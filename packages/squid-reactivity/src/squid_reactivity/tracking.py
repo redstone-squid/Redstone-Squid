@@ -52,17 +52,6 @@ awaiting an operation does not make its inputs dependencies of the awaiting comp
 """
 
 
-@contextmanager
-def untracked() -> Iterator[None]:
-    """Read reactive values without adding them to the surrounding dependency capture.
-
-    Use this when a computation needs to sample a value without depending on its changes.
-    Transaction conflict tracking is independent and remains active.
-    """
-    with _DEPENDENCY_COLLECTOR.set(None):
-        yield
-
-
 @dataclass(slots=True)
 class Dependencies(_DependencyCollector):
     """Record sources and versions read within one dependency-capture scope.
@@ -126,6 +115,17 @@ def observe_reads() -> Iterator[Dependencies]:
     """Collect dependencies of a read-only computation."""
     with read_only(), capture_reads() as dependencies:
         yield dependencies
+
+
+@contextmanager
+def untracked() -> Iterator[None]:
+    """Read reactive values without adding them to the surrounding dependency capture.
+
+    Use this when a computation needs to sample a value without depending on its changes.
+    Transaction conflict tracking is independent and remains active.
+    """
+    with _DEPENDENCY_COLLECTOR.set(None):
+        yield
 
 
 def addresses(read: Callable[[], object]) -> tuple[DependencyAddress, ...]:

@@ -55,34 +55,6 @@ class _Cell[ValueT](_ReactiveSource):
         """Return the readable address, or an opaque slot ID for an unaddressed cell."""
         return f"slot:{self.identity}" if self.address is None else str(self.address)
 
-    def staged_value(self) -> ValueT | _Missing:
-        """Return the active transaction's pending value, or _MISSING if none is staged."""
-        current = _active()
-        if current is None:
-            return _MISSING
-        entry = current.staged(self)
-        return _MISSING if entry is None else entry.value
-
-    @override
-    def dependencies(self) -> tuple[_ReactiveSource, ...]:
-        return ()
-
-    @override
-    def settle(self) -> int:
-        """Return the staged version when present, otherwise the committed version."""
-        current = _active()
-        if current is not None:
-            entry = current.staged(self)
-            if entry is not None:
-                return entry.version
-        return self.version
-
-    def track(self, version: int) -> None:
-        """Record a read of this cell at `version` with whatever is consuming it."""
-        consumer = _DEPENDENCY_COLLECTOR.get()
-        if consumer is not None:
-            consumer.sources[self] = version
-
     def read(self) -> ValueT | _Missing:
         """Return the value this reader should see, staged write included, and record it."""
         current = _active()
@@ -99,6 +71,14 @@ class _Cell[ValueT](_ReactiveSource):
         self.track(self.version)
         return self.value
 
+    def staged_value(self) -> ValueT | _Missing:
+        """Return the active transaction's pending value, or _MISSING if none is staged."""
+        current = _active()
+        if current is None:
+            return _MISSING
+        entry = current.staged(self)
+        return _MISSING if entry is None else entry.value
+
     def write(self, value: ValueT | _Missing) -> None:
         self.value = value
         self.touch()
@@ -107,6 +87,26 @@ class _Cell[ValueT](_ReactiveSource):
         """Advance the version without replacing the value."""
         self.version += 1
         _bump_epoch()
+
+    def track(self, version: int) -> None:
+        """Record a read of this cell at `version` with whatever is consuming it."""
+        consumer = _DEPENDENCY_COLLECTOR.get()
+        if consumer is not None:
+            consumer.sources[self] = version
+
+    @override
+    def dependencies(self) -> tuple[_ReactiveSource, ...]:
+        return ()
+
+    @override
+    def settle(self) -> int:
+        """Return the staged version when present, otherwise the committed version."""
+        current = _active()
+        if current is not None:
+            entry = current.staged(self)
+            if entry is not None:
+                return entry.version
+        return self.version
 
 
 class Signal(_ReactiveSource, SubscriptionSource):
@@ -136,6 +136,12 @@ class Signal(_ReactiveSource, SubscriptionSource):
         if consumer is not None:
             consumer.sources[self] = self.version
 
+    def notify(self) -> None:
+        """Tell readers that tracked this signal that the state behind it changed."""
+        self.version += 1
+        _bump_epoch()
+        publish(self.address)
+
     @override
     def dependencies(self) -> tuple[_ReactiveSource, ...]:
         return ()
@@ -143,9 +149,3 @@ class Signal(_ReactiveSource, SubscriptionSource):
     @override
     def settle(self) -> int:
         return self.version
-
-    def notify(self) -> None:
-        """Tell readers that tracked this signal that the state behind it changed."""
-        self.version += 1
-        _bump_epoch()
-        publish(self.address)

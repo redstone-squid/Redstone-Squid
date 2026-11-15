@@ -69,22 +69,17 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 
 
-def _next_commit_sequence() -> CommitSequence:
-    _runtime.sequence += 1
-    return CommitSequence(_runtime.identity, _runtime.sequence)
-
-
 class TransactionView(Protocol):
     """Read-only access to the frozen overlay during participant preparation."""
 
     __slots__ = ()
 
+    @property
+    def context(self) -> TransactionContext: ...
+
     def read_staged(self, target: CellTarget) -> SlotValue: ...
 
     def read_committed(self, target: CellTarget) -> SlotValue: ...
-
-    @property
-    def context(self) -> TransactionContext: ...
 
 
 class TransactionParticipant[PreparedT](Protocol):
@@ -109,20 +104,20 @@ class TransactionParticipant[PreparedT](Protocol):
         """
         ...
 
-    def apply(self, prepared: PreparedT) -> None:
-        """Publish the prepared change synchronously. This method must not raise."""
-
     def describe_change(self, prepared: PreparedT) -> TransactionContribution | None:
         """Return the participant's reversible token, or no history contribution."""
 
-    def abort(self, prepared: PreparedT | None, cause: BaseException) -> None:
-        """Discard staged work after failure. Called once in reverse participant order."""
+    def apply(self, prepared: PreparedT) -> None:
+        """Publish the prepared change synchronously. This method must not raise."""
 
     def finalize(self, prepared: PreparedT) -> None:
         """Notify subscribers after all participants have applied.
 
         An exception here is reported but does not roll back the committed transaction.
         """
+
+    def abort(self, prepared: PreparedT | None, cause: BaseException) -> None:
+        """Discard staged work after failure. Called once in reverse participant order."""
 
 
 @dataclass(slots=True)
@@ -138,26 +133,6 @@ class _Staged[ValueT]:
     cell: _Cell[ValueT]
     value: ValueT | _Missing
     version: int
-
-
-def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing) -> None:
-    """Stage a field write, or publish it immediately outside a transaction.
-
-    Writes to objects created inside the transaction also publish immediately: those
-    objects had no earlier state for the transaction to restore.
-    """
-    _check_write(owner, name)
-    current = _current_transaction()
-    if current is None and in_continuation():
-        message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
-        raise ReactiveWriteError(message)
-    if current is not None and not current.writable():
-        current.reject_stale(f"{type(owner).__name__}.{name}")
-    if current is None or not current.protects(owner):
-        cell.write(value)
-        owner._state_changed(frozenset((name,)))
-        return
-    current.stage(owner, name, cell, value)
 
 
 class _Phase(Enum):
@@ -223,6 +198,111 @@ class _TransactionEngine:
         """Terminal transactions no longer expose their overlay, including during notifications."""
         return self.phase in (_Phase.COMMITTED, _Phase.ABORTED)
 
+    def writable(self) -> bool:
+        """Whether this transaction is open and the caller owns it.
+
+        Read-only and temporary write restrictions are checked separately by stage.
+        """
+        return (
+            self.owner_thread is current_thread()
+            and not self.closed
+            and (self.owner_task is None or self.owner_task is _current_task())
+        )
+
+    def reject_stale(self, what: str) -> None:
+        """Raise an error identifying the finished transaction or wrong task."""
+        if self.closed:
+            message = (
+                f"{what} was written through a transaction that has already finished. The write "
+                f"came from a task that outlived the transaction which opened it, so nothing would "
+                f"publish it: give the task an owner inside the handler, or write in the handler."
+            )
+        else:
+            message = (
+                f"{what} was written from a task other than the one that opened its transaction. "
+                f"Sibling tasks staging into one overlay make what commits depend on scheduling: "
+                f"write from the handler's own task, or give each branch its own transaction."
+            )
+        raise StaleReactiveContextError(message)
+
+    def note_born(self, owner: object) -> None:
+        """Record an object created after this transaction began."""
+        self.born[id(owner)] = owner
+
+    def protects(self, owner: object) -> bool:
+        """Whether writes to this object belong in the transaction's overlay.
+
+        Objects created after the transaction began have no earlier state to restore.
+        Their initialization writes are applied immediately instead.
+        """
+        return id(owner) not in self.born
+
+    def staged[ValueT](self, cell: _Cell[ValueT]) -> _Staged[ValueT] | None:
+        """This transaction's pending write to `cell`, if it has made one."""
+        # stage() stores each value under its matching cell; the dictionary erases
+        # their shared type only so it can hold fields of different types.
+        return cast(_Staged[ValueT] | None, self.writes.get(cell))
+
+    def observe(self, cell: _Cell[Any], *, strong: bool) -> None:
+        """Record the first committed version read from a shared cell.
+
+        Strong reads have a separate first-read version. An earlier ordinary read
+        must not become a precondition just because a later read is strong.
+        """
+        self.observed.setdefault(cell, cell.version)
+        if strong:
+            self.strong.setdefault(cell, cell.version)
+
+    def require_version(self, cell: _Cell[Any], version: int) -> None:
+        existing = self.preconditions.get(cell)
+        if existing is not None and existing != version:
+            detail = ConflictDetail(cell.label, existing, version)
+            raise ReactiveConflictError(detail, "incompatible inverse preconditions")
+        self.preconditions[cell] = version
+
+    def stage[ValueT](
+        self, owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing
+    ) -> None:
+        """Hold a write for commit, visible only to readers of this transaction."""
+        if self.write_block is not None:
+            raise ReactiveWriteError(self.write_block)
+        if self.readonly:
+            message = "read-only transactions cannot mutate component state"
+            raise ReactiveWriteError(message)
+        entry = self.staged(cell)
+        if entry is None:
+            self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1)
+        else:
+            entry.value = value
+            entry.version += 1
+        _, names = self.changed.setdefault(id(owner), (owner, set()))
+        names.add(name)
+        # The staged version is what a read inside this transaction reports, so a computed that
+        # sampled it has to be told the world moved even though nothing is published yet.
+        _bump_epoch()
+
+    def enlist[ParticipantT: TransactionParticipant[Any]](
+        self, key: object, factory: Callable[[], ParticipantT]
+    ) -> ParticipantT:
+        """Return this transaction's participant for `key`, creating it on first use.
+
+        The guards run on every call, not just the first: a participant enlisted before a
+        `block_writes` region may not keep staging writes inside one.
+        """
+        if not self.writable():
+            self.reject_stale("a transaction participant")
+        if self.write_block is not None:
+            raise ReactiveWriteError(self.write_block)
+        if self.readonly:
+            message = "read-only transactions cannot stage writes"
+            raise ReactiveWriteError(message)
+        existing = self.participants.get(key)
+        if existing is not None:
+            return existing  # type: ignore[bad-return]
+        created = factory()
+        self.participants[key] = created
+        return created
+
     def add_commit_hook(self, callback: Callable[[TransactionCommit], None], *, key: object | None) -> None:
         self._add_hook(self.commit_hooks, callback, key=key)
 
@@ -253,60 +333,31 @@ class _TransactionEngine:
             raise RuntimeError(message)
         hooks.append((key, callback))
 
-    def note_born(self, owner: object) -> None:
-        """Record an object created after this transaction began."""
-        self.born[id(owner)] = owner
-
-    def writable(self) -> bool:
-        """Whether this transaction is open and the caller owns it.
-
-        Read-only and temporary write restrictions are checked separately by stage.
-        """
-        return (
-            self.owner_thread is current_thread()
-            and not self.closed
-            and (self.owner_task is None or self.owner_task is _current_task())
-        )
-
-    def reject_stale(self, what: str) -> None:
-        """Raise an error identifying the finished transaction or wrong task."""
-        if self.closed:
-            message = (
-                f"{what} was written through a transaction that has already finished. The write "
-                f"came from a task that outlived the transaction which opened it, so nothing would "
-                f"publish it: give the task an owner inside the handler, or write in the handler."
-            )
-        else:
-            message = (
-                f"{what} was written from a task other than the one that opened its transaction. "
-                f"Sibling tasks staging into one overlay make what commits depend on scheduling: "
-                f"write from the handler's own task, or give each branch its own transaction."
-            )
-        raise StaleReactiveContextError(message)
-
-    def protects(self, owner: object) -> bool:
-        """Whether writes to this object belong in the transaction's overlay.
-
-        Objects created after the transaction began have no earlier state to restore.
-        Their initialization writes are applied immediately instead.
-        """
-        return id(owner) not in self.born
-
-    def staged[ValueT](self, cell: _Cell[ValueT]) -> _Staged[ValueT] | None:
-        """This transaction's pending write to `cell`, if it has made one."""
-        # stage() stores each value under its matching cell; the dictionary erases
-        # their shared type only so it can hold fields of different types.
-        return cast(_Staged[ValueT] | None, self.writes.get(cell))
-
-    def observe(self, cell: _Cell[Any], *, strong: bool) -> None:
-        """Record the first committed version read from a shared cell.
-
-        Strong reads have a separate first-read version. An earlier ordinary read
-        must not become a precondition just because a later read is strong.
-        """
-        self.observed.setdefault(cell, cell.version)
-        if strong:
-            self.strong.setdefault(cell, cell.version)
+    def finish(self) -> None:
+        """Publish staged work and deliver its outcome, preserving the commit on later failure."""
+        try:
+            _checkpoint("transaction.close_staging")
+            commit = self.commit()
+        except BaseException as error:
+            if self.phase is _Phase.COMMITTED:
+                # Publication is the commit point. An apply failure is an adapter integrity
+                # defect, not a user rollback; retain the commit truth and fail loudly.
+                assert self.commit_record is not None
+                integrity_commit = replace(
+                    self.commit_record,
+                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
+                )
+                self.handle._result = integrity_commit
+                self._deliver_result(integrity_commit)
+                message = f"an infallible transaction adapter failed after the commit point: {error}"
+                raise FrameworkIntegrityError(message) from error
+            self.rollback(error, during_commit=True)
+            raise
+        try:
+            _checkpoint("commit.before_notifications")
+            self.finalize_commit()
+        finally:
+            self._emit_commit(commit)
 
     def check_preconditions(self) -> None:
         """Check required versions before publishing writes or participant changes.
@@ -353,64 +404,21 @@ class _TransactionEngine:
             raise ReactiveConflictError(detail, message)
         _checkpoint("commit.after_validation")
 
-    def require_version(self, cell: _Cell[Any], version: int) -> None:
-        existing = self.preconditions.get(cell)
-        if existing is not None and existing != version:
-            detail = ConflictDetail(cell.label, existing, version)
-            raise ReactiveConflictError(detail, "incompatible inverse preconditions")
-        self.preconditions[cell] = version
+    @contextmanager
+    def preparing(self) -> Iterator[None]:
+        """Expose staged values to participants while preventing further writes.
 
-    def stage[ValueT](
-        self, owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing
-    ) -> None:
-        """Hold a write for commit, visible only to readers of this transaction."""
-        if self.write_block is not None:
-            raise ReactiveWriteError(self.write_block)
-        if self.readonly:
-            message = "read-only transactions cannot mutate component state"
-            raise ReactiveWriteError(message)
-        entry = self.staged(cell)
-        if entry is None:
-            self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1)
-        else:
-            entry.value = value
-            entry.version += 1
-        _, names = self.changed.setdefault(id(owner), (owner, set()))
-        names.add(name)
-        # The staged version is what a read inside this transaction reports, so a computed that
-        # sampled it has to be told the world moved even though nothing is published yet.
-        _bump_epoch()
-
-    def publish(self, patches: CellPatchSet) -> None:
-        """Install exactly the values and versions recorded in the publication plan."""
-        for entry, patch in zip(self.writes.values(), patches, strict=True):
-            entry.cell.value = patch.after.raw()
-            entry.cell.version = patch.after_version
-        self.phase = _Phase.COMMITTED
-        if patches:
-            _bump_epoch()
-
-    def enlist[ParticipantT: TransactionParticipant[Any]](
-        self, key: object, factory: Callable[[], ParticipantT]
-    ) -> ParticipantT:
-        """Return this transaction's participant for `key`, creating it on first use.
-
-        The guards run on every call, not just the first: a participant enlisted before a
-        `block_writes` region may not keep staging writes inside one.
+        The transaction context has already been removed before commit. Restore it
+        for preparation so participants can read the values they are validating.
+        Block writes and new participants, and skip recording these internal reads
+        because conflict validation has already run.
         """
-        if not self.writable():
-            self.reject_stale("a transaction participant")
-        if self.write_block is not None:
-            raise ReactiveWriteError(self.write_block)
-        if self.readonly:
-            message = "read-only transactions cannot stage writes"
-            raise ReactiveWriteError(message)
-        existing = self.participants.get(key)
-        if existing is not None:
-            return existing  # type: ignore[bad-return]
-        created = factory()
-        self.participants[key] = created
-        return created
+        with (
+            _CURRENT_TRANSACTION.set(self),
+            block_writes("a transaction participant cannot write while preparing"),
+            relaxed_read(),
+        ):
+            yield
 
     def patches(self) -> CellPatchSet:
         """Freeze the physical slot lineage written by this transaction."""
@@ -428,48 +436,6 @@ class _TransactionEngine:
                 for entry in self.writes.values()
             )
         )
-
-    @contextmanager
-    def preparing(self) -> Iterator[None]:
-        """Expose staged values to participants while preventing further writes.
-
-        The transaction context has already been removed before commit. Restore it
-        for preparation so participants can read the values they are validating.
-        Block writes and new participants, and skip recording these internal reads
-        because conflict validation has already run.
-        """
-        with (
-            _CURRENT_TRANSACTION.set(self),
-            block_writes("a transaction participant cannot write while preparing"),
-            relaxed_read(),
-        ):
-            yield
-
-    def finish(self) -> None:
-        """Publish staged work and deliver its outcome, preserving the commit on later failure."""
-        try:
-            _checkpoint("transaction.close_staging")
-            commit = self.commit()
-        except BaseException as error:
-            if self.phase is _Phase.COMMITTED:
-                # Publication is the commit point. An apply failure is an adapter integrity
-                # defect, not a user rollback; retain the commit truth and fail loudly.
-                assert self.commit_record is not None
-                integrity_commit = replace(
-                    self.commit_record,
-                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
-                )
-                self.handle._result = integrity_commit
-                self._deliver_result(integrity_commit)
-                message = f"an infallible transaction adapter failed after the commit point: {error}"
-                raise FrameworkIntegrityError(message) from error
-            self.rollback(error, during_commit=True)
-            raise
-        try:
-            _checkpoint("commit.before_notifications")
-            self.finalize_commit()
-        finally:
-            self._emit_commit(commit)
 
     def commit(self) -> TransactionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
@@ -512,6 +478,15 @@ class _TransactionEngine:
 
         return commit
 
+    def publish(self, patches: CellPatchSet) -> None:
+        """Install exactly the values and versions recorded in the publication plan."""
+        for entry, patch in zip(self.writes.values(), patches, strict=True):
+            entry.cell.value = patch.after.raw()
+            entry.cell.version = patch.after_version
+        self.phase = _Phase.COMMITTED
+        if patches:
+            _bump_epoch()
+
     def finalize_commit(self) -> None:
         """Notify reactive consumers after publication, isolating continuation failures."""
         assert self.commit_record is not None
@@ -542,6 +517,26 @@ class _TransactionEngine:
                     error,
                 )
 
+    def rollback(self, error: BaseException, *, during_commit: bool = False) -> TransactionRollback:
+        """Discard staged work, record the failure, and deliver rollback callbacks."""
+        cleanup_errors = self.abort(error)
+        rolled_back_at = datetime.now(UTC)
+        rollback = TransactionRollback(
+            self.context,
+            rolled_back_at,
+            rolled_back_at - self.context.started_at,
+            _rollback_reason(error, during_commit=during_commit),
+            error.detail if isinstance(error, ReactiveConflictError) else None,
+            ExceptionReport.capture(error),
+            ChangeReport(len(self.writes), len(self.participants)),
+            cleanup_errors,
+        )
+        self.handle._result = rollback
+        self._deliver_result(rollback)
+        _notify_hooks(rollback, self.rollback_hooks)
+        _notify_hooks(rollback, self.result_hooks)
+        return rollback
+
     def abort(self, cause: BaseException) -> tuple[ExceptionReport, ...]:
         """Discard the overlay and abort each participant once, before publication only."""
         assert self.phase is not _Phase.COMMITTED
@@ -568,38 +563,18 @@ class _TransactionEngine:
             _bump_epoch()
         return tuple(self.cleanup_errors)
 
-    def _deliver_result(self, result: TransactionResult) -> None:
-        emit_result(result)
-        # Sinks may run application code, so validation diagnostics are delivered
-        # only once the outcome is fixed, never between validation and publication.
-        if self.validation_snapshot is not None:
-            emit_causal_event(self.validation_snapshot)
-
     def _emit_commit(self, commit: TransactionCommit) -> None:
         self.handle._result = commit
         self._deliver_result(commit)
         _notify_hooks(commit, self.commit_hooks)
         _notify_hooks(commit, self.result_hooks)
 
-    def rollback(self, error: BaseException, *, during_commit: bool = False) -> TransactionRollback:
-        """Discard staged work, record the failure, and deliver rollback callbacks."""
-        cleanup_errors = self.abort(error)
-        rolled_back_at = datetime.now(UTC)
-        rollback = TransactionRollback(
-            self.context,
-            rolled_back_at,
-            rolled_back_at - self.context.started_at,
-            _rollback_reason(error, during_commit=during_commit),
-            error.detail if isinstance(error, ReactiveConflictError) else None,
-            ExceptionReport.capture(error),
-            ChangeReport(len(self.writes), len(self.participants)),
-            cleanup_errors,
-        )
-        self.handle._result = rollback
-        self._deliver_result(rollback)
-        _notify_hooks(rollback, self.rollback_hooks)
-        _notify_hooks(rollback, self.result_hooks)
-        return rollback
+    def _deliver_result(self, result: TransactionResult) -> None:
+        emit_result(result)
+        # Sinks may run application code, so validation diagnostics are delivered
+        # only once the outcome is fixed, never between validation and publication.
+        if self.validation_snapshot is not None:
+            emit_causal_event(self.validation_snapshot)
 
 
 @dataclass(frozen=True, slots=True)
@@ -629,6 +604,26 @@ class _FrozenTransactionView(TransactionView):
         return SlotValue.from_raw(cell.value)
 
 
+def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], value: ValueT | _Missing) -> None:
+    """Stage a field write, or publish it immediately outside a transaction.
+
+    Writes to objects created inside the transaction also publish immediately: those
+    objects had no earlier state for the transaction to restore.
+    """
+    _check_write(owner, name)
+    current = _current_transaction()
+    if current is None and in_continuation():
+        message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
+        raise ReactiveWriteError(message)
+    if current is not None and not current.writable():
+        current.reject_stale(f"{type(owner).__name__}.{name}")
+    if current is None or not current.protects(owner):
+        cell.write(value)
+        owner._state_changed(frozenset((name,)))
+        return
+    current.stage(owner, name, cell, value)
+
+
 def report_undeclared_write(owner: object, name: str) -> None:
     """Reject writes to undeclared attributes during a transaction.
 
@@ -651,6 +646,11 @@ def report_undeclared_write(owner: object, name: str) -> None:
         f"Declare it with state()."
     )
     raise UndeclaredStateError(message)
+
+
+def _next_commit_sequence() -> CommitSequence:
+    _runtime.sequence += 1
+    return CommitSequence(_runtime.identity, _runtime.sequence)
 
 
 def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackReason:

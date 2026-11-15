@@ -58,6 +58,11 @@ class Transaction:
         return self._context
 
     @property
+    def readonly(self) -> bool:
+        """Whether this transaction rejects state writes."""
+        return self._readonly
+
+    @property
     def result(self) -> TransactionResult | None:
         return self._result
 
@@ -72,11 +77,6 @@ class Transaction:
     def after_result(self, callback: Callable[[TransactionResult], None], *, key: object | None = None) -> None:
         """Run after either outcome. Further writes require a new transaction."""
         self._require_active_engine().add_result_hook(callback, key=key)
-
-    @property
-    def readonly(self) -> bool:
-        """Whether this transaction rejects state writes."""
-        return self._readonly
 
     def has_hook(self, key: object) -> bool:
         """Check whether this active transaction has a result callback registered under key."""
@@ -93,29 +93,12 @@ class Transaction:
 def current_transaction() -> Transaction | None:
     """Return the handle of the transaction this code is running in, or None outside one.
 
-    The transaction counts from the start of its block until its outcome is decided.
-    Result callbacks run after that and see None, as does a task that inherited the
-    transaction and outlived it.
+    The handle is available in the transaction body and during participant preparation.
+    Publication and outcome callbacks run outside that scope. A task that inherited
+    an already finished transaction also sees None.
     """
     current = _active()
     return None if current is None else current.handle
-
-
-@contextmanager
-def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
-    """Install the transaction scope and hand its success or failure to the engine."""
-    current = _TransactionEngine(Transaction(context, readonly=readonly), owner_task=_current_task())
-    with causal_scope(context.causal_ref(), context.root_transaction_id):
-        token = _CURRENT_TRANSACTION.set(current)
-        try:
-            _checkpoint("transaction.enter_body")
-            yield current.handle
-        except BaseException as error:
-            _CURRENT_TRANSACTION.reset(token)
-            current.rollback(error)
-            raise
-        _CURRENT_TRANSACTION.reset(token)
-        current.finish()
 
 
 @contextmanager
@@ -175,6 +158,29 @@ def transaction(
 
 
 @contextmanager
+def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
+    """Run an identified read-only transaction and reject any state mutation."""
+    if _current_transaction() is not None:
+        message = "a read-only transaction cannot nest inside a writable transaction"
+        raise RuntimeError(message)
+    causality = current_causality()
+    context = transaction_context or TransactionContext.create(
+        "read-only transaction",
+        cause=None if causality is None else causality.cause,
+        root_transaction_id=None if causality is None else causality.root_transaction_id,
+    )
+    with _run_transaction(context, readonly=True) as handle:
+        yield handle
+
+
+@contextmanager
+def batch() -> Iterator[None]:
+    """Group related writes into one change notification per model on commit."""
+    with transaction():
+        yield
+
+
+@contextmanager
 def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Transaction]:
     """Start an independent transaction while an enclosing transaction has staged no work.
 
@@ -190,29 +196,6 @@ def fresh_transaction(*, transaction_context: TransactionContext) -> Iterator[Tr
         message = "a fresh transaction cannot start after the admitting transaction staged changes"
         raise FreshTransactionError(message)
     with _CURRENT_TRANSACTION.set(None), transaction(transaction_context=transaction_context) as handle:
-        yield handle
-
-
-@contextmanager
-def batch() -> Iterator[None]:
-    """Group related writes into one change notification per model on commit."""
-    with transaction():
-        yield
-
-
-@contextmanager
-def readonly_transaction(*, transaction_context: TransactionContext | None = None) -> Iterator[Transaction]:
-    """Run an identified read-only transaction and reject any state mutation."""
-    if _current_transaction() is not None:
-        message = "a read-only transaction cannot nest inside a writable transaction"
-        raise RuntimeError(message)
-    causality = current_causality()
-    context = transaction_context or TransactionContext.create(
-        "read-only transaction",
-        cause=None if causality is None else causality.cause,
-        root_transaction_id=None if causality is None else causality.root_transaction_id,
-    )
-    with _run_transaction(context, readonly=True) as handle:
         yield handle
 
 
@@ -249,3 +232,20 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
         current.require_version(cell, patch.expected_version)
     for patch, owner, cell in resolved:
         _write(owner, patch.target.name, cell, patch.value.raw())
+
+
+@contextmanager
+def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> Iterator[Transaction]:
+    """Install the transaction scope and hand its success or failure to the engine."""
+    current = _TransactionEngine(Transaction(context, readonly=readonly), owner_task=_current_task())
+    with causal_scope(context.causal_ref(), context.root_transaction_id):
+        token = _CURRENT_TRANSACTION.set(current)
+        try:
+            _checkpoint("transaction.enter_body")
+            yield current.handle
+        except BaseException as error:
+            _CURRENT_TRANSACTION.reset(token)
+            current.rollback(error)
+            raise
+        _CURRENT_TRANSACTION.reset(token)
+        current.finish()

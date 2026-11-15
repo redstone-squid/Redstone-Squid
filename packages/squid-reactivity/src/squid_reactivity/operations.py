@@ -131,6 +131,30 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         self._signal.track()
         return isinstance(self._status, Pending)
 
+    @contextmanager
+    def start_transaction(
+        self, name: str, *, kind: TransactionPurpose = TransactionPurpose.SYSTEM
+    ) -> Iterator[TransactionContext]:
+        """Start a fresh state-publishing transaction caused by this execution."""
+        context = TransactionContext.create(
+            name,
+            kind=kind,
+            cause=self.context.causal_ref(),
+            root_transaction_id=self.context.root_transaction_id,
+        )
+        with fresh_transaction(transaction_context=context):
+            yield context
+
+    def __await__(self) -> Generator[Any, None, ValueT]:
+        """Run or join this execution under the caller's owned task."""
+        return self._awaited().__await__()
+
+    @override
+    async def resolve(self) -> OperationStatus[ValueT, ProgressT]:
+        """Run or join this execution and return its status instead of unwrapping its value."""
+        with settling(self):
+            return await self._execution.run(self._execute, lambda: self._status)
+
     def _set_progress(self, value: ProgressT) -> None:
         match self._status:
             case Pending():
@@ -139,10 +163,6 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
             case _:
                 message = f"operation execution {self.context.execution_id} has already settled"
                 raise RuntimeError(message)
-
-    def __await__(self) -> Generator[Any, None, ValueT]:
-        """Run or join this execution under the caller's owned task."""
-        return self._awaited().__await__()
 
     async def _awaited(self) -> ValueT:
         try:
@@ -160,12 +180,6 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
             case Pending():
                 message = f"operation {self.context.name!r} did not settle"
                 raise RuntimeError(message)
-
-    @override
-    async def resolve(self) -> OperationStatus[ValueT, ProgressT]:
-        """Run or join this execution and return its status instead of unwrapping its value."""
-        with settling(self):
-            return await self._execution.run(self._execute, lambda: self._status)
 
     async def _execute(self) -> OperationStatus[ValueT, ProgressT]:
         progress = ProgressReporter(self)
@@ -196,20 +210,6 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT,
         finally:
             _DEPENDENCY_COLLECTOR.reset(consumer)
         return self._status
-
-    @contextmanager
-    def start_transaction(
-        self, name: str, *, kind: TransactionPurpose = TransactionPurpose.SYSTEM
-    ) -> Iterator[TransactionContext]:
-        """Start a fresh state-publishing transaction caused by this execution."""
-        context = TransactionContext.create(
-            name,
-            kind=kind,
-            cause=self.context.causal_ref(),
-            root_transaction_id=self.context.root_transaction_id,
-        )
-        with fresh_transaction(transaction_context=context):
-            yield context
 
     def _emit(self, status: str, error: BaseException | None = None) -> None:
         if not has_event_observers():
@@ -267,6 +267,26 @@ class OperationDefinition[ValueT, ProgressT]:
         return execution
 
 
+def operation[OwnerT, ValueT, ProgressT](
+    *, initial: ProgressT
+) -> Callable[
+    [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],
+    _OperationDescriptor[OwnerT, ValueT, ProgressT],
+]:
+    """Declare an asynchronous operation with an initial progress value.
+
+    The decorated method receives a ProgressReporter. Accessing the attribute
+    returns an OperationDefinition; call its start method for each execution.
+    """
+
+    def decorate(
+        loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],
+    ) -> _OperationDescriptor[OwnerT, ValueT, ProgressT]:
+        return _OperationDescriptor(loader, initial=initial)
+
+    return decorate
+
+
 class _OperationDescriptor[OwnerT, ValueT, ProgressT]:
     """Bind one repeatable definition per owner instance."""
 
@@ -305,26 +325,6 @@ class _OperationDescriptor[OwnerT, ValueT, ProgressT]:
             )
             instance.__dict__[self._name] = bound
         return bound
-
-
-def operation[OwnerT, ValueT, ProgressT](
-    *, initial: ProgressT
-) -> Callable[
-    [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],
-    _OperationDescriptor[OwnerT, ValueT, ProgressT],
-]:
-    """Declare an asynchronous operation with an initial progress value.
-
-    The decorated method receives a ProgressReporter. Accessing the attribute
-    returns an OperationDefinition; call its start method for each execution.
-    """
-
-    def decorate(
-        loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],
-    ) -> _OperationDescriptor[OwnerT, ValueT, ProgressT]:
-        return _OperationDescriptor(loader, initial=initial)
-
-    return decorate
 
 
 __all__ = [

@@ -26,6 +26,49 @@ class AsyncBinding[StatusT](Protocol):
         ...
 
 
+_ASYNC_BINDING_COLLECTOR: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
+    "squid_reactivity_observed_async_bindings", default=None
+)
+"""Bindings accessed in an observation scope, separate from versioned dependencies.
+
+The observation scope owns the list. Nested scopes replace it and restore the outer list;
+child tasks inherit that same list. Collection discovers work but never starts loaders.
+"""
+
+
+@contextmanager
+def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
+    """Collect asynchronous bindings accessed inside this scope without starting them.
+
+    Integrations can resolve pending bindings after a synchronous computation finishes.
+    UI renderers use this to discover asynchronous inputs before presenting a result.
+    """
+    observed: list[AsyncBinding[object]] = []
+    token = _ASYNC_BINDING_COLLECTOR.set(observed)
+    try:
+        yield observed
+    finally:
+        _ASYNC_BINDING_COLLECTOR.reset(token)
+
+
+def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBinding[object], ...]:
+    """Remove repeated bindings by identity, preserving first-access order."""
+    seen: set[int] = set()
+    unique: list[AsyncBinding[object]] = []
+    for binding in bindings:
+        identity = id(binding)
+        if identity not in seen:
+            seen.add(identity)
+            unique.append(binding)
+    return tuple(unique)
+
+
+def _observe(binding: AsyncBinding[object]) -> None:
+    observed = _ASYNC_BINDING_COLLECTOR.get()
+    if observed is not None:
+        observed.append(binding)
+
+
 class _Execution[StatusT]:
     """Run once in the first caller's task; other callers join its completion.
 
@@ -57,46 +100,3 @@ class _Execution[StatusT]:
             return await loader()
         finally:
             self.completion.resolve(status())
-
-
-_ASYNC_BINDING_COLLECTOR: ContextVar[list[AsyncBinding[object]] | None] = ContextVar(
-    "squid_reactivity_observed_async_bindings", default=None
-)
-"""Bindings accessed in an observation scope, separate from versioned dependencies.
-
-The observation scope owns the list. Nested scopes replace it and restore the outer list;
-child tasks inherit that same list. Collection discovers work but never starts loaders.
-"""
-
-
-def _observe(binding: AsyncBinding[object]) -> None:
-    observed = _ASYNC_BINDING_COLLECTOR.get()
-    if observed is not None:
-        observed.append(binding)
-
-
-@contextmanager
-def observe_async_bindings() -> Iterator[list[AsyncBinding[object]]]:
-    """Collect asynchronous bindings accessed inside this scope without starting them.
-
-    Integrations can resolve pending bindings after a synchronous computation finishes.
-    UI renderers use this to discover asynchronous inputs before presenting a result.
-    """
-    observed: list[AsyncBinding[object]] = []
-    token = _ASYNC_BINDING_COLLECTOR.set(observed)
-    try:
-        yield observed
-    finally:
-        _ASYNC_BINDING_COLLECTOR.reset(token)
-
-
-def unique_async_bindings(bindings: list[AsyncBinding[object]]) -> tuple[AsyncBinding[object], ...]:
-    """Remove repeated bindings by identity, preserving first-access order."""
-    seen: set[int] = set()
-    unique: list[AsyncBinding[object]] = []
-    for binding in bindings:
-        identity = id(binding)
-        if identity not in seen:
-            seen.add(identity)
-            unique.append(binding)
-    return tuple(unique)

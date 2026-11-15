@@ -18,13 +18,6 @@ class InterleavingHarness:
         """Queue ``callback`` for the next occurrence of ``checkpoint``."""
         self._scheduled[checkpoint].append(callback)
 
-    def checkpoint(self, name: str) -> None:
-        """Record a checkpoint and run its next queued callback, if any."""
-        self.seen.append(name)
-        scheduled = self._scheduled.get(name)
-        if scheduled:
-            scheduled.popleft()()
-
     @contextmanager
     def installed(self) -> Iterator[InterleavingHarness]:
         """Use this harness until the context exits, then restore the previous one."""
@@ -33,6 +26,13 @@ class InterleavingHarness:
             yield self
         finally:
             transaction_state._INTERLEAVER.reset(token)
+
+    def checkpoint(self, name: str) -> None:
+        """Record a checkpoint and run its next queued callback, if any."""
+        self.seen.append(name)
+        scheduled = self._scheduled.get(name)
+        if scheduled:
+            scheduled.popleft()()
 
 
 __all__ = ["InterleavingHarness"]

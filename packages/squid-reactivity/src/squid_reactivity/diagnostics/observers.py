@@ -54,10 +54,6 @@ class EventLedger(EventSink):
             raise ValueError(message)
         self._events: deque[CausalEventSnapshot] = deque(maxlen=limit)
 
-    @override
-    def accept(self, result: CausalEventSnapshot) -> None:
-        self._events.append(result)
-
     @property
     def events(self) -> tuple[CausalEventSnapshot, ...]:
         return tuple(self._events)
@@ -65,6 +61,10 @@ class EventLedger(EventSink):
     @property
     def results(self) -> tuple[TransactionResultSnapshot, ...]:
         return tuple(event for event in self._events if isinstance(event, TransactionResultSnapshot))
+
+    @override
+    def accept(self, result: CausalEventSnapshot) -> None:
+        self._events.append(result)
 
 
 @dataclass(slots=True)
@@ -135,6 +135,33 @@ def has_validation_observers() -> bool:
     return False
 
 
+def emit_result(result: TransactionResult) -> None:
+    """Deliver a redacted transaction summary and report failures from result sinks."""
+    _deliver(result)
+
+
+def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
+    """Apply each observer's policy and isolate failures during delivery."""
+    _deliver(snapshot)
+
+
+def emit_continuation_failure(result: TransactionResult, stage: str, callback: str, error: BaseException) -> None:
+    """Report a callback failure linked to its transaction outcome."""
+    if not has_event_observers():
+        return
+    emit_causal_event(
+        ContinuationFailureSnapshot(
+            str(uuid.uuid7()),
+            str(result.context.root_transaction_id),
+            result.context.causal_ref(),
+            stage,
+            callback,
+            datetime.now(UTC),
+            ExceptionReport.capture(error),
+        )
+    )
+
+
 def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
     seen: set[int] = set()
     snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
@@ -164,30 +191,3 @@ def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
     if isinstance(event, (TransactionCommit, TransactionRollback)):
         for callback, error in failures:
             emit_continuation_failure(event, "result_sink", callback, error)
-
-
-def emit_result(result: TransactionResult) -> None:
-    """Deliver a redacted transaction summary and report failures from result sinks."""
-    _deliver(result)
-
-
-def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
-    """Apply each observer's policy and isolate failures during delivery."""
-    _deliver(snapshot)
-
-
-def emit_continuation_failure(result: TransactionResult, stage: str, callback: str, error: BaseException) -> None:
-    """Report a callback failure linked to its transaction outcome."""
-    if not has_event_observers():
-        return
-    emit_causal_event(
-        ContinuationFailureSnapshot(
-            str(uuid.uuid7()),
-            str(result.context.root_transaction_id),
-            result.context.causal_ref(),
-            stage,
-            callback,
-            datetime.now(UTC),
-            ExceptionReport.capture(error),
-        )
-    )

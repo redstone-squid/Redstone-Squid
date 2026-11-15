@@ -69,42 +69,6 @@ def watch(*topics: Topic) -> None:
         topic.watch()
 
 
-class TopicCodec(Protocol):
-    """Encode the portable subset of topic addresses for an external bridge."""
-
-    __slots__ = ()
-
-    def encode(self, topic: TopicName) -> str | None: ...
-
-    def decode(self, text: str) -> TopicName | None: ...
-
-
-class DelimitedTopicCodec(TopicCodec):
-    """Encode topics as ``kind<separator>key`` without escaping.
-
-    The kind and key must be nonempty. The kind cannot contain the separator;
-    the key can, because decoding splits only at the first occurrence. Invalid
-    inputs return None. An empty separator raises ValueError at construction.
-    """
-
-    def __init__(self, separator: str = ":") -> None:
-        if not separator:
-            message = "topic separator must not be empty"
-            raise ValueError(message)
-        self.separator = separator
-
-    @override
-    def encode(self, topic: TopicName) -> str | None:
-        if not topic.kind or not topic.key or self.separator in topic.kind:
-            return None
-        return f"{topic.kind}{self.separator}{topic.key}"
-
-    @override
-    def decode(self, text: str) -> TopicName | None:
-        kind, found, key = text.partition(self.separator)
-        return TopicName(kind, key) if found and kind and key else None
-
-
 @runtime_checkable
 class TopicBus(Protocol):
     """Publish notifications that external dependencies may have changed.
@@ -264,6 +228,42 @@ def _callback_name(callback: Subscriber) -> str:
     module = getattr(callback, "__module__", type(callback).__module__)
     qualified = getattr(callback, "__qualname__", type(callback).__qualname__)
     return f"{module}.{qualified}"
+
+
+class TopicCodec(Protocol):
+    """Encode the portable subset of topic addresses for an external bridge."""
+
+    __slots__ = ()
+
+    def encode(self, topic: TopicName) -> str | None: ...
+
+    def decode(self, text: str) -> TopicName | None: ...
+
+
+class DelimitedTopicCodec(TopicCodec):
+    """Encode topics as ``kind<separator>key`` without escaping.
+
+    The kind and key must be nonempty. The kind cannot contain the separator;
+    the key can, because decoding splits only at the first occurrence. Invalid
+    inputs return None. An empty separator raises ValueError at construction.
+    """
+
+    def __init__(self, separator: str = ":") -> None:
+        if not separator:
+            message = "topic separator must not be empty"
+            raise ValueError(message)
+        self.separator = separator
+
+    @override
+    def encode(self, topic: TopicName) -> str | None:
+        if not topic.kind or not topic.key or self.separator in topic.kind:
+            return None
+        return f"{topic.kind}{self.separator}{topic.key}"
+
+    @override
+    def decode(self, text: str) -> TopicName | None:
+        kind, found, key = text.partition(self.separator)
+        return TopicName(kind, key) if found and kind and key else None
 
 
 __all__ = [

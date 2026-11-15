@@ -82,13 +82,6 @@ class Subscriptions:
         self._staged = None
         self._retire_unneeded()
 
-    def close(self) -> None:
-        """Release every committed or staged subscription and prevent reuse."""
-        if self._closed:
-            return
-        self.clear()
-        self._closed = True
-
     def clear(self) -> None:
         """Release all subscriptions while allowing this consumer to subscribe again."""
         self._committed = ()
@@ -96,6 +89,13 @@ class Subscriptions:
         for unsubscribe in tuple(self._subscriptions.values()):
             unsubscribe()
         self._subscriptions.clear()
+
+    def close(self) -> None:
+        """Release every committed or staged subscription and prevent reuse."""
+        if self._closed:
+            return
+        self.clear()
+        self._closed = True
 
     def _require_staged(self) -> tuple[DependencyAddress, ...]:
         if self._staged is None:

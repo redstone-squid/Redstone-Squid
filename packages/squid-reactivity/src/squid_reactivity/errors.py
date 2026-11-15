@@ -19,20 +19,17 @@ class ReactiveWriteError(ReactivityError, RuntimeError):
     """A reactive write violated a computation, transaction, or callback write restriction."""
 
 
-class TransactionValidationError(ReactivityError, ValueError):
-    """Application validation rejected a transaction before publication."""
-
-
-class FrameworkIntegrityError(ReactivityError, RuntimeError):
-    """An infallible publication adapter failed after the local commit point."""
-
-
-class FreshTransactionError(ReactivityError, RuntimeError):
-    """An independent transaction was requested after the enclosing transaction staged work."""
-
-
 class UndeclaredStateError(ReactivityError, RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
+
+
+class StaleReactiveContextError(ReactivityError, RuntimeError):
+    """Reactive access used a transaction outside its allowed lifetime or execution context.
+
+    Only the task that opened a transaction may stage writes. Child tasks on the same
+    thread may read its staged values; after closure, their reads use committed state
+    and their writes fail. Access through a context inherited by another thread fails.
+    """
 
 
 class ReactiveCycleError(ReactivityError, RuntimeError):
@@ -49,15 +46,6 @@ class ReactiveCycleError(ReactivityError, RuntimeError):
         super().__init__(message)
 
 
-class StaleReactiveContextError(ReactivityError, RuntimeError):
-    """Reactive access used a transaction outside its allowed lifetime or execution context.
-
-    Only the task that opened a transaction may stage writes. Child tasks on the same
-    thread may read its staged values; after closure, their reads use committed state
-    and their writes fail. Access through a context inherited by another thread fails.
-    """
-
-
 class ReactiveConflictError(ReactivityError, RuntimeError):
     """A required shared-state version changed before commit.
 
@@ -68,3 +56,15 @@ class ReactiveConflictError(ReactivityError, RuntimeError):
     def __init__(self, detail: ConflictDetail, message: str) -> None:
         self.detail = detail
         super().__init__(message)
+
+
+class FreshTransactionError(ReactivityError, RuntimeError):
+    """An independent transaction was requested after the enclosing transaction staged work."""
+
+
+class TransactionValidationError(ReactivityError, ValueError):
+    """Application validation rejected a transaction before publication."""
+
+
+class FrameworkIntegrityError(ReactivityError, RuntimeError):
+    """An infallible publication adapter failed after the local commit point."""

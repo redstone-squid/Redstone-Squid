@@ -13,11 +13,6 @@ class Completion[ValueT]:
     def __init__(self) -> None:
         self._future: asyncio.Future[ValueT] | None = None
 
-    def _bound(self) -> asyncio.Future[ValueT]:
-        if self._future is None:
-            self._future = asyncio.get_running_loop().create_future()
-        return self._future
-
     @property
     def done(self) -> bool:
         """Whether the result has been resolved or cancelled."""
@@ -43,6 +38,11 @@ class Completion[ValueT]:
     async def wait(self) -> ValueT:
         """Wait without letting a cancelled joiner cancel every other observer."""
         return await asyncio.shield(self._bound())
+
+    def _bound(self) -> asyncio.Future[ValueT]:
+        if self._future is None:
+            self._future = asyncio.get_running_loop().create_future()
+        return self._future
 
 
 __all__ = ["Completion"]

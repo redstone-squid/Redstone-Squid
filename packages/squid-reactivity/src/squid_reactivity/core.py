@@ -33,25 +33,114 @@ from squid_reactivity.transactions.state import (
 _log = logging.getLogger(__name__)
 
 
-def _equal(left: object, right: object) -> bool:
-    """Compare values, treating an equality-check failure as a difference."""
-    if left is right:
-        return True
-    try:
-        return bool(left == right)
-    except Exception:
-        return False
+class Reactive(ReactiveStateOwner):
+    """A model with tracked fields, cached computations, and transaction-aware writes.
 
+    Declare fields with state() and derived properties with computed(). Consumers can
+    capture reads and subscribe to the resulting addresses through Subscriptions.
+    Fields without defaults must be assigned before initialization finishes.
 
-def _frozen(value: Any) -> Any:
-    """Return a restored snapshot value in the shape it was exported from.
-
-    JSON has one sequence type, so an exported tuple comes back as a list. A field declared
-    `Sequence` reads either; one declared `tuple[...]` needs the tuple back.
+    Construction may assign ordinary attributes. Later writes inside a transaction
+    must target declared state so failure can discard them. Use mutated() to notify
+    readers after changing an opaque collaborator in place; rollback can discard that
+    notification, but cannot undo the collaborator's mutation.
     """
-    if isinstance(value, list | tuple):
-        return tuple(_frozen(item) for item in value)
-    return value
+
+    _reactive_commit_listeners: set[Callable[[], None]]
+    _reactive_subscribers: SubscriberRegistry
+
+    _state_names: ClassVar[frozenset[str]] = frozenset()
+    _state_descriptors: ClassVar[dict[str, _State[Any]]] = {}
+    _opaque_state: ClassVar[tuple[tuple[str, _State[Any]], ...]] = ()
+    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
+    _reactive_internal_attributes: ClassVar[frozenset[str]] = frozenset()
+    _reactive_require_state: ClassVar[bool] = True
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        instance = super().__new__(cls)
+        # Subclasses can initialize their own inputs without calling a base initializer.
+        object.__setattr__(instance, "_reactive_subscribers", {})
+        object.__setattr__(instance, "_reactive_commit_listeners", set())
+        object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
+        if current := _current_transaction():
+            current.note_born(instance)
+        return instance
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        declared = dict(_descriptors(cls, _State))
+        cls._state_names = frozenset(declared)
+        cls._state_descriptors = declared
+        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
+        cls._computed_descriptors = dict(_descriptors(cls, _Computed))
+        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
+        cls.__init__ = _checked_init(cls.__init__, required if cls._reactive_require_state else ())
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if (
+            _active() is not None
+            and name not in type(self)._reactive_internal_attributes
+            and name not in type(self)._state_names
+        ):
+            report_undeclared_write(self, name)
+        object.__setattr__(self, name, value)
+
+    def mutated(self, collaborator: object) -> None:
+        """Notify readers after changing an object held in an opaque state field.
+
+        Inside a transaction, notification waits for commit and is discarded on rollback.
+        The object's in-place mutation itself is not reversible.
+        """
+        with untracked():
+            holders = [
+                (name, descriptor)
+                for name, descriptor in type(self)._opaque_state
+                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
+            ]
+        if not holders:
+            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
+            raise TypeError(message)
+        if len(holders) > 1:
+            names = ", ".join(name for name, _ in holders)
+            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
+            raise TypeError(message)
+        _, descriptor = holders[0]
+        # No notification of its own: the staged write carries one, delivered at the commit
+        # outside an transaction and at `finalize_commit` inside one.
+        descriptor.mutated(self)
+
+    def on_state_commit(self, names: frozenset[str]) -> None:
+        """React after state fields publish together. `names` holds their declared field names."""
+
+    def on_state_rollback(self) -> None:
+        """React after this model's staged writes are discarded."""
+
+    @override
+    def _state_changed(self, names: frozenset[str]) -> None:
+        # Transactions identify a write by its storage key (`__state_<field>`). Subscribers and
+        # `on_state_commit` are addressed by the field name the author declared.
+        changed = [
+            descriptor.public_name for descriptor in type(self)._state_descriptors.values() if descriptor._name in names
+        ]
+        for name in changed:
+            publish(CellAddress(self, name))
+        for listener in tuple(self._reactive_commit_listeners):
+            try:
+                listener()
+            except Exception:
+                _log.exception("reactive commit listener failed")
+        self.on_state_commit(frozenset(changed))
+
+    @override
+    def _state_rolled_back(self) -> None:
+        self.on_state_rollback()
+
+    def _add_commit_listener(self, listener: Callable[[], None]) -> None:
+        self._reactive_commit_listeners.add(listener)
+
+    def _remove_commit_listener(self, listener: Callable[[], None]) -> None:
+        self._reactive_commit_listeners.discard(listener)
 
 
 class _State[ValueT]:
@@ -88,42 +177,6 @@ class _State[ValueT]:
         self._name = f"__state_{name}"
         self.public_name = name
 
-    @property
-    def has_initial(self) -> bool:
-        return self._default is not _MISSING or self._factory is not None
-
-    def _initial(self, instance: ReactiveStateOwner) -> ValueT:
-        if self._factory is None:
-            # No copy: a state value is replaced, never mutated, so instances may share it.
-            assert self._default is not _MISSING
-            return self._default
-        return self._factory()
-
-    def cell(self, instance: ReactiveStateOwner) -> _Cell[ValueT]:
-        """Return this field's storage on `instance`, empty until something assigns it."""
-        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
-        if cell is None:
-            cell = instance.__dict__[self._name] = _Cell[ValueT](address=CellAddress(instance, self.public_name))
-        return cell
-
-    def is_set(self, instance: ReactiveStateOwner) -> bool:
-        """Whether this field currently holds a value of its own rather than its default."""
-        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
-        return cell is not None and (cell.value is not _MISSING or cell.staged_value() is not _MISSING)
-
-    def mutated(self, instance: ReactiveStateOwner) -> None:
-        """Stage a version change for an opaque value that was mutated in place.
-
-        The mutation itself cannot be undone. Staging delays its notification until
-        commit, so a failed transaction does not publish a change notification. Bypass
-        __set__ because its identity comparison would discard this same-object write.
-        """
-        cell = self.cell(instance)
-        held = cell.staged_value()
-        if held is _MISSING:
-            held = cell.value
-        _write(instance, self._name, cell, held)
-
     @overload
     def __get__(self, instance: None, owner: type | None = None) -> _State[ValueT]: ...
 
@@ -134,8 +187,8 @@ class _State[ValueT]:
         if instance is None:
             return self
         cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
-        # `read()` answers with this action's staged value wherever it has one, so a slot the
-        # action emptied reads as empty rather than handing back the sentinel that spells it.
+        # `read()` answers with this transaction's staged value wherever it has one, so a slot the
+        # transaction emptied reads as empty rather than handing back the sentinel that spells it.
         # Asking the cell first is what keeps that sentinel private: deciding on `cell.value`
         # and only then reading meant a staged absence was returned to the caller verbatim.
         held = _MISSING if cell is None else cell.read()
@@ -151,8 +204,8 @@ class _State[ValueT]:
             value = cell.read()
             assert value is not _MISSING
             return value
-        # The action in flight emptied this slot. Empty reads as the declared default, and
-        # that default is not installed over the committed value: outside the action the
+        # The transaction in flight emptied this slot. Empty reads as the declared default, and
+        # that default is not installed over the committed value: outside the transaction the
         # committed value is still what everyone sees, and the commit is about to remove it
         # rather than replace it with this.
         return self._initial(instance)
@@ -181,6 +234,42 @@ class _State[ValueT]:
             f"reset, not removed. Assign the value it should hold instead."
         )
         raise AttributeError(message)
+
+    @property
+    def has_initial(self) -> bool:
+        return self._default is not _MISSING or self._factory is not None
+
+    def cell(self, instance: ReactiveStateOwner) -> _Cell[ValueT]:
+        """Return this field's storage on `instance`, empty until something assigns it."""
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
+        if cell is None:
+            cell = instance.__dict__[self._name] = _Cell[ValueT](address=CellAddress(instance, self.public_name))
+        return cell
+
+    def is_set(self, instance: ReactiveStateOwner) -> bool:
+        """Whether this field currently holds a value of its own rather than its default."""
+        cell = cast(_Cell[ValueT] | None, instance.__dict__.get(self._name))
+        return cell is not None and (cell.value is not _MISSING or cell.staged_value() is not _MISSING)
+
+    def mutated(self, instance: ReactiveStateOwner) -> None:
+        """Stage a version change for an opaque value that was mutated in place.
+
+        The mutation itself cannot be undone. Staging delays its notification until
+        commit, so a failed transaction does not publish a change notification. Bypass
+        __set__ because its identity comparison would discard this same-object write.
+        """
+        cell = self.cell(instance)
+        held = cell.staged_value()
+        if held is _MISSING:
+            held = cell.value
+        _write(instance, self._name, cell, held)
+
+    def _initial(self, instance: ReactiveStateOwner) -> ValueT:
+        if self._factory is None:
+            # No copy: a state value is replaced, never mutated, so instances may share it.
+            assert self._default is not _MISSING
+            return self._default
+        return self._factory()
 
 
 @overload
@@ -286,6 +375,121 @@ def state(
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
 
+class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
+    """Cache one model's computed value and the versions of its dependencies.
+
+    The node retains its input sources, but sources do not retain the node. Checking
+    versions on demand lets unused computations be collected without unsubscribe work.
+    """
+
+    __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
+
+    def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str) -> None:
+        self._function = function
+        self._label = label
+        self.owner = owner
+        self.sources: dict[_ReactiveSource, int] = {}
+        self.value: Any = None
+        self.version = 0
+        self._settled = False
+        self._epoch = -1
+        self._view: object = _MISSING
+
+    @property
+    @override
+    def address(self) -> None:
+        return None
+
+    @property
+    def evaluated(self) -> bool:
+        """Whether this node has ever produced a value. Reading it is what does that."""
+        return self._settled
+
+    def read(self) -> Any:
+        self.settle()
+        consumer = _DEPENDENCY_COLLECTOR.get()
+        if consumer is not None:
+            consumer.sources[self] = self.version
+        return self.value
+
+    @override
+    def dependencies(self) -> Iterable[_ReactiveSource]:
+        return self.sources
+
+    @override
+    def settle(self) -> int:
+        """Return the version after validating this read view and its dependencies."""
+        current = _active()
+        view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
+        # A cache belongs to one read view. Re-evaluate on entry to an transaction or
+        # a different read policy so cache hits cannot bypass conflict observations.
+        if self._view == view:
+            if self._epoch == _runtime.epoch:
+                return self.version
+            if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
+                self._epoch = _runtime.epoch
+                return self.version
+        # Cleared before the run, not after: a body that raises must leave the node asking to
+        # be recomputed rather than holding a value nothing verified.
+        self._settled = False
+        self._epoch = -1
+        self.sources = {}
+        with _DEPENDENCY_COLLECTOR.set(self), settling(self), read_only():
+            value = self._function(self.owner)
+        self._settled = True
+        self._view = view
+        # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
+        # from it, and bumping would make every settled node on the thread walk its sources.
+        self._epoch = _runtime.epoch
+        if not _equal(self.value, value):
+            self.value = value
+            self.version += 1
+        return self.version
+
+
+class _Computed:
+    """Bind a computed function to a separate cache on each model instance."""
+
+    def __init__(self, function: Callable[[Any], Any]) -> None:
+        self._function = function
+        self.public_name = function.__name__
+        self._name = f"__computed_{function.__name__}"
+        self._label = function.__name__
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.public_name = name
+        self._name = f"__computed_{name}"
+        self._label = f"{owner.__name__}.{name}"
+
+    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> Any:
+        if instance is None:
+            return self
+        return self.node(instance).read()
+
+    def node(self, instance: ReactiveStateOwner) -> _Derived:
+        """Return this computed's node on `instance`, unevaluated until something reads it."""
+        node = instance.__dict__.get(self._name)
+        if node is None:
+            node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label)
+        return node
+
+
+def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
+    """Cache a derived value and track the reactive fields its function reads.
+
+    The function runs on first access, when dependencies change, and when the
+    transaction or its read consistency policy changes. One cache serves the
+    current read view; switching views recomputes so staged values stay isolated
+    and transaction reads are recorded even if another view already evaluated it.
+
+    Each run replaces the dependencies, including conditional branches. Equal
+    results preserve the computed version. The function runs read-only.
+    """
+    # The declared return type describes what reading the attribute yields, not what the
+    # decorator hands back: the descriptor below is what actually gets bound to the class.
+    return _Computed(function)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
+
+
 @dataclass(frozen=True, slots=True)
 class CellReport:
     """Describe the storage and assignment status of one declared field."""
@@ -308,17 +512,6 @@ class ComputedReport:
     version: int
     sources: tuple[int, ...]
     """Identities of the cells and computeds its last run read, in read order."""
-
-
-def _descriptors[DescriptorT](cls: type, kind: type[DescriptorT]) -> Iterator[tuple[str, DescriptorT]]:
-    """Visit declarations base-first, including overrides from derived classes.
-
-    Callers that build dictionaries by name keep the most derived declaration.
-    """
-    for base in reversed(cls.__mro__):
-        for name, descriptor in vars(base).items():
-            if isinstance(descriptor, kind):
-                yield name, descriptor
 
 
 def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
@@ -354,10 +547,6 @@ def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell[Any], int]:
     return presumed
 
 
-def _state_fields(owner: ReactiveStateOwner) -> dict[str, _State[Any]]:
-    return {name: descriptor for name, descriptor in _descriptors(type(owner), _State) if descriptor.persist}
-
-
 def export_state(owner: ReactiveStateOwner) -> dict[str, Any]:
     """Return the value of every persistent state descriptor that currently has one."""
     return {
@@ -377,121 +566,6 @@ def restore_state(owner: ReactiveStateOwner, values: Mapping[str, Any]) -> None:
     with transaction():
         for name, value in values.items():
             setattr(owner, name, _frozen(value))
-
-
-class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
-    """Cache one model's computed value and the versions of its dependencies.
-
-    The node retains its input sources, but sources do not retain the node. Checking
-    versions on demand lets unused computations be collected without unsubscribe work.
-    """
-
-    __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
-
-    def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str) -> None:
-        self._function = function
-        self._label = label
-        self.owner = owner
-        self.sources: dict[_ReactiveSource, int] = {}
-        self.value: Any = None
-        self.version = 0
-        self._settled = False
-        self._epoch = -1
-        self._view: object = _MISSING
-
-    @property
-    @override
-    def address(self) -> None:
-        return None
-
-    @override
-    def dependencies(self) -> Iterable[_ReactiveSource]:
-        return self.sources
-
-    @override
-    def settle(self) -> int:
-        """Return the version after validating this read view and its dependencies."""
-        current = _active()
-        view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
-        # A cache belongs to one read view. Re-evaluate on entry to an action or
-        # a different read policy so cache hits cannot bypass conflict observations.
-        if self._view == view:
-            if self._epoch == _runtime.epoch:
-                return self.version
-            if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
-                self._epoch = _runtime.epoch
-                return self.version
-        # Cleared before the run, not after: a body that raises must leave the node asking to
-        # be recomputed rather than holding a value nothing verified.
-        self._settled = False
-        self._epoch = -1
-        self.sources = {}
-        with _DEPENDENCY_COLLECTOR.set(self), settling(self), read_only():
-            value = self._function(self.owner)
-        self._settled = True
-        self._view = view
-        # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
-        # from it, and bumping would make every settled node on the thread walk its sources.
-        self._epoch = _runtime.epoch
-        if not _equal(self.value, value):
-            self.value = value
-            self.version += 1
-        return self.version
-
-    @property
-    def evaluated(self) -> bool:
-        """Whether this node has ever produced a value. Reading it is what does that."""
-        return self._settled
-
-    def read(self) -> Any:
-        self.settle()
-        consumer = _DEPENDENCY_COLLECTOR.get()
-        if consumer is not None:
-            consumer.sources[self] = self.version
-        return self.value
-
-
-class _Computed:
-    """Bind a computed function to a separate cache on each model instance."""
-
-    def __init__(self, function: Callable[[Any], Any]) -> None:
-        self._function = function
-        self.public_name = function.__name__
-        self._name = f"__computed_{function.__name__}"
-        self._label = function.__name__
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        self.public_name = name
-        self._name = f"__computed_{name}"
-        self._label = f"{owner.__name__}.{name}"
-
-    def node(self, instance: ReactiveStateOwner) -> _Derived:
-        """Return this computed's node on `instance`, unevaluated until something reads it."""
-        node = instance.__dict__.get(self._name)
-        if node is None:
-            node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label)
-        return node
-
-    def __get__(self, instance: ReactiveStateOwner | None, owner: type | None = None) -> Any:
-        if instance is None:
-            return self
-        return self.node(instance).read()
-
-
-def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
-    """Cache a derived value and track the reactive fields its function reads.
-
-    The function runs on first access, when dependencies change, and when the
-    transaction or its read consistency policy changes. One cache serves the
-    current read view; switching views recomputes so staged values stay isolated
-    and transaction reads are recorded even if another view already evaluated it.
-
-    Each run replaces the dependencies, including conditional branches. Equal
-    results preserve the computed version. The function runs read-only.
-    """
-    # The declared return type describes what reading the attribute yields, not what the
-    # decorator hands back: the descriptor below is what actually gets bound to the class.
-    return _Computed(function)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
 
 
 def _checked_init(
@@ -517,111 +591,37 @@ def _checked_init(
     return __init__
 
 
-class Reactive(ReactiveStateOwner):
-    """A model with tracked fields, cached computations, and transaction-aware writes.
+def _descriptors[DescriptorT](cls: type, kind: type[DescriptorT]) -> Iterator[tuple[str, DescriptorT]]:
+    """Visit declarations base-first, including overrides from derived classes.
 
-    Declare fields with state() and derived properties with computed(). Consumers can
-    capture reads and subscribe to the resulting addresses through Subscriptions.
-    Fields without defaults must be assigned before initialization finishes.
-
-    Construction may assign ordinary attributes. Later writes inside a transaction
-    must target declared state so failure can discard them. Use mutated() to notify
-    readers after changing an opaque collaborator in place; rollback can discard that
-    notification, but cannot undo the collaborator's mutation.
+    Callers that build dictionaries by name keep the most derived declaration.
     """
+    for base in reversed(cls.__mro__):
+        for name, descriptor in vars(base).items():
+            if isinstance(descriptor, kind):
+                yield name, descriptor
 
-    _reactive_commit_listeners: set[Callable[[], None]]
-    _reactive_subscribers: SubscriberRegistry
 
-    _state_names: ClassVar[frozenset[str]] = frozenset()
-    _state_descriptors: ClassVar[dict[str, _State[Any]]] = {}
-    _opaque_state: ClassVar[tuple[tuple[str, _State[Any]], ...]] = ()
-    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
-    _reactive_internal_attributes: ClassVar[frozenset[str]] = frozenset()
-    _reactive_require_state: ClassVar[bool] = True
+def _state_fields(owner: ReactiveStateOwner) -> dict[str, _State[Any]]:
+    return {name: descriptor for name, descriptor in _descriptors(type(owner), _State) if descriptor.persist}
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        declared = dict(_descriptors(cls, _State))
-        cls._state_names = frozenset(declared)
-        cls._state_descriptors = declared
-        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
-        cls._computed_descriptors = dict(_descriptors(cls, _Computed))
-        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
-        cls.__init__ = _checked_init(cls.__init__, required if cls._reactive_require_state else ())
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        instance = super().__new__(cls)
-        # Subclasses can initialize their own inputs without calling a base initializer.
-        object.__setattr__(instance, "_reactive_subscribers", {})
-        object.__setattr__(instance, "_reactive_commit_listeners", set())
-        object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
-        if current := _current_transaction():
-            current.note_born(instance)
-        return instance
+def _frozen(value: Any) -> Any:
+    """Return a restored snapshot value in the shape it was exported from.
 
-    @override
-    def __setattr__(self, name: str, value: Any) -> None:
-        if (
-            _active() is not None
-            and name not in type(self)._reactive_internal_attributes
-            and name not in type(self)._state_names
-        ):
-            report_undeclared_write(self, name)
-        object.__setattr__(self, name, value)
+    JSON has one sequence type, so an exported tuple comes back as a list. A field declared
+    `Sequence` reads either; one declared `tuple[...]` needs the tuple back.
+    """
+    if isinstance(value, list | tuple):
+        return tuple(_frozen(item) for item in value)
+    return value
 
-    @override
-    def _state_rolled_back(self) -> None:
-        self.on_state_rollback()
 
-    def on_state_commit(self, names: frozenset[str]) -> None:
-        """React after state fields publish together. `names` holds their declared field names."""
-
-    def on_state_rollback(self) -> None:
-        """React after this model's staged writes are discarded."""
-
-    def mutated(self, collaborator: object) -> None:
-        """Notify readers after changing an object held in an opaque state field.
-
-        Inside a transaction, notification waits for commit and is discarded on rollback.
-        The object's in-place mutation itself is not reversible.
-        """
-        with untracked():
-            holders = [
-                (name, descriptor)
-                for name, descriptor in type(self)._opaque_state
-                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
-            ]
-        if not holders:
-            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
-            raise TypeError(message)
-        if len(holders) > 1:
-            names = ", ".join(name for name, _ in holders)
-            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
-            raise TypeError(message)
-        _, descriptor = holders[0]
-        # No notification of its own: the staged write carries one, delivered at the commit
-        # outside an action and at `finalize_commit` inside one.
-        descriptor.mutated(self)
-
-    @override
-    def _state_changed(self, names: frozenset[str]) -> None:
-        # Transactions identify a write by its storage key (`__state_<field>`). Subscribers and
-        # `on_state_commit` are addressed by the field name the author declared.
-        changed = [
-            descriptor.public_name for descriptor in type(self)._state_descriptors.values() if descriptor._name in names
-        ]
-        for name in changed:
-            publish(CellAddress(self, name))
-        for listener in tuple(self._reactive_commit_listeners):
-            try:
-                listener()
-            except Exception:
-                _log.exception("reactive commit listener failed")
-        self.on_state_commit(frozenset(changed))
-
-    def _add_commit_listener(self, listener: Callable[[], None]) -> None:
-        self._reactive_commit_listeners.add(listener)
-
-    def _remove_commit_listener(self, listener: Callable[[], None]) -> None:
-        self._reactive_commit_listeners.discard(listener)
+def _equal(left: object, right: object) -> bool:
+    """Compare values, treating an equality-check failure as a difference."""
+    if left is right:
+        return True
+    try:
+        return bool(left == right)
+    except Exception:
+        return False

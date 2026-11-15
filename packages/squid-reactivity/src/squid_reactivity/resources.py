@@ -60,6 +60,55 @@ from squid_reactivity.transactions.context import (
 from squid_reactivity.transactions.state import ReactiveStateOwner
 
 
+@dataclass(frozen=True, slots=True)
+class Ready[ValueT]:
+    """A resource value that completed for its current dependencies."""
+
+    value: ValueT
+
+
+@dataclass(frozen=True, slots=True)
+class Pending[ValueT]:
+    """A resource waiting to load, optionally retaining its last ready value."""
+
+    previous: Ready[ValueT] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Failed[ValueT]:
+    """A resource load that failed, optionally retaining its last ready value."""
+
+    error: Exception
+    previous: Ready[ValueT] | None = None
+
+
+type ResourceStatus[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
+type AtomicResourceStatus[ValueT] = Ready[ValueT] | Failed[ValueT]
+
+
+class PendingMode(StrEnum):
+    """Choose whether synchronous status exposes Pending or requires a ready value."""
+
+    EXPLICIT = "explicit"
+    ATOMIC = "atomic"
+
+
+class ResourceNotReadyError(ReactivityError, LookupError):
+    """A resource value was read while its state was not ready."""
+
+
+class _AtomicResourcePending(ResourceNotReadyError):
+    """Request loading before a synchronous computation can continue.
+
+    UI integrations catch this internal ResourceNotReadyError subtype, resolve the
+    resource, and retry the computation.
+    """
+
+    def __init__(self, resource: Resource[Any]) -> None:
+        self.resource = resource
+        super().__init__(f"atomic resource {resource._label!r} is pending")
+
+
 class LoadScope(Protocol):
     """A cancellation scope entered in the task running one load.
 
@@ -142,141 +191,6 @@ def _load_scope() -> LoadScope:
     return _NO_LOAD_SCOPE_FACTORY if factory is None else factory()
 
 
-@dataclass(frozen=True, slots=True)
-class Ready[ValueT]:
-    """A resource value that completed for its current dependencies."""
-
-    value: ValueT
-
-
-@dataclass(frozen=True, slots=True)
-class Pending[ValueT]:
-    """A resource waiting to load, optionally retaining its last ready value."""
-
-    previous: Ready[ValueT] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class Failed[ValueT]:
-    """A resource load that failed, optionally retaining its last ready value."""
-
-    error: Exception
-    previous: Ready[ValueT] | None = None
-
-
-type ResourceStatus[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
-type AtomicResourceStatus[ValueT] = Ready[ValueT] | Failed[ValueT]
-
-
-class PendingMode(StrEnum):
-    """Choose whether synchronous status exposes Pending or requires a ready value."""
-
-    EXPLICIT = "explicit"
-    ATOMIC = "atomic"
-
-
-class ResourceNotReadyError(ReactivityError, LookupError):
-    """A resource value was read while its state was not ready."""
-
-
-class _AtomicResourcePending(ResourceNotReadyError):
-    """Request loading before a synchronous computation can continue.
-
-    UI integrations catch this internal ResourceNotReadyError subtype, resolve the
-    resource, and retry the computation.
-    """
-
-    def __init__(self, resource: Resource[Any]) -> None:
-        self.resource = resource
-        super().__init__(f"atomic resource {resource._label!r} is pending")
-
-
-class _Missing:
-    """Distinguish an absent replacement from a replacement whose value is None."""
-
-    __slots__ = ()
-
-
-_MISSING = _Missing()
-
-
-class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
-    """Stage one resource replacement as a transaction participant.
-
-    Repeated replace() calls in one transaction keep only the final value. Preparation
-    captures dependency versions; publication installs the replacement.
-    """
-
-    __slots__ = ("_resource", "value")
-
-    def __init__(self, resource: Resource[Any]) -> None:
-        self._resource = resource
-        self.value: Any = _MISSING
-
-    @override
-    def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
-        """Capture dependency versions before publishing a replacement.
-
-        Return None when no replacement was staged; otherwise apply() uses these versions
-        as the replacement's dependency baseline.
-        """
-        if isinstance(self.value, _Missing):
-            return None
-        return {source: source.settle() for source in self._resource.sources}
-
-    @override
-    def apply(self, prepared: dict[_ReactiveSource, int] | None) -> None:
-        if prepared is not None:
-            self._resource._replace_now(self.value, baseline=prepared)
-
-    @override
-    def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:
-        return None
-
-    @override
-    def abort(self, prepared: dict[_ReactiveSource, int] | None, cause: BaseException) -> None:
-        self.value = _MISSING
-
-    @override
-    def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
-        """Do nothing: applying the replacement already sent its notifications."""
-
-
-class _Load[ValueT](_DependencyCollector):
-    """Keep one load's dependencies, cancellation scope, and completion signal.
-
-    A superseded loader may continue running until cancellation reaches it, or
-    until completion when no cancellation scope exists. Its tracked reads must
-    remain separate from the next load's reads. Only the load whose token is
-    still current installs its dependencies on the resource.
-    """
-
-    __slots__ = ("execution", "owner", "scope", "sources", "token")
-
-    def __init__(
-        self,
-        owner: Resource[ValueT],
-        token: int,
-        execution: _Execution[ResourceStatus[ValueT]],
-        scope: LoadScope,
-    ) -> None:
-        # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
-        # runs it, not the resource, is the `_DEPENDENCY_COLLECTOR`, so an identity check against the
-        # consumer alone would let a loader that reads its own resource subscribe the resource
-        # to itself -- which re-pends it forever rather than settling.
-        self.owner = owner
-        self.token = token
-        self.execution = execution
-        self.scope = scope
-        self.sources: dict[_ReactiveSource, int] = {}
-
-
-def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
-    if isinstance(status, Ready):
-        return status
-    return status.previous
-
-
 class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _SettlingNode, SubscriptionSource):
     """A cached asynchronous value with tracked inputs and synchronous status access.
 
@@ -336,66 +250,12 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         """Return the status, marking it pending if a dependency changed."""
         staged = self._staged()
         if not isinstance(staged, _Missing):
-            # This action already declared the value authoritative, so nothing it reads next
+            # This transaction already declared the value authoritative, so nothing it reads next
             # should re-pend it -- and `_recheck` would empty the sources `apply` re-baselines.
             return Ready(staged)
         self._recheck()
         self.track()
         return self._status
-
-    def track(self) -> None:
-        """Record this resource and its version as a dependency of the current reader."""
-        consumer = _DEPENDENCY_COLLECTOR.get()
-        if consumer is None or consumer is self:
-            return
-        if isinstance(consumer, _Load) and consumer.owner is self:
-            # This resource's own load is reading it. A dependency on itself would make every
-            # install invalidate the value it just installed.
-            return
-        consumer.sources[self] = self.version
-
-    @override
-    def dependencies(self) -> Iterable[_ReactiveSource]:
-        return self.sources
-
-    @override
-    def settle(self) -> int:
-        """Recheck dependencies and return the resulting version without starting a load."""
-        self._recheck()
-        return self.version
-
-    def _notify(self) -> None:
-        """Notify readers of a status change, including an explicit reload becoming pending."""
-        publish(self.address)
-
-    def _moved(self) -> None:
-        """Advance the resource version and the epoch used by computed caches."""
-        self.version += 1
-        _bump_epoch()
-
-    def _recheck(self) -> None:
-        """Mark the resource pending when any dependency version changes.
-
-        Dependencies are checked on read rather than at commit. Recursive checks
-        stop at this resource while it is already checking; resolve detects and
-        reports dependency cycles when a loader runs.
-        """
-        if self._rechecking:
-            return
-        # During loading, check the dependencies already read by that load. self.sources
-        # belongs to the previous value and is empty while loading, so checking it would
-        # miss changes to inputs the active loader has used.
-        watched = self._loading.sources if self._loading is not None else self.sources
-        self._rechecking = True
-        try:
-            # Snapshotted: `settle()` re-checks a source, which can reach back into this
-            # resource, and a load still recording would otherwise resize the dict under us.
-            moved = watched and any(source.settle() != seen for source, seen in tuple(watched.items()))
-        finally:
-            self._rechecking = False
-        if moved:
-            self.sources = {}
-            self._invalidate(notify=False)
 
     @property
     def value(self) -> ValueT:
@@ -422,16 +282,33 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         """Whether this resource currently requests settlement."""
         return isinstance(self.status, Pending)
 
-    def invalidate(self) -> None:
-        """Request a fresh value while retaining the last successful one."""
-        self._invalidate(notify=True)
+    def __await__(self) -> Generator[Any, None, ValueT]:
+        """Load the resource if needed, then return its value or raise its error.
 
-    def _invalidate(self, *, notify: bool) -> None:
-        self._new_generation()
-        self._status = Pending(_previous(self._status))
-        self._moved()
-        if notify:
-            self._notify()
+        A resource loader may await another resource and track it as a dependency. Tracking
+        happens after loading so the caller records the version it actually receives.
+        Synchronous consumers can inspect status or value instead.
+        """
+        return self._awaited().__await__()
+
+    @override
+    async def resolve(self) -> ResourceStatus[ValueT]:
+        """Load or join the current pending generation and return its status.
+
+        Use _status internally to avoid tracking the resource's pending version as
+        a dependency of its caller. _awaited records the read after loading finishes.
+        """
+        self._recheck()
+        if not isinstance(self._status, Pending):
+            return self._status
+        # Check for a cycle before joining a load, or the loader could wait on itself.
+        with settling(self):
+            return await self._loaded()
+
+    async def reload(self) -> ResourceStatus[ValueT]:
+        """Request and settle a fresh value under the caller's task."""
+        self._invalidate(notify=True)
+        return await self.resolve()
 
     def replace(self, value: ValueT) -> None:
         """Supply a value and supersede any load in progress.
@@ -446,6 +323,67 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
             return
         staged.value = value
 
+    def invalidate(self) -> None:
+        """Request a fresh value while retaining the last successful one."""
+        self._invalidate(notify=True)
+
+    def track(self) -> None:
+        """Record this resource and its version as a dependency of the current reader."""
+        consumer = _DEPENDENCY_COLLECTOR.get()
+        if consumer is None or consumer is self:
+            return
+        if isinstance(consumer, _Load) and consumer.owner is self:
+            # This resource's own load is reading it. A dependency on itself would make every
+            # install invalidate the value it just installed.
+            return
+        consumer.sources[self] = self.version
+
+    @override
+    def dependencies(self) -> Iterable[_ReactiveSource]:
+        return self.sources
+
+    @override
+    def settle(self) -> int:
+        """Recheck dependencies and return the resulting version without starting a load."""
+        self._recheck()
+        return self.version
+
+    def _staged(self) -> ValueT | _Missing:
+        """Return the active transaction's replacement for this resource, if present."""
+        staged = transaction_participant(self)
+        return staged.value if isinstance(staged, _Replacement) else _MISSING
+
+    def _recheck(self) -> None:
+        """Mark the resource pending when any dependency version changes.
+
+        Dependencies are checked on read rather than at commit. Recursive checks
+        stop at this resource while it is already checking; resolve detects and
+        reports dependency cycles when a loader runs.
+        """
+        if self._rechecking:
+            return
+        # During loading, check the dependencies already read by that load. self.sources
+        # belongs to the previous value and is empty while loading, so checking it would
+        # miss changes to inputs the active loader has used.
+        watched = self._loading.sources if self._loading is not None else self.sources
+        self._rechecking = True
+        try:
+            # Snapshotted: `settle()` re-checks a source, which can reach back into this
+            # resource, and a load still recording would otherwise resize the dict under us.
+            moved = watched and any(source.settle() != seen for source, seen in tuple(watched.items()))
+        finally:
+            self._rechecking = False
+        if moved:
+            self.sources = {}
+            self._invalidate(notify=False)
+
+    def _invalidate(self, *, notify: bool) -> None:
+        self._new_generation()
+        self._status = Pending(_previous(self._status))
+        self._moved()
+        if notify:
+            self._notify()
+
     def _replace_now(self, value: ValueT, *, baseline: dict[_ReactiveSource, int] | None = None) -> None:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
@@ -457,19 +395,14 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
         self.sources = baseline
         self._notify()
 
-    def _staged(self) -> ValueT | _Missing:
-        """Return the active transaction's replacement for this resource, if present."""
-        staged = transaction_participant(self)
-        return staged.value if isinstance(staged, _Replacement) else _MISSING
+    def _moved(self) -> None:
+        """Advance the resource version and the epoch used by computed caches."""
+        self.version += 1
+        _bump_epoch()
 
-    def __await__(self) -> Generator[Any, None, ValueT]:
-        """Load the resource if needed, then return its value or raise its error.
-
-        A resource loader may await another resource and track it as a dependency. Tracking
-        happens after loading so the caller records the version it actually receives.
-        Synchronous consumers can inspect status or value instead.
-        """
-        return self._awaited().__await__()
+    def _notify(self) -> None:
+        """Notify readers of a status change, including an explicit reload becoming pending."""
+        publish(self.address)
 
     async def _awaited(self) -> ValueT:
         self._recheck()
@@ -486,25 +419,6 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _S
             return status.value
         message = f"resource {self._label!r} did not settle"
         raise ResourceNotReadyError(message)
-
-    async def reload(self) -> ResourceStatus[ValueT]:
-        """Request and settle a fresh value under the caller's task."""
-        self._invalidate(notify=True)
-        return await self.resolve()
-
-    @override
-    async def resolve(self) -> ResourceStatus[ValueT]:
-        """Load or join the current pending generation and return its status.
-
-        Use _status internally to avoid tracking the resource's pending version as
-        a dependency of its caller. _awaited records the read after loading finishes.
-        """
-        self._recheck()
-        if not isinstance(self._status, Pending):
-            return self._status
-        # Check for a cycle before joining a load, or the loader could wait on itself.
-        with settling(self):
-            return await self._loaded()
 
     async def _loaded(self) -> ResourceStatus[ValueT]:
         token = self._request_token
@@ -772,3 +686,89 @@ def resource(
         return descriptor(function, pending_mode=pending)
 
     return decorate if loader is None else decorate(loader)
+
+
+class _Missing:
+    """Distinguish an absent replacement from a replacement whose value is None."""
+
+    __slots__ = ()
+
+
+_MISSING = _Missing()
+
+
+class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
+    """Stage one resource replacement as a transaction participant.
+
+    Repeated replace() calls in one transaction keep only the final value. Preparation
+    captures dependency versions; publication installs the replacement.
+    """
+
+    __slots__ = ("_resource", "value")
+
+    def __init__(self, resource: Resource[Any]) -> None:
+        self._resource = resource
+        self.value: Any = _MISSING
+
+    @override
+    def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
+        """Capture dependency versions before publishing a replacement.
+
+        Return None when no replacement was staged; otherwise apply() uses these versions
+        as the replacement's dependency baseline.
+        """
+        if isinstance(self.value, _Missing):
+            return None
+        return {source: source.settle() for source in self._resource.sources}
+
+    @override
+    def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:
+        return None
+
+    @override
+    def apply(self, prepared: dict[_ReactiveSource, int] | None) -> None:
+        if prepared is not None:
+            self._resource._replace_now(self.value, baseline=prepared)
+
+    @override
+    def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
+        """Do nothing: applying the replacement already sent its notifications."""
+
+    @override
+    def abort(self, prepared: dict[_ReactiveSource, int] | None, cause: BaseException) -> None:
+        self.value = _MISSING
+
+
+class _Load[ValueT](_DependencyCollector):
+    """Keep one load's dependencies, cancellation scope, and completion signal.
+
+    A superseded loader may continue running until cancellation reaches it, or
+    until completion when no cancellation scope exists. Its tracked reads must
+    remain separate from the next load's reads. Only the load whose token is
+    still current installs its dependencies on the resource.
+    """
+
+    __slots__ = ("execution", "owner", "scope", "sources", "token")
+
+    def __init__(
+        self,
+        owner: Resource[ValueT],
+        token: int,
+        execution: _Execution[ResourceStatus[ValueT]],
+        scope: LoadScope,
+    ) -> None:
+        # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
+        # runs it, not the resource, is the `_DEPENDENCY_COLLECTOR`, so an identity check against the
+        # consumer alone would let a loader that reads its own resource subscribe the resource
+        # to itself -- which re-pends it forever rather than settling.
+        self.owner = owner
+        self.token = token
+        self.execution = execution
+        self.scope = scope
+        self.sources: dict[_ReactiveSource, int] = {}
+
+
+def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
+    if isinstance(status, Ready):
+        return status
+    return status.previous

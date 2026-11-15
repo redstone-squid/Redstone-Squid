@@ -132,13 +132,6 @@ install their captured execution identity while their loader runs. Child tasks i
 immutable origin; it grants no permission to write through the originating transaction.
 """
 
-_CONTINUATION: ContextVar[bool] = ContextVar("squid_reactivity_continuation", default=False)
-"""Result callbacks must open a new transaction before writing reactive state.
-
-Nested callback scopes restore the outer guard on exit. The guard is inherited by child
-tasks, so scheduling work does not accidentally permit direct writes from a callback.
-"""
-
 
 def current_causality() -> Causality | None:
     """Return the origin to capture when starting implicit reactive work."""
@@ -153,6 +146,14 @@ def causal_scope(cause: CausalRef, root_transaction_id: TransactionId | None) ->
         yield
     finally:
         _CURRENT_CAUSALITY.reset(token)
+
+
+_CONTINUATION: ContextVar[bool] = ContextVar("squid_reactivity_continuation", default=False)
+"""Result callbacks must open a new transaction before writing reactive state.
+
+Nested callback scopes restore the outer guard on exit. The guard is inherited by child
+tasks, so scheduling work does not accidentally permit direct writes from a callback.
+"""
 
 
 @contextmanager

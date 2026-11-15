@@ -91,6 +91,29 @@ def read_only() -> Iterator[None]:
         yield
 
 
+@contextmanager
+def block_writes(reason: str) -> Iterator[None]:
+    """Temporarily reject writes through the current transaction.
+
+    The transaction retains its staged work and resumes normal writes when the scope
+    exits. With no transaction, this context does nothing. Unlike read_only(), it does
+    not establish a general restriction on reactive writes outside transactions.
+
+    Undo integrations use this while running external inverses, before restoring fields
+    whose values would otherwise overwrite additional staged changes.
+    """
+    current = _current_transaction()
+    if current is None:
+        yield
+        return
+    previous = current.write_block
+    current.write_block = reason
+    try:
+        yield
+    finally:
+        current.write_block = previous
+
+
 def _check_write(owner: ReactiveStateOwner, name: str) -> None:
     scope = _READ_ONLY.get()
     if scope is not None and owner.__dict__.get("_reactive_initialization") is not scope:
@@ -161,26 +184,3 @@ def _checkpoint(name: str) -> None:
     interleaver = _INTERLEAVER.get()
     if interleaver is not None:
         interleaver(name)
-
-
-@contextmanager
-def block_writes(reason: str) -> Iterator[None]:
-    """Temporarily reject writes through the current transaction.
-
-    The transaction retains its staged work and resumes normal writes when the scope
-    exits. With no transaction, this context does nothing. Unlike read_only(), it does
-    not establish a general restriction on reactive writes outside transactions.
-
-    Undo integrations use this while running external inverses, before restoring fields
-    whose values would otherwise overwrite additional staged changes.
-    """
-    current = _current_transaction()
-    if current is None:
-        yield
-        return
-    previous = current.write_block
-    current.write_block = reason
-    try:
-        yield
-    finally:
-        current.write_block = previous
