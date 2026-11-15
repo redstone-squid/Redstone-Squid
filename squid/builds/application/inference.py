@@ -141,7 +141,8 @@ class InferredBuild(BaseModel):
 
     source_message_ids: list[int]
     build_category: Literal["Piston Door", "Entrance", "Piston Extender", "Utility"] | None = Field(
-        description="Identified build category, including Utility for mechanisms such as lever breakers. "
+        description="Category of the whole primary build. A standalone feedtape is Utility; a piston door using one is Piston Door. "
+        "Unrelated preceding doors do not establish this build's category. "
         "Terse posts can still describe builds. Null when the mechanism cannot be identified."
     )
     component_restrictions: list[str] = Field(
