@@ -105,6 +105,17 @@ class Match[T]:
     _index: int
     _token: object
 
+    def precedes(self, other: Match[Any]) -> bool:
+        """Whether this occurrence precedes another in the same snapshot's depth-first order.
+
+        Ancestors precede their descendants. This does not imply a sibling relationship.
+        Comparing different captures raises ValueError, even for the same underlying tree.
+        """
+        if self._token is not other._token:
+            message = "ordering requires matches from the same snapshot"
+            raise ValueError(message)
+        return self._index < other._index
+
 
 @dataclass(frozen=True, slots=True)
 class Snapshot:
@@ -130,6 +141,11 @@ def snapshot(tree: object, *, children: Children = ui_children) -> Snapshot:
     Repeated references become separate occurrences; ancestor cycles raise ValueError.
     A custom children adapter also permits querying frontend or application-specific trees.
     """
+    if isinstance(tree, Snapshot):
+        if children is not ui_children:
+            message = "children cannot change traversal of an existing snapshot"
+            raise ValueError(message)
+        return tree
     rendered = tree if isinstance(tree, ComponentTree) else None
     if rendered is not None:
         if rendered.suspended or rendered.deferred:
