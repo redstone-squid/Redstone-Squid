@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import threading
 from collections.abc import Sequence
 from copy import copy
@@ -56,6 +57,7 @@ from squid.media.errors import (
     MediaDraftStateConflictError,
     MediaFailureReason,
     MediaLimitExceededError,
+    MediaProcessingError,
 )
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
@@ -968,6 +970,37 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
         assert snapshot.attempts == 1
         assert (snapshot.upload.source_object_key in artifacts.objects) is raw_exists
         assert not any(tmp_path.iterdir())
+
+
+async def test_processing_failure_logs_operation_reason_and_exit_code(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    artifacts = MemoryArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"private-media-payload",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    failure = MediaProcessingError(MediaFailureReason.TOOL_FAILED, operation="normalize_image", exit_code=-9)
+    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE, failure=failure), tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="squid.media.application.jobs"):
+        await runner.process_batch()
+
+    [record] = [item for item in caplog.records if "Media processing failed for upload" in item.getMessage()]
+    assert str(UPLOAD_ID) in record.getMessage()
+    assert "operation=normalize_image reason=tool_failed exit_code=-9" in record.getMessage()
+    assert record.exc_info is not None
+    assert "private-media-payload" not in caplog.text
+    snapshot = await jobs.get(UPLOAD_ID)
+    assert snapshot is not None
+    assert snapshot.status is MediaJobStatus.DEAD
 
 
 class BrokenFailurePathJobs(MemoryMediaJobs):

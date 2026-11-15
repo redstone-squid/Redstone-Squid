@@ -722,6 +722,15 @@ class MediaNormalizationJobRunner:
             except MediaJobClaimLostError:
                 return
             except Exception as error:
+                if isinstance(error, MediaProcessingError):
+                    logger.warning(
+                        "Media processing failed for upload %s: operation=%s reason=%s exit_code=%s",
+                        job.upload.id,
+                        error.operation,
+                        error.reason.value,
+                        error.exit_code,
+                        exc_info=True,
+                    )
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
     async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
