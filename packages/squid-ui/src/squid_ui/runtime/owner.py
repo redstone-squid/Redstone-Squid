@@ -329,9 +329,6 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     def _commit_tree(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int) -> None:
         """Reconcile lifecycle after the candidate has adopted its subscriptions."""
 
-        def depth(path: str) -> int:
-            return 0 if path == "$" else path.count(".") + 1
-
         if tree is self._committed_tree:
             if self.revision == rendered_revision:
                 self._cached_tree = tree
@@ -339,7 +336,23 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self.dirty = self.revision != rendered_revision
             return
 
-        if (
+        incremental = self._can_reconcile_incrementally(tree)
+        if incremental:
+            self._reconcile_incremental(tree)
+        else:
+            self._reconcile_components(tree)
+        self._committed_tree = tree
+        if self.revision == rendered_revision:
+            self._cached_tree = tree
+            self._cached_revision = self.revision
+        if not incremental:
+            self._cache.retain(tree.components)
+        self.dirty = self.revision != rendered_revision
+        self._raise_hook_errors()
+
+    def _can_reconcile_incrementally(self, tree: ComponentTree[RenderTargetT]) -> bool:
+        # Shared or relocated instances need reconciliation by identity across the whole tree.
+        return (
             self._committed_tree is not None
             and tree._topology_base is self._committed_tree._topology
             and len(set(self.components.values())) == len(self.components)
@@ -348,56 +361,47 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 {component for _, component in tree._removed_components}
                 & {component for _, component in tree._added_components}
             )
-        ):
-            for path, component in sorted(
-                tree._removed_components,
-                key=lambda item: depth(item[0]),
-                reverse=True,
-            ):
-                self._unmount(component)
-                component._runtime = None
-                if path != "$":
-                    component._parent = None
-                if self.components.get(path) is component:
-                    self.components.pop(path)
-                self._cache.remove_path(component)
-            for path, component in sorted(tree._added_components, key=lambda item: depth(item[0])):
-                self.components[path] = component
-                self._cache.add_path(component, path)
-                self._mount(component, path)
-            self._cache.discard_removed(tree._removed_components)
-            self._release_unused_claims(set(tree.components.values()))
-            self._committed_tree = tree
-            if self.revision == rendered_revision:
-                self._cached_tree = tree
-                self._cached_revision = self.revision
-            self.dirty = self.revision != rendered_revision
-            self._raise_hook_errors()
-            return
+        )
 
+    def _reconcile_incremental(self, tree: ComponentTree[RenderTargetT]) -> None:
+        """Apply placement changes when each instance has one unchanged location."""
+        for path, component in sorted(
+            tree._removed_components,
+            key=lambda item: _component_depth(item[0]),
+            reverse=True,
+        ):
+            self._unmount(component)
+            component._runtime = None
+            if path != "$":
+                component._parent = None
+            if self.components.get(path) is component:
+                self.components.pop(path)
+            self._cache.remove_path(component)
+        for path, component in sorted(tree._added_components, key=lambda item: _component_depth(item[0])):
+            self.components[path] = component
+            self._cache.add_path(component, path)
+            self._mount(component, path)
+        self._cache.discard_removed(tree._removed_components)
+        self._release_unused_claims(set(tree.components.values()))
+
+    def _reconcile_components(self, tree: ComponentTree[RenderTargetT]) -> None:
+        """Mount and unmount each changed instance once, including shared placements."""
         old_instances = set(self.components.values())
         new_instances = set(tree.components.values())
         removed = [(path, component) for path, component in self.components.items() if component not in new_instances]
         added = [(path, component) for path, component in tree.components.items() if component not in old_instances]
         visited: set[AnyComponent] = set()
-        for _path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
+        for _path, component in sorted(removed, key=lambda item: _component_depth(item[0]), reverse=True):
             if component not in visited:
                 visited.add(component)
                 self._unmount(component)
         visited.clear()
-        for path, component in sorted(added, key=lambda item: depth(item[0])):
+        for path, component in sorted(added, key=lambda item: _component_depth(item[0])):
             if component not in visited:
                 visited.add(component)
                 self._mount(component, path)
         self._release_unused_claims(new_instances)
         self.components = dict(tree.components)
-        self._committed_tree = tree
-        if self.revision == rendered_revision:
-            self._cached_tree = tree
-            self._cached_revision = self.revision
-        self._cache.retain(tree.components)
-        self.dirty = self.revision != rendered_revision
-        self._raise_hook_errors()
 
     def _mount(self, component: AnyComponent, path: str) -> None:
         self.claim(component)
@@ -462,7 +466,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         visited: set[AnyComponent] = set()
         for _path, component in sorted(
             self.components.items(),
-            key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,
+            key=lambda item: _component_depth(item[0]),
             reverse=True,
         ):
             if component not in visited:
@@ -480,3 +484,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.plan_memo.clear()
         self.root._runtime = None
         self._raise_hook_errors()
+
+
+def _component_depth(path: str) -> int:
+    return 0 if path == "$" else path.count(".") + 1
