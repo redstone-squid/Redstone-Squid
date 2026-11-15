@@ -229,3 +229,12 @@ def test_instance_selection_can_narrow_a_component_placement() -> None:
     assert primary.node is screen.editor
     assert query(tree, editor, within=primary, include_scope=True).one() == primary
     assert query(tree, select(ui.Component)).count() == 3
+
+
+def test_string_query_can_select_custom_component_placements() -> None:
+    screen = Screen()
+    tree = render_snapshot(screen)
+    primary = query(tree, 'Editor[key="primary"]', types={"Editor": Editor}).one()
+    assert_type(primary, Match[object])
+    assert primary.node is screen.editor
+    assert query(tree, 'ActionControl[key="save"]', within=primary).one().owner == "primary"

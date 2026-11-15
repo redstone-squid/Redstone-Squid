@@ -161,16 +161,18 @@ For tests, `squid_ui.testing.render_snapshot(component)` combines explicit rende
 and snapshot capture. Existing `find` and `find_all` keep their original general
 dataclass traversal and assertion behavior for compatibility.
 
-A CSS-inspired string form compiles to the same selector operations:
+Pass a CSS-inspired string directly to `query`, or compile it with `parse` for reuse:
 
 ```python
 from squid_ui.selectors import parse
 
 save = parse('Editor[key="editor"] ActionControl[key="save"]', types={"Editor": Editor})
 query(tree, save).one()
-query(tree, parse('ActionControls:has(> ActionControl[available=false])')).all()
+query(tree, 'ActionControls:has(> ActionControl[available=false])').all()
+query(tree, 'Editor[key="editor"]', types={"Editor": Editor}).one()
 ```
 
+String queries return `Match[object]`; typed selectors preserve their inferred node type.
 Semantic type names are built in. Register component or primitive names explicitly
 with `types={...}`; parsing never imports or evaluates names. Supported syntax is
 `*`, types, `[attribute]`, `[attribute=value]`, `[text*=value]`, `[label*=value]`,

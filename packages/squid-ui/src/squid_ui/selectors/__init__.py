@@ -4,7 +4,8 @@ Capture existing nodes with snapshot(nodes), or preserve component boundaries wi
 snapshot(render_component_tree(component)). Selectors never render or dispatch actions.
 """
 
-from squid_ui.selectors.core import Query, QueryError, Selector, query, scope, select
+from squid_ui.selectors._query import query
+from squid_ui.selectors.core import Query, QueryError, Selector, scope, select
 from squid_ui.selectors.parser import SelectorSyntaxError, parse
 from squid_ui.selectors.tree import Children, Match, Snapshot, snapshot, ui_children
 

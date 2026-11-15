@@ -6,7 +6,7 @@ from re import Pattern
 from typing import Any, cast, overload
 
 from squid_ui.selectors.tree import Match, Snapshot
-from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_ui.text import Localization, TextLike, resolve_text
 
 type Predicate = Callable[[Snapshot, int, int | None, Localization], bool]
 _MISSING = object()
@@ -206,28 +206,3 @@ class Query[T]:
         if len(candidates) > 20:
             details += f"\n  ... {len(candidates) - 20} more"
         return QueryError(f"Expected {expected} {self._description}; found {len(self._matches)}.\n{details}")
-
-
-def query[T](
-    tree: Snapshot,
-    selector: Selector[T],
-    *,
-    within: Match[Any] | None = None,
-    include_scope: bool = False,
-    localization: Localization = NEUTRAL,
-) -> Query[T]:
-    """Evaluate once in depth-first order, deduplicating by occurrence, not object identity.
-
-    An unscoped query includes every root. A scoped query includes strict descendants
-    unless include_scope is set. Ancestor and has predicates cannot escape the scope.
-    """
-    root = tree.index(within) if within is not None else None
-    start = 0 if root is None else root + (not include_scope)
-    end = len(tree.matches) if root is None else tree.ends[root]
-    available = tree.matches[start:end]
-    found = tuple(
-        cast(Match[T], tree.matches[index])
-        for index in range(start, end)
-        if selector._predicate(tree, index, root, localization)
-    )
-    return Query(found, selector.description, available)

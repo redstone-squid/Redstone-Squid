@@ -108,3 +108,17 @@ def test_presence_uses_query_metadata_and_own_text() -> None:
     assert query(captured, parse("[qualified_key]")).count() == 3
     assert query(captured, parse("[text]")).count() == 2
     assert query(captured, parse("Heading[level=2e0]")).count() == 1
+
+
+def test_query_accepts_strings_and_preserves_scope() -> None:
+    captured = snapshot(tree())
+    section = query(captured, "Section").one()
+    source = 'ActionControl[key="save"]'
+    assert query(captured, source, within=section).all() == query(captured, parse(source), within=section).all()
+    assert query(captured, ":scope", within=section, include_scope=True).one() == section
+    assert not query(captured, "Stack ActionControl", within=section).exists()
+    assert query(captured, "Control", types={"Control": s.ActionControl}).count() == 2
+    with pytest.raises(SelectorSyntaxError, match="unknown type"):
+        query(captured, "Control")
+    with pytest.raises(SelectorSyntaxError, match="offset"):
+        query(captured, "ActionControl[")
