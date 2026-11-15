@@ -5,8 +5,8 @@ combines a protocol mode (`components-v1` or `components-v2`) with an immutable 
 describe what the message format can express; adapter capabilities describe behavior the installed framework has been
 verified to provide.
 
-The Discord extra ships `DISCORD_PY_27_ADAPTER`, applicable to `discord.py>=2.7,<2.8`. The built-in `V2_TARGET`,
-`CLASSIC_TARGET`, `Target.v2()`, and `Target.classic()` use this profile. Compose, rendering, mounting, routing,
+The Discord package ships `DISCORD_PY_27_ADAPTER`, applicable to `discord.py>=2.7,<2.8`. The built-in `DISCORD_V2_DPY27`,
+`DISCORD_V1_DPY27`, `target.v2()`, and `target.classic()` use this profile. Compose, rendering, mounting, routing,
 interaction delivery, and modal construction verify both the installed discord.py version and the capability needed by
 that operation. An unknown version fails with a message asking for an explicitly verified custom profile.
 
@@ -15,13 +15,13 @@ that operation. An unknown version fails with a message asking for an explicitly
 Applications may opt into a newer discord.py release without waiting for a Squid release:
 
 ```python
-import squid_ui as sl
+import squid_ui.ext.discord as sd
 
-profile = sd.discord_py_adapter_profile(
+profile = sd.adapter.discord_py_adapter_profile(
     "my-discord-py-2.8",
     ">=2.8,<2.9",
 )
-target = sd.Target.v2(adapter=profile)
+target = sd.target.v2(adapter=profile)
 ```
 
 Only declare capabilities the application has verified. Omitting a behavior produces an operation-specific error at the

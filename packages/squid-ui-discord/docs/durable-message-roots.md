@@ -8,24 +8,29 @@ Register a stable recipe for every message-root type the runtime may reconstruct
 including its dependencies and explicit access policy; snapshots never import application classes or infer an owner.
 
 ```python
+import anyio
+
 import squid_ui as sl
+import squid_ui.ext.discord as sd
 from squid_ui.ext.discord.durability import (
     ComponentRegistry,
     DiscordFrontend,
     DurableSessionRuntime,
     RestoreContext,
-    SnapshotError,
+    MessageRootStateError,
     SQLiteSessionStore,
 )
+from squid_ui.runtime.services import UIExecutionHost
 
 
 components = ComponentRegistry()
-defaults = sd.MessageRootDefaults()
+execution = UIExecutionHost()
+defaults = sd.MessageRootDefaults(execution_host=execution)
 
 
 def restore_review(context: RestoreContext) -> sd.MessageRoot:
     if context.actor_id is None:
-        raise SnapshotError("review sessions require an owner")
+        raise MessageRootStateError("review sessions require an owner")
     return defaults.mount(
         ReviewPanel(review_service),
         access=sd.Owner(context.actor_id),
@@ -47,22 +52,39 @@ Run the coordinator after Discord login and before gateway connection. The task-
 until recovery has completed and lease/checkpoint supervision is active.
 
 ```python
-async with anyio.create_task_group() as tasks:
-    await bot.login(token)
-    report = await tasks.start(runtime.run)
-    await bot.connect()
+async with bot, anyio.create_task_group() as tasks:
+    await tasks.start(execution.run)
+    try:
+        await bot.login(token)
+        async with anyio.create_task_group() as durable_tasks:
+            report = await durable_tasks.start(runtime.run)
+            try:
+                await bot.connect()
+            finally:
+                durable_tasks.cancel_scope.cancel()
+    finally:
+        with anyio.CancelScope(shield=True):
+            try:
+                await sessions.close_all(reason=sd.CloseReason.RUNTIME_SHUTDOWN)
+            finally:
+                await execution.close()
 ```
 
-`DurableBot` supplies the same ordering for `commands.Bot`. Subclasses implement `build_durable_runtime()`;
+Stop the durable coordinator before closing live sessions: it releases claims and detaches
+persistence, so closing the messages preserves their records for recovery. Store adapters
+should bound their own I/O timeouts; cancellation waits for claim-release cleanup.
+
+`DurableBot` supplies the same recovery ordering for `commands.Bot`. Subclasses implement `build_durable_runtime()`;
 the runtime is available as `durable_sessions` during `setup_hook()`. Both inherited `start()` and an explicit
 `await bot.login(...); await bot.connect()` recover before gateway dispatch.
+It does not start or close the UI execution host; keep that host running around the bot lifecycle.
 
 Open a public, addressable delivery through the runtime rather than opening through `SessionManager` and trying
 to persist it afterward:
 
 ```python
 assert interaction.guild_id is not None
-message_root = sd.MessageRoot(
+message_root = defaults.mount(
     ReviewPanel(review_service),
     access=sd.Owner(interaction.user.id),
     timeout=None,

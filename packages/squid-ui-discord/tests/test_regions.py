@@ -222,7 +222,8 @@ async def test_mounted_region_turns_keep_sibling_position_and_survive_failed_del
     assert retained is not None
     assert root.presentation.retained_composition is not None
     assert root.presentation.retained_composition.result.allocation is retained.result.allocation
-    assert_within_limits(retry.response.edit_message.await_args.kwargs["view"])
+    assert len(retry.edits) == 1
+    assert_within_limits(retry.edits[0].kwargs["view"])
 
 
 async def test_region_controls_use_the_existing_stale_generation_policy() -> None:

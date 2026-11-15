@@ -12,7 +12,8 @@ saying which one you mean:
 
 ```python
 import squid_ui as sl
-from squid_ui.ext.discord import CLASSIC_TARGET, V2_TARGET, classic
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, classic
 
 document = [
     sl.heading("Piston door"),
@@ -31,7 +32,7 @@ the fields real embed fields, and the trailing note its footer. The same documen
 
 ## What the targets differ in
 
-| | `V2_TARGET` | `CLASSIC_TARGET` |
+| | `DISCORD_V2_DPY27` | `DISCORD_V1_DPY27` |
 |---|---|---|
 | Target id | `discord.components-v2` | `discord.components-v1` |
 | Message `content` | not available | 2,000 characters, via `Content` |
@@ -94,7 +95,11 @@ without owning the embed.
 
 ### 3. Let a message root own the screen
 
-Now the message is Squid's, and the same service function is called from an action:
+Now the message is Squid's, and the same service function is called from an action.
+The standalone roots below require a running `UIExecutionHost` named `execution`,
+started with `await tasks.start(execution.run)` in a host-owned AnyIO task group.
+Finish the roots before closing the execution host; see the
+[quickstart](../../../docs/squid-ui-quickstart.md) for application runtime startup.
 
 ```python
 class Door(sl.Component):
@@ -113,7 +118,7 @@ class Door(sl.Component):
         ]
 
 
-message_root = sd.MessageRoot(Door(), target=CLASSIC_TARGET, access=sd.Owner(user_id))
+message_root = sd.MessageRoot(Door(), target=DISCORD_V1_DPY27, access=sd.Owner(user_id), execution_host=execution)
 await message_root.send(sd.reply_to(ctx))
 ```
 
@@ -130,7 +135,7 @@ rather than transferring the item that carried it.
 Change the target, and nothing else:
 
 ```python
-message_root = sd.MessageRoot(Door(), target=V2_TARGET, access=sd.Owner(user_id))
+message_root = sd.MessageRoot(Door(), target=DISCORD_V2_DPY27, access=sd.Owner(user_id), execution_host=execution)
 ```
 
 This has to be a *new* message. Discord cannot take the Components V2 flag back off a sent
@@ -175,7 +180,7 @@ nothing useful.
 `ClassicRenderer` therefore runs a strict payload audit over what will actually be sent —
 `Embed.to_dict()` for the wire shape, `Embed.__len__` for the aggregate — covering per-value
 caps, URL schemes, empty field names and values, duplicate embed URLs, custom-ID uniqueness and
-length, row and control structure, and attachment capacity. `sd.audit_classic_payload`
+length, row and control structure, and attachment capacity. `sd.inspection.audit_classic_payload`
 is the same check, callable directly.
 
 Duplicate non-null embed URLs are refused rather than sent: Discord renders only the first such
@@ -190,12 +195,13 @@ The two built-in targets are registered by default; a custom target needs explic
 registration:
 
 ```python
-from squid_ui.ext.discord import Target, TargetRegistry
+from squid_ui.ext.discord import target
+from squid_ui.ext.discord.targets import TargetRegistry
 from squid_ui.ext.discord.limits import ClassicLimits
 
-compact = Target.classic(limits=ClassicLimits(embeds=2))
+compact = target.classic(limits=ClassicLimits(embeds=2))
 targets = TargetRegistry(compact)
-message_root = components.restore(snapshot, targets=targets, access=sd.Everyone())
+message_root = components.restore(snapshot, targets=targets, access=sd.Everyone(), execution_host=execution)
 ```
 
 ## Limits and where they come from
