@@ -1046,7 +1046,7 @@
       }
     ],
     "locations": [
-      "packages/squid-ui/src/squid_ui/factories.py:608"
+      "packages/squid-ui/src/squid_ui/factories/collections.py:183"
     ]
   }
 }

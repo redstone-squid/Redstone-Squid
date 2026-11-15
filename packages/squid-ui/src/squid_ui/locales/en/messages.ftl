@@ -266,5 +266,5 @@ ui-page-jump-range = Enter a page from 1 to { $pages }.
 # packages/squid-ui/src/squid_ui/planning/navigation.py:356
 ui-page-jump-unavailable = This pager is no longer available.
 
-# packages/squid-ui/src/squid_ui/factories.py:608
+# packages/squid-ui/src/squid_ui/factories/collections.py:183
 ui-tally-option = { $label } — { NUMBER($count) }
