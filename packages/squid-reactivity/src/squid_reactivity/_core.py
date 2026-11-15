@@ -16,7 +16,7 @@ from squid_reactivity._addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity._cells import _MISSING, _Cell, _Missing
 from squid_reactivity._evaluation import _SettlingNode, settling
 from squid_reactivity._runtime import _runtime
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource, untracked
+from squid_reactivity._tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
 from squid_reactivity.transactions._engine import _write, report_undeclared_write
 from squid_reactivity.transactions._state import (

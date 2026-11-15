@@ -4,9 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
 from typing import override
 
-from squid_reactivity.core import (
-    state,
-)
+from squid_reactivity import state
 from squid_reactivity.operations import Failed, Pending
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike

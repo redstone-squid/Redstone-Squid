@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from squid_reactivity._cells import _MISSING, _Cell
-from squid_reactivity.errors import (
+from squid_reactivity._errors import (
     ReactiveConflictError,
 )
 from squid_reactivity.transactions._results import (

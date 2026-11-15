@@ -16,8 +16,8 @@ from squid_reactivity import (
     state,
     transaction,
 )
-from squid_reactivity.core import inspect_cells
 from squid_reactivity.diagnostics import TransactionResultSnapshot
+from squid_reactivity.inspection import inspect_cells
 from squid_reactivity.testing import InterleavingHarness
 from squid_reactivity.transactions import (
     ActorRef,

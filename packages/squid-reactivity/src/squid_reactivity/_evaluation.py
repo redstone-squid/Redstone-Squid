@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Protocol
 
-from squid_reactivity.errors import ReactiveCycleError
+from squid_reactivity._errors import ReactiveCycleError
 
 
 class _SettlingNode(Protocol):

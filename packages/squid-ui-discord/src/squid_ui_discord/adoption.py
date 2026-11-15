@@ -19,9 +19,7 @@ from urllib.parse import urlsplit
 
 import discord
 
-from squid_reactivity.core import (
-    state,
-)
+from squid_reactivity import state
 from squid_ui.assets import Asset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji, normalize_emoji

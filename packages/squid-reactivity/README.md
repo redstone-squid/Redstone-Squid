@@ -241,21 +241,21 @@ Import from the modules below. A module or name that starts with an underscore i
 and can change in any release.
 
 - `squid_reactivity` has what models and their readers need: fields, computed values,
-  transactions, read tracking, subscriptions, topics, and the error types.
+  transactions, read tracking, change listeners, topics, and the error types.
 - `squid_reactivity.transactions` adds patches, participants, causal context, and results.
 - `squid_reactivity.diagnostics` has event snapshots, sinks, and redaction.
 - `squid_reactivity.resources` and `squid_reactivity.operations` have asynchronous values and
   explicitly started work.
 - `squid_reactivity.topics` has buses, codecs, and the address types.
-- `squid_reactivity.core` and `squid_reactivity.tracking` add inspection helpers such as
-  `inspect_cells` and `addresses` to the model and tracking names the root exports.
-- `squid_reactivity.errors`, `squid_reactivity.subscriptions`, and `squid_reactivity.completion`
-  hold the error types, `Subscriptions`, and `Completion`, a shareable asynchronous result.
+- `squid_reactivity.inspection` reports the versions and dependencies of a model's fields and
+  computed values, for debugging tools.
+- `squid_reactivity.completion` has `Completion`, an asynchronous result several tasks can await.
 - `squid_reactivity.testing` runs callbacks at named points of a commit, to test interleavings.
 - `squid_reactivity.internals` exposes storage and execution types to packages that integrate
   closely, such as a UI runtime. It is public to import but carries no stability promise.
 
-Inside the package, `_cells` stores versioned values and `_addresses` delivers notifications.
+Inside the package, `_core` declares models, `_cells` stores versioned values, `_tracking`
+captures and checks dependencies, and `_addresses` delivers notifications.
 The `transactions` package separates the `with transaction(...)` block (`_scope`), execution
 (`_engine`), reversible changes (`_patches`), identity (`_context`), outcomes (`_results`),
 and scoped controls (`_state`).

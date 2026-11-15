@@ -5,7 +5,7 @@ from typing import override
 
 import pytest
 
-from squid_reactivity.subscriptions import Subscriptions
+from squid_reactivity import Subscriptions
 from squid_reactivity.topics import LocalTopicBus, TopicName
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.errors import LayoutInvariantError

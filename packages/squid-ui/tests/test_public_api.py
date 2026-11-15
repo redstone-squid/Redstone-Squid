@@ -63,7 +63,7 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
             "squid_ui.planning",
             "squid_ui.profiling",
             "squid_ui.runtime",
-            "squid_reactivity.core",
+            "squid_reactivity",
             "squid_reactivity.topics",
         ],
         "discord",

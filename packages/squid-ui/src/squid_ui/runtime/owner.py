@@ -4,8 +4,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from squid_reactivity import Subscriptions
 from squid_reactivity.resources import AsyncBinding
-from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import BusAddress, DependencyAddress
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError

@@ -92,19 +92,19 @@ this type. `BusAddress` also accepts `TopicName`, which the receiving bus resolv
 
 ::: squid_reactivity.CellAddress
 
-::: squid_reactivity.tracking.addresses
+::: squid_reactivity.addresses
 
-::: squid_reactivity.core.inspect_cells
+::: squid_reactivity.inspection.inspect_cells
 
-::: squid_reactivity.core.inspect_computed
+::: squid_reactivity.inspection.inspect_computed
 
 ::: squid_reactivity.export_state
 
 ::: squid_reactivity.restore_state
 
-::: squid_reactivity.core.CellReport
+::: squid_reactivity.inspection.CellReport
 
-::: squid_reactivity.core.ComputedReport
+::: squid_reactivity.inspection.ComputedReport
 
 ## Patches
 
@@ -131,7 +131,7 @@ rules documented at each declaration:
 | Module | Scoped state | Lifetime |
 |---|---|---|
 | `transactions._state` | Active transaction, read policy, write restriction | Transaction body or nested read scope; test interception is separate. |
-| `tracking` | Dependency collector | Computation, resource load, or render. |
+| `_tracking` | Dependency collector | Computation, resource load, or render. |
 | `_evaluation` | Evaluation stack for cycle detection | Computed value, resource load, or operation. |
 | `transactions._context` | Immutable causality and callback write guard | Transaction publication, operation execution, or result callback. |
 | `_async_values` | Observed async bindings | One render expansion. |

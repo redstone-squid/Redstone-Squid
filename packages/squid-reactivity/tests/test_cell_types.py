@@ -4,7 +4,7 @@ from typing import assert_type
 
 from squid_reactivity import Reactive, transaction
 from squid_reactivity._cells import _MISSING, _Cell, _Missing
-from squid_reactivity.core import _State
+from squid_reactivity._core import _State
 from squid_reactivity.transactions._engine import _Staged
 from squid_reactivity.transactions._state import _current_transaction
 

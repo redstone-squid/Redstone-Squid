@@ -11,9 +11,9 @@ from types import TracebackType
 from typing import Self
 
 from squid_reactivity._addresses import CellAddress, subscribe
-from squid_reactivity.core import _equal
+from squid_reactivity._core import _equal
+from squid_reactivity._tracking import Dependencies, observe_reads, untracked
 from squid_reactivity.topics import DependencyAddress, Topic
-from squid_reactivity.tracking import Dependencies, observe_reads, untracked
 from squid_reactivity.transactions._context import continuation_callback
 from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
 

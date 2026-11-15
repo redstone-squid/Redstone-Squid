@@ -9,8 +9,7 @@ from typing import override
 
 import pytest
 
-from squid_reactivity import DependencyAddress, Subscriptions, UndeclaredStateError, export_state
-from squid_reactivity.tracking import addresses
+from squid_reactivity import DependencyAddress, Subscriptions, UndeclaredStateError, addresses, export_state
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, transaction

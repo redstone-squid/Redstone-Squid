@@ -13,7 +13,7 @@ from threading import current_thread
 from typing import TYPE_CHECKING, Protocol
 
 from squid_reactivity._addresses import SubscriptionSource
-from squid_reactivity.errors import ReactiveWriteError, StaleReactiveContextError
+from squid_reactivity._errors import ReactiveWriteError, StaleReactiveContextError
 
 if TYPE_CHECKING:
     from squid_reactivity.transactions._engine import _TransactionEngine

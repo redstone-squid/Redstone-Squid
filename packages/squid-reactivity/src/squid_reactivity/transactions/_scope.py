@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
-from squid_reactivity.errors import (
+from squid_reactivity._errors import (
     FreshTransactionError,
     StaleReactiveContextError,
 )

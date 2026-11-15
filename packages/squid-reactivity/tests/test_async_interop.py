@@ -3,8 +3,7 @@ import asyncio
 import anyio
 import pytest
 
-from squid_reactivity import Reactive, state
-from squid_reactivity.errors import ReactiveCycleError
+from squid_reactivity import Reactive, ReactiveCycleError, state
 from squid_reactivity.operations import Failed, OperationExecution, ProgressReporter, operation
 from squid_reactivity.resources import Ready, resource
 

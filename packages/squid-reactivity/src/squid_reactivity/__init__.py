@@ -11,9 +11,8 @@ separate reactive objects when started with separate execution contexts.
 """
 
 from squid_reactivity._cells import Signal
-from squid_reactivity.core import Reactive, computed, export_state, restore_state, state
-from squid_reactivity.diagnostics import EventLedger, observe_events
-from squid_reactivity.errors import (
+from squid_reactivity._core import Reactive, computed, export_state, restore_state, state
+from squid_reactivity._errors import (
     FrameworkIntegrityError,
     FreshTransactionError,
     ReactiveConflictError,
@@ -24,9 +23,10 @@ from squid_reactivity.errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity.subscriptions import ChangeListener, Subscriptions, on_change
+from squid_reactivity._subscriptions import ChangeListener, Subscriptions, on_change
+from squid_reactivity._tracking import Dependencies, addresses, capture_reads, observe_reads, untracked
+from squid_reactivity.diagnostics import EventLedger, observe_events
 from squid_reactivity.topics import CellAddress, DependencyAddress, LocalTopicBus, Topic, TopicBus, TopicName, watch
-from squid_reactivity.tracking import Dependencies, capture_reads, observe_reads, untracked
 from squid_reactivity.transactions import Transaction, current_transaction, readonly_transaction, transaction
 from squid_reactivity.transactions._results import TransactionCommit, TransactionResult, TransactionRollback
 from squid_reactivity.transactions._state import relaxed_read, strong_read
@@ -57,6 +57,7 @@ __all__ = [
     "TransactionRollback",
     "TransactionValidationError",
     "UndeclaredStateError",
+    "addresses",
     "capture_reads",
     "computed",
     "current_transaction",

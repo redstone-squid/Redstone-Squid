@@ -5,8 +5,7 @@ import weakref
 
 import pytest
 
-from squid_reactivity import Reactive, Subscriptions, computed, state, transaction
-from squid_reactivity.tracking import addresses
+from squid_reactivity import Reactive, Subscriptions, addresses, computed, state, transaction
 
 
 class Search(Reactive):

@@ -6,7 +6,7 @@ from typing import Any, override
 
 import pytest
 
-from squid_reactivity.core import CellReport, inspect_cells
+from squid_reactivity.inspection import CellReport, inspect_cells
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 
@@ -95,9 +95,7 @@ class TestOpaqueFields:
         assert panel.service is service
 
     def test_they_are_not_persisted_by_default(self):
-        from squid_reactivity.core import (
-            export_state,
-        )
+        from squid_reactivity import export_state
 
         assert set(export_state(Panel(Service()))) == {"rows", "channels", "filters"}
 

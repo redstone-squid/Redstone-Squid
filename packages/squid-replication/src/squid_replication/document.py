@@ -10,10 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactivity import CellAddress
-from squid_reactivity.errors import (
-    ReactiveConflictError,
-)
+from squid_reactivity import CellAddress, ReactiveConflictError
 from squid_reactivity.internals import Cell as _Cell
 from squid_reactivity.internals import SubscriberRegistry, publish
 from squid_reactivity.transactions import (

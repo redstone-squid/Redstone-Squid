@@ -27,9 +27,8 @@ from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 import anyio
 import discord
 
-from squid_reactivity import CellAddress
+from squid_reactivity import CellAddress, Subscriptions
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_reactivity.subscriptions import Subscriptions
 from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import (
     ActorRef,

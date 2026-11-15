@@ -7,10 +7,7 @@ from typing import Any, override
 
 import pytest
 
-from squid_reactivity.core import (
-    export_state,
-    restore_state,
-)
+from squid_reactivity import export_state, restore_state
 from squid_reactivity.transactions import TransactionCommit, block_writes, readonly_transaction
 from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
