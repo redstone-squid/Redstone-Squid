@@ -7,6 +7,7 @@ selection and wrap the returned node with their controls or message payload.
 import logging
 import mimetypes
 from collections.abc import Sequence
+from urllib.parse import urlsplit
 
 from discord.utils import escape_markdown
 
@@ -180,8 +181,7 @@ async def render_build_card(
             ),
         )
     description = build_description(build)
-    media = await _get_media_urls(build, media_previews)
-    extra_media = media[1:]
+    thumbnail, extra_media = await _get_media_urls(build, media_previews)
     return sl.section(
         sl.heading(sl.md(format_build_display_title(build, markdown=True))),
         # Allow the description to shrink when the full card exceeds the layout budget.
@@ -195,7 +195,7 @@ async def render_build_card(
         sl.note(sl.plain(footer)),
         *rows,
         accent=_status_tone(build.submission_status, build_id=build.id),
-        thumbnail=media[0] if media else None,
+        thumbnail=thumbnail,
     )
 
 
@@ -219,23 +219,24 @@ def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:
     return ladders
 
 
-async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> list[str]:
-    media: list[str] = []
+async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> tuple[str | None, list[str]]:
+    """Choose an image thumbnail and retain the remaining images and direct video files."""
+    images: list[str] = []
     for url in build.image_urls:
-        mimetype, _ = mimetypes.guess_type(url)
-        if mimetype is not None and mimetype.startswith("image"):
-            media.append(url)
+        mimetype, _ = mimetypes.guess_type(urlsplit(url).path)
+        if mimetype is not None and mimetype.startswith("image/"):
+            images.append(url)
             continue
         try:
             preview = await media_previews.get(url)
         except Exception:
             logger.warning("Could not resolve a build media preview", exc_info=True)
-            continue
-        image = preview["image"]
-        if isinstance(image, str):
-            media.append(image)
+            preview = None
+        image = preview["image"] if preview is not None else None
+        # Stored image links may be extensionless or outside the preview fetch allowlist.
+        images.append(image if isinstance(image, str) else url)
 
-    if not media:
+    if not images:
         for url in build.video_urls:
             try:
                 preview = await media_previews.get(url)
@@ -244,13 +245,18 @@ async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> l
                 continue
             image = preview["image"]
             if isinstance(image, str):
-                media.append(image)
+                images.append(image)
                 break
 
     # Prefer submitted images or a video preview over a generated render for the thumbnail.
-    media.extend(build.render_urls)
-
-    return media[:10]
+    images = list(dict.fromkeys((*images, *build.render_urls)))
+    videos: list[str] = []
+    for url in build.video_urls:
+        mimetype, _ = mimetypes.guess_type(urlsplit(url).path)
+        if mimetype is not None and mimetype.startswith("video/"):
+            videos.append(url)
+    # Video pages remain in Resources; Discord galleries need direct media URLs.
+    return (images[0] if images else None), list(dict.fromkeys((*images[1:], *videos)))
 
 
 def build_description(build: Build) -> Text | None:

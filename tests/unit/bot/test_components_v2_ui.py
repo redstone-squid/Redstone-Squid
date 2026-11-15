@@ -109,6 +109,51 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
 
 
 @pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/build.png?signature=abc",
+        "https://example.com/image/123",
+        "https://example.com/build.webp#preview",
+    ],
+)
+async def test_build_card_preserves_image_urls(display_build: Build, url: str) -> None:
+    display_build.links = [BuildLink(url=url, media_type="image")]
+
+    payload = render_payload([await render_build_card(display_build, MediaPreviewClient())]).layout.to_components()
+
+    assert url in str(payload)
+
+
+async def test_build_card_keeps_remaining_images_and_videos(display_build: Build) -> None:
+    images = [f"https://example.com/image-{index}.png" for index in range(12)]
+    video = "https://example.com/demo.mp4?signature=abc"
+    video_page = "https://example.com/watch/123"
+    display_build.links = [
+        *(BuildLink(url=url, media_type="image") for url in images),
+        BuildLink(url=video, media_type="video"),
+        BuildLink(url=video_page, media_type="video"),
+    ]
+
+    thumbnail, media = await build_card_module._get_media_urls(display_build, MediaPreviewClient())
+    payload = render_payload([await render_build_card(display_build, MediaPreviewClient())]).layout.to_components()
+
+    assert thumbnail == images[0]
+    assert media == [*images[1:], video]
+    for url in (*images, video, video_page):
+        assert url in str(payload)
+
+
+async def test_build_card_video_without_preview_stays_in_gallery(display_build: Build) -> None:
+    video = "https://example.com/demo.webm"
+    display_build.links = [BuildLink(url=video, media_type="video")]
+
+    thumbnail, media = await build_card_module._get_media_urls(display_build, MediaPreviewClient())
+
+    assert thumbnail is None
+    assert media == [video]
+
+
+@pytest.mark.parametrize(
     ("status", "expected"),
     [
         (Status.PENDING, sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")),
