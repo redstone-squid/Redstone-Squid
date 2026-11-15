@@ -31,6 +31,7 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
+from squid_ui.planning.offers import OfferPolicy, semantic_offers
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
@@ -39,7 +40,6 @@ from squid_ui.planning.realizations import (
     FieldsRealization,
     FlowRealization,
     ImageRealization,
-    OfferPolicy,
     PanelRealization,
     Realization,
     RowRealization,
@@ -50,7 +50,6 @@ from squid_ui.planning.realizations import (
     TextSequenceRealization,
     TimeRealization,
     record_text,
-    semantic_offers,
 )
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
 from squid_ui.primitives.styles import ActionStyle

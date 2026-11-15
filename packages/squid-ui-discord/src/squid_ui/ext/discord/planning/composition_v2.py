@@ -32,6 +32,7 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
+from squid_ui.planning.offers import OfferPolicy, semantic_offers
 from squid_ui.planning.realizations import (
     ActionsRealization,
     CardRealization,
@@ -45,7 +46,6 @@ from squid_ui.planning.realizations import (
     GalleryRealization,
     ImageRealization,
     NativeSectionRealization,
-    OfferPolicy,
     OpaqueRealization,
     PanelRealization,
     PremiumRealization,
@@ -61,7 +61,6 @@ from squid_ui.planning.realizations import (
     TimeRealization,
     matrix_text,
     record_text,
-    semantic_offers,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.primitives import nodes as primitive
