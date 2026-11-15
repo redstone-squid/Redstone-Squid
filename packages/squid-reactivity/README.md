@@ -55,10 +55,10 @@ another `@computed`. Reactivity is fine-grained: changing a field affects only w
 that field. Otherwise, a `Reactive` model is a plain object.
 
 Computed values keep separate caches for committed state and each transaction/read policy.
-Expensive committed results may be reused after checking inputs and replaying conflict reads;
-otherwise the function evaluates in the transaction. Reuse requires functions of reactive inputs.
-Use `@computed(reuse=False)` when sampling external context. Resource and transaction-context
-reads automatically prevent reuse. Closing a transaction discards its caches.
+By default, the first read in each view evaluates the function. Use `@computed(reuse=True)`
+to allow expensive committed results to be reused after checking inputs and replaying conflict
+reads. Opt in only for functions of captured reactive inputs with no required evaluation side
+effects. Resource and transaction-context reads prevent reuse. Closing a transaction discards its caches.
 
 ## Transactions
 

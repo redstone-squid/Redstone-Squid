@@ -562,7 +562,7 @@ class _ComputedMemo:
 class _Computed:
     """Bind a computed function to a separate cache on each model instance."""
 
-    def __init__(self, function: Callable[[Any], Any], *, reuse: bool = True) -> None:
+    def __init__(self, function: Callable[[Any], Any], *, reuse: bool = False) -> None:
         self._function = function
         self.public_name = function.__name__
         self._name = f"__computed_{function.__name__}"
@@ -588,28 +588,28 @@ class _Computed:
 
 
 @overload
-def computed[ValueT](function: Callable[[Any], ValueT], *, reuse: bool = True) -> ValueT: ...
+def computed[ValueT](function: Callable[[Any], ValueT], *, reuse: bool = False) -> ValueT: ...
 
 
 @overload
-def computed[ValueT](function: None = None, *, reuse: bool = True) -> Callable[[Callable[[Any], ValueT]], ValueT]: ...
+def computed[ValueT](function: None = None, *, reuse: bool = False) -> Callable[[Callable[[Any], ValueT]], ValueT]: ...
 
 
 def computed[ValueT](
-    function: Callable[[Any], ValueT] | None = None, *, reuse: bool = True
+    function: Callable[[Any], ValueT] | None = None, *, reuse: bool = False
 ) -> ValueT | Callable[[Callable[[Any], ValueT]], ValueT]:
     """Cache a derived value and track the reactive fields its function reads.
 
     Committed state and each transaction/read-policy view have separate caches.
-    Returning to a view reuses its cache if still valid. Expensive committed results
-    may also be reused in a new transaction after validating inputs and recording
-    the required conflict observations. Otherwise the function runs in that view.
+    The first read in each view evaluates the function. Returning to a view reuses
+    its cache if still valid.
     Transaction caches are discarded on commit or rollback.
 
-    Functions eligible for cross-transaction reuse must depend only on reactive
-    inputs. Use @computed(reuse=False) for functions that sample external context or
-    require evaluation in each transaction. Resource and transaction-context reads
-    automatically prevent reuse. Neither form guarantees a particular evaluation count.
+    Opt into cross-transaction reuse with @computed(reuse=True) only when the result
+    depends solely on captured reactive inputs and skipping evaluation has no required
+    side effects. Expensive committed results may then be reused after validating
+    inputs and replaying conflict observations. Resource and transaction-context reads
+    prevent reuse. Admission is heuristic; opting in does not guarantee a cache hit.
 
     Each run replaces the dependencies, including conditional branches. Equal
     results preserve the computed version within that view. The function runs read-only.

@@ -60,7 +60,7 @@ def test_reuse_replays_relative_policy(original: str, caller: str, inner: tuple[
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             with consistency(*inner):
@@ -82,12 +82,12 @@ def test_cached_child_footprint_is_replayed_through_parent() -> None:
     calls: list[str] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def child(self) -> int:
             calls.append("child")
             return self.value
 
-        @computed
+        @computed(reuse=True)
         def parent(self) -> int:
             calls.append("parent")
             return self.child + 10
@@ -106,13 +106,13 @@ def test_parent_relaxed_scope_composes_with_cached_child_strong_scope() -> None:
     calls: list[str] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def child(self) -> int:
             calls.append("child")
             with strong_read():
                 return self.value
 
-        @computed
+        @computed(reuse=True)
         def parent(self) -> int:
             calls.append("parent")
             with relaxed_read():
@@ -132,12 +132,12 @@ def test_untracked_cached_child_still_contributes_conflict_reads() -> None:
     calls: list[str] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def child(self) -> int:
             calls.append("child")
             return self.value
 
-        @computed
+        @computed(reuse=True)
         def parent(self) -> int:
             calls.append("parent")
             with untracked():
@@ -159,7 +159,7 @@ def test_changed_untracked_input_rejects_reuse(staged: bool) -> None:
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             with untracked():
@@ -181,7 +181,7 @@ def test_only_staged_inputs_prevent_reuse(related: bool) -> None:
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             return self.value
@@ -202,7 +202,7 @@ def test_replay_preserves_independent_first_read_versions(earlier_strong: bool) 
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             return self.value
@@ -221,11 +221,11 @@ def test_replay_preserves_independent_first_read_versions(earlier_strong: bool) 
 
 def test_equal_child_result_does_not_replay_an_obsolete_input_version() -> None:
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def parity(self) -> int:
             return self.value % 2
 
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             return self.parity + 10
 
@@ -247,7 +247,7 @@ def test_resource_replacement_cannot_reuse_committed_projection(hidden: bool) ->
         async def data(self) -> int:
             return 0
 
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             with untracked() if hidden else nullcontext():
                 value = self.data.value
@@ -265,7 +265,7 @@ def test_resource_replacement_cannot_reuse_committed_projection(hidden: bool) ->
 @pytest.mark.parametrize("causal", [False, True])
 def test_public_context_reads_prevent_cross_transaction_reuse(causal: bool) -> None:
     class Owner(Reactive):
-        @computed
+        @computed(reuse=True)
         def identity(self) -> str | None:
             if causal:
                 origin = current_causality()
@@ -300,12 +300,38 @@ def test_explicit_opt_out_resamples_ambient_inputs_in_each_transaction() -> None
         assert owner.projection == 2
 
 
+def test_default_decorators_keep_ambient_results_local_to_each_view() -> None:
+    ambient = [0]
+    calls: list[str] = []
+
+    class Owner(Reactive):
+        @computed
+        def bare(self) -> int:
+            calls.append("bare")
+            return ambient[0]
+
+        @computed()
+        def configured(self) -> int:
+            calls.append("configured")
+            return ambient[0]
+
+    owner = Owner()
+    assert owner.bare == owner.configured == 0
+    for value in (1, 2):
+        ambient[0] = value
+        with transaction():
+            assert owner.bare == owner.configured == value
+            assert owner.bare == owner.configured == value
+        assert owner.bare == owner.configured == 0
+    assert calls == ["bare", "configured"] * 3
+
+
 def test_topic_watch_does_not_become_a_strong_transaction_read() -> None:
     topic = LocalTopicBus().topic("record", "1")
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             topic.watch()
@@ -322,7 +348,7 @@ def test_topic_watch_does_not_become_a_strong_transaction_read() -> None:
 
 def test_reusable_footprints_do_not_keep_unused_models_alive() -> None:
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             return self.value
 
@@ -340,7 +366,7 @@ def test_replayed_default_read_guards_a_later_write_to_the_same_cell() -> None:
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             return self.value + 1
@@ -358,7 +384,7 @@ def test_transaction_recomputation_cannot_mutate_the_reusable_committed_cache() 
     calls: list[int] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(self.value)
             return self.value
@@ -375,15 +401,17 @@ def test_transaction_recomputation_cannot_mutate_the_reusable_committed_cache() 
     assert calls == [0, 1]
 
 
-def test_parent_cannot_reuse_an_opted_out_child_result() -> None:
+@pytest.mark.parametrize("explicit_opt_out", [False, True])
+def test_parent_cannot_reuse_a_child_without_opt_in(explicit_opt_out: bool) -> None:
     ambient = [0]
+    child_computed = computed(reuse=False) if explicit_opt_out else computed()
 
     class Owner(Reactive):
-        @computed(reuse=False)
+        @child_computed
         def child(self) -> int:
             return ambient[0]
 
-        @computed
+        @computed(reuse=True)
         def parent(self) -> int:
             return self.child + 10
 
@@ -399,7 +427,7 @@ def test_cheap_computations_can_skip_reusable_footprints(monkeypatch: pytest.Mon
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             return self.value
@@ -418,7 +446,7 @@ def test_equal_recomputation_reuses_the_retained_result_object() -> None:
         parity: int
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> Value:
             return Value(self.value % 2)
 
@@ -435,7 +463,7 @@ def test_oversized_footprints_fall_back_to_evaluation(monkeypatch: pytest.Monkey
     calls: list[None] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(None)
             return self.value
@@ -453,7 +481,7 @@ def test_repeated_ineligible_views_evict_a_reusable_candidate(monkeypatch: pytes
     calls: list[int] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def projection(self) -> int:
             calls.append(self.value)
             return self.value
@@ -477,14 +505,14 @@ def test_caught_child_failure_prevents_reuse_of_partial_reads() -> None:
     calls: list[str] = []
 
     class Owner(Model):
-        @computed
+        @computed(reuse=True)
         def child(self) -> int:
             calls.append("child")
             if self.value == 0:
                 raise ValueError("not ready")
             return self.value
 
-        @computed
+        @computed(reuse=True)
         def parent(self) -> int:
             calls.append("parent")
             try:
@@ -510,7 +538,7 @@ def test_operation_status_remains_discoverable_through_a_computed_in_a_new_trans
     calls: list[None] = []
 
     class Owner(Reactive):
-        @computed
+        @computed(reuse=True)
         def waiting(self) -> bool:
             calls.append(None)
             return isinstance(execution.status, Pending)
@@ -528,7 +556,7 @@ def test_cell_inspection_resamples_the_current_transaction_view() -> None:
     calls: list[None] = []
 
     class Owner(Reactive):
-        @computed
+        @computed(reuse=True)
         def revision(self) -> int:
             calls.append(None)
             return inspect_cells(target)["value"].version
@@ -543,7 +571,7 @@ def test_cell_inspection_resamples_the_current_transaction_view() -> None:
 
 def test_computed_inspection_resamples_the_current_transaction_view() -> None:
     class Target(Model):
-        @computed
+        @computed(reuse=True)
         def doubled(self) -> int:
             return self.value * 2
 
@@ -552,7 +580,7 @@ def test_computed_inspection_resamples_the_current_transaction_view() -> None:
     calls: list[None] = []
 
     class Owner(Reactive):
-        @computed
+        @computed(reuse=True)
         def evaluated(self) -> bool:
             calls.append(None)
             return inspect_computed(target)["doubled"].evaluated

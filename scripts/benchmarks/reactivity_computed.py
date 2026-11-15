@@ -22,7 +22,7 @@ class Model(Reactive):
         # Instrument evaluation without adding a reactive input to the benchmark.
         self.calls: list[None] = []
 
-    @computed
+    @computed(reuse=True)
     def cheap(self) -> int:
         self.calls.append(None)
         return self.value * 2
@@ -32,7 +32,7 @@ class Model(Reactive):
         self.calls.append(None)
         return self.value * 2
 
-    @computed
+    @computed(reuse=True)
     def expensive(self) -> int:
         self.calls.append(None)
         return self.value + sum(index * index for index in range(self.work))
@@ -42,7 +42,7 @@ class Model(Reactive):
         self.calls.append(None)
         return self.value + sum(index * index for index in range(self.work))
 
-    @computed
+    @computed(reuse=True)
     def nested(self) -> int:
         self.calls.append(None)
         return self.expensive + 1
