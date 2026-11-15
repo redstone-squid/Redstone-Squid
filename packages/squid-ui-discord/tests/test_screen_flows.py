@@ -158,6 +158,21 @@ async def test_child_cancellation_notifies_once(explicit: bool) -> None:
         assert child.root.finished
 
 
+@pytest.mark.parametrize("button", ["choose", "cancel"])
+async def test_a_finished_private_child_deletes_its_message(button: str) -> None:
+    parent = Parent()
+    async with sd.testing.stage(parent, owner=object()) as ui:
+        await ui.press("open")
+        child = _child_stage(parent, ui)
+        assert child.root.ephemeral
+        # The press renews the child's credentials, so the deletion goes through it.
+        pressed = await child.press(button)
+        await parent.child.wait()
+        assert child.root.finished
+        assert len(pressed.deletions) == 1
+        assert not ui.root.finished
+
+
 async def test_opening_rollback_closes_delivered_child() -> None:
     parent = Parent()
     parent.fail_open = True

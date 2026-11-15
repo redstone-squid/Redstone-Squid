@@ -669,6 +669,11 @@ class MessageRoot[
         return self._shutdown.accepted
 
     @property
+    def ephemeral(self) -> bool:
+        """Whether the delivered message is visible only to its recipient; False before delivery."""
+        return self._ephemeral is True
+
+    @property
     def close_reason(self) -> CloseReason | None:
         """The first accepted closure reason, or None while open.
 

@@ -283,7 +283,13 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                             await self._screen_close(ScreenCancelReason.PARENT_CLOSED)
                         return
                 state.outcome = outcome
-                await self._screen_require_root().finish()
+                root = self._screen_require_root()
+                if parent is not None and root.ephemeral:
+                    # The parent now holds the result. Delete the private child message rather
+                    # than leave it behind with disabled controls; nobody else can see it.
+                    await root.dismiss()
+                else:
+                    await root.finish()
             finally:
                 state.pending = False
 
