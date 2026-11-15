@@ -471,8 +471,23 @@ def _result_title(hit: SearchHit, request: SearchRequest) -> SearchText:
     return hit.title_match or SearchText(hit.title)
 
 
+def _heading_subtitle(hit: SearchHit, request: SearchRequest) -> str | None:
+    """Return the subtitle of the record heading a grouped record result, if any."""
+    if isinstance(hit, BuildSearchHit) and request.group_by_build and request.scope is SearchScope.RECORDS:
+        return hit.records[0].subtitle if hit.records else None
+    return None
+
+
+def _record_line(record: RecordSearchHit) -> Text:
+    """Show a record with its subtitle; many records share a title and differ only by restrictions."""
+    title = _highlighted(record.title_match or SearchText(record.title))
+    return title + f" · {record.subtitle}" if record.subtitle else title
+
+
 def _result_label(hit: SearchHit, request: SearchRequest) -> str:
     title = _result_title(hit, request).text
+    if subtitle := _heading_subtitle(hit, request):
+        title = f"{title} · {subtitle}"
     if isinstance(hit, BuildSearchHit) and request.group_by_build:
         # Tied holders can share the same heading; keep their picker labels distinct.
         suffix = f" · #{hit.source_id}"
@@ -501,8 +516,11 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
         records = hit.records[1:] if scope is SearchScope.RECORDS else hit.records
         if scope in {SearchScope.BUILDS, SearchScope.ALL} and len(records) == 1 and records[0].title == title.text:
             records = ()
-        lines: list[sl.TextLike] = [_highlighted(title), identity]
-        lines.extend(_highlighted(record.title_match or SearchText(record.title)) for record in records[:2])
+        heading = _highlighted(title)
+        if subtitle := _heading_subtitle(hit, request):
+            heading += f" · {subtitle}"
+        lines: list[sl.TextLike] = [heading, identity]
+        lines.extend(_record_line(record) for record in records[:2])
         if len(records) > 2:
             count = len(records) - 2
             lines.append(tr(t"search-grouped-more-records = +{count} more records"))

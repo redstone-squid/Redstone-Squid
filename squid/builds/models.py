@@ -255,6 +255,25 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
 
         return format_build_display_title(self, markdown=True)
 
+    @property
+    def subtitle(self) -> str | None:
+        """Miscellaneous restrictions that the title leaves out, or None when there are none."""
+        from squid.builds.domain.titles import format_build_subtitle
+
+        return format_build_subtitle(self)
+
+    @property
+    def one_line_title(self) -> str:
+        """The plain-text title and subtitle on one line, for lists and selection menus.
+
+        Many builds share a title and differ only by the restrictions in the subtitle.
+        """
+        from squid.builds.domain.titles import format_build_display_title
+
+        title = format_build_display_title(self, markdown=False)
+        subtitle = self.subtitle
+        return f"{title} · {subtitle}" if subtitle else title
+
     def edit_values(self) -> dict[str, Any]:
         """Return comparable fields, replacing related objects with their display data."""
         values = {item.name: getattr(self, item.name) for item in fields(self) if item.compare}

@@ -28,7 +28,6 @@ from squid.bot.ui import tr, truncate_display_text
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import Status
-from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.pagination import PageSelector
@@ -818,15 +817,20 @@ def _has_or(expression: QueryExpression) -> bool:
 
 def _build_label(build: Build) -> str:
     """A plain-text label for selection menus, which cannot show the title's Markdown."""
-    return truncate_display_text(f"#{build.id} {format_build_display_title(build, markdown=False)}", 100)
+    return truncate_display_text(f"#{build.id} {build.one_line_title}", 100)
 
 
 def _build_summary(build: Build) -> sl.TextLike:
-    """A compact list entry; the full card is reserved for an opened build."""
-    title = build.title
-    size = " x ".join(str(value) if value is not None else "?" for value in (build.width, build.height, build.depth))
-    status = cast(Status, build.submission_status).name.lower()
-    return sl.md(t"**#{build.id} {title}** — {size} · {build.category} · {status}")
+    """A compact list entry; the full card is reserved for an opened build.
+
+    The title already names the category and marks pending builds, so the entry adds only the
+    build's outer size, when any of it is known.
+    """
+    title = build.one_line_title
+    if all(value is None for value in build.dimensions):
+        return sl.md(t"**#{build.id}** {title}")
+    size = " x ".join(str(value) if value is not None else "?" for value in build.dimensions)
+    return sl.md(t"**#{build.id}** {title} — {size}")
 
 
 class _OpenBuildForm(sl.forms.Form):

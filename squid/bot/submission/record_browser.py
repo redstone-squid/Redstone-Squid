@@ -47,6 +47,17 @@ class RecordSource:
         return window_fingerprint(window.items, lambda record: str(record.id))
 
 
+def _record_label(record: PublishedTitle) -> str:
+    scope = record.version_scope.replace("_", " ")
+    return truncate_display_text(f"{record.one_line_title} · {scope}", 100)
+
+
+def _record_summary(record: PublishedTitle) -> sl.TextLike:
+    title = record.one_line_title
+    scope = record.version_scope.replace("_", " ")
+    return sl.md(t"**{title}** — {scope}")
+
+
 def record_browser(
     records: RecordService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
@@ -80,8 +91,8 @@ def record_browser(
         RecordSource(records),
         key="records",
         identity=lambda record: str(record.id),
-        label=lambda record: truncate_display_text(record.title, 80),
-        summary=lambda record: sl.md(t"**{record.title}** — {record.version_scope.replace('_', ' ')}"),
+        label=_record_label,
+        summary=_record_summary,
         detail=detail,
         page_size=CATALOGUE_PAGE_SIZE,
         show_page_size=True,

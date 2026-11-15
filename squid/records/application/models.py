@@ -180,6 +180,11 @@ class PublishedTitle:
     computed_at: datetime
     door_evidence: DoorRecordEvidence | None = field(default=None, kw_only=True)
 
+    @property
+    def one_line_title(self) -> str:
+        """The title and subtitle on one line; many records share a title and differ only by subtitle."""
+        return f"{self.title} · {self.subtitle}" if self.subtitle else self.title
+
 
 @dataclass(frozen=True, slots=True)
 class PublicRecordDetail(PublishedTitle):

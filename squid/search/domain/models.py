@@ -119,6 +119,11 @@ class RecordSearchHit:
     title_match: SearchText | None = None
     resource_kind: Literal["record"] = field(default="record", init=False)
 
+    @property
+    def one_line_title(self) -> str:
+        """The title and subtitle on one line; many records share a title and differ only by subtitle."""
+        return f"{self.title} · {self.subtitle}" if self.subtitle else self.title
+
 
 @dataclass(frozen=True, slots=True)
 class BuildSearchHit:

@@ -110,6 +110,17 @@ def format_build_display_title(build: Build, *, markdown: bool) -> str:
     return " ".join(terms)
 
 
+def format_build_subtitle(build: Build) -> str | None:
+    """Return the miscellaneous restrictions that the display title leaves out, or None.
+
+    The display title already names component restrictions, so only the category
+    subtitle's miscellaneous terms remain.
+    """
+    category = format_build_category(build)
+    terms = [token.value for token in category.subtitle_tokens if token.section is TitleSection.MISCELLANEOUS]
+    return " ".join(terms) or None
+
+
 def _door_size(build: DoorBuild) -> str:
     width = str(build.door_width) if build.door_width is not None else "?"
     height = str(build.door_height) if build.door_height is not None else "?"

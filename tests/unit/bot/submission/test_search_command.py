@@ -248,19 +248,33 @@ def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() 
         return SearchRequest("2x2", scope=scope, group_by_build=True)
 
     records = source_text(_result_description(hit, grouped()), format="plain")
-    assert records.splitlines() == ["Smallest 2x2 Door", "Build #42 · 2x2 Seamless Door", "Fastest 2x2 Door"]
+    # Records show their subtitle, since many records share a title.
+    assert records.splitlines() == [
+        "Smallest 2x2 Door · Java Edition",
+        "Build #42 · 2x2 Seamless Door",
+        "Fastest 2x2 Door · Java Edition",
+    ]
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
         description = source_text(_result_description(hit, grouped(scope)), format="plain")
-        assert description.splitlines() == ["2x2 Seamless Door", "Build #42", "Smallest 2x2 Door", "Fastest 2x2 Door"]
+        assert description.splitlines() == [
+            "2x2 Seamless Door",
+            "Build #42",
+            "Smallest 2x2 Door · Java Edition",
+            "Fastest 2x2 Door · Java Edition",
+        ]
     same = replace(hit, title="Smallest 2x2 Door", title_match=None, records=hit.records[:1])
-    for scope in (SearchScope.BUILDS, SearchScope.ALL, SearchScope.RECORDS):
+    for scope in (SearchScope.BUILDS, SearchScope.ALL):
         assert source_text(_result_description(same, grouped(scope)), format="plain").splitlines() == [
             "Smallest 2x2 Door",
             "Build #42",
         ]
+    assert source_text(_result_description(same, grouped()), format="plain").splitlines() == [
+        "Smallest 2x2 Door · Java Edition",
+        "Build #42",
+    ]
     assert "**2x2**" in source_text(_result_description(hit, grouped()), format="markdown")
-    assert _result_label(hit, grouped()) == "Smallest 2x2 Door · #42"
-    assert _result_label(replace(hit, source_id="57"), grouped()) == "Smallest 2x2 Door · #57"
+    assert _result_label(hit, grouped()) == "Smallest 2x2 Door · Java Edition · #42"
+    assert _result_label(replace(hit, source_id="57"), grouped()) == "Smallest 2x2 Door · Java Edition · #57"
 
 
 def test_highlights_do_not_interpret_build_titles_as_markdown() -> None:
