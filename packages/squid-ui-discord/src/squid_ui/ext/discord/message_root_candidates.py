@@ -25,6 +25,7 @@ from squid_ui.palette import Palette
 from squid_ui.planning.pagination.navigation import NavFactory
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import AnyTarget
+from squid_ui.presentation import SessionUpdate
 from squid_ui.profiling import (
     ActionStatus,
     DetachedSpanRecorder,
@@ -36,9 +37,8 @@ from squid_ui.profiling import (
     TraceResult,
     TraceStatus,
 )
-from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.owner import RenderCandidate
-from squid_ui.runtime.presentation_state import SessionUpdate
+from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import DiscordTarget
 
 if TYPE_CHECKING:

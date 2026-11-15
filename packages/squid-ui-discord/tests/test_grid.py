@@ -12,7 +12,7 @@ from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import PresentationState
-from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select
 
 

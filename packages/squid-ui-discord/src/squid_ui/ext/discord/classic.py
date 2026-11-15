@@ -77,7 +77,7 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
 
 if TYPE_CHECKING:

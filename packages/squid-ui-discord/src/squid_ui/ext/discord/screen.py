@@ -18,7 +18,7 @@ from squid_ui.ext.discord.response import Abandoned, Presented, Rejected, Respon
 from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
 from squid_ui.ext.discord.session_specs import SessionSpec
 from squid_ui.interactions import ActionEvent as PortableActionEvent
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tasks import anyio, task_is_within
 from squid_ui.target_types import ComponentsV2Target
 

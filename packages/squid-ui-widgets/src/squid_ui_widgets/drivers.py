@@ -41,7 +41,7 @@ from squid_ui.interactions.forms import Form, FormLike, FormSpec
 from squid_ui.palette import Role
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import PageEvent, RoutedPage
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import DiscordTarget, RenderTarget
 
 type FormValues = Mapping[str, object]

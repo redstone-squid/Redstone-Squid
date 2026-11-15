@@ -25,7 +25,7 @@ from squid_ui.ext.discord.message_root_contracts import ExpiryPolicy
 from squid_ui.ext.discord.session_specs import SessionSpec
 from squid_ui.ext.discord.sessions import RejectionReason, Session
 from squid_ui.planning.pagination.navigation import NavFactory
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
 

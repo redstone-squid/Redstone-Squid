@@ -4,8 +4,10 @@ from typing import assert_type, override
 
 from squid_ui.planning import ComponentsV2Target
 from squid_ui.primitives import Panel
-from squid_ui.runtime.component import Component, ComponentTree, render_component_tree
+from squid_ui.runtime.definition import Component
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.runtime.tree import ComponentTree
 
 
 class V2Component(Component[ComponentsV2Target]):

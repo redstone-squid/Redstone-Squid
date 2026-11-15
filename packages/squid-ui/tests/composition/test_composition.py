@@ -6,7 +6,7 @@ import pytest
 
 import squid_ui as ui
 from squid_ui.runtime import ComponentRuntime
-from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select
 from squid_ui.testing import keys, render_index, texts
 

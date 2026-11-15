@@ -29,7 +29,7 @@ from squid_ui.primitives.nodes import (
     Variant,
     Variants,
 )
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import DiscordTarget
 
 

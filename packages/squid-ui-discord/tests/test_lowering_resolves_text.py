@@ -16,6 +16,7 @@ from squid_ui.content.text import Text as TextExpression
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import LIMITS
 from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Card,
@@ -38,7 +39,6 @@ from squid_ui.primitives.nodes import (
     Text,
     Thumbnail,
 )
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.target_types import DiscordTarget, Renderable
 
 _TEXT_FIELDS = ("content", "label", "description", "placeholder")

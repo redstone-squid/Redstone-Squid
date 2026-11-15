@@ -18,7 +18,7 @@ from squid_ui.ext.discord.message_root import AnyMessageRoot
 from squid_ui.ext.discord.target import classic, v2
 from squid_ui.planning import ClassicTarget, ComponentsV2Target
 from squid_ui.planning.adapter import ResourceCost
-from squid_ui.runtime.component import AnyComponent
+from squid_ui.runtime.definition import AnyComponent
 
 
 class ClassicPanel(sl.Component[ClassicTarget]):

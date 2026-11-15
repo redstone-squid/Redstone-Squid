@@ -41,7 +41,7 @@ from squid_ui.ext.discord.response import Response, ResponseOverrides, ResponseR
 from squid_ui.ext.discord.sessions import Session
 from squid_ui.interactions import ActionEvent
 from squid_ui.interactions.forms import FormSpec
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:

@@ -11,7 +11,7 @@ from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime import PresentationState
-from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.expansion import render_component_tree
 
 
 class _Responder:

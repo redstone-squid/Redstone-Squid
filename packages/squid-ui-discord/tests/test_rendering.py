@@ -50,7 +50,7 @@ from squid_ui.primitives import (
     Row,
     Text,
 )
-from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
 
 

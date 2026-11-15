@@ -17,7 +17,7 @@ from squid_ui.planning.pagination.navigation import (
     default_nav,
 )
 from squid_ui.primitives import Lines
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,

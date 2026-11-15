@@ -41,7 +41,7 @@ from squid_ui.ext.discord.screen import Screen
 from squid_ui.ext.discord.session_specs import OpenContext
 from squid_ui.ext.discord.sessions import Opened, RejectionReason
 from squid_ui.ext.discord.sessions import Rejected as SessionRejected
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.runtime import DiscordUIRuntime

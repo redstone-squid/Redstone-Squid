@@ -47,7 +47,7 @@ from squid_ui.primitives.nodes import (
     Thumbnail,
 )
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
 type Item = discord.ui.Item[Any]

@@ -178,7 +178,6 @@ for snapshot storage, invalidation causes, and component-path indexing. Expansio
 its mutable view for one synchronous render; reconciliation prunes it after delivery
 without clearing writes made by lifecycle hooks.
 Candidate and committed trees and lifecycle decisions remain with `ComponentRuntime`.
-The existing `runtime.component` import path is a facade over these definitions.
 
 ## End-to-end flow
 

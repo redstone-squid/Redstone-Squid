@@ -10,7 +10,7 @@ import squid_ui.ext.discord
 import squid_ui_widgets as sp
 from squid_ui import scene
 from squid_ui.chrome import Chrome
-from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select
 
 SLOTS = (

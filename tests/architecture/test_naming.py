@@ -220,7 +220,7 @@ NOT_AGENT_NOUNS = frozenset(
         "Owner",
         "Pager",
         # "One expanded render" is this codebase's own phrase for the noun (see
-        # `runtime.component.ComponentTree`); a Render does not render anything.
+        # `runtime.tree.ComponentTree`); a Render does not render anything.
         "Render",
         "Roster",
         "Separator",

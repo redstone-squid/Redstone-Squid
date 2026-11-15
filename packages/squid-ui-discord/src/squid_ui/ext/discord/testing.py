@@ -46,7 +46,7 @@ from squid_ui.ext.discord.response import Presented, ResponseOverrides
 from squid_ui.ext.discord.runtime import DiscordUIRuntime, install
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.selectors import Match, Query, Selector, TreeIndex, select
 from squid_ui.selectors import query as query_tree
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter

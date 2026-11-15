@@ -28,8 +28,8 @@ from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.result import PlanResult
 from squid_ui.profiling import OperationRecorder
-from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import DiscordTarget
 
 logger = logging.getLogger(__name__)

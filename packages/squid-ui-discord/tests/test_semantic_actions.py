@@ -31,10 +31,10 @@ from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.planning.result import PlanResult
+from squid_ui.presentation import StrategyState
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.primitives.nodes import Node
 from squid_ui.runtime import PresentationState
-from squid_ui.runtime.presentation_state import StrategyState
 from squid_ui.selectors import query, select
 
 

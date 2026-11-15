@@ -11,7 +11,7 @@ from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.content.text import TextLike
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 

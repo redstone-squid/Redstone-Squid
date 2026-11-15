@@ -14,7 +14,7 @@ from squid_reactivity.operations import (
 )
 from squid_ui.ext.discord.contracts import DocumentContent
 from squid_ui.ext.discord.request import Request
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
 

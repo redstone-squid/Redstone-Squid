@@ -36,7 +36,7 @@ from squid_ui.ext.discord.request import Request, request
 from squid_ui.ext.discord.response import Presented, ResponseSpec, Sent
 from squid_ui.ext.discord.sessions import SessionManager
 from squid_ui.interactions import ActionEvent
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.target_types import ComponentsV2Target
 

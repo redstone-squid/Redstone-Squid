@@ -18,7 +18,7 @@ from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.renderer import V2Renderer
 from squid_ui.ext.discord.testing import query
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.selectors import select as select_node
 
 

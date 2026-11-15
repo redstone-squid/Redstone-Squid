@@ -137,6 +137,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.planning.spread import plan_spread
 from squid_ui.planning.target import AnyTarget, Target
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
@@ -152,10 +153,10 @@ from squid_ui.profiling import (
     TraceStatus,
 )
 from squid_ui.runtime.async_bindings import async_render_policy
-from squid_ui.runtime.component import Component, ComponentTree
+from squid_ui.runtime.definition import Component
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.presentation_state import PresentationState
+from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
 
 if TYPE_CHECKING:
