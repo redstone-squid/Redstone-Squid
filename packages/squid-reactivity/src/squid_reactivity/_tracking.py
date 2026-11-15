@@ -34,7 +34,7 @@ class _ReactiveSource(Protocol):
         """Validate dependencies synchronously and return the resulting version.
 
         Computed values may recompute; resources may become pending. This method
-        never starts asynchronous work. Cells and signals simply return their
+        never starts asynchronous work. Cells and `Signal`s simply return their
         current version, including staged changes where applicable.
         """
         ...

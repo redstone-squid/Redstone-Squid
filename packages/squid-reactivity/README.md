@@ -1,6 +1,6 @@
 # squid-reactivity
 
-Reactive models with signals, cached computed values, asynchronous values, and transactions.
+Reactive models with cached computed values, asynchronous values, and transactions.
 
 You declare fields on a model. The package records which fields were read and notifies the
 reader when one of them changes. A transaction groups related writes so that all of them
@@ -49,7 +49,7 @@ with observe_reads() as dependencies:
     assert counter.doubled == 2
 ```
 
-`state()` declares a field, and each field is a signal. `@computed` declares a derived value,
+`state()` declares a field. `@computed` declares a derived value,
 which is cached until a reactive value it depends on changes. A `@computed` can depend on
 another `@computed`. Reactivity is fine-grained: changing a field affects only what read
 that field. Otherwise, a `Reactive` model is a plain object.
