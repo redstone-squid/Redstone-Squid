@@ -22,6 +22,10 @@ from squid_reactivity.transactions._state import _CURRENT_TRANSACTION
 _log = logging.getLogger(__name__)
 
 
+def _name(function: Callable[..., object]) -> str:
+    return getattr(function, "__qualname__", None) or repr(function)
+
+
 class Subscriptions:
     """Update a consumer's subscriptions without missing changes during the transition.
 
@@ -132,7 +136,8 @@ class _QueuedConsumer:
     """Subscribe to what a function read and queue a rerun when any of it changes.
 
     Subclasses implement _deliver(), which the delivery queue calls once per pass
-    however many notifications arrived. See `_delivery` for when the queue runs.
+    however many notifications arrived, and describe(), which names the user's
+    function in a log message. See `_delivery` for when the queue runs.
     """
 
     def __init__(self) -> None:
@@ -163,6 +168,10 @@ class _QueuedConsumer:
     def _deliver(self) -> None:
         raise NotImplementedError
 
+    def describe(self) -> str:
+        """Name this listener and the user function behind it, for log messages."""
+        raise NotImplementedError
+
 
 class ChangeListener[ValueT](_QueuedConsumer):
     """A running on_change() registration. Close it to stop the calls.
@@ -180,6 +189,10 @@ class ChangeListener[ValueT](_QueuedConsumer):
             self._value = read()
         self._dependencies = dependencies
         self._subscribe()
+
+    @override
+    def describe(self) -> str:
+        return f"on_change callback {_name(self._callback)}"
 
     @override
     def _deliver(self) -> None:
@@ -225,6 +238,10 @@ class Effect(_QueuedConsumer):
         """Stop the effect and run the cleanup its last run returned, if any."""
         super().close()
         self._clean_up()
+
+    @override
+    def describe(self) -> str:
+        return f"effect {_name(self._run)}"
 
     @override
     def _deliver(self) -> None:
@@ -278,7 +295,9 @@ def on_change[ValueT](read: Callable[[], ValueT], callback: Callable[[ValueT], N
     `callback` may not assign reactive state directly; to write, it opens its own
     transaction(...). Listeners affected by that transaction run after those
     already waiting, so each sees a cause before its consequences. A listener
-    that reruns 100 times for one change is treated as a loop and stopped.
+    that reruns 100 times for one change is treated as a loop: an error naming
+    the callback is logged and its remaining runs for that change are skipped.
+    It stays subscribed and runs again after the next change.
 
     An exception from either function is logged and does not reach the code that
     made the change.
@@ -310,8 +329,10 @@ def effect(run: Callable[[], Callable[[], None] | None]) -> Effect:
     listeners share one queue and run in the order they were first notified.
 
     An effect that assigns something it reads runs again, until a run changes
-    nothing. One that reruns 100 times for a single change is treated as a loop
-    and stopped. An exception from `run` is logged; the effect reruns after the
+    nothing. One that reruns 100 times for a single change is treated as a loop:
+    an error naming `run` is logged and its remaining runs for that change are
+    skipped. The effect stays active and runs again after the next change to what
+    it last read. An exception from `run` is logged; the effect reruns after the
     next change to what it read before failing.
 
     For example, this keeps a stored total in step with two fields::

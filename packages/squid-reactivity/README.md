@@ -129,7 +129,10 @@ Both follow the same rules:
 - They run one at a time, in the order they were notified. When one of them changes state,
   whatever that affects waits behind those already queued, so each hears about a change
   before it hears about what the change led to.
-- One that reruns 100 times for a single change is treated as a loop, logged, and stopped.
+- One that reruns 100 times for a single change is treated as a loop. An error naming its
+  function is logged and its remaining runs for that change are skipped. It stays
+  subscribed and runs again after the next change. The change that triggered it is not
+  affected.
 
 ### Doing it yourself
 

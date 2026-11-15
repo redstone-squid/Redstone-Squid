@@ -159,7 +159,12 @@ def test_an_effect_that_never_settles_is_stopped(caplog: pytest.LogCaptureFixtur
 
     with caplog.at_level(logging.ERROR), effect(grow):
         assert cart.apples == 100
-        assert "keeps changing what it reads" in caplog.text
+        assert "effect test_an_effect_that_never_settles_is_stopped.<locals>.grow ran 100 times" in caplog.text
+
+        # The loop was cut, not the effect: it is still subscribed and runs on the next change.
+        caplog.clear()
+        cart.apples = -1000
+        assert cart.apples == -900
 
 
 def test_closing_or_dropping_the_effect_stops_it() -> None:

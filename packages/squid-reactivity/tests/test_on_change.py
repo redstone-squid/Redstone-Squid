@@ -222,7 +222,9 @@ def test_listeners_that_keep_retriggering_each_other_are_stopped(caplog: pytest.
     ):
         cart.apples = 1
         assert cart.pears == 100
-        assert "keeps changing what it reads" in caplog.text
+        assert "on_change callback test_listeners_that_keep_retriggering_each_other_are_stopped.<locals>.bump_" in (
+            caplog.text
+        )
 
         # The loop was cut, not the listeners: a later change is still reported.
         caplog.clear()
