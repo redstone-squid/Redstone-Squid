@@ -614,9 +614,14 @@ class BuildInferenceService:
             if parsed is not None:
                 represented_ticks[parsed] += 1
             approximate = timing.value is not None and re.match(r"\s*[~≈]", timing.value) is not None
-            if timing.qualifier or approximate or (timing.value is not None and parsed is None):
+            timing_category = (
+                BuildCategory.EXTENDER if attribute in {"extension_time", "retraction_time"} else BuildCategory.DOOR
+            )
+            unrepresented = timing.value is not None and build.category is not timing_category
+            if timing.qualifier or approximate or unrepresented or (timing.value is not None and parsed is None):
                 # Keep qualifications and unparseable measurements through form prefill,
-                # which carries the description but not arbitrary extra_info metadata.
+                # including durations without a timing field in the selected category.
+                # Prefill carries the description but not arbitrary extra_info metadata.
                 parts = [" ".join(part.split()) for part in (timing.value, timing.qualifier) if part]
                 if not any(
                     label.casefold() in note.casefold() and all(part in note for part in parts) for note in quoted_notes

@@ -717,6 +717,61 @@ def test_invalid_credit_names_are_isolated_and_keep_the_sender_fallback(name: st
     assert credits[0].attribution is CreditAttribution.ASSUMED_SENDER
 
 
+@pytest.mark.parametrize(
+    ("category", "timing_field", "label"),
+    [
+        ("Piston Door", "extension_time", "Extension"),
+        ("Piston Door", "retraction_time", "Retraction"),
+        ("Entrance", "extension_time", "Extension"),
+        ("Entrance", "retraction_time", "Retraction"),
+        ("Utility", "extension_time", "Extension"),
+        ("Utility", "retraction_time", "Retraction"),
+        ("Utility", "opening_time", "Opening"),
+        ("Utility", "closing_time", "Closing"),
+        ("Utility", "visible_opening_time", "Visible opening"),
+        ("Utility", "visible_closing_time", "Visible closing"),
+        ("Piston Extender", "opening_time", "Opening"),
+        ("Piston Extender", "closing_time", "Closing"),
+        ("Piston Extender", "visible_opening_time", "Visible opening"),
+        ("Piston Extender", "visible_closing_time", "Visible closing"),
+    ],
+)
+@pytest.mark.parametrize("duration", ["0s", "0.3s"])
+async def test_timings_without_a_category_field_survive_retention_and_prefill(
+    category: str, timing_field: str, label: str, duration: str
+) -> None:
+    timings = dict.fromkeys(
+        (
+            "opening_time",
+            "closing_time",
+            "visible_opening_time",
+            "visible_closing_time",
+            "extension_time",
+            "retraction_time",
+        )
+    )
+    value = inferred(
+        build_category=category,
+        **{**timings, timing_field: {"value": duration, "qualifier": None}},
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+    inputs = BuildInferenceInput.from_single_message(
+        author_name="Builder", content=f"{label}: {duration}", message_id=10, author_id=20, channel_id=30, server_id=40
+    )
+
+    [build] = await service.infer(inputs, model="test")
+    retained = (
+        TypeAdapter(BuildDraftPayload)
+        .validate_json(TypeAdapter(BuildDraftPayload).dump_json(BuildDraftPayload.from_draft(build)))
+        .to_draft()
+    )
+    projected = project_submission(retained, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+
+    assert projected.answers["description"] == f"{label}: {duration}"
+
+
 async def test_extender_stroke_and_timings_survive_retained_candidates_and_prefill() -> None:
     value = inferred(
         build_category="Piston Extender",
