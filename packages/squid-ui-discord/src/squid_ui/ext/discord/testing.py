@@ -692,7 +692,8 @@ class StagedForm:
             message = "this staged form was already submitted"
             raise RuntimeError(message)
         remaining = dict(values)
-        for item in self.modal.walk_children():
+        for match in query(self.modal, select(discord.ui.Item).has_attr("custom_id")).all():
+            item = match.node
             key = getattr(item, "custom_id", None)
             if not isinstance(key, str) or key not in remaining:
                 continue

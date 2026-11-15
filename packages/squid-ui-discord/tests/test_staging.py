@@ -129,3 +129,70 @@ async def test_local_control_lookup_requires_a_unique_suffix() -> None:
     async with sd.testing.stage(Parent(), owner=object()) as ui:
         with pytest.raises(KeyError, match="expected one control"):
             ui.key_for("editor.add")
+
+
+class SubmissionModal(discord.ui.Modal):
+    def __init__(self) -> None:
+        super().__init__(title="Edit", custom_id="modal-root")
+        self.submissions = 0
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.submissions += 1
+
+
+@pytest.mark.parametrize(
+    ("kind", "value", "expected"),
+    [
+        ("text", 42, "42"),
+        ("radio", ["one"], "one"),
+        ("radio", [], None),
+        ("checkbox", True, True),
+        ("select", [1], ["1"]),
+        ("checkboxes", ["one"], ["one"]),
+    ],
+)
+async def test_staged_form_populates_labelled_inputs_once(kind: str, value: object, expected: object) -> None:
+    match kind:
+        case "text":
+            item = discord.ui.TextInput(custom_id="field")
+        case "radio":
+            item = discord.ui.RadioGroup(
+                custom_id="field", options=[discord.RadioGroupOption(label="One", value="one")]
+            )
+        case "checkbox":
+            item = discord.ui.Checkbox(custom_id="field")
+        case "select":
+            item = discord.ui.Select(custom_id="field", options=[discord.SelectOption(label="One", value="1")])
+        case _:
+            item = discord.ui.CheckboxGroup(
+                custom_id="field", options=[discord.CheckboxGroupOption(label="One", value="one")]
+            )
+    modal = SubmissionModal()
+    modal.add_item(discord.ui.Label(text="Field", component=item))
+    async with discord.Client(intents=discord.Intents.none()) as client:
+        form = sd.testing.StagedForm(modal, client=client, user_id=7)
+        await form.submit({"field": value})
+        actual = item.values if isinstance(item, discord.ui.Select | discord.ui.CheckboxGroup) else item.value
+        assert actual == expected
+        assert modal.submissions == 1
+        with pytest.raises(RuntimeError, match="already submitted"):
+            await form.submit({"field": value})
+
+
+async def test_staged_form_rejects_modal_and_unknown_ids_and_keeps_first_duplicate() -> None:
+    modal = SubmissionModal()
+    first = discord.ui.TextInput(custom_id="field")
+    second = discord.ui.TextInput(custom_id="field")
+    modal.add_item(discord.ui.Label(text="First", component=first))
+    modal.add_item(discord.ui.Label(text="Second", component=second))
+    async with discord.Client(intents=discord.Intents.none()) as client:
+        form = sd.testing.StagedForm(modal, client=client, user_id=7)
+        for unknown in ("modal-root", "missing"):
+            with pytest.raises(KeyError, match="no fields"):
+                await form.submit({unknown: "ignored"})
+        assert modal.submissions == 0
+        await form.submit({"field": "first only"})
+        assert first.value == "first only"
+        assert second.value == ""
+        assert modal.submissions == 1
