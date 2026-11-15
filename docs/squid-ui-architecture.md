@@ -865,10 +865,15 @@ outside the transaction. It takes the object rather than a field name -- identit
 field, which is how an opaque field settles anyway -- so the call is typed, and it fails if
 no opaque field holds the object, so the manual signal cannot drift from the declaration.
 
-state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
-component holds and never mutates -- a service, a guild, a session. It settles on identity
-rather than equality, and it is never persisted:
+`sl.state(persist=False)` marks runtime-only data that durable snapshots omit. Persistent state
+must be JSON-safe, so use it for any value that is not: a frozen dataclass, a tuple of domain
+objects, a mapping of them. Such a field still settles on equality, so assigning an equal value
+notifies nobody.
+
+`sl.state(opaque=True)` is for a collaborator rather than a value -- a service, a guild, a
+session, a child component. It settles on identity rather than equality, because `==` on a
+collaborator is the author's code, and it is never persisted. Do not reach for it only to keep
+a value out of snapshots; that is what `persist=False` says:
 
     class Panel(sl.Component):
         page: str = sl.state("server")
