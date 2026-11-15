@@ -30,7 +30,9 @@ from squid_ui.planning.pagination.navigation import (
     MountNavNode,
     NavigationContext,
     default_nav,
+    page_size_button,
 )
+from squid_ui.primitives import Row
 from squid_ui.primitives.constraints import FIRST_PAGE
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
@@ -68,7 +70,8 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
     the same item retains its detail, whose component owns refresh of its domain data.
 
     Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
-    list sorted by time to label them Newer and Older instead.
+    list sorted by time to label them Newer and Older instead. `show_page_size` adds
+    an items-per-page form (1 to 25); changing it returns to the beginning.
     """
 
     def __init__(
@@ -85,6 +88,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         page_size: int = 10,
         title: TextLike | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
+        show_page_size: bool = False,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
         chronology: Chronology | None = None,
     ) -> None:
@@ -106,9 +110,9 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         self.summary = summary
         self.entry_actions = entry_actions
         self.overview = overview
-        self.page_size = self.session.page_size
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
+        self.show_page_size = show_page_size
         self.copy = copy
         self.chronology = chronology
 
@@ -129,6 +133,16 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         with untracked():
             item = self.session.focused_item
         return self.detail(item) if key is not None and item is not None else None
+
+    @property
+    def page_size(self) -> int:
+        return self.session.page_size
+
+    async def _resize(self, revision: int, _event: ActionEvent, page_size: int) -> None:
+        if not 1 <= page_size <= 25:
+            message = "Browser.page_size must be between 1 and 25"
+            raise ValueError(message)
+        self.session.resize(page_size, revision=revision)
 
     async def refresh(self) -> None:
         self.session.move("refresh", revision=self.session.revision)
@@ -251,18 +265,38 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             chrome=chrome,
             chronology=self.chronology,
         )
+        size_controls = (
+            (
+                Row(
+                    (
+                        page_size_button(
+                            self.key,
+                            self.page_size,
+                            partial(self._resize, self.session.revision),
+                            maximum=25,
+                            chrome=chrome,
+                        ),
+                    )
+                ),
+            )
+            if self.show_page_size
+            else ()
+        )
         if state is None:
-            return ()
-        return tuple(
-            nav(
-                NavigationContext(
-                    state,
-                    partial(self._move, "previous", self.session.revision),
-                    partial(self._move, "next", self.session.revision),
-                    partial(self._seek, self.session.revision) if state.extent is not None else None,
-                    chrome=chrome,
+            return size_controls
+        return (
+            tuple(
+                nav(
+                    NavigationContext(
+                        state,
+                        partial(self._move, "previous", self.session.revision),
+                        partial(self._move, "next", self.session.revision),
+                        partial(self._seek, self.session.revision) if state.extent is not None else None,
+                        chrome=chrome,
+                    )
                 )
             )
+            + size_controls
         )
 
     def _render_detail(

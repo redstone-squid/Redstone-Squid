@@ -44,6 +44,7 @@ class BrowseSession[ItemT](Reactive):
     """
 
     snapshot: BrowseSnapshot[ItemT] | None = state(None, opaque=True)
+    page_size: int = state(10)
     revision: int = state(0)
     visit: int = state(0)
     operation: OperationExecution[None, None] | None = state(None, opaque=True)
@@ -97,6 +98,17 @@ class BrowseSession[ItemT](Reactive):
             self.snapshot = None
             self.revision += 1
             self._start(_Request(source, None, "refresh"))
+
+    def resize(self, page_size: int, *, revision: int) -> None:
+        """Reload from the beginning with a new item count, ignoring stale controls."""
+        if page_size < 1:
+            message = "BrowseSession.page_size must be positive"
+            raise ValueError(message)
+        if revision != self.revision or self.busy or page_size == self.page_size:
+            return
+        with transaction():
+            self.page_size = page_size
+            self.reset(self.source)
 
     def open(self, key: str, *, revision: int) -> None:
         current = self.snapshot

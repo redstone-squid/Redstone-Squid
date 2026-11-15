@@ -335,6 +335,66 @@ def page_jump_form(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _PageSizeSubmit(GeneratedHandler[SubmitEvent]):
+    change: Callable[[ActionEvent, int], Awaitable[None]]
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        if isinstance(self.change, _HandlerComposition):
+            change = binder.composition(self.change)
+            return replace(self, change=change) if change is not self.change else self
+        return self
+
+    @override
+    async def __call__(self, event: SubmitEvent) -> None:
+        await self.change(event, cast(int, event.values["page_size"]))
+
+
+def page_size_form(page_size: int, *, maximum: int | None = None, chrome: Chrome = DEFAULT_CHROME) -> FormSpec:
+    """Ask for a positive item count, optionally bounded by the widget's capacity."""
+    if page_size < 1 or (maximum is not None and page_size > maximum):
+        message = "page_size must be positive and no greater than maximum"
+        raise ValueError(message)
+    return FormSpec(
+        chrome.items_per_page,
+        (
+            IntField(
+                key="page_size",
+                label=chrome.items_per_page,
+                minimum=1,
+                maximum=maximum,
+                default=page_size,
+                chrome=chrome,
+            ),
+        ),
+    )
+
+
+def page_size_button(
+    key: str,
+    page_size: int,
+    on_change: Callable[[ActionEvent, int], Awaitable[None]],
+    *,
+    maximum: int | None = None,
+    chrome: Chrome = DEFAULT_CHROME,
+) -> FormButton:
+    """Build an optional size button; the owner applies the count and resets its page.
+
+    Keep this control visible even when all items fit on one page, so readers can
+    choose a smaller size again. The form rebases against the latest rendered control.
+    """
+    form = FormBinding(
+        f"{key}.page-size",
+        page_size_form(page_size, maximum=maximum, chrome=chrome),
+        _PageSizeSubmit(on_change),
+        ActionMode.REBASE,
+        chrome.items_per_page,
+        unavailable=chrome.page_jump_unavailable,
+    )
+    return FormButton(chrome.items_per_page, _PresentJump(form), form.key, mode=form.mode, form=form)
+
+
 def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """Previous/Next plus a form-opening button for an addressable pager.
 
@@ -433,5 +493,7 @@ __all__ = [
     "page_jump_form",
     "page_jump_nav",
     "page_select_nav",
+    "page_size_button",
+    "page_size_form",
     "seek_control",
 ]

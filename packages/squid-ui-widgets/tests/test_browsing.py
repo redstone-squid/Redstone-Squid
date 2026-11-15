@@ -209,3 +209,28 @@ async def test_boundary_fetches_handle_empty_and_overlapping_windows(result: str
         await settle(session)
         assert session.focused_item == ("a" if result == "end" else "b")
         assert not session.can_step(1)
+
+
+async def test_resize_restarts_and_rejects_stale_controls() -> None:
+    session = BrowseSession(list_source(("a", "b", "c", "d")), identity=str, page_size=2)
+    await settle(session)
+    session.move("next", revision=session.revision)
+    await settle(session)
+    revision = session.revision
+    session.resize(3, revision=revision)
+    assert session.snapshot is None
+    await settle(session)
+    assert session.snapshot is not None
+    assert session.snapshot.loaded.window.items == ("a", "b", "c")
+    session.resize(1, revision=revision)
+    assert session.page_size == 3
+    session.move("next", revision=session.revision)
+    await settle(session)
+    assert session.snapshot.loaded.window.items == ("d",)
+
+
+@pytest.mark.parametrize("size", [0, -1])
+def test_resize_rejects_nonpositive_sizes(size: int) -> None:
+    session = BrowseSession(list_source(("a",)), identity=str)
+    with pytest.raises(ValueError, match="positive"):
+        session.resize(size, revision=session.revision)

@@ -15,8 +15,9 @@ from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
     default_nav,
+    page_size_button,
 )
-from squid_ui.primitives import Lines
+from squid_ui.primitives import Lines, Row
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
     ORIGIN,
@@ -47,7 +48,8 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     """Render source-ordered ranking windows, retaining the last page during reloads.
 
     The source's absolute offset determines row numbers. Header and footer callbacks
-    receive None when the source does not supply a total count.
+    receive None when the source does not supply a total count. `show_page_size` adds
+    an items-per-page form; changing it returns to the beginning.
     """
 
     def __init__(
@@ -64,6 +66,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
         footer: SourceContentHook[RenderTargetT, ContextT] | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_position: Position = ORIGIN,
+        show_page_size: bool = False,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         title = None if title is None else Text(title)
@@ -72,7 +75,6 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             message = "SourceRankedList.page_size must be at least 1"
             raise ValueError(message)
         self.source = source
-        self.page_size = page_size
         self.rows = RankedRows(label, value, identity)
         self.title = title
         self.header = header
@@ -82,7 +84,15 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             source, page_size=page_size, identity=self.rows.identity_of, initial_position=initial_position
         )
 
+        self.show_page_size = show_page_size
         self.copy = copy
+
+    @property
+    def page_size(self) -> int:
+        return self.session.page_size
+
+    async def _resize(self, revision: int, _event: ActionEvent, page_size: int) -> None:
+        self.session.resize(page_size, revision=revision)
 
     async def refresh(self) -> None:
         self.session.move("refresh", revision=self.session.revision)
@@ -175,6 +185,15 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             *body,
             note(numeric_footer) if navigation_state is not None and numeric_footer is not None else None,
             *navigation,
+            Row(
+                (
+                    page_size_button(
+                        self.key, self.page_size, partial(self._resize, self.session.revision), chrome=chrome
+                    ),
+                )
+            )
+            if self.show_page_size
+            else None,
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
             note(status) if status is not None else None,
             action_controls(

@@ -273,6 +273,7 @@ class Chrome:
     form_timezone_offset_mismatch: TextLike = "The UTC offset does not match this local time in the selected timezone."
     form_scale_integer: Callable[[int | float, int | float], TextLike] = _default_form_scale_integer
     page_jump_unavailable: TextLike = "This pager is no longer available."
+    items_per_page: TextLike = "Items per page"
     page_jump_number: TextLike = "Page number"
     page_jump_range: Callable[[int], TextLike] = _default_page_jump_range
     tally_option: Callable[[TextLike, int], TextLike] = _default_tally_option
@@ -380,6 +381,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
             resolve_text(chrome.form_scale_integer(minimum, maximum), localization).content
         ),
         page_jump_unavailable=resolve_text(chrome.page_jump_unavailable, localization).content,
+        items_per_page=resolve_text(chrome.items_per_page, localization).content,
         page_jump_number=resolve_text(chrome.page_jump_number, localization).content,
         page_jump_range=lambda pages: resolve_text(chrome.page_jump_range(pages), localization).content,
         tally_option=lambda label, count: resolve_text(chrome.tally_option(label, count), localization).content,

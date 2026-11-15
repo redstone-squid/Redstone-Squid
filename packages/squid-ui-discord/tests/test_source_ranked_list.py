@@ -276,3 +276,33 @@ async def test_page_form_jumps_to_a_source_offset_beyond_25_pages() -> None:
         assert source.requests[-1].offset == (number - 1) * 2
         assert ranked.session.snapshot is not None
         assert ranked.session.snapshot.loaded.window.position.offset == (number - 1) * 2
+
+
+@pytest.mark.parametrize("show_page_size", [False, True])
+async def test_optional_page_size_form_can_shrink_a_single_page(show_page_size: bool) -> None:
+    ranked = sp.SourceRankedList(
+        sl.sources.list_source(("a", "b", "c")),
+        key="ranked",
+        identity=str,
+        page_size=3,
+        label=str,
+        value=str,
+        show_page_size=show_page_size,
+    )
+    root = MessageRoot(ranked, access=Everyone(), timeout=None)
+    await root.send(delivered_to(message_harness()))
+    assert root._candidates.view is not None
+    assert ("Items per page" in _labels(root._candidates.view)) is show_page_size
+    if not show_page_size:
+        return
+    interaction = interaction_harness()
+    await root.dispatch("ranked.page-size", interaction)
+    modal = interaction.response.send_modal.await_args.args[0]
+    assert modal.children[0].component.default == "3"
+    modal.children[0].component._value = "1"
+    await modal.on_submit(interaction_harness())
+    assert ranked.page_size == 1
+    assert ranked.session.snapshot is not None
+    assert ranked.session.snapshot.loaded.window.items == ("a",)
+    await root.dispatch("ranked.next", interaction_harness())
+    assert ranked.session.snapshot.loaded.window.items == ("b",)
