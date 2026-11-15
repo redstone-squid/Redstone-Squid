@@ -4,7 +4,8 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import NoReturn
+from functools import lru_cache
+from typing import NoReturn, override
 
 from squid_ui import semantic
 from squid_ui.scene import model as scene_model
@@ -200,15 +201,40 @@ class _Parser:
         return result.attr(name, value)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class _RegisteredType:
+    name: str
+    kind: type
+
+    @override
+    def __hash__(self) -> int:
+        return hash((self.name, id(self.kind)))
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _RegisteredType) and self.name == other.name and self.kind is other.kind
+
+
+@lru_cache(maxsize=256)
+def _parse_cached(source: str, registered: tuple[_RegisteredType, ...]) -> Selector[object]:
+    parser = _Parser(source, _TYPES | {entry.name: entry.kind for entry in registered})
+    result = parser.selector_list()
+    if parser.peek():
+        parser.fail("unexpected token")
+    return result
+
+
 def parse(source: str, *, types: Mapping[str, type] | None = None) -> Selector[object]:
     """Compile type, attribute, relationship, :scope, :is, :not, and :has selectors.
 
     Semantic types and qualified scene.Type names are registered by default. Supply additional names for components
     and primitives; names never trigger imports. Attribute values use JSON literals.
     This is a CSS-inspired subset, without CSS escaping or specificity.
+
+    Up to 256 compiled expressions are retained, keyed by source and registered type
+    identities. Changing a registry mapping uses a separate entry. Matching results
+    and syntax failures are not cached.
     """
-    parser = _Parser(source, _TYPES | dict(types or {}))
-    result = parser.selector_list()
-    if parser.peek():
-        parser.fail("unexpected token")
-    return result
+    # Type identity matters even when a metaclass overloads equality or disables hashing.
+    registered = tuple(_RegisteredType(name, kind) for name, kind in sorted(dict(types or {}).items()))
+    return _parse_cached(source, registered)
