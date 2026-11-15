@@ -125,10 +125,13 @@ class Renderer:
         plan: PlanResult[scene.HtmlBody] | None,
     ) -> str:
         if isinstance(node, scene.HtmlText):
-            if node.markup is Markup.PLAIN:
-                return escape(node.content)
-            return markdown(node.content)
+            return self._text(node)
         return self._element(node, assets, plan)
+
+    def _text(self, node: scene.HtmlText) -> str:
+        if node.markup is Markup.PLAIN:
+            return escape(node.content)
+        return markdown(node.content)
 
     def _element(
         self,
@@ -136,31 +139,7 @@ class Renderer:
         assets: dict[str, scene.Asset],
         plan: PlanResult[scene.HtmlBody] | None,
     ) -> str:
-        attributes = list(self._attributes(element.attributes))
-        if element.action is not None:
-            attributes.extend(
-                (
-                    f'data-squid-action="{_attribute(element.action.action)}"',
-                    f'data-squid-mode="{element.action.mode.value}"',
-                )
-            )
-        if element.route is not None:
-            attributes.append(f'data-route-id="{_attribute(element.route.route_id)}"')
-        if element.form is not None:
-            attributes.append(f'data-squid-form="{_attribute(element.form.key)}"')
-            if element.form.field_name is not None:
-                attributes.append(f'data-squid-field="{_attribute(element.form.field_name)}"')
-        if element.time is not None:
-            if element.tag is not scene.HtmlTag.TIME:
-                message = "HTML time references require a time element"
-                raise DrawInvariantError(message)
-            attributes.append(f'datetime="{_attribute(element.time.instant)}"')
-            if element.time.timezone is not None:
-                attributes.append(f'data-squid-timezone="{_attribute(element.time.timezone)}"')
-            if element.time.style is not None:
-                attributes.append(f'data-squid-time-style="{_attribute(element.time.style)}"')
-        if element.colour is not None:
-            attributes.append(f'style="--squid-accent:#{element.colour.value:06x}"')
+        attributes = self._element_attributes(element)
 
         tag = element.tag.value
         if element.url is not None:
@@ -192,6 +171,34 @@ class Renderer:
             return f"<{tag}{suffix}>"
         children = "".join(self._node(child, assets, plan) for child in element.children)
         return f"<{tag}{suffix}>{children}</{tag}>"
+
+    def _element_attributes(self, element: scene.HtmlElement) -> list[str]:
+        attributes = list(self._attributes(element.attributes))
+        if element.action is not None:
+            attributes.extend(
+                (
+                    f'data-squid-action="{_attribute(element.action.action)}"',
+                    f'data-squid-mode="{element.action.mode.value}"',
+                )
+            )
+        if element.route is not None:
+            attributes.append(f'data-route-id="{_attribute(element.route.route_id)}"')
+        if element.form is not None:
+            attributes.append(f'data-squid-form="{_attribute(element.form.key)}"')
+            if element.form.field_name is not None:
+                attributes.append(f'data-squid-field="{_attribute(element.form.field_name)}"')
+        if element.time is not None:
+            if element.tag is not scene.HtmlTag.TIME:
+                message = "HTML time references require a time element"
+                raise DrawInvariantError(message)
+            attributes.append(f'datetime="{_attribute(element.time.instant)}"')
+            if element.time.timezone is not None:
+                attributes.append(f'data-squid-timezone="{_attribute(element.time.timezone)}"')
+            if element.time.style is not None:
+                attributes.append(f'data-squid-time-style="{_attribute(element.time.style)}"')
+        if element.colour is not None:
+            attributes.append(f'style="--squid-accent:#{element.colour.value:06x}"')
+        return attributes
 
     def _attributes(self, attributes: Iterable[scene.HtmlAttribute]) -> Iterable[str]:
         for attribute in attributes:

@@ -134,200 +134,220 @@ class DiscordPreviewRenderer:
         resolve_file: FileResolver,
     ) -> str:
         match node:
-            case scene.Text(content=content, markup=markup):
-                rendered = (
-                    escape(content)
-                    if markup is Markup.PLAIN
-                    else markdown(content, block=True, discord=markup is Markup.DISCORD_MARKDOWN)
-                )
-                return f'<div class="squid-text" data-squid-markup="{markup.value}">{rendered}</div>'
-            case scene.Time(instant=instant, style=style, prefix=prefix):
-                return (
-                    f'<div class="squid-text">{escape(prefix or "")}'
-                    f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
-                    f"{escape(instant)}</time></div>"
-                )
-            case scene.ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
-                value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
-                return (
-                    f'<div class="squid-text">{escape(prefix or "")}'
-                    f'<time datetime="{_attribute(instant)}" data-squid-timezone="{_attribute(timezone)}">'
-                    f"{escape(value.isoformat())}</time></div>"
-                )
-            case scene.File(name=name, spoiler=spoiler):
-                spoiler_class = " squid-spoiler" if spoiler else ""
-                focus = ' tabindex="0"' if spoiler else ""
-                resolved = resolve_file(node)
-                if resolved is None:
-                    return (
-                        f'<span class="squid-button squid-file{spoiler_class}" aria-disabled="true"{focus}>'
-                        f"{escape(name)}</span>"
-                    )
-                return (
-                    f'<a class="squid-button squid-link squid-file{spoiler_class}" href="{_attribute(resolved)}" '
-                    f'download="{_attribute(name)}"{focus}>{escape(name)}</a>'
-                )
-            case scene.Separator(large=large, visible=visible):
-                if not visible:
-                    return ""
-                modifier = " squid-separator--large" if large else ""
-                return f'<hr class="squid-separator{modifier}">'
-            case scene.Panel(children=children, accent=accent, spoiler=spoiler):
-                style = f' style="--squid-accent:#{accent:06x}"' if accent is not None else ""
-                spoiler_attributes = ' squid-spoiler" tabindex="0' if spoiler else '"'
-                return (
-                    f'<section class="squid-panel{spoiler_attributes}{style}>'
-                    f"{''.join(self._node(child, resolve_file) for child in children)}</section>"
-                )
-            case scene.Section(texts=texts, accessory=accessory):
-                content = "".join(self._node(text, resolve_file) for text in texts)
-                return (
-                    f'<section class="squid-section"><div>{content}</div>'
-                    f"{self._node(accessory, resolve_file)}</section>"
-                )
-            case scene.Row(items=items):
-                return f'<div class="squid-row">{"".join(self._node(item, resolve_file) for item in items)}</div>'
-            case scene.Button(
-                label=label,
-                action=action,
-                style=style,
-                emoji=emoji,
-                disabled=disabled,
-                mode=mode,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                return (
-                    f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-squid-action="{_attribute(action)}" data-squid-mode="{mode.value}"'
-                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
-                )
-            case scene.RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
-                disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                return (
-                    f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-route-id="{_attribute(route_id)}"'
-                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
-                )
-            case scene.Link(label=label, url=url, emoji=emoji, disabled=disabled):
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                safe = _safe_url(url)
-                if safe is None or disabled:
-                    return (
-                        f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
-                    )
-                return (
-                    f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
-                    f'rel="noopener noreferrer">{icon}{escape(label or "")}</a>'
-                )
-            case scene.PremiumButton(sku_id=sku_id):
-                return (
-                    f'<button type="button" class="squid-button squid-premium" disabled '
-                    f'data-sku-id="{sku_id}">Premium</button>'
-                )
-            case scene.Select(
-                options=options,
-                action=action,
-                placeholder=placeholder,
-                min_values=minimum,
-                max_values=maximum,
-                disabled=disabled,
-                mode=mode,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                multiple = " multiple" if maximum > 1 else ""
-                prompt = (
-                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
-                    if placeholder is not None
-                    else ""
-                )
-                rendered = "".join(
-                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
-                    for option in options
-                )
-                return (
-                    f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
-                    f'data-squid-mode="{mode.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
-                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
-                )
-            case scene.RoutedSelect(
-                options=options,
-                route_id=route_id,
-                placeholder=placeholder,
-                min_values=minimum,
-                max_values=maximum,
-                disabled=disabled,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                multiple = " multiple" if maximum > 1 else ""
-                prompt = (
-                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
-                    if placeholder is not None
-                    else ""
-                )
-                rendered = "".join(
-                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
-                    for option in options
-                )
-                return (
-                    f'<select class="squid-select" data-route-id="{_attribute(route_id)}" '
-                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
-                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
-                )
-            case scene.EntitySelect(
-                entity_type=entity_type,
-                action=action,
-                placeholder=placeholder,
-                default_values=defaults,
-                min_values=minimum,
-                max_values=maximum,
-                disabled=disabled,
-                mode=mode,
-            ):
-                # Discord fills entity pickers from the guild, so the preview can only show the
-                # current values, written as the mentions Discord would display for them.
-                disabled_attribute = " disabled" if disabled else ""
-                multiple = " multiple" if maximum > 1 else ""
-                prompt = (
-                    f'<option value="" disabled{"" if defaults else " selected"}>{escape(placeholder)}</option>'
-                    if placeholder is not None
-                    else ""
-                )
-                rendered = "".join(
-                    f'<option value="{_attribute(str(ref.id))}" selected>{escape(_mention(ref))}</option>'
-                    for ref in defaults
-                )
-                return (
-                    f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
-                    f'data-squid-entity="{entity_type.value}" data-squid-mode="{mode.value}" '
-                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
-                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
-                )
-            case scene.Thumbnail(url=url, description=description, spoiler=spoiler):
-                safe = _safe_url(url)
-                if safe is None:
-                    return ""
-                spoiler_class = " squid-spoiler" if spoiler else ""
-                focus = ' tabindex="0"' if spoiler else ""
-                return f'<img class="squid-thumbnail{spoiler_class}" src="{_attribute(safe)}" alt="{_attribute(description or "")}"{focus}>'
-            case scene.Gallery(items=items):
-                images = "".join(
-                    f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
-                    f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
-                    for item in items
-                    if (safe := resolve_file(item) if item.asset_name is not None else _safe_url(item.url)) is not None
-                )
-                return f'<div class="squid-gallery">{images}</div>'
-            case scene.Extension(kind=kind, version=version):
-                return (
-                    f'<div class="squid-extension" data-squid-extension="{_attribute(kind)}" '
-                    f'data-squid-extension-version="{version}"></div>'
-                )
+            case scene.Text():
+                return self._text(node)
+            case scene.Time():
+                return self._time(node)
+            case scene.ZonedTime():
+                return self._zoned_time(node)
+            case scene.File():
+                return self._file(node, resolve_file=resolve_file)
+            case scene.Separator():
+                return self._separator(node)
+            case scene.Panel():
+                return self._panel(node, resolve_file=resolve_file)
+            case scene.Section():
+                return self._section(node, resolve_file=resolve_file)
+            case scene.Row():
+                return self._row(node, resolve_file=resolve_file)
+            case scene.Button():
+                return self._button(node)
+            case scene.RoutedButton():
+                return self._routed_button(node)
+            case scene.Link():
+                return self._link(node)
+            case scene.PremiumButton():
+                return self._premium_button(node)
+            case scene.Select():
+                return self._select(node)
+            case scene.RoutedSelect():
+                return self._routed_select(node)
+            case scene.EntitySelect():
+                return self._entity_select(node)
+            case scene.Thumbnail():
+                return self._thumbnail(node)
+            case scene.Gallery():
+                return self._gallery(node, resolve_file=resolve_file)
+            case scene.Extension():
+                return self._extension(node)
         message = f"DiscordPreviewRenderer cannot draw scene node {type(node).__name__}"
         raise DrawInvariantError(message)
+
+    def _text(self, node: scene.Text) -> str:
+        rendered = (
+            escape(node.content)
+            if node.markup is Markup.PLAIN
+            else markdown(node.content, block=True, discord=node.markup is Markup.DISCORD_MARKDOWN)
+        )
+        return f'<div class="squid-text" data-squid-markup="{node.markup.value}">{rendered}</div>'
+
+    def _time(self, node: scene.Time) -> str:
+        return (
+            f'<div class="squid-text">{escape(node.prefix or "")}'
+            f'<time datetime="{_attribute(node.instant)}" data-squid-style="{_attribute(node.style)}">'
+            f"{escape(node.instant)}</time></div>"
+        )
+
+    def _zoned_time(self, node: scene.ZonedTime) -> str:
+        value = ZonedDateTime(datetime.fromisoformat(node.instant), node.timezone)
+        return (
+            f'<div class="squid-text">{escape(node.prefix or "")}'
+            f'<time datetime="{_attribute(node.instant)}" data-squid-timezone="{_attribute(node.timezone)}">'
+            f"{escape(value.isoformat())}</time></div>"
+        )
+
+    def _file(self, node: scene.File, resolve_file: FileResolver) -> str:
+        spoiler_class = " squid-spoiler" if node.spoiler else ""
+        focus = ' tabindex="0"' if node.spoiler else ""
+        resolved = resolve_file(node)
+        if resolved is None:
+            return (
+                f'<span class="squid-button squid-file{spoiler_class}" aria-disabled="true"{focus}>'
+                f"{escape(node.name)}</span>"
+            )
+        return (
+            f'<a class="squid-button squid-link squid-file{spoiler_class}" href="{_attribute(resolved)}" '
+            f'download="{_attribute(node.name)}"{focus}>{escape(node.name)}</a>'
+        )
+
+    def _separator(self, node: scene.Separator) -> str:
+        if not node.visible:
+            return ""
+        modifier = " squid-separator--large" if node.large else ""
+        return f'<hr class="squid-separator{modifier}">'
+
+    def _panel(self, node: scene.Panel, resolve_file: FileResolver) -> str:
+        style = f' style="--squid-accent:#{node.accent:06x}"' if node.accent is not None else ""
+        spoiler_attributes = ' squid-spoiler" tabindex="0' if node.spoiler else '"'
+        return (
+            f'<section class="squid-panel{spoiler_attributes}{style}>'
+            f"{''.join(self._node(child, resolve_file) for child in node.children)}</section>"
+        )
+
+    def _section(self, node: scene.Section, resolve_file: FileResolver) -> str:
+        content = "".join(self._node(text, resolve_file) for text in node.texts)
+        return (
+            f'<section class="squid-section"><div>{content}</div>{self._node(node.accessory, resolve_file)}</section>'
+        )
+
+    def _row(self, node: scene.Row, resolve_file: FileResolver) -> str:
+        return f'<div class="squid-row">{"".join(self._node(item, resolve_file) for item in node.items)}</div>'
+
+    def _button(self, node: scene.Button) -> str:
+        disabled_attribute = " disabled" if node.disabled else ""
+        icon = f'<span class="squid-button__emoji">{escape(node.emoji.name)}</span> ' if node.emoji else ""
+        return (
+            f'<button type="button" class="squid-button squid-button--{node.style.value}" '
+            f'data-squid-action="{_attribute(node.action)}" data-squid-mode="{node.mode.value}"'
+            f"{disabled_attribute}>{icon}{escape(node.label or '')}</button>"
+        )
+
+    def _routed_button(self, node: scene.RoutedButton) -> str:
+        disabled_attribute = " disabled" if node.disabled else ""
+        icon = f'<span class="squid-button__emoji">{escape(node.emoji.name)}</span> ' if node.emoji else ""
+        return (
+            f'<button type="button" class="squid-button squid-button--{node.style.value}" '
+            f'data-route-id="{_attribute(node.route_id)}"'
+            f"{disabled_attribute}>{icon}{escape(node.label or '')}</button>"
+        )
+
+    def _link(self, node: scene.Link) -> str:
+        icon = f'<span class="squid-button__emoji">{escape(node.emoji.name)}</span> ' if node.emoji else ""
+        safe = _safe_url(node.url)
+        if safe is None or node.disabled:
+            return f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(node.label or "")}</span>'
+        return (
+            f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
+            f'rel="noopener noreferrer">{icon}{escape(node.label or "")}</a>'
+        )
+
+    def _premium_button(self, node: scene.PremiumButton) -> str:
+        return (
+            f'<button type="button" class="squid-button squid-premium" disabled '
+            f'data-sku-id="{node.sku_id}">Premium</button>'
+        )
+
+    def _select(self, node: scene.Select) -> str:
+        disabled_attribute = " disabled" if node.disabled else ""
+        multiple = " multiple" if node.max_values > 1 else ""
+        prompt = (
+            f'<option value="" disabled selected>{escape(node.placeholder)}</option>'
+            if node.placeholder is not None
+            else ""
+        )
+        rendered = "".join(
+            f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
+            f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
+            for option in node.options
+        )
+        return (
+            f'<select class="squid-select" data-squid-action="{_attribute(node.action)}" '
+            f'data-squid-mode="{node.mode.value}" data-squid-min="{node.min_values}" data-squid-max="{node.max_values}"'
+            f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+        )
+
+    def _routed_select(self, node: scene.RoutedSelect) -> str:
+        disabled_attribute = " disabled" if node.disabled else ""
+        multiple = " multiple" if node.max_values > 1 else ""
+        prompt = (
+            f'<option value="" disabled selected>{escape(node.placeholder)}</option>'
+            if node.placeholder is not None
+            else ""
+        )
+        rendered = "".join(
+            f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
+            f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
+            for option in node.options
+        )
+        return (
+            f'<select class="squid-select" data-route-id="{_attribute(node.route_id)}" '
+            f'data-squid-min="{node.min_values}" data-squid-max="{node.max_values}"'
+            f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+        )
+
+    def _entity_select(self, node: scene.EntitySelect) -> str:
+        # Discord fills entity pickers from the guild, so the preview can only show the
+        # current values, written as the mentions Discord would display for them.
+        disabled_attribute = " disabled" if node.disabled else ""
+        multiple = " multiple" if node.max_values > 1 else ""
+        prompt = (
+            f'<option value="" disabled{"" if node.default_values else " selected"}>{escape(node.placeholder)}</option>'
+            if node.placeholder is not None
+            else ""
+        )
+        rendered = "".join(
+            f'<option value="{_attribute(str(ref.id))}" selected>{escape(_mention(ref))}</option>'
+            for ref in node.default_values
+        )
+        return (
+            f'<select class="squid-select" data-squid-action="{_attribute(node.action)}" '
+            f'data-squid-entity="{node.entity_type.value}" data-squid-mode="{node.mode.value}" '
+            f'data-squid-min="{node.min_values}" data-squid-max="{node.max_values}"'
+            f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+        )
+
+    def _thumbnail(self, node: scene.Thumbnail) -> str:
+        safe = _safe_url(node.url)
+        if safe is None:
+            return ""
+        spoiler_class = " squid-spoiler" if node.spoiler else ""
+        focus = ' tabindex="0"' if node.spoiler else ""
+        return f'<img class="squid-thumbnail{spoiler_class}" src="{_attribute(safe)}" alt="{_attribute(node.description or "")}"{focus}>'
+
+    def _gallery(self, node: scene.Gallery, resolve_file: FileResolver) -> str:
+        images = "".join(
+            f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
+            f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
+            for item in node.items
+            if (safe := resolve_file(item) if item.asset_name is not None else _safe_url(item.url)) is not None
+        )
+        return f'<div class="squid-gallery">{images}</div>'
+
+    def _extension(self, node: scene.Extension) -> str:
+        return (
+            f'<div class="squid-extension" data-squid-extension="{_attribute(node.kind)}" '
+            f'data-squid-extension-version="{node.version}"></div>'
+        )
 
 
 def _mention(ref: EntityRef) -> str:
