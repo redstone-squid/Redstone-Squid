@@ -393,14 +393,14 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
-    # An open build with its schematic tools and the search reference needs more components
-    # than one message holds, so the workspace may continue in a second message.
+    # Expanded filters, a populated build with tools, and search help can each
+    # need their own message. Keep all three available while browsing.
     policy = sd.ResponseSpec(
         nav=sd.navigation_controls.page_jump_nav,
         timeout=300,
         live_updates=True,
         session=sd.SessionSpec("build-browse"),
-        max_messages=2,
+        max_messages=3,
     )
 
     _results: SearchScreen | None = sl.state(None, opaque=True)

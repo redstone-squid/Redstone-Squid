@@ -19,6 +19,7 @@ from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import Page, PageAnchor, PageSelector
+from squid.messages.domain import MessageRef
 from squid.permissions.domain import PermissionNode
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
@@ -940,3 +941,48 @@ async def test_examples_keep_help_and_editor_in_sync() -> None:
             assert "## Search help" in ui.texts()
             ui.control(ui.key_for("advanced"))
             assert not ui.control(ui.key_for("reset")).payload.get("disabled", False)
+
+
+async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> None:
+    screen = _screen(initial_id=None, schematics_available=True, video_enabled=True)
+    screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
+    build = DoorBuild(
+        id=7,
+        submission_status=Status.CONFIRMED,
+        width=10,
+        height=12,
+        depth=3,
+        versions=["Java 1.21"],
+        source_messages=(MessageRef(id=3, guild_id=1, channel_id=2),),
+        completion_time="2026-11-15",
+        description="A compact piston door with synchronized opening and closing.",
+    )
+    build.creators_ign = ["Builder One", "Builder Two", "Builder Three"]
+    cast(AsyncMock, screen._queries).get.return_value = build
+    hit = BuildSearchHit("7", "Door 7", "confirmed", "A detailed door description")
+    cast(AsyncMock, screen._search_service).search.return_value = SearchPage(hits=(hit,), total=1, next=None, prev=None)
+    async with stage(screen, owner=object()) as ui:
+        await toggle_help(ui)
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "width:3 AND height:5 AND depth:2"})
+        await ui.select(ui.key_for("search.open"), ["build:7"])
+        await ui.press(ui.key_for("open-build"))
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            ui.control(ui.key_for("advanced"))
+            ui.control("back")
+            ui.assert_within_limits()
+        await ui.press(ui.key_for("schematic-tools"))
+        assert len(ui.root._candidates.continuations) == 2
+        ui.control(ui.key_for("schematic-info"))
+        await ui.press(ui.key_for("next-clauses"))
+        ui.control(ui.key_for("edit-2"))
+        await ui.press(ui.key_for("previous-clauses"))
+        for tab in ("fields", "syntax", "examples"):
+            await ui.press(ui.key_for(f"search-reference.{tab}"))
+            ui.assert_within_limits()
+        await ui.press("back")
+        ui.control(ui.key_for("open-build"))
+        assert screen._guided is not None
+        assert screen._show_search_help
+        assert screen._query == "width:3 AND height:5 AND depth:2"
