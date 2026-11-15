@@ -1,4 +1,4 @@
-# packages/squid-ui-widgets/src/squid_ui_widgets/agreement.py:90
+# packages/squid-ui-widgets/src/squid_ui_widgets/agreement.py:88
 widgets-agreement-participant = { $mark } { $display }
 
 # packages/squid-ui-widgets/src/squid_ui_widgets/collection.py:149

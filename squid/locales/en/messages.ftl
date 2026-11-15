@@ -199,223 +199,250 @@ access-view-this-server = This server
 # squid/bot/access_view.py:678
 access-view-unassign = Unassign
 
-# squid/bot/account_presentation.py:59
+# squid/bot/accounts/presentation.py:59
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
 
-# squid/bot/account_workspace.py:365
+# squid/bot/accounts/workspace.py:204
+account-claim-heading = Claim your earlier builds
+
+# squid/bot/accounts/workspace.py:206
+account-claim-help = Used another creator name? Submit that name to connect its build credits to your account.
+
+# squid/bot/accounts/workspace.py:394
 account-claim-pending-review = Claim #{ $claim_id } for **{ $alias_name }** is awaiting staff approval.
 
-# squid/bot/account_presentation.py:51
+# squid/bot/accounts/workspace.py:211
+account-claim-review-help = Staff review each claim before credits are connected.
+
+# squid/bot/accounts/presentation.py:51
 account-credits-attributed = Build credits under **{ $name }** are attributed to your account.
 
-# squid/bot/account_presentation.py:68
+# squid/bot/accounts/presentation.py:68
 account-credits-retained = You are still credited under: { $names }.
 
-# squid/bot/account_presentation.py:27
+# squid/bot/accounts/presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/account_view.py:332
+# squid/bot/accounts/overview.py:332
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/account_view.py:341
+# squid/bot/accounts/overview.py:341
 account-hidden-page-credit-note = A hidden page still lists the creator names you hold, because that credit is what attributes your builds.
 
-# squid/bot/account_view.py:245, squid/bot/account_view.py:257
+# squid/bot/accounts/overview.py:245, squid/bot/accounts/overview.py:257
 account-history-profile = Edit profile
 
-# squid/bot/profile_editor.py:148
+# squid/bot/accounts/profile_editor.py:148
 account-history-profile-draft = Edit profile draft
 
-# squid/bot/account_view.py:231
+# squid/bot/accounts/overview.py:231
 account-history-unlink = Unlink identity
 
-# squid/bot/account_view.py:211
+# squid/bot/accounts/overview.py:211
 account-history-visibility = Change identity visibility
 
-# squid/bot/account_view.py:235
+# squid/bot/accounts/overview.py:235
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/account_view.py:327
+# squid/bot/accounts/workspace.py:151
+account-link-heading = Connect Minecraft
+
+# squid/bot/accounts/workspace.py:153
+account-link-help = Enter your in-game link code to connect your Minecraft identity to this account.
+
+# squid/bot/accounts/overview.py:327
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
-# squid/bot/account_workspace.py:218
-account-merge-action = Merge another account into this one
-
-# squid/bot/account_workspace.py:374
+# squid/bot/accounts/workspace.py:403
 account-merge-code-warning = Merge code: `{ $code }`. It expires { $expiry }. Keep it private: it hands this account over.
 
-# squid/bot/account_workspace.py:413
+# squid/bot/accounts/workspace.py:442
 account-merge-complete = Merged. `{ $redirected }` now redirects to your creator page.
 
-# squid/bot/account_workspace.py:390
+# squid/bot/accounts/workspace.py:224
+account-merge-heading = Bring your accounts together
+
+# squid/bot/accounts/workspace.py:226
+account-merge-help = On the account you want to move, create a merge code. Then open the account you want to keep and enter that code.
+
+# squid/bot/accounts/workspace.py:240
+account-merge-preview-action = Enter merge code
+
+# squid/bot/accounts/workspace.py:232
+account-merge-preview-help = You will review the transfer before confirming. Keep merge codes private.
+
+# squid/bot/accounts/workspace.py:419
 account-merge-transfer-preview = Move { $aliases } creator names, { $identities } identities, and { $builds } build credits here? This cannot be undone.
 
-# squid/bot/account_presentation.py:41
+# squid/bot/accounts/presentation.py:41
 account-name-changed = Your Minecraft name changed from **{ $old }** to **{ $new }**.
 
-# squid/bot/account_presentation.py:37
+# squid/bot/accounts/presentation.py:37
 account-name-unchanged = Your Minecraft name is still **{ $name }**. Nothing changed.
 
-# squid/bot/account_workspace.py:332
+# squid/bot/accounts/workspace.py:361
 account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.
 
-# squid/bot/account_workspace.py:189
-account-refresh-member-identity = Refresh another member's Minecraft identity
+# squid/bot/accounts/workspace.py:158
+account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.
 
-# squid/bot/profile_editor.py:90
+# squid/bot/accounts/workspace.py:193
+account-refresh-member-action = Refresh member
+
+# squid/bot/accounts/profile_editor.py:90
 account-view-bio = Bio
 
-# squid/bot/profile_editor.py:57
+# squid/bot/accounts/profile_editor.py:57
 account-view-cancel = Cancel
 
-# squid/bot/account_view.py:181
+# squid/bot/accounts/overview.py:181
 account-view-creator-page = Creator page
 
-# squid/bot/profile_editor.py:78
+# squid/bot/accounts/profile_editor.py:78
 account-view-display-name = Display name
 
-# squid/bot/account_view.py:188
+# squid/bot/accounts/overview.py:188
 account-view-edit-page = Edit page
 
-# squid/bot/profile_editor.py:74
+# squid/bot/accounts/profile_editor.py:74
 account-view-edit-profile = Edit profile
 
-# squid/bot/profile_editor.py:129
+# squid/bot/accounts/profile_editor.py:129
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/account_view.py:312
+# squid/bot/accounts/overview.py:312
 account-view-hidden = hidden
 
-# squid/bot/account_view.py:185
+# squid/bot/accounts/overview.py:185
 account-view-hidden-2 = Hidden
 
-# squid/bot/account_view.py:165
+# squid/bot/accounts/overview.py:165
 account-view-hidden-from-page = Hidden from page
 
-# squid/bot/profile_editor.py:109
+# squid/bot/accounts/profile_editor.py:109
 account-view-https-url = HTTPS URL
 
-# squid/bot/profile_editor.py:104
+# squid/bot/accounts/profile_editor.py:104
 account-view-label = Label
 
-# squid/bot/account_view.py:301
+# squid/bot/accounts/overview.py:301
 account-view-linked-accounts = Linked accounts
 
-# squid/bot/profile_editor.py:29
+# squid/bot/accounts/profile_editor.py:29
 account-view-links = { $count } links
 
-# squid/bot/profile_editor.py:121, squid/bot/profile_editor.py:98
+# squid/bot/accounts/profile_editor.py:121, squid/bot/accounts/profile_editor.py:98
 account-view-links-2 = Links
 
-# squid/bot/account_view.py:302
+# squid/bot/accounts/overview.py:302
 account-view-none-yet = _None yet._
 
-# squid/bot/profile_editor.py:72
+# squid/bot/accounts/profile_editor.py:72
 account-view-profile = Profile
 
-# squid/bot/profile_editor.py:100
+# squid/bot/accounts/profile_editor.py:100
 account-view-profile-link = Profile link
 
-# squid/bot/profile_editor.py:207
+# squid/bot/accounts/profile_editor.py:207
 account-view-profile-saved = Profile saved.
 
-# squid/bot/profile_editor.py:84
+# squid/bot/accounts/profile_editor.py:84
 account-view-pronouns = Pronouns
 
-# squid/bot/account_view.py:325
+# squid/bot/accounts/overview.py:325
 account-view-remove-this-linked-account = Remove this linked account?
 
-# squid/bot/profile_editor.py:132
+# squid/bot/accounts/profile_editor.py:132
 account-view-save-profile = Save profile
 
-# squid/bot/account_view.py:161
+# squid/bot/accounts/overview.py:161
 account-view-selected-identity = Selected identity
 
-# squid/bot/account_view.py:184
+# squid/bot/accounts/overview.py:184
 account-view-shown = Shown
 
-# squid/bot/account_view.py:164
+# squid/bot/accounts/overview.py:164
 account-view-shown-on-page = Shown on page
 
-# squid/bot/account_view.py:310
+# squid/bot/accounts/overview.py:310
 account-view-shown-publicly = shown publicly
 
-# squid/bot/account_view.py:317
+# squid/bot/accounts/overview.py:317
 account-view-unknown = unknown
 
-# squid/bot/account_view.py:168
+# squid/bot/accounts/overview.py:168
 account-view-unlink = Unlink
 
-# squid/bot/account_view.py:336
+# squid/bot/accounts/overview.py:336
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/account_view.py:319
+# squid/bot/accounts/overview.py:319
 account-view-verified = { $visibility } · verified { $age }
 
-# squid/bot/account_view.py:125, squid/bot/profile_editor.py:192
+# squid/bot/accounts/overview.py:125, squid/bot/accounts/profile_editor.py:192
 account-view-your-account = Your account
 
-# squid/bot/account_workspace.py:137
+# squid/bot/accounts/workspace.py:137
 account-workspace-account = Account
 
-# squid/bot/account_workspace.py:396
+# squid/bot/accounts/workspace.py:425
 account-workspace-cancel = Cancel
 
-# squid/bot/account_workspace.py:439
+# squid/bot/accounts/workspace.py:468
 account-workspace-claim-an-older-creator-name = Claim an older creator name
 
-# squid/bot/account_workspace.py:200
+# squid/bot/accounts/workspace.py:214
 account-workspace-claim-creator-credit = Claim creator credit
 
-# squid/bot/account_workspace.py:211
+# squid/bot/accounts/workspace.py:246
 account-workspace-create-merge-code = Create merge code
 
-# squid/bot/account_workspace.py:130
+# squid/bot/accounts/workspace.py:130
 account-workspace-creator-claims = Creator claims
 
-# squid/bot/account_workspace.py:441
+# squid/bot/accounts/workspace.py:470
 account-workspace-creator-name = Creator name
 
-# squid/bot/account_workspace.py:435
+# squid/bot/accounts/workspace.py:464
 account-workspace-discord-member = Discord member
 
-# squid/bot/account_workspace.py:429
+# squid/bot/accounts/workspace.py:458
 account-workspace-in-game-link-code = In-game link code
 
-# squid/bot/account_workspace.py:127
+# squid/bot/accounts/workspace.py:127
 account-workspace-link-and-refresh = Link and refresh
 
-# squid/bot/account_workspace.py:164, squid/bot/account_workspace.py:427
+# squid/bot/accounts/workspace.py:171, squid/bot/accounts/workspace.py:456
 account-workspace-link-minecraft-account = Link Minecraft account
 
-# squid/bot/account_workspace.py:145
+# squid/bot/accounts/workspace.py:145
 account-workspace-loading-account = Loading account.
 
-# squid/bot/account_workspace.py:131, squid/bot/account_workspace.py:395
+# squid/bot/accounts/workspace.py:131, squid/bot/accounts/workspace.py:424
 account-workspace-merge-accounts = Merge accounts
 
-# squid/bot/account_workspace.py:447
+# squid/bot/accounts/workspace.py:476
 account-workspace-merge-code = Merge code
 
-# squid/bot/account_workspace.py:125
+# squid/bot/accounts/workspace.py:125
 account-workspace-overview = Overview
 
-# squid/bot/account_workspace.py:445
+# squid/bot/accounts/workspace.py:474
 account-workspace-preview-account-merge = Preview account merge
 
-# squid/bot/account_workspace.py:343
+# squid/bot/accounts/workspace.py:372
 account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity.
 
-# squid/bot/account_workspace.py:433
+# squid/bot/accounts/workspace.py:462
 account-workspace-refresh-member-identity = Refresh member identity
 
-# squid/bot/account_workspace.py:179
+# squid/bot/accounts/workspace.py:185
 account-workspace-refresh-minecraft-identity = Refresh Minecraft identity
 
-# squid/bot/account_workspace.py:133
+# squid/bot/accounts/workspace.py:133
 account-workspace-review-claims = Review claims
 
-# squid/bot/account_workspace.py:155
+# squid/bot/accounts/workspace.py:164
 account-workspace-review-privacy-notice = Review privacy notice
 
 # squid/accounts/errors.py:179
@@ -736,19 +763,19 @@ artifacts-artifactstore-requires-object = S3ArtifactStore requires an S3 object-
 # squid/auth/application/services.py:66
 auth-key-pepper-required = API key pepper must not be empty.
 
-# squid/bot/claims_view.py:201
+# squid/bot/accounts/claims.py:201
 bot-claims-view-value =
     { "*" }*{ $heading }**
     { $detail }
 
-# squid/bot/consent.py:122
+# squid/bot/accounts/consent.py:122
 bot-consent-build =
     { $count ->
         [one] { $count } build
        *[other] { $count } builds
     }
 
-# squid/bot/consent.py:186
+# squid/bot/accounts/consent.py:186
 bot-consent-value =
     { "*" }*{ $username }**
     `{ $uuid }`
@@ -760,96 +787,96 @@ bot-notifications-a-credited-build-gained-record =
        *[other] A credited build gained { $count } records.
     }
 
-# squid/bot/notifications_view.py:511
+# squid/bot/notifications_view.py:526
 bot-notifications-remainder = …and { $hidden } more.
 
-# squid/bot/notifications_view.py:501
+# squid/bot/notifications_view.py:516
 bot-notifications-subscription =
     { "*" }*{ $label }**
     { $detail }
 
-# squid/bot/notifications_view.py:473
+# squid/bot/notifications_view.py:488
 bot-notifications-view-base-title = Base title
 
-# squid/bot/notifications_view.py:639
+# squid/bot/notifications_view.py:665
 bot-notifications-view-build-awaiting-review = Build awaiting review
 
-# squid/bot/notifications_view.py:631
+# squid/bot/notifications_view.py:657
 bot-notifications-view-build-confirmed = Build confirmed
 
-# squid/bot/notifications_view.py:633
+# squid/bot/notifications_view.py:659
 bot-notifications-view-build-denied = Build denied
 
-# squid/bot/notifications_view.py:464
+# squid/bot/notifications_view.py:479
 bot-notifications-view-build-kind = Build kind
 
-# squid/bot/notifications_view.py:643
+# squid/bot/notifications_view.py:669
 bot-notifications-view-build-notification = Build notification
 
-# squid/bot/notifications_view.py:54
+# squid/bot/notifications_view.py:55
 bot-notifications-view-creator = Creator
 
-# squid/bot/notifications_view.py:635
+# squid/bot/notifications_view.py:661
 bot-notifications-view-creator-build-confirmed = Creator build confirmed
 
-# squid/bot/notifications_view.py:167
+# squid/bot/notifications_view.py:172
 bot-notifications-view-discord-dms = Discord DMs
 
-# squid/bot/notifications_view.py:441
+# squid/bot/notifications_view.py:456
 bot-notifications-view-exact-tag-value = Exact tag value
 
-# squid/bot/notifications_view.py:252
+# squid/bot/notifications_view.py:257
 bot-notifications-view-follow-creator = Follow creator
 
-# squid/bot/notifications_view.py:262, squid/bot/notifications_view.py:460
+# squid/bot/notifications_view.py:267, squid/bot/notifications_view.py:475
 bot-notifications-view-follow-matching-records = Follow matching records
 
-# squid/bot/notifications_view.py:257
+# squid/bot/notifications_view.py:262
 bot-notifications-view-follow-record = Follow record
 
-# squid/bot/notifications_view.py:97
+# squid/bot/notifications_view.py:86
 bot-notifications-view-following = Following
 
-# squid/bot/notifications_view.py:369
+# squid/bot/notifications_view.py:384
 bot-notifications-view-following-that-creator = Following that creator.
 
-# squid/bot/notifications_view.py:383
+# squid/bot/notifications_view.py:398
 bot-notifications-view-following-that-record = Following that record.
 
-# squid/bot/notifications_view.py:586
+# squid/bot/notifications_view.py:612
 bot-notifications-view-mark-selected-read = Mark selected read
 
-# squid/bot/notifications_view.py:592
+# squid/bot/notifications_view.py:618
 bot-notifications-view-mark-selected-unread = Mark selected unread
 
-# squid/bot/notifications_view.py:495
+# squid/bot/notifications_view.py:510
 bot-notifications-view-nothing-yet = _Nothing yet._
 
-# squid/bot/notifications_view.py:107
+# squid/bot/notifications_view.py:108
 bot-notifications-view-notifications = Notifications
 
-# squid/bot/notifications_view.py:575
+# squid/bot/notifications_view.py:601
 bot-notifications-view-read = Read
 
-# squid/bot/notifications_view.py:56
+# squid/bot/notifications_view.py:57
 bot-notifications-view-record = Record
 
-# squid/bot/notifications_view.py:58
+# squid/bot/notifications_view.py:59
 bot-notifications-view-record-filter = Record filter
 
-# squid/bot/notifications_view.py:637
+# squid/bot/notifications_view.py:663
 bot-notifications-view-record-gained = Record gained
 
-# squid/bot/notifications_view.py:269
+# squid/bot/notifications_view.py:274
 bot-notifications-view-unfollow-selected = Unfollow selected
 
-# squid/bot/notifications_view.py:573, squid/bot/notifications_view.py:98
+# squid/bot/notifications_view.py:599
 bot-notifications-view-unread = Unread
 
-# squid/bot/notifications_view.py:482
+# squid/bot/notifications_view.py:497
 bot-notifications-view-version-scope = Version scope
 
-# squid/bot/notifications_view.py:161
+# squid/bot/notifications_view.py:166
 bot-notifications-view-web-inbox = Web inbox
 
 # squid/bot/notifications.py:142
@@ -858,38 +885,38 @@ bot-notifications-your-build-was-confirmed = Your build was confirmed.
 # squid/bot/notifications.py:144
 bot-notifications-your-build-was-denied = Your build was denied.
 
-# squid/bot/profile_render.py:104
+# squid/bot/accounts/profile_render.py:104
 bot-profile-render-build =
     { $count ->
         [one] { "*" }*{ $name }** — { $count } build
        *[other] { "*" }*{ $name }** — { $count } builds
     }
 
-# squid/bot/profile_render.py:90
+# squid/bot/accounts/profile_render.py:90
 bot-profile-render-creator-credit = Creator credit
 
-# squid/bot/profile_render.py:16
+# squid/bot/accounts/profile_render.py:16
 bot-profile-render-discord = Discord
 
-# squid/bot/profile_render.py:83
+# squid/bot/accounts/profile_render.py:83
 bot-profile-render-linked-accounts = Linked accounts
 
-# squid/bot/profile_render.py:52, squid/bot/profile_render.py:79
+# squid/bot/accounts/profile_render.py:52, squid/bot/accounts/profile_render.py:79
 bot-profile-render-links = Links
 
-# squid/bot/profile_render.py:18
+# squid/bot/accounts/profile_render.py:18
 bot-profile-render-minecraft-bedrock = Minecraft (Bedrock)
 
-# squid/bot/profile_render.py:17
+# squid/bot/accounts/profile_render.py:17
 bot-profile-render-minecraft-java = Minecraft (Java)
 
-# squid/bot/profile_render.py:50, squid/bot/profile_render.py:77
+# squid/bot/accounts/profile_render.py:50, squid/bot/accounts/profile_render.py:77
 bot-profile-render-pronouns = Pronouns
 
-# squid/bot/profile_render.py:100, squid/bot/profile_render.py:38
+# squid/bot/accounts/profile_render.py:100, squid/bot/accounts/profile_render.py:38
 bot-profile-render-value = { $provider } — { $name }
 
-# squid/bot/profile_render.py:36
+# squid/bot/accounts/profile_render.py:36
 bot-profile-render-value-2 = { $provider } — { $subject }
 
 # squid/bot/recount.py:85
@@ -913,103 +940,100 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount.py:100
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings_view.py:586
+# squid/bot/settings/screen.py:596
 bot-settings-role-multiplier = { $role } — { NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x
 
-# squid/bot/settings_view.py:148
-bot-settings-view-back = Back
-
-# squid/bot/settings_view.py:317
+# squid/bot/settings/screen.py:327
 bot-settings-view-bot-language = Bot language
 
-# squid/bot/settings_view.py:61
+# squid/bot/settings/screen.py:61
 bot-settings-view-build-reviews = Build reviews
 
-# squid/bot/settings_view.py:56
+# squid/bot/settings/screen.py:56
 bot-settings-view-builds-awaiting-review = Builds awaiting review
 
-# squid/bot/settings_view.py:220
+# squid/bot/settings/screen.py:230
 bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied picker clears that setting.
 
-# squid/bot/settings_view.py:295
+# squid/bot/settings/screen.py:305
 bot-settings-view-changed = Changed { $setting_label }
 
-# squid/bot/settings_view.py:304
+# squid/bot/settings/screen.py:314
 bot-settings-view-changed-the-bot-language = Changed the bot language
 
-# squid/bot/settings_view.py:378
+# squid/bot/settings/screen.py:388
 bot-settings-view-choose-a-role = Choose a role
 
-# squid/bot/settings_view.py:392
+# squid/bot/settings/screen.py:402
 bot-settings-view-confirm-reset = Confirm reset
 
-# squid/bot/settings_view.py:55
+# squid/bot/settings/screen.py:55
 bot-settings-view-confirmed-builds = Confirmed builds
 
-# squid/bot/settings_view.py:600
+# squid/bot/settings/screen.py:610
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
 
-# squid/bot/settings_view.py:62
+# squid/bot/settings/screen.py:62
 bot-settings-view-deletion-votes = Deletion votes
 
-# squid/bot/settings_view.py:386
+# squid/bot/settings/screen.py:396
 bot-settings-view-edit-emojis = Edit emojis
 
-# squid/bot/settings_view.py:593
+# squid/bot/settings/screen.py:603
 bot-settings-view-emojis = Emojis
 
-# squid/bot/settings_view.py:53
+# squid/bot/settings/screen.py:53
 bot-settings-view-fastest-record-builds = Fastest-record builds
 
-# squid/bot/settings_view.py:54
+# squid/bot/settings/screen.py:54
 bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds
 
-# squid/bot/settings_view.py:261
+# squid/bot/settings/screen.py:271
 bot-settings-view-follow-discord = Follow Discord
 
-# squid/bot/settings_view.py:499
+# squid/bot/settings/screen.py:509
 bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice.
 
-# squid/bot/settings_view.py:579, squid/bot/settings_view.py:591
+# squid/bot/settings/screen.py:589, squid/bot/settings/screen.py:601
 bot-settings-view-none = _None_
 
-# squid/bot/settings_view.py:324
+# squid/bot/settings/screen.py:334
 bot-settings-view-not-found = _Not found_ ({ $channel_id })
 
-# squid/bot/settings_view.py:322
+# squid/bot/settings/screen.py:332
 bot-settings-view-not-set = _Not set_
 
-# squid/bot/settings_view.py:630
+# squid/bot/settings/screen.py:640
 bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line
 
-# squid/bot/settings_view.py:63
+# squid/bot/settings/screen.py:63
 bot-settings-view-polls = Polls
 
-# squid/bot/settings_view.py:394
+# squid/bot/settings/screen.py:404
 bot-settings-view-reset = Reset
 
-# squid/bot/settings_view.py:594
+# squid/bot/settings/screen.py:604
 bot-settings-view-role-multipliers = Role multipliers
 
-# squid/bot/settings_view.py:229
+# squid/bot/settings/screen.py:239
 bot-settings-view-server-settings = Server settings
 
-# squid/bot/settings_view.py:52
+# squid/bot/settings/screen.py:52
 bot-settings-view-smallest-record-builds = Smallest-record builds
 
-# squid/bot/settings_view.py:425
+# squid/bot/settings/screen.py:435
 bot-settings-view-that-role-has-been-deleted = That role has been deleted.
 
-# squid/bot/settings_view.py:420
+# squid/bot/settings/screen.py:430
 bot-settings-view-that-role-selection-is-invalid = That role selection is invalid.
 
-# squid/bot/settings_view.py:433
+# squid/bot/settings/screen.py:443
 bot-settings-view-vote-weight-for = Vote weight for { $role_name }
 
-# squid/bot/settings_view.py:153
+# squid/bot/settings/screen.py:155
 bot-settings-view-voting = Voting
 
-# squid/bot/settings_view.py:360
+# squid/bot/settings/screen.py:370
 bot-settings-view-voting-2 = Voting — { $kind_label }
 
 # squid/bot/starboard/render.py:26
@@ -1024,79 +1048,79 @@ bot-starboard-render-reactions = { " " }({ $count } reactions)
 # squid/bot/starboard/render.py:37
 bot-starboard-render-replying-to-message = -# Replying to message `{ $message_id }`
 
-# squid/bot/starboard/screen.py:120
+# squid/bot/starboard/screen.py:114
 bot-starboard-screen-boards = Boards
 
-# squid/bot/starboard/screen.py:358
+# squid/bot/starboard/screen.py:361
 bot-starboard-screen-cancel = Cancel
 
-# squid/bot/starboard/screen.py:400
+# squid/bot/starboard/screen.py:403
 bot-starboard-screen-channel = Channel
 
-# squid/bot/starboard/screen.py:122
+# squid/bot/starboard/screen.py:116
 bot-starboard-screen-create = Create
 
-# squid/bot/starboard/screen.py:158, squid/bot/starboard/screen.py:430
+# squid/bot/starboard/screen.py:161, squid/bot/starboard/screen.py:433
 bot-starboard-screen-create-starboard = Create starboard
 
-# squid/bot/starboard/screen.py:297
+# squid/bot/starboard/screen.py:300
 bot-starboard-screen-created-starboard = Created starboard **{ $created_name }**.
 
-# squid/bot/starboard/screen.py:357
+# squid/bot/starboard/screen.py:360
 bot-starboard-screen-delete = Delete
 
-# squid/bot/starboard/screen.py:251
+# squid/bot/starboard/screen.py:254
 bot-starboard-screen-delete-board = Delete board
 
-# squid/bot/starboard/screen.py:142, squid/bot/starboard/screen.py:374
+# squid/bot/starboard/screen.py:136, squid/bot/starboard/screen.py:377
 bot-starboard-screen-delete-starboard = Delete starboard
 
-# squid/bot/starboard/screen.py:446
+# squid/bot/starboard/screen.py:449
 bot-starboard-screen-direction = Direction
 
-# squid/bot/starboard/screen.py:450
+# squid/bot/starboard/screen.py:453
 bot-starboard-screen-down = Down
 
-# squid/bot/starboard/screen.py:220
+# squid/bot/starboard/screen.py:223
 bot-starboard-screen-edit-role-weight = Edit role weight
 
-# squid/bot/starboard/screen.py:444
+# squid/bot/starboard/screen.py:447
 bot-starboard-screen-emoji = Emoji
 
-# squid/bot/starboard/screen.py:187, squid/bot/starboard/screen.py:403
+# squid/bot/starboard/screen.py:190, squid/bot/starboard/screen.py:406
 bot-starboard-screen-emojis = Emojis
 
-# squid/bot/starboard/screen.py:152
+# squid/bot/starboard/screen.py:146
 bot-starboard-screen-loading-starboards = Loading starboards.
 
-# squid/bot/starboard/screen.py:453, squid/bot/starboard/screen.py:460
+# squid/bot/starboard/screen.py:456, squid/bot/starboard/screen.py:463
 bot-starboard-screen-multiplier = Multiplier
 
-# squid/bot/starboard/screen.py:432
+# squid/bot/starboard/screen.py:435
 bot-starboard-screen-name = Name
 
-# squid/bot/starboard/screen.py:401, squid/bot/starboard/screen.py:438
+# squid/bot/starboard/screen.py:404, squid/bot/starboard/screen.py:441
 bot-starboard-screen-post-threshold = Post threshold
 
-# squid/bot/starboard/screen.py:402
+# squid/bot/starboard/screen.py:405
 bot-starboard-screen-removal-threshold = Removal threshold
 
-# squid/bot/starboard/screen.py:217
+# squid/bot/starboard/screen.py:220
 bot-starboard-screen-role-weights = Role weights
 
-# squid/bot/starboard/screen.py:172
+# squid/bot/starboard/screen.py:175
 bot-starboard-screen-settings = Settings
 
-# squid/bot/starboard/screen.py:133
+# squid/bot/starboard/screen.py:127
 bot-starboard-screen-starboard-configuration = Starboard configuration
 
-# squid/bot/starboard/screen.py:378
+# squid/bot/starboard/screen.py:381
 bot-starboard-screen-starboard-deleted = Starboard deleted.
 
-# squid/bot/starboard/screen.py:117
+# squid/bot/starboard/screen.py:111
 bot-starboard-screen-starboards = Starboards
 
-# squid/bot/starboard/screen.py:449
+# squid/bot/starboard/screen.py:452
 bot-starboard-screen-up = Up
 
 # squid/bot/submission/build_browse.py:275
@@ -1105,10 +1129,10 @@ bot-submission-build-browse-approve = Approve
 # squid/bot/submission/build_browse.py:313
 bot-submission-build-browse-build = { $action } build #{ $build_id }?
 
-# squid/bot/submission/build_browse.py:463
+# squid/bot/submission/build_browse.py:469
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:768
+# squid/bot/submission/build_browse.py:778
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/submission/build_browse.py:332
@@ -1138,10 +1162,10 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/submission/build_browse.py:229
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:766
+# squid/bot/submission/build_browse.py:776
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:524
+# squid/bot/submission/build_browse.py:533
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:384
@@ -1255,65 +1279,65 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/commands.py:182
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/submission/search_view.py:487
+# squid/bot/submission/search_view.py:496
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Base title**
     { $base_title } · { $version_scope }
 
-# squid/bot/submission/search_view.py:413
+# squid/bot/submission/search_view.py:422
 bot-submission-search-view-creator = Creator
 
-# squid/bot/submission/search_view.py:521
+# squid/bot/submission/search_view.py:530
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/submission/search_view.py:498
+# squid/bot/submission/search_view.py:507
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/submission/search_view.py:409
+# squid/bot/submission/search_view.py:418
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/submission/search_view.py:407
+# squid/bot/submission/search_view.py:416
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/submission/search_view.py:218, squid/bot/submission/search_view.py:324
+# squid/bot/submission/search_view.py:224, squid/bot/submission/search_view.py:332
 bot-submission-search-view-retry = Retry
 
-# squid/bot/submission/search_view.py:319
+# squid/bot/submission/search_view.py:327
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/submission/search_view.py:411
+# squid/bot/submission/search_view.py:420
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/submission/search_view.py:510
+# squid/bot/submission/search_view.py:519
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/submission/search_view.py:417
+# squid/bot/submission/search_view.py:426
 bot-submission-search-view-tag = Tag
 
-# squid/bot/submission/search_view.py:530
+# squid/bot/submission/search_view.py:539
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/submission/search_view.py:538
+# squid/bot/submission/search_view.py:547
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/submission/search_view.py:415
+# squid/bot/submission/search_view.py:424
 bot-submission-search-view-version = Version
 
-# squid/bot/submission/search_view.py:125
+# squid/bot/submission/search_view.py:128
 bot-submission-search-view-view-build = View build
 
 # squid/bot/submission/submit.py:400
@@ -1337,82 +1361,79 @@ bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x d
 # squid/bot/submission/ui/opening.py:93
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/build_edit.py:407
+# squid/bot/submission/ui/build_edit.py:415
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/build_edit.py:412
+# squid/bot/submission/ui/build_edit.py:420
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/build_edit.py:432
+# squid/bot/submission/ui/build_edit.py:440
 bot-submission-ui-views-cancel = Cancel
 
-# squid/bot/submission/ui/build_edit.py:316
+# squid/bot/submission/ui/build_edit.py:324
 bot-submission-ui-views-edit-build = Edit build
 
-# squid/bot/submission/ui/build_edit.py:288
+# squid/bot/submission/ui/build_edit.py:296
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/build_edit.py:453
+# squid/bot/submission/ui/build_edit.py:461
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/build_edit.py:429
+# squid/bot/submission/ui/build_edit.py:437
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/build_edit.py:418
+# squid/bot/submission/ui/build_edit.py:426
 bot-submission-ui-views-review-changes = Review changes
 
-# squid/bot/tags_view.py:335, squid/bot/tags_view.py:523
+# squid/bot/tags_view.py:341, squid/bot/tags_view.py:529
 bot-tags-view-add-restriction-alias = Add restriction alias
 
-# squid/bot/tags_view.py:532
+# squid/bot/tags_view.py:538
 bot-tags-view-apply-showcase-tag = Apply showcase tag
 
-# squid/bot/tags_view.py:504
+# squid/bot/tags_view.py:510
 bot-tags-view-approve = Approve
 
-# squid/bot/tags_view.py:506
+# squid/bot/tags_view.py:512
 bot-tags-view-archive = Archive
 
-# squid/bot/tags_view.py:411
+# squid/bot/tags_view.py:417
 bot-tags-view-attached-to-build = Attached **{ $tag_name }** to build #{ $build_id }.
 
-# squid/bot/tags_view.py:534
+# squid/bot/tags_view.py:540
 bot-tags-view-build-id = Build ID
 
-# squid/bot/tags_view.py:205
-bot-tags-view-build-tags = Build tags
-
-# squid/bot/tags_view.py:444
+# squid/bot/tags_view.py:450
 bot-tags-view-cancel = Cancel
 
-# squid/bot/tags_view.py:526
+# squid/bot/tags_view.py:532
 bot-tags-view-canonical-restriction = Canonical restriction
 
 # squid/bot/tags_view.py:192
 bot-tags-view-catalogue = Catalogue
 
-# squid/bot/tags_view.py:443
+# squid/bot/tags_view.py:449
 bot-tags-view-confirm = Confirm
 
-# squid/bot/tags_view.py:217
+# squid/bot/tags_view.py:216
 bot-tags-view-confirm-tag-moderation = Confirm tag moderation
 
-# squid/bot/tags_view.py:513
+# squid/bot/tags_view.py:519
 bot-tags-view-display-name = Display name
 
-# squid/bot/tags_view.py:495
+# squid/bot/tags_view.py:501
 bot-tags-view-id = ID
 
-# squid/bot/tags_view.py:496
+# squid/bot/tags_view.py:502
 bot-tags-view-kind = Kind
 
-# squid/bot/tags_view.py:223
+# squid/bot/tags_view.py:222
 bot-tags-view-loading-build-tags = Loading build tags.
 
 # squid/bot/tags_view.py:197
 bot-tags-view-moderation = Moderation
 
-# squid/bot/tags_view.py:340, squid/bot/tags_view.py:528
+# squid/bot/tags_view.py:346, squid/bot/tags_view.py:534
 bot-tags-view-new-alias = New alias
 
 # squid/bot/tags_view.py:163
@@ -1421,46 +1442,46 @@ bot-tags-view-no-public-build-tags-are-available = No public build tags are avai
 # squid/bot/tags_view.py:194
 bot-tags-view-propose-and-apply = Propose and apply
 
-# squid/bot/tags_view.py:511
+# squid/bot/tags_view.py:517
 bot-tags-view-propose-showcase-tag = Propose showcase tag
 
-# squid/bot/tags_view.py:247
+# squid/bot/tags_view.py:253
 bot-tags-view-propose-tag = Propose tag
 
 # squid/bot/tags_view.py:162
 bot-tags-view-published-build-tags = Published build tags
 
-# squid/bot/tags_view.py:498, squid/bot/tags_view.py:519
+# squid/bot/tags_view.py:504, squid/bot/tags_view.py:525
 bot-tags-view-query-field = Query field
 
-# squid/bot/tags_view.py:505
+# squid/bot/tags_view.py:511
 bot-tags-view-reject = Reject
 
-# squid/bot/tags_view.py:369, squid/bot/tags_view.py:431
+# squid/bot/tags_view.py:375, squid/bot/tags_view.py:437
 bot-tags-view-restriction-alias-added = Restriction alias added.
 
 # squid/bot/tags_view.py:200
 bot-tags-view-restriction-aliases = Restriction aliases
 
-# squid/bot/tags_view.py:535
+# squid/bot/tags_view.py:541
 bot-tags-view-tag-id = Tag ID
 
-# squid/bot/tags_view.py:386
+# squid/bot/tags_view.py:392
 bot-tags-view-tag-is-awaiting-staff-approval = Tag #{ $tag_id } is awaiting staff approval.
 
 # squid/bot/tags_view.py:185
 bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review
 
-# squid/bot/tags_view.py:286, squid/bot/tags_view.py:497, squid/bot/tags_view.py:536
+# squid/bot/tags_view.py:292, squid/bot/tags_view.py:503, squid/bot/tags_view.py:542
 bot-tags-view-value = Value
 
-# squid/bot/tags_view.py:478
+# squid/bot/tags_view.py:484
 bot-tags-view-value-2 = { $action_label } **{ $tag_name }**.
 
-# squid/bot/tags_view.py:218
+# squid/bot/tags_view.py:217
 bot-tags-view-value-3 = { $action_label } **{ $tag_name }**?
 
-# squid/bot/tags_view.py:515
+# squid/bot/tags_view.py:521
 bot-tags-view-value-type = Value type
 
 # squid/bot/ui.py:119
@@ -1571,13 +1592,13 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/ui.py:118
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/verify.py:109
+# squid/bot/accounts/cog.py:109
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
-# squid/bot/verify.py:89
+# squid/bot/accounts/cog.py:89
 bot-verify-hidden-creator-page = Hidden creator page
 
-# squid/bot/verify.py:85
+# squid/bot/accounts/cog.py:85
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
 # squid/bot/version_tracking.py:178
@@ -1742,7 +1763,7 @@ bot-voting-vote-working = Working
 # squid/bot/voting/vote.py:90
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/submission/build_browse.py:560
+# squid/bot/submission/build_browse.py:569
 browse-query-summary = Query: { $query } · Sort: { $sort }
 
 # squid/bot/submission/attachments.py:59
@@ -1751,22 +1772,22 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:65
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/build_browse.py:501
+# squid/bot/submission/build_browse.py:510
 build-browse-all-builds = Builds
 
-# squid/bot/submission/build_browse.py:483
+# squid/bot/submission/build_browse.py:491
 build-browse-list = List view
 
-# squid/bot/submission/build_browse.py:517
+# squid/bot/submission/build_browse.py:526
 build-browse-record-tools = Record tools
 
-# squid/bot/submission/build_browse.py:509
+# squid/bot/submission/build_browse.py:518
 build-browse-records = Records
 
 # squid/bot/submission/build_browse.py:257
 build-browse-tags = Build tags
 
-# squid/bot/submission/build_browse.py:562
+# squid/bot/submission/build_browse.py:571
 build-browser-edit-search = Edit
 
 # squid/bot/submission/submit.py:516
@@ -1829,58 +1850,58 @@ build-edit-form-videos = Video links
 # squid/submissions/application/forms.py:666
 build-edit-form-world-downloads = World download links
 
-# squid/bot/submission/ui/build_edit.py:151
+# squid/bot/submission/ui/build_edit.py:159
 build-edit-history-fields = Edit build fields
 
-# squid/bot/submission/ui/build_edit.py:469
+# squid/bot/submission/ui/build_edit.py:477
 build-edit-history-save = Save build changes
 
-# squid/bot/submission/ui/build_edit.py:181
+# squid/bot/submission/ui/build_edit.py:189
 build-edit-history-unlisted = Remove names not in the catalogue
 
 # squid/bot/submission/ui/controls.py:79, squid/bot/submission/ui/controls.py:93
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/build_edit.py:302
+# squid/bot/submission/ui/build_edit.py:310
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
 # squid/bot/submission/ui/opening.py:94
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:510
+# squid/bot/submission/ui/build_edit.py:518
 build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:349
+# squid/bot/submission/ui/build_edit.py:357
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
 # squid/bot/submission/edit.py:159
 build-editor-fields-unavailable = This build has no { $names }. Open the workspace to see what it does have.
 
-# squid/bot/submission/ui/build_edit.py:354
+# squid/bot/submission/ui/build_edit.py:362
 build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/build_edit.py:294
+# squid/bot/submission/ui/build_edit.py:302
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/build_edit.py:327
+# squid/bot/submission/ui/build_edit.py:335
 build-editor-remove-unlisted = Remove names not in the catalogue…
 
-# squid/bot/submission/ui/build_edit.py:394
+# squid/bot/submission/ui/build_edit.py:402
 build-editor-removed-unlisted = Removed: { $names }
 
-# squid/bot/submission/ui/build_edit.py:310
+# squid/bot/submission/ui/build_edit.py:318
 build-editor-review-hint = Review the changed values below, then apply them.
 
-# squid/bot/submission/ui/build_edit.py:312
+# squid/bot/submission/ui/build_edit.py:320
 build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.
 
-# squid/bot/submission/ui/build_edit.py:143
+# squid/bot/submission/ui/build_edit.py:151
 build-editor-stale-form = These answers changed while the form was open. Open it again.
 
-# squid/bot/submission/ui/build_edit.py:374
+# squid/bot/submission/ui/build_edit.py:382
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/submission/build_browse.py:550, squid/bot/submission/build_browse.py:680
+# squid/bot/submission/build_browse.py:559, squid/bot/submission/build_browse.py:689
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1895,7 +1916,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:464
+# squid/bot/submission/build_browse.py:470
 build-list-empty = No builds are available.
 
 # squid/bot/submission/schematic_tools.py:400
@@ -1928,19 +1949,19 @@ build-schematic-tools-hide = Hide schematic tools
 # squid/bot/submission/build_browse.py:300
 build-schematic-tools-show = Schematic tools
 
-# squid/bot/submission/search_view.py:140, squid/bot/submission/search_view.py:144, squid/bot/submission/search_view.py:193, squid/bot/submission/search_view.py:215
+# squid/bot/submission/search_view.py:146, squid/bot/submission/search_view.py:150, squid/bot/submission/search_view.py:199, squid/bot/submission/search_view.py:221
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/submission/search_view.py:323
+# squid/bot/submission/search_view.py:331
 build-search-load-failed = Could not load search results.
 
-# squid/bot/submission/search_view.py:322
+# squid/bot/submission/search_view.py:330
 build-search-loading = Loading search results…
 
 # squid/bot/submission/commands.py:122
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/submission/search_view.py:320
+# squid/bot/submission/search_view.py:328
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/commands.py:132
@@ -2018,46 +2039,46 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/submission/build_browse.py:610, squid/bot/submission/search_help.py:181
+# squid/bot/submission/build_browse.py:619, squid/bot/submission/search_help.py:181
 catalogue-search-help = Search help
 
 # squid/catalogue/domain/titles.py:67
 catalogue-title-token-blank = A title token cannot be blank.
 
-# squid/bot/claims_view.py:182
+# squid/bot/accounts/claims.py:182
 claims-closed-uncredited = Closed { $claimant }'s claim on **{ $name }** without crediting it.
 
-# squid/bot/claims_view.py:218
+# squid/bot/accounts/claims.py:218
 claims-reapproval-warning = Approving again takes the name from them.
 
-# squid/bot/claims_view.py:146
+# squid/bot/accounts/claims.py:146
 claims-resolve-forbidden = You are no longer allowed to resolve creator claims.
 
-# squid/bot/claims_view.py:73
+# squid/bot/accounts/claims.py:73
 claims-review-empty = No creator credit claims are awaiting review.
 
-# squid/bot/claims_view.py:116
+# squid/bot/accounts/claims.py:116
 claims-review-heading = Creator credit claims awaiting review
 
-# squid/bot/claims_view.py:99
+# squid/bot/accounts/claims.py:99
 claims-view-approve = Approve
 
-# squid/bot/claims_view.py:197, squid/bot/claims_view.py:213
+# squid/bot/accounts/claims.py:197, squid/bot/accounts/claims.py:213
 claims-view-claim = Claim #{ $claim_id } — { $name }
 
-# squid/bot/claims_view.py:180
+# squid/bot/accounts/claims.py:180
 claims-view-credited-to = Credited **{ $name }** to { $claimant }.
 
-# squid/bot/claims_view.py:200
+# squid/bot/accounts/claims.py:200
 claims-view-opened = { $claimant } — opened { $age }
 
-# squid/bot/claims_view.py:128
+# squid/bot/accounts/claims.py:128
 claims-view-page-of-in-total = Page { $page } of { $pages } — { $total } in total
 
-# squid/bot/claims_view.py:109
+# squid/bot/accounts/claims.py:109
 claims-view-reject = Reject
 
-# squid/bot/claims_view.py:97
+# squid/bot/accounts/claims.py:97
 claims-view-take-the-name = Take the name
 
 # squid/cli_auth/errors.py:66
@@ -2126,13 +2147,13 @@ command-access-user-help = Member whose access to inspect. Defaults to you.
 # squid/bot/permissions.py:54
 command-access-user-name = user
 
-# squid/bot/verify.py:48
+# squid/bot/accounts/cog.py:48
 command-account-help = Manage your account or view a creator page
 
-# squid/bot/verify.py:47
+# squid/bot/accounts/cog.py:47
 command-account-name = account
 
-# squid/bot/verify.py:51
+# squid/bot/accounts/cog.py:51
 command-account-user-name = user
 
 # squid/bot/admin.py:102
@@ -2237,16 +2258,16 @@ command-build-submit-restrictions-name = restrictions
 # squid/bot/submission/submit.py:145
 command-build-submit-versions-name = versions
 
-# squid/bot/diagnostics.py:24
+# squid/bot/diagnostics/cog.py:24
 command-errors-help = Browse private error reports, optionally opening one reference.
 
-# squid/bot/diagnostics.py:23
+# squid/bot/diagnostics/cog.py:23
 command-errors-name = errors
 
-# squid/bot/diagnostics.py:28
+# squid/bot/diagnostics/cog.py:28
 command-errors-reference-help = The error reference to open immediately
 
-# squid/bot/diagnostics.py:27
+# squid/bot/diagnostics/cog.py:27
 command-errors-reference-name = reference
 
 # squid/bot/help.py:194
@@ -2258,34 +2279,34 @@ command-help-help = Show a grouped command directory or focused command details.
 # squid/bot/help.py:191
 command-help-name = help
 
-# squid/bot/layout_showcase.py:26
+# squid/bot/showcase/cog.py:26
 command-layout-help = Explore the build workbench or collaborative review room.
 
-# squid/bot/layout_showcase.py:24
+# squid/bot/showcase/cog.py:24
 command-layout-name = layout
 
-# squid/bot/layout_showcase.py:67
+# squid/bot/showcase/cog.py:67
 command-layout-review-choice-mode-live = live
 
-# squid/bot/layout_showcase.py:65
+# squid/bot/showcase/cog.py:65
 command-layout-review-choice-mode-simulated = simulated
 
-# squid/bot/layout_showcase.py:57
+# squid/bot/showcase/cog.py:57
 command-layout-review-help = Review together, or operate Alice and Bob yourself in simulated mode.
 
-# squid/bot/layout_showcase.py:61
+# squid/bot/showcase/cog.py:61
 command-layout-review-mode-help = …
 
-# squid/bot/layout_showcase.py:60
+# squid/bot/showcase/cog.py:60
 command-layout-review-mode-name = mode
 
-# squid/bot/layout_showcase.py:55
+# squid/bot/showcase/cog.py:55
 command-layout-review-name = review
 
-# squid/bot/layout_showcase.py:36
+# squid/bot/showcase/cog.py:36
 command-layout-workbench-help = Edit a sample build and watch a second message update live.
 
-# squid/bot/layout_showcase.py:34
+# squid/bot/showcase/cog.py:34
 command-layout-workbench-name = workbench
 
 # squid/bot/notifications.py:53
@@ -2408,10 +2429,10 @@ command-search-scope-name = scope
 # squid/bot/submission/commands.py:116
 command-search-sort-name = sort
 
-# squid/bot/settings.py:29
+# squid/bot/settings/cog.py:29
 command-settings-help = Configure this server
 
-# squid/bot/settings.py:28
+# squid/bot/settings/cog.py:28
 command-settings-name = settings
 
 # squid/bot/starboard/cog.py:207
@@ -2441,61 +2462,61 @@ command-versions-name = versions
 # squid/bot/voting/vote.py:108
 command-vote-to-delete-name = Vote to Delete
 
-# squid/bot/consent.py:171
+# squid/bot/accounts/consent.py:171
 consent-agree = Agree
 
-# squid/bot/consent.py:206
+# squid/bot/accounts/consent.py:206
 consent-agree-and-link = Agree and link
 
-# squid/bot/consent.py:178
+# squid/bot/accounts/consent.py:178
 consent-agreement-details = Agreeing stores your Discord user ID, your Minecraft UUID and your current Minecraft username, and records this consent. Cancelling stores nothing.
 
-# squid/bot/consent.py:200
+# squid/bot/accounts/consent.py:200
 consent-build-credit = Build credit
 
-# squid/bot/consent.py:98
+# squid/bot/accounts/consent.py:98
 consent-cancel = Cancel
 
-# squid/bot/consent.py:328
+# squid/bot/accounts/consent.py:328
 consent-cancelled-no-data = Cancelled. No account information was stored.
 
-# squid/bot/consent.py:165, squid/bot/consent.py:202
+# squid/bot/accounts/consent.py:165, squid/bot/accounts/consent.py:202
 consent-consent-recorded = Consent recorded
 
-# squid/bot/consent.py:137
+# squid/bot/accounts/consent.py:137
 consent-credit-attribution = **{ $name }** ({ $builds }) becomes attributed to your account.
 
-# squid/bot/consent.py:152
+# squid/bot/accounts/consent.py:152
 consent-data-storage-summary = Agreeing stores your Discord user ID and records this consent, so the bot can recognise you and attribute your builds. Cancelling stores nothing.
 
-# squid/bot/consent.py:159, squid/bot/consent.py:195
+# squid/bot/accounts/consent.py:159, squid/bot/accounts/consent.py:195
 consent-discord-account = Discord account
 
-# squid/bot/consent.py:132
+# squid/bot/accounts/consent.py:132
 consent-existing-credit-warning = **{ $name }** ({ $builds }) is already credited to another creator, so agreeing moves nothing and opens a claim for staff to review.
 
-# squid/bot/consent.py:177
+# squid/bot/accounts/consent.py:177
 consent-link-to-your-discord-account = Link { $username } to your Discord account
 
-# squid/bot/consent.py:185
+# squid/bot/accounts/consent.py:185
 consent-minecraft-account = Minecraft account
 
-# squid/bot/consent.py:118
+# squid/bot/accounts/consent.py:118
 consent-no-credits-notice = No build credits **{ $username }** yet, so nothing is reattributed.
 
-# squid/bot/consent.py:166, squid/bot/consent.py:203
+# squid/bot/accounts/consent.py:166, squid/bot/accounts/consent.py:203
 consent-notice-versioning = Notice { $version }, timed at the moment you agree.
 
-# squid/bot/consent.py:99
+# squid/bot/accounts/consent.py:99
 consent-privacy-notice = Privacy notice
 
-# squid/bot/consent.py:49
+# squid/bot/accounts/consent.py:49
 consent-prompt-already-open = You already have a consent prompt open. Please answer that one.
 
-# squid/bot/consent.py:151
+# squid/bot/accounts/consent.py:151
 consent-storage-prerequisite = Before Redstone Squid stores anything about you
 
-# squid/bot/consent.py:160, squid/bot/consent.py:196
+# squid/bot/accounts/consent.py:160, squid/bot/accounts/consent.py:196
 consent-value-2 = { $user_mention } (`{ $user_id }`)
 
 # squid/bot/follows.py:36
@@ -2657,19 +2678,19 @@ credits-role = Contribution
 # squid/bot/submission/ui/credits.py:44
 credits-title = Credits
 
-# squid/bot/diagnostics_view.py:387
+# squid/bot/diagnostics/screen.py:385
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
-# squid/bot/diagnostics_view.py:38
+# squid/bot/diagnostics/screen.py:38
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:326
+# squid/bot/diagnostics/screen.py:324
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics_view.py:48
+# squid/bot/diagnostics/screen.py:48
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics_view.py:193
+# squid/bot/diagnostics/screen.py:191
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/diagnostics/domain.py:23
@@ -2678,421 +2699,421 @@ diagnostics-error-report-not-found = Error report not found
 # squid/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics_view.py:228
+# squid/bot/diagnostics/screen.py:226
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics_view.py:155
+# squid/bot/diagnostics/screen.py:155
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics_view.py:110
+# squid/bot/diagnostics/screen.py:110
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:397
+# squid/bot/diagnostics/screen.py:395
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
-# squid/bot/diagnostics_view.py:105
+# squid/bot/diagnostics/screen.py:105
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:396
+# squid/bot/diagnostics/screen.py:394
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics_view.py:273
+# squid/bot/diagnostics/screen.py:271
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics_view.py:191
+# squid/bot/diagnostics/screen.py:189
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics_view.py:199
+# squid/bot/diagnostics/screen.py:197
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics_view.py:246
+# squid/bot/diagnostics/screen.py:244
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics_view.py:49
+# squid/bot/diagnostics/screen.py:49
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics_view.py:283
+# squid/bot/diagnostics/screen.py:281
 diagnostics-view-error = Error { $reference }
 
-# squid/bot/diagnostics_view.py:244
+# squid/bot/diagnostics/screen.py:242
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:380
+# squid/bot/diagnostics/screen.py:378
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:381
+# squid/bot/diagnostics/screen.py:379
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:303
+# squid/bot/diagnostics/screen.py:301
 diagnostics-view-full-report = Full report
 
-# squid/bot/diagnostics_view.py:50
+# squid/bot/diagnostics/screen.py:50
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics_view.py:258
+# squid/bot/diagnostics/screen.py:256
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:295
+# squid/bot/diagnostics/screen.py:293
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics_view.py:279
+# squid/bot/diagnostics/screen.py:277
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics_view.py:227
+# squid/bot/diagnostics/screen.py:225
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics_view.py:138
+# squid/bot/diagnostics/screen.py:138
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics_view.py:37
+# squid/bot/diagnostics/screen.py:37
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:376
+# squid/bot/diagnostics/screen.py:374
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:379
+# squid/bot/diagnostics/screen.py:377
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:386
+# squid/bot/diagnostics/screen.py:384
 diagnostics-view-work-lost = Work lost
 
-# squid/bot/diagnostics_view.py:264
+# squid/bot/diagnostics/screen.py:262
 diagnostics-view-work-lost-only = Work lost only
 
-# squid/bot/submission/ui/drafts.py:474, squid/bot/submission/ui/drafts.py:642, squid/bot/submission/ui/drafts.py:887
+# squid/bot/submission/ui/drafts.py:476, squid/bot/submission/ui/drafts.py:644, squid/bot/submission/ui/drafts.py:889
 draft-editor-add-files = Add files
 
 # squid/bot/submission/ui/sections.py:78
 draft-editor-build-size = Build size
 
-# squid/bot/submission/ui/sections.py:270
+# squid/bot/submission/ui/sections.py:272
 draft-editor-choose = Choose…
 
-# squid/bot/submission/ui/drafts.py:608
+# squid/bot/submission/ui/drafts.py:610
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:532, squid/bot/submission/ui/sections.py:361
+# squid/bot/submission/ui/build_edit.py:540, squid/bot/submission/ui/sections.py:363
 draft-editor-done = Done
 
 # squid/bot/submission/ui/sections.py:83
 draft-editor-door-size = Door size
 
-# squid/bot/submission/ui/drafts.py:472, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:206
+# squid/bot/submission/ui/drafts.py:474, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:208
 draft-editor-edit = Edit
 
-# squid/bot/submission/ui/drafts.py:546
+# squid/bot/submission/ui/drafts.py:548
 draft-editor-edit-build = Edit build
 
-# squid/bot/submission/ui/drafts.py:437
+# squid/bot/submission/ui/drafts.py:439
 draft-editor-expired = This panel has closed. Your answers are saved.
 
-# squid/bot/submission/ui/drafts.py:368
+# squid/bot/submission/ui/drafts.py:370
 draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:841
+# squid/bot/submission/ui/drafts.py:843
 draft-editor-file-failed = ⚠️ Upload failed. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:843
+# squid/bot/submission/ui/drafts.py:845
 draft-editor-file-failed-final = ⚠️ Upload failed
 
-# squid/bot/submission/ui/drafts.py:833
+# squid/bot/submission/ui/drafts.py:835
 draft-editor-file-kind-image = Image
 
-# squid/bot/submission/ui/drafts.py:832
+# squid/bot/submission/ui/drafts.py:834
 draft-editor-file-kind-schematic = Schematic
 
-# squid/bot/submission/ui/drafts.py:835
+# squid/bot/submission/ui/drafts.py:837
 draft-editor-file-kind-unknown = Unsupported file type
 
-# squid/bot/submission/ui/drafts.py:834
+# squid/bot/submission/ui/drafts.py:836
 draft-editor-file-kind-video = Video
 
-# squid/bot/submission/ui/drafts.py:845
+# squid/bot/submission/ui/drafts.py:847
 draft-editor-file-not-added = Not added yet. Choose it under Edit to use it.
 
-# squid/bot/submission/ui/drafts.py:847
+# squid/bot/submission/ui/drafts.py:849
 draft-editor-file-not-used = Not used
 
-# squid/bot/submission/ui/drafts.py:849
+# squid/bot/submission/ui/drafts.py:851
 draft-editor-file-uploading = Uploading…
 
-# squid/bot/submission/ui/drafts.py:824
+# squid/bot/submission/ui/drafts.py:826
 draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*
 
-# squid/bot/submission/ui/drafts.py:349
+# squid/bot/submission/ui/drafts.py:351
 draft-editor-files-failed = { $failed } of the files could not be added. They are listed under Files so you can replace or remove them.
 
-# squid/bot/submission/ui/drafts.py:589
+# squid/bot/submission/ui/drafts.py:591
 draft-editor-files-heading = Files
 
-# squid/bot/submission/ui/drafts.py:891
+# squid/bot/submission/ui/drafts.py:893
 draft-editor-files-label = Schematic, images, or videos
 
-# squid/bot/submission/ui/drafts.py:828
+# squid/bot/submission/ui/drafts.py:830
 draft-editor-files-none = *No files.*
 
-# squid/bot/submission/ui/drafts.py:820
+# squid/bot/submission/ui/drafts.py:822
 draft-editor-files-title = **Files**
 
-# squid/bot/submission/ui/drafts.py:948
+# squid/bot/submission/ui/drafts.py:950
 draft-editor-issue-media-processing = Your images or videos are still being processed.
 
-# squid/bot/submission/ui/drafts.py:950
+# squid/bot/submission/ui/drafts.py:952
 draft-editor-issue-media-rejected = A file could not be used. Replace or remove it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:964
+# squid/bot/submission/ui/drafts.py:966
 draft-editor-issue-permission = You no longer have permission to submit this draft.
 
-# squid/bot/submission/ui/drafts.py:959
+# squid/bot/submission/ui/drafts.py:961
 draft-editor-issue-retry-exhausted = Creating the build failed several times. Press **Submit** to try again, or ask staff for help if it keeps failing.
 
-# squid/bot/submission/ui/drafts.py:930
+# squid/bot/submission/ui/drafts.py:932
 draft-editor-issue-schema-unsupported = This draft uses an old version of the form. Start a new one with `/build submit`.
 
-# squid/bot/submission/ui/drafts.py:943
+# squid/bot/submission/ui/drafts.py:945
 draft-editor-issue-schematic-primary = You added several schematics. Choose the main one under **Files**.
 
-# squid/bot/submission/ui/drafts.py:937
+# squid/bot/submission/ui/drafts.py:939
 draft-editor-issue-schematic-processing = Your schematic is still being processed.
 
-# squid/bot/submission/ui/drafts.py:939
+# squid/bot/submission/ui/drafts.py:941
 draft-editor-issue-schematic-rejected = Your schematic could not be read. Replace it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:935
+# squid/bot/submission/ui/drafts.py:937
 draft-editor-issue-schematic-required = Add a schematic under **Files**.
 
-# squid/bot/submission/ui/drafts.py:954
+# squid/bot/submission/ui/drafts.py:956
 draft-editor-issue-sponsor = The Minecraft server credited for this build is no longer available for credit. Turn off server credit to continue.
 
-# squid/bot/submission/ui/drafts.py:966
+# squid/bot/submission/ui/drafts.py:968
 draft-editor-issue-target-rejected = The build could not be created from these answers. Check them and press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:448
+# squid/bot/submission/ui/drafts.py:450
 draft-editor-loading = Loading your draft…
 
-# squid/bot/submission/ui/drafts.py:630
+# squid/bot/submission/ui/drafts.py:632
 draft-editor-main-schematic = Use as main schematic
 
-# squid/bot/submission/ui/drafts.py:597
+# squid/bot/submission/ui/drafts.py:599
 draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic.
 
-# squid/bot/submission/ui/sections.py:285
+# squid/bot/submission/ui/sections.py:287
 draft-editor-next-page = Next page
 
-# squid/bot/submission/ui/sections.py:445, squid/bot/submission/ui/sections.py:535
+# squid/bot/submission/ui/sections.py:447, squid/bot/submission/ui/sections.py:537
 draft-editor-no = No
 
-# squid/bot/submission/ui/sections.py:413, squid/bot/submission/ui/sections.py:436
+# squid/bot/submission/ui/sections.py:415, squid/bot/submission/ui/sections.py:438
 draft-editor-not-set = *Not set*
 
-# squid/bot/submission/ui/sections.py:226
+# squid/bot/submission/ui/sections.py:228
 draft-editor-nothing-chosen = *Nothing chosen yet.*
 
-# squid/bot/submission/ui/sections.py:579
+# squid/bot/submission/ui/sections.py:581
 draft-editor-one-per-line = One per line
 
-# squid/bot/submission/ui/sections.py:261
+# squid/bot/submission/ui/sections.py:263
 draft-editor-picker-pages = -# Page { $page_number } of { $pages }.
 
-# squid/bot/submission/ui/sections.py:256
+# squid/bot/submission/ui/sections.py:258
 draft-editor-picker-pages-multiple = -# Page { $page_number } of { $pages }. Choices on other pages are kept.
 
-# squid/bot/submission/ui/sections.py:220
+# squid/bot/submission/ui/sections.py:222
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/build_edit.py:425, squid/bot/submission/ui/drafts.py:480
+# squid/bot/submission/ui/build_edit.py:433, squid/bot/submission/ui/drafts.py:482
 draft-editor-preview = Preview
 
-# squid/bot/submission/ui/drafts.py:739, squid/bot/submission/ui/drafts.py:741
+# squid/bot/submission/ui/drafts.py:741, squid/bot/submission/ui/drafts.py:743
 draft-editor-preview-failed = The preview could not be drawn.
 
-# squid/bot/submission/ui/drafts.py:730
+# squid/bot/submission/ui/drafts.py:732
 draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. It updates as you edit; images and schematics appear after submission.
 
-# squid/bot/submission/ui/drafts.py:743
+# squid/bot/submission/ui/drafts.py:745
 draft-editor-preview-loading = Drawing the preview…
 
-# squid/bot/submission/ui/sections.py:279
+# squid/bot/submission/ui/sections.py:281
 draft-editor-previous-page = Previous page
 
-# squid/bot/submission/ui/sections.py:676
+# squid/bot/submission/ui/sections.py:678
 draft-editor-problem-above-maximum = Too large
 
-# squid/bot/submission/ui/sections.py:674
+# squid/bot/submission/ui/sections.py:676
 draft-editor-problem-below-minimum = Too small
 
-# squid/bot/submission/ui/sections.py:670
+# squid/bot/submission/ui/sections.py:672
 draft-editor-problem-required = Required
 
-# squid/bot/submission/ui/sections.py:672
+# squid/bot/submission/ui/sections.py:674
 draft-editor-problem-required-value = Must be confirmed
 
-# squid/bot/submission/ui/sections.py:682
+# squid/bot/submission/ui/sections.py:684
 draft-editor-problem-too-few-items = Needs more entries
 
-# squid/bot/submission/ui/sections.py:680
+# squid/bot/submission/ui/sections.py:682
 draft-editor-problem-too-long = Too long
 
-# squid/bot/submission/ui/sections.py:684
+# squid/bot/submission/ui/sections.py:686
 draft-editor-problem-too-many-items = Too many entries
 
-# squid/bot/submission/ui/sections.py:678
+# squid/bot/submission/ui/sections.py:680
 draft-editor-problem-too-short = Too short
 
-# squid/bot/submission/ui/sections.py:688
+# squid/bot/submission/ui/sections.py:690
 draft-editor-problem-unknown-field = No longer part of the form
 
-# squid/bot/submission/ui/sections.py:686
+# squid/bot/submission/ui/sections.py:688
 draft-editor-problem-unknown-option = No longer available, choose again
 
-# squid/bot/submission/ui/sections.py:690
+# squid/bot/submission/ui/sections.py:692
 draft-editor-problem-wrong-type = Not a valid value, enter it again
 
-# squid/bot/submission/ui/drafts.py:505
+# squid/bot/submission/ui/drafts.py:507
 draft-editor-ready = Ready to submit.
 
-# squid/bot/submission/ui/drafts.py:488, squid/bot/submission/ui/drafts.py:535
+# squid/bot/submission/ui/drafts.py:490, squid/bot/submission/ui/drafts.py:537
 draft-editor-refresh = Refresh
 
-# squid/bot/submission/ui/drafts.py:621
+# squid/bot/submission/ui/drafts.py:623
 draft-editor-remove-file = Remove
 
-# squid/bot/submission/ui/drafts.py:440
+# squid/bot/submission/ui/drafts.py:442
 draft-editor-reopen = Reopen draft
 
-# squid/bot/submission/ui/drafts.py:618
+# squid/bot/submission/ui/drafts.py:620
 draft-editor-replace-file = Replace
 
-# squid/bot/submission/ui/drafts.py:690
+# squid/bot/submission/ui/drafts.py:692
 draft-editor-replace-title = Replace file
 
-# squid/bot/submission/ui/drafts.py:398
+# squid/bot/submission/ui/drafts.py:400
 draft-editor-replacement-failed = The replacement could not be added. Try again or remove it.
 
-# squid/bot/submission/ui/drafts.py:691
+# squid/bot/submission/ui/drafts.py:693
 draft-editor-replacement-label = New file
 
-# squid/bot/submission/ui/sections.py:411, squid/bot/submission/ui/sections.py:435
+# squid/bot/submission/ui/sections.py:413, squid/bot/submission/ui/sections.py:437
 draft-editor-required = ⚠️ *Required*
 
-# squid/bot/submission/ui/drafts.py:496
+# squid/bot/submission/ui/drafts.py:498
 draft-editor-required-left =
     { NUMBER($missing) ->
         [one] ⚠️ **{ NUMBER($missing) } required field is empty.** Fill it in to submit.
        *[other] ⚠️ **{ NUMBER($missing) } required fields are empty.** Fill them in to submit.
     }
 
-# squid/bot/submission/ui/sections.py:383
+# squid/bot/submission/ui/sections.py:385
 draft-editor-section-empty = *Optional. Nothing added yet.*
 
-# squid/bot/submission/ui/sections.py:189
+# squid/bot/submission/ui/sections.py:191
 draft-editor-section-gone = This section is no longer part of the form.
 
-# squid/bot/submission/ui/sections.py:618
+# squid/bot/submission/ui/sections.py:620
 draft-editor-size-format = Enter the size as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/sections.py:640
+# squid/bot/submission/ui/sections.py:642
 draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/drafts.py:787
+# squid/bot/submission/ui/drafts.py:789
 draft-editor-status-creating = ⏳ Creating your build. This usually takes under a minute; this message updates when it is done.
 
-# squid/bot/submission/ui/drafts.py:794
+# squid/bot/submission/ui/drafts.py:796
 draft-editor-status-done = ✅ Your build was saved as **#{ $build_id }** and is now pending review. You can still edit it while it waits.
 
-# squid/bot/submission/ui/drafts.py:799
+# squid/bot/submission/ui/drafts.py:801
 draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.
 
-# squid/bot/submission/ui/drafts.py:768
+# squid/bot/submission/ui/drafts.py:770
 draft-editor-status-editing =
     Fill in each section, then press **Submit**. Your answers are saved as you go.
     -# Reopen this draft with `/build drafts` until { $expires }.
 
-# squid/bot/submission/ui/drafts.py:802
+# squid/bot/submission/ui/drafts.py:804
 draft-editor-status-expired = This draft expired before it was submitted. Start a new one with `/build submit`; your answers are listed below for reference.
 
-# squid/bot/submission/ui/drafts.py:782
+# squid/bot/submission/ui/drafts.py:784
 draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** Fix the problems below, then press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:776
+# squid/bot/submission/ui/drafts.py:778
 draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** The submission continues on its own once they are ready. If you edit anything now, press **Submit** again afterwards.
 
-# squid/bot/submission/ui/drafts.py:513
+# squid/bot/submission/ui/drafts.py:515
 draft-editor-submit = Submit
 
-# squid/bot/submission/ui/drafts.py:759
+# squid/bot/submission/ui/drafts.py:761
 draft-editor-title-creating = ## Submitting your build · { $category }
 
-# squid/bot/submission/ui/drafts.py:761
+# squid/bot/submission/ui/drafts.py:763
 draft-editor-title-done = ## Build submitted · { $category }
 
-# squid/bot/submission/ui/drafts.py:765
+# squid/bot/submission/ui/drafts.py:767
 draft-editor-title-editing = ## Submit a build · { $category }
 
-# squid/bot/submission/ui/drafts.py:763
+# squid/bot/submission/ui/drafts.py:765
 draft-editor-title-expired = ## Draft expired · { $category }
 
 # squid/bot/submission/submit.py:487
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
-# squid/bot/submission/ui/drafts.py:616
+# squid/bot/submission/ui/drafts.py:618
 draft-editor-use-file = Use this file
 
-# squid/bot/submission/ui/drafts.py:485
+# squid/bot/submission/ui/drafts.py:487
 draft-editor-waiting-hint = This message updates when your files are ready.
 
-# squid/bot/submission/ui/sections.py:445, squid/bot/submission/ui/sections.py:534
+# squid/bot/submission/ui/sections.py:447, squid/bot/submission/ui/sections.py:536
 draft-editor-yes = Yes
 
-# squid/bot/submission/ui/drafts.py:346
+# squid/bot/submission/ui/drafts.py:348
 draft-history-add-files = Add submission files
 
-# squid/bot/submission/ui/drafts.py:301
+# squid/bot/submission/ui/drafts.py:303
 draft-history-answers = Edit submission answers
 
-# squid/bot/submission/ui/drafts.py:376
+# squid/bot/submission/ui/drafts.py:378
 draft-history-primary = Choose primary schematic
 
-# squid/bot/submission/ui/drafts.py:360
+# squid/bot/submission/ui/drafts.py:362
 draft-history-remove-file = Remove submission file
 
-# squid/bot/submission/ui/drafts.py:404
+# squid/bot/submission/ui/drafts.py:406
 draft-history-replace-file = Replace submission file
 
-# squid/bot/submission/ui/sections.py:247
+# squid/bot/submission/ui/sections.py:249
 draft-options-empty = No matching choices. Clear the search to see all choices.
 
-# squid/bot/submission/ui/sections.py:235
+# squid/bot/submission/ui/sections.py:237
 draft-options-name = Name contains
 
-# squid/bot/submission/ui/sections.py:229
+# squid/bot/submission/ui/sections.py:231
 draft-options-search = Search choices
 
-# squid/bot/edit_controller.py:262, squid/bot/edit_history.py:57
+# squid/bot/edit_controller.py:262, squid/bot/edit_history.py:58
 edit-history-applied = Applied: { $label }
 
-# squid/bot/edit_controller.py:260, squid/bot/edit_history.py:59
+# squid/bot/edit_controller.py:260, squid/bot/edit_history.py:60
 edit-history-conflict = This edit changed elsewhere or is no longer permitted.
 
-# squid/bot/edit_history.py:65
+# squid/bot/edit_history.py:66
 edit-history-failed = The edit could not be reversed.
 
-# squid/bot/edit_controller.py:227, squid/bot/edit_history.py:81
+# squid/bot/edit_controller.py:227, squid/bot/edit_history.py:82
 edit-history-redo = Redo
 
-# squid/bot/edit_history.py:62
+# squid/bot/edit_history.py:63
 edit-history-uncertain = The saved result needs checking. Refresh before editing again.
 
-# squid/bot/edit_controller.py:226, squid/bot/edit_history.py:79
+# squid/bot/edit_controller.py:226, squid/bot/edit_history.py:80
 edit-history-undo = Undo
 
-# squid/bot/submission/ui/sections.py:349
+# squid/bot/submission/ui/sections.py:351
 editor-detail-closed = Done. You can dismiss this message.
 
-# squid/bot/submission/ui/sections.py:351
+# squid/bot/submission/ui/sections.py:353
 editor-detail-locked = These answers can no longer be edited here.
 
 # squid/edits/domain.py:219
@@ -3260,7 +3281,7 @@ guided-search-query-label = Query
 # squid/bot/submission/guided_search.py:203
 guided-search-remove-clause = Remove
 
-# squid/bot/submission/build_browse.py:616
+# squid/bot/submission/build_browse.py:625
 guided-search-reset = Reset
 
 # squid/bot/submission/guided_search.py:395
@@ -3415,166 +3436,166 @@ ingestion-consent-timestamp-notice = Notice { $version }, timed at the moment yo
 # squid/bot/submission/consent_banner.py:57
 ingestion-enable-automatic-action = Enable Automatic Build Ingestion
 
-# squid/bot/layout_inspector.py:43
+# squid/bot/showcase/inspector.py:43
 layout-inspector-developer-snapshot = Developer snapshot
 
-# squid/bot/layout_inspector.py:30
+# squid/bot/showcase/inspector.py:30
 layout-inspector-hide-inspector = Hide inspector
 
-# squid/bot/layout_inspector.py:23
+# squid/bot/showcase/inspector.py:23
 layout-inspector-inspect = Inspect
 
-# squid/bot/layout_inspector.py:21
+# squid/bot/showcase/inspector.py:21
 layout-inspector-refresh-inspector = Refresh inspector
 
-# squid/bot/layout_review.py:110, squid/bot/layout_review.py:49
+# squid/bot/showcase/review.py:110, squid/bot/showcase/review.py:49
 layout-review-approve = Approve
 
-# squid/bot/layout_review.py:155
+# squid/bot/showcase/review.py:155
 layout-review-approve-build = Approve build
 
-# squid/bot/layout_review.py:256
+# squid/bot/showcase/review.py:256
 layout-review-close-forbidden = Only the host can close this room.
 
-# squid/bot/layout_review.py:215
+# squid/bot/showcase/review.py:215
 layout-review-close-room-host-only = Close room · host only
 
-# squid/bot/layout_review.py:55
+# squid/bot/showcase/review.py:55
 layout-review-comment = Comment
 
-# squid/bot/layout_review.py:47
+# squid/bot/showcase/review.py:47
 layout-review-decision = Decision
 
-# squid/bot/layout_review.py:185
+# squid/bot/showcase/review.py:185
 layout-review-demo-description = Disposable reviews of a 4x4x3 door opening in 16 ticks. This does not create a production vote.
 
-# squid/bot/layout_review.py:70
+# squid/bot/showcase/review.py:70
 layout-review-describe-the-change-you-want = Describe the change you want.
 
-# squid/bot/layout_review.py:82
+# squid/bot/showcase/review.py:82
 layout-review-edit-review = Edit review
 
-# squid/bot/layout_review.py:193
+# squid/bot/showcase/review.py:193
 layout-review-join-hint = Join to open your own reviewer panel. Invite someone else to review too.
 
-# squid/bot/layout_review.py:209
+# squid/bot/showcase/review.py:209
 layout-review-join-review = Join review
 
-# squid/bot/layout_review.py:239
+# squid/bot/showcase/review.py:239
 layout-review-panel-exists = You already have a reviewer panel in this room.
 
-# squid/bot/layout_review.py:205
+# squid/bot/showcase/review.py:205
 layout-review-recent-activity = Recent activity
 
-# squid/bot/layout_review.py:122
+# squid/bot/showcase/review.py:122
 layout-review-redo-mine = Redo mine
 
-# squid/bot/layout_review.py:51
+# squid/bot/showcase/review.py:51
 layout-review-request-changes = Request changes
 
-# squid/bot/layout_review.py:182
+# squid/bot/showcase/review.py:182
 layout-review-review-room-flush-piston-door = Review room · Flush piston door
 
-# squid/bot/layout_review.py:45
+# squid/bot/showcase/review.py:45
 layout-review-review-sample-build = Review sample build
 
-# squid/bot/layout_review.py:79
+# squid/bot/showcase/review.py:79
 layout-review-this-review-room-has-closed = This review room has closed.
 
-# squid/bot/layout_review.py:191
+# squid/bot/showcase/review.py:191
 layout-review-undo-example = Approve as Alice and Bob, then undo Alice. Bob's approval stays.
 
-# squid/bot/layout_review.py:116
+# squid/bot/showcase/review.py:116
 layout-review-undo-mine = Undo mine
 
-# squid/bot/layout_review.py:204
+# squid/bot/showcase/review.py:204
 layout-review-waiting-for-reviewers = Waiting for reviewers.
 
-# squid/bot/layout_review.py:107
+# squid/bot/showcase/review.py:107
 layout-review-write-review = Write review
 
-# squid/bot/layout_review.py:105
+# squid/bot/showcase/review.py:105
 layout-review-your-comment = Your comment
 
-# squid/bot/layout_review.py:104
+# squid/bot/showcase/review.py:104
 layout-review-your-decision = Your decision
 
-# squid/bot/layout_workbench.py:375
+# squid/bot/showcase/workbench.py:375
 layout-workbench-add-tag = Add { $tag }
 
-# squid/bot/layout_workbench.py:133
+# squid/bot/showcase/workbench.py:133
 layout-workbench-build-title = Build title
 
-# squid/bot/layout_workbench.py:194
+# squid/bot/showcase/workbench.py:194
 layout-workbench-build-workbench = Build workbench
 
-# squid/bot/layout_workbench.py:197
+# squid/bot/showcase/workbench.py:197
 layout-workbench-demo-description = A form, an undo stack, and a live preview in another message. All data here is disposable.
 
-# squid/bot/layout_workbench.py:142
+# squid/bot/showcase/workbench.py:142
 layout-workbench-description = Description
 
-# squid/bot/layout_workbench.py:322
+# squid/bot/showcase/workbench.py:322
 layout-workbench-dimensions = Dimensions
 
-# squid/bot/layout_workbench.py:135
+# squid/bot/showcase/workbench.py:135
 layout-workbench-dimensions-hint = Dimensions (width x height x depth)
 
-# squid/bot/layout_workbench.py:159
+# squid/bot/showcase/workbench.py:159
 layout-workbench-dimensions-validation = Use three positive sizes, such as 4x4x3.
 
-# squid/bot/layout_workbench.py:203
+# squid/bot/showcase/workbench.py:203
 layout-workbench-draft = Draft
 
-# squid/bot/layout_workbench.py:173, squid/bot/layout_workbench.py:207
+# squid/bot/showcase/workbench.py:173, squid/bot/showcase/workbench.py:207
 layout-workbench-edit-build = Edit build
 
-# squid/bot/layout_workbench.py:132
+# squid/bot/showcase/workbench.py:132
 layout-workbench-edit-sample-build = Edit sample build
 
-# squid/bot/layout_workbench.py:243
+# squid/bot/showcase/workbench.py:243
 layout-workbench-fail-next-publish = Fail next publish
 
-# squid/bot/layout_workbench.py:241
+# squid/bot/showcase/workbench.py:241
 layout-workbench-failure-armed = Failure armed
 
-# squid/bot/layout_workbench.py:323
+# squid/bot/showcase/workbench.py:323
 layout-workbench-opening-time = Opening time
 
-# squid/bot/layout_workbench.py:139
+# squid/bot/showcase/workbench.py:139
 layout-workbench-opening-time-in-ticks = Opening time in ticks
 
-# squid/bot/layout_workbench.py:220
+# squid/bot/showcase/workbench.py:220
 layout-workbench-oversized-sample = Oversized sample
 
-# squid/bot/layout_workbench.py:351
+# squid/bot/showcase/workbench.py:351
 layout-workbench-pagination-hint = Try the oversized sample: records paginate, text shortens, and tag controls paginate.
 
-# squid/bot/layout_workbench.py:204
+# squid/bot/showcase/workbench.py:204
 layout-workbench-publication = Publication
 
-# squid/bot/layout_workbench.py:235
+# squid/bot/showcase/workbench.py:235
 layout-workbench-publish-sample = Publish sample
 
-# squid/bot/layout_workbench.py:229
+# squid/bot/showcase/workbench.py:229
 layout-workbench-redo = Redo
 
-# squid/bot/layout_workbench.py:328
+# squid/bot/showcase/workbench.py:328
 layout-workbench-related-sample-records = Related sample records
 
-# squid/bot/layout_workbench.py:372
+# squid/bot/showcase/workbench.py:372
 layout-workbench-remove-tag = Remove { $tag }
 
-# squid/bot/layout_workbench.py:214
+# squid/bot/showcase/workbench.py:214
 layout-workbench-small-sample = Small sample
 
-# squid/bot/layout_workbench.py:324
+# squid/bot/showcase/workbench.py:324
 layout-workbench-tags = Tags
 
-# squid/bot/layout_workbench.py:336
+# squid/bot/showcase/workbench.py:336
 layout-workbench-toggle-tags = Add or remove tags
 
-# squid/bot/layout_workbench.py:226
+# squid/bot/showcase/workbench.py:226
 layout-workbench-undo = Undo
 
 # squid/bot/lookup.py:107
@@ -3877,46 +3898,46 @@ navigation-invalid-address = That screen address is invalid. Try /builds, /draft
 # squid/bot/navigation/factories.py:74
 navigation-tab-unavailable = That account tab is unavailable.
 
-# squid/bot/notifications_view.py:362
+# squid/bot/notifications_view.py:377
 notification-choose-creator = Choose a creator
 
-# squid/bot/notifications_view.py:375
+# squid/bot/notifications_view.py:390
 notification-choose-record = Choose a record
 
-# squid/bot/notifications_view.py:282, squid/bot/notifications_view.py:386
+# squid/bot/notifications_view.py:297, squid/bot/notifications_view.py:401
 notification-choose-tag = Choose filter tag
 
-# squid/bot/notifications_view.py:287
+# squid/bot/notifications_view.py:302
 notification-clear-tag = Clear filter tag
 
-# squid/bot/notifications_view.py:364, squid/bot/notifications_view.py:377
+# squid/bot/notifications_view.py:379, squid/bot/notifications_view.py:392
 notification-follow = Follow
 
-# squid/bot/notifications_view.py:355
+# squid/bot/notifications_view.py:370
 notification-history-follow = Follow
 
-# squid/bot/notifications_view.py:189
+# squid/bot/notifications_view.py:194
 notification-history-preferences = Change notification preferences
 
-# squid/bot/notifications_view.py:619
+# squid/bot/notifications_view.py:645
 notification-history-read = Change read state
 
-# squid/bot/notifications_view.py:331
+# squid/bot/notifications_view.py:346
 notification-history-unfollow = Unfollow
 
-# squid/bot/notifications_view.py:302
+# squid/bot/notifications_view.py:317
 notification-next = Next follows
 
-# squid/bot/notifications_view.py:296
+# squid/bot/notifications_view.py:311
 notification-previous = Previous follows
 
-# squid/bot/notifications_view.py:451
+# squid/bot/notifications_view.py:466
 notification-tag-false = False
 
-# squid/bot/notifications_view.py:450
+# squid/bot/notifications_view.py:465
 notification-tag-true = True
 
-# squid/bot/notifications_view.py:394
+# squid/bot/notifications_view.py:409
 notification-tag-unavailable = That tag is no longer available. Choose another tag.
 
 # squid/bot/notifications.py:129
@@ -3930,16 +3951,19 @@ notifications-build-review-link =
     A new build is awaiting staff review.
     Open it in Discord with `/build browse id:{ $build_id }`.
 
-# squid/bot/notifications_view.py:100
-notifications-channel-and-follow-help = Toggle where notifications arrive, and unfollow what you no longer want.
-
 # squid/bot/notifications.py:55
 notifications-channel-preferences = Manage notification channels and subscriptions
 
 # squid/notifications/application.py:224
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
-# squid/bot/notifications_view.py:195
+# squid/bot/notifications_view.py:158
+notifications-delivery-heading = Where notifications arrive
+
+# squid/bot/notifications_view.py:160
+notifications-delivery-help = Choose your delivery channels. Changes save immediately.
+
+# squid/bot/notifications_view.py:200
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
 # squid/notifications/domain.py:230
@@ -3951,11 +3975,32 @@ notifications-domain-unsupported = unsupported { $name }: { $value }
 # squid/notifications/domain.py:165
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/bot/notifications_view.py:428
+# squid/bot/notifications_view.py:443
 notifications-follow-filter-confirmation = Following records matching that filter.
 
 # squid/bot/notifications.py:146
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
+
+# squid/bot/notifications_view.py:291
+notifications-following-empty = Nothing followed yet. Add your first follow below.
+
+# squid/bot/notifications_view.py:284
+notifications-following-heading = Your follows
+
+# squid/bot/notifications_view.py:286
+notifications-following-help = Follow creators or records to hear about new builds and records.
+
+# squid/bot/notifications_view.py:583
+notifications-inbox-empty = Your inbox is empty
+
+# squid/bot/notifications_view.py:585
+notifications-inbox-empty-help = Follow creators or records in Following to get updates.
+
+# squid/bot/notifications_view.py:591
+notifications-inbox-heading = Recent notifications
+
+# squid/bot/notifications_view.py:592
+notifications-inbox-help = Select notifications to mark them read or unread.
 
 # squid/notifications/domain.py:232
 notifications-invalid-exact-tag-value = invalid exact tag value
@@ -3978,7 +4023,7 @@ notifications-presence-predicates-include = presence predicates cannot include a
 # squid/notifications/domain.py:192
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
-# squid/bot/notifications_view.py:412
+# squid/bot/notifications_view.py:427
 notifications-record-filter-required = Choose at least one record filter.
 
 # squid/notifications/domain.py:199
@@ -3986,6 +4031,15 @@ notifications-record-filter-single-predicate = record filters may contain only o
 
 # squid/notifications/application.py:120
 notifications-retention-days-positive = retention_days must be positive
+
+# squid/bot/notifications_view.py:109
+notifications-summary = { $unread } unread · { $following } follows
+
+# squid/bot/notifications_view.py:87
+notifications-tab-delivery = Delivery
+
+# squid/bot/notifications_view.py:85
+notifications-tab-inbox = Inbox
 
 # squid/notifications/domain.py:154
 notifications-tag-id-positive = tag_id must be positive
@@ -4311,16 +4365,16 @@ record-browse-open-holder = Open build #{ $build_id }
 # squid/bot/submission/record_browser.py:84
 record-browse-title = Records
 
-# squid/bot/submission/build_browse.py:593
+# squid/bot/submission/build_browse.py:602
 record-browser-all = All standings
 
-# squid/bot/submission/build_browse.py:588
+# squid/bot/submission/build_browse.py:597
 record-browser-fastest = Fastest
 
-# squid/bot/submission/build_browse.py:589
+# squid/bot/submission/build_browse.py:598
 record-browser-first = First
 
-# squid/bot/submission/build_browse.py:587
+# squid/bot/submission/build_browse.py:596
 record-browser-smallest = Smallest
 
 # squid/bot/submission/commands.py:198
@@ -4723,34 +4777,34 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 # squid/search/application/fields.py:65
 search-expects-number = { $field_name } expects a number
 
-# squid/bot/submission/search_view.py:384
+# squid/bot/submission/search_view.py:393
 search-grouped-build-count = { $total } builds
 
-# squid/bot/submission/search_view.py:203
+# squid/bot/submission/search_view.py:209
 search-grouped-build-details = Build details
 
-# squid/bot/submission/search_view.py:459
+# squid/bot/submission/search_view.py:468
 search-grouped-build-identity = Build #{ $build_id }
 
-# squid/bot/submission/search_view.py:224
+# squid/bot/submission/search_view.py:230
 search-grouped-loading-build = Loading build…
 
-# squid/bot/submission/search_view.py:165
+# squid/bot/submission/search_view.py:171
 search-grouped-matching-records = Matching records
 
-# squid/bot/submission/search_view.py:469
+# squid/bot/submission/search_view.py:478
 search-grouped-more-records = +{ $count } more records
 
-# squid/bot/submission/search_view.py:265
+# squid/bot/submission/search_view.py:271
 search-grouped-open-holder = View build #{ $build_id }
 
-# squid/bot/submission/search_view.py:167
+# squid/bot/submission/search_view.py:173
 search-grouped-records = Records
 
-# squid/bot/submission/search_view.py:386
+# squid/bot/submission/search_view.py:395
 search-grouped-result-count = { $total } results
 
-# squid/bot/submission/search_view.py:261
+# squid/bot/submission/search_view.py:267
 search-grouped-tied-holders = Tied holders
 
 # squid/search/application/ranking.py:67
@@ -4822,85 +4876,94 @@ search-search-results-sorted = Search results cannot be sorted by { $field_name 
 # squid/search/application/ranking.py:76
 search-weight-negative = weight for { $branch_name } cannot be negative
 
-# squid/bot/settings_view.py:197
+# squid/bot/settings/screen.py:207
 settings-change-permission-denied = You are no longer allowed to change this.
 
-# squid/bot/settings_view.py:277
+# squid/bot/settings/screen.py:287
 settings-channel-invalid = That channel selection is invalid.
 
-# squid/bot/settings_view.py:509
+# squid/bot/settings/screen.py:519
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
-# squid/bot/settings_view.py:492
+# squid/bot/settings/screen.py:502
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
-# squid/bot/settings_view.py:315
+# squid/bot/settings/screen.py:325
 settings-follow-server-language = Following this server's Discord language
 
-# squid/bot/settings_view.py:608
+# squid/bot/settings/screen.py:618
 settings-review-weighting-explained = Build reviews are weighted by the network's own server, so these multipliers do not apply here.
 
-# squid/bot/settings_view.py:621
+# squid/bot/settings/screen.py:631
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
 # squid/settings/domain/runtime.py:41
 settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
-# squid/bot/settings_view.py:480
+# squid/bot/settings/screen.py:147
+settings-tab-server = Server
+
+# squid/bot/settings/screen.py:490
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
-# squid/bot/starboard/screen.py:190
+# squid/bot/starboard/screen.py:193
 starboard-add-emoji = Add or replace emoji
 
 # squid/bot/starboard/cog.py:234
 starboard-channel-permissions-required = I need View Channel, Send Messages, and Read Message History there.
 
-# squid/bot/starboard/screen.py:355
+# squid/bot/starboard/screen.py:152
+starboard-create-heading = Highlight community favourites
+
+# squid/bot/starboard/screen.py:154
+starboard-create-help = Create a starboard, then choose which reactions count and where highlighted messages appear.
+
+# squid/bot/starboard/screen.py:358
 starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session.
 
-# squid/bot/starboard/screen.py:144
+# squid/bot/starboard/screen.py:138
 starboard-delete-confirmation = Delete **{ $board_name }** and stop mirroring new entries?
 
-# squid/bot/starboard/screen.py:434
+# squid/bot/starboard/screen.py:437
 starboard-destination-channel = Destination channel
 
 # squid/bot/starboard/cog.py:229
 starboard-destination-must-be-text = That destination is not a text channel in this server.
 
-# squid/bot/starboard/screen.py:442
+# squid/bot/starboard/screen.py:445
 starboard-emoji-editor-title = Add or remove starboard emoji
 
-# squid/bot/starboard/screen.py:294
+# squid/bot/starboard/screen.py:297
 starboard-history-create = Create starboard
 
-# squid/bot/starboard/screen.py:311
+# squid/bot/starboard/screen.py:314
 starboard-history-edit = Edit starboard
 
 # squid/starboard/models.py:130
 starboard-minimum-message-age = The minimum message age cannot exceed the maximum.
 
-# squid/bot/starboard/screen.py:118
+# squid/bot/starboard/screen.py:112
 starboard-none-configured = No starboards are configured.
 
-# squid/bot/starboard/screen.py:384
+# squid/bot/starboard/screen.py:387
 starboard-operation-permission-denied = You are no longer allowed to perform this starboard operation.
 
 # squid/starboard/models.py:124
 starboard-post-threshold-exceed = The post threshold must exceed the removal threshold.
 
-# squid/bot/starboard/screen.py:248
+# squid/bot/starboard/screen.py:251
 starboard-read-only = Read only
 
-# squid/bot/starboard/screen.py:202
+# squid/bot/starboard/screen.py:205
 starboard-remove-emoji = Remove emoji
 
-# squid/bot/starboard/screen.py:234
+# squid/bot/starboard/screen.py:237
 starboard-remove-weight = Remove weight
 
-# squid/bot/starboard/screen.py:459
+# squid/bot/starboard/screen.py:462
 starboard-role = Role
 
-# squid/bot/starboard/screen.py:457
+# squid/bot/starboard/screen.py:460
 starboard-role-multiplier-action = Set or remove role multiplier
 
 # squid/starboard/models.py:133
@@ -4930,7 +4993,7 @@ starboard-starboard-name-empty = Starboard name cannot be empty.
 # squid/starboard/models.py:121
 starboard-starboard-thresholds-finite = Starboard thresholds must be finite.
 
-# squid/bot/starboard/cog.py:254, squid/bot/starboard/screen.py:92
+# squid/bot/starboard/cog.py:254, squid/bot/starboard/screen.py:86
 starboard-unknown-role = Deleted role
 
 # squid/submissions/application/forms.py:177
@@ -5497,25 +5560,25 @@ sync-claim-limit-between = claim limit must be between 1 and 100
 # squid/sync/application.py:95
 sync-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/tags_view.py:374, squid/bot/tags_view.py:394
+# squid/bot/tags_view.py:380, squid/bot/tags_view.py:400
 tags-account-consent-required = A linked, consented account is required.
 
-# squid/bot/tags_view.py:428
+# squid/bot/tags_view.py:434
 tags-alias-already-exists = That alias is already on this restriction.
 
-# squid/bot/tags_view.py:313
+# squid/bot/tags_view.py:319
 tags-applied = Tag applied.
 
-# squid/bot/tags_view.py:280, squid/bot/tags_view.py:295
+# squid/bot/tags_view.py:286, squid/bot/tags_view.py:301
 tags-apply-selected = Apply this tag
 
 # squid/tags/application/services.py:155
 tags-approved-user-showcase = An approved user showcase tag is required.
 
-# squid/bot/tags_view.py:227, squid/bot/tags_view.py:257
+# squid/bot/tags_view.py:233, squid/bot/tags_view.py:263
 tags-choose-build = Choose build
 
-# squid/bot/tags_view.py:323, squid/bot/tags_view.py:354
+# squid/bot/tags_view.py:329, squid/bot/tags_view.py:360
 tags-choose-restriction = Choose restriction
 
 # squid/tags/application/services.py:119
@@ -5533,16 +5596,16 @@ tags-expects-number-canonical = { $display_name } expects a number in its canoni
 # squid/tags/application/services.py:133
 tags-expects-true-false = { $display_name } expects true or false.
 
-# squid/bot/tags_view.py:367, squid/bot/tags_view.py:425
+# squid/bot/tags_view.py:373, squid/bot/tags_view.py:431
 tags-history-alias = Add restriction alias
 
-# squid/bot/tags_view.py:311, squid/bot/tags_view.py:407
+# squid/bot/tags_view.py:317, squid/bot/tags_view.py:413
 tags-history-assignment = Edit showcase tag
 
-# squid/bot/tags_view.py:383
+# squid/bot/tags_view.py:389
 tags-history-proposal = Propose showcase tag
 
-# squid/bot/tags_view.py:238
+# squid/bot/tags_view.py:244
 tags-link-account-instructions = Link and consent an account in `/account` before proposing or applying tags.
 
 # squid/tags/application/services.py:167
@@ -5551,16 +5614,16 @@ tags-names-start-letter = query names must start with a letter and contain only 
 # squid/bot/tags_view.py:186
 tags-no-proposals-awaiting-review = No tag proposals are awaiting review.
 
-# squid/bot/tags_view.py:484
+# squid/bot/tags_view.py:490
 tags-operation-permission-denied = You are no longer allowed to perform this tag operation.
 
-# squid/bot/tags_view.py:441
+# squid/bot/tags_view.py:447
 tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here.
 
 # squid/tags/application/services.py:123
 tags-requires-value = { $display_name } requires a { $value_type } value.
 
-# squid/bot/tags_view.py:274
+# squid/bot/tags_view.py:280
 tags-select-build-first = Choose a build above to apply this tag.
 
 # squid/tags/application/services.py:163
@@ -5569,16 +5632,22 @@ tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 # squid/tags/errors.py:11
 tags-tag-not-found-title = Tag not found
 
-# squid/bot/routes.py:48
+# squid/bot/tags_view.py:225
+tags-workspace-heading = Build tags
+
+# squid/bot/tags_view.py:229
+tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.
+
+# squid/bot/routes.py:49
 ui-control-expired = This control is no longer available.
 
 # squid/bot/ui.py:87
 ui-list-controls-not-owned = These list controls belong to someone else.
 
-# squid/bot/verify.py:90
+# squid/bot/accounts/cog.py:90
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
-# squid/bot/verify.py:52
+# squid/bot/accounts/cog.py:52
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking.py:108
@@ -5668,43 +5737,43 @@ vote-option-unavailable = That option is not available on this vote.
 # squid/bot/voting/actors.py:29
 vote-poll-action-permission-denied = Only the poll creator or staff can do that.
 
-# squid/bot/vote_emoji_editor.py:80
+# squid/bot/settings/vote_emoji_editor.py:80
 vote-row-add = Add emoji
 
-# squid/bot/vote_emoji_editor.py:50
+# squid/bot/settings/vote_emoji_editor.py:50
 vote-row-approve = Approve
 
-# squid/bot/vote_emoji_editor.py:47
+# squid/bot/settings/vote_emoji_editor.py:47
 vote-row-choice = Choice
 
-# squid/bot/vote_emoji_editor.py:51
+# squid/bot/settings/vote_emoji_editor.py:51
 vote-row-deny = Deny
 
-# squid/bot/vote_emoji_editor.py:66
+# squid/bot/settings/vote_emoji_editor.py:66
 vote-row-edit = Edit
 
-# squid/bot/vote_emoji_editor.py:29
+# squid/bot/settings/vote_emoji_editor.py:29
 vote-row-emoji = Emoji
 
-# squid/bot/vote_emoji_editor.py:93
+# squid/bot/settings/vote_emoji_editor.py:93
 vote-row-emoji-unavailable = That custom emoji is inaccessible.
 
-# squid/bot/vote_emoji_editor.py:38
+# squid/bot/settings/vote_emoji_editor.py:38
 vote-row-label = Option label
 
-# squid/bot/vote_emoji_editor.py:72
+# squid/bot/settings/vote_emoji_editor.py:72
 vote-row-remove = Remove
 
-# squid/bot/vote_emoji_editor.py:55
+# squid/bot/settings/vote_emoji_editor.py:55
 vote-row-title = Vote emoji
 
-# squid/bot/vote_emoji_editor.py:82
+# squid/bot/settings/vote_emoji_editor.py:82
 vote-rows-cancel = Cancel
 
-# squid/bot/vote_emoji_editor.py:81
+# squid/bot/settings/vote_emoji_editor.py:81
 vote-rows-save = Save emojis
 
-# squid/bot/vote_emoji_editor.py:60
+# squid/bot/settings/vote_emoji_editor.py:60
 vote-rows-title = Vote emojis
 
 # squid/bot/voting/actors.py:28
