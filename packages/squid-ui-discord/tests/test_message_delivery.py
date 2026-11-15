@@ -1,13 +1,16 @@
 """Retry message writes only when another authority can deliver them."""
 
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
+import discord
 import pytest
 
-from squid_ui.ext.discord.delivery import EditHandle, StaleHandleError
+import squid_ui as sl
+from squid_ui.ext.discord.delivery import EditHandle, StaleHandleError, handle_from
 from squid_ui.ext.discord.message_delivery import _MessageDelivery
 from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.testing import http_error, interaction_harness
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -40,3 +43,29 @@ async def test_other_write_errors_do_not_retry_through_standing_authority() -> N
 
     fallback.write.assert_not_awaited()
     assert delivery.handle is fallback
+
+
+@pytest.mark.parametrize("remote", [False, True])
+async def test_edit_race_rewinds_uploaded_files_before_webhook_retry(remote: bool) -> None:
+    interaction = interaction_harness(components_v2=False)
+    payload = MessagePayload.classic(assets=(sl.file(b"schematic", filename="build.schem"),))
+    uploads: list[bytes] = []
+
+    async def lose_response(**fields: Any) -> None:
+        uploads.append(fields["attachments"][0].fp.read())
+        if remote:
+            raise http_error(400, code=40060)
+        raise discord.InteractionResponded(interaction)
+
+    async def retry(message_id: int, **fields: Any) -> None:
+        assert message_id == interaction.message.id
+        uploads.append(fields["attachments"][0].fp.read())
+
+    interaction.response.edit_message.callback = lose_response
+    interaction.followup.edit_message.callback = retry
+    handle = handle_from(interaction)
+    assert handle is not None
+
+    await handle.write(payload)
+
+    assert uploads == [b"schematic", b"schematic"]

@@ -222,13 +222,13 @@ class _WebhookMessageHandle:
             if not interaction.response.is_done():
                 try:
                     await interaction.response.edit_message(**fields)
-                except discord.InteractionResponded:
-                    self._message = await interaction.followup.edit_message(self._message_id, **fields)
-                except discord.HTTPException as error:
-                    if error.code != 40060:
+                except (discord.InteractionResponded, discord.HTTPException) as error:
+                    if isinstance(error, discord.HTTPException) and error.code != 40060:
                         raise
-                    # The acknowledgement watchdog may have claimed the response while
-                    # this edit was in flight. The source message still needs updating.
+                    # The watchdog may claim the response after the upload was read.
+                    # The webhook retry must start each file at its original position.
+                    for file in fields.get("attachments", ()):
+                        file.reset()
                     self._message = await interaction.followup.edit_message(self._message_id, **fields)
             else:
                 self._message = await interaction.followup.edit_message(self._message_id, **fields)
