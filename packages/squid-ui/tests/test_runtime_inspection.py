@@ -7,6 +7,7 @@ import pytest
 import squid_ui as ui
 from squid_ui import testing
 from squid_ui.context import ContextKey
+from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime import ComponentRuntime
 
 LABEL = ContextKey[str]("label")
@@ -107,7 +108,9 @@ def test_render_retains_authored_boundaries_and_local_keys() -> None:
     runtime = ComponentRuntime(root, context={LABEL: "child"})
     root.shown = True
     tree = runtime.render()
-    assert tree.authored_nodes["$"][0].component is child
+    boundary = tree.authored_nodes["$"][0]
+    assert isinstance(boundary, Boundary)
+    assert boundary.component is child
     assert testing.texts(tree.authored_nodes["child"]) == ["child"]
     with pytest.raises(TypeError):
         tree.authored_nodes["$"] = ()  # type: ignore  # Inspection must not rewrite a render.
