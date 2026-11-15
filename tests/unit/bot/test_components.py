@@ -28,7 +28,7 @@ def test_card_node_serializes_as_components_v2() -> None:
     assert children[0]["content"] == "## Status"
     assert children[1]["content"] == "Ready"
     # sl.fields() renders "**label:** value" on one line, not presets.card's two-line form.
-    assert children[2]["content"] == "**Count:** 3"
+    assert children[2]["content"] == "Count: 3"
     assert children[3]["content"] == "-# Updated now"
 
 

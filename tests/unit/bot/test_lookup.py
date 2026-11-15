@@ -88,9 +88,9 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(conf
         assert parent.presented is not None, interaction.sends
         child = StagedUI(parent.presented, client=ui._client, user_id=1, interaction=ui.interaction)
         with anyio.fail_after(2):
-            while not any(key.endswith("lookup.results.second") for key in child.root.snapshot().handler_keys):
+            while not any(key.endswith("lookup.results") for key in child.root.snapshot().handler_keys):
                 await anyio.sleep(0.01)
-        await child.press(child.key_for("lookup.results.second"))
+        await child.select(child.key_for("lookup.results"), ["second"])
         assert parent.value == ""
         await child.press(child.key_for("confirm" if confirm else "cancel"))
         assert parent.value == ("second" if confirm else "")

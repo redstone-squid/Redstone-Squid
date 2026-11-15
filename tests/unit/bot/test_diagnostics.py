@@ -221,9 +221,10 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
         # The failing frame is at the end, so that is where the report opens.
         first_shown = next(text for text in _texts(view) if text.startswith("```"))
         assert "ValueError: boom" in first_shown
-        footers = [text for text in _texts(view) if text.startswith("-#")]
-        assert footers
-        assert "page 1 of" not in footers[0]
+        assert message_root.plan is not None
+        pager = next(pager for pager in message_root.plan.scene.pagers if pager.key == "traceback")
+        assert pager.page == pager.pages - 1
+        assert pager.pages > 1
 
         message_root.presentation.move_cursor("traceback", PagePosition())
         earliest = commit_render(message_root)

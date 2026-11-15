@@ -3548,7 +3548,7 @@ layout-workbench-opening-time-in-ticks = Opening time in ticks
 layout-workbench-oversized-sample = Oversized sample
 
 # squid/bot/layout_workbench.py:351
-layout-workbench-pagination-hint = Try the oversized sample: records paginate, text shortens, and tag buttons become pickers.
+layout-workbench-pagination-hint = Try the oversized sample: records paginate, text shortens, and tag controls paginate.
 
 # squid/bot/layout_workbench.py:204
 layout-workbench-publication = Publication

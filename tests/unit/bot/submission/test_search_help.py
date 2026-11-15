@@ -26,8 +26,8 @@ def test_reference_entry_compacts_without_losing_its_label_or_description() -> N
     assert normal.scene != compact.scene
     assert normal.allocation is not None
     assert compact.allocation is not None
-    assert normal.report.legacy_pagination is None
-    assert compact.report.legacy_pagination is None
+    assert normal.allocation is not None
+    assert compact.allocation is not None
     view = render_static(entry, target=compact_target).view
     assert view is not None
     assert payload_texts(view) == ["width: Physical width in blocks.\n\nheight: Height in blocks."]

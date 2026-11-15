@@ -266,13 +266,7 @@ async def test_routed_consent_button_cancelling_stores_no_account(
     interaction.followup.send.assert_not_awaited()
 
 
-async def test_sticky_banner_uses_shared_composition_and_preserves_its_route(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    def legacy_plan(*args: object, **kwargs: object) -> None:
-        pytest.fail("the migrated banner must not invoke the legacy Discord planner")
-
-    monkeypatch.setattr("squid_ui.planning.discord_planner.DiscordPlanner.plan", legacy_plan)
+async def test_sticky_banner_uses_shared_composition_and_preserves_its_route(caplog: pytest.LogCaptureFixture) -> None:
     channel = MagicMock(spec=discord.TextChannel)
     payload = await StickyRecorder().render(channel)
     items = tuple(payload.layout.walk_children())

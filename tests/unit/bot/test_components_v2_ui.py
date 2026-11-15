@@ -392,13 +392,8 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     bot = make_layout_bot()
     message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     rendered = commit_render(message_root)
-    result_buttons = [
-        child
-        for child in rendered.walk_children()
-        if isinstance(child, discord.ui.Button) and child.label in {"Smallest 2x2 door", "Fast door"}
-    ]
-
-    assert [button.label for button in result_buttons] == ["Smallest 2x2 door", "Fast door"]
+    result_select = next(child for child in rendered.walk_children() if isinstance(child, discord.ui.Select))
+    assert [option.label for option in result_select.options] == ["Smallest 2x2 door", "Fast door"]
     assert "Close" not in str(rendered.to_components())
 
 

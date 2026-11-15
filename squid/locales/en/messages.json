@@ -11613,12 +11613,12 @@
     ]
   },
   "layout-workbench-pagination-hint": {
-    "fingerprint": "e01af9a17742183378ec77b91129e9b3616312f21d29940b6147a40e2c2c2545",
+    "fingerprint": "20d91016ce435deb9ffce29f817a3c6f8e594b7707e7c130584f006fdaad98d8",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:351"
+      "squid/bot/showcase/workbench.py:351"
     ]
   },
   "layout-workbench-publication": {

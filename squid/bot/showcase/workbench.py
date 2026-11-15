@@ -350,7 +350,7 @@ class BuildPreview(InspectablePanel):
             sl.note(
                 tr(
                     t"layout-workbench-pagination-hint = Try the oversized "
-                    t"sample: records paginate, text shortens, and tag buttons become pickers."
+                    t"sample: records paginate, text shortens, and tag controls paginate."
                 )
             ),
             self.inspector(),

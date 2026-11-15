@@ -1,6 +1,6 @@
 """The Wizard-driven poll composition screen."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import discord
@@ -56,17 +56,17 @@ async def open_screen(
 
 async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target, sd.Request]:
     harness = wt.driving(screen.driver)
-    with transaction():
-        await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
-    with transaction():
-        await harness.submit(
-            "poll.settings",
-            {
-                "visibility": VoteVisibility.ANONYMOUS_LIVE,
-                "duration": 12 * 3600,
-                "scope": PollScope.GUILD,
-            },
-        )
+
+    async def submit(key: str, values: dict[str, object]) -> None:
+        trigger = sl.testing.find(sl.testing.render_tree(screen.driver), sl.semantic.FormTrigger, key=key)
+        with transaction() as current:
+            await trigger.on_submit(replace(sl.testing.submit_event(values), _transaction=current))
+
+    await submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
+    await submit(
+        "poll.settings",
+        {"visibility": VoteVisibility.ANONYMOUS_LIVE, "duration": 12 * 3600, "scope": PollScope.GUILD},
+    )
     assert harness.state.current == sp.REVIEW_STEP
     return harness
 

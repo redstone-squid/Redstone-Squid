@@ -126,7 +126,9 @@ async def test_inspector_captures_committed_report_and_refreshes() -> None:
         await ui.press("inspect")
         inspection = source_text(preview.inspection)
         assert "oversized" in inspection
-        assert any(code in inspection for code in codes)
+        assert all(code in inspection for code in codes)
+        if not codes:
+            assert "No layout adaptations recorded." in inspection
         assert "`squid/bot/showcase/workbench.py`" in inspection
         assert_within_limits(commit_render(ui.root))
     async with sd.testing.stage(editor, owner=object()) as ui:
@@ -183,12 +185,7 @@ async def test_tag_picker_undo_and_redo_preserve_build_fields(oversized: bool) -
     draft.build = replace(draft.build, oversized=oversized)
     preview = BuildPreview(draft)
     async with sd.testing.stage(preview, owner=object()) as ui:
-        if oversized:
-            choices = ui.control("tags.default.0").payload["options"]
-            value = next(option["value"] for option in choices if option["label"] == "Seamless")
-            await ui.select("tags.default.0", [value])
-        else:
-            await ui.press("tag-2")
+        await ui.press("tag-2")
         assert draft.tags.value == {"Flush", "Seamless"}
         with transaction():
             draft.build = replace(draft.build, title="New title")
