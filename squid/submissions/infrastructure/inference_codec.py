@@ -27,7 +27,8 @@ class PydanticInferenceRunCodec(InferenceRunCodec):
 
     @override
     def encode_source_files(self, source_files: tuple[SubmissionSourceFile, ...]) -> list[JSONValue]:
-        return cast(list[JSONValue], _SOURCE_FILES.dump_python(source_files, mode="json"))
+        # Retrying a legacy run must reproduce inputs that lacked optional provenance.
+        return cast(list[JSONValue], _SOURCE_FILES.dump_python(source_files, mode="json", exclude_defaults=True))
 
     @override
     def decode_source_files(self, value: JSONValue) -> tuple[SubmissionSourceFile, ...]:

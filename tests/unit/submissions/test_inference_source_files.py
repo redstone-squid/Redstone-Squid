@@ -10,9 +10,33 @@ from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import JSONValue
 from squid.messages.domain import MessageSnapshot
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
 from squid.submissions.infrastructure.inference_runs import _candidates
 from squid.submissions.models.inference import SubmissionInferenceRun
+
+
+def test_legacy_source_files_reencode_without_changing_retained_input() -> None:
+    identity = uuid4()
+    legacy: list[JSONValue] = [
+        {
+            "id": str(identity),
+            "filename": "image.png",
+            "content_type": None,
+            "url": "https://example.com/a.png",
+            "size": 4,
+        }
+    ]
+    codec = PydanticInferenceRunCodec()
+
+    assert codec.encode_source_files(codec.decode_source_files(legacy)) == legacy
+
+
+def test_source_message_ownership_survives_retained_input_roundtrip() -> None:
+    source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://example.com/image.png", 4, 10)
+    codec = PydanticInferenceRunCodec()
+
+    assert codec.decode_source_files(codec.encode_source_files((source,))) == (source,)
 
 
 @pytest.mark.parametrize("origin", [None, 10, 20, 30])
