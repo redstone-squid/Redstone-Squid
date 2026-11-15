@@ -118,7 +118,7 @@ through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui.ext.discord.owner_message_root
 
-::: squid_ui.ext.discord.messages.roots
+::: squid_ui.ext.discord.message_roots
 
 ::: squid_ui.ext.discord.PauseUpdates
 
