@@ -8,9 +8,12 @@ from typing import Any
 from squid_ui import scene
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
+from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
+from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.discord_dialect import SceneBindings, require_gallery_item
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
@@ -26,11 +29,12 @@ from squid_ui.planning.layout_measurement.solver import (
     measure,
 )
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.navigation import PagerNav, PlannedNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
+from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -385,6 +389,18 @@ class V2Dialect:
     body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
+
+    @property
+    def navigation(self) -> PlannedNav | None:
+        return None
+
+    def input_policy(self, limits: V2Limits) -> InputPolicy:
+        return InputPolicy(
+            limits.total_text, character_axis=True, native_types=frozenset({primitive.Text, primitive.Panel})
+        )
+
+    def rules[R](self, document: DocumentLike[R], limits: V2Limits) -> V2CompositionRules[R, object]:
+        return V2CompositionRules[R, object](limits)
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]

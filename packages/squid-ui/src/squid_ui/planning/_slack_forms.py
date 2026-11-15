@@ -13,7 +13,7 @@ from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import is_portable_node
 from squid_ui.planning.composition import CandidateViolation, LocalCapacityExceeded, OccurrenceId
-from squid_ui.slack.target import SlackModalLimits
+from squid_ui.slack.limits import SlackModalLimits
 from squid_ui.text import Localization, resolve_text
 
 

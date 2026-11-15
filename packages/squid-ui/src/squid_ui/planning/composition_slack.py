@@ -51,7 +51,7 @@ from squid_ui.planning.realizations import (
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
 from squid_ui.presentations import FidelityEffect, SemanticRef
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
+from squid_ui.slack.limits import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.text import resolve_text
 
 

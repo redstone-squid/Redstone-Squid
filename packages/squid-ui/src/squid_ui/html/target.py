@@ -6,7 +6,11 @@ from typing import Self, overload
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
+from squid_ui.document import DocumentLike
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.composition_html import HtmlCompositionRules
+from squid_ui.planning.dialect import InputPolicy
+from squid_ui.planning.navigation import PlannedNav, page_select_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.target_types import HtmlAdapter, HtmlTarget
@@ -53,6 +57,16 @@ class HtmlDialect:
     body_type = scene.HtmlBody
     default_limits = HTML_LIMITS
     realizes_extensions = False
+
+    @property
+    def navigation(self) -> PlannedNav | None:
+        return page_select_nav
+
+    def input_policy(self, limits: HtmlLimits) -> InputPolicy:
+        return InputPolicy(character_axis=True, budget_ladder=True)
+
+    def rules[R](self, document: DocumentLike[R], limits: HtmlLimits) -> HtmlCompositionRules[R, object]:
+        return HtmlCompositionRules[R, object]()
 
 
 HTML_DIALECT = HtmlDialect()

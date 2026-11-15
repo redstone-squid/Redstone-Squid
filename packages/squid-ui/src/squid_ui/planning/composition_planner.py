@@ -5,14 +5,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from types import MappingProxyType
-from typing import cast
 
 from squid_ui import scene
 from squid_ui.assets import Asset
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
-from squid_ui.html.target import HtmlLimits
-from squid_ui.planning._slack_forms import modal_form
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache
@@ -27,23 +24,17 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
-from squid_ui.planning.composition_classic import ClassicCompositionRules
-from squid_ui.planning.composition_html import HtmlCompositionRules
 from squid_ui.planning.composition_request import CompositionOptions
-from squid_ui.planning.composition_slack import SlackCompositionRules
 from squid_ui.planning.composition_state import present_composition
-from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
-from squid_ui.planning.limits import ClassicLimits, V2Limits
-from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.semantic import Group
-from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 
 _logger = logging.getLogger(__name__)
 
@@ -62,10 +53,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
 ) -> PlanningContext:
     nav = request.nav
     if nav is None and request.composition is None:
-        if request.target.body_type is scene.HtmlBody:
-            nav = page_select_nav
-        elif request.target.body_type in (scene.SlackMessage, scene.SlackHomeView):
-            nav = default_nav
+        nav = request.target.dialect.navigation
     return PlanningContext(
         WorkBudget(request.search_budget if work_limit is None else work_limit),
         request.localization,
@@ -298,7 +286,7 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     *,
     cache: PlanCache[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
-    """Select the built-in rules without routing through a legacy target planner."""
+    """Plan with rules supplied by the target dialect."""
     retained = request.presentation.retained_composition
     if options.automatic and retained is not None and retained.matches(as_document(rendered), request, options):
         reused = replace(retained.result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
@@ -306,76 +294,6 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     if not options.automatic or has_routed_page(rendered):
         cache = None
     effective = request.target.reserve(request.reservation)
-    # The public target couples limits and body types; narrow both before bridging
-    # its generic parameter to one concrete built-in rules implementation.
-    if isinstance(effective.limits, V2Limits) and effective.body_type is scene.ComponentsV2:
-        v2_request = cast(PlanRequest[scene.ComponentsV2, RenderTargetT, AdapterT], request)
-        result = _plan(
-            rendered,
-            v2_request,
-            V2CompositionRules[RenderTargetT, object](effective.limits),
-            options.selections,
-            options,
-            cast(PlanCache[scene.ComponentsV2] | None, cache),
-        )
-    elif isinstance(effective.limits, ClassicLimits) and effective.body_type is scene.ClassicMessage:
-        result = _plan(
-            rendered,
-            cast(PlanRequest[scene.ClassicMessage, RenderTargetT, AdapterT], request),
-            ClassicCompositionRules[RenderTargetT, object](effective.limits),
-            options.selections,
-            options,
-            cast(PlanCache[scene.ClassicMessage] | None, cache),
-        )
-    elif isinstance(effective.limits, SlackHomeLimits) and effective.body_type is scene.SlackHomeView:
-        result = _plan(
-            rendered,
-            cast(PlanRequest[scene.SlackHomeView, RenderTargetT, AdapterT], request),
-            SlackCompositionRules[RenderTargetT, object, scene.SlackHomeView](effective.limits),
-            options.selections,
-            options,
-            cast(PlanCache[scene.SlackHomeView] | None, cache),
-        )
-    elif isinstance(effective.limits, SlackModalLimits) and effective.body_type is scene.SlackModalView:
-        result = _plan(
-            rendered,
-            cast(PlanRequest[scene.SlackModalView, RenderTargetT, AdapterT], request),
-            SlackCompositionRules[RenderTargetT, object, scene.SlackModalView](effective.limits, modal_form(rendered)),
-            options.selections,
-            options,
-            cast(PlanCache[scene.SlackModalView] | None, cache),
-        )
-    elif isinstance(effective.limits, SlackMessageLimits) and effective.body_type is scene.SlackMessage:
-        slack_request = cast(PlanRequest[scene.SlackMessage, RenderTargetT, AdapterT], request)
-        result = _plan(
-            rendered,
-            slack_request,
-            SlackCompositionRules[RenderTargetT, object](effective.limits),
-            options.selections,
-            options,
-            cast(PlanCache[scene.SlackMessage] | None, cache),
-        )
-    elif isinstance(effective.limits, HtmlLimits) and effective.body_type is scene.HtmlBody:
-        html_request = cast(PlanRequest[scene.HtmlBody, RenderTargetT, AdapterT], request)
-        result = _plan(
-            rendered,
-            html_request,
-            HtmlCompositionRules[RenderTargetT, object](),
-            options.selections,
-            options,
-            cast(PlanCache[scene.HtmlBody] | None, cache),
-        )
-    else:
-        if options.automatic:
-            raise JointUnsupportedError(
-                SearchDiagnostics(
-                    SearchCompletion.UNSUPPORTED,
-                    optimal=False,
-                    work_used=0,
-                    work_limit=options.work_limit,
-                    violations=(UnsupportedCapability(OccurrenceId(("root",)), "target composition rules"),),
-                    unsupported=(OccurrenceId(("root",)),),
-                )
-            )
-        raise CompositionRejectedError((UnsupportedCapability(OccurrenceId(("root",)), "target composition rules"),))
-    return cast(PlanResult[BodyT], result)
+    return _plan(
+        rendered, request, effective.dialect.rules(rendered, effective.limits), options.selections, options, cache
+    )

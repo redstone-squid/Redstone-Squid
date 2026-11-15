@@ -5,8 +5,6 @@ from dataclasses import dataclass, replace
 from squid_ui import scene
 from squid_ui import semantic as sem
 from squid_ui.document import Document
-from squid_ui.html.target import HtmlLimits
-from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.native_extensions import ComposableExtension
 from squid_ui.planning.pagination_content import RootRegion
 from squid_ui.planning.request import PlanRequest
@@ -15,7 +13,6 @@ from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 from squid_ui.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
-from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import Renderable
 from squid_ui.text import resolve_text
 
@@ -30,32 +27,22 @@ class PreparedComposition[RenderTargetT]:
 def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     document: Document[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]
 ) -> PreparedComposition[RenderTargetT]:
-    limits = request.target.limits
-    if isinstance(limits, SlackModalLimits):
+    policy = request.target.dialect.input_policy(request.target.limits)
+    if not policy.inspect:
         return PreparedComposition(document)
-    if not isinstance(limits, ClassicLimits | V2Limits | SlackMessageLimits | SlackHomeLimits | HtmlLimits):
-        return PreparedComposition(document, limitation="target has no shared composition rules")
     combinations = 1
     text_choices = 0
     shortening_depth = 0
     card_depth = 0
     variant_index = 0
-    text_ladder = (
-        limits.total_text
-        if isinstance(limits, V2Limits)
-        else max(limits.content, limits.embeds.description)
-        if isinstance(limits, ClassicLimits)
-        else limits.components.section_text
-        if isinstance(limits, SlackMessageLimits | SlackHomeLimits)
-        else 1
-    )
+    text_ladder = policy.text_ladder
 
     def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
         nonlocal combinations, shortening_depth, text_choices, card_depth, variant_index
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
                 if isinstance(node, sem.Paged):
-                    if not isinstance(limits, V2Limits | HtmlLimits):
+                    if not policy.character_axis:
                         msg = "Paged requires one shared character axis; use regions with this target's resource limits"
                         raise UnsupportedSemanticError(msg)
                     return replace(node, node=visit(node.node))
@@ -113,7 +100,7 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | primitive.MediaCollection()
                 | primitive.File()
             ):
-                if not isinstance(limits, V2Limits):
+                if primitive.Panel not in policy.native_types:
                     message = "native Components V2 layout on another target"
                     raise UnsupportedSemanticError(message)
                 if isinstance(node, primitive.Panel):
@@ -125,13 +112,13 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                     return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
                 return node
             case primitive.Content():
-                if not isinstance(limits, ClassicLimits):
+                if primitive.Card not in policy.native_types:
                     msg = "native classic message content on another target"
                     raise UnsupportedSemanticError(msg)
                 visit(primitive.Text(node.content, overflow=node.overflow, priority=node.priority))
                 return node
             case primitive.Card():
-                if not isinstance(limits, ClassicLimits):
+                if primitive.Card not in policy.native_types:
                     msg = "native classic embed on another target"
                     raise UnsupportedSemanticError(msg)
                 card_depth += 1
@@ -151,35 +138,35 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                     card_depth -= 1
                 return node
             case primitive.Budget() | primitive.Break():
-                if not isinstance(limits, V2Limits | ClassicLimits):
+                if primitive.Text not in policy.native_types:
                     msg = "Discord native layout policy on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
-                if isinstance(node, primitive.Budget) and not isinstance(limits, V2Limits):
+                if isinstance(node, primitive.Budget) and primitive.Panel not in policy.native_types:
                     msg = "Budget requires one shared character axis; use resource budgets on this target"
                     raise UnsupportedSemanticError(msg)
                 for child in node.children:
                     visit(child)
                 return node
             case primitive.Time() | primitive.ZonedTime():
-                if not isinstance(limits, V2Limits | ClassicLimits):
+                if primitive.Text not in policy.native_types:
                     msg = "Discord native time on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 return node
             case primitive.Extension():
                 adapter = request.target.extensions.get(node.kind.name)
-                if adapter is None or not isinstance(limits, V2Limits):
+                if adapter is None or primitive.Panel not in policy.native_types:
                     visit(node.fallback)
                 elif not isinstance(adapter, ComposableExtension):
                     msg = f"extension {node.kind.name!r} needs a compose() contract for shared allocation"
                     raise UnsupportedSemanticError(msg)
                 return node
             case primitive.RawItem():
-                if not isinstance(limits, V2Limits) or node.composition is None:
+                if primitive.Panel not in policy.native_types or node.composition is None:
                     msg = "RawItem requires a native Components V2 composition contract"
                     raise UnsupportedSemanticError(msg)
                 return node
             case primitive.Row() | primitive.ControlGroup():
-                if not isinstance(limits, V2Limits | ClassicLimits):
+                if primitive.Text not in policy.native_types:
                     msg = "Discord native controls on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 for item in node.items:
@@ -200,19 +187,19 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                 | primitive.RoutedSelect()
                 | primitive.EntitySelect()
             ):
-                if not isinstance(limits, V2Limits | ClassicLimits):
+                if primitive.Text not in policy.native_types:
                     msg = "Discord native controls on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 return node
             case sem.Unbreakable() | sem.KeepWithNext() | sem.Budgeted() | Budget():
-                if isinstance(limits, HtmlLimits):
+                if policy.budget_ladder:
                     if isinstance(node, sem.Budgeted):
                         combinations = max(combinations, node.preferred)
                     elif isinstance(node, Budget):
                         combinations = max(combinations, node.limits.get(Axis.DISPLAY_TEXT, 1))
                 return replace(node, node=visit(node.node))
             case primitive.Text() | primitive.Code() | primitive.Lines() | primitive.Heading() | primitive.Footer():
-                if not isinstance(limits, V2Limits | ClassicLimits):
+                if primitive.Text not in policy.native_types:
                     msg = "Discord text primitives on a non-Discord target"
                     raise UnsupportedSemanticError(msg)
                 overflow = node.overflow
@@ -241,7 +228,7 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                 if not isinstance(overflow, Paginate):
                     msg = "primitive text overflow alternatives"
                     raise UnsupportedSemanticError(msg)
-                if overflow.min_fill and not isinstance(limits, V2Limits):
+                if overflow.min_fill and primitive.Panel not in policy.native_types:
                     msg = "primitive min_fill requires one shared character axis"
                     raise UnsupportedSemanticError(msg)
                 if isinstance(node, primitive.Lines):
