@@ -15,7 +15,6 @@ import discord
 from squid_ui.entity import EntityType
 from squid_ui.forms import FormSpec, FormText, UploadedFile
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
@@ -36,6 +35,7 @@ from squid_ui_discord.form_planning import (
     plan_form,
 )
 from squid_ui_discord.form_planning import _entity_defaults as _entity_defaults
+from squid_ui_discord.limits import COMPONENT_LIMITS, ComponentLimits
 
 logger = logging.getLogger(__name__)
 

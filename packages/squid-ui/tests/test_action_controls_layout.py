@@ -7,20 +7,22 @@ moved behind the actions. These tests pin the order and row sharing that replace
 from typing import Any
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import forms, scene
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.semantic import ControlDisplay
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 from squid_ui.testing import keys
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "tests.actions", ">=1"))
 CLASSIC = classic_target(AdapterProfile(DiscordAdapter, "tests.actions", ">=1"))
-SLACK = sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "tests.actions", ">=1"))
+SLACK = squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "tests.actions", ">=1"))
 FORM = forms.FormSpec("Edit page", (forms.TextField("Name", "name"),))
 
 
@@ -109,8 +111,8 @@ def test_folding_into_a_menu_keeps_toggles_and_forms_as_buttons() -> None:
 
 
 def test_html_places_the_toggle_and_form_inside_the_actions() -> None:
-    planned = sl.planning.plan(_mixed(), target=sl.html.target())
-    html = sl.html.Renderer().draw(planned.scene, plan=planned)
+    planned = sl.planning.plan(_mixed(), target=squid_ui_html.target())
+    html = squid_ui_html.Renderer().draw(planned.scene, plan=planned)
 
     nav = html[html.index("<nav") : html.index("</nav>")]
     assert 'data-squid-action="alerts"' in nav

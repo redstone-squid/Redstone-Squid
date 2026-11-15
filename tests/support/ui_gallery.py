@@ -31,9 +31,9 @@ from typing import Any, cast
 import pytest
 
 from squid_ui import scene
-from squid_ui.html import PREVIEW_CSS, DiscordPreviewRenderer
 from squid_ui.planning.result import PlanResult
 from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.preview import PREVIEW_CSS, DiscordPreviewRenderer
 
 _BROWSERS = ("google-chrome", "chromium", "chromium-browser", "google-chrome-stable")
 

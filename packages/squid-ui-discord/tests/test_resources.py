@@ -4,17 +4,18 @@ import pytest
 
 from squid_ui import paragraph
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.planning import measure, plan
-from squid_ui.planning.layout_measurement.costing import measure_nodes
-from squid_ui.planning.layout_measurement.model import MeasuredText
-from squid_ui.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
-from squid_ui.planning.limits import Axis
+from squid_ui.planning import plan
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.presentations import corresponds
 from squid_ui.primitives import Never, Panel, Text, Variant, Variants
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import testing as sd
+from squid_ui_discord.limits import Axis
+from squid_ui_discord.planning import measure
+from squid_ui_discord.planning.measurement.costing import measure_nodes
+from squid_ui_discord.planning.measurement.model import MeasuredText
+from squid_ui_discord.planning.measurement.text import BudgetRegion, make_unit, text_total
 
 
 class TestResourceCost:

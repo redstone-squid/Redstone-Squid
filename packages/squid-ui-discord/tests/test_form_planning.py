@@ -12,13 +12,13 @@ from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LimitViolationError
 from squid_ui.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
 from squid_ui.planning.cache import PlanCache
-from squid_ui.planning.limits import COMPONENT_LIMITS
 from squid_ui.planning.planner import plan
 from squid_ui.planning.target import AnyTarget
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.form_fields import CheckboxGroupField, EntityField
 from squid_ui_discord.form_planning import ChoiceControl, DiscordFormPlan, FieldPlan, TextControl, plan_form
+from squid_ui_discord.limits import COMPONENT_LIMITS
 from squid_ui_discord.modal import render_form_modal
 from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
 from squid_ui_discord.testing import commit_render, interaction_harness

@@ -20,7 +20,6 @@ from squid_ui.planning.adapter import (
     PreparedExtension,
 )
 from squid_ui.planning.composition import AtomicContract, PlanningContext, ResourceIdentity, SharedUse
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import AnyTarget
@@ -29,6 +28,7 @@ from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.text import Localization
 from squid_ui_discord.form_planning import DiscordFormPlan, plan_form
 from squid_ui_discord.inspection import _walk, audit_items, cost
+from squid_ui_discord.limits import V2Limits
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 

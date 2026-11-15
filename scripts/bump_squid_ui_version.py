@@ -21,6 +21,7 @@ DISTRIBUTIONS = (
     "squid-ui",
     "squid-ui-discord",
     "squid-ui-slack",
+    "squid-ui-html",
     "squid-ui-widgets",
 )
 # Final releases and alpha/beta/rc pre-releases, matching check_squid_ui_release.py.

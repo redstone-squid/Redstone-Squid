@@ -19,7 +19,6 @@ from squid_ui.document import DocumentLike
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
@@ -31,6 +30,7 @@ from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord.adapter import require_discord_py_target
+from squid_ui_discord.limits import V2Limits
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 from squid_ui_discord.renderer import V2Renderer, Wire
 from squid_ui_discord.target import DISCORD_V2_DPY27

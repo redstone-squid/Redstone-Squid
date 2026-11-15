@@ -32,10 +32,10 @@ from squid_ui.forms import (
     TimeField,
     ZonedDateTimeField,
 )
-from squid_ui.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui_discord.conformance import trim
 from squid_ui_discord.form_fields import CheckboxGroupField, EntityField, FileField
+from squid_ui_discord.limits import COMPONENT_LIMITS, ComponentLimits
 
 logger = logging.getLogger(__name__)
 

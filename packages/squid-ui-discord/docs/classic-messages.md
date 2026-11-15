@@ -191,7 +191,7 @@ registration:
 
 ```python
 from squid_ui_discord import Target, TargetRegistry
-from squid_ui.planning.limits import ClassicLimits
+from squid_ui_discord.limits import ClassicLimits
 
 compact = Target.classic(limits=ClassicLimits(embeds=2))
 targets = TargetRegistry(compact)

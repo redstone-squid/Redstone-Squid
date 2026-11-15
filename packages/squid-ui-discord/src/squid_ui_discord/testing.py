@@ -28,8 +28,6 @@ from discord.ext import commands
 from squid_ui import scene
 from squid_ui.errors import LayoutError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
@@ -37,10 +35,12 @@ from squid_ui_discord.commands import bind_context_menu, context_menu_declaratio
 from squid_ui_discord.config import Config
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.facade import Scope
+from squid_ui_discord.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
+from squid_ui_discord.planning.discord import components_v2_target
 from squid_ui_discord.rendering import render_static
 from squid_ui_discord.request import Request
 from squid_ui_discord.response import Presented, ResponseOverrides

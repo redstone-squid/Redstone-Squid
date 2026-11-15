@@ -7,7 +7,9 @@ compatibility is checked separately in typing_renderers.py.
 
 from typing import Any, assert_type
 
-from squid_ui import RenderTarget, fallback, html, scene
+import squid_ui_html as html
+
+from squid_ui import RenderTarget, fallback, scene
 from squid_ui.planning import (
     AdapterProfile,
     ClassicTarget,
@@ -19,14 +21,13 @@ from squid_ui.planning import (
     PlanMemo,
     Renderable,
     Target,
-    classic_target,
-    components_v2_target,
     plan,
 )
-from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Card, Panel, Text, Variants
 from squid_ui.semantic import FallbackContent, Paragraph
+from squid_ui_discord.limits import ClassicLimits, V2Limits
+from squid_ui_discord.planning import classic_target, components_v2_target
 from squid_ui_discord.target import classic, v2
 
 

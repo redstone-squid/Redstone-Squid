@@ -14,13 +14,8 @@ from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.pages import PagePosition, resolve_page_position
-from squid_ui.planning import SolveNoteCode, measure
-from squid_ui.planning.layout_measurement.costing import component_count
-from squid_ui.planning.layout_measurement.model import MeasuredText
-from squid_ui.planning.layout_measurement.text import split_pages
-from squid_ui.planning.limits import Axis
+from squid_ui.planning import SolveNoteCode
 from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
-from squid_ui.planning.semantic_adaptation.lowering import lower_semantics
 from squid_ui.primitives import (
     LAST_PAGE,
     Button,
@@ -36,7 +31,13 @@ from squid_ui.semantic import Item, Items, Paragraph
 from squid_ui.text import NEUTRAL
 from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui_discord.limits import Axis
 from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_ui_discord.planning import measure
+from squid_ui_discord.planning.adaptation.lowering import lower_semantics
+from squid_ui_discord.planning.measurement.costing import component_count
+from squid_ui_discord.planning.measurement.model import MeasuredText
+from squid_ui_discord.planning.measurement.text import split_pages
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
 

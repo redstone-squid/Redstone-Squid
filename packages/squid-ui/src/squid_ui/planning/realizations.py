@@ -23,7 +23,7 @@ from squid_ui.emoji import Emoji, normalize_emoji
 from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
-from squid_ui.grids import _coordinate
+from squid_ui.grids import coordinate
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.ownership import Controlled
 from squid_ui.planning.classic_content import CardSlot
@@ -45,15 +45,8 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
-from squid_ui.planning.limits import EmbedLimits
-from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
-from squid_ui.planning.navigation import PagerNav, default_nav
-from squid_ui.planning.pagination_content import RootRegion
-from squid_ui.planning.resources import EMPTY_COST, Axis
-from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
-from squid_ui.planning.semantic_adaptation.common import _button_style
-from squid_ui.planning.semantic_adaptation.handlers import (
+from squid_ui.planning.control_style import button_style as _button_style
+from squid_ui.planning.interaction_handlers import (
     ChoiceCommit,
     CloseItem,
     EntityCommit,
@@ -70,6 +63,12 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntityFallback,
     ToggleDetails,
 )
+from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
+from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
+from squid_ui.planning.navigation import PagerNav, default_nav
+from squid_ui.planning.pagination_content import RootRegion
+from squid_ui.planning.resources import EMPTY_COST, Axis
+from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantics import (
     ItemBranch,
     SourceScope,
@@ -687,7 +686,7 @@ def semantic_offers[RenderTargetT, ContextT](
     heading_limit: int | None = None,
     native_v2: bool = False,
     grid_columns: int | None = None,
-    embed_limits: EmbedLimits | None = None,
+    embed_limits: Mapping[str, int] | None = None,
 ) -> (
     tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
     | OfferDiscovery[RenderTargetT, ContextT, Realization]
@@ -773,7 +772,7 @@ def semantic_offers[RenderTargetT, ContextT](
     if isinstance(value, CardSlot):
         if embed_limits is None:
             return ()
-        text_capacity = getattr(embed_limits, value.kind)
+        text_capacity = embed_limits[value.kind]
         value = value.text
     if any(isinstance(ancestor, primitive.Content) for ancestor in occurrence.ancestors()):
         text_capacity = context.capacities.get(Axis.CONTENT_TEXT, text_capacity)
@@ -1802,7 +1801,7 @@ def semantic_offers[RenderTargetT, ContextT](
         labels = tuple(resolve_text(cell.label, context.localization).plain() for cell in value.cells)
         grid_summaries = tuple(
             ReferencedText(
-                ref, (tree.literal(f"{_coordinate(index, value.columns)} [{' ' if cell.available else 'x'}] {label}"),)
+                ref, (tree.literal(f"{coordinate(index, value.columns)} [{' ' if cell.available else 'x'}] {label}"),)
             )
             for index, (ref, cell, label) in enumerate(zip(refs, value.cells, labels, strict=True))
         )
@@ -1823,7 +1822,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 ),
             )
         options = tuple(
-            scene.Option(f"{_coordinate(index, value.columns)} — {labels[index]}", value.cells[index].key)
+            scene.Option(f"{coordinate(index, value.columns)} — {labels[index]}", value.cells[index].key)
             for index in available
         )
         action = _control_key(occurrence, context)

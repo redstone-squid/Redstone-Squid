@@ -11,14 +11,14 @@ from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate, alts
 from squid_ui.target_types import DiscordAdapter
+from squid_ui_discord.limits import ClassicLimits, V2Limits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-lines.discord", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [

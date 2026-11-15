@@ -16,9 +16,9 @@ from squid_ui.forms import FormSpec, TextField
 from squid_ui.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
+from squid_ui.planning.interaction_handlers import SelectChoices
 from squid_ui.planning.navigation import TurnPage, default_nav
 from squid_ui.planning.result import PlanReuse
-from squid_ui.planning.semantic_adaptation.handlers import SelectChoices
 from squid_ui.presentations import corresponds, losses, omit, ref
 from squid_ui.primitives import (
     Button,

@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from squid_ui_html.composition import HtmlCompositionRules
 
 import squid_ui as sl
 from squid_i18n import tree
@@ -22,17 +23,16 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
-from squid_ui.planning.composition_html import HtmlCompositionRules
-from squid_ui.planning.composition_slack import SlackCompositionRules
-from squid_ui.planning.composition_v2 import V2CompositionRules
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import TableRealization, select_composition
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import ref
 from squid_ui.semantic import TableDisplay
-from squid_ui.slack.target import SlackComponentLimits, SlackMessageLimits
 from squid_ui.target_types import ComponentsV2Target, RenderTarget
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.composition_v2 import V2CompositionRules
+from squid_ui_slack.composition import SlackCompositionRules
+from squid_ui_slack.protocol import SlackComponentLimits, SlackMessageLimits
 
 
 def test_v2_shares_an_unread_attachment_across_sibling_regions(tmp_path: Path) -> None:
@@ -209,7 +209,7 @@ def test_v2_constructs_and_validates_without_serializing_again(monkeypatch: pyte
     assert isinstance(candidate, CandidateComposition)
     evaluated = rules.evaluate(candidate, context)
     assert evaluated.preparation is not None
-    monkeypatch.setattr("squid_ui.planning.composition_v2.tree.markdown", reject_reserialization)
+    monkeypatch.setattr("squid_ui_discord.planning.composition_v2.tree.markdown", reject_reserialization)
     body = rules.build(evaluated.preparation, context)
     rules.validate(body, evaluated, context)
     assert body is evaluated.preparation
@@ -223,7 +223,7 @@ def test_slack_constructs_and_validates_without_serializing_again(monkeypatch: p
     assert isinstance(candidate, CandidateComposition)
     evaluated = rules.evaluate(candidate, context)
     assert evaluated.preparation is not None
-    monkeypatch.setattr("squid_ui.planning.composition_slack._plain", reject_reserialization)
+    monkeypatch.setattr("squid_ui_slack.composition._plain", reject_reserialization)
     body = rules.build(evaluated.preparation, context)
     rules.validate(body, evaluated, context)
     assert body is evaluated.preparation

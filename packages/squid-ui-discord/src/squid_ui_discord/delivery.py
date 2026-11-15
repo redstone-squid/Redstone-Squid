@@ -22,9 +22,9 @@ import discord
 
 from squid_ui.errors import LayoutError, LimitViolationError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.limits import LIMITS
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui_discord.limits import LIMITS
 from squid_ui_discord.message_payload import MessageMode, MessagePayload, message_mode
 
 # Discord's way of saying the credentials behind a handle are gone.

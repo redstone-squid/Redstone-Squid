@@ -6,7 +6,6 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui import PressEvent
-from squid_ui.planning.limits import Axis
 from squid_ui.primitives import (
     Button,
     Code,
@@ -31,6 +30,7 @@ from squid_ui_discord import (
     render_static,
 )
 from squid_ui_discord import testing as sd
+from squid_ui_discord.limits import Axis
 
 _policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
 _content = st.text(max_size=1500)

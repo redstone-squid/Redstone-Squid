@@ -19,7 +19,6 @@ from squid_ui.assets import Asset, StoredAsset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.limits import LIMITS, V2Limits
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import Renderer
 from squid_ui.target_types import DiscordPyAdapter
@@ -29,6 +28,7 @@ from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_c
 from squid_ui_discord.attachments import attachment_assets
 from squid_ui_discord.conformance import LimitViolationError, conform
 from squid_ui_discord.emoji import discord_emoji
+from squid_ui_discord.limits import LIMITS, V2Limits
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.target import DISCORD_V2_DPY27

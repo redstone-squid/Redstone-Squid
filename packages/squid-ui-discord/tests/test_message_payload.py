@@ -15,12 +15,12 @@ import squid_ui_discord
 import squid_ui_discord.durability
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.errors import LimitViolationError
-from squid_ui.planning.limits import LIMITS
 from squid_ui.primitives import Text
 from squid_ui_discord import delivery
 from squid_ui_discord import testing as sd
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
+from squid_ui_discord.limits import LIMITS
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
 from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 

@@ -9,7 +9,6 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.document import Document
-from squid_ui.planning.limits import Axis
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
@@ -17,6 +16,7 @@ from squid_ui_discord import ExistingLayoutError, ResourceCost, contribute
 from squid_ui_discord import testing as sd
 from squid_ui_discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
 from squid_ui_discord.inspection import audit
+from squid_ui_discord.limits import Axis
 
 
 def _text(content: str) -> list:

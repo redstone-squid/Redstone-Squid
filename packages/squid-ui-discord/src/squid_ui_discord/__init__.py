@@ -22,9 +22,7 @@ from squid_ui.errors import (
     ExistingLayoutError,
     LimitViolationError,
 )
-from squid_ui.planning import limits as limits
 from squid_ui.planning import navigation as navigation_controls
-from squid_ui.planning.limits import LIMITS as V2_LIMITS
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui_discord import (
     access,
@@ -65,6 +63,7 @@ from squid_ui_discord import (
     testing,
     v2,
 )
+from squid_ui_discord import limits as limits
 from squid_ui_discord import (
     modal as modals,
 )
@@ -140,6 +139,7 @@ from squid_ui_discord.events import (
 from squid_ui_discord.facade import Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
+from squid_ui_discord.limits import LIMITS as V2_LIMITS
 from squid_ui_discord.live import message_roots
 from squid_ui_discord.message_payload import (
     MessageMode,

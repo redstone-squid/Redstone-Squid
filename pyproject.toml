@@ -125,6 +125,7 @@ members = [
     "packages/squid-i18n",
     "packages/squid-ui-discord",
     "packages/squid-ui-slack",
+    "packages/squid-ui-html",
     "packages/squid-ui-widgets",
 ]
 
@@ -133,6 +134,7 @@ squid-i18n = { workspace = true }
 squid-ui-discord = { workspace = true }
 squid-ui = { workspace = true }
 squid-ui-slack = { workspace = true }
+squid-ui-html = { workspace = true }
 squid-ui-widgets = { workspace = true }
 squid-reactivity = { workspace = true }
 squid-replication = { workspace = true }
@@ -333,6 +335,7 @@ search-path = [
     "packages/squid-i18n/src",
     "packages/squid-ui-discord/src",
     "packages/squid-ui-slack/src",
+    "packages/squid-ui-html/src",
     "packages/squid-ui-widgets/src",
 ]
 # The observability extra is optional; runtime imports already handle ModuleNotFoundError.
@@ -355,6 +358,7 @@ testpaths = [
     "packages/squid-i18n/tests",
     "packages/squid-ui-discord/tests",
     "packages/squid-ui-slack/tests",
+    "packages/squid-ui-html/tests",
     "packages/squid-ui-widgets/tests",
     "packages/squid-replication/tests",
 ]

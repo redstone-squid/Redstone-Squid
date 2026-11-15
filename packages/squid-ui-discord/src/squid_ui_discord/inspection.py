@@ -20,7 +20,8 @@ import discord
 from discord.ui.select import BaseSelect
 
 from squid_ui.errors import ExistingLayoutError, LimitViolationError
-from squid_ui.planning.limits import (
+from squid_ui.planning.resources import ResourceCost
+from squid_ui_discord.limits import (
     CLASSIC_LIMITS,
     LIMITS,
     Axis,
@@ -28,7 +29,6 @@ from squid_ui.planning.limits import (
     ComponentLimits,
     V2Limits,
 )
-from squid_ui.planning.resources import ResourceCost
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 
 type Path = tuple[int, ...]

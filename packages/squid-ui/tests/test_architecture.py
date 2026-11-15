@@ -75,7 +75,16 @@ def test_existing_contract_imports_preserve_identity() -> None:
     ),
 )
 def test_entrypoints_import_in_fresh_processes(entrypoint: str) -> None:
-    testing.assert_imports_without([entrypoint, "squid_ui"], "discord", "anyio", "squid_storage", "squid_ui_widgets")
+    testing.assert_imports_without(
+        [entrypoint, "squid_ui"],
+        "discord",
+        "anyio",
+        "squid_storage",
+        "squid_ui_widgets",
+        "squid_ui_discord",
+        "squid_ui_slack",
+        "squid_ui_html",
+    )
 
 
 def test_scene_sources_do_not_depend_on_live_execution() -> None:
@@ -139,7 +148,11 @@ def test_handler_composition_does_not_import_planning_or_runtime() -> None:
     assert not {name for name in imports if name.startswith(("squid_ui.planning", "squid_ui.runtime"))}
 
 
-def test_composition_rules_do_not_depend_on_complete_target_planners() -> None:
-    for name in ("html", "slack", "v2", "classic"):
-        imports = runtime_imports(SOURCE / "planning" / f"composition_{name}.py")
-        assert not {module for module in imports if module.endswith(("_planner", ".request", ".cache"))}
+def test_core_does_not_import_target_implementations() -> None:
+    adapters = ("squid_ui_discord", "squid_ui_slack", "squid_ui_html")
+    violations = {
+        str(path.relative_to(SOURCE)): sorted(name for name in runtime_imports(path) if name.startswith(adapters))
+        for path in SOURCE.rglob("*.py")
+        if any(name.startswith(adapters) for name in runtime_imports(path))
+    }
+    assert not violations

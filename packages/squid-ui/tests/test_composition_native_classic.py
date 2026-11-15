@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
 from squid_ui import scene
@@ -12,9 +13,7 @@ from squid_ui.document import Document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.limits import ClassicLimits, EmbedLimits
 from squid_ui.planning.navigation import default_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import check_alternative
@@ -24,6 +23,8 @@ from squid_ui.presentations import Alternative
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Paginate, Truncate
 from squid_ui.target_types import DiscordAdapter, Renderable
+from squid_ui_discord.limits import ClassicLimits, EmbedLimits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-classic", "1")
 TARGET = classic_target(ADAPTER)
@@ -147,7 +148,7 @@ def test_classic_native_structures_report_the_v2_capability_boundary() -> None:
 
 
 @pytest.mark.parametrize(
-    "target", [TARGET, components_v2_target(ADAPTER), sl.html.target()], ids=lambda target: target.id
+    "target", [TARGET, components_v2_target(ADAPTER), squid_ui_html.target()], ids=lambda target: target.id
 )
 def test_checked_alternatives_select_a_supported_native_layout(target: Target[Any, Any, Any, Any]) -> None:
     choices: tuple[Alternative[Any], ...] = (
@@ -184,7 +185,7 @@ def test_canonical_content_does_not_need_a_realization_on_the_selected_target() 
         correspondence=(sl.corresponds("body", "@0"),),
     )
     document = sl.alternatives(choice, content=source, key="choice")
-    target: Target[Any, Any, Any, Any] = sl.html.target()
+    target: Target[Any, Any, Any, Any] = squid_ui_html.target()
     result = plan(document, target=target, strict=True)
     assert result.allocation is not None
-    assert "Body" in sl.html.Renderer().draw(result.scene, plan=result)
+    assert "Body" in squid_ui_html.Renderer().draw(result.scene, plan=result)

@@ -3,20 +3,22 @@
 from dataclasses import replace
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.navigation import TurnPage, default_nav, page_select_nav
 from squid_ui.planning.resources import Axis, TargetLimits
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.discord import components_v2_target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "test", ">=1"))
 REGION = OccurrenceId(("root", "r"))
@@ -217,7 +219,11 @@ def test_changed_callback_rebuilds_bindings_in_a_retained_owner() -> None:
 
 @pytest.mark.parametrize(
     "target",
-    [V2, sl.html.target(), sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "state.slack", ">=1"))],
+    [
+        V2,
+        squid_ui_html.target(),
+        squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "state.slack", ">=1")),
+    ],
     ids=["v2", "html", "slack"],
 )
 def test_production_list_recovers_a_deleted_anchor_across_targets[

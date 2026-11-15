@@ -23,7 +23,6 @@ from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
-from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanReport, PlanResult
@@ -77,6 +76,7 @@ from squid_ui_discord.inspection import (
     measure,
     measure_classic,
 )
+from squid_ui_discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload
 from squid_ui_discord.rendering import RenderedMessage
 from squid_ui_discord.target import DISCORD_V1_DPY27

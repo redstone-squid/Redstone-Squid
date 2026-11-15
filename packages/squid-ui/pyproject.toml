@@ -1,7 +1,7 @@
 [project]
 name = "squid-ui"
 version = "0.1.0a1"
-description = "Declarative, limits-aware UI planning with a portable HTML renderer"
+description = "Portable semantic UI composition, allocation, and runtime"
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"

@@ -66,7 +66,6 @@ from squid_ui.palette import Palette
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_ui.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     default_nav,
@@ -154,6 +153,7 @@ from squid_ui_discord.message_root_wiring import (
     _WiredButton,
     _WiredSelect,
 )
+from squid_ui_discord.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message

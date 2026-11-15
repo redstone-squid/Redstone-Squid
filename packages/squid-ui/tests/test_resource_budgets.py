@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Literal, override
 
 import pytest
+from squid_ui_html.composition import HtmlCompositionRules
 
 import squid_ui as sl
 from squid_ui import scene
@@ -23,16 +24,15 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
-from squid_ui.planning.composition_html import HtmlCompositionRules
-from squid_ui.planning.composition_slack import SlackCompositionRules
-from squid_ui.planning.composition_v2 import V2CompositionRules
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.realizations import Realization, select_composition
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.semantics import semantic_graph
 from squid_ui.presentations import budget, ref
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.composition_v2 import V2CompositionRules
+from squid_ui_slack.composition import SlackCompositionRules
 
 
 def evaluate[BodyT, PreparationT, ResourceT](

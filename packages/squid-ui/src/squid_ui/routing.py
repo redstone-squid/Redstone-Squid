@@ -23,7 +23,9 @@ from string import Formatter
 from typing import Any
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.limits import COMPONENT_LIMITS
+
+MAX_ROUTE_ID_LENGTH = 100
+"""Portable route identifier bound; adapters also validate native control limits."""
 
 _SEPARATOR = ":"
 
@@ -258,8 +260,10 @@ class Route:
         if not self.pattern.fullmatch(route_id):
             message = f"route {self.format!r} cannot match the id it built from {params!r}: {route_id!r}"
             raise ValueError(message)
-        if len(route_id) > COMPONENT_LIMITS.custom_id:
-            message = f"route {self.format!r} built a {len(route_id)}-character id, over the {COMPONENT_LIMITS.custom_id} budget"
+        if len(route_id) > MAX_ROUTE_ID_LENGTH:
+            message = (
+                f"route {self.format!r} built a {len(route_id)}-character id, over the {MAX_ROUTE_ID_LENGTH} budget"
+            )
             raise LayoutInvariantError(message)
         return route_id
 

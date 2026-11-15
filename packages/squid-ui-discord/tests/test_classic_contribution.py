@@ -4,10 +4,10 @@ import discord
 import pytest
 
 from squid_ui.errors import UnsolvableLayoutError
-from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.semantic import Block, Heading, Paragraph
 from squid_ui_discord import ExistingLayoutError, classic
 from squid_ui_discord.inspection import measure
+from squid_ui_discord.limits import CLASSIC_LIMITS, Axis
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 
 

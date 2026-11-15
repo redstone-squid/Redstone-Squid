@@ -12,15 +12,15 @@ from squid_ui.extensions import ExtensionKind
 from squid_ui.planning import AtomicContract, plan
 from squid_ui.planning.adapter import AdapterProfile, PreparedExtension
 from squid_ui.planning.composition import Placement, PlanningContext, ResourceIdentity, SharedUse
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentations import budget
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
 from squid_ui.target_types import DiscordAdapter
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 ADAPTER = AdapterProfile(DiscordAdapter, "composition.extensions", "1")
 KIND = ExtensionKind[str, object]("test.badge")

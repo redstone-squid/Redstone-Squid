@@ -4,28 +4,30 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.rosters import RosterEntry, RosterOverflow, RosterSlot, place_roster
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "roster.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "roster.slack", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    sl.html.target(),
-    sl.slack.message_target(adapter=SLACK),
-    sl.slack.home_target(adapter=SLACK),
+    squid_ui_html.target(),
+    squid_ui_slack.message_target(adapter=SLACK),
+    squid_ui_slack.home_target(adapter=SLACK),
 ]
 CHROME = Chrome(slot_count=lambda count, capacity: f"Seats {count}/{capacity}", full="No seats", waitlist="Queue")
 
@@ -52,7 +54,7 @@ def test_roster_pages_repeat_localized_slot_context_and_join_controls(target: Ta
     for index in range(2):
         page = result.for_page({identity: index})
         wire = (
-            sl.html.Renderer().draw(page.scene, plan=page)
+            squid_ui_html.Renderer().draw(page.scene, plan=page)
             if isinstance(page.scene.body, scene.HtmlBody)
             else scene.Codec.dumps(page.scene)
         )
@@ -73,7 +75,7 @@ def test_roster_waitlist_is_visible_without_changing_join_availability(target: T
     result = plan(node, target=target, chrome=CHROME)
     assert result.allocation is not None
     wire = (
-        sl.html.Renderer().draw(result.scene, plan=result)
+        squid_ui_html.Renderer().draw(result.scene, plan=result)
         if isinstance(result.scene.body, scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
@@ -91,13 +93,13 @@ def test_full_rejecting_slots_disable_join_without_discarding_slot_counts(target
     )
     result = plan(sl.roster(placement, key="raid", on_join=join), target=target, chrome=CHROME)
     wire = (
-        sl.html.Renderer().draw(result.scene, plan=result)
+        squid_ui_html.Renderer().draw(result.scene, plan=result)
         if isinstance(result.scene.body, scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
     assert "No seats" in wire and "Seats 1/1" in wire
     if isinstance(result.scene.body, scene.HtmlBody):
-        assert "disabled" in sl.html.Renderer().draw(result.scene, plan=result)
+        assert "disabled" in squid_ui_html.Renderer().draw(result.scene, plan=result)
     else:
         assert '"disabled":true' in wire.replace(" ", "")
 

@@ -17,6 +17,7 @@ SCAN_ROOTS = (
     Path("packages/squid-ui/src"),
     Path("packages/squid-ui-discord/src"),
     Path("packages/squid-ui-slack/src"),
+    Path("packages/squid-ui-html/src"),
     Path("packages/squid-ui-widgets/src"),
     Path("packages/squid-replication/src"),
     Path("packages/squid-storage/src"),
@@ -42,6 +43,7 @@ FRAMEWORK_DISTRIBUTIONS = {
     "squid_ui": "squid-ui",
     "squid_ui_discord": "squid-ui-discord",
     "squid_ui_slack": "squid-ui-slack",
+    "squid_ui_html": "squid-ui-html",
     "squid_ui_widgets": "squid-ui-widgets",
 }
 
@@ -55,6 +57,7 @@ FRAMEWORK_PACKAGE_NAMES = frozenset(
         "squid-ui",
         "squid-ui-discord",
         "squid-ui-slack",
+        "squid-ui-html",
         "squid-ui-widgets",
     }
 )
@@ -265,8 +268,8 @@ def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None
     """The public target seam must not acquire Discord's IR or layout solver types."""
     generic = tuple(COMPILER_PASS_ROOT / name for name in ("dialect.py", "planner.py", "target.py"))
     blocked_modules = (
-        "squid_ui.planning.limits",
-        "squid_ui.planning.layout_measurement",
+        "squid_ui_discord.limits",
+        "squid_ui_discord.planning.measurement",
         "squid_ui.primitives",
         "squid_ui.target_types",
     )
@@ -301,6 +304,7 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("nucleation*")
         .should_not_import("squid_ui_discord*")
         .should_not_import("squid_ui_slack*")
+        .should_not_import("squid_ui_html*")
         .should_not_import("squid_ui_widgets*")
         .check("squid_ui", only_direct_imports=True)
     )
@@ -350,6 +354,7 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
         "squid_ui",
         "squid_ui_discord",
         "squid_ui_slack",
+        "squid_ui_html",
         "squid_ui_widgets",
     }
     violations: list[tuple[str, int, str]] = []
@@ -817,6 +822,7 @@ def test_the_engine_needs_no_transport_install() -> None:
         "squid_storage",
         "squid_ui_discord",
         "squid_ui_slack",
+        "squid_ui_html",
         "squid_ui_widgets",
     }
     violations: list[str] = []
@@ -859,16 +865,15 @@ def _irrefutable(pattern: ast.pattern) -> bool:
 
 
 def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
-    """Require terminal catch-all arms to raise or call `assert_never` in three planner files.
+    """Require terminal catch-all arms to raise or call `assert_never` in native lowering traversals.
 
     These traversals rely on type checking to catch missing cases. A fallback return
     would hide new node types from that check. Other match statements are outside
     this rule.
     """
     traversals = (
-        COMPILER_PASS_ROOT / "html_planner.py",
-        COMPILER_PASS_ROOT / "semantic_adaptation" / "lowering.py",
-        COMPILER_PASS_ROOT / "semantic_adaptation" / "decisions.py",
+        Path("packages/squid-ui-discord/src/squid_ui_discord/planning/adaptation") / "lowering.py",
+        Path("packages/squid-ui-discord/src/squid_ui_discord/planning/adaptation") / "decisions.py",
     )
     violations: list[tuple[Path, int]] = []
     for path in traversals:

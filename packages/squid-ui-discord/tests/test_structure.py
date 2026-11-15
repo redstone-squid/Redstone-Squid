@@ -9,14 +9,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui import ComponentsV2Target, Renderable, paragraph, scene
-from squid_ui.planning import (
-    SolveNoteCode,
-    measure,
-    plan,
-)
+from squid_ui.planning import SolveNoteCode, plan
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
-from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredText
 from squid_ui.planning.navigation import default_nav
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentations import Replacement, corresponds, losses, ref
@@ -39,6 +34,8 @@ from squid_ui_discord import DISCORD_V2_DPY27, render_message
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
+from squid_ui_discord.planning import measure
+from squid_ui_discord.planning.measurement.model import MeasuredPanel, MeasuredText
 
 
 def _rendered(solved) -> str:

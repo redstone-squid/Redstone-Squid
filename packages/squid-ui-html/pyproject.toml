@@ -1,0 +1,32 @@
+[project]
+name = "squid-ui-html"
+version = "0.1.0a1"
+description = "Semantic HTML composition and rendering for squid-ui"
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = ["squid-ui==0.1.0a1", "squid-i18n==0.1.0a1", "markdown-it-py>=4.0,<5"]
+
+[project.urls]
+Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+# Include source files in the wheel cache key so persistent Docker caches do not
+# reuse an old wheel after a source-only change.
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

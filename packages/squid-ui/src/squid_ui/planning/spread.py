@@ -22,7 +22,7 @@ from squid_ui import scene
 from squid_ui.document import Document, DocumentLike, PortableDocumentLike, as_document
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.cache import PlanCache, PlanMemo
-from squid_ui.planning.layout_measurement.diagnostics import LayoutOverflowError
+from squid_ui.planning.diagnostics import LayoutOverflowError
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult

@@ -13,6 +13,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.preview
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -1138,7 +1139,7 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.DiscordPreviewRenderer().draw(
+        html = squid_ui_discord.preview.DiscordPreviewRenderer().draw(
             sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
         )
 
@@ -1171,7 +1172,7 @@ class TestDrawing:
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
 
-        html = sl.html.DiscordPreviewRenderer().draw(planned)
+        html = squid_ui_discord.preview.DiscordPreviewRenderer().draw(planned)
         assert 'data-route-id="pick:build:3"' in html
 
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:

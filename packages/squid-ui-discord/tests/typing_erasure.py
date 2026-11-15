@@ -13,10 +13,10 @@ import squid_ui as sl
 from squid_ui.document import DocumentLike
 from squid_ui.planning import ClassicTarget, ComponentsV2Target
 from squid_ui.planning.adapter import ResourceCost
-from squid_ui.planning.limits import LIMITS, Axis
 from squid_ui.runtime.component import AnyComponent
 from squid_ui_discord import Everyone, MessageRoot, owner_message_root
 from squid_ui_discord.emoji import discord_emoji
+from squid_ui_discord.limits import LIMITS, Axis
 from squid_ui_discord.message_root import AnyMessageRoot
 from squid_ui_discord.target import classic, v2
 

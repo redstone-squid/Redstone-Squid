@@ -5,9 +5,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
-from squid_ui.planning import SolveNoteCode, measure
-from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
-from squid_ui.planning.layout_measurement.solver import MeasuredLayout
+from squid_ui.planning import SolveNoteCode
 from squid_ui.primitives import (
     Alt,
     Condense,
@@ -20,6 +18,9 @@ from squid_ui_discord import (
     conform,
 )
 from squid_ui_discord import testing as sd
+from squid_ui_discord.planning import measure
+from squid_ui_discord.planning.measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
+from squid_ui_discord.planning.measurement.solver import MeasuredLayout
 from squid_ui_discord.testing import assert_within_limits
 
 

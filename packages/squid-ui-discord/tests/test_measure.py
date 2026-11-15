@@ -8,14 +8,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning import (
-    LayoutOverflowError,
-    SolveNoteCode,
-    measure,
-)
+from squid_ui.planning import LayoutOverflowError, SolveNoteCode
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.planning.layout_measurement.model import MeasuredText
-from squid_ui.planning.layout_measurement.solver import MeasuredLayout
 from squid_ui.primitives import (
     Budget,
     Code,
@@ -43,6 +37,9 @@ from squid_ui_discord import (
 from squid_ui_discord import conform, render_static
 from squid_ui_discord import testing as sd
 from squid_ui_discord.conformance import ELLIPSIS
+from squid_ui_discord.planning import measure
+from squid_ui_discord.planning.measurement.model import MeasuredText
+from squid_ui_discord.planning.measurement.solver import MeasuredLayout
 from squid_ui_discord.testing import assert_within_limits
 
 

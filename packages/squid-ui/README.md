@@ -35,22 +35,24 @@ fields each render reads. Models need no bus, scope, or `super().__init__()` cal
 [reusable reactive models](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/#reusable-reactive-models).
 
 The base package contains semantic nodes, planning, exact primitives, the component runtime,
-the resolved-scene codec, and first-class HTML and Slack planning targets. It has no frontend SDK
-dependency; `markdown-it-py` is its direct Markdown parser dependency.
+and the resolved-scene codec. Platform rules, limits, and renderers belong to
+`squid-ui-discord`, `squid-ui-slack`, and `squid-ui-html`. The core has no dependency
+on those packages or their SDKs.
 
-Plan a portable document directly to native HTML:
+Install `squid-ui-html` to plan a portable document as native HTML:
 
 ```python
+import squid_ui_html
 document = sl.section(
     sl.heading("Build details"),
     sl.paragraph("**Compact**, semantic, and accessible."),
 )
-planned = sl.planning.plan(document, target=sl.html.target())
-fragment = sl.html.Renderer().draw(planned.scene, plan=planned)
+planned = sl.planning.plan(document, target=squid_ui_html.target())
+fragment = squid_ui_html.Renderer().draw(planned.scene, plan=planned)
 ```
 
 `Renderer(standalone=True)` adds the document shell and neutral responsive CSS. It accepts only
-HTML scenes; `DiscordPreviewRenderer` remains available when a tool specifically needs to inspect
+HTML scenes; `squid_ui_discord.preview.DiscordPreviewRenderer` is available when a tool specifically needs to inspect
 a planned Discord Components V2 scene in a browser.
 
 Install the package directly when you are writing a renderer or portable component library:
@@ -102,7 +104,8 @@ preserves the same component identities and lifetimes as running it again.
 The suite is deliberately split so portable code does not acquire transport or storage imports:
 
 - `squid-reactivity`: transactional state and topic primitives
-- `squid-ui`: semantic UI, shared composition, runtime, scenes, and native HTML
+- `squid-ui`: semantic UI, shared composition, runtime, and scene vocabulary
+- `squid-ui-html`: HTML composition, limits, and rendering
 - `squid-ui-widgets`: reusable frontend-neutral application machines
 - `squid-ui-discord`: discord.py rendering, delivery, sessions, and routing
 - `squid-ui-slack`: Slack SDK drawing for messages, modals, and App Home

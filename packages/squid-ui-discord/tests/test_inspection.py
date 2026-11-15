@@ -11,11 +11,11 @@ from hypothesis import strategies as st
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.target
-from squid_ui.planning.limits import Axis
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import ExistingLayoutError, LimitViolationError, conform
 from squid_ui_discord import testing as sd
 from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
+from squid_ui_discord.limits import Axis
 
 
 def _rich_view() -> discord.ui.LayoutView:

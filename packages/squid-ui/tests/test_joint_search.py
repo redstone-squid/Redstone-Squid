@@ -3,6 +3,7 @@ from itertools import product
 from pathlib import Path
 
 import pytest
+from squid_ui_html.composition import HtmlCompositionRules
 
 import squid_ui as sl
 from squid_ui.assets import Asset
@@ -15,15 +16,14 @@ from squid_ui.planning.composition import (
     SemanticOccurrence,
     WorkBudget,
 )
-from squid_ui.planning.composition_html import HtmlCompositionRules
-from squid_ui.planning.composition_slack import SlackCompositionRules
-from squid_ui.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, search_composition
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import semantic_graph
-from squid_ui.slack.target import SlackComponentLimits, SlackMessageLimits
 from squid_ui.target_types import RenderTarget
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.composition_v2 import V2CompositionRules
+from squid_ui_slack.composition import SlackCompositionRules
+from squid_ui_slack.protocol import SlackComponentLimits, SlackMessageLimits
 
 
 def occurrence(node: sl.Renderable[RenderTarget, object]) -> SemanticOccurrence[RenderTarget, object]:

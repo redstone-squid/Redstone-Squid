@@ -16,26 +16,14 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition import AtomicContract, OccurrenceId
 from squid_ui.planning.composition_planner import AutomaticComposition, CompositionRejectedError, FixedComposition
 from squid_ui.planning.composition_request import CompositionOptions
-from squid_ui.planning.dialect import TargetDialect
-from squid_ui.planning.discord import (
-    CLASSIC_PROTOCOL_CAPABILITIES,
-    V2_PROTOCOL_CAPABILITIES,
-    classic_target,
-    components_v2_target,
-    dynamic_classic_target,
-    dynamic_components_v2_target,
-)
-from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.layout_measurement.diagnostics import (
+from squid_ui.planning.diagnostics import (
     LayoutOverflowError,
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
 )
-from squid_ui.planning.layout_measurement.solver import (
-    MeasuredLayout,
-    measure,
-)
+from squid_ui.planning.dialect import TargetDialect
+from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
 from squid_ui.planning.planner import plan
 from squid_ui.planning.resources import ResourceCost
@@ -71,9 +59,7 @@ from squid_ui.target_types import (
 )
 
 __all__ = [
-    "CLASSIC_PROTOCOL_CAPABILITIES",
     "DEFAULT_SEARCH_BUDGET",
-    "V2_PROTOCOL_CAPABILITIES",
     "AdapterProfile",
     "AllocationGoal",
     "AtomicContract",
@@ -94,7 +80,6 @@ __all__ = [
     "JointInfeasibleError",
     "JointUnsupportedError",
     "LayoutOverflowError",
-    "MeasuredLayout",
     "MessageSpread",
     "NativeComposition",
     "OccurrenceId",
@@ -131,12 +116,7 @@ __all__ = [
     "Target",
     "TargetDialect",
     "choose_strategy",
-    "classic_target",
-    "components_v2_target",
-    "dynamic_classic_target",
-    "dynamic_components_v2_target",
     "iter_assignments",
-    "measure",
     "plan",
     "plan_spread",
     "resolve_page_position",

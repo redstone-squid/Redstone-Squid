@@ -43,3 +43,22 @@ __all__ = [
     "slack_sdk_adapter_profile",
     "target",
 ]
+
+from squid_ui_slack.protocol import SLACK_COMPONENT_LIMITS as SLACK_COMPONENT_LIMITS
+from squid_ui_slack.protocol import SLACK_HOME_DIALECT as SLACK_HOME_DIALECT
+from squid_ui_slack.protocol import SLACK_HOME_LIMITS as SLACK_HOME_LIMITS
+from squid_ui_slack.protocol import SLACK_MESSAGE_DIALECT as SLACK_MESSAGE_DIALECT
+from squid_ui_slack.protocol import SLACK_MESSAGE_LIMITS as SLACK_MESSAGE_LIMITS
+from squid_ui_slack.protocol import SLACK_MODAL_DIALECT as SLACK_MODAL_DIALECT
+from squid_ui_slack.protocol import SLACK_MODAL_LIMITS as SLACK_MODAL_LIMITS
+from squid_ui_slack.protocol import SlackComponentLimits as SlackComponentLimits
+from squid_ui_slack.protocol import SlackHomeDialect as SlackHomeDialect
+from squid_ui_slack.protocol import SlackHomeLimits as SlackHomeLimits
+from squid_ui_slack.protocol import SlackLimits as SlackLimits
+from squid_ui_slack.protocol import SlackMessageDialect as SlackMessageDialect
+from squid_ui_slack.protocol import SlackMessageLimits as SlackMessageLimits
+from squid_ui_slack.protocol import SlackModalDialect as SlackModalDialect
+from squid_ui_slack.protocol import SlackModalLimits as SlackModalLimits
+from squid_ui_slack.protocol import home_target as home_target
+from squid_ui_slack.protocol import message_target as message_target
+from squid_ui_slack.protocol import modal_target as modal_target

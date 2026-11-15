@@ -4,31 +4,33 @@ from dataclasses import replace
 from typing import Any, Literal
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.planning import OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.presentations import budget
 from squid_ui.primitives import nodes as native
 from squid_ui.semantic import Importance
 from squid_ui.target_types import DiscordAdapter, RenderTarget, SlackAdapter
+from squid_ui_discord.limits import ClassicLimits, V2Limits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "truncate.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "truncate.slack", "1")
 SLACK_TARGETS: list[Target[Any, Any, Any, Any]] = [
-    sl.slack.message_target(adapter=SLACK),
-    sl.slack.home_target(adapter=SLACK),
+    squid_ui_slack.message_target(adapter=SLACK),
+    squid_ui_slack.home_target(adapter=SLACK),
 ]
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD, limits=V2Limits(total_text=10)),
     classic_target(DISCORD, limits=ClassicLimits(content=10)),
-    sl.html.target(),
+    squid_ui_html.target(),
     *(
         replace(target, limits=replace(target.limits, components=replace(target.limits.components, section_text=10)))
         for target in SLACK_TARGETS
@@ -47,7 +49,7 @@ def test_truncation_retains_the_requested_end_and_reports_loss(
     assert result.allocation is not None
     expected = "abcdefghi…" if keep == "head" else "…lmnopqrst"
     rendered = (
-        sl.html.Renderer().draw(result.scene, plan=result)
+        squid_ui_html.Renderer().draw(result.scene, plan=result)
         if isinstance(result.scene.body, scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
@@ -65,7 +67,7 @@ def test_styled_shortening_keeps_balanced_markup(target: Target[Any, Any, Any, A
     wire = scene.Codec.dumps(result.scene)
     assert "abc" in wire and "abcdefghijklmnopqrst" not in wire
     if isinstance(result.scene.body, scene.HtmlBody):
-        assert "<strong>abcdefghi</strong>…" in sl.html.Renderer().draw(result.scene, plan=result)
+        assert "<strong>abcdefghi</strong>…" in squid_ui_html.Renderer().draw(result.scene, plan=result)
     else:
         assert "**abcde**…" in wire if target.id.startswith("discord") else "*abcdefg*…" in wire
 
@@ -158,7 +160,7 @@ def test_shortening_never_changes_a_mention_identifier(keep: Literal["head", "ta
     [
         components_v2_target(DISCORD, limits=V2Limits(total_text=22)),
         classic_target(DISCORD, limits=ClassicLimits(content=22)),
-        sl.html.target(),
+        squid_ui_html.target(),
         *(
             replace(
                 target, limits=replace(target.limits, components=replace(target.limits.components, section_text=22))

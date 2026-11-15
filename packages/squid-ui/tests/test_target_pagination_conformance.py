@@ -4,26 +4,28 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.limits import ClassicLimits
 from squid_ui.planning.navigation import default_nav
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
+from squid_ui_discord.limits import ClassicLimits
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "conformance.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "conformance.slack", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    sl.html.target(),
-    sl.slack.message_target(adapter=SLACK),
-    sl.slack.home_target(adapter=SLACK),
+    squid_ui_html.target(),
+    squid_ui_slack.message_target(adapter=SLACK),
+    squid_ui_slack.home_target(adapter=SLACK),
 ]
 
 
@@ -142,7 +144,7 @@ def test_uncontrolled_toggle_changes_invalidate_retained_output(target: Target[A
 
 def test_modal_regions_explain_the_form_surface_constraint() -> None:
     with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
-        plan(sl.region(sl.paragraph("body"), key="r", title="R"), target=sl.slack.modal_target(adapter=SLACK))
+        plan(sl.region(sl.paragraph("body"), key="r", title="R"), target=squid_ui_slack.modal_target(adapter=SLACK))
 
 
 def test_legacy_fallback_in_a_region_retains_the_primary_without_loss() -> None:
@@ -177,7 +179,7 @@ def test_images_and_choices_remain_bound_to_their_visible_page(target: Target[An
 
 
 def test_slack_list_continuations_do_not_insert_extra_separators() -> None:
-    target = sl.slack.message_target(adapter=SLACK)
+    target = squid_ui_slack.message_target(adapter=SLACK)
     target = replace(
         target, limits=replace(target.limits, components=replace(target.limits.components, section_text=120))
     )

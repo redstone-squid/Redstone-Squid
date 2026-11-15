@@ -10,8 +10,7 @@ from squid_ui.forms import FormBinding, FormSpec, TextField
 from squid_ui.handlers import FrontendHandler, HandlerSet, bind_handlers, handlers
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, PressEvent
 from squid_ui.planning.generated import GeneratedHandler
-from squid_ui.planning.navigation import _SeekSelection
-from squid_ui.planning.semantic_adaptation.handlers import (
+from squid_ui.planning.interaction_handlers import (
     ChoiceCommit,
     ChooseChoice,
     CloseItem,
@@ -30,6 +29,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntityFallback,
     ToggleDetails,
 )
+from squid_ui.planning.navigation import _SeekSelection
 from squid_ui.presentation import PresentationState
 from squid_ui.semantic import Controlled, Details, Summary, Toggle
 

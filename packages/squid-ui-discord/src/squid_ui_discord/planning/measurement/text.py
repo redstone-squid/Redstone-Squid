@@ -1,0 +1,234 @@
+"""Text units, exact chrome costing, and lossless splitting."""
+
+from dataclasses import dataclass, replace
+
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.adapter import ResourceCost
+from squid_ui.planning.breaking import BreakItem, balanced_breaks
+from squid_ui.planning.resolved import text as resolved_text
+from squid_ui.primitives.constraints import Alt, Never, Overflow
+from squid_ui.primitives.nodes import Code, Footer, Heading, Lines, Node, Text
+from squid_ui_discord.limits import ELLIPSIS, TEXT_AXES, Axis
+from squid_ui_discord.planning.measurement.model import MeasuredText
+
+type TextBearing = Text | Heading | Footer | Code | Lines
+
+
+@dataclass(slots=True)
+class TextUnit:
+    """A text node's demand, character allowance, and destination slot.
+
+    `need` includes formatting such as a heading prefix or code fences. Allocation
+    sets `grant`, applies the node's overflow policy within that allowance, and
+    writes the result into `slot`. `axis` keeps independent text pools separate.
+    """
+
+    node: TextBearing
+    slot: MeasuredText
+    index: int
+    axis: Axis
+    """Which message-wide text pool this unit draws from."""
+    prefix: str
+    suffix: str
+    content: str
+    ladders: tuple[tuple[str, ...], ...] | None
+    ranks: tuple[int, ...]
+    """One drop priority per ladder; empty for nodes that are not entry lists."""
+    join: str
+    priority: int
+    overflow: Overflow
+    grant: int = 0
+    fragments: list[str] | None = None
+    count_pages: list[str] | None = None
+    """Count-based pages, when the node paginates every N entries rather than on overflow."""
+
+    @property
+    def chrome_len(self) -> int:
+        return len(self.prefix) + len(self.suffix)
+
+    @property
+    def need(self) -> int:
+        if self.count_pages is not None:
+            return self.chrome_len + max(len(page) for page in self.count_pages)
+        return self.chrome_len + len(self.content)
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetRegion:
+    units: tuple[TextUnit, ...]
+    minimum: int
+    preferred: int
+    stretch: int
+    best_effort: bool
+
+    @property
+    def axis(self) -> str | None:
+        """The single text pool this region reserves from, or None if it holds no text."""
+        axes = {unit.axis for unit in self.units}
+        if len(axes) > 1:
+            named = ", ".join(sorted(axes))
+            message = f"a Budget region spans the text axes {named}; give each axis its own Budget"
+            raise LayoutInvariantError(message)
+        return next(iter(axes), None)
+
+
+def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Axis.DISPLAY_TEXT) -> TextUnit | None:
+    """Create the allocation unit for one text-bearing primitive."""
+    prefix, suffix, content, ladders, join = "", "", "", None, "\n"
+    ranks: tuple[int, ...] = ()
+    match node:
+        case Text(content=content):
+            content = resolved_text(content)
+        case Heading(content=content, level=level):
+            prefix = "#" * level + " "
+            content = resolved_text(content)
+        case Footer(content=content):
+            prefix = "-# "
+            content = resolved_text(content)
+        case Code(content=content, lang=lang):
+            prefix = f"```{lang}\n"
+            suffix = "\n```"
+            content = resolved_text(content).replace("```", "``\N{ZERO WIDTH SPACE}`")
+        case Lines(lines=raw_lines, join=join):
+            entries = [
+                (entry.steps, entry.priority) if isinstance(entry, Alt) else ((resolved_text(entry),), 0)
+                for entry in raw_lines
+            ]
+            kept = [(ladder, rank) for ladder, rank in entries if ladder[0]]
+            ladders = tuple(ladder for ladder, _ in kept)
+            ranks = tuple(rank for _, rank in kept)
+            content = join.join(ladder[0] for ladder in ladders)
+    if not content:
+        slot.dropped = True
+        return None
+    return TextUnit(
+        node=node,
+        slot=slot,
+        index=index,
+        axis=axis,
+        prefix=prefix,
+        suffix=suffix,
+        content=content,
+        ladders=ladders,
+        ranks=ranks,
+        join=join,
+        priority=node.priority,
+        overflow=node.overflow,
+    )
+
+
+def split_pages(
+    text: str,
+    limit: int,
+    boundary: str = "\n",
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> list[str]:
+    """Split text into bounded pages, balancing fill after pagination preferences.
+
+    Boundary separators are retained within pages and omitted at page breaks.
+    Segments larger than the limit are cut at character offsets. `min_fill` and
+    `widows` are soft preferences passed to `balanced_breaks`.
+    """
+    if limit < 1:
+        message = "page limit must be positive"
+        raise ValueError(message)
+    chunks: list[tuple[str, str]] = []
+    for segment_index, segment in enumerate(text.split(boundary)):
+        separator = boundary if segment_index else ""
+        pieces = [segment[start : start + limit] for start in range(0, len(segment), limit)] or [segment]
+        for piece_index, piece in enumerate(pieces):
+            chunks.append((separator if piece_index == 0 else "", piece))
+    if not chunks:
+        return [""]
+
+    def page_text(start: int, end: int) -> str:
+        return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
+
+    cuts = balanced_breaks(
+        [BreakItem(len(content), leading_chars=len(separator)) for separator, content in chunks],
+        max_chars=limit,
+        min_fill=min_fill,
+        widows=widows,
+        ideal_total=len(text),
+    )
+    result: list[str] = []
+    start = 0
+    for end in cuts:
+        result.append(page_text(start, end))
+        start = end
+    return result or [""]
+
+
+def trim_keep(text: str, limit: int, keep: str) -> str:
+    """Trim text to a limit while preserving the requested end."""
+    if len(text) <= limit:
+        return text
+    if limit <= 1:
+        return ELLIPSIS if limit == 1 else ""
+    if keep == "tail":
+        return ELLIPSIS + text[-(limit - 1) :].lstrip()
+    return text[: limit - 1].rstrip() + ELLIPSIS
+
+
+def text_total(cost: ResourceCost) -> int:
+    """Every text axis a cost spends on, added up."""
+    return sum(value for axis, value in cost.values.items() if axis in TEXT_AXES)
+
+
+def split_text_node(
+    node: Node,
+    limit: int,
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> tuple[Node, ...] | None:
+    """Split a text primitive into independently renderable fragments.
+
+    Return None for unsupported nodes or when chrome leaves no content space.
+    Boundary separators at page breaks are omitted; each fragment repeats the
+    node's formatting chrome and uses Never overflow.
+    """
+    if not isinstance(node, Text | Heading | Footer | Code | Lines):
+        return None
+    slot = MeasuredText()
+    unit = make_unit(node, slot, 0)
+    if unit is None:
+        return (node,)
+    usable = limit - unit.chrome_len
+    if usable < 1:
+        return None
+    boundary = node.join if isinstance(node, Lines) else "\n"
+    fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
+    if len(fragments) <= 1:
+        return (node,)
+    if isinstance(node, Lines):
+        return tuple(Text(fragment, overflow=Never(), priority=node.priority) for fragment in fragments)
+    return tuple(replace(node, content=fragment, overflow=Never()) for fragment in fragments)
+
+
+def entry_page_anchors(unit: TextUnit) -> dict[str, int]:
+    """Locate keyed entry starts in lossless fragments after text allocation.
+
+    Page breaks omit separators. Find fragments in order in the original text so
+    duplicate entry text and oversized entries retain their actual start positions.
+    """
+    if not isinstance(unit.node, Lines) or not unit.node.keys or unit.fragments is None:
+        return {}
+    starts: list[int] = []
+    offset = 0
+    for fragment in unit.fragments:
+        start = unit.content.index(fragment, offset)
+        starts.append(start)
+        offset = start + len(fragment)
+    anchors: dict[str, int] = {}
+    offset = 0
+    for key, entry in zip(unit.node.keys, unit.node.lines, strict=True):
+        content = entry.steps[0] if isinstance(entry, Alt) else resolved_text(entry)
+        if not content:
+            continue
+        if key:
+            anchors.setdefault(key, max(index for index, start in enumerate(starts) if start <= offset))
+        offset += len(content) + len(unit.join)
+    return anchors

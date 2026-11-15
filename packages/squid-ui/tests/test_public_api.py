@@ -16,7 +16,6 @@ ROOT_NAMESPACES = (
     "errors",
     "forms",
     "guards",
-    "html",
     "interactions",
     "operations",
     "palette",
@@ -28,7 +27,6 @@ ROOT_NAMESPACES = (
     "runtime",
     "scene",
     "semantic",
-    "slack",
     "sources",
     "temporal",
     "text",
@@ -59,7 +57,6 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
     testing.assert_imports_without(
         [
             "squid_ui",
-            "squid_ui.html",
             "squid_ui.planning",
             "squid_ui.profiling",
             "squid_ui.runtime",
@@ -70,5 +67,7 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         "anyio",
         "squid_storage",
         "squid_ui_discord",
+        "squid_ui_slack",
+        "squid_ui_html",
         "squid_ui_widgets",
     )

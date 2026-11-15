@@ -21,11 +21,11 @@ from squid_ui import scene
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.planning import AdapterProfile, PlanResult, Target, dynamic_components_v2_target, plan
+from squid_ui.planning import PlanResult, Target, plan
 from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.navigation import PlannedNav, default_nav
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
-from squid_ui.target_types import DiscordAdapter, RenderTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
     _MISSING_INITIAL_STATE,
     ComponentDriver,
@@ -243,15 +243,15 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
 ) -> RoutedRender[StateT, RenderTargetT, ContextT]:
     """Record routes, planning when a target is supplied or the tree has routed pagination.
 
-    Routed pagination defaults to a protocol-only Discord V2 target. `planned` exposes
-    its scene; `routes` includes only IDs reachable in that final scene, not discarded
-    candidates. Other calls retain the lightweight semantic-render behavior.
+    Routed pagination requires an explicit target. `planned` exposes its scene;
+    `routes` includes only IDs reachable in that final scene, not discarded candidates. Other calls retain the lightweight semantic-render behavior.
     """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
     driver: RouteDriver[StateT, RenderTargetT, ContextT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
     if target is None and has_routed_page(result):
-        target = dynamic_components_v2_target(AdapterProfile(DiscordAdapter, "widget-tests", "1"))
+        message = "routed pagination requires an explicit target"
+        raise ValueError(message)
     # This helper inspects scenes; it never supplies the callbacks' application context.
     planned = None if target is None else plan(cast(DocumentLike[Any], result), target=target, chrome=chrome, nav=nav)
     rendered = RoutedRender(as_document(result).children, tuple(recorder.routes), planned)

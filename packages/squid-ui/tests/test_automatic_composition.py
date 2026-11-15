@@ -3,8 +3,10 @@ from dataclasses import replace
 from typing import Any, Literal
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.handlers import FrontendHandler, handlers
@@ -16,15 +18,15 @@ from squid_ui.planning import (
 )
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import OccurrenceId
-from squid_ui.planning.composition_v2 import V2CompositionRules
-from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter, SlackAdapter
+from squid_ui_discord.limits import V2Limits
+from squid_ui_discord.planning.composition_v2 import V2CompositionRules
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "joint.discord", ">=1"))
-SLACK = sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "joint.slack", ">=1"))
+SLACK = squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "joint.slack", ">=1"))
 
 
 @pytest.mark.parametrize("target", ["v2", "slack", "html"])
@@ -46,7 +48,7 @@ def test_public_automatic_planning_and_page_selection(target: Literal["v2", "sla
         case "slack":
             result = sl.planning.plan(node, target=SLACK, composition=options)
         case "html":
-            result = sl.planning.plan(node, target=sl.html.target(), composition=options)
+            result = sl.planning.plan(node, target=squid_ui_html.target(), composition=options)
     assert result.report.search is not None and result.report.search.optimal
     assert result.allocation is not None
     assert result.allocation.regions[identity].cuts == (1, 3)
@@ -164,7 +166,7 @@ def test_custom_automatic_rules_share_the_public_boundary() -> None:
 
 
 def test_shared_modal_requires_one_top_level_form() -> None:
-    target = sl.slack.modal_target(adapter=AdapterProfile(SlackAdapter, "joint.modal", ">=1"))
+    target = squid_ui_slack.modal_target(adapter=AdapterProfile(SlackAdapter, "joint.modal", ">=1"))
     with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
         sl.planning.plan(sl.paragraph("Body"), target=target, composition=CompositionOptions(automatic=True))
 
@@ -173,12 +175,12 @@ def test_shared_html_assets_reach_the_delivery_renderer() -> None:
     asset = sl.file(b"report contents", filename="report.txt")
     result = sl.planning.plan(
         sl.download(asset, label="Report", key="report"),
-        target=sl.html.target(),
+        target=squid_ui_html.target(),
         composition=CompositionOptions(automatic=True),
     )
 
     assert result.resources[f"asset:{asset.key}"] is asset
-    assert "data:text/plain;base64," in sl.html.Renderer().draw(result.scene, plan=result)
+    assert "data:text/plain;base64," in squid_ui_html.Renderer().draw(result.scene, plan=result)
 
 
 @pytest.mark.parametrize("target", [classic_target(V2.adapter), SLACK])

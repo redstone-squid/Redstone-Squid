@@ -4,27 +4,29 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
+import squid_ui_html
 
 import squid_ui as sl
+import squid_ui_slack
 from squid_ui import scene
 from squid_ui.interactions import ActionResponder, Actor, PressEvent, SelectionEvent
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.semantic import ItemDisplay
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
+from squid_ui_discord.planning.discord import classic_target, components_v2_target
 
 DISCORD = AdapterProfile(DiscordAdapter, "items.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "items.slack", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
     components_v2_target(DISCORD),
     classic_target(DISCORD),
-    sl.html.target(),
-    sl.slack.message_target(adapter=SLACK),
-    sl.slack.home_target(adapter=SLACK),
+    squid_ui_html.target(),
+    squid_ui_slack.message_target(adapter=SLACK),
+    squid_ui_slack.home_target(adapter=SLACK),
 ]
 
 

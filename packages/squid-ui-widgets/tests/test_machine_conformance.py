@@ -20,6 +20,7 @@ from squid_ui.semantic import (
     RoutedActionControl,
     RoutedChoices,
 )
+from squid_ui_discord.target import DISCORD_V2_DPY27
 from squid_ui_widgets import testing as wt
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices)
@@ -100,7 +101,7 @@ def test_the_initial_state_is_stable_across_reads(build: MachineFactory) -> None
 @machine
 def test_each_shell_renders_nonempty_nodes_with_unique_control_keys(build: MachineFactory) -> None:
     """Duplicate semantic keys make control identity ambiguous."""
-    for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
+    for nodes in (wt.mounted(build()).nodes, wt.routed(build(), target=DISCORD_V2_DPY27).nodes):
         assert nodes
         keys = _control_keys(nodes)
 
@@ -118,7 +119,7 @@ def test_routed_actions_have_typed_deterministic_transitions(build: MachineFacto
     check the resulting values and supply input for forms and pickers.
     """
     subject = build()
-    render = wt.routed(subject)
+    render = wt.routed(subject, target=DISCORD_V2_DPY27)
 
     assert len(render.route_ids()) == len(render.routes)
 

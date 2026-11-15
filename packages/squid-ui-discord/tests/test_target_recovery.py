@@ -14,10 +14,10 @@ from squid_ui.planning import Target
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_ui.planning.limits import ClassicLimits
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui_discord.adapter import discord_py_adapter_profile
 from squid_ui_discord.durability import DEFAULT_TARGETS, ComponentRegistry, MessageRootStateCodec
+from squid_ui_discord.limits import ClassicLimits
 from squid_ui_discord.target import classic
 from squid_ui_discord.targets import TargetRegistry
 from squid_ui_discord.testing import commit_classic_render, commit_render

@@ -5,7 +5,15 @@ from typing import overload
 from squid_ui import scene
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.slack.target import (
+from squid_ui.target_types import (
+    SlackHomeTarget,
+    SlackMessageTarget,
+    SlackModalTarget,
+    SlackSdk343Adapter,
+    SlackSdkAdapter,
+)
+from squid_ui_slack.adapter import SLACK_SDK_343_ADAPTER
+from squid_ui_slack.protocol import (
     SLACK_HOME_LIMITS,
     SLACK_MESSAGE_LIMITS,
     SLACK_MODAL_LIMITS,
@@ -16,14 +24,6 @@ from squid_ui.slack.target import (
     message_target,
     modal_target,
 )
-from squid_ui.target_types import (
-    SlackHomeTarget,
-    SlackMessageTarget,
-    SlackModalTarget,
-    SlackSdk343Adapter,
-    SlackSdkAdapter,
-)
-from squid_ui_slack.adapter import SLACK_SDK_343_ADAPTER
 
 # The verified default, widened to the family every implementation below accepts. `AdapterProfile`
 # is frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright

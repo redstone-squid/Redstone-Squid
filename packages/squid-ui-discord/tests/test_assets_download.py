@@ -12,11 +12,11 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui import scene
 from squid_ui.document import DocumentLike
-from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime.component import Component
 from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
+from squid_ui_discord.preview import DiscordPreviewRenderer
 from squid_ui_discord.renderer import V2Renderer
 
 

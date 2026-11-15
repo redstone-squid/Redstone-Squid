@@ -8,9 +8,14 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.ownership import Controlled
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.primitives import Alt, Lines, Paginate
+from squid_ui.target_types import DiscordAdapter
 from squid_ui.text import source_text
+from squid_ui_discord.planning import dynamic_components_v2_target
 from squid_ui_widgets import testing as wt
+
+ROUTED_TARGET = dynamic_components_v2_target(AdapterProfile(DiscordAdapter, "widget-tests", "1"))
 
 
 class _LimitKwargs(TypedDict, total=False):
@@ -59,8 +64,8 @@ async def test_a_mounted_page_turn_stores_the_page_the_pager_asked_for() -> None
 
 def test_a_routed_ranking_plans_its_page_and_numbers_rows_globally() -> None:
     """Edsger is third overall, so he is `3.` on page two -- not `1.`."""
-    first = wt.routed(_leaderboard())
-    second = wt.routed(_leaderboard(), sp.RankedListState(1))
+    first = wt.routed(_leaderboard(), target=ROUTED_TARGET)
+    second = wt.routed(_leaderboard(), sp.RankedListState(1), target=ROUTED_TARGET)
 
     assert "1\\. **Ada** — 30\n2\\. **Grace** — 20" in first.texts()
     assert any("Page 1 of 2" in text for text in first.texts())

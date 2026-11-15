@@ -10,12 +10,12 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui import scene
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
-from squid_ui.planning import measure
 from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.planning.limits import Axis
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
 from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.limits import Axis
+from squid_ui_discord.planning import measure
 from squid_ui_discord.testing import commit_render, interaction_harness, without_capabilities
 
 

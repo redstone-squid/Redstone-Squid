@@ -18,6 +18,7 @@ members = [
     "squid-storage",
     "squid-ui",
     "squid-ui-discord",
+    "squid-ui-html",
     "squid-ui-slack",
     "squid-ui-widgets",
 ]
@@ -2850,6 +2851,7 @@ dependencies = [
     { name = "squid-i18n" },
     { name = "squid-reactivity" },
     { name = "squid-ui", extra = ["services"] },
+    { name = "squid-ui-html" },
     { name = "typing-extensions" },
 ]
 
@@ -2876,6 +2878,7 @@ requires-dist = [
     { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
     { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
     { name = "squid-ui", extras = ["services"], editable = "packages/squid-ui" },
+    { name = "squid-ui-html", editable = "packages/squid-ui-html" },
     { name = "typing-extensions", specifier = ">=4.13" },
 ]
 provides-extras = ["durable", "postgres"]
@@ -2884,12 +2887,30 @@ provides-extras = ["durable", "postgres"]
 test = [{ name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" }]
 
 [[package]]
+name = "squid-ui-html"
+version = "0.1.0a1"
+source = { editable = "packages/squid-ui-html" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "squid-i18n" },
+    { name = "squid-ui" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "markdown-it-py", specifier = ">=4.0,<5" },
+    { name = "squid-i18n", editable = "packages/squid-i18n" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
+]
+
+[[package]]
 name = "squid-ui-slack"
 version = "0.1.0a1"
 source = { editable = "packages/squid-ui-slack" }
 dependencies = [
     { name = "packaging" },
     { name = "slack-sdk" },
+    { name = "squid-i18n" },
     { name = "squid-ui" },
 ]
 
@@ -2897,6 +2918,7 @@ dependencies = [
 requires-dist = [
     { name = "packaging", specifier = ">=24,<27" },
     { name = "slack-sdk", specifier = ">=3.43,<4" },
+    { name = "squid-i18n", editable = "packages/squid-i18n" },
     { name = "squid-ui", editable = "packages/squid-ui" },
 ]
 

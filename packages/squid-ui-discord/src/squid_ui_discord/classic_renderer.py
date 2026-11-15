@@ -15,13 +15,13 @@ import discord
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui.planning.result import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.attachments import attachment_assets
 from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.inspection import audit_classic_payload
+from squid_ui_discord.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import Control as Control

@@ -5,7 +5,6 @@ import pytest
 
 from squid_ui import scene
 from squid_ui.emoji import Emoji
-from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.presentations import Replacement, corresponds, losses, ref
@@ -23,6 +22,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.text import Markup
 from squid_ui_discord import DISCORD_V2_DPY27, classic, render_static
+from squid_ui_discord.preview import DiscordPreviewRenderer
 from squid_ui_discord.testing import without_capabilities
 
 
