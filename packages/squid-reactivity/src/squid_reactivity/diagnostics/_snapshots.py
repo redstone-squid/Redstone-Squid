@@ -79,7 +79,7 @@ class TransactionResultSnapshot:
             changes=changes,
             tags=tags,
             actor=context.actor,
-            metadata=tuple(sorted(context.metadata.items())),
+            metadata=tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
             relation=context.relation,
             conflict=conflict,
             exception=exception,
@@ -173,24 +173,30 @@ class RedactionPolicy:
     include_exception_messages: bool = False
 
     def redact[SnapshotT: CausalEventSnapshot](self, snapshot: SnapshotT) -> SnapshotT:
-        """Return the same event variant with fields restricted by this policy."""
+        """Restrict sensitive fields, reusing the immutable event when nothing changes."""
         if isinstance(snapshot, TransactionValidationSnapshot):
             return snapshot
+        exception = self.redact_exception(snapshot.exception)
         if isinstance(snapshot, TransactionResultSnapshot):
+            actor = snapshot.actor if self.include_actor else None
+            metadata = snapshot.metadata if self.include_metadata else ()
+            if actor is snapshot.actor and metadata is snapshot.metadata and exception is snapshot.exception:
+                return snapshot
             return replace(
                 snapshot,
-                actor=snapshot.actor if self.include_actor else None,
-                metadata=snapshot.metadata if self.include_metadata else (),
-                exception=self.redact_exception(snapshot.exception),
+                actor=actor,
+                metadata=metadata,
+                exception=exception,
             )
-        exception = self.redact_exception(snapshot.exception)
+        if exception is snapshot.exception:
+            return snapshot
         if isinstance(snapshot, ContinuationFailureSnapshot):
             assert exception is not None
             return replace(snapshot, exception=exception)
         return replace(snapshot, exception=exception)
 
     def redact_exception(self, report: ExceptionReport | None) -> ExceptionReport | None:
-        if report is None or self.include_exception_messages:
+        if report is None or self.include_exception_messages or report.message == "[redacted]":
             return report
         return ExceptionReport(report.type_name, "[redacted]")
 

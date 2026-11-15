@@ -2,7 +2,10 @@
 
 import gc
 import weakref
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
+from typing import override
 
 import anyio
 import pytest
@@ -11,12 +14,64 @@ from squid_reactivity import EventLedger, Reactive, TransactionCommit, observe_e
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     RedactionPolicy,
+    TransactionResultSnapshot,
     TransactionValidationSnapshot,
     emit_causal_event,
 )
 from squid_reactivity.operations import ProgressReporter, operation
 from squid_reactivity.resources import resource
-from squid_reactivity.transactions import ExceptionReport
+from squid_reactivity.transactions import ActorRef, ExceptionReport, TransactionContext
+
+
+def test_snapshot_only_reads_metadata_when_included() -> None:
+    class Metadata(Mapping[str, str]):
+        iterations = 0
+
+        @override
+        def __iter__(self) -> Iterator[str]:
+            self.iterations += 1
+            return iter(("z", "a"))
+
+        @override
+        def __len__(self) -> int:
+            return 2
+
+        @override
+        def __getitem__(self, key: str) -> str:
+            return f"value-{key}"
+
+    metadata = Metadata()
+    context = replace(TransactionContext.create(actor=ActorRef("user", "1")), metadata=metadata)
+    with transaction(transaction_context=context) as tx:
+        pass
+    assert isinstance(tx.result, TransactionCommit)
+    default = TransactionResultSnapshot.from_result(tx.result)
+    assert default.metadata == ()
+    assert metadata.iterations == 0
+    assert RedactionPolicy().redact(default) is default
+
+    included = TransactionResultSnapshot.from_result(tx.result, RedactionPolicy(include_metadata=True))
+    assert included.metadata == (("a", "value-a"), ("z", "value-z"))
+    assert metadata.iterations == 1
+    hidden = RedactionPolicy(include_actor=False).redact(included)
+    assert hidden.actor is None
+    assert hidden.metadata == ()
+    assert included.actor == context.actor
+    assert included.metadata == (("a", "value-a"), ("z", "value-z"))
+
+
+@pytest.mark.parametrize("exception", [None, ExceptionReport("Error", "detail")])
+def test_redaction_reuses_events_without_exposing_exception_messages(exception: ExceptionReport | None) -> None:
+    event = OperationEventSnapshot("1", None, None, "operation", "finished", datetime.now(UTC), exception)
+    assert RedactionPolicy(include_exception_messages=True).redact(event) is event
+    policy = RedactionPolicy()
+    redacted = policy.redact(event)
+    if exception is None:
+        assert redacted is event
+    else:
+        assert redacted.exception == ExceptionReport("Error", "[redacted]")
+        assert event.exception == ExceptionReport("Error", "detail")
+    assert policy.redact(redacted) is redacted
 
 
 async def test_scopes_isolate_siblings_and_expire_in_inherited_tasks() -> None:

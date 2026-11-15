@@ -120,13 +120,19 @@ def copy_event_observers(base: Context) -> Context:
 
 def has_event_observers() -> bool:
     """Whether this execution scope has any active diagnostic observers."""
-    return any(observer.sink is not None for observer in _EVENT_OBSERVERS.get())
+    for observer in _EVENT_OBSERVERS.get():  # noqa: SIM110 - Avoid allocating a generator for each event.
+        if observer.sink is not None:
+            return True
+    return False
 
 
 def has_validation_observers() -> bool:
     """Whether a sink has opted into transaction validation details."""
+    observers = _EVENT_OBSERVERS.get()
+    if not observers:
+        return False
     seen: set[int] = set()
-    for observer in reversed(_EVENT_OBSERVERS.get()):
+    for observer in reversed(observers):
         if observer.sink is None or id(observer.sink) in seen:
             continue
         seen.add(id(observer.sink))
@@ -163,10 +169,13 @@ def emit_continuation_failure(result: TransactionResult, stage: str, callback: s
 
 
 def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
+    observers = _EVENT_OBSERVERS.get()
+    if not observers:
+        return
     seen: set[int] = set()
     snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
     failures: list[tuple[str, Exception]] = []
-    for observer in reversed(_EVENT_OBSERVERS.get()):
+    for observer in reversed(observers):
         sink = observer.sink
         if sink is None or id(sink) in seen:
             continue
