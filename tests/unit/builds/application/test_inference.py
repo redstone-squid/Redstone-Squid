@@ -1110,3 +1110,61 @@ def test_bare_numeric_credit_names_do_not_establish_discord_ids() -> None:
     _, contributor = BuildInferenceService._credits(value, [message])
 
     assert contributor.subject is None
+
+
+@pytest.mark.parametrize(
+    ("text", "marker"),
+    [
+        ("[OUTDATED] 3x3 door", "[OUTDATED]"),
+        ("**[OUTDATED]** 3x3 door", "[OUTDATED]"),
+        ("__[outdated]__ 3x3 door", "[outdated]"),
+    ],
+)
+async def test_leading_outdated_status_survives_omitted_model_notes(text: str, marker: str) -> None:
+    message = ContextMessage(10, "Builder", 20, text, "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+
+    assert build.description == marker
+
+
+@pytest.mark.parametrize("in_title", [False, True])
+async def test_outdated_status_does_not_duplicate_the_models_title_or_quote(in_title: bool) -> None:
+    message = ContextMessage(10, "Builder", 20, "[OUTDATED] 3x3 door", "", "primary")
+    value = inferred(
+        display_name="[OUTDATED] 3x3 door" if in_title else None,
+        author_notes=[] if in_title else [{"source_message_id": 10, "text": "[OUTDATED]"}],
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+
+    assert build.description == (None if in_title else "[OUTDATED]")
+
+
+async def test_outdated_status_is_not_assigned_to_every_variant_in_a_shared_post() -> None:
+    message = ContextMessage(10, "Builder", 20, "[OUTDATED] 3x3 door; also a newer 4x4", "", "primary")
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(), inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+
+    builds = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+
+    assert [build.description for build in builds] == [None, None]
+
+
+async def test_outdated_reference_and_context_do_not_mark_the_current_build_outdated() -> None:
+    message = ContextMessage(10, "Builder", 20, "Improved from the [OUTDATED] version", "", "primary")
+    context = ContextMessage(9, "Builder", 20, "[OUTDATED] 3x3 door", "", "preceding")
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+
+    [build] = await service.infer(BuildInferenceInput((message,), (context,), (), 30, 40), model="test")
+
+    assert build.description is None

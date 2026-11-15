@@ -41,6 +41,7 @@ _TIMING_CONTEXT = re.compile(
 )
 _SOURCE_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 _SOURCE_EMPHASIS = re.compile(r"(?<!\\)(?P<marker>\*\*|__)(?P<body>\S(?:.*?\S)?)(?<!\\)(?P=marker)")
+_SOURCE_OUTDATED = re.compile(r"^[\s*_]*(\[OUTDATED\])", re.IGNORECASE)
 
 
 def _without_source_emphasis(text: str) -> tuple[str, list[int]]:
@@ -639,12 +640,17 @@ class BuildInferenceService:
                     label.casefold() in note.casefold() and all(part in note for part in parts) for note in quoted_notes
                 ):
                     notes.append(f"{label}: {'; '.join(parts)}")
-        # Unlabelled timing pairs must survive even when the model cannot assign
-        # both halves. Shared source messages cannot safely attribute them to a variant.
+        # Keep source statuses and unlabelled timing pairs when the model omits them.
+        # Shared source messages cannot safely attribute these facts to a variant.
         for message in build.source_messages:
             if message.id not in exclusive_source_ids:
                 continue
-            for line in (message.content or "").splitlines():
+            content = message.content or ""
+            if match := _SOURCE_OUTDATED.match(content):
+                marker = match[1]
+                if not any(marker.casefold() in text.casefold() for text in (*notes, inferred.display_name or "")):
+                    notes.append(marker)
+            for line in content.splitlines():
                 if _TIMING_CONTEXT.search(line) is None:
                     continue
                 for pair in _TIMING_PAIR.finditer(line):
