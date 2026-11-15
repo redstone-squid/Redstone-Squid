@@ -534,3 +534,25 @@ def test_enclosing_floor_does_not_double_reserve_a_nested_hard_goal() -> None:
         policies={OccurrenceId(("root", "r")): RegionPolicy(goals=(AllocationGoal(Axis.DISPLAY_TEXT, 9, hard=True),))},
     )
     assert result.diagnostics.optimal
+
+
+def test_fitting_preferred_representation_does_not_evaluate_inferior_choices() -> None:
+    source = sl.paragraph("body", key="text")
+    node = sl.alternatives(
+        *(
+            sl.alternative(source, key=f"choice-{index}", preference=index, fidelity=sl.equivalent())
+            for index in range(20)
+        ),
+        content=source,
+        key="alternatives",
+    )
+    result = search_composition(
+        occurrence(node),
+        V2CompositionRules[RenderTarget, object](V2Limits()),
+        PlanningContext(WorkBudget(100000)),
+        finalize=finish,
+    )
+
+    assert result.diagnostics.optimal
+    assert dict(result.allocation.selection)[OccurrenceId(("root",))] == "choice-0"
+    assert result.diagnostics.certified_combinations == 1

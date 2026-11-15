@@ -1,9 +1,10 @@
 """Bounded joint search over representations and stable legal page partitions.
 
 The queue retains partial assignments and exact partition states. Fit estimates
-only order probes; rejection uses complete, contextual evaluations. The sole
-partition bound discards refinements of a feasible family with satisfied soft
-goals: they preserve its choices and effects and necessarily add page turns.
+only order probes; rejection uses complete, contextual evaluations. An assignment
+can be skipped when a certified family beats even its best possible quality:
+zero shortfalls and no page turns. Feasible families with satisfied soft goals
+also need no partition refinements, which necessarily add page turns.
 Opaque payloads and scalar resource envelopes never establish dominance.
 """
 
@@ -485,6 +486,26 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         self.seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
         if self.fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
             return
+        if self.retained:
+            # Partitions cannot improve representation preferences or remove their
+            # effects. Grant every other quality axis its best possible value; only
+            # strict dominance is safe because ties still use the final partition key.
+            self.context.work.consume(len(task.choices) + len(self.retained))
+            optimistic = AllocationQuality(
+                (),
+                _preferences(
+                    candidate,
+                    {offer.occurrence.identity: rank for offer, rank in task.choices},
+                    self.policy,
+                    self.context,
+                ),
+                frozenset(effect for offer, _ in task.choices for effect in offer.effects),
+                (),
+                0,
+                (),
+            )
+            if any(compare_quality(previous, optimistic) == -1 for previous, _ in self.retained):
+                return
         initial: list[tuple[int, ...]] = []
         for node in regions:
             contract = node.candidate.offer.region
