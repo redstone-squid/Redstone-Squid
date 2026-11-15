@@ -9,15 +9,6 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from squid_reactivity.transactions.api import Transaction as Transaction
-    from squid_reactivity.transactions.api import apply_conditional_patches as apply_conditional_patches
-    from squid_reactivity.transactions.api import batch as batch
-    from squid_reactivity.transactions.api import current_transaction as current_transaction
-    from squid_reactivity.transactions.api import enlist as enlist
-    from squid_reactivity.transactions.api import fresh_transaction as fresh_transaction
-    from squid_reactivity.transactions.api import readonly_transaction as readonly_transaction
-    from squid_reactivity.transactions.api import transaction as transaction
-    from squid_reactivity.transactions.api import transaction_participant as transaction_participant
     from squid_reactivity.transactions.context import ActorRef as ActorRef
     from squid_reactivity.transactions.context import Causality as Causality
     from squid_reactivity.transactions.context import CausalRef as CausalRef
@@ -44,21 +35,30 @@ if TYPE_CHECKING:
     from squid_reactivity.transactions.results import TransactionContribution as TransactionContribution
     from squid_reactivity.transactions.results import TransactionResult as TransactionResult
     from squid_reactivity.transactions.results import TransactionRollback as TransactionRollback
+    from squid_reactivity.transactions.scope import Transaction as Transaction
+    from squid_reactivity.transactions.scope import apply_conditional_patches as apply_conditional_patches
+    from squid_reactivity.transactions.scope import batch as batch
+    from squid_reactivity.transactions.scope import current_transaction as current_transaction
+    from squid_reactivity.transactions.scope import enlist as enlist
+    from squid_reactivity.transactions.scope import fresh_transaction as fresh_transaction
+    from squid_reactivity.transactions.scope import readonly_transaction as readonly_transaction
+    from squid_reactivity.transactions.scope import transaction as transaction
+    from squid_reactivity.transactions.scope import transaction_participant as transaction_participant
     from squid_reactivity.transactions.state import block_writes as block_writes
     from squid_reactivity.transactions.state import read_only as read_only
     from squid_reactivity.transactions.state import relaxed_read as relaxed_read
     from squid_reactivity.transactions.state import strong_read as strong_read
 
 _EXPORT_MODULES = {
-    "Transaction": "api",
-    "transaction": "api",
-    "readonly_transaction": "api",
-    "fresh_transaction": "api",
-    "batch": "api",
-    "current_transaction": "api",
-    "enlist": "api",
-    "transaction_participant": "api",
-    "apply_conditional_patches": "api",
+    "Transaction": "scope",
+    "transaction": "scope",
+    "readonly_transaction": "scope",
+    "fresh_transaction": "scope",
+    "batch": "scope",
+    "current_transaction": "scope",
+    "enlist": "scope",
+    "transaction_participant": "scope",
+    "apply_conditional_patches": "scope",
     "TransactionParticipant": "engine",
     "TransactionView": "engine",
     "report_undeclared_write": "engine",

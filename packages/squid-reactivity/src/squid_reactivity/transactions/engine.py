@@ -61,7 +61,7 @@ from squid_reactivity.transactions.state import (
 )
 
 if TYPE_CHECKING:
-    from squid_reactivity.transactions.api import Transaction
+    from squid_reactivity.transactions.scope import Transaction
 
 _log = logging.getLogger(__name__)
 
