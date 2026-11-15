@@ -3253,7 +3253,7 @@ class MessageRoot[
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
         if isinstance(error, UnsolvableLayoutError | LayoutSearchExhaustedError):
             error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
-            error.context["action"] = source
+            error.context.setdefault("action", source)
         if self.finished:
             # An in-flight action can fail after its owner closes. Resolving another
             # scoped Request would revive closed authority and mask the original error.

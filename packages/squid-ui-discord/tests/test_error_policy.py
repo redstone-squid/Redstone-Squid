@@ -103,3 +103,20 @@ async def test_error_notice_stays_private_after_a_public_response() -> None:
         interaction = await ui.press("fail")
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is False
         assert interaction.followup.send.await_args.kwargs["ephemeral"] is True
+
+
+async def test_layout_error_keeps_the_dispatched_action_in_diagnostics() -> None:
+    error = sl.errors.LayoutSearchExhaustedError("search exhausted")
+    error.context["action"] = "builds.item-next"
+    seen: list[Exception] = []
+
+    async def observe(_request: sd.Request[Any], error: Exception, _delivery: DeliveryResult | None) -> None:
+        seen.append(error)
+
+    config = sd.Config(errors=sd.ErrorPolicy(render=lambda _req, _error: sl.paragraph("Failed"), observe=observe))
+    async with sd.testing.stage(FailingPanel(), owner=object(), config=config) as ui:
+        await ui.root.handle_error(ui.interaction.source, error, "item:_WiredButton")
+
+    assert seen == [error]
+    assert error.context["action"] == "builds.item-next"
+    assert error.context["screen"].endswith("FailingPanel")
