@@ -19,7 +19,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord
-from squid_storage import SessionRecord
+from squid_storage import ClaimToken, SessionRecord
 from squid_ui.ext.discord import Everyone, SessionKey, SessionManager
 from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination
 from squid_ui.ext.discord.durability import (
@@ -979,4 +979,29 @@ async def test_attaching_a_durable_session_without_a_recipe_is_refused_not_raise
 
         assert isinstance(refused, Rejected)
         assert refused.reason is RejectionReason.RECIPE_REQUIRED
+        tasks.cancel_scope.cancel()
+
+
+async def test_cancellation_releases_claims_through_an_asynchronous_store() -> None:
+    class AsyncStore(MemorySessionStore):
+        @override
+        async def release(self, token: ClaimToken) -> bool:
+            await anyio.lowlevel.checkpoint()
+            return await super().release(token)
+
+    store = AsyncStore()
+    first = runtime(store, FakeFrontend())
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first.run)
+        _, opened = await open_counter(first)
+        assert isinstance(opened, Opened)
+        tasks.cancel_scope.cancel()
+
+    assert opened.session._durable_runtime is None
+    assert not first.snapshot().running
+    second = runtime(store, FakeFrontend())
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second.run)
+        assert len(report.restored) == 1
+        assert not report.claimed_elsewhere
         tasks.cancel_scope.cancel()

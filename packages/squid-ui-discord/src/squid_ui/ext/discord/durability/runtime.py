@@ -474,16 +474,19 @@ class DurableSessionRuntime:
                 await self._maintain()
         finally:
             self._shutting_down = True
-            for active in tuple(self._active.values()):
-                try:
-                    await self.store.release(active.token)
-                except Exception:
-                    logger.exception("could not release durable session claim %s", active.token.key)
-                active.session._durable_runtime = None
-            self._active.clear()
-            self._by_session.clear()
-            self._dirty.clear()
-            self._running = False
+            # Cancellation stops supervision, but releasing leases and detaching the
+            # live sessions must finish before their execution host shuts down.
+            with anyio.CancelScope(shield=True):
+                for active in tuple(self._active.values()):
+                    try:
+                        await self.store.release(active.token)
+                    except Exception:
+                        logger.exception("could not release durable session claim %s", active.token.key)
+                    active.session._durable_runtime = None
+                self._active.clear()
+                self._by_session.clear()
+                self._dirty.clear()
+                self._running = False
 
     async def recover(self) -> RecoveryReport:
         """Claim and independently reconnect every available durable session record."""
