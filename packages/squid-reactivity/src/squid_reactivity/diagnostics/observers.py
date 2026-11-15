@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from contextvars import Context, ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, override
 
 from squid_reactivity.diagnostics.snapshots import (
     DEFAULT_REDACTION,
@@ -37,10 +37,12 @@ _log = logging.getLogger(__name__)
 class EventSink(Protocol):
     """A synchronous consumer of retention-safe diagnostic events."""
 
+    __slots__ = ()
+
     def accept(self, event: CausalEventSnapshot, /) -> None: ...
 
 
-class EventLedger:
+class EventLedger(EventSink):
     """Keep the most recent diagnostic events, up to the configured limit.
 
     Pass this ledger to observe_events to collect events within an execution scope.
@@ -52,6 +54,7 @@ class EventLedger:
             raise ValueError(message)
         self._events: deque[CausalEventSnapshot] = deque(maxlen=limit)
 
+    @override
     def accept(self, result: CausalEventSnapshot) -> None:
         self._events.append(result)
 

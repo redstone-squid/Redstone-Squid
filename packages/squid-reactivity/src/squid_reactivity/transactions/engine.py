@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum, auto
 from threading import Thread, current_thread
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from squid_reactivity._runtime import _bump_epoch, _runtime
 from squid_reactivity.cells import _Cell, _Missing
@@ -75,6 +75,8 @@ def _next_commit_sequence() -> CommitSequence:
 class TransactionView(Protocol):
     """Read-only access to the frozen overlay during participant preparation."""
 
+    __slots__ = ()
+
     def read_staged(self, target: CellTarget) -> SlotValue: ...
 
     def read_committed(self, target: CellTarget) -> SlotValue: ...
@@ -94,6 +96,8 @@ class TransactionParticipant[PreparedT](Protocol):
     runs after all participants have applied, when subscribers can read the full
     result. A finalize failure is reported without undoing the commit.
     """
+
+    __slots__ = ()
 
     def prepare(self, view: TransactionView) -> PreparedT:
         """Validate the staged writes and return what `apply` needs, publishing none of them.
@@ -598,20 +602,23 @@ class _TransactionEngine:
 
 
 @dataclass(frozen=True, slots=True)
-class _FrozenTransactionView:
+class _FrozenTransactionView(TransactionView):
     """The immutable overlay exposed only during participant preparation."""
 
     transaction: _TransactionEngine
 
     @property
+    @override
     def context(self) -> TransactionContext:
         return self.transaction.context
 
+    @override
     def read_staged(self, target: CellTarget) -> SlotValue:
         _, cell = target.resolve(-1)
         staged = self.transaction.staged(cell)
         return SlotValue.from_raw(cell.value if staged is None else staged.value)
 
+    @override
     def read_committed(self, target: CellTarget) -> SlotValue:
         _, cell = target.resolve(-1)
         return SlotValue.from_raw(cell.value)

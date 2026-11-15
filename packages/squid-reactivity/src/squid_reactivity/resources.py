@@ -22,7 +22,7 @@ from types import TracebackType
 from typing import Any, Literal, Protocol, overload, override
 
 from squid_reactivity._runtime import _bump_epoch
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 from squid_reactivity.async_values import (
     AsyncBinding as AsyncBinding,
 )
@@ -48,9 +48,9 @@ from squid_reactivity.errors import (
     ReactiveCycleError,
     ReactivityError,
 )
-from squid_reactivity.evaluation import cycle_path, settling
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
-from squid_reactivity.transactions import TransactionView, enlist, transaction_participant
+from squid_reactivity.evaluation import _SettlingNode, cycle_path, settling
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource
+from squid_reactivity.transactions import TransactionParticipant, TransactionView, enlist, transaction_participant
 from squid_reactivity.transactions.context import (
     CausalRef,
     ExceptionReport,
@@ -68,6 +68,8 @@ class LoadScope(Protocol):
     without making this package depend on anyio.
     """
 
+    __slots__ = ()
+
     def __enter__(self) -> object: ...
 
     def __exit__(
@@ -80,14 +82,16 @@ class LoadScope(Protocol):
     def cancel(self) -> None: ...
 
 
-class _NoAbandonment:
+class _NoAbandonment(LoadScope):
     """Let superseded loaders finish when no cancellation scope is installed."""
 
     __slots__ = ()
 
+    @override
     def __enter__(self) -> _NoAbandonment:
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -96,6 +100,7 @@ class _NoAbandonment:
     ) -> bool:
         return False
 
+    @override
     def cancel(self) -> None:
         """Leave the loader running; its obsolete result will be discarded."""
 
@@ -191,7 +196,7 @@ class _Missing:
 _MISSING = _Missing()
 
 
-class _Replacement:
+class _Replacement(TransactionParticipant[dict[_ReactiveSource, int] | None]):
     """One resource's replaced value, held until the action that made it commits.
 
     Keyed by the resource itself, so repeated `replace` calls in one action collapse into
@@ -204,6 +209,7 @@ class _Replacement:
         self._resource = resource
         self.value: Any = _MISSING
 
+    @override
     def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
         """Settle dependencies before publication, while failure can still abort the action.
 
@@ -214,21 +220,25 @@ class _Replacement:
             return None
         return {source: source.settle() for source in self._resource.sources}
 
+    @override
     def apply(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         if prepared is not None:
             self._resource._replace_now(self.value, baseline=prepared)
 
+    @override
     def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         return None
 
+    @override
     def abort(self, prepared: dict[_ReactiveSource, int] | None, cause: BaseException) -> None:
         self.value = _MISSING
 
+    @override
     def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         """Do nothing: applying the replacement already sent its notifications."""
 
 
-class _Load[ValueT]:
+class _Load[ValueT](_DependencyCollector):
     """Keep one load's dependencies, cancellation scope, and completion signal.
 
     A superseded loader may continue running until cancellation reaches it, or
@@ -263,7 +273,7 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
     return status.previous
 
 
-class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
+class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]], _ReactiveSource, _SettlingNode, SubscriptionSource):
     """An asynchronous value with a synchronous status for render code.
 
     Reading status never starts a load. Await the resource to load it and get
@@ -311,6 +321,15 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
         """
 
     @property
+    @override
+    def address(self) -> CellAddress:
+        return self._address
+
+    @address.setter
+    def address(self, value: CellAddress) -> None:
+        self._address = value
+
+    @property
     def status(self) -> ResourceStatus[ValueT]:
         """Return the status, marking it pending if a dependency changed."""
         staged = self._staged()
@@ -333,9 +352,11 @@ class Resource[ValueT](AsyncBinding[ResourceStatus[ValueT]]):
             return
         consumer.sources[self] = self.version
 
+    @override
     def dependencies(self) -> Iterable[_ReactiveSource]:
         return self.sources
 
+    @override
     def settle(self) -> int:
         """Recheck dependencies and return the resulting version without starting a load."""
         self._recheck()

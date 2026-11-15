@@ -62,6 +62,8 @@ class ChangeToken[InverseT = Any](Protocol):
     to stage_inverse inside a transaction.
     """
 
+    __slots__ = ()
+
     def plan_inverse(self) -> InverseT | ConflictDetail: ...
 
     def stage_inverse(self, inverse: InverseT) -> None: ...

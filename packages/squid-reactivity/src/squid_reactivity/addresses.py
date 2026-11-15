@@ -19,6 +19,8 @@ type SubscriberRegistry = dict[str, list[weakref.ReferenceType[_Subscription]]]
 class SubscriptionSource(Protocol):
     """Provide the registry used to subscribe to named changes on an object."""
 
+    __slots__ = ()
+
     _reactive_subscribers: SubscriberRegistry
 
 

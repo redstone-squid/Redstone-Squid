@@ -23,6 +23,8 @@ class _ReactiveSource(Protocol):
     Address traversal therefore follows the live graph after validation.
     """
 
+    __slots__ = ()
+
     @property
     def address(self) -> DependencyAddress | None: ...
 
@@ -33,6 +35,8 @@ class _ReactiveSource(Protocol):
 
 class _DependencyCollector(Protocol):
     """Collect dependencies read by a computed value, resource load, or render."""
+
+    __slots__ = ()
 
     sources: dict[_ReactiveSource, int]
 
@@ -61,7 +65,7 @@ def untracked() -> Iterator[None]:
 
 
 @dataclass(slots=True)
-class Dependencies:
+class Dependencies(_DependencyCollector):
     """Record dependencies read by one render or computation.
 
     Addresses are collected through computed values and resources as well as

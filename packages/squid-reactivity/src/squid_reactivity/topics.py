@@ -72,12 +72,14 @@ def watch(*topics: Topic) -> None:
 class TopicCodec(Protocol):
     """Encode the portable subset of topic addresses for an external bridge."""
 
+    __slots__ = ()
+
     def encode(self, topic: TopicName) -> str | None: ...
 
     def decode(self, text: str) -> TopicName | None: ...
 
 
-class DelimitedTopicCodec:
+class DelimitedTopicCodec(TopicCodec):
     """Encode topics as ``kind<separator>key`` without escaping.
 
     The kind and key must be nonempty. The kind cannot contain the separator;
@@ -91,11 +93,13 @@ class DelimitedTopicCodec:
             raise ValueError(message)
         self.separator = separator
 
+    @override
     def encode(self, topic: TopicName) -> str | None:
         if not topic.kind or not topic.key or self.separator in topic.kind:
             return None
         return f"{topic.kind}{self.separator}{topic.key}"
 
+    @override
     def decode(self, text: str) -> TopicName | None:
         kind, found, key = text.partition(self.separator)
         return TopicName(kind, key) if found and kind and key else None
@@ -112,6 +116,8 @@ class TopicBus(Protocol):
     notifying subscribers, even when there are no subscribers. Delivery scheduling, coalescing,
     durability, and bridges are deliberately outside this protocol.
     """
+
+    __slots__ = ()
 
     def topic(self, kind: str, key: str) -> Topic: ...
 
@@ -161,7 +167,7 @@ def _log_subscriber_error(address: BusAddress, callback: Subscriber, error: Exce
     )
 
 
-class LocalTopicBus:
+class LocalTopicBus(TopicBus):
     """Notify subscribers synchronously in registration order.
 
     Callbacks receive the address, not a value. An ordinary callback exception
@@ -175,6 +181,7 @@ class LocalTopicBus:
         self._addresses: dict[BusAddress, _AddressState] = {}
         self._topics: WeakValueDictionary[TopicName, Topic] = WeakValueDictionary()
 
+    @override
     def topic(self, kind: str, key: str) -> Topic:
         """Return this bus's handle for a portable name, without tracking a read.
 
@@ -188,6 +195,7 @@ class LocalTopicBus:
             self._topics[name] = handle
         return handle
 
+    @override
     def subscribe[AddressT: BusAddress](
         self, address: AddressT, callback: Callable[[AddressT], None]
     ) -> Callable[[], None]:
@@ -205,6 +213,7 @@ class LocalTopicBus:
 
         return unsubscribe
 
+    @override
     def publish(self, *addresses: BusAddress) -> None:
         for address in addresses:
             if isinstance(address, Topic):

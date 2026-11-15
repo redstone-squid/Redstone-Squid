@@ -6,10 +6,10 @@ changes directly for work such as operation progress and history bookkeeping.
 
 import uuid
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, override
 
 from squid_reactivity._runtime import _bump_epoch
-from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
+from squid_reactivity.addresses import CellAddress, SubscriberRegistry, SubscriptionSource, publish
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
 from squid_reactivity.transactions.state import _READ_CONSISTENCY, _active, _ReadConsistency
 
@@ -25,7 +25,7 @@ _MISSING: Final = _Missing.VALUE
 """A cell that has never been assigned. Distinct from None, which is a real value."""
 
 
-class _Cell[ValueT]:
+class _Cell[ValueT](_ReactiveSource):
     """Store one field's value, version, and optional publication address.
 
     Reactive fields, including component fields, have CellAddress values. Topics
@@ -33,7 +33,7 @@ class _Cell[ValueT]:
     be checked for conflicts and collected as render subscriptions.
     """
 
-    __slots__ = ("__weakref__", "address", "identity", "value", "version")
+    __slots__ = ("__weakref__", "_address", "identity", "value", "version")
 
     def __init__(
         self, value: ValueT | _Missing = _MISSING, version: int = 0, address: DependencyAddress | None = None
@@ -42,6 +42,15 @@ class _Cell[ValueT]:
         self.value: ValueT | _Missing = value
         self.version = version
         self.address = address
+
+    @property
+    @override
+    def address(self) -> DependencyAddress | None:
+        return self._address
+
+    @address.setter
+    def address(self, value: DependencyAddress | None) -> None:
+        self._address = value
 
     @property
     def label(self) -> str:
@@ -56,9 +65,11 @@ class _Cell[ValueT]:
         entry = current.staged(self)
         return _MISSING if entry is None else entry.value
 
+    @override
     def dependencies(self) -> tuple[_ReactiveSource, ...]:
         return ()
 
+    @override
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
         current = _active()
@@ -100,7 +111,7 @@ class _Cell[ValueT]:
         _bump_epoch()
 
 
-class Signal:
+class Signal(_ReactiveSource, SubscriptionSource):
     """A reactive source with no value, for changes that publish outside transactions.
 
     Use one for state kept in ordinary attributes that readers should still follow, such
@@ -117,15 +128,26 @@ class Signal:
         self.address = CellAddress(self, "revision")
         self.version = 0
 
+    @property
+    @override
+    def address(self) -> CellAddress:
+        return self._address
+
+    @address.setter
+    def address(self, value: CellAddress) -> None:
+        self._address = value
+
     def track(self) -> None:
         """Make the computation or render now running depend on this signal."""
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
             consumer.sources[self] = self.version
 
+    @override
     def dependencies(self) -> tuple[_ReactiveSource, ...]:
         return ()
 
+    @override
     def settle(self) -> int:
         return self.version
 

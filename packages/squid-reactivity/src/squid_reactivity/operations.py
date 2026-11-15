@@ -22,7 +22,7 @@ from squid_reactivity.diagnostics import (
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.evaluation import settling
+from squid_reactivity.evaluation import _SettlingNode, settling
 from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR
 from squid_reactivity.transactions import fresh_transaction
 from squid_reactivity.transactions.context import (
@@ -93,7 +93,7 @@ class ProgressReporter[ProgressT]:
         self._execution._set_progress(value)
 
 
-class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT, ProgressT]]):
+class OperationExecution[ValueT, ProgressT](AsyncBinding[OperationStatus[ValueT, ProgressT]], _SettlingNode):
     """One execution of an operation, shared by all callers that await it.
 
     The first waiter runs the loader in its own task. Later waiters join the

@@ -25,6 +25,8 @@ class ReactiveStateOwner(SubscriptionSource, Protocol):
     State descriptors also require an instance dictionary for cell storage.
     """
 
+    __slots__ = ()
+
     def _state_changed(self, names: frozenset[str]) -> None: ...
 
     def _state_rolled_back(self) -> None: ...

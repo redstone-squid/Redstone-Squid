@@ -15,8 +15,8 @@ from typing import Any, ClassVar, Self, cast, overload, override
 from squid_reactivity._runtime import _runtime
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.cells import _MISSING, _Cell, _Missing
-from squid_reactivity.evaluation import settling
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource, untracked
+from squid_reactivity.evaluation import _SettlingNode, settling
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _DependencyCollector, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
 from squid_reactivity.transactions.engine import _write, report_undeclared_write
 from squid_reactivity.transactions.state import (
@@ -379,7 +379,7 @@ def restore_state(owner: ReactiveStateOwner, values: Mapping[str, Any]) -> None:
             setattr(owner, name, _frozen(value))
 
 
-class _Derived:
+class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
     """One computed's per-instance node: what it read last, and what it returned.
 
     Sources are held by the node, never the other way round. A component here is per-message
@@ -401,12 +401,15 @@ class _Derived:
         self._view: object = _MISSING
 
     @property
+    @override
     def address(self) -> None:
         return None
 
+    @override
     def dependencies(self) -> Iterable[_ReactiveSource]:
         return self.sources
 
+    @override
     def settle(self) -> int:
         """Return the version after validating this read view and its dependencies."""
         current = _active()
@@ -513,7 +516,7 @@ def _checked_init(
     return __init__
 
 
-class Reactive:
+class Reactive(ReactiveStateOwner):
     """Reusable reactive state and behavior, independent of rendering.
 
     Declare fields with `state()` and derived properties with `computed`. Consumers
@@ -566,6 +569,7 @@ class Reactive:
             report_undeclared_write(self, name)
         object.__setattr__(self, name, value)
 
+    @override
     def _state_rolled_back(self) -> None:
         self.on_state_rollback()
 
@@ -600,6 +604,7 @@ class Reactive:
         # outside an action and at `finalize_commit` inside one.
         descriptor.mutated(self)
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         # Transactions identify a write by its storage key (`__state_<field>`). Subscribers and
         # `on_state_commit` are addressed by the field name the author declared.

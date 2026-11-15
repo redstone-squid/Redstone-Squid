@@ -11,6 +11,8 @@ from squid_reactivity.errors import ReactiveCycleError
 class _SettlingNode(Protocol):
     """A named derived value that can participate in cycle detection."""
 
+    __slots__ = ()
+
     _label: str
 
 

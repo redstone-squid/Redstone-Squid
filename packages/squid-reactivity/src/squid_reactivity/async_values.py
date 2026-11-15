@@ -11,6 +11,8 @@ from squid_reactivity.completion import Completion
 class AsyncBinding[StatusT](Protocol):
     """An observed asynchronous value whose loader runs in the caller's task."""
 
+    __slots__ = ()
+
     @property
     def pending(self) -> bool: ...
 
