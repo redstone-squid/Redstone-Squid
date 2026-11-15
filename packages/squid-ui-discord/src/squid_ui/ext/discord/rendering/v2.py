@@ -153,6 +153,11 @@ class _V2Program:
     children: tuple[_V2Instruction, ...]
     opaque: bool = False
 
+    @classmethod
+    def from_scene(cls, document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
+        children = tuple(_compile_item(child) for child in document.components_v2.children)
+        return cls(children, any(map(_opaque, children)))
+
 
 class StaticView(discord.ui.LayoutView):
     """A rendered view with no interaction session or timeout."""
@@ -229,11 +234,6 @@ def _opaque(instruction: _V2Instruction) -> bool:
             return False
 
 
-def _compile_program(document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
-    children = tuple(_compile_item(child) for child in document.components_v2.children)
-    return _V2Program(children, any(map(_opaque, children)))
-
-
 class V2Renderer:
     """Draw a resolved Components V2 scene without making layout decisions.
 
@@ -296,16 +296,7 @@ class V2Renderer:
             message = f"V2Renderer cannot draw Discord target version {document.target_version}"
             raise DrawInvariantError(message)
         key = self._cache_key(document, plan)
-        cached = self.cache.get(key)
-        if cached is None:
-            program = _compile_program(document)
-            certified = False
-        else:
-            stored, certified = cached
-            if not isinstance(stored, _V2Program):
-                message = "render program cache returned the wrong program type"
-                raise DrawInvariantError(message)
-            program = stored
+        program, certified = self.cache.resolve(key, _V2Program, lambda: _V2Program.from_scene(document))
         view = self.view_factory()
         for child in program.children:
             view.add_item(self._execute(child, plan=plan, wire=wire))

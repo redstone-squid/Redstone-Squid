@@ -7,8 +7,10 @@ that check. Native extensions and custom wiring still need a fresh audit.
 """
 
 from collections import OrderedDict
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
+
+from squid_ui.errors import DrawInvariantError
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +57,23 @@ class RenderProgramCache:
         self._entries.move_to_end(key)
         self._hits += 1
         return entry.program, entry.certified
+
+    def resolve[ProgramT](
+        self, key: Hashable, program_type: type[ProgramT], compile: Callable[[], ProgramT]
+    ) -> tuple[ProgramT, bool]:
+        """Reuse a typed program or compile one without retaining it yet.
+
+        Call `put` only after drawing and any required audit succeed. A failed
+        construction must not leave a new program or certificate in the cache.
+        """
+        cached = self.get(key)
+        if cached is None:
+            return compile(), False
+        program, certified = cached
+        if not isinstance(program, program_type):
+            message = "render program cache returned the wrong program type"
+            raise DrawInvariantError(message)
+        return program, certified
 
     def put(self, key: Hashable, program: object, *, certified: bool) -> None:
         """Retain a program, preserving its certificate only when the instance is unchanged."""

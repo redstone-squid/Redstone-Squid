@@ -94,6 +94,51 @@ class _ClassicProgram:
     rows: tuple[tuple[_ClassicControlInstruction, ...], ...]
     opaque: bool = False
 
+    @classmethod
+    def from_body(cls, body: scene.ClassicMessage, limits: ClassicLimits) -> _ClassicProgram:
+        embeds = tuple(
+            _ClassicEmbedInstruction(
+                embed,
+                None if embed.timestamp is None else datetime.fromisoformat(embed.timestamp),
+            )
+            for embed in body.embeds
+        )
+        rows: list[tuple[_ClassicControlInstruction, ...]] = []
+        opaque = False
+        for index, row in enumerate(body.rows):
+            selects = sum(
+                isinstance(control, scene.Select | scene.RoutedSelect | scene.EntitySelect) for control in row.controls
+            )
+            if selects and len(row.controls) > 1:
+                message = f"row {index} mixes a select with other controls; a select occupies its whole row"
+                raise DrawInvariantError(message)
+            if not selects and len(row.controls) > limits.components.row_buttons:
+                message = (
+                    f"row {index} holds {len(row.controls)} buttons; the maximum is {limits.components.row_buttons}"
+                )
+                raise DrawInvariantError(message)
+            if not row.controls:
+                message = f"row {index} is empty; planning should not have produced it"
+                raise DrawInvariantError(message)
+            instructions: list[_ClassicControlInstruction] = []
+            for control in row.controls:
+                match control:
+                    case scene.Link():
+                        instructions.append(_ClassicLink(control))
+                    case scene.PremiumButton():
+                        instructions.append(_ClassicPremium(control))
+                    case scene.RoutedButton():
+                        instructions.append(_ClassicRoutedButton(control))
+                    case scene.RoutedSelect():
+                        instructions.append(_ClassicRoutedSelect(control))
+                    case scene.Button() | scene.Select() | scene.EntitySelect():
+                        instructions.append(_ClassicControlItem(control))
+                    case scene.Extension():
+                        instructions.append(_ClassicExtension(control))
+                        opaque = True
+            rows.append(tuple(instructions))
+        return cls(body.content, embeds, tuple(rows), opaque)
+
 
 class StaticClassicView(discord.ui.View):
     """A rendered classic view with no interaction session or timeout."""
@@ -142,16 +187,9 @@ class ClassicRenderer:
     ) -> MessagePayload:
         body = self._body(document)
         key = self._cache_key(document, plan)
-        cached = self.cache.get(key)
-        if cached is None:
-            program = self._compile(body)
-            certified = False
-        else:
-            stored, certified = cached
-            if not isinstance(stored, _ClassicProgram):
-                message = "render program cache returned the wrong program type"
-                raise DrawInvariantError(message)
-            program = stored
+        program, certified = self.cache.resolve(
+            key, _ClassicProgram, lambda: _ClassicProgram.from_body(body, self.limits)
+        )
         embeds = tuple(self._embed(embed, index) for index, embed in enumerate(program.embeds))
         view = self._view(program, plan=plan, wire=wire)
         # `attachment_assets` reads a plan without caring which body it resolved to, but
@@ -197,51 +235,6 @@ class ClassicRenderer:
             message = f"ClassicRenderer cannot draw a {type(document.body).__name__} body"
             raise DrawInvariantError(message)
         return document.body
-
-    def _compile(self, body: scene.ClassicMessage) -> _ClassicProgram:
-        embeds = tuple(
-            _ClassicEmbedInstruction(
-                embed,
-                None if embed.timestamp is None else datetime.fromisoformat(embed.timestamp),
-            )
-            for embed in body.embeds
-        )
-        rows: list[tuple[_ClassicControlInstruction, ...]] = []
-        opaque = False
-        for index, row in enumerate(body.rows):
-            selects = sum(
-                isinstance(control, scene.Select | scene.RoutedSelect | scene.EntitySelect) for control in row.controls
-            )
-            if selects and len(row.controls) > 1:
-                message = f"row {index} mixes a select with other controls; a select occupies its whole row"
-                raise DrawInvariantError(message)
-            if not selects and len(row.controls) > self.limits.components.row_buttons:
-                message = (
-                    f"row {index} holds {len(row.controls)} buttons; "
-                    f"the maximum is {self.limits.components.row_buttons}"
-                )
-                raise DrawInvariantError(message)
-            if not row.controls:
-                message = f"row {index} is empty; planning should not have produced it"
-                raise DrawInvariantError(message)
-            instructions: list[_ClassicControlInstruction] = []
-            for control in row.controls:
-                match control:
-                    case scene.Link():
-                        instructions.append(_ClassicLink(control))
-                    case scene.PremiumButton():
-                        instructions.append(_ClassicPremium(control))
-                    case scene.RoutedButton():
-                        instructions.append(_ClassicRoutedButton(control))
-                    case scene.RoutedSelect():
-                        instructions.append(_ClassicRoutedSelect(control))
-                    case scene.Button() | scene.Select() | scene.EntitySelect():
-                        instructions.append(_ClassicControlItem(control))
-                    case scene.Extension():
-                        instructions.append(_ClassicExtension(control))
-                        opaque = True
-            rows.append(tuple(instructions))
-        return _ClassicProgram(body.content, embeds, tuple(rows), opaque)
 
     def _embed(self, instruction: _ClassicEmbedInstruction, index: int) -> discord.Embed:
         node = instruction.source

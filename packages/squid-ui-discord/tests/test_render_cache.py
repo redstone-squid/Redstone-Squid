@@ -5,6 +5,7 @@ import weakref
 from typing import override
 
 import discord
+import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord.rendering.classic as classic_renderer_module
@@ -12,6 +13,7 @@ import squid_ui.ext.discord.rendering.v2 as renderer_module
 from squid_ui import Component, state
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.semantic import ActionControl, ActionControls
+from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
@@ -56,6 +58,29 @@ def test_reusing_a_program_preserves_its_audit_certificate() -> None:
 
     assert cache.get("scene") == (program, True)
     assert cache.snapshot().certified == 1
+
+
+def test_resolving_a_program_retains_it_only_after_successful_drawing() -> None:
+    cache = RenderProgramCache()
+    program, certified = cache.resolve("scene", str, lambda: "instructions")
+
+    assert (program, certified) == ("instructions", False)
+    assert len(cache) == 0
+
+    cache.put("scene", program, certified=True)
+
+    def unexpected_compile() -> str:
+        pytest.fail("a cache hit must not recompile the program")
+
+    assert cache.resolve("scene", str, unexpected_compile) == (program, True)
+
+
+def test_resolving_a_program_rejects_a_cache_key_collision() -> None:
+    cache = RenderProgramCache()
+    cache.put("scene", 42, certified=True)
+
+    with pytest.raises(DrawInvariantError, match="wrong program type"):
+        cache.resolve("scene", str, lambda: "instructions")
 
 
 def test_v2_program_hits_return_fresh_discord_objects_and_skip_certified_audit(monkeypatch) -> None:
