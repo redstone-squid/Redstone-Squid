@@ -99,7 +99,11 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         scopes: dict[OccurrenceId, ResourceCost] = {}
         scoped_resources: dict[OccurrenceId, frozenset[ResourceIdentity]] = {}
         uses: list[SharedUse[object]] = [
-            SharedUse(ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1}))
+            SharedUse(
+                ResourceIdentity("attachment", asset.key),
+                asset,
+                ResourceCost({Axis.ATTACHMENTS: int(asset.url is None)}),
+            )
             for asset in context.assets
         ]
         violations: list[CandidateViolation] = []
@@ -229,7 +233,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         )
                     else:
                         button = scene.Link(
-                            control.label, control.url or "", emoji=control.emoji, disabled=control.disabled
+                            control.label or None, control.url or "", emoji=control.emoji, disabled=control.disabled
                         )
                     return (button,) if in_row else (scene.Row((button,)),)
                 case ActionsRealization(columns=columns):
@@ -444,10 +448,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     if asset is not None:
                         uses.append(
                             SharedUse(
-                                ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1})
+                                ResourceIdentity("attachment", asset.key),
+                                asset,
+                                ResourceCost({Axis.ATTACHMENTS: int(asset.url is None)}),
                             )
                         )
-                    url = f"attachment://{asset.name}" if asset is not None else str(media.source)
+                    url = (asset.url or f"attachment://{asset.name}") if asset is not None else str(media.source)
                     return (
                         scene.Gallery(
                             (
@@ -466,12 +472,13 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         SharedUse(
                             ResourceIdentity("attachment", download.asset.key),
                             download.asset,
-                            ResourceCost({Axis.ATTACHMENTS: 1}),
+                            ResourceCost({Axis.ATTACHMENTS: int(download.asset.url is None)}),
                         )
                     )
+                    label = download.label
+                    caption = label + ((tree.literal("\n"), *download.description) if download.description else ())
                     return (
-                        *text(download.label),
-                        *text(download.description),
+                        *text(caption),
                         scene.File(
                             download.asset.key, download.asset.name, download.asset.media_type, download.spoiler
                         ),
@@ -687,7 +694,15 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         for node in body.children:
             visit(node, in_panel=False)
         actual = ResourceCost(
-            {Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: sum(map(len, texts)), Axis.ATTACHMENTS: len(assets)}
+            {
+                Axis.COMPONENTS: components,
+                Axis.DISPLAY_TEXT: sum(map(len, texts)),
+                Axis.ATTACHMENTS: sum(
+                    isinstance(use.value, Asset) and use.value.url is None
+                    for identity, use in expected.resources.uses.items()
+                    if identity.kind == "attachment" and identity.key in assets
+                ),
+            }
         )
         if (
             actual != expected.cost

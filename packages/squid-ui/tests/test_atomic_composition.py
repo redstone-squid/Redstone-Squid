@@ -147,7 +147,7 @@ def test_atomic_shared_resources_deduplicate_and_obey_enclosing_budgets() -> Non
     result = sl.planning.plan(content, target=TARGET, composition=FixedComposition(BadgeRules()))
     assert result.cost.get(Axis.ATTACHMENTS) == 1
     assert result.cost.get(Axis.COMPONENTS) == 2
-    assert result.resources[asset.key] is asset
+    assert result.resources[f"asset:{asset.key}"] is asset
 
 
 def test_builtin_rules_do_not_guess_an_opaque_widgets_meaning() -> None:

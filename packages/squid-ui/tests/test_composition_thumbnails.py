@@ -115,11 +115,11 @@ def test_classic_rejects_a_thumbnail_that_cannot_belong_to_its_own_embed() -> No
 
 
 @pytest.mark.parametrize("target", TARGETS[3:], ids=lambda target: target.id)
-def test_slack_rejects_section_accents(target: Target[Any, Any, Any, Any]) -> None:
+def test_slack_preserves_section_content_without_an_accent(target: Target[Any, Any, Any, Any]) -> None:
     node = sl.region(sl.section(sl.heading("Details"), thumbnail=IMAGE, accent=0x123456), key="r", title="R")
-    with pytest.raises(JointUnsupportedError) as caught:
-        plan(node, target=target)
-    assert "Slack section accent" in str(caught.value.diagnostics.violations)
+    result = plan(node, target=target)
+    assert "Details" in scene.Codec.dumps(result.scene)
+    assert IMAGE in scene.Codec.dumps(result.scene)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)

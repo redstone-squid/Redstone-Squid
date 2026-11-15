@@ -16,6 +16,7 @@ from squid_ui.planning.composition import (
     LocalCapacityExceeded,
     OccurrenceId,
     OfferDiscovery,
+    Placement,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
@@ -96,7 +97,11 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         embeds: list[scene.Embed] = []
         rows: list[scene.ClassicRow] = []
         uses = [
-            SharedUse(ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1}))
+            SharedUse(
+                ResourceIdentity("attachment", asset.key),
+                asset,
+                ResourceCost({Axis.ATTACHMENTS: int(asset.url is None)}),
+            )
             for asset in context.assets
         ]
         violations: list[CandidateViolation] = []
@@ -256,7 +261,10 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         cards(entries, scene.Embed())
                     text(markdown(notice))
                 case TextRealization() as payload:
-                    text(discord_text(payload, context.escape_text))
+                    if embedded and part.offer.occurrence.placement is Placement.HEADER and payload.role == "heading":
+                        text(markdown(payload.visible_nodes))
+                    else:
+                        text(discord_text(payload, context.escape_text))
                 case TextSequenceRealization() as sequence:
                     text(
                         sequence.prefix
@@ -296,14 +304,22 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         description: list[str] = []
                         entries = []
                         field_stack.append(entries)
-                        for child in part.children:
-                            visit(child, description, embedded=True)
+                        title: list[str] = []
+                        for index, child in enumerate(part.children):
+                            visit(
+                                child,
+                                title if index == 0 and panel.kind in ("article", "section") else description,
+                                embedded=True,
+                            )
                         field_stack.pop()
+                        heading = "\n".join(title)
+                        limit("embed.title", len(heading), self.limits.embeds.title)
                         value = "\n".join(description)
                         limit("embed.description", len(value), self.limits.embeds.description)
                         cards(
                             entries,
                             scene.Embed(
+                                title=heading or None,
                                 description=value or None,
                                 colour=panel.accent,
                                 thumbnail=scene.EmbedMedia(panel.thumbnail) if panel.thumbnail is not None else None,
@@ -341,7 +357,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         )
                         if control.route is not None
                         else scene.Link(
-                            control.label, control.url or "", emoji=control.emoji, disabled=control.disabled
+                            control.label or None, control.url or "", emoji=control.emoji, disabled=control.disabled
                         )
                     )
                     if row is None:
@@ -404,10 +420,12 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     if asset is not None:
                         uses.append(
                             SharedUse(
-                                ResourceIdentity("attachment", asset.key), asset, ResourceCost({Axis.ATTACHMENTS: 1})
+                                ResourceIdentity("attachment", asset.key),
+                                asset,
+                                ResourceCost({Axis.ATTACHMENTS: int(asset.url is None)}),
                             )
                         )
-                    url = f"attachment://{asset.name}" if asset is not None else str(media.source)
+                    url = (asset.url or f"attachment://{asset.name}") if asset is not None else str(media.source)
                     limit("embed.description", len(media.description), self.limits.embeds.description)
                     if media.description:
                         texts.append(media.description)

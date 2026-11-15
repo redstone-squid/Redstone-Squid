@@ -136,11 +136,11 @@ def test_shared_attachments_count_once_per_scope_even_after_a_sibling_uses_them(
             ),
             key="layout",
         ),
-        limits={Axis.ATTACHMENTS: 1, Axis.COMPONENTS: 3},
+        limits={Axis.ATTACHMENTS: 1, Axis.COMPONENTS: 6},
     )
     result = on_target(node, "v2")
     assert result.cost.get(Axis.ATTACHMENTS) == 1
-    assert result.cost.get(Axis.COMPONENTS) == 3
+    assert result.cost.get(Axis.COMPONENTS) == 6
     assert result.violations == (CapacityExceeded(OccurrenceId(("root", "layout", "@1")), Axis.ATTACHMENTS, 1, 0),)
 
 

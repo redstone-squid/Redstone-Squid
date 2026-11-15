@@ -157,7 +157,7 @@ def test_classic_fields_preserve_embed_slots_across_continuation_pages() -> None
     names: list[str] = []
     for page_index in range(3):
         page = result.allocation.select({region: page_index})
-        assert "Fields" in (page.scene.body.embeds[0].description or "")
+        assert page.scene.body.embeds[0].title == "Fields"
         assert all(len(embed.fields) <= 2 for embed in page.scene.body.embeds)
         names.extend(field.name for embed in page.scene.body.embeds for field in embed.fields)
     assert names == [str(index) for index in range(5)]

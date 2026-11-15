@@ -50,8 +50,8 @@ def test_v2_shares_an_unread_attachment_across_sibling_regions(tmp_path: Path) -
     result = build_composition(candidate, rules, context)
     assert isinstance(result, BuiltComposition)
     assert result.evaluation.cost.get(Axis.ATTACHMENTS) == 1
-    assert result.evaluation.cost.get(Axis.COMPONENTS) == 2
-    assert len(result.body.children) == 2
+    assert result.evaluation.cost.get(Axis.COMPONENTS) == 4
+    assert len(result.body.children) == 4
 
 
 def test_v2_repeated_header_and_container_costs_remain_per_occurrence() -> None:
@@ -295,7 +295,7 @@ def test_html_retains_styled_links_and_shared_asset_references(tmp_path: Path) -
     result = build_composition(candidate, rules, context)
     assert isinstance(result, BuiltComposition)
     assert len(result.evaluation.resources.uses) == 1
-    assert result.evaluation.text == ("Docs", asset.name, asset.name)
+    assert result.evaluation.text == ("Docs", "Download", "Download")
     paragraph = result.body.children[0]
     assert isinstance(paragraph, scene.HtmlElement)
     strong = paragraph.children[0]

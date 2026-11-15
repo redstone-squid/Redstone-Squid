@@ -12,7 +12,7 @@ from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.limits import ClassicLimits
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
@@ -129,10 +129,9 @@ def test_aside_continuations_preserve_palette_and_reuse(target: Target[Any, Any,
 
 
 @pytest.mark.parametrize("target", TARGETS[3:], ids=lambda target: target.id)
-def test_slack_names_its_missing_aside_accent(target: Target[Any, Any, Any, Any]) -> None:
-    with pytest.raises(JointUnsupportedError) as caught:
-        plan(sl.region(sl.aside("Warning", tone=sl.Tone.WARNING), key="r", title="R"), target=target)
-    assert "Slack section accent" in str(caught.value.diagnostics.violations)
+def test_slack_preserves_aside_content_without_an_accent(target: Target[Any, Any, Any, Any]) -> None:
+    result = plan(sl.region(sl.aside("Warning", tone=sl.Tone.WARNING), key="r", title="R"), target=target)
+    assert "Warning" in scene.Codec.dumps(result.scene)
 
 
 @pytest.mark.parametrize("target", TARGETS[:2], ids=lambda target: target.id)

@@ -470,7 +470,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             ),
                         ),
                     )
-                case ActionsRealization(navigation=True):
+                case ActionsRealization():
                     return (
                         scene.HtmlElement(
                             scene.HtmlTag.NAV, tuple(node for child in part.children for node in visit(child))
@@ -489,7 +489,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                         (scene.HtmlElement(scene.HtmlTag.FIGCAPTION, visit(part.children[-1])),) if caption else ()
                     )
                     return (scene.HtmlElement(scene.HtmlTag.FIGURE, (*media, *caption_nodes)),)
-                case FlowRealization() | RowRealization() | ActionsRealization():
+                case FlowRealization() | RowRealization():
                     return tuple(node for child in part.children for node in visit(child))
                 case PanelRealization() as panel:
                     children = tuple(node for child in part.children for node in visit(child))

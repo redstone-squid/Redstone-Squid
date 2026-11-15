@@ -106,7 +106,7 @@ def test_form_trigger_retains_live_schema_and_submission_handler() -> None:
     result = compose(sl.form("Edit", spec, key="edit", on_submit=submitted), V2CompositionRules[RenderTarget, object]())
     assert isinstance(result, BuiltComposition)
     form = next(iter(result.forms.values()))
-    assert form.spec is spec and form.on_submit is submitted
+    assert form.spec == spec and form.on_submit is submitted
     assert form.key in result.bindings
     assert result.evaluation.interactions == {ref("edit")}
     assert result.evaluation.cost.get(Axis.COMPONENTS) == 2

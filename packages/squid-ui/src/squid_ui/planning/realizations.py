@@ -7,6 +7,7 @@ This module offers representations; it does not fit or paginate them.
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from datetime import UTC
 from enum import StrEnum
 from hashlib import sha256
 from itertools import pairwise
@@ -1960,7 +1961,24 @@ def semantic_offers[RenderTargetT, ContextT](
                 SelectChoices(ChoiceCommit(value.selection, value.key, previous, context.presentation)),
                 ActionMode.EXCLUSIVE,
             )
-        return (RealizationOffer(occurrence, "select", payload, interaction=True, binding=binding),)
+        offer = RealizationOffer(occurrence, "select", payload, interaction=True, binding=binding)
+        if isinstance(value, sem.Choices) and value.maximum == 1 and options:
+            cursor_key = f"{value.key}.choices"
+            offer = replace(
+                offer,
+                fragments=FragmentContract(
+                    (frozenset({occurrence.reference}),) * len(options),
+                    tuple(range(1, len(options) + 1)),
+                    payload.fragment,
+                    continuations=True,
+                ),
+                region=RegionContract(
+                    cursor_key,
+                    RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
+                    cursor_key=cursor_key,
+                ),
+            )
+        return (offer,)
     if isinstance(value, sem.ActionControl | sem.RoutedActionControl | sem.Link | sem.FormTrigger | sem.Toggle):
         # Wire IDs follow semantic ownership, independently of presentation keys.
         key = _control_key(occurrence, context)
@@ -2079,7 +2097,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 "time",
                 TimeRealization(
                     (*prefix, *time_nodes),
-                    instant=instant.isoformat(),
+                    instant=instant.astimezone(UTC).isoformat(),
                     display=display,
                     style=style,
                     timezone=timezone,
@@ -2176,8 +2194,6 @@ def semantic_offers[RenderTargetT, ContextT](
         return text_offers(
             RealizationOffer(occurrence, "text", payload, fragments=fragments), payload, priority=value.importance
         )
-    if isinstance(value, sem.Block) and not panels:
-        return ()
     if isinstance(
         value,
         sem.Group
@@ -2255,7 +2271,7 @@ def semantic_offers[RenderTargetT, ContextT](
                 tone=value.tone.base.value,
             )
         elif isinstance(value, sem.Block):
-            payload = PanelRealization(resolve_accent(value.accent, context.palette))
+            payload = PanelRealization(resolve_accent(value.accent, context.palette), framed=panels)
         elif isinstance(value, sem.ActionControls | sem.ControlGroup):
             payload = ActionsRealization()
         elif isinstance(value, sem.Fields):
@@ -2343,7 +2359,7 @@ def semantic_offers[RenderTargetT, ContextT](
                     else item.emphasis != sem.Emphasis.STRONG and item.tone.base in (sem.Tone.NEUTRAL, sem.Tone.INFO)
                 )
             )
-            if len(eligible) == len(value.items) and len(eligible) > 1:
+            if eligible and (len(eligible) > 1 or value.display == sem.ControlDisplay.GROUPED):
                 encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
                 key = "composition." + sha256(encoded.encode()).hexdigest()[:32]
                 routes = {
@@ -2369,11 +2385,32 @@ def semantic_offers[RenderTargetT, ContextT](
                     occurrence,
                     "actions.grouped",
                     SelectRealization(scene.Select(options, key)),
+                    children=tuple(
+                        child for child in children if child.graph.units[child.reference].value not in eligible
+                    ),
                     interaction=True,
                     binding=ActionBinding(key, RouteSelection(routes), ActionMode.EXCLUSIVE, routes=routes),
                     preference=0 if value.display == sem.ControlDisplay.GROUPED else 1,
                     preference_priority=int(value.flexibility),
                 )
+                if len(eligible) == len(value.items):
+                    cursor_key = f"{value.key}.actions"
+                    contract = RegionContract(
+                        cursor_key,
+                        RegionNavigation(occurrence, disabled_controls, cursor_key=cursor_key, default_controls=True),
+                        cursor_key=cursor_key,
+                    )
+                    payload = SelectRealization(scene.Select(options, key))
+                    grouped = replace(
+                        grouped,
+                        fragments=FragmentContract(
+                            tuple(child.sources for child in children),
+                            tuple(range(1, len(children) + 1)),
+                            payload.fragment,
+                        ),
+                        region=contract,
+                    )
+                    container = replace(container, region=contract)
                 return (
                     (replace(container, preference=1), grouped)
                     if value.display == sem.ControlDisplay.GROUPED
@@ -2437,7 +2474,9 @@ def semantic_offers[RenderTargetT, ContextT](
     if isinstance(value, sem.Download):
         payload = DownloadRealization(
             value.asset,
-            resolve_text(value.label, context.localization).nodes if value.label is not None else (),
+            resolve_text(
+                value.label if value.label is not None else context.chrome.download, context.localization
+            ).nodes,
             resolve_text(value.description, context.localization).nodes if value.description is not None else (),
             value.spoiler,
         )

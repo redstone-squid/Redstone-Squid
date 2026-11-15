@@ -529,7 +529,7 @@ class SlackCompositionRules[
                         scene.SlackActions(
                             (
                                 scene.SlackButton(
-                                    scene.SlackText(label or ""),
+                                    scene.SlackText(label or "", scene.SlackTextKind.PLAIN),
                                     asset=scene.SlackAssetRef(
                                         download.asset.key, download.asset.name, download.asset.media_type
                                     ),
@@ -562,8 +562,6 @@ class SlackCompositionRules[
                 case PanelRealization() as panel:
                     if panel.framed:
                         violations.append(UnsupportedCapability(identity, "Slack panel framing"))
-                    if panel.accent is not None:
-                        violations.append(UnsupportedCapability(identity, "Slack section accent"))
                     for index, child in enumerate(part.children):
                         visit(child)
                         if index == 0 and panel.thumbnail is not None:
