@@ -3,8 +3,9 @@
 import hashlib
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+import discord
 import pytest
 
 from scripts.reindex_media_assets import parse_args, recover_source
@@ -43,3 +44,34 @@ async def test_repair_rejects_corrupted_original(tmp_path: Path) -> None:
     }
     with pytest.raises(ValueError, match="checksum mismatch"):
         await recover_source(row, source, AsyncMock(), AsyncMock())
+
+
+async def test_repair_recovers_attachment_from_followup_message(tmp_path: Path) -> None:
+    destination = tmp_path / "source"
+    data = b"original"
+    attachment = MagicMock(size=len(data))
+
+    async def save(path: Path) -> None:
+        path.write_bytes(data)
+
+    attachment.save = AsyncMock(side_effect=save)
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.fetch_message = AsyncMock(side_effect=[MagicMock(attachments=[]), MagicMock(attachments=[attachment])])
+    client = AsyncMock()
+    client.fetch_channel.return_value = channel
+    store = AsyncMock()
+    store.get_path.return_value = None
+    row: dict[str, Any] = {
+        "source_byte_size": len(data),
+        "source_sha256": hashlib.sha256(data).hexdigest(),
+        "source_object_key": "raw/source",
+        "source_messages": [{"channel_id": 10, "id": 100}],
+        "bundle_channel_id": 10,
+        "bundle_message_ids": [100, 101],
+    }
+
+    await recover_source(row, destination, store, client)
+
+    assert destination.read_bytes() == data
+    assert [call.args for call in channel.fetch_message.await_args_list] == [(100,), (101,)]
+    client.fetch_channel.assert_awaited_once_with(10)

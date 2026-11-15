@@ -36,10 +36,13 @@ from squid.persistence.engine import DatabaseEngine
 
 INVENTORY = """
 SELECT u.*, j.status, d.source_messages,
+       r.inputs->'bundle'->'channel_id' AS bundle_channel_id,
+       jsonb_path_query_array(r.inputs, '$.bundle.primary[*].message_id') AS bundle_message_ids,
        (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.role) FROM media_artifacts a WHERE a.upload_id=u.id) AS artifacts
 FROM media_uploads u
 JOIN media_normalization_jobs j ON j.upload_id=u.id
 JOIN submission_drafts d ON d.id=u.draft_id
+LEFT JOIN submission_inference_runs r ON r.id=d.inference_run_id
 WHERE j.status IN ('completed', 'dead') AND NOT u.strip_audio
   AND (CAST(:upload_id AS uuid) IS NULL OR u.id=CAST(:upload_id AS uuid))
   AND NOT EXISTS (SELECT 1 FROM media_artifacts a WHERE a.upload_id=u.id AND a.role='output'
@@ -72,8 +75,12 @@ async def recover_source(
         channels = {}
     if messages is None:
         messages = OrderedDict()
-    for source in row["source_messages"]:
-        channel_id, message_id = int(source["channel_id"]), int(source["id"])
+    locations = [(int(source["channel_id"]), int(source["id"])) for source in row["source_messages"]]
+    # Inference can attribute the build to its main message while its files came
+    # from follow-up messages in the same retained bundle.
+    if row.get("bundle_channel_id") is not None:
+        locations.extend((int(row["bundle_channel_id"]), int(value)) for value in row.get("bundle_message_ids") or [])
+    for channel_id, message_id in dict.fromkeys(locations):
         try:
             if channel_id not in channels:
                 channels[channel_id] = await client.fetch_channel(channel_id)
