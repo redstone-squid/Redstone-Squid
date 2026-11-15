@@ -202,7 +202,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._tabs = sp.Tabs(
             tabs,
             key="tag-tabs",
-            title=tr(t"bot-tags-view-build-tags = Build tags"),
             initial_state=None if self._tabs is None else self._tabs.machine_state,
         )
 
@@ -222,7 +221,14 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._tabs is None:
             return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
         return (
-            sl.note(self._build_label or (f"Build #{self._build_id}" if self._build_id is not None else "")),
+            sl.section(
+                sl.heading(tr(t"tags-workspace-heading = Build tags")),
+                sl.paragraph(
+                    self._build_label or f"Build #{self._build_id}"
+                    if self._build_id is not None
+                    else tr(t"tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.")
+                ),
+            ),
             sl.action_controls(
                 sl.action_control(tr(t"tags-choose-build = Choose build"), self._choose_build, key="choose-build"),
                 key="build-actions",

@@ -101,15 +101,12 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        # Delivery settings are shown on their toggles, so the summary covers only the rest.
-        fields = (
-            sl.field(tr(t"bot-notifications-view-following = Following"), self.subscriptions.summary()),
-            sl.field(tr(t"bot-notifications-view-unread = Unread"), str(self.inbox.unread_count)),
-        )
+        following = len(self.settings.subscriptions)
+        unread = self.inbox.unread_count
         return (
             sl.section(
                 sl.heading(tr(t"bot-notifications-view-notifications = Notifications")),
-                sl.fields(*fields),
+                sl.note(md_tr(t"notifications-summary = {unread} unread · {following} follows")),
             ),
             self.tabs,
             *self.edits.refresh_controls(),

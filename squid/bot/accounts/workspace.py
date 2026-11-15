@@ -147,19 +147,26 @@ class AccountWorkspace(sd.Screen):
 
     def _identity_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         account = self._account
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        header = sl.section(
+            sl.heading(tr(t"account-link-heading = Connect Minecraft")),
+            sl.paragraph(
+                tr(
+                    t"account-link-help = Enter your in-game link code to connect your Minecraft identity to this "
+                    t"account."
+                )
+            ),
+            sl.note(tr(t"account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.")),
+        )
+        controls: list[sl.semantic.ActionControl[sd.Request] | sl.semantic.FormTrigger[sd.Request]] = []
         if account is None or account.needs_consent_refresh:
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"account-workspace-review-privacy-notice = Review privacy notice"),
-                        self._consent,
-                        key="consent",
-                    ),
-                    key="consent-actions",
+            controls.append(
+                sl.action_control(
+                    tr(t"account-workspace-review-privacy-notice = Review privacy notice"),
+                    self._consent,
+                    key="consent",
                 )
             )
-        nodes.append(
+        controls.append(
             sl.form(
                 tr(t"account-workspace-link-minecraft-account = Link Minecraft account"),
                 _LinkForm().spec(),
@@ -173,29 +180,36 @@ class AccountWorkspace(sd.Screen):
             and not account.needs_consent_refresh
             and self._can_refresh_identity
         ):
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"account-workspace-refresh-minecraft-identity = Refresh Minecraft identity"),
-                        self._refresh_identity,
-                        key="refresh",
-                    ),
-                    key="refresh-actions",
+            controls.append(
+                sl.action_control(
+                    tr(t"account-workspace-refresh-minecraft-identity = Refresh Minecraft identity"),
+                    self._refresh_identity,
+                    key="refresh",
                 )
             )
         if self._can_refresh_any:
-            nodes.append(
+            controls.append(
                 sl.form(
-                    tr(t"account-refresh-member-identity = Refresh another member's Minecraft identity"),
+                    tr(t"account-refresh-member-action = Refresh member"),
                     _RefreshMemberForm().spec(),
                     key="staff-refresh",
                     on_submit=self._refresh_member_identity,
                 )
             )
-        return nodes
+        return [header, sl.action_controls(*controls, key="identity-tools")]
 
     def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
+            sl.section(
+                sl.heading(tr(t"account-claim-heading = Claim your earlier builds")),
+                sl.paragraph(
+                    tr(
+                        t"account-claim-help = Used another creator name? Submit that name to connect its build "
+                        t"credits to your account."
+                    )
+                ),
+                sl.note(tr(t"account-claim-review-help = Staff review each claim before credits are connected.")),
+            ),
             sl.form(
                 tr(t"account-workspace-claim-creator-credit = Claim creator credit"),
                 _ClaimForm().spec(),
@@ -206,19 +220,34 @@ class AccountWorkspace(sd.Screen):
 
     def _merge_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
+            sl.section(
+                sl.heading(tr(t"account-merge-heading = Bring your accounts together")),
+                sl.paragraph(
+                    tr(
+                        t"account-merge-help = On the account you want to move, create a merge code. Then open the "
+                        t"account you want to keep and enter that code."
+                    )
+                ),
+                sl.note(
+                    tr(
+                        t"account-merge-preview-help = You will review the transfer before confirming. Keep merge "
+                        t"codes private."
+                    )
+                ),
+            ),
             sl.action_controls(
+                sl.form(
+                    tr(t"account-merge-preview-action = Enter merge code"),
+                    _MergeForm().spec(),
+                    key="merge",
+                    on_submit=self._request_merge,
+                ),
                 sl.action_control(
                     tr(t"account-workspace-create-merge-code = Create merge code"),
                     self._create_merge_code,
                     key="merge-code",
                 ),
                 key="merge-code-actions",
-            ),
-            sl.form(
-                tr(t"account-merge-action = Merge another account into this one"),
-                _MergeForm().spec(),
-                key="merge",
-                on_submit=self._request_merge,
             ),
         )
 

@@ -148,6 +148,15 @@ class StarboardScreen(sd.Screen):
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
+            sl.section(
+                sl.heading(tr(t"starboard-create-heading = Highlight community favourites")),
+                sl.paragraph(
+                    tr(
+                        t"starboard-create-help = Create a starboard, then choose which reactions count and where "
+                        t"highlighted messages appear."
+                    )
+                ),
+            ),
             sl.form(
                 tr(t"bot-starboard-screen-create-starboard = Create starboard"),
                 _CreateBoardForm().spec(),

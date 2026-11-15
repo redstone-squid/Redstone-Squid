@@ -524,8 +524,8 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
             can_refresh_any=allowed,
         )
 
-    assert "Refresh another member's Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
-    assert "Refresh another member's Minecraft identity" in labels(workspace(allowed=True)._identity_nodes())
+    assert "Refresh member" not in labels(workspace(allowed=False)._identity_nodes())
+    assert "Refresh member" in labels(workspace(allowed=True)._identity_nodes())
 
 
 def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> None:
@@ -1044,6 +1044,8 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         authorize_claim=authorize,
     )
     async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
+        for tab in ("identity", "claims", "merge", "overview"):
+            await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith(f"account-tabs.{tab}")))
         overview = workspace._overview
         assert isinstance(overview, AccountOverview)
         assert not isinstance(overview, sd.Screen)
