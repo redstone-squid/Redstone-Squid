@@ -15,7 +15,7 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, http_error, interaction_harness
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
-from squid_ui.planning.navigation import default_nav
+from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState

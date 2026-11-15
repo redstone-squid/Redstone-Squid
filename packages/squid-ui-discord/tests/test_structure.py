@@ -18,7 +18,7 @@ from squid_ui.ext.discord.planning.measurement.model import MeasuredPanel, Measu
 from squid_ui.planning import SolveNoteCode, plan
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
-from squid_ui.planning.navigation import default_nav
+from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentations import Replacement, corresponds, losses, ref
 from squid_ui.primitives import (

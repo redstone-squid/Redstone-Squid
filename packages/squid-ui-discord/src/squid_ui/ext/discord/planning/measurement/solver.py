@@ -46,7 +46,7 @@ from squid_ui.planning.diagnostics import (
     SolveNoteSeverity,
     lossy_notes,
 )
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.constraints import Paginate, RoutedPage, resolve_page
 from squid_ui.primitives.nodes import (

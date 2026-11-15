@@ -25,7 +25,7 @@ from squid_ui.ext.discord.planning.measurement.text import split_pages
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import SolveNoteCode
-from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import PagerNav, default_nav, page_select_nav
 from squid_ui.primitives import (
     LAST_PAGE,
     Button,

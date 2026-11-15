@@ -3,7 +3,7 @@
 from collections.abc import Callable, Sequence
 
 from squid_ui.ext.discord.planning.adaptation.model import LoweringContext
-from squid_ui.planning.cursors import MaterializedCursorRequest, content_fingerprint
+from squid_ui.planning.pagination.cursors import MaterializedCursorRequest, content_fingerprint
 from squid_ui.planning.search import StrategyAxis, choose_strategy
 from squid_ui.presentation import StrategyState, StrategyUpdate
 from squid_ui.text import TextLike, discord_text, resolve_text

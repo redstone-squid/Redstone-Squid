@@ -139,6 +139,14 @@ the selected target and everything below it solve, draw, deliver, and route one 
 
 ## Internal dependency boundaries
 
+Semantic factories live in `squid_ui.factories`, grouped into containers, content,
+collections, and controls. The package facade preserves the existing factory imports.
+Pagination internals live together in `squid_ui.planning.pagination`: `content` defines
+the root region, `cursors` tracks page positions, `navigation` builds pager controls,
+and `reuse` compares allocation inputs. Imports from the former planning-level
+`cursors`, `navigation`, `pagination_content`, and `pagination_reuse` modules now use
+these paths. Composition tests are grouped under `packages/squid-ui/tests/composition/`.
+
 `ContextKey` is defined in `squid_ui.context`; presentation state and updates live in
 `squid_ui.presentation`. Planning and runtime both consume these contracts. Their existing
 runtime import paths re-export the same objects for callers, but implementation modules use

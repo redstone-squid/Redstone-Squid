@@ -222,7 +222,7 @@ from squid_ui.ext.discord.target import (
     DISCORD_V1_DPY27,
     DISCORD_V2_DPY27,
 )
-from squid_ui.planning import navigation as navigation_controls
+from squid_ui.planning.pagination import navigation as navigation_controls
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 
 _LAZY_NAMESPACES = frozenset({"durability"})

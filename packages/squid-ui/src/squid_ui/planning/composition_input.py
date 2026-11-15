@@ -6,7 +6,7 @@ from squid_ui import scene
 from squid_ui import semantic as sem
 from squid_ui.document import Document
 from squid_ui.planning.native_extensions import ComposableExtension
-from squid_ui.planning.pagination_content import RootRegion
+from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph, variant_alternatives

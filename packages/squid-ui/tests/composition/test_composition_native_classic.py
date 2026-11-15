@@ -16,7 +16,7 @@ from squid_ui.ext.discord.planning.discord import classic_target, components_v2_
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.navigation import default_nav
+from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantics import check_alternative
 from squid_ui.planning.target import Target

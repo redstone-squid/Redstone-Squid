@@ -29,7 +29,7 @@ from squid_ui.planning.composition_state import present_composition
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.realizations import select_composition
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity

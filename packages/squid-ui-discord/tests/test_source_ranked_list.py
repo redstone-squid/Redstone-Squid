@@ -15,7 +15,7 @@ import squid_ui_widgets as sp
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
-from squid_ui.planning.navigation import NavigationContext, page_jump_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import NavigationContext, page_jump_nav, page_select_nav
 from squid_ui.primitives import Button, Row
 from squid_ui.sources import Position, Window
 

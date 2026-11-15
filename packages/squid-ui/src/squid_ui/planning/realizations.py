@@ -65,8 +65,8 @@ from squid_ui.planning.interaction_handlers import (
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
 from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
-from squid_ui.planning.navigation import PagerNav, default_nav
-from squid_ui.planning.pagination_content import RootRegion
+from squid_ui.planning.pagination.content import RootRegion
+from squid_ui.planning.pagination.navigation import PagerNav, default_nav
 from squid_ui.planning.resources import EMPTY_COST, Axis
 from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantics import (

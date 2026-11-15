@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from squid_ui.factories import action_controls, paragraph
-from squid_ui.planning.cursors import content_fingerprint
+from squid_ui.planning.pagination.cursors import content_fingerprint
 from squid_ui.semantic import Choice, LayoutNode
 from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
 from squid_ui_widgets.drivers import MachineControls

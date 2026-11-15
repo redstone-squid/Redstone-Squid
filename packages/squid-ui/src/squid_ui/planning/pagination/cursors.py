@@ -17,7 +17,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ownership import Controlled
 from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.presentation import (
     ActivePagers,
     CursorState,

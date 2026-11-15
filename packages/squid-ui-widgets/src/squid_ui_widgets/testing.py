@@ -23,7 +23,7 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.planning import PlanResult, Target, plan
 from squid_ui.planning.identity import has_routed_page
-from squid_ui.planning.navigation import PlannedNav, default_nav
+from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (

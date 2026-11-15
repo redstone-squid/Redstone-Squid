@@ -14,7 +14,7 @@ from squid_ui.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.navigation import TurnPage, default_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import TurnPage, default_nav, page_select_nav
 from squid_ui.planning.resources import Axis, TargetLimits
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState

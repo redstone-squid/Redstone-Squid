@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
-from squid_ui.planning.navigation import (
+from squid_ui.planning.pagination.navigation import (
     MATERIALIZED_NEXT_KEY,
     MATERIALIZED_PREVIOUS_KEY,
     MATERIALIZED_SEEK_KEY,

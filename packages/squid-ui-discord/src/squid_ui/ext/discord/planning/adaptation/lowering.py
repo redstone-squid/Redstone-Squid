@@ -54,7 +54,7 @@ from squid_ui.ext.discord.planning.adaptation.structures import (
 from squid_ui.ext.discord.planning.discord_dialect import require_gallery_item
 from squid_ui.factories import is_builtin_layout_node
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.cursors import CursorCoordinator
+from squid_ui.planning.pagination.cursors import CursorCoordinator
 from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.structure import (

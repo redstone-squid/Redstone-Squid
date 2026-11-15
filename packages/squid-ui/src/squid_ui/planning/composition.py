@@ -16,7 +16,7 @@ from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSear
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScope, budget_floor

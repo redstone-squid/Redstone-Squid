@@ -9,7 +9,7 @@ from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
 from squid_ui.interactions import ActionEvent
-from squid_ui.planning.navigation import (
+from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
     default_nav,

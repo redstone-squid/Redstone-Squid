@@ -21,8 +21,8 @@ from squid_ui.ext.discord.planning.adaptation.model import (
 from squid_ui.ext.discord.planning.measurement.costing import measure_nodes
 from squid_ui.ext.discord.planning.measurement.text import split_text_node, text_total
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
-from squid_ui.planning.cursors import MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
+from squid_ui.planning.pagination.cursors import MaterializedCursorRequest
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.primitives.constraints import (

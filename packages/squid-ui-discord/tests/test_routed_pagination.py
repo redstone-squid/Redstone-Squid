@@ -15,7 +15,7 @@ from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
-from squid_ui.planning.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.primitives.constraints import RoutedPage

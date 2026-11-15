@@ -23,7 +23,7 @@ from squid_ui.factories import (
 )
 from squid_ui.interactions import ActionEvent
 from squid_ui.pages import RevealPage
-from squid_ui.planning.navigation import (
+from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     MountNavNode,
     NavigationContext,

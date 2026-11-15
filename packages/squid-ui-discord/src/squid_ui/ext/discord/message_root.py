@@ -126,7 +126,7 @@ from squid_ui.palette import Palette
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_ui.planning.navigation import (
+from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     default_nav,
 )

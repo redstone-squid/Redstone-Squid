@@ -9,7 +9,7 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.identity import stable_value
-from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target, TargetIdentity

@@ -26,10 +26,10 @@ from squid_ui.ext.discord.planning.measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.identity import stable_fingerprint
-from squid_ui.planning.navigation import PagerNav, PlannedNav
+from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
+from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text

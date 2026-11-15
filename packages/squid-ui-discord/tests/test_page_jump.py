@@ -14,7 +14,7 @@ from squid_ui.ext.discord.testing import commit_classic_render, commit_render, i
 from squid_ui.forms import IntField
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, plan
-from squid_ui.planning.navigation import NavigationContext, materialized_navigation_state, page_jump_nav
+from squid_ui.planning.pagination.navigation import NavigationContext, materialized_navigation_state, page_jump_nav
 from squid_ui.primitives import Lines, Paginate, Row, Text
 from squid_ui.selectors import select as select_node
 

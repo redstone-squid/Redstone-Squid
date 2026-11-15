@@ -17,7 +17,7 @@ from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.identity import has_routed_page
 from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult

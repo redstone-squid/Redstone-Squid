@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid_ui.planning.cursors import content_fingerprint
+from squid_ui.planning.pagination.cursors import content_fingerprint
 
 
 @pytest.mark.parametrize(

@@ -29,7 +29,7 @@ from squid_ui.planning.interaction_handlers import (
     SelectEntityFallback,
     ToggleDetails,
 )
-from squid_ui.planning.navigation import _SeekSelection
+from squid_ui.planning.pagination.navigation import _SeekSelection
 from squid_ui.presentation import PresentationState
 from squid_ui.semantic import Controlled, Details, Summary, Toggle
 

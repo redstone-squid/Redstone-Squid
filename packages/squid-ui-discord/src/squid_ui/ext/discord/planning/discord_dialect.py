@@ -17,8 +17,8 @@ from squid_ui.ext.discord.planning.measurement.model import Realized
 from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding
-from squid_ui.planning.cursors import CursorCoordinator
-from squid_ui.planning.navigation import PagerNav
+from squid_ui.planning.pagination.cursors import CursorCoordinator
+from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.primitives.nodes import (

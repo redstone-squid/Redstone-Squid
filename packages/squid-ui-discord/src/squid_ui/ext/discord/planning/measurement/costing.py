@@ -16,7 +16,7 @@ from squid_ui.ext.discord.planning.measurement.model import (
 )
 from squid_ui.ext.discord.planning.measurement.realization import Builder
 from squid_ui.planning.adapter import ResourceCost
-from squid_ui.planning.navigation import NavNode
+from squid_ui.planning.pagination.navigation import NavNode
 from squid_ui.primitives.nodes import (
     Break,
     Budget,

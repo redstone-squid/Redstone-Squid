@@ -11,7 +11,7 @@ from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.identity import stable_fingerprint
-from squid_ui.planning.navigation import TurnPage, default_nav
+from squid_ui.planning.pagination.navigation import TurnPage, default_nav
 from squid_ui.planning.result import PlanReuse
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter

@@ -10,7 +10,7 @@ from squid_ui.planning.resources import TargetLimits
 if TYPE_CHECKING:
     from squid_ui.document import DocumentLike
     from squid_ui.planning.composition import TargetRules
-    from squid_ui.planning.navigation import PlannedNav
+    from squid_ui.planning.pagination.navigation import PlannedNav
 
 
 @dataclass(frozen=True, slots=True)

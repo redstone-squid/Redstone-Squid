@@ -34,7 +34,7 @@ from squid_ui.ext.slack.limits import (
 )
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.dialect import InputPolicy
-from squid_ui.planning.navigation import PlannedNav, default_nav
+from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.planning.target import Target
 from squid_ui.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTarget, SlackModalTarget
 
