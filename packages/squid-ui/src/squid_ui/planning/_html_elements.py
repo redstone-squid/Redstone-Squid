@@ -6,10 +6,8 @@ and authored-budget adaptations. Target planners build scenes and manage caches.
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any, assert_never, cast
 
-from squid_ui import forms as form_types
 from squid_ui import scene
 from squid_ui import semantic as sem
 from squid_ui.assets import Asset
@@ -23,6 +21,7 @@ from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
 from squid_ui.pages import PagePosition
 from squid_ui.palette import Palette, Role
+from squid_ui.planning._html_forms import HtmlFormRenderer
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
@@ -132,14 +131,6 @@ def _entity_key(ref: object) -> str:
         return ref.encode()
     kind = getattr(getattr(ref, "kind", None), "value", "entity")
     return f"{kind}:{getattr(ref, 'id', '')}"
-
-
-def _scalar(value: object) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, date | datetime | time):
-        return value.isoformat()
-    return "" if value is None else str(value)
 
 
 def _html_size(node: scene.HtmlNode) -> int:
@@ -914,7 +905,7 @@ class ElementCompiler:
     def _form(self, node: sem.FormTrigger) -> scene.HtmlElement:
         spec = node.spec.adapt(self.capabilities)
         self.form_bindings[node.key] = FormBinding(node.key, spec, node.on_submit, node.mode, node.label, node.record)
-        action = self.bind(
+        self.bind(
             node.key,
             PresentForm(spec, node.key, node.on_submit, node.mode, node.label, node.record),
             mode=node.mode,
@@ -922,148 +913,7 @@ class ElementCompiler:
             label=node.label,
             record=node.record,
         )
-        children: list[scene.HtmlNode] = [self.element(scene.HtmlTag.H3, self.text(spec.title))]
-        for item in spec.items:
-            if isinstance(item, form_types.FormText):
-                children.append(self.element(scene.HtmlTag.P, self.text(item.content)))
-            else:
-                children.append(self._form_field(node.key, spec, item))
-        children.append(
-            self.element(
-                scene.HtmlTag.BUTTON,
-                self.text(node.label),
-                attributes=_attributes((scene.HtmlAttributeName.TYPE, "submit")),
-                action=action,
-                form=scene.HtmlFormRef(node.key),
-            )
-        )
-        return self.element(
-            scene.HtmlTag.FORM,
-            *children,
-            attributes=_attributes((scene.HtmlAttributeName.CLASS, "squid-form")),
-            action=action,
-            form=scene.HtmlFormRef(node.key),
-        )
-
-    def _form_field(
-        self, form_key: str, spec: form_types.FormSpec, field: form_types.FormField[Any]
-    ) -> scene.HtmlElement:
-        control_id = f"squid-{form_key}-{field.key}"
-        description_id = f"{control_id}-description"
-        common = _attributes(
-            (scene.HtmlAttributeName.ID, control_id),
-            (scene.HtmlAttributeName.NAME, field.key),
-            (scene.HtmlAttributeName.REQUIRED, field.required if field.required else None),
-            (scene.HtmlAttributeName.ARIA_DESCRIBEDBY, description_id if field.description is not None else None),
-        )
-        prefill = spec.prefill_for(field)
-        if isinstance(field, form_types.TextAreaField):
-            control = self.element(
-                scene.HtmlTag.TEXTAREA,
-                scene.HtmlText(_scalar(prefill)),
-                attributes=common
-                + _attributes(
-                    (scene.HtmlAttributeName.PLACEHOLDER, self._optional_text(field.placeholder)),
-                    (scene.HtmlAttributeName.MINLENGTH, field.minimum),
-                    (scene.HtmlAttributeName.MAXLENGTH, field.maximum),
-                ),
-                form=scene.HtmlFormRef(form_key, field.key),
-            )
-        elif isinstance(field, form_types.ChoiceField | form_types.MultiChoiceField | form_types.ScaleField):
-            if isinstance(field, form_types.ScaleField):
-                options = tuple((str(point), field.label_for(point)) for point in field.points)
-                selected = {_scalar(prefill)}
-                multiple = False
-            else:
-                options = tuple((option.key, option.label) for option in field.options)
-                selected = set(prefill if isinstance(prefill, tuple) else (_scalar(prefill),))
-                multiple = isinstance(field, form_types.MultiChoiceField)
-            control = self.element(
-                scene.HtmlTag.SELECT,
-                *(
-                    self.element(
-                        scene.HtmlTag.OPTION,
-                        self.text(label),
-                        attributes=_attributes(
-                            (scene.HtmlAttributeName.VALUE, key),
-                            (scene.HtmlAttributeName.SELECTED, True if key in selected else None),
-                        ),
-                    )
-                    for key, label in options
-                ),
-                attributes=common + _attributes((scene.HtmlAttributeName.MULTIPLE, True if multiple else None)),
-                form=scene.HtmlFormRef(form_key, field.key),
-            )
-        else:
-            input_type = "text"
-            extra: tuple[scene.HtmlAttribute, ...] = ()
-            if isinstance(field, form_types.IntField):
-                input_type = "number"
-                extra = _attributes(
-                    (scene.HtmlAttributeName.MIN, field.minimum),
-                    (scene.HtmlAttributeName.MAX, field.maximum),
-                    (scene.HtmlAttributeName.STEP, 1),
-                )
-            elif isinstance(field, form_types.FloatField):
-                input_type = "number"
-                extra = _attributes(
-                    (scene.HtmlAttributeName.MIN, field.minimum),
-                    (scene.HtmlAttributeName.MAX, field.maximum),
-                    (scene.HtmlAttributeName.STEP, "any"),
-                )
-            elif isinstance(field, form_types.DateField):
-                input_type = "date"
-                extra = _attributes(
-                    (scene.HtmlAttributeName.MIN, None if field.minimum is None else field.minimum.isoformat()),
-                    (scene.HtmlAttributeName.MAX, None if field.maximum is None else field.maximum.isoformat()),
-                )
-            elif isinstance(field, form_types.TimeField):
-                input_type = "time"
-                extra = _attributes(
-                    (scene.HtmlAttributeName.MIN, None if field.minimum is None else field.minimum.isoformat()),
-                    (scene.HtmlAttributeName.MAX, None if field.maximum is None else field.maximum.isoformat()),
-                )
-            elif isinstance(field, form_types.DateTimeField | form_types.ZonedDateTimeField):
-                input_type = "datetime-local"
-                if isinstance(field, form_types.ZonedDateTimeField):
-                    extra = _attributes((scene.HtmlAttributeName.TIMEZONE, field.timezone))
-            elif isinstance(field, form_types.BoolField):
-                input_type = "checkbox"
-                extra = _attributes((scene.HtmlAttributeName.CHECKED, True if prefill else None))
-            placeholder = getattr(field, "placeholder", None)
-            control = self.element(
-                scene.HtmlTag.INPUT,
-                attributes=common
-                + _attributes(
-                    (scene.HtmlAttributeName.TYPE, input_type),
-                    (
-                        scene.HtmlAttributeName.VALUE,
-                        None if isinstance(field, form_types.BoolField) else _scalar(prefill),
-                    ),
-                    (scene.HtmlAttributeName.PLACEHOLDER, self._optional_text(placeholder)),
-                )
-                + extra,
-                form=scene.HtmlFormRef(form_key, field.key),
-            )
-        children: list[scene.HtmlNode] = [
-            self.element(
-                scene.HtmlTag.LABEL,
-                self.text(cast(TextLike, field.label)),
-                attributes=_attributes((scene.HtmlAttributeName.FOR, control_id)),
-            ),
-            control,
-        ]
-        if field.description is not None:
-            children.append(
-                self.element(
-                    scene.HtmlTag.SMALL,
-                    self.text(field.description),
-                    attributes=_attributes((scene.HtmlAttributeName.ID, description_id)),
-                )
-            )
-        return self.element(
-            scene.HtmlTag.DIV, *children, attributes=_attributes((scene.HtmlAttributeName.CLASS, "squid-field"))
-        )
+        return HtmlFormRenderer(self.localization).render(self.form_bindings[node.key])
 
     def _optional_text(self, value: TextLike | None) -> str | None:
         return None if value is None else self._resolved(value)

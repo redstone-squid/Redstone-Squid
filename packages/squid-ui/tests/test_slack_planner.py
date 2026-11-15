@@ -127,9 +127,14 @@ def test_unsupported_native_entity_family_requires_an_enumerated_fallback() -> N
     assert actions.elements[0].kind is scene.SlackSelectKind.STATIC
 
 
-def test_message_form_is_a_modal_trigger_button_with_form_binding() -> None:
+@pytest.mark.parametrize("shared", [False, True])
+def test_message_form_is_a_modal_trigger_button_with_form_binding(shared: bool) -> None:
     spec = forms.FormSpec("Edit build", (forms.TextField("Name", "name"),))
-    result = sl.planning.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=MESSAGE)
+    result = sl.planning.plan(
+        sl.form("Edit", spec, key="edit", on_submit=_submitted),
+        target=MESSAGE,
+        composition=sl.planning.CompositionOptions(automatic=True) if shared else None,
+    )
 
     assert len(result.scene.body.blocks) == 1
     assert isinstance(result.scene.body.blocks[0], scene.SlackActions)

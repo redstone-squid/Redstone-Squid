@@ -118,6 +118,7 @@ _COMMON_CAPABILITIES = frozenset(
         Capability.ACTIONS_BUTTONS,
         Capability.ACTIONS_ENTITY,
         Capability.ACTIONS_SELECT,
+        Capability.FORMS_MODAL,
         Capability.LAYOUT_CARD,
         Capability.LAYOUT_CONTAINER,
         Capability.LAYOUT_SECTION,

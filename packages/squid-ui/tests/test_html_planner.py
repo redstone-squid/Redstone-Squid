@@ -201,7 +201,8 @@ class _PortableExtension(ExtensionField[str]):
         return None if raw is None else str(raw)
 
 
-def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
+@pytest.mark.parametrize("shared", [False, True])
+def test_html_planner_renders_portable_forms_inline_with_prefill(shared: bool) -> None:
     spec = FormSpec(
         "Edit build",
         (
@@ -233,7 +234,11 @@ def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
         prefill={"name": '"><script>alert(1)</script>', "tags": ("door",), "published": True},
     )
 
-    result = sl.planning.plan(sl.form("Save", spec, key="edit", on_submit=_submitted), target=sl.html.target())
+    result = sl.planning.plan(
+        sl.form("Save", spec, key="edit", on_submit=_submitted),
+        target=sl.html.target(),
+        composition=sl.planning.CompositionOptions(automatic=True) if shared else None,
+    )
     elements = _elements(result)
     controls = [
         element

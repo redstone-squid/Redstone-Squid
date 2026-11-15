@@ -6,6 +6,7 @@ from squid_i18n import tree
 from squid_ui import scene
 from squid_ui.assets import Asset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.planning._html_forms import HtmlFormRenderer
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -135,6 +136,10 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
 
             match part.offer.payload:
                 case ControlRealization() as control:
+                    if part.offer.form is not None:
+                        rendered_form = HtmlFormRenderer(context.localization).render(part.offer.form)
+                        texts.extend(_text_leaves(rendered_form))
+                        return (rendered_form,)
                     texts.append(control.label)
                     attributes = (
                         (scene.HtmlAttribute(scene.HtmlAttributeName.DISABLED, "disabled"),) if control.disabled else ()

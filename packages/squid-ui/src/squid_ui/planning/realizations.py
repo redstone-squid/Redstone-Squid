@@ -2003,12 +2003,13 @@ def semantic_offers[RenderTargetT, ContextT](
                     record=value.record,
                 )
             case sem.FormTrigger():
-                if Capability.FORMS_MODAL not in context.capabilities:
+                if not {Capability.FORMS_MODAL, Capability.FORMS_INLINE}.intersection(context.capabilities):
                     return ()
-                form = FormBinding(key, value.spec, value.on_submit, value.mode, value.label, value.record)
+                spec = value.spec.adapt(context.capabilities)
+                form = FormBinding(key, spec, value.on_submit, value.mode, value.label, value.record)
                 binding = ActionBinding(
                     key,
-                    PresentForm(value.spec, key, value.on_submit, value.mode, value.label, value.record),
+                    PresentForm(spec, key, value.on_submit, value.mode, value.label, value.record),
                     value.mode,
                     guard=value.guard,
                     label=value.label,
