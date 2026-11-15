@@ -329,7 +329,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     def _channel_display(self, channel_id: int | None) -> sl.TextLike:
         if channel_id is None:
-            return tr(t"bot-settings-view-not-set = _Not set_")
+            return md_tr(t"bot-settings-view-not-set = _Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
             return md_tr(
                 t"bot-settings-view-not-found = _Not found_ ({channel_id!s})",
@@ -586,7 +586,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         emojis = (
             Text.join("\n", (Text(t"{emoji_text(option.emoji)} — {option.choice.value}") for option in preset.options))
             if preset is not None and preset.options
-            else tr(t"bot-settings-view-none = _None_")
+            else md_tr(t"bot-settings-view-none = _None_")
         )
         weight_lines: list[Text] = []
         for weight in self.configuration.weights:
@@ -598,7 +598,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     t"{NUMBER(multiplier, use_grouping=False, maximum_significant_digits=6)}x",
                 )
             )
-        weights = sl.text.Text.join("\n", weight_lines) if weight_lines else tr(t"bot-settings-view-none = _None_")
+        weights = sl.text.Text.join("\n", weight_lines) if weight_lines else md_tr(t"bot-settings-view-none = _None_")
         return [
             CardField(tr(t"bot-settings-view-emojis = Emojis"), emojis),
             CardField(tr(t"bot-settings-view-role-multipliers = Role multipliers"), weights),
