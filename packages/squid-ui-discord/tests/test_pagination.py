@@ -301,7 +301,7 @@ class TestMountPagination:
 
     def test_the_message_root_draws_once_per_render(self, monkeypatch):
         """One committed render must make one planner call, including cursor fingerprinting."""
-        from squid_ui.ext.discord import message_root as message_root_module
+        from squid_ui.ext.discord.messages import root as message_root_module
 
         calls = 0
         planner = message_root_module.plan_document  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here

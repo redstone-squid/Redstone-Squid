@@ -12,8 +12,8 @@ from typing import Protocol
 import discord
 from squid_ui.ext.discord.delivery import Abandoned, DeliveryResult, EditHandle, StaleHandleError, handle_for
 from squid_ui.ext.discord.durability import FrontendAddress
-from squid_ui.ext.discord.message_payload import MessageMode, MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
+from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
 
 
 @dataclass(frozen=True, slots=True)

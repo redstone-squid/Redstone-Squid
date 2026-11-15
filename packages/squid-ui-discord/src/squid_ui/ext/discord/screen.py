@@ -24,7 +24,7 @@ from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
-    from squid_ui.ext.discord.message_root import MessageRoot
+    from squid_ui.ext.discord.messages.root import MessageRoot
     from squid_ui.ext.discord.sessions import Session
 
 

@@ -38,7 +38,7 @@ from squid_ui.ext.discord.durability import (
     RecoveredBinding,
     Unreachable,
 )
-from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.sessions import (
     AdmissionSpec,
     MembershipStatus,

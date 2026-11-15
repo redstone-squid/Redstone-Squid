@@ -28,7 +28,7 @@ from squid_storage import (
     TopicBridgeSnapshot,
 )
 from squid_ui.errors import SquidUiError
-from squid_ui.ext.discord.message_root import AnyMessageRoot, MessageRoot
+from squid_ui.ext.discord.messages.root import AnyMessageRoot, MessageRoot
 from squid_ui.ext.discord.sessions import SessionKey
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.targets import DEFAULT_TARGETS, TargetRegistry

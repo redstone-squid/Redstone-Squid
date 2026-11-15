@@ -25,7 +25,7 @@ from squid_ui.content.emoji import Emoji, normalize_emoji
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutError
 from squid_ui.ext.discord.actions import ActionResponder, _responder
-from squid_ui.ext.discord.message_root_wiring import _CONVERSATION_TYPES
+from squid_ui.ext.discord.messages.wiring import _CONVERSATION_TYPES
 from squid_ui.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
 from squid_ui.primitives.constraints import Never
 from squid_ui.primitives.nodes import (

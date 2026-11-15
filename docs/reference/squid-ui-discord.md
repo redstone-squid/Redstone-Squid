@@ -118,7 +118,7 @@ through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui.ext.discord.owner_message_root
 
-::: squid_ui.ext.discord.message_roots
+::: squid_ui.ext.discord.messages.roots
 
 ::: squid_ui.ext.discord.PauseUpdates
 
@@ -286,8 +286,8 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui.ext.discord.request` | One localized, owner-bound Discord request and its acknowledgement ledger. |
 | `squid_ui.ext.discord.limits` | Discord presentation limits as data, for both message modes. |
 | `squid_ui.ext.discord.live` | Which message roots are live right now. |
-| `squid_ui.ext.discord.message_payload` | The whole outgoing Discord message surface, as one value. |
-| `squid_ui.ext.discord.message_root` | The mount: one component bound to one Discord message. |
+| `squid_ui.ext.discord.messages.payload` | The whole outgoing Discord message surface, as one value. |
+| `squid_ui.ext.discord.messages.root` | The mount: one component bound to one Discord message. |
 | `squid_ui.ext.discord.modals` | Declarative modals: specs in, clamped discord.py modals out. |
 | `squid_ui.ext.discord.navigation` | Stack navigation by composition. |
 | `squid_ui.ext.discord.navigation_controls` | One navigation factory for materialized and loaded cursors. |

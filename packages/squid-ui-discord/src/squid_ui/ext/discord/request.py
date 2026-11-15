@@ -34,8 +34,8 @@ from squid_ui.ext.discord.delivery import (
     respond_to,
     send_to,
 )
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui.ext.discord.response import Response, ResponseOverrides, ResponseResult
 from squid_ui.ext.discord.sessions import Session

@@ -12,8 +12,8 @@ import anyio
 from squid_reactivity.topics import BusAddress, CellAddress, Topic, TopicBus, TopicBusStats, TopicName
 from squid_ui.errors import SquidUiError
 from squid_ui.ext.discord.live import find, message_roots
-from squid_ui.ext.discord.message_root_contracts import MessageRootSnapshot
-from squid_ui.ext.discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
+from squid_ui.ext.discord.messages.contracts import MessageRootSnapshot
+from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui.ext.discord.sessions import Session, SessionManager
 from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories

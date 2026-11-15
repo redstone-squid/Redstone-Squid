@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Unpack
 
 from squid_ui.ext.discord.access import AccessPolicy
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_contracts import (
+from squid_ui.ext.discord.messages.contracts import (
     MessageRootBehaviorOptions,
     MessageRootConfig,
 )
-from squid_ui.ext.discord.message_root_contracts import (
+from squid_ui.ext.discord.messages.contracts import (
     MessageRootOptions as MessageRootOptions,
 )
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
 

@@ -18,7 +18,7 @@ from squid_ui.content.emoji import Emoji
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.adoption import AdoptionError, adopt
-from squid_ui.ext.discord.message_root_wiring import _EntityValues
+from squid_ui.ext.discord.messages.wiring import _EntityValues
 from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import (
     ActionStyle,

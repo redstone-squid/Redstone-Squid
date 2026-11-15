@@ -19,9 +19,9 @@ from squid_ui.ext.discord.access import AccessPolicy, Owner
 from squid_ui.ext.discord.audience import Audience, Private
 from squid_ui.ext.discord.contracts import FacadeContent
 from squid_ui.ext.discord.delivery import DeliveryResult
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_contracts import ExpiryPolicy
+from squid_ui.ext.discord.messages.contracts import ExpiryPolicy
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.session_specs import SessionSpec
 from squid_ui.ext.discord.sessions import RejectionReason, Session
 from squid_ui.planning.pagination.navigation import NavFactory

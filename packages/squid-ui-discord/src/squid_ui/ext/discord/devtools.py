@@ -28,8 +28,8 @@ from squid_ui.ext.discord.devtools_view import (
     DevToolsSection,
     OperationalInspector,
 )
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_scheduler import MessageRootScheduler
+from squid_ui.ext.discord.messages.root import MessageRoot
+from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
 from squid_ui.ext.discord.request import request
 from squid_ui.ext.discord.response import Presented
 from squid_ui.ext.discord.sessions import SessionManager

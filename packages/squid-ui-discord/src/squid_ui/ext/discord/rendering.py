@@ -20,7 +20,7 @@ from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.ext.discord._draw import plan_and_draw
 from squid_ui.ext.discord.adapter import require_discord_py_target
 from squid_ui.ext.discord.limits import V2Limits
-from squid_ui.ext.discord.message_payload import MessageModeError, MessagePayload
+from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
 from squid_ui.ext.discord.renderer import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.palette import DEFAULT_PALETTE, Palette

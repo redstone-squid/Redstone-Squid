@@ -18,7 +18,7 @@ from squid_ui import ActionEvent, Component, state
 from squid_ui import form as sl_form
 from squid_ui.ext.discord import Everyone, MessageRoot, delivery
 from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui.ext.discord.message_root_contracts import ChallengeRequest
+from squid_ui.ext.discord.messages.contracts import ChallengeRequest
 from squid_ui.ext.discord.sessions import SessionManager
 from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from squid_ui.interactions import ActionMode

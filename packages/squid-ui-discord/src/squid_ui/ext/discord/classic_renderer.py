@@ -14,10 +14,10 @@ import discord
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui.ext.discord.attachments import attachment_assets
 from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, ClassicLimits
-from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.messages.attachments import attachment_assets
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.native_controls import Control as Control
 from squid_ui.ext.discord.native_controls import Wire as Wire
 from squid_ui.ext.discord.native_controls import (

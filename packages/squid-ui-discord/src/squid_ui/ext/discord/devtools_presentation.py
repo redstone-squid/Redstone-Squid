@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 from squid_reactivity.topics import TopicBusStats
-from squid_ui.ext.discord.message_root_scheduler import MessageRootSchedulerSnapshot
+from squid_ui.ext.discord.messages.scheduler import MessageRootSchedulerSnapshot
 
 if TYPE_CHECKING:
     # Keep the optional durable extra out of runtime imports.

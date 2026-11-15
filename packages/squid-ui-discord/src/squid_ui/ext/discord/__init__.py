@@ -44,8 +44,7 @@ from squid_ui.ext.discord import (
     guards,
     inspection,
     live,
-    message_payload,
-    message_root,
+    messages,
     navigation,
     renderer,
     rendering,
@@ -139,17 +138,7 @@ from squid_ui.ext.discord.fragments import contribute
 from squid_ui.ext.discord.grids import button_grid
 from squid_ui.ext.discord.limits import LIMITS as V2_LIMITS
 from squid_ui.ext.discord.live import message_roots
-from squid_ui.ext.discord.message_payload import (
-    MessageMode,
-    MessageModeError,
-    MessagePayload,
-    message_mode,
-)
-from squid_ui.ext.discord.message_root import (
-    MessageRoot,
-    owner_message_root,
-)
-from squid_ui.ext.discord.message_root_contracts import (
+from squid_ui.ext.discord.messages.contracts import (
     DEFAULT_MESSAGE_ROOT_CONFIG,
     ChallengePresenter,
     ChallengeRequest,
@@ -160,11 +149,21 @@ from squid_ui.ext.discord.message_root_contracts import (
     PauseUpdates,
     RenewEphemeral,
 )
-from squid_ui.ext.discord.message_root_options import (
+from squid_ui.ext.discord.messages.defaults import (
     MessageRootDefaults,
     MessageRootOptions,
 )
-from squid_ui.ext.discord.message_root_scheduler import (
+from squid_ui.ext.discord.messages.payload import (
+    MessageMode,
+    MessageModeError,
+    MessagePayload,
+    message_mode,
+)
+from squid_ui.ext.discord.messages.root import (
+    MessageRoot,
+    owner_message_root,
+)
+from squid_ui.ext.discord.messages.scheduler import (
     MessageRootScheduler,
     MessageRootSchedulerSnapshot,
 )
@@ -399,9 +398,8 @@ __all__ = [
     "limits",
     "live",
     "message_mode",
-    "message_payload",
-    "message_root",
     "message_roots",
+    "messages",
     "modals",
     "navigation",
     "navigation_controls",

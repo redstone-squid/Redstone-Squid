@@ -53,14 +53,13 @@ from squid_ui.ext.discord._shutdown import Shutdown
 from squid_ui.ext.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.adapter import require_discord_py_target
-from squid_ui.ext.discord.attachments import attachment_assets, files_for
 from squid_ui.ext.discord.classic import render_message as render_classic_message
 from squid_ui.ext.discord.classic_renderer import ClassicRenderer
 from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.lifetime import Lifetime
-from squid_ui.ext.discord.message_delivery import _MessageDelivery
-from squid_ui.ext.discord.message_payload import MessageMode, MessagePayload
-from squid_ui.ext.discord.message_root_candidates import (
+from squid_ui.ext.discord.messages.attachments import attachment_assets, files_for
+from squid_ui.ext.discord.messages.authority import _MessageDelivery
+from squid_ui.ext.discord.messages.candidates import (
     _ApplicationCandidate,
     _BusyPaint,
     _Candidate,
@@ -75,7 +74,8 @@ from squid_ui.ext.discord.message_root_candidates import (
     _scene_action_keys,
     _SubmitBinding,
 )
-from squid_ui.ext.discord.message_root_contracts import (
+from squid_ui.ext.discord.messages.continuations import _Continuations, _DeliveryReport
+from squid_ui.ext.discord.messages.contracts import (
     DEFAULT_MESSAGE_ROOT_CONFIG,
     ChallengeRequest,
     CommittedHook,
@@ -91,9 +91,9 @@ from squid_ui.ext.discord.message_root_contracts import (
     ReactiveScheduler,
     RenewEphemeral,
 )
-from squid_ui.ext.discord.message_root_lifecycle import _CandidateLifecycle
-from squid_ui.ext.discord.message_root_spread import _Continuations, _DeliveryReport
-from squid_ui.ext.discord.message_root_wiring import (
+from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload
+from squid_ui.ext.discord.messages.publication import _CandidateLifecycle
+from squid_ui.ext.discord.messages.wiring import (
     AnyMountedView,
     ClassicMountedView,
     MountedView,

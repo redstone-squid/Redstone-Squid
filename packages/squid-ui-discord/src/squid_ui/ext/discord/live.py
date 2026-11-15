@@ -10,7 +10,7 @@ import weakref
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
 
 _LIVE: weakref.WeakValueDictionary[str, AnyMessageRoot] = weakref.WeakValueDictionary()
 

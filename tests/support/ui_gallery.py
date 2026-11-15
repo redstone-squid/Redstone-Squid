@@ -31,7 +31,7 @@ from typing import Any, cast
 import pytest
 
 from squid_ui import scene
-from squid_ui.ext.discord.message_root import MessageRoot
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.preview import PREVIEW_CSS, DiscordPreviewRenderer
 from squid_ui.planning.result import PlanResult
 

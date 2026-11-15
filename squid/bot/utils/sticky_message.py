@@ -55,7 +55,7 @@ class StickyMessage(abc.ABC):
         return self._locks[channel_id]
 
     @abc.abstractmethod
-    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
+    async def render(self, channel: TextChannel) -> sd.messages.payload.MessagePayload:
         """Render the presentation to display in the sticky message."""
         ...
 

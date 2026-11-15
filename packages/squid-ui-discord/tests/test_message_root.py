@@ -20,7 +20,7 @@ from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_ui as sl
 import squid_ui.ext.discord
-import squid_ui.ext.discord.message_root_contracts
+import squid_ui.ext.discord.messages.contracts
 from squid_i18n import tr
 from squid_reactivity import EventLedger, current_transaction, observe_events
 from squid_ui import (
@@ -52,9 +52,9 @@ from squid_ui.ext.discord import (
 )
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.access import Allowed, Check, Denied
-from squid_ui.ext.discord.message_root_candidates import _BusyPaint
-from squid_ui.ext.discord.message_root_contracts import MessageRootStatus
-from squid_ui.ext.discord.message_root_wiring import _custom_id
+from squid_ui.ext.discord.messages.candidates import _BusyPaint
+from squid_ui.ext.discord.messages.contracts import MessageRootStatus
+from squid_ui.ext.discord.messages.wiring import _custom_id
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -272,7 +272,7 @@ async def _armed_root(
     component: Component[Any, Any] | None = None,
     *,
     access: squid_ui.ext.discord.AccessPolicy | None = None,
-    on_error: squid_ui.ext.discord.message_root_contracts.ErrorHook | None = None,
+    on_error: squid_ui.ext.discord.messages.contracts.ErrorHook | None = None,
 ) -> tuple[MessageRoot, Any, MessageRootScheduler]:
     """Deliver an ephemeral root with a token inside its warning window and arm renewal."""
     now = datetime.now(UTC)
@@ -2407,7 +2407,7 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, presentation: squid_ui.ext.discord.message_payload.MessagePayload) -> Any:
+    async def __call__(self, presentation: squid_ui.ext.discord.messages.payload.MessagePayload) -> Any:
         self.calls.append((presentation.layout, presentation.build_files()))
         if self.raises is not None:
             raise self.raises
@@ -4683,14 +4683,14 @@ class _OverlongText(Component[sl.ComponentsV2Target]):
 
 async def test_an_ordinary_layout_choice_is_not_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
     # The planner reports which strategy it chose for every ActionControls, even the preferred one.
-    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.message_root"):
+    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.messages.root"):
         commit_render(MessageRoot(_ActionsOnly(), access=Everyone(), timeout=None))
 
     assert "layout degraded" not in caplog.text
 
 
 async def test_truncated_content_is_logged_as_degraded(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.message_root"):
+    with caplog.at_level("WARNING", logger="squid_ui.ext.discord.messages.root"):
         commit_render(MessageRoot(_OverlongText(), access=Everyone(), timeout=None))
 
     assert "layout degraded" in caplog.text

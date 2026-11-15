@@ -15,7 +15,7 @@ from squid_reactivity.topics import BusAddress, CellAddress, DependencyAddress, 
 from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import MessageRoot
+    from squid_ui.ext.discord.messages.root import MessageRoot
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

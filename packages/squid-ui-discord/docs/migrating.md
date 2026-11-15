@@ -442,3 +442,12 @@ delivery; failed delivery must leave the remembered presentation unchanged.
 Use `str(address)` for diagnostic state/topic addresses, `inspection.measure_classic(payload, ...)`
 for an existing classic payload's cost, and `SolveNote(...)` to construct solver diagnostics. The
 `describe`, `classic.measure_host`, and diagnostic `note` forwarding functions have been removed.
+
+## Message ownership package
+
+Low-level message modules now live under `squid_ui.ext.discord.messages`:
+`root`, `payload`, `contracts`, `defaults`, `scheduler`, `candidates`, `publication`,
+`continuations`, `wiring`, `authority`, and `attachments`. The old flat
+`message_root_*`, `message_payload`, and `message_delivery` modules are removed.
+Application imports such as `sd.MessageRoot` and `sd.MessagePayload` remain available;
+use `sd.messages.payload` when importing the payload module itself.

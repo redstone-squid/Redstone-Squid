@@ -28,10 +28,10 @@ from squid_ui.ext.discord.contracts import LocalizationResolver
 from squid_ui.ext.discord.delivery import DeliveryResult, Replyable
 from squid_ui.ext.discord.facade import Scope
 from squid_ui.ext.discord.lifetime import Lifetime
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_contracts import MessageRootBehaviorOptions
-from squid_ui.ext.discord.message_root_options import MessageRootDefaults
-from squid_ui.ext.discord.message_root_scheduler import MessageRootScheduler
+from squid_ui.ext.discord.messages.contracts import MessageRootBehaviorOptions
+from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
+from squid_ui.ext.discord.messages.root import MessageRoot
+from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
 from squid_ui.ext.discord.request import Request, request
 from squid_ui.ext.discord.response import Presented, ResponseSpec, Sent
 from squid_ui.ext.discord.sessions import SessionManager

@@ -19,10 +19,10 @@ from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import discord_text
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui.ext.discord.attachments import attachment_assets
 from squid_ui.ext.discord.conformance import LimitViolationError, conform
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
-from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.messages.attachments import attachment_assets
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.native_controls import Control as Control
 from squid_ui.ext.discord.native_controls import RoutedItem as RoutedItem
 from squid_ui.ext.discord.native_controls import RoutedSelectItem as RoutedSelectItem

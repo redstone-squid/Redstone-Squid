@@ -16,7 +16,7 @@ from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.voting import build_snapshot, poll_snapshot
 
 
-def text_displays(payload: sd.message_payload.MessagePayload) -> str:
+def text_displays(payload: sd.messages.payload.MessagePayload) -> str:
     return "\n".join(
         item.content for item in payload.layout.walk_children() if isinstance(item, discord.ui.TextDisplay)
     )

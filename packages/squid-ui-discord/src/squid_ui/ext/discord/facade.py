@@ -22,9 +22,9 @@ from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, Respo
 from squid_ui.ext.discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui.ext.discord.lifetime import Lifetime
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_contracts import MessageRootBehaviorOptions, PauseUpdates, RenewEphemeral
+from squid_ui.ext.discord.messages.contracts import MessageRootBehaviorOptions, PauseUpdates, RenewEphemeral
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.rendering import render_static
 from squid_ui.ext.discord.request import Request, RequestOrigin, _resolve_request
 from squid_ui.ext.discord.response import (

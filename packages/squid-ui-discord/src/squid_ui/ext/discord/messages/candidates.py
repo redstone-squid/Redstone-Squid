@@ -16,8 +16,8 @@ from squid_ui.authoring.document import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import Localization, TextLike
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root_wiring import AnyMountedView
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.wiring import AnyMountedView
 from squid_ui.ext.discord.rendering import RenderedMessage
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.interactions.forms import FormBinding, FormSpec
@@ -42,7 +42,7 @@ from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import DiscordTarget
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
 
 
 @dataclass(frozen=True, slots=True)

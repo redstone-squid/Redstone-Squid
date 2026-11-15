@@ -16,7 +16,7 @@ from squid_ui.ext.discord.devtools_runtime import (
     DevToolsRuntime,
 )
 from squid_ui.ext.discord.durability import DurableSessionRuntime, PurgeResult
-from squid_ui.ext.discord.message_root_scheduler import MessageRootSchedulerSnapshot
+from squid_ui.ext.discord.messages.scheduler import MessageRootSchedulerSnapshot
 from squid_ui.ext.discord.sessions import Opened
 from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, message_harness
 from squid_ui.profiling import MemoryProfiler, OperationKind

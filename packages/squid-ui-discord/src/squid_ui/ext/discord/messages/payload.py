@@ -14,7 +14,7 @@ from typing import Any
 import discord
 from squid_ui.content.assets import Asset, LocalAsset
 from squid_ui.errors import LayoutError
-from squid_ui.ext.discord.attachments import files_for
+from squid_ui.ext.discord.messages.attachments import files_for
 
 type AnyView = discord.ui.View | discord.ui.LayoutView
 

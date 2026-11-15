@@ -11,7 +11,7 @@ import anyio
 
 import discord
 from squid_ui.content.text import NEUTRAL, localization_scope
-from squid_ui.ext.discord.message_root_contracts import ErrorHook
+from squid_ui.ext.discord.messages.contracts import ErrorHook
 from squid_ui.ext.discord.request import request as resolve_request
 from squid_ui.ext.discord.runtime import DiscordUIRuntimeMissing
 from squid_ui.profiling import OperationKind, OperationRecorder, Profiler, TraceResult, TraceStatus

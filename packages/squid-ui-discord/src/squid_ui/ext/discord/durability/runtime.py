@@ -29,7 +29,7 @@ from anyio.abc import TaskStatus
 from squid_reactivity import Transaction
 from squid_storage import ClaimToken, DurableSessionStore, SessionRecord
 from squid_ui.ext.discord.delivery import Abandoned, Delivered, MessageDestination
-from squid_ui.ext.discord.message_root import MessageRoot
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.sessions import (
     DEFAULT_ADMISSION,
     AdmissionSpec,

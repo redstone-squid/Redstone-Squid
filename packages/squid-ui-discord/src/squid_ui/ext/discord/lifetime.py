@@ -12,7 +12,7 @@ from squid_ui.ext.discord.closure import CloseReason
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
 
 
 class Lifetime:

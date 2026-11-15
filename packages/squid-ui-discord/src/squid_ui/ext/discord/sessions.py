@@ -29,9 +29,9 @@ from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
 from squid_ui.ext.discord.lifetime import Lifetime
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_options import MessageRootDefaults
+from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
 
 logger = logging.getLogger(__name__)
 

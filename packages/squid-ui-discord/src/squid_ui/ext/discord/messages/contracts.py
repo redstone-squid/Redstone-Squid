@@ -1,7 +1,7 @@
 """Host-facing contracts of a message root: hooks, schedulers, challenges, and expiry.
 
 Everything here is a protocol, policy value, or read-only snapshot that a host implements
-or consumes; the behaviour they describe lives in :mod:`squid_ui.ext.discord.message_root`.
+or consumes; the behaviour they describe lives in :mod:`squid_ui.ext.discord.messages.root`.
 """
 
 import math
@@ -35,7 +35,7 @@ from squid_ui.target_types import (
 )
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
 
 
 class ErrorHook(Protocol):

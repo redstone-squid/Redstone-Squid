@@ -27,7 +27,7 @@ from squid_ui.ext.discord.limits import (
     ComponentLimits,
     V2Limits,
 )
-from squid_ui.ext.discord.message_payload import MessageMode, MessagePayload
+from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload
 from squid_ui.planning.resources import ResourceCost
 
 type Path = tuple[int, ...]

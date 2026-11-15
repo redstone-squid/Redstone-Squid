@@ -6,7 +6,7 @@ from squid.voting.domain import VoteSessionResult, VoteStatus
 from tests.support.voting import poll_snapshot
 
 
-def _custom_ids(payload: sd.message_payload.MessagePayload) -> list[str]:
+def _custom_ids(payload: sd.messages.payload.MessagePayload) -> list[str]:
     """Every clickable custom id on a card, in render order.
 
     A dynamic item is not a `Button` — it wraps one — so the children are matched on

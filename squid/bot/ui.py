@@ -116,7 +116,7 @@ def render_payload(
     strict: bool = False,
     composition: ui.planning.CompositionOptions | None = None,
     reservation: sd.ResourceCost = sd.EMPTY_COST,
-) -> sd.message_payload.MessagePayload:
+) -> sd.messages.payload.MessagePayload:
     """Render a complete Discord payload through the bot's chrome and catalogue."""
     return sd.render_static(
         nodes,

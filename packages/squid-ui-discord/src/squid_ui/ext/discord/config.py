@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from squid_reactivity.topics import TopicBus
 from squid_ui.ext.discord.contracts import DocumentContent, LocalizationResolver
 from squid_ui.ext.discord.delivery import DeliveryResult
-from squid_ui.ext.discord.message_root_options import MessageRootDefaults
+from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
 from squid_ui.ext.discord.response import ResponseSpec
 from squid_ui.profiling import Profiler
 

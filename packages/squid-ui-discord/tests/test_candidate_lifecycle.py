@@ -10,9 +10,9 @@ import pytest
 from squid_ui import Component, ComponentsV2Target, state
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler, RenewEphemeral, delivery
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root_candidates import _Candidate, _LifecycleCandidate
-from squid_ui.ext.discord.message_root_contracts import MessageRootStatus
+from squid_ui.ext.discord.messages.candidates import _Candidate, _LifecycleCandidate
+from squid_ui.ext.discord.messages.contracts import MessageRootStatus
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Text
 from squid_ui.profiling import OperationRecorder, PresentationStatus

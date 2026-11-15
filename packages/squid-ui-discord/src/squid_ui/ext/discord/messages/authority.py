@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from squid_ui.ext.discord import delivery as deliver
-from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.profiling import OperationRecorder
 
 logger = logging.getLogger(__name__)

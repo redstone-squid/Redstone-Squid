@@ -35,10 +35,10 @@ from squid_ui.ext.discord.config import Config
 from squid_ui.ext.discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui.ext.discord.facade import Scope
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
-from squid_ui.ext.discord.message_payload import MessagePayload
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_scheduler import MessageRootScheduler
-from squid_ui.ext.discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
+from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.messages.root import MessageRoot
+from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
+from squid_ui.ext.discord.messages.wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.rendering import render_static
 from squid_ui.ext.discord.request import Request

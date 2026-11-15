@@ -20,7 +20,7 @@ from squid_ui.ext.discord.delivery import (
     handle_for_original,
     handle_from,
 )
-from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.testing import interaction_harness, message_harness, payload_texts
 from squid_ui.primitives import Button, Row

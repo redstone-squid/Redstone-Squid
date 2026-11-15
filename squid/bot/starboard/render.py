@@ -13,7 +13,7 @@ from squid_i18n import Text, discord_markup, emoji_text, md, md_tr, mention
 
 def starboard_layout(
     state: EntryState, message: discord.Message, *, locale: str | None = None
-) -> sd.message_payload.MessagePayload:
+) -> sd.messages.payload.MessagePayload:
     """Render one source message as a semantic Components V2 card."""
     config = state.config
     entry = state.entry

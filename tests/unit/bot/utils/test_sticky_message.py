@@ -16,7 +16,7 @@ from squid_ui.ext.discord.testing import MessageHarness
 
 class StubStickyMessage(StickyMessage):
     @override
-    async def render(self, channel: discord.TextChannel) -> sd.message_payload.MessagePayload:
+    async def render(self, channel: discord.TextChannel) -> sd.messages.payload.MessagePayload:
         return sd.render_static([])
 
 

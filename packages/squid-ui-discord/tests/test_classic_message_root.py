@@ -13,9 +13,9 @@ import squid_ui as sl
 from squid_ui import Component
 from squid_ui.authoring.semantic import ActionControl, ActionControls, Article, Heading, Paragraph
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
-from squid_ui.ext.discord.message_payload import MessageMode
-from squid_ui.ext.discord.message_root import AnyMessageRoot
-from squid_ui.ext.discord.message_root_wiring import ClassicMountedView
+from squid_ui.ext.discord.messages.payload import MessageMode
+from squid_ui.ext.discord.messages.root import AnyMessageRoot
+from squid_ui.ext.discord.messages.wiring import ClassicMountedView
 from squid_ui.ext.discord.testing import (
     commit_classic_render,
     commit_render,

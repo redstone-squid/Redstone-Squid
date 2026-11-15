@@ -14,7 +14,7 @@ from typing import Any
 
 from squid_ui.authoring.document import Asset
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.ext.discord.message_root_candidates import (
+from squid_ui.ext.discord.messages.candidates import (
     _ApplicationCandidate,
     _Candidate,
     _LifecycleCandidate,
@@ -22,8 +22,8 @@ from squid_ui.ext.discord.message_root_candidates import (
     _PlannedCandidate,
     _PlannedContinuation,
 )
-from squid_ui.ext.discord.message_root_contracts import MessageRootStatus
-from squid_ui.ext.discord.message_root_wiring import AnyMountedView
+from squid_ui.ext.discord.messages.contracts import MessageRootStatus
+from squid_ui.ext.discord.messages.wiring import AnyMountedView
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.result import PlanResult

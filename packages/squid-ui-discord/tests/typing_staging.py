@@ -2,8 +2,8 @@
 
 from typing import assert_type
 
-from squid_ui.ext.discord.message_root import MessageRoot
-from squid_ui.ext.discord.message_root_candidates import _ApplicationCandidate, _Candidate
+from squid_ui.ext.discord.messages.candidates import _ApplicationCandidate, _Candidate
+from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.target_types import ComponentsV2Target
 
 

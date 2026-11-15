@@ -21,7 +21,7 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.emoji import discord_emoji
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
 
 
 class _MountedBehaviour:

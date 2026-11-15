@@ -23,7 +23,7 @@ from squid_ui.interactions.forms import FieldError, FormField, FormIssue, FormLi
 from squid_ui.runtime.continuations import PostCommitOperation
 
 if TYPE_CHECKING:
-    from squid_ui.ext.discord.message_root import AnyMessageRoot
+    from squid_ui.ext.discord.messages.root import AnyMessageRoot
     from squid_ui.runtime.histories import History
 
 

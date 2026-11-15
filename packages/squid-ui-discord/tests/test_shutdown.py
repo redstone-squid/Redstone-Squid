@@ -12,7 +12,7 @@ import pytest
 
 from squid_ui import Component, ComponentsV2Target
 from squid_ui.ext.discord import CloseReason, Everyone, MessageRoot, SessionManager
-from squid_ui.ext.discord.message_root_wiring import ClassicMountedView, MountedView
+from squid_ui.ext.discord.messages.wiring import ClassicMountedView, MountedView
 from squid_ui.ext.discord.sessions import Opened
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.primitives import Text

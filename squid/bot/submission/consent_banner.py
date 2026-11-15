@@ -105,7 +105,7 @@ class BuildLogConsentStickyMessage(StickyMessage):
     """Sticky banner posted in build-log channels when unconsented users post."""
 
     @override
-    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
+    async def render(self, channel: TextChannel) -> sd.messages.payload.MessagePayload:
         return render_payload(
             [
                 sl.paragraph(

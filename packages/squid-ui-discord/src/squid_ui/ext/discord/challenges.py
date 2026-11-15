@@ -18,7 +18,7 @@ import anyio
 
 from squid_ui.ext.discord.access import Owner
 from squid_ui.ext.discord.delivery import respond_to
-from squid_ui.ext.discord.message_root_contracts import ChallengeRequest, ChallengeSupervisor, ResumedPress
+from squid_ui.ext.discord.messages.contracts import ChallengeRequest, ChallengeSupervisor, ResumedPress
 from squid_ui.ext.discord.sessions import SessionManager
 from squid_ui.interactions.guards import ChallengeResolver
 

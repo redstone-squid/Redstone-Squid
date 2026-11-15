@@ -21,9 +21,9 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import ExistingLayoutError, LayoutError
-from squid_ui.ext.discord.attachments import files_for
 from squid_ui.ext.discord.inspection import MessageReservation, audit, cost, measure
 from squid_ui.ext.discord.limits import LIMITS, Axis, V2Limits
+from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.rendering import render_message
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.palette import DEFAULT_PALETTE, Palette

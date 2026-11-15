@@ -12,7 +12,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord
-import squid_ui.ext.discord.message_root_contracts
+import squid_ui.ext.discord.messages.contracts
 from squid_i18n import tr
 from squid_ui.ext.discord import CloseReason, Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui.ext.discord.delivery import Abandoned
@@ -55,7 +55,7 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui.ext.discord.MessageD
     delivered = message_harness() if message is _DEFAULT_MESSAGE else message
 
     async def send(
-        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+        payload: squid_ui.ext.discord.messages.payload.MessagePayload,
     ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         handle = None if delivered is None else squid_ui.ext.discord.delivery.handle_for(delivered)
         return squid_ui.ext.discord.delivery.DeliveryResult(delivered, handle)
@@ -67,7 +67,7 @@ def slowly() -> squid_ui.ext.discord.MessageDestination:
     """Yield during delivery so concurrent admissions can pass their preliminary checks."""
 
     async def send(
-        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+        payload: squid_ui.ext.discord.messages.payload.MessagePayload,
     ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         await anyio.sleep(0)
         message = message_harness()
@@ -78,7 +78,7 @@ def slowly() -> squid_ui.ext.discord.MessageDestination:
 
 def abandoning() -> squid_ui.ext.discord.MessageDestination:
     async def send(
-        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+        payload: squid_ui.ext.discord.messages.payload.MessagePayload,
     ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         raise squid_ui.ext.discord.delivery.DeliveryAbandoned
 
@@ -87,7 +87,7 @@ def abandoning() -> squid_ui.ext.discord.MessageDestination:
 
 def failing(error: Exception) -> squid_ui.ext.discord.MessageDestination:
     async def send(
-        payload: squid_ui.ext.discord.message_payload.MessagePayload,
+        payload: squid_ui.ext.discord.messages.payload.MessagePayload,
     ) -> squid_ui.ext.discord.delivery.DeliveryResult:
         raise error
 
