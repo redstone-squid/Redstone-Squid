@@ -233,3 +233,19 @@ async def test_a_strong_read_is_not_satisfied_by_a_version_a_later_write_reused(
         tasks.create_task(guarded())
 
     assert preferences.locale == "en", "the action that branched on a stale read published nothing"
+
+
+def test_a_failing_owner_cannot_fail_a_published_assignment(caplog: pytest.LogCaptureFixture) -> None:
+    class Model(Reactive):
+        value: int = state(0)
+
+        @override
+        def on_state_commit(self, names: frozenset[str]) -> None:
+            raise RuntimeError("owner failed")
+
+    model = Model()
+    # Outside a transaction the assignment publishes before the owner hears of it,
+    # so raising here would report a failure for a write that took effect.
+    model.value = 1
+    assert model.value == 1
+    assert "owner failed" in caplog.text
