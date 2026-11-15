@@ -8,7 +8,7 @@ import squid_ui as ui
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.selectors import query, select
-from squid_ui.testing import keys, render_snapshot, texts
+from squid_ui.testing import keys, render_index, texts
 
 
 class Counter(ui.Component):
@@ -85,13 +85,13 @@ def test_reordering_retains_namespaces_state_and_mounts(explicit: bool) -> None:
 
 def test_keyed_reference_does_not_change_direct_placement() -> None:
     child = Counter()
-    before = render_snapshot(Parent(child))
+    before = render_index(Parent(child))
     direct_namespace = query(before, select(child)).one().qualified_key
     reference = child.keyed(42)
     assert reference.component is child
     assert reference.key == "42"
     assert child.keyed("other").component is child
-    after = render_snapshot(Parent(child))
+    after = render_index(Parent(child))
     assert query(after, select(child)).one().qualified_key == direct_namespace
 
 

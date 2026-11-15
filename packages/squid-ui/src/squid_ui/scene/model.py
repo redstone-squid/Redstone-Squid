@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
+from squid_ui._query_index import QueryIndexOwner
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.emoji import Emoji
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
@@ -641,7 +642,7 @@ class Pager:
 
 
 @dataclass(frozen=True, slots=True)
-class Scene[BodyT = Body]:
+class Scene[BodyT = Body](QueryIndexOwner):
     """One planned display, including its target, content, assets, and selected pages.
 
     The body holds the target's content structure: for example, classic Discord

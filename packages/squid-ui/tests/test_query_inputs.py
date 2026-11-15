@@ -6,7 +6,7 @@ import squid_ui as ui
 from squid_ui import scene
 from squid_ui.authoring import semantic as s
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.selectors import query, select, snapshot
+from squid_ui.selectors import index_tree, query, select
 from squid_ui.testing import text_component
 
 
@@ -22,17 +22,17 @@ def test_query_accepts_nodes_sequences_and_component_trees() -> None:
         query(component, select(s.Paragraph))
 
 
-def test_explicit_snapshot_preserves_order_and_scope_across_queries() -> None:
+def test_explicit_index_preserves_order_and_scope_across_queries() -> None:
     paragraph = ui.paragraph("Ready")
-    tree = snapshot(ui.stack(paragraph, paragraph))
-    assert snapshot(tree) is tree
+    tree = index_tree(ui.stack(paragraph, paragraph))
+    assert index_tree(tree) is tree
     parent = query(tree, select(s.Stack)).one()
     first, second = query(tree, select(s.Paragraph), within=parent).all()
     assert parent.precedes(first)
     assert first.precedes(second)
     assert not second.precedes(first)
     assert not first.precedes(first)
-    with pytest.raises(ValueError, match="same snapshot"):
+    with pytest.raises(ValueError, match="same tree index"):
         first.precedes(query(paragraph, select(s.Paragraph)).one())
 
 
@@ -43,12 +43,12 @@ def test_query_accepts_an_explicit_adapter_without_mutating_nodes() -> None:
         return tuple(node.items()) if isinstance(node, dict) else ()
 
     assert query(tree, "Paragraph", children=children).one().node is tree["child"]
-    captured = snapshot(tree, children=children)
-    with pytest.raises(ValueError, match="existing snapshot"):
+    captured = index_tree(tree, children=children)
+    with pytest.raises(ValueError, match="existing tree index"):
         query(captured, "Paragraph", children=children)
 
 
-def test_query_adapts_planned_scenes_without_an_explicit_snapshot() -> None:
+def test_query_adapts_planned_scenes_without_an_explicit_index() -> None:
     button = scene.Button("Save", "save")
     planned = scene.Scene(1, "discord", 1, scene.ComponentsV2((scene.Row((button,)),)))
     assert query(planned, select(scene.Row).children(select(scene.Button))).one().node is button

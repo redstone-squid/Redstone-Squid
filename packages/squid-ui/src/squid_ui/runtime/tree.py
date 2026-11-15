@@ -6,11 +6,13 @@ lifetime and reconciles candidate trees only after successful delivery.
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Generic
 
 from squid_reactivity import Dependencies
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import DependencyAddress
+from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring.document import Asset
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.context import ContextKey
@@ -20,7 +22,7 @@ from squid_ui.target_types import RenderTarget
 
 
 @dataclass(frozen=True, slots=True)
-class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported TypeVars preserve contravariance
+class ComponentTree(QueryIndexOwner, Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported TypeVars preserve contravariance
     """Layout nodes from a render, with the components that produced them.
 
     Child boundaries have been expanded into layout nodes; these nodes still need
@@ -29,7 +31,7 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
     """
 
     nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
-    components: dict[str, AnyComponent]
+    components: Mapping[str, AnyComponent]
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
     deferred: tuple[AnyComponent, ...] = ()
@@ -56,6 +58,11 @@ class ComponentTree(Generic[RenderTargetT, ContextT]):  # noqa: UP046 - imported
         default_factory=dict, compare=False, repr=False
     )
     """Original nodes by component placement, retaining boundaries and local keys for inspection."""
+
+    def __post_init__(self) -> None:
+        # Render topology is fixed even when its components' reactive state changes.
+        object.__setattr__(self, "components", MappingProxyType(dict(self.components)))
+        object.__setattr__(self, "authored_nodes", MappingProxyType(dict(self.authored_nodes)))
 
 
 @dataclass(slots=True)

@@ -8,7 +8,7 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.authoring.semantic import ActionControl, RoutedActionControl
-from squid_ui.selectors import query, select, snapshot
+from squid_ui.selectors import index_tree, query, select
 
 
 def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], sp.FormValues, sl.RenderTarget]:
@@ -167,7 +167,7 @@ def test_nested_forms_keep_router_shell_parity() -> None:
     rendered = sp.RouteDriver(route).render(editor, state)
 
     add = select(RoutedActionControl).attr_ends_with("key", "links.add")
-    assert query(snapshot(rendered), add).exists()
+    assert query(index_tree(rendered), add).exists()
     request = next(route for route in routes if route.action == "section:links:add")
     assert request.phase == "input"
     assert editor.form_for(state, "section:links:add") is not None
@@ -186,7 +186,7 @@ def test_editor_render_shows_unsaved_status_and_gates_save_on_validation() -> No
     )
 
     rendered = editor.build_component(initial=staged).render()
-    tree = snapshot(rendered)
+    tree = index_tree(rendered)
     save = query(tree, select(ActionControl).key("editor.save")).one().node
 
     assert not save.available

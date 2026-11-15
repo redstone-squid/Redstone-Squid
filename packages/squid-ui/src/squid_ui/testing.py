@@ -30,7 +30,7 @@ from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.selectors import Snapshot, snapshot
+from squid_ui.selectors import TreeIndex, index_tree
 
 type Tree = object
 """Anything `walk` can inspect recursively."""
@@ -124,12 +124,12 @@ def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
     return tuple(render_component_tree(component).nodes)
 
 
-def render_snapshot(component: AnyComponent) -> Snapshot:
-    """Render an authored query snapshot with component placements and local keys.
+def render_index(component: AnyComponent) -> TreeIndex:
+    """Render an authored query index with component placements and local keys.
 
     Like render_tree, this does not run frontend loading or lifecycle hooks.
     """
-    return snapshot(render_component_tree(component))
+    return index_tree(render_component_tree(component))
 
 
 # --- Frontend doubles ---------------------------------------------------------------------
@@ -434,7 +434,7 @@ __all__ = [
     "page_event",
     "press",
     "press_event",
-    "render_snapshot",
+    "render_index",
     "render_tree",
     "selection_event",
     "submit",

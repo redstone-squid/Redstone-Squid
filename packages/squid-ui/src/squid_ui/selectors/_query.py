@@ -1,4 +1,4 @@
-"""Evaluate typed and string selectors against an existing snapshot."""
+"""Evaluate typed and string selectors against an existing tree index."""
 
 from collections.abc import Mapping
 from typing import Any, cast, overload
@@ -6,7 +6,7 @@ from typing import Any, cast, overload
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.selectors.core import Query, Selector
 from squid_ui.selectors.parser import parse
-from squid_ui.selectors.tree import Children, Match, Snapshot, snapshot, ui_children
+from squid_ui.selectors.tree import Children, Match, TreeIndex, index_tree, ui_children
 
 
 @overload
@@ -46,8 +46,8 @@ def query[T](
 ) -> Query[T] | Query[object]:
     """Evaluate once in depth-first order, deduplicating by occurrence, not object identity.
 
-    Existing nodes and ComponentTree values are captured automatically. Pass a Snapshot
-    to reuse one capture across queries, scoped matches, or ordering comparisons.
+    ComponentTree and Scene reuse their own structural index across queries. Pass a
+    TreeIndex to share scopes or ordering when inspecting raw nodes or mutable views.
     Live components require explicit rendering; custom trees can supply children.
 
     Strings use parse, including its semantic types and optional types registry.
@@ -68,19 +68,19 @@ def query[T](
     if types is not None:
         message = "types is only supported for string selectors"
         raise ValueError(message)
-    if isinstance(tree, Snapshot):
+    if isinstance(tree, TreeIndex):
         if children is not None:
-            message = "children cannot change traversal of an existing snapshot"
+            message = "children cannot change traversal of an existing tree index"
             raise ValueError(message)
     else:
-        tree = snapshot(tree, children=children or ui_children)
+        tree = index_tree(tree, children=children or ui_children)
     root = tree.index(within) if within is not None else None
     start = 0 if root is None else root + (not include_scope)
     end = len(tree.matches) if root is None else tree.ends[root]
     available = tree.matches[start:end]
     found = tuple(
         cast(Match[T], tree.matches[index])
-        for index in range(start, end)
+        for index in tree.candidates(selector._kind, selector._key, start, end)
         if selector._predicate(tree, index, root, localization)
     )
     return Query(found, selector.description, available)

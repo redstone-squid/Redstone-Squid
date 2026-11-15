@@ -27,7 +27,6 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid_i18n import source_text
-from squid_ui.selectors import query, scope, select, snapshot
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
@@ -37,6 +36,7 @@ from squid_ui.ext.discord.testing import (
     interaction_harness,
     message_harness,
 )
+from squid_ui.selectors import index_tree, query, scope, select
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
 from tests.support.discord import make_layout_bot
 
@@ -519,7 +519,7 @@ async def test_build_card_shows_compact_attachment_specific_dimensions(display_b
     assert reader.calls == [7]
     assert isinstance(node, sl.semantic.Section)
     # The shorter resource entry retains the exact download, with no dimensions.
-    tree = snapshot(node)
+    tree = index_tree(node)
     schematic_entry = select(sl.semantic.Field).where(
         lambda field: "/schematics/42/content" in source_text(field.value)
     )

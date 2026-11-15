@@ -4,7 +4,7 @@ import pytest
 
 import squid_ui as ui
 from squid_ui.authoring import semantic as s
-from squid_ui.selectors import SelectorSyntaxError, parse, query, select, snapshot
+from squid_ui.selectors import SelectorSyntaxError, index_tree, parse, query, select
 
 
 async def pressed(event: ui.PressEvent) -> None: ...
@@ -46,20 +46,20 @@ def tree() -> object:
     ],
 )
 def test_css_subset(source: str, expected: list[str]) -> None:
-    found = query(snapshot(tree()), parse(source)).all()
+    found = query(index_tree(tree()), parse(source)).all()
     assert [match.key for match in found] == expected
 
 
 def test_scoped_has_cannot_match_an_outer_ancestor() -> None:
-    assert not query(snapshot(tree()), parse("Section:has(Stack ActionControl)")).exists()
-    assert query(snapshot(tree()), parse('Paragraph[text="Ready"]')).count() == 1
-    assert query(snapshot(tree()), parse("Heading[level=2]")).count() == 1
-    assert query(snapshot(tree()), parse("Heading[level=2e0]")).count() == 1
-    assert query(snapshot(tree()), parse("Thing", types={"Thing": s.ActionControl})).count() == 2
+    assert not query(index_tree(tree()), parse("Section:has(Stack ActionControl)")).exists()
+    assert query(index_tree(tree()), parse('Paragraph[text="Ready"]')).count() == 1
+    assert query(index_tree(tree()), parse("Heading[level=2]")).count() == 1
+    assert query(index_tree(tree()), parse("Heading[level=2e0]")).count() == 1
+    assert query(index_tree(tree()), parse("Thing", types={"Thing": s.ActionControl})).count() == 2
 
 
 def test_parser_and_builder_have_identical_results() -> None:
-    captured = snapshot(tree())
+    captured = index_tree(tree())
     typed = select(s.Section).descendants(select(s.ActionControl).key("save"))
     assert query(captured, typed).all() == query(captured, parse('Section ActionControl[key="save"]')).all()
 
@@ -92,7 +92,7 @@ def test_invalid_syntax_has_source_position(source: str) -> None:
 
 
 def test_nested_pseudo_classes_and_relative_has_lists() -> None:
-    captured = snapshot(tree())
+    captured = index_tree(tree())
     result = query(captured, parse('ActionControls:not(:has([key="missing"])):has(> Heading, > ActionControl)'))
     assert result.one().key == "toolbar"
     with pytest.raises(SelectorSyntaxError, match="nesting"):
@@ -100,14 +100,14 @@ def test_nested_pseudo_classes_and_relative_has_lists() -> None:
 
 
 def test_presence_uses_query_metadata_and_own_text() -> None:
-    captured = snapshot(tree())
+    captured = index_tree(tree())
     assert query(captured, parse("[qualified_key]")).count() == 3
     assert query(captured, parse("[text]")).count() == 2
     assert query(captured, parse("Heading[level=2e0]")).count() == 1
 
 
 def test_query_accepts_strings_and_preserves_scope() -> None:
-    captured = snapshot(tree())
+    captured = index_tree(tree())
     section = query(captured, "Section").one()
     source = 'ActionControl[key="save"]'
     assert query(captured, source, within=section).all() == query(captured, parse(source), within=section).all()

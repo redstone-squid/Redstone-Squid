@@ -28,6 +28,8 @@ from discord.ext import commands
 from squid_ui import scene
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutError
+from squid_ui.ext.discord._testing_queries import index_tree as index_tree
+from squid_ui.ext.discord._testing_queries import query as query
 from squid_ui.ext.discord.commands import bind_context_menu, context_menu_declaration
 from squid_ui.ext.discord.config import Config
 from squid_ui.ext.discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
@@ -45,11 +47,9 @@ from squid_ui.ext.discord.runtime import DiscordUIRuntime, install
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.runtime.component import Component
-from squid_ui.selectors import Match, Query, Selector, Snapshot, select
+from squid_ui.selectors import Match, Query, Selector, TreeIndex, select
 from squid_ui.selectors import query as query_tree
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
-from squid_ui.ext.discord._testing_queries import query as query
-from squid_ui.ext.discord._testing_queries import snapshot as snapshot
 
 type ComponentPayload = dict[str, Any]
 type BuiltView = discord.ui.LayoutView | discord.ui.View | list[ComponentPayload]
@@ -753,13 +753,13 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         self._client = client
         self._user_id = user_id
 
-    def snapshot(self) -> Snapshot:
+    def index(self) -> TreeIndex:
         """Capture the currently delivered Discord views, including continuation messages.
 
         Pending candidates and undelivered component state are excluded. No refresh or
         render runs. Returned nodes are native Discord objects, not authored controls.
         """
-        return snapshot(tuple(view for view, _, _ in self._views()))
+        return index_tree(tuple(view for view, _, _ in self._views()))
 
     @overload
     def query[T](
@@ -797,9 +797,9 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         """Inspect delivered native controls without rendering or refreshing.
 
         Pass view explicitly to inspect a candidate view or a previously captured
-        snapshot. Use the same snapshot for scoped queries and order comparisons.
+        index. Use the same index for scoped queries and order comparisons.
         """
-        captured = self.snapshot() if view is None else view
+        captured = self.index() if view is None else view
         if isinstance(selector, str):
             return query(
                 captured,
@@ -1064,6 +1064,7 @@ __all__ = [
     "delivered_to",
     "drain",
     "http_error",
+    "index_tree",
     "interaction_harness",
     "invoke",
     "invoke_context_menu",
@@ -1076,7 +1077,6 @@ __all__ = [
     "payload_problems",
     "payload_texts",
     "query",
-    "snapshot",
     "stage",
     "stale_http_error",
     "static_view",

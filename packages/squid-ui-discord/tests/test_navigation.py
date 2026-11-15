@@ -11,7 +11,7 @@ from squid_ui.ext.discord.navigation import StackNavigator
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.primitives import Heading, Text
 from squid_ui.runtime import ComponentRuntime
-from squid_ui.selectors import query, select, snapshot
+from squid_ui.selectors import index_tree, query, select
 
 
 class Screen(Component[sl.ComponentsV2Target]):
@@ -92,7 +92,7 @@ async def test_same_screen_keeps_its_namespace_at_a_different_depth() -> None:
     before = runtime.render()
     runtime.commit(before)
     retained_screen = select(child)
-    namespace = query(snapshot(before), retained_screen).one().qualified_key
+    namespace = query(index_tree(before), retained_screen).one().qualified_key
 
     navigator.push(Screen("middle"))
     runtime.commit(runtime.render(reuse_committed=True))
@@ -100,7 +100,7 @@ async def test_same_screen_keeps_its_namespace_at_a_different_depth() -> None:
     after = runtime.render(reuse_committed=True)
     runtime.commit(after)
 
-    assert query(snapshot(after), retained_screen).one().qualified_key == namespace
+    assert query(index_tree(after), retained_screen).one().qualified_key == namespace
     navigator.home()
     home = runtime.render(reuse_committed=True)
-    assert query(snapshot(home), retained_screen).one().qualified_key == namespace
+    assert query(index_tree(home), retained_screen).one().qualified_key == namespace

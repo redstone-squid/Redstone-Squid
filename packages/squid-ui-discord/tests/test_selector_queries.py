@@ -22,13 +22,13 @@ async def test_native_views_preserve_rows_sections_and_accessories() -> None:
     assert testing.query(view, 'Section > Button[label="More"]').one().node is extra
     assert testing.query(view, select(discord.ui.TextDisplay)).one().node.content == "Details"
     assert not testing.query(view, "Container > Button").exists()
-    captured = testing.snapshot(view)
+    captured = testing.index_tree(view)
     section_match = testing.query(captured, select(section)).one()
     found = testing.query(captured, select(discord.ui.Button), within=section_match).one()
     assert_type(found, Match[discord.ui.Button])
     assert found.node is extra
     assert not testing.query(captured, "ActionRow Button", within=section_match).exists()
-    assert testing.snapshot(captured) is captured
+    assert testing.index_tree(captured) is captured
 
 
 async def test_classic_views_and_modal_labels_are_queryable() -> None:
@@ -68,7 +68,7 @@ async def test_staged_queries_read_delivery_without_rendering_pending_state() ->
     counter = Counter()
     async with testing.stage(counter, owner=object()) as staged:
         assert staged.query('TextDisplay[content="Count 0"]').exists()
-        before = staged.snapshot()
+        before = staged.index()
         counter.count = 10
         assert staged.root.pending
         # Even an explicitly rendered candidate must not replace the delivered output.
@@ -84,6 +84,6 @@ async def test_staged_queries_resolve_again_after_delivery() -> None:
         assert staged.query(select(discord.ui.Button).label("Add")).one().node.label == "Add"
         await staged.press("add")
         assert staged.query('TextDisplay[content="Count 1"]').exists()
-        captured = staged.snapshot()
+        captured = staged.index()
         container = staged.query("LayoutView", view=captured).one()
         assert staged.query("Button", view=captured, within=container).count() == 1

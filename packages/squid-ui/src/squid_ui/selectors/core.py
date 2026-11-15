@@ -1,14 +1,14 @@
 """Immutable typed selector expressions and strict query results."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from re import Pattern
 from typing import Any, cast, overload
 
 from squid_ui.content.text import Localization, TextLike, resolve_text
-from squid_ui.selectors.tree import Match, Snapshot
+from squid_ui.selectors.tree import Match, TreeIndex
 
-type Predicate = Callable[[Snapshot, int, int | None, Localization], bool]
+type Predicate = Callable[[TreeIndex, int, int | None, Localization], bool]
 _MISSING = object()
 
 
@@ -30,6 +30,8 @@ class Selector[T]:
 
     _predicate: Predicate
     description: str
+    _kind: type | None = field(default=None, repr=False, compare=False)
+    _key: tuple[str, str] | None = field(default=None, repr=False, compare=False)
 
     def attr(self, name: str, value: object) -> Selector[T]:
         """Match an attribute path; missing is distinct from None and False.
@@ -37,6 +39,8 @@ class Selector[T]:
         Dots follow attributes, such as overflow.key. key and qualified_key refer to
         occurrence metadata, including component placement keys.
         """
+        if name in ("key", "qualified_key") and isinstance(value, str):
+            return self._metadata(name, value)
         return self._attribute_filter(name, lambda actual: actual is not _MISSING and actual == value, f"={value!r}")
 
     def has_attr(self, name: str) -> Selector[T]:
@@ -61,6 +65,8 @@ class Selector[T]:
                 self._predicate(tree, index, scope, locale) and predicate(_attribute(tree.matches[index], name))
             ),
             f"{self.description}[{name}{suffix}]",
+            self._kind,
+            self._key,
         )
 
     def where(self, predicate: Callable[[T], bool]) -> Selector[T]:
@@ -73,6 +79,8 @@ class Selector[T]:
                 self._predicate(tree, index, scope, locale) and predicate(cast(T, tree.matches[index].node))
             ),
             self.description + description,
+            self._kind,
+            self._key,
         )
 
     def key(self, value: str) -> Selector[T]:
@@ -87,6 +95,8 @@ class Selector[T]:
                 self._predicate(tree, index, scope, locale) and getattr(tree.matches[index], name) == value
             ),
             f"{self.description}[{name}={value!r}]",
+            self._kind,
+            (name, value),
         )
 
     def text(self, value: str | Pattern[str], *, contains: bool = False) -> Selector[T]:
@@ -97,7 +107,7 @@ class Selector[T]:
         return self._text("label", value, contains)
 
     def _text(self, field: str, value: str | Pattern[str], contains: bool) -> Selector[T]:
-        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+        def matches(tree: TreeIndex, index: int, scope: int | None, locale: Localization) -> bool:
             if not self._predicate(tree, index, scope, locale):
                 return False
             raw = getattr(tree.matches[index].node, field, None)
@@ -110,7 +120,9 @@ class Selector[T]:
                 return value.search(content) is not None
             return value in content if contains else value == content
 
-        return Selector(matches, f"{self.description}[{field}{'*=' if contains else '='}{value!r}]")
+        return Selector(
+            matches, f"{self.description}[{field}{'*=' if contains else '='}{value!r}]", self._kind, self._key
+        )
 
     def intersect(self, other: Selector[Any]) -> Selector[T]:
         return Selector(
@@ -118,6 +130,8 @@ class Selector[T]:
                 self._predicate(tree, index, scope, locale) and other._predicate(tree, index, scope, locale)
             ),
             f"({self.description} and {other.description})",
+            self._kind or other._kind,
+            self._key or other._key,
         )
 
     def union[U](self, other: Selector[U]) -> Selector[T | U]:
@@ -134,6 +148,8 @@ class Selector[T]:
                 self._predicate(tree, index, scope, locale) and not other._predicate(tree, index, scope, locale)
             ),
             f"{self.description}:not({other.description})",
+            self._kind,
+            self._key,
         )
 
     def descendants[U](self, other: Selector[U]) -> Selector[U]:
@@ -143,7 +159,7 @@ class Selector[T]:
         return self._related(other, direct=True)
 
     def _related[U](self, other: Selector[U], *, direct: bool) -> Selector[U]:
-        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+        def matches(tree: TreeIndex, index: int, scope: int | None, locale: Localization) -> bool:
             if not other._predicate(tree, index, scope, locale) or index == scope:
                 return False
             parent = tree.parents[index]
@@ -157,7 +173,9 @@ class Selector[T]:
                 parent = tree.parents[parent]
             return False
 
-        return Selector(matches, f"{self.description}{' > ' if direct else ' '}{other.description}")
+        return Selector(
+            matches, f"{self.description}{' > ' if direct else ' '}{other.description}", other._kind, other._key
+        )
 
     def next_sibling[U](self, other: Selector[U]) -> Selector[U]:
         """Select an immediately following sibling; descendants do not count as siblings."""
@@ -168,7 +186,7 @@ class Selector[T]:
         return self._siblings(other, adjacent=False)
 
     def _siblings[U](self, other: Selector[U], *, adjacent: bool) -> Selector[U]:
-        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+        def matches(tree: TreeIndex, index: int, scope: int | None, locale: Localization) -> bool:
             if index == scope or not other._predicate(tree, index, scope, locale):
                 return False
             parent = tree.parents[index]
@@ -185,14 +203,16 @@ class Selector[T]:
                     return False
             return False
 
-        return Selector(matches, f"{self.description}{' + ' if adjacent else ' ~ '}{other.description}")
+        return Selector(
+            matches, f"{self.description}{' + ' if adjacent else ' ~ '}{other.description}", other._kind, other._key
+        )
 
     def has(self, other: Selector[Any], *, direct: bool = False) -> Selector[T]:
         """Keep nodes with a matching descendant, evaluating the inner query in that node's scope."""
         return self._has(other, direct=direct, following=False)
 
     def _has(self, other: Selector[Any], *, direct: bool, following: bool) -> Selector[T]:
-        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+        def matches(tree: TreeIndex, index: int, scope: int | None, locale: Localization) -> bool:
             if not self._predicate(tree, index, scope, locale):
                 return False
             if following:
@@ -209,7 +229,9 @@ class Selector[T]:
                 for child in range(start, end)
             )
 
-        return Selector(matches, f"{self.description}:has({' > ' if direct else ''}{other.description})")
+        return Selector(
+            matches, f"{self.description}:has({' > ' if direct else ''}{other.description})", self._kind, self._key
+        )
 
 
 @overload
@@ -228,7 +250,9 @@ def select[T](target: type[T] | T) -> Selector[T]:
     """
     if isinstance(target, type):
         return Selector(
-            lambda tree, index, _scope, _locale: isinstance(tree.matches[index].node, target), target.__name__
+            lambda tree, index, _scope, _locale: isinstance(tree.matches[index].node, target),
+            target.__name__,
+            target if type(target) is type else None,
         )
     return Selector(
         lambda tree, index, _scope, _locale: tree.matches[index].node is target,

@@ -11,8 +11,8 @@ from squid_i18n import tr
 from squid_ui.authoring import semantic as s
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.selectors import Match, QueryError, query, scope, select, snapshot
-from squid_ui.testing import render_snapshot
+from squid_ui.selectors import Match, QueryError, index_tree, query, scope, select
+from squid_ui.testing import render_index
 
 
 async def pressed(event: ui.PressEvent) -> None: ...
@@ -24,7 +24,7 @@ def toolbar(*keys: str) -> s.ActionControls:
 
 def test_repeated_objects_are_occurrences_and_union_is_in_tree_order() -> None:
     shared = toolbar("save")
-    tree = snapshot(ui.stack(shared, shared))
+    tree = index_tree(ui.stack(shared, shared))
     controls = select(s.ActionControl)
     found = query(tree, controls.union(controls.key("save"))).all()
     assert len(found) == 2
@@ -34,7 +34,7 @@ def test_repeated_objects_are_occurrences_and_union_is_in_tree_order() -> None:
 
 
 def test_relations_and_scope_do_not_escape_the_subtree() -> None:
-    tree = snapshot(ui.stack(ui.section(ui.heading("Editor"), toolbar("save")), toolbar("cancel")))
+    tree = index_tree(ui.stack(ui.section(ui.heading("Editor"), toolbar("save")), toolbar("cancel")))
     section = query(tree, select(s.Section)).one()
     save = select(s.ActionControl).key("save")
     assert query(tree, select(s.Stack).descendants(save)).exists()
@@ -48,13 +48,13 @@ def test_relations_and_scope_do_not_escape_the_subtree() -> None:
     assert query(tree, select(s.Section).has(save)).one() == section
     assert not query(tree, select(s.Section).has(save, direct=True)).exists()
     assert query(tree, select(s.Section).has(select(s.ActionControls), direct=True)).exists()
-    with pytest.raises(ValueError, match="different snapshot"):
-        query(snapshot(toolbar("save")), save, within=section)
+    with pytest.raises(ValueError, match="different tree index"):
+        query(index_tree(toolbar("save")), save, within=section)
 
 
 def test_predicates_text_and_missing_attributes() -> None:
     control = s.ActionControl("save", tr(t"selector-save = Save {(name := 'Ada')}"), pressed, available=False)
-    tree = snapshot(s.ActionControls((control,), key="toolbar"))
+    tree = index_tree(s.ActionControls((control,), key="toolbar"))
     controls = select(s.ActionControl)
     assert query(tree, controls.attr("available", value=False)).one().node is control
     assert query(tree, controls.label("Save Ada")).exists()
@@ -70,7 +70,7 @@ def test_predicates_text_and_missing_attributes() -> None:
 
 
 def test_query_cardinality_has_useful_diagnostics() -> None:
-    tree = snapshot(toolbar("save", "save"))
+    tree = index_tree(toolbar("save", "save"))
     save = select(s.ActionControl).key("save")
     assert query(tree, save).count() == 2
     with pytest.raises(QueryError, match=r"found 2.*") as error:
@@ -110,7 +110,7 @@ class Screen(ui.Component):
 def test_component_placements_keep_local_keys_and_owner_paths() -> None:
     component = Screen()
     rendered = render_component_tree(component)
-    tree = snapshot(rendered)
+    tree = index_tree(rendered)
     editors = query(tree, select(Editor)).all()
     assert [match.key for match in editors] == ["primary", "preview"]
     assert editors[0].node is editors[1].node
@@ -122,10 +122,10 @@ def test_component_placements_keep_local_keys_and_owner_paths() -> None:
     assert query(tree, save.qualified_key("primary.save")).one() == primary
     assert query(tree, select(Editor).key("preview").descendants(save)).one().owner == "preview"
     with pytest.raises(ValueError, match="ComponentTree"):
-        snapshot(component)
+        index_tree(component)
     # Expanded-node inspection is explicit and cannot recover local keys or owners.
-    assert not query(snapshot(rendered.nodes), save).exists()
-    assert query(snapshot(rendered.nodes), select(s.ActionControl).key("primary.save")).exists()
+    assert not query(index_tree(rendered.nodes), save).exists()
+    assert query(index_tree(rendered.nodes), select(s.ActionControl).key("primary.save")).exists()
 
 
 @pytest.mark.parametrize("incremental", [True, False])
@@ -137,12 +137,12 @@ def test_runtime_snapshots_survive_reuse_and_removed_placements(incremental: boo
     root.editor.count = 1
     updated = runtime.render(reuse_committed=incremental)
     runtime.commit(updated)
-    assert query(snapshot(updated), select(s.Paragraph).text("1")).count() == 2
-    assert query(snapshot(initial), select(s.Paragraph).text("0")).count() == 2
+    assert query(index_tree(updated), select(s.Paragraph).text("1")).count() == 2
+    assert query(index_tree(initial), select(s.Paragraph).text("0")).count() == 2
     root.shown = False
     closed = runtime.render(reuse_committed=incremental)
-    assert not query(snapshot(closed), select(Editor)).exists()
-    assert query(snapshot(initial), select(Editor)).count() == 2
+    assert not query(index_tree(closed), select(Editor)).exists()
+    assert query(index_tree(initial), select(Editor)).count() == 2
     runtime.finish()
 
 
@@ -158,10 +158,10 @@ def test_explicit_adapters_handle_cycles_without_deduplicating_siblings() -> Non
         assert isinstance(value, Node)
         return [(str(i), item) for i, item in enumerate(value.children)]
 
-    assert query(snapshot(root, children=edges), select(Node)).count() == 3
+    assert query(index_tree(root, children=edges), select(Node)).count() == 3
     root.children.append(root)
     with pytest.raises(ValueError, match="cycle"):
-        snapshot(root, children=edges)
+        index_tree(root, children=edges)
 
 
 def test_ui_traversal_does_not_follow_application_records() -> None:
@@ -169,18 +169,18 @@ def test_ui_traversal_does_not_follow_application_records() -> None:
     class ApplicationRecord:
         nested: s.ActionControls
 
-    assert not query(snapshot(ApplicationRecord(toolbar("private"))), select(s.ActionControl)).exists()
+    assert not query(index_tree(ApplicationRecord(toolbar("private"))), select(s.ActionControl)).exists()
 
 
 def test_incomplete_renders_are_not_silently_queried() -> None:
     root = Screen()
     tree = render_component_tree(root, defer=lambda _component: True)
     with pytest.raises(ValueError, match="incomplete"):
-        snapshot(tree)
+        index_tree(tree)
 
 
 def test_testing_snapshot_helper_preserves_component_scope() -> None:
-    tree = render_snapshot(Screen())
+    tree = render_index(Screen())
     editor = query(tree, select(Editor).key("primary")).one()
     assert query(tree, select(s.ActionControl).key("save"), within=editor).one().owner == "primary"
 
@@ -188,7 +188,7 @@ def test_testing_snapshot_helper_preserves_component_scope() -> None:
 def test_authored_alternatives_and_choice_values_are_queryable() -> None:
     alternate = s.FallbackContent(toolbar("full"), (toolbar("compact"),))
     choices = s.Choices("pick", (s.Choice("ada", "Ada"),))
-    tree = snapshot(ui.stack(alternate, choices))
+    tree = index_tree(ui.stack(alternate, choices))
     assert [match.key for match in query(tree, select(s.ActionControl)).all()] == ["full", "compact"]
     assert query(tree, select(s.Choices).children(select(s.Choice).label("Ada"))).one().key == "ada"
 
@@ -202,7 +202,7 @@ def test_inspection_does_not_reconstruct_nodes_or_render_components() -> None:
             constructions.append("constructed")
 
     node = Stack((toolbar("save"),))
-    assert query(snapshot(node), select(s.ActionControl)).count() == 1
+    assert query(index_tree(node), select(s.ActionControl)).count() == 1
     assert constructions == ["constructed"]
 
 
@@ -210,7 +210,7 @@ def test_instance_selection_matches_identity_not_equality() -> None:
     first = ui.paragraph("equal")
     second = ui.paragraph("equal")
     assert first == second and first is not second
-    tree = snapshot(ui.stack(first, second, first))
+    tree = index_tree(ui.stack(first, second, first))
     found = query(tree, select(first)).all()
     assert len(found) == 2
     assert all(match.node is first for match in found)
@@ -221,7 +221,7 @@ def test_instance_selection_matches_identity_not_equality() -> None:
 
 def test_instance_selection_can_narrow_a_component_placement() -> None:
     screen = Screen()
-    tree = render_snapshot(screen)
+    tree = render_index(screen)
     editor = select(screen.editor)
     assert_type(query(tree, editor).all()[0], Match[Editor])
     assert query(tree, editor).count() == 2
@@ -233,7 +233,7 @@ def test_instance_selection_can_narrow_a_component_placement() -> None:
 
 def test_string_query_can_select_custom_component_placements() -> None:
     screen = Screen()
-    tree = render_snapshot(screen)
+    tree = render_index(screen)
     primary = query(tree, 'Editor[key="primary"]', types={"Editor": Editor}).one()
     assert_type(primary, Match[object])
     assert primary.node is screen.editor

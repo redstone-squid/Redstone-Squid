@@ -119,7 +119,7 @@ Use `squid_ui.selectors` for read-only queries in tests and inspection tools:
 
 ```python
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.selectors import query, select, snapshot
+from squid_ui.selectors import query, select, index_tree
 from squid_ui.authoring.semantic import ActionControl
 
 # Rendering is explicit. query accepts existing nodes, scenes, or component trees.
@@ -139,7 +139,7 @@ against the neutral locale. Text matches a node's own content, not its descendan
 Compose selectors with `descendants`, `children`, `next_sibling`, `following_siblings`,
 `has`, `intersect`, `union`, and `excluding`. For example, `select(Editor).key("editor").descendants(save)` selects
 save controls inside that component placement. `query(tree, save, within=match)`
-searches a matched subtree in a shared snapshot, excluding its root unless `include_scope=True` is set.
+searches a matched subtree in a shared tree index, excluding its root unless `include_scope=True` is set.
 `scope()` explicitly matches that root. Scoped relations cannot consult ancestors
 outside the subtree; `has` evaluates its inner selector relative to each candidate.
 
@@ -147,27 +147,31 @@ Results provide `all()`, `one()`, `optional()`, `exists()`, and `count()`. `one(
 `optional()` raise `QueryError` on ambiguity, with occurrence paths and keys.
 Matches expose `node`, `path`, `owner`, `key`, and `qualified_key`. Repeated objects
 are distinct occurrences; unions deduplicate occurrences in depth-first tree order.
-Paths for unkeyed nodes are addresses within a snapshot, not persistent identities.
+Paths for unkeyed nodes are addresses within a tree index, not persistent identities.
 
-`query(nodes, selector)` captures its input automatically. For multiple queries that
-share matches, capture once with `tree = snapshot(nodes)`. This is required for
-`within=match` and `first.precedes(second)`: scopes and order comparisons belong to
-one capture. `precedes` uses depth-first order (ancestors precede descendants);
-`next_sibling` and `following_siblings` require a shared parent. Queries do not
-implicitly render a live component.
+`query(tree, selector)` indexes its input automatically. Rendered `ComponentTree`
+and planned `Scene` values retain one index, so repeated queries can share scopes
+and compare match order directly. A new render gets a new index. For mutable lists,
+native views, or custom child adapters, indexing happens on each query; use
+`tree = index_tree(nodes)` when several queries should share one topology.
+`precedes` uses depth-first order (ancestors precede descendants); sibling selectors
+require a shared parent. Queries do not implicitly render a live component.
 
 A `ComponentTree` retains authored boundaries and local keys, including all layout
 alternatives before planning. It describes authored UI, not what a frontend finally
-shows. `snapshot(nodes)` instead inspects exactly those nodes without recovering
-component ownership or undoing namespacing. Custom trees can pass a `children`
-adapter yielding `(edge_name, child)` pairs. Traversal follows declared UI edges,
-never arbitrary application records or callbacks, and rejects ancestor cycles.
-Snapshots retain node references and fixed topology, not copies of mutable component
-state. Capture another snapshot after a new render to inspect its layout.
+shows. Indexing raw nodes inspects exactly those nodes without recovering component
+ownership or undoing namespacing. Custom trees can pass a `children` adapter yielding
+`(edge_name, child)` pairs. Traversal follows declared UI edges, never arbitrary
+application records or callbacks, and rejects ancestor cycles.
 
-For tests, `squid_ui.testing.render_snapshot(component)` combines explicit rendering
-and snapshot capture. Existing `find` and `find_all` keep their original general
-dataclass traversal and assertion behavior for compatibility.
+A `TreeIndex` retains node references and fixed topology. Type and key indexes narrow
+candidate searches, but queries reevaluate attributes, predicates, and localized
+text every time. Match results are not cached. Parsed selector strings use a bounded
+cache keyed by their source and type registry.
+
+For tests, `squid_ui.testing.render_index(component)` combines explicit rendering
+and indexing. Existing `find` and `find_all` keep their general dataclass traversal
+and assertion behavior.
 
 Pass a CSS-inspired string directly to `query`, or compile it with `parse` for reuse:
 
@@ -213,6 +217,6 @@ save = staged.query('Button[label="Save"]').one()
 These inspect native Discord items and their native attributes (`custom_id`,
 `disabled`, etc.), not authored controls or reconstructed semantic keys. Nested
 containers, section accessories, select options, and modal inputs are supported.
-Use `discord_testing.snapshot(view)` or `staged.snapshot()` for shared scopes or
+Use `discord_testing.index_tree(view)` or `staged.index()` for shared scopes or
 ordering. `staged.query(selector, view=candidate)` explicitly inspects a candidate
 view; the default keeps pending renders separate from committed output.

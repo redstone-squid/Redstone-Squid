@@ -184,5 +184,5 @@ Discord meanings; custom IDs are not decoded into semantic keys.
 Inside `async with testing.stage(...) as staged`, `staged.query('Button')` inspects
 currently delivered native views, including continuation messages. It does not render
 pending component changes. Pass `view=candidate_view` explicitly to inspect a candidate.
-For scoped queries or ordering comparisons, capture `testing.snapshot(view)` or
-`staged.snapshot()` once and query that snapshot; matches belong to that capture.
+For scoped queries or ordering comparisons, capture `testing.index_tree(view)` or
+`staged.index()` once and query that index; matches belong to that capture.

@@ -5,9 +5,9 @@ from typing import Any, overload
 
 import discord
 from squid_ui.content.text import NEUTRAL, Localization
-from squid_ui.selectors import Match, Query, Selector, Snapshot, parse
+from squid_ui.selectors import Match, Query, Selector, TreeIndex, parse
+from squid_ui.selectors import index_tree as capture_index
 from squid_ui.selectors import query as query_tree
-from squid_ui.selectors import snapshot as capture_snapshot
 
 _DISCORD_TYPES: dict[str, type] = {
     name: value
@@ -34,16 +34,17 @@ def _children(node: object) -> Iterator[tuple[str, object]]:
         yield from ((f"items.{index}", item) for index, item in enumerate(node.items))
 
 
-def snapshot(view: object) -> Snapshot:
+def index_tree(view: object) -> TreeIndex:
     """Capture a View, LayoutView, modal, native item, or sequence without rendering.
 
     Native child relationships, section accessories, select options, and gallery items
-    are traversed. Callback and parent references are not. Reuse the returned snapshot
-    when comparing order or scoping queries with matches from an earlier query.
+    are traversed. Callback and parent references are not. Reuse the returned index
+    when comparing order or scoping queries with matches from an earlier query. Native
+    views are indexed afresh; an existing TreeIndex is returned unchanged.
     """
-    if isinstance(view, Snapshot):
+    if isinstance(view, TreeIndex):
         return view
-    return capture_snapshot(view, children=_children)
+    return capture_index(view, children=_children)
 
 
 @overload
@@ -81,12 +82,12 @@ def query[T](
     """Query existing native Discord UI, using Button, TextDisplay, etc. as string type names.
 
     Attributes retain their Discord names, such as custom_id and disabled. Semantic
-    control keys are not reconstructed from custom IDs. Pass an explicit snapshot
+    control keys are not reconstructed from custom IDs. Pass an explicit index
     when using within to scope a query to an existing match.
     """
     if isinstance(selector, str):
         return query_tree(
-            snapshot(view),
+            index_tree(view),
             parse(selector, types=_DISCORD_TYPES | dict(types or {})),
             within=within,
             include_scope=include_scope,
@@ -95,4 +96,4 @@ def query[T](
     if types is not None:
         message = "types is only supported for string selectors"
         raise ValueError(message)
-    return query_tree(snapshot(view), selector, within=within, include_scope=include_scope, localization=localization)
+    return query_tree(index_tree(view), selector, within=within, include_scope=include_scope, localization=localization)

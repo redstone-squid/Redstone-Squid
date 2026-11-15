@@ -27,7 +27,7 @@ from squid.notifications.models import InboxNotification, NotificationSubscripti
 from squid.suggestions.domain import Suggestion
 from squid.tags.domain import TagValueType
 from squid_ui.selectors import query, select
-from squid_ui.testing import RecordingResponder, choose, labels, press, render_snapshot, render_tree, submit
+from squid_ui.testing import RecordingResponder, choose, labels, press, render_index, render_tree, submit
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.testing import stage
 from tests.support.notification_edits import NotificationEditRecorder
@@ -310,7 +310,7 @@ async def test_selection_actions_need_something_to_select() -> None:
     screen = make_screen().screen
     await screen.on_load()
 
-    tree = render_snapshot(screen)
+    tree = render_index(screen)
 
     assert not query(tree, select(object).key("unfollow_selected")).exists()
     mark_read = query(tree, select(sl.semantic.ActionControl).key("mark_selected_read")).one().node

@@ -1,10 +1,14 @@
-"""Occurrence snapshots for authored UI and explicitly adapted trees."""
+"""Occurrence indexes for authored UI and explicitly adapted trees."""
 
-from collections.abc import Callable, Iterable
+from bisect import bisect_left
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields, is_dataclass
+from threading import RLock
+from types import MappingProxyType
 from typing import Any
 
 from squid_ui import primitives as p
+from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring import semantic as s
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.definition import Component
@@ -72,7 +76,7 @@ def ui_children(node: object) -> Iterable[tuple[str, object]]:
     """Declared UI edges, including controls and all authored alternatives.
 
     Application records, callbacks, and state ownership objects are leaves. Custom
-    trees can supply their own adapter to snapshot instead of exposing arbitrary fields.
+    trees can supply their own adapter to index_tree instead of exposing arbitrary fields.
     """
     if is_scene_node(node):
         yield from scene_children(node)
@@ -95,7 +99,7 @@ def ui_children(node: object) -> Iterable[tuple[str, object]]:
 
 @dataclass(frozen=True, slots=True)
 class Match[T]:
-    """One occurrence. Paths address this snapshot, not identity across future renders.
+    """One occurrence. Paths address this tree index, not identity across future renders.
 
     Nodes are original references, not deep copies; component state may subsequently change.
     owner identifies the producing component placement, and key is the authored local key.
@@ -110,53 +114,83 @@ class Match[T]:
     _token: object
 
     def precedes(self, other: Match[Any]) -> bool:
-        """Whether this occurrence precedes another in the same snapshot's depth-first order.
+        """Whether this occurrence precedes another in the same tree index's depth-first order.
 
         Ancestors precede their descendants. This does not imply a sibling relationship.
         Comparing different captures raises ValueError, even for the same underlying tree.
         """
         if self._token is not other._token:
-            message = "ordering requires matches from the same snapshot"
+            message = "ordering requires matches from the same tree index"
             raise ValueError(message)
         return self._index < other._index
 
 
 @dataclass(frozen=True, slots=True)
-class Snapshot:
+class TreeIndex:
     """A fixed topology in depth-first order. Querying it never invokes render or lifecycle hooks."""
 
     matches: tuple[Match[object], ...]
     parents: tuple[int | None, ...]
     ends: tuple[int, ...]
     _token: object
+    _types: Mapping[type, tuple[int, ...]]
+    _keys: Mapping[tuple[str, str], tuple[int, ...]]
+
+    def candidates(self, kind: type | None, key: tuple[str, str] | None, start: int, end: int) -> Iterable[int]:
+        """Narrow to a stable type or captured key, preserving occurrence order."""
+        choices: list[tuple[int, ...]] = []
+        if kind is not None:
+            choices.append(self._types.get(kind, ()))
+        if key is not None:
+            choices.append(self._keys.get(key, ()))
+        if not choices:
+            return range(start, end)
+        indices = min(choices, key=len)
+        return indices[bisect_left(indices, start) : bisect_left(indices, end)]
 
     def index(self, match: Match[Any]) -> int:
         if match._token is not self._token:
-            msg = "scope belongs to a different snapshot"
+            msg = "scope belongs to a different tree index"
             raise ValueError(msg)
         return match._index
 
 
-def snapshot(tree: object, *, children: Children = ui_children) -> Snapshot:
-    """Capture an authored ComponentTree, planned scene, or existing UI values.
+_INDEX_LOCK = RLock()
 
-    ComponentTree preserves placements and local keys. Plain expanded nodes have only
-    their existing keys and no owner metadata. Lists and tuples are transparent roots.
-    Repeated references become separate occurrences; ancestor cycles raise ValueError.
-    A custom children adapter also permits querying frontend or application-specific trees.
+
+def index_tree(tree: object, *, children: Children = ui_children) -> TreeIndex:
+    """Index existing UI without rendering, reusing the index owned by each render.
+
+    ComponentTree and Scene retain a lazy index for their fixed topology with the default
+    adapter. Raw nodes, lists, native views, and custom adapters are indexed afresh.
+    Reuse an explicit TreeIndex for shared scopes on those mutable representations.
+    Values are references, not copies; predicates are evaluated again on each query.
     """
-    if isinstance(tree, Snapshot):
+    if isinstance(tree, TreeIndex):
         if children is not ui_children:
-            message = "children cannot change traversal of an existing snapshot"
+            message = "children cannot change traversal of an existing tree index"
             raise ValueError(message)
         return tree
+    if isinstance(tree, QueryIndexOwner) and children is ui_children:
+        # A render may be inspected from different threads. Publish one occurrence identity.
+        with _INDEX_LOCK:
+            cached = getattr(tree, "_query_index", None)
+            if isinstance(cached, tuple) and cached[0] == id(tree) and isinstance(cached[1], TreeIndex):
+                return cached[1]
+            indexed = _build_index(tree, children=children)
+            object.__setattr__(tree, "_query_index", (id(tree), indexed))
+            return indexed
+    return _build_index(tree, children=children)
+
+
+def _build_index(tree: object, *, children: Children) -> TreeIndex:
     rendered = tree if isinstance(tree, ComponentTree) else None
     if rendered is not None:
         if rendered.suspended or rendered.deferred:
             msg = "cannot inspect an incomplete component render"
             raise ValueError(msg)
         if "$" not in rendered.authored_nodes or "$" not in rendered.components:
-            msg = "ComponentTree has no authored snapshot; inspect its nodes explicitly"
+            msg = "ComponentTree has no authored render data; inspect its nodes explicitly"
             raise ValueError(msg)
         roots: tuple[object, ...] = (rendered.components["$"],)
     else:
@@ -203,4 +237,21 @@ def snapshot(tree: object, *, children: Children = ui_children) -> Snapshot:
 
     for index, root in enumerate(roots):
         visit(root, f"$/{index}", None, None, "$" if rendered is not None else None)
-    return Snapshot(tuple(matches), tuple(parents), tuple(ends), token)
+    by_type: dict[type, list[int]] = {}
+    by_key: dict[tuple[str, str], list[int]] = {}
+    for match in matches:
+        for kind in type(match.node).__mro__:
+            # Custom instance checks (including virtual ABC registrations) remain predicates.
+            if type(kind) is type:
+                by_type.setdefault(kind, []).append(match._index)
+        for name, value in (("key", match.key), ("qualified_key", match.qualified_key)):
+            if value is not None:
+                by_key.setdefault((name, value), []).append(match._index)
+    return TreeIndex(
+        tuple(matches),
+        tuple(parents),
+        tuple(ends),
+        token,
+        MappingProxyType({kind: tuple(indices) for kind, indices in by_type.items()}),
+        MappingProxyType({key: tuple(indices) for key, indices in by_key.items()}),
+    )

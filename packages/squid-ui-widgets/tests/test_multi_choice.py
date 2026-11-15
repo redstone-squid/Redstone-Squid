@@ -8,7 +8,7 @@ from squid_ui import testing as engine
 from squid_ui.authoring.semantic import ActionControl, Choices, FormTrigger
 from squid_ui.content.text import NEUTRAL, TextLike, resolve_text
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.selectors import query, select, snapshot
+from squid_ui.selectors import index_tree, query, select
 from squid_ui_widgets import testing as wt
 
 
@@ -87,13 +87,13 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
     invalid = sp.MultiChoiceState(("left-0", "left-1", "right-0", "right-1"))
     component = pattern.build_component(initial=invalid)
     rendered = component.render()
-    apply = query(snapshot(rendered), select(ActionControl).key("choices.apply")).one().node
+    apply = query(index_tree(rendered), select(ActionControl).key("choices.apply")).one().node
     assert not apply.available
     assert _english(pattern.errors(invalid)) == ("Select no more than 3 options.",)
 
     staged_elsewhere = sp.MultiChoiceState(("right-0", "right-1"))
     rendered = pattern.build_component(initial=staged_elsewhere).render()
-    left = query(snapshot(rendered), select(Choices).key("choices.left.select")).one().node
+    left = query(index_tree(rendered), select(Choices).key("choices.left.select")).one().node
     assert left.maximum == 1
 
 
@@ -124,7 +124,7 @@ def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
     )
     rendered = pattern.build_component(initial=sp.MultiChoiceState(("role-1",))).render()
-    alternate = query(snapshot(rendered), select(FormTrigger)).one().node
+    alternate = query(index_tree(rendered), select(FormTrigger)).one().node
     assert alternate.spec.prefill == {"selection": ("role-1",)}
     field = alternate.spec.items[0]
     assert isinstance(field, sl.forms.MultiChoiceField)
@@ -138,7 +138,7 @@ def test_panel_modal_alternate_scales_to_twenty_five_options() -> None:
 
     rendered = pattern.build_component().render()
 
-    assert query(snapshot(rendered), "FormTrigger").exists()
+    assert query(index_tree(rendered), "FormTrigger").exists()
 
 
 def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection() -> None:
@@ -154,7 +154,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
         return f"pick:{len(routes)}"
 
     rendered = sp.RouteDriver(route).render(pattern, pattern.initial_state)
-    assert query(snapshot(rendered), "RoutedChoices").exists()
+    assert query(index_tree(rendered), "RoutedChoices").exists()
     selection = next(request for request in routes if request.action.startswith("select_window:roles:"))
     assert selection.phase == "input"
 
@@ -163,7 +163,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
     staged = sp.MultiChoiceState(("role-0",), (), ())
     routes.clear()
     rendered = sp.RouteDriver(route).render(pattern, staged)
-    assert query(snapshot(rendered), 'RoutedActionControl[key="choices.apply"]').exists()
+    assert query(index_tree(rendered), 'RoutedActionControl[key="choices.apply"]').exists()
     apply = next(request for request in routes if request.action == "apply")
     assert apply == sp.TransitionRoute("apply", sp.MultiChoiceState(("role-0",), ("role-0",), ()), "next")
 
@@ -230,7 +230,7 @@ async def test_exclusive_replacement_is_offered_at_capacity(commit: sp.CommitMod
         commit=commit,
     )
     harness = wt.mounted(pattern)
-    picker = query(snapshot(harness.nodes), select(Choices).key("choices.everyone.select")).one().node
+    picker = query(index_tree(harness.nodes), select(Choices).key("choices.everyone.select")).one().node
     assert picker.maximum == 1
 
     routed = wt.routed(pattern)
@@ -324,7 +324,7 @@ async def test_available_options_define_windows_and_clamp_the_displayed_page() -
         window_size=2,
     )
     harness = wt.mounted(pattern)
-    first = query(snapshot(harness.nodes), select(Choices)).one().node
+    first = query(index_tree(harness.nodes), select(Choices)).one().node
     assert tuple(choice.key for choice in first.choices) == ("role-0", "role-1")
     await harness.press("choices.roles.next")
     await harness.choose("choices.roles.select", "role-2")
@@ -342,7 +342,7 @@ def test_no_available_options_renders_without_a_picker() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", (sl.choice("Hidden", key="hidden", available=False),)),),
     )
     for nodes in (wt.mounted(pattern).nodes, wt.routed(pattern).nodes):
-        assert not query(snapshot(nodes), "Choices, RoutedChoices").exists()
+        assert not query(index_tree(nodes), "Choices, RoutedChoices").exists()
         assert "No available options." in engine.texts(nodes)
 
 
