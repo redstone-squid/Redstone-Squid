@@ -111,3 +111,47 @@ The suite is deliberately split so portable code does not acquire transport or s
 - `squid-ui-slack`: Slack SDK drawing for messages, modals, and App Home
 - `squid-storage`: portable persistence contracts and backends
 - `squid-replication`: optional replicated-state backends
+
+## Querying UI trees
+
+Use `squid_ui.selectors` for read-only queries in tests and inspection tools:
+
+```python
+from squid_ui.runtime.expansion import render_component_tree
+from squid_ui.selectors import query, select, snapshot
+from squid_ui.semantic import ActionControl
+
+# Rendering is explicit. Querying this snapshot never renders or dispatches.
+tree = snapshot(render_component_tree(screen))
+save = select(ActionControl).key("save")
+match = query(tree, save.qualified_key("editor.save")).one()
+assert match.node.available
+```
+
+`select(Type)` includes subclasses. Refine it with `key`, `qualified_key`, `attr`,
+`has_attr`, `text`, `label`, or a read-only `where` predicate. Text and labels match
+exactly by default; `contains=True` or a compiled regular expression opts into
+partial matching. Queries accept `localization=...` and otherwise resolve text
+against the neutral locale. Text matches a node's own content, not its descendants.
+
+Compose selectors with `descendants`, `children`, `has`, `intersect`, `union`, and
+`excluding`. For example, `select(Editor).key("editor").descendants(save)` selects
+save controls inside that component placement. `query(tree, save, within=match)`
+searches a matched subtree, excluding its root unless `include_scope=True` is set.
+`scope()` explicitly matches that root. Scoped relations cannot consult ancestors
+outside the subtree; `has` evaluates its inner selector relative to each candidate.
+
+Results provide `all()`, `one()`, `optional()`, `exists()`, and `count()`. `one()` and
+`optional()` raise `QueryError` on ambiguity, with occurrence paths and keys.
+Matches expose `node`, `path`, `owner`, `key`, and `qualified_key`. Repeated objects
+are distinct occurrences; unions deduplicate occurrences in depth-first tree order.
+Paths for unkeyed nodes are addresses within a snapshot, not persistent identities.
+
+A `ComponentTree` retains authored boundaries and local keys, including all layout
+alternatives before planning. It describes authored UI, not what a frontend finally
+shows. `snapshot(nodes)` instead inspects exactly those nodes without recovering
+component ownership or undoing namespacing. Custom trees can pass a `children`
+adapter yielding `(edge_name, child)` pairs. Traversal follows declared UI edges,
+never arbitrary application records or callbacks, and rejects ancestor cycles.
+Snapshots retain node references and fixed topology, not copies of mutable component
+state. Capture another snapshot after a new render to inspect its layout.
