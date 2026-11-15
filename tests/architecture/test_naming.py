@@ -179,6 +179,7 @@ AGENT_NOUNS = {
     "Editor": "edit",
     "Holder": "hold",
     "Inspector": "inspect",
+    "Listener": "listen",
     "Loader": "load",
     "Manager": "manage",
     "Navigator": "navigate",
