@@ -29,6 +29,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.domain.finalization import FinalizationJobStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.errors import DraftCapacityExceededError
 from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.services import bot_services
 
@@ -208,6 +209,17 @@ async def test_redelivery_does_not_submit_a_corrected_draft(monkeypatch: pytest.
     h = setup(monkeypatch, (candidate(),), revision=2)
     await ingestion.ingest_message_bundle([message()], [], h.services, model="test")
     h.download.assert_not_awaited()
+    h.finalization.submit_calls.assert_not_awaited()
+
+
+async def test_capacity_failure_stops_admission_instead_of_reporting_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = candidate()
+    h = setup(monkeypatch, (item,))
+    h.materialize.side_effect = DraftCapacityExceededError(1000)
+
+    with pytest.raises(DraftCapacityExceededError):
+        await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7))
+
     h.finalization.submit_calls.assert_not_awaited()
 
 

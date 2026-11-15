@@ -26,6 +26,7 @@ from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.errors import DraftCapacityExceededError
 
 logger = logging.getLogger(__name__)
 
@@ -153,5 +154,8 @@ async def admit_candidates(
                 logger.info(
                     "Candidate %s finalization: %s (job %s)", candidate.id, outcome.status.value, outcome.job_id
                 )
+        except DraftCapacityExceededError:
+            # Importers must stop and resume retained results after making room.
+            raise
         except SquidError:
             logger.warning("Inferred candidate %s requires recovery", candidate.id, exc_info=True)
