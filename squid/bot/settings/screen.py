@@ -141,18 +141,28 @@ class SettingsPanel(sd.Screen):
 
     @override
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
-        actions: list[sl.semantic.ActionControl] = []
-        if self.page == "voting":
-            content = self.voting
-            if self.shows_server:
-                actions.append(sl.action_control(tr(t"bot-settings-view-back = Back"), self._show_server, key="server"))
-        else:
-            content = self.server
-            if self.shows_voting:
-                actions.append(
-                    sl.action_control(tr(t"bot-settings-view-voting = Voting"), self._show_voting, key="voting")
-                )
-        return (content, sl.action_controls(*actions, key="settings-navigation"), *self.edits.refresh_controls())
+        navigation = sl.action_controls(
+            self.shows_server
+            and sl.action_control(
+                tr(t"settings-tab-server = Server"),
+                self._show_server,
+                key="server",
+                available=self.page != "server",
+                emphasis=sl.semantic.Emphasis.STRONG if self.page == "server" else sl.semantic.Emphasis.NORMAL,
+            ),
+            self.shows_voting
+            and sl.action_control(
+                tr(t"bot-settings-view-voting = Voting"),
+                self._show_voting,
+                key="voting",
+                available=self.page != "voting",
+                emphasis=sl.semantic.Emphasis.STRONG if self.page == "voting" else sl.semantic.Emphasis.NORMAL,
+            ),
+            key="settings-navigation",
+            display=sl.semantic.ControlDisplay.INDIVIDUAL,
+        )
+        content = self.voting if self.page == "voting" else self.server
+        return (navigation, content, *self.edits.refresh_controls())
 
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()

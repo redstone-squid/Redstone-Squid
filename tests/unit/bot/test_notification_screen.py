@@ -157,6 +157,7 @@ async def test_screen_offers_all_follow_workflows() -> None:
     screen = make_screen().screen
     await screen.on_load()
 
+    await press(screen.tabs, "notification-tabs.following")
     rendered = render_tree(screen)
 
     assert isinstance(NotificationScreen.__response_spec__.session, SessionSpec)
@@ -288,8 +289,18 @@ async def test_mounted_inbox_updates_summary_without_undo() -> None:
 
         handler_keys = ui.root.snapshot().handler_keys
         assert not any(key.endswith(("edit-undo", "edit-redo")) for key in handler_keys)
-        assert any(key.endswith(".follow-creator") for key in handler_keys)
-        assert any(key.endswith(".web") for key in handler_keys)
+        assert not any(key.endswith(".follow-creator") for key in handler_keys)
+        assert not any(key.endswith(".web") for key in handler_keys)
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if key.endswith("notification-tabs.following"))
+        )
+        assert any(key.endswith(".follow-creator") for key in ui.root.snapshot().handler_keys)
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if key.endswith("notification-tabs.delivery"))
+        )
+        assert any(key.endswith(".web") for key in ui.root.snapshot().handler_keys)
+        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith("notification-tabs.inbox")))
+        assert harness.screen.inbox.selected_inbox_ids == ("3",)
 
 
 async def test_selection_actions_need_something_to_select() -> None:

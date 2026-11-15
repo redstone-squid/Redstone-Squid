@@ -9,6 +9,7 @@ from pydantic import JsonValue
 
 import squid_ui as sl
 import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
@@ -79,6 +80,14 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
         self.preferences = NotificationPreferencesControls(self.settings, self.edits)
         self.subscriptions = NotificationSubscriptions(self.settings, self.edits)
         self.inbox = NotificationInbox(notifications, account_id, self.edits, visibility, visibility_resolver)
+        self.tabs = sp.Tabs(
+            (
+                sp.Tab("inbox", tr(t"notifications-tab-inbox = Inbox"), self.inbox),
+                sp.Tab("following", tr(t"bot-notifications-view-following = Following"), self.subscriptions),
+                sp.Tab("delivery", tr(t"notifications-tab-delivery = Delivery"), self.preferences),
+            ),
+            key="notification-tabs",
+        )
 
     @override
     async def on_load(self) -> None:
@@ -97,21 +106,12 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.field(tr(t"bot-notifications-view-following = Following"), self.subscriptions.summary()),
             sl.field(tr(t"bot-notifications-view-unread = Unread"), str(self.inbox.unread_count)),
         )
-        description = tr(
-            t"notifications-channel-and-follow-help = Toggle where "
-            t"notifications arrive, and unfollow what you no longer want."
-        )
-        suspension_note = self.preferences.suspension_note()
         return (
             sl.section(
                 sl.heading(tr(t"bot-notifications-view-notifications = Notifications")),
-                sl.paragraph(description).truncate(),
                 sl.fields(*fields),
-                suspension_note and sl.note(suspension_note),
             ),
-            self.preferences,
-            self.subscriptions,
-            self.inbox,
+            self.tabs,
             *self.edits.refresh_controls(),
         )
 
@@ -155,7 +155,15 @@ class NotificationPreferencesControls(sl.Component[sl.ComponentsV2Target, sd.Req
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        suspension_note = self.suspension_note()
         return (
+            sl.section(
+                sl.heading(tr(t"notifications-delivery-heading = Where notifications arrive")),
+                sl.paragraph(
+                    tr(t"notifications-delivery-help = Choose your delivery channels. Changes save immediately.")
+                ),
+                suspension_note and sl.note(suspension_note),
+            ),
             sl.action_controls(
                 sl.toggle(
                     tr(t"bot-notifications-view-web-inbox = Web inbox"),
@@ -275,6 +283,16 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
             key="subscription-actions",
         )
         return (
+            sl.section(
+                sl.heading(tr(t"notifications-following-heading = Your follows")),
+                sl.paragraph(
+                    tr(
+                        t"notifications-following-help = Follow creators or records to hear about new builds and records."
+                    )
+                ),
+                not self._settings.subscriptions
+                and sl.note(tr(t"notifications-following-empty = Nothing followed yet. Add your first follow below.")),
+            ),
             *selection,
             sl.note(self.filter_tag.label) if self.filter_tag is not None else sl.note(""),
             sl.action_controls(
@@ -563,8 +581,19 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Reds
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not self._inbox:
-            return ()
+            return (
+                sl.section(
+                    sl.heading(tr(t"notifications-inbox-empty = Your inbox is empty")),
+                    sl.paragraph(
+                        tr(t"notifications-inbox-empty-help = Follow creators or records in Following to get updates.")
+                    ),
+                ),
+            )
         return (
+            sl.section(
+                sl.heading(tr(t"notifications-inbox-heading = Recent notifications")),
+                sl.note(tr(t"notifications-inbox-help = Select notifications to mark them read or unread.")),
+            ),
             sl.choices(
                 *(
                     sl.choice(
