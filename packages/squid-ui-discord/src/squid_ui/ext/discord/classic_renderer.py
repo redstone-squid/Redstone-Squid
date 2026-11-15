@@ -15,14 +15,18 @@ from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui.ext.discord.attachments import attachment_assets
-from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.native_controls import Control as Control
+from squid_ui.ext.discord.native_controls import Wire as Wire
+from squid_ui.ext.discord.native_controls import (
+    draw_control,
+    draw_link,
+    draw_routed_button,
+    draw_routed_select,
+)
 from squid_ui.ext.discord.render_cache import RenderProgramCache
-from squid_ui.ext.discord.renderer import Control as Control
-from squid_ui.ext.discord.renderer import RoutedItem, RoutedSelectItem
-from squid_ui.ext.discord.renderer import Wire as Wire
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
@@ -303,68 +307,18 @@ class ClassicRenderer:
     ) -> discord.ui.Item[Any]:
         match instruction:
             case _ClassicLink():
-                return self._draw_link(instruction.node)
+                return draw_link(instruction.node)
             case _ClassicPremium(node=node):
                 return discord.ui.Button(sku_id=node.sku_id)
             case _ClassicRoutedButton():
-                return self._draw_routed_button(instruction.node)
+                return draw_routed_button(instruction.node)
             case _ClassicRoutedSelect():
-                return self._draw_routed_select(instruction.node)
+                return draw_routed_select(instruction.node)
             case _ClassicControlItem():
-                return self._draw_control_item(instruction.node, plan=plan, wire=wire)
+                return draw_control(instruction.node, plan=plan, wire=wire)
             case _ClassicExtension():
                 return self._draw_extension(instruction.node, row=row)
-
-    def _draw_link(self, node: scene.Link) -> discord.ui.Item[Any]:
-        return discord.ui.Button(
-            style=discord.ButtonStyle.link,
-            label=node.label,
-            url=node.url,
-            emoji=discord_emoji(node.emoji),
-            disabled=node.disabled,
-        )
-
-    def _draw_routed_button(self, node: scene.RoutedButton) -> discord.ui.Item[Any]:
-        return RoutedItem(
-            style=getattr(discord.ButtonStyle, node.style.value),
-            label=node.label,
-            custom_id=node.route_id,
-            emoji=discord_emoji(node.emoji),
-            disabled=node.disabled,
-        )
-
-    def _draw_routed_select(self, node: scene.RoutedSelect) -> discord.ui.Item[Any]:
-        return RoutedSelectItem(
-            options=[_option(option) for option in node.options],
-            custom_id=node.route_id,
-            placeholder=node.placeholder,
-            min_values=node.min_values,
-            max_values=node.max_values,
-            disabled=node.disabled,
-        )
-
-    def _draw_control_item(
-        self, node: Control, plan: PlanResult[scene.ClassicMessage] | None, wire: Wire | None
-    ) -> discord.ui.Item[Any]:
-        if plan is None or wire is None:
-            message = "interactive scene controls require a mounted Discord frontend"
-            raise TypeError(message)
-        binding = plan.bindings.get(node.action)
-        if binding is None:
-            message = f"scene action {node.action!r} has no binding"
-            raise DrawInvariantError(message)
-        return wire(node, binding)
 
     def _draw_extension(self, node: scene.Extension, row: int) -> discord.ui.Item[Any]:
         message = f"a classic message cannot draw the Discord extension {node.kind!r} in row {row}"
         raise DrawInvariantError(message)
-
-
-def _option(option: scene.Option) -> discord.SelectOption:
-    return discord.SelectOption(
-        label=option.label,
-        value=option.value,
-        description=option.description,
-        default=option.default,
-        emoji=discord_emoji(option.emoji),
-    )

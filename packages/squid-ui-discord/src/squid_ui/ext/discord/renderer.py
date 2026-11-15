@@ -21,23 +21,29 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui.ext.discord.attachments import attachment_assets
 from squid_ui.ext.discord.conformance import LimitViolationError, conform
-from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
 from squid_ui.ext.discord.message_payload import MessagePayload
+from squid_ui.ext.discord.native_controls import Control as Control
+from squid_ui.ext.discord.native_controls import RoutedItem as RoutedItem
+from squid_ui.ext.discord.native_controls import RoutedSelectItem as RoutedSelectItem
+from squid_ui.ext.discord.native_controls import Wire as Wire
+from squid_ui.ext.discord.native_controls import (
+    draw_control,
+    draw_link,
+    draw_routed_button,
+    draw_routed_select,
+)
 from squid_ui.ext.discord.render_cache import RenderProgramCache
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
-from squid_ui.interactions import ActionBinding
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import Renderer
 from squid_ui.target_types import DiscordPyAdapter
 
-type Control = scene.Button | scene.Select | scene.EntitySelect
 type Accessory = (
     scene.Thumbnail | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension
 )
 """What may sit beside a section or inside a row -- `scene.Section.accessory`'s own type."""
-type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
 
 
@@ -164,36 +170,6 @@ narrows and the arms read what they were handed.
 class _V2Program:
     children: tuple[_V2Instruction, ...]
     opaque: bool = False
-
-
-class RoutedItem(discord.ui.Button[Any]):
-    """A button whose only dispatch path is a `Router`.
-
-    Discord's payload is an ordinary button; the override is purely about discord.py's
-    in-process bookkeeping. `ViewStore.add_view` files an item into the stored dispatch
-    table only when `is_dispatchable()` is true, and `dispatch_view` runs *both* the dynamic
-    lookup and that table. A stored routed button would therefore take a second dispatch
-    whose callback is `Item`'s no-op — harmless for responses, but `_scheduled_task` resets
-    the view's timeout expiry before awaiting it, so clicking a routed control inside a
-    mounted message silently extended that mount's life.
-
-    Staying out of the table gives the control exactly one dispatch path. Dynamic dispatch
-    is unaffected: `schedule_dynamic_item_call` rebuilds the view with
-    `LayoutView.from_message` and finds the base item by component type and custom id there,
-    on stock `Button` objects this class never touches.
-    """
-
-    @override
-    def is_dispatchable(self) -> bool:
-        return False
-
-
-class RoutedSelectItem(discord.ui.Select[Any]):
-    """A stateless select kept out of a surrounding mount's stored dispatch table."""
-
-    @override
-    def is_dispatchable(self) -> bool:
-        return False
 
 
 class StaticView(discord.ui.LayoutView):
@@ -371,22 +347,6 @@ class V2Renderer:
         factory = "static" if self.view_factory is StaticView else "custom"
         return "discord.components-v2", fingerprint, self.limits, factory
 
-    def _control(
-        self,
-        node: Control,
-        *,
-        plan: PlanResult[scene.ComponentsV2] | None,
-        wire: Wire | None,
-    ) -> discord.ui.Item[Any]:
-        if plan is None or wire is None:
-            message = "interactive scene controls require a mounted Discord frontend"
-            raise TypeError(message)
-        binding = plan.bindings.get(node.action)
-        if binding is None:
-            message = f"scene action {node.action!r} has no binding"
-            raise DrawInvariantError(message)
-        return wire(node, binding)
-
     @staticmethod
     def _extension(
         node: scene.Extension,
@@ -423,21 +383,21 @@ class V2Renderer:
             case _V2Row(children=children):
                 return discord.ui.ActionRow(*(self._execute(child, plan=plan, wire=wire) for child in children))
             case _V2ControlRow(node=node):
-                return discord.ui.ActionRow(self._control(node, plan=plan, wire=wire))
+                return discord.ui.ActionRow(draw_control(node, plan=plan, wire=wire))
             case _V2RoutedSelect():
-                return self._draw_routed_select(instruction.node)
+                return discord.ui.ActionRow(draw_routed_select(instruction.node))
             case _V2Gallery():
                 return self._draw_gallery(instruction.node)
             case _V2Thumbnail(node=node):
                 return discord.ui.Thumbnail(node.url, description=node.description, spoiler=node.spoiler)
             case _V2Link():
-                return self._draw_link(instruction.node)
+                return draw_link(instruction.node)
             case _V2Premium(node=node):
                 return discord.ui.Button(sku_id=node.sku_id)
             case _V2Control(node=node):
-                return self._control(node, plan=plan, wire=wire)
+                return draw_control(node, plan=plan, wire=wire)
             case _V2RoutedButton():
-                return self._draw_routed_button(instruction.node)
+                return draw_routed_button(instruction.node)
             case _V2Extension(node=node):
                 return self._extension(node, plan)
 
@@ -477,26 +437,6 @@ class V2Renderer:
         spacing = discord.SeparatorSpacing.large if node.large else discord.SeparatorSpacing.small
         return discord.ui.Separator(visible=node.visible, spacing=spacing)
 
-    def _draw_routed_select(self, node: scene.RoutedSelect) -> discord.ui.Item[Any]:
-        select = RoutedSelectItem(
-            options=[
-                discord.SelectOption(
-                    label=option.label,
-                    value=option.value,
-                    description=option.description,
-                    default=option.default,
-                    emoji=discord_emoji(option.emoji),
-                )
-                for option in node.options
-            ],
-            custom_id=node.route_id,
-            placeholder=node.placeholder,
-            min_values=node.min_values,
-            max_values=node.max_values,
-            disabled=node.disabled,
-        )
-        return discord.ui.ActionRow(select)
-
     def _draw_gallery(self, node: scene.Gallery) -> discord.ui.Item[Any]:
         return discord.ui.MediaGallery(
             *(
@@ -507,22 +447,4 @@ class V2Renderer:
                 )
                 for entry in node.items
             )
-        )
-
-    def _draw_link(self, node: scene.Link) -> discord.ui.Item[Any]:
-        return discord.ui.Button(
-            style=discord.ButtonStyle.link,
-            label=node.label,
-            url=node.url,
-            emoji=discord_emoji(node.emoji),
-            disabled=node.disabled,
-        )
-
-    def _draw_routed_button(self, node: scene.RoutedButton) -> discord.ui.Item[Any]:
-        return RoutedItem(
-            style=getattr(discord.ButtonStyle, node.style.value),
-            label=node.label,
-            custom_id=node.route_id,
-            emoji=discord_emoji(node.emoji),
-            disabled=node.disabled,
         )
