@@ -86,6 +86,8 @@ class MediaNormalizationService:
     def _validate_probe(self, kind: MediaKind, probe: MediaProbe, *, strip_audio: bool = False) -> None:
         # Original videos are copied; only a single thumbnail is decoded. Encoding
         # constraints on duration, rate, and even dimensions do not apply.
+        if kind is MediaKind.IMAGE and probe.original_image_content_type is not None:
+            return
         if kind is MediaKind.VIDEO and not strip_audio:
             return
         if kind is MediaKind.VIDEO:

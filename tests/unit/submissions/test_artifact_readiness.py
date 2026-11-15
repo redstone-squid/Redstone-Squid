@@ -187,7 +187,7 @@ async def test_valid_completed_media_exposes_only_opaque_upload_ids(kind: MediaK
     [
         (_artifact(MediaArtifactRole.OUTPUT, content_type="image/png"),),
         (
-            _artifact(MediaArtifactRole.OUTPUT, content_type="image/jpeg"),
+            _artifact(MediaArtifactRole.OUTPUT, content_type="image/svg+xml"),
             _artifact(MediaArtifactRole.REPORT, content_type="application/json", width=None, height=None),
         ),
         (

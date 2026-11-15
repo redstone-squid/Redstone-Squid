@@ -2,6 +2,8 @@
 
 Videos retain their original bytes, container, audio, timing, rotation, and metadata. The worker decodes a JPEG
 thumbnail without transcoding the video. Explicit audio removal still uses the H.264/AAC conversion path.
+PNG, APNG, JPEG, GIF, and WebP images also retain their original bytes, including animation and metadata.
+Other supported image formats are converted to PNG.
 Original videos can require a player that supports their source codec; processing does not guarantee browser playback.
 
 Submission media processing is optional and disabled by default. The API streams an owned draft upload into private
@@ -116,7 +118,7 @@ additional concurrent job, budget another 3 GiB memory and 1.5 GiB scratch disk.
 PID, and writable-layer limits in the deployment platform; the repository does not choose a one-size-fits-all machine
 budget.
 
-The submission contract rejects more than 10 images or 3 videos. Image decoding is limited to 33.2 megapixels.
+The submission contract rejects more than 10 images or 3 videos. Image conversion is limited to 33.2 megapixels; copying recognized raster originals does not decode them.
 Videos copied unchanged are not subject to encoder limits on duration, frame rate, or even dimensions; thumbnail
 decoding remains bounded by subprocess memory and time limits. Explicit audio removal retains the five-minute,
 33.2-megapixel, and 250-million-decoded-pixels-per-second encoding limits.

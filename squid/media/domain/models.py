@@ -13,6 +13,16 @@ VIDEO_CONTENT_TYPES = frozenset(
 )
 
 
+ORIGINAL_IMAGE_FORMATS = {
+    "png": ("png_pipe", "image/png"),
+    "apng": ("apng", "image/apng"),
+    "mjpeg": ("jpeg_pipe", "image/jpeg"),
+    "gif": ("gif", "image/gif"),
+    "webp": ("webp_pipe", "image/webp"),
+}
+IMAGE_CONTENT_TYPES = frozenset(content_type for _, content_type in ORIGINAL_IMAGE_FORMATS.values())
+
+
 class MediaKind(StrEnum):
     """A hosted media type accepted by a submission."""
 
@@ -157,6 +167,14 @@ class MediaProbe:
             raise ValidationError(msg)
 
     @property
+    def original_image_content_type(self) -> str | None:
+        """Recognize raster image containers independently of supplied filenames and MIME types."""
+        match = ORIGINAL_IMAGE_FORMATS.get(self.video_codec)
+        if match is not None and match[0] in self.container_names:
+            return match[1]
+        return None
+
+    @property
     def has_audio(self) -> bool:
         """Whether the inspected input contains an audio stream."""
         return self.audio_codec is not None
@@ -228,8 +246,8 @@ class MediaNormalizationReport:
         if len(set(self.actions)) != len(self.actions):
             msg = tr(t"media-report-actions-duplicate = Normalization report actions cannot contain duplicates.")
             raise ValidationError(msg)
-        if self.kind is MediaKind.IMAGE and self.output.content_type != "image/png":
-            msg = tr(t"media-normalized-images-png = Normalized images must be PNG artifacts.")
+        if self.kind is MediaKind.IMAGE and self.output.content_type not in IMAGE_CONTENT_TYPES:
+            msg = tr(t"media-normalized-images-png = Processed images must use a supported raster format.")
             raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and (
             self.output.content_type not in VIDEO_CONTENT_TYPES

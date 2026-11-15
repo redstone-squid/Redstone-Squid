@@ -232,7 +232,7 @@ async def test_cancelled_normalization_removes_every_staged_output(
         poster_path=tmp_path / "poster" if kind is MediaKind.VIDEO else None,
     )
     probe = MediaProbe(
-        container_names=("mp4",) if kind is MediaKind.VIDEO else ("png_pipe",),
+        container_names=("mp4",) if kind is MediaKind.VIDEO else ("ppm_pipe",),
         video_codec="png",
         width=1,
         height=1,

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from squid.media.application import MediaNormalizationRequest, MediaNormalizationService
-from squid.media.domain import MediaKind, MediaNormalizationAction
+from squid.media.domain import MediaKind, MediaLimits, MediaNormalizationAction
 from squid.media.errors import InvalidMediaError, MediaFailureReason
 from squid.media.infrastructure import FfmpegMediaNormalizer
 
@@ -495,3 +495,30 @@ async def test_webm_is_preserved_with_odd_dimensions_and_unknown_duration(tmp_pa
     assert result.report.output_probe == result.report.input_probe
     assert result.poster_path is not None
     assert result.poster_path.read_bytes().startswith(b"\xff\xd8")
+
+
+@pytest.mark.parametrize("extension", ["png", "gif", "jpg", "webp"])
+async def test_raster_originals_preserve_bytes_and_animation(tmp_path: Path, extension: str) -> None:
+    source = tmp_path / f"source.{extension}"
+    subprocess.run(
+        [
+            FFMPEG or "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=32x24:rate=4",
+            "-frames:v",
+            "4" if extension == "gif" else "1",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    result = await MediaNormalizationService(
+        FfmpegMediaNormalizer(), limits=MediaLimits(max_pixels_per_frame=1)
+    ).normalize(MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output"))
+    assert result.output_path.read_bytes() == source.read_bytes()
+    assert result.report.actions == ()
+    assert result.report.output.content_type == {"jpg": "image/jpeg"}.get(extension, f"image/{extension}")

@@ -86,7 +86,7 @@ class MediaProcessLimits:
 
 
 class FfmpegMediaNormalizer:
-    """Normalize images to PNG and preserve original videos with a JPEG thumbnail.
+    """Preserve raster images and videos, generating a JPEG thumbnail for videos.
 
     Each probe or encoding step runs in a separate subprocess. Outputs are staged
     beside their destinations and published only after size and stream checks pass.
@@ -154,6 +154,8 @@ class FfmpegMediaNormalizer:
     ) -> MediaNormalizationResult:
         """Produce normalized artifacts, committing them only after validation."""
         if request.kind is MediaKind.IMAGE:
+            if probe.original_image_content_type is not None:
+                return await self._preserve_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
             return await self._normalize_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
         if not request.strip_audio:
             return await self._preserve_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
@@ -170,6 +172,34 @@ class FfmpegMediaNormalizer:
                 result.poster_path.unlink(missing_ok=True)
         except OSError as exc:
             raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="discard_output") from exc
+
+    async def _preserve_image(
+        self,
+        request: MediaNormalizationRequest,
+        *,
+        probe: MediaProbe,
+        source_bytes: int,
+        limits: MediaLimits,
+    ) -> MediaNormalizationResult:
+        assert probe.original_image_content_type is not None
+        with _staged_outputs((request.output_path, ".image")) as (temporary,):
+            with CancelScope(shield=True):
+                await asyncio.to_thread(shutil.copyfile, request.source_path, temporary)
+            size = _bounded_size(temporary, limits.max_output_bytes)
+            artifact = _artifact(temporary, probe.original_image_content_type, probe, byte_size=size)
+        return MediaNormalizationResult(
+            output_path=request.output_path,
+            poster_path=None,
+            report=MediaNormalizationReport(
+                kind=MediaKind.IMAGE,
+                source_bytes=source_bytes,
+                input_probe=probe,
+                output_probe=probe,
+                output=artifact,
+                poster=None,
+                actions=(),
+            ),
+        )
 
     async def _normalize_image(
         self,
@@ -259,7 +289,8 @@ class FfmpegMediaNormalizer:
         else:
             raise InvalidMediaError(MediaFailureReason.PROBE_INVALID)
         with _staged_outputs((request.output_path, ".video"), (request.poster_path, ".jpg")) as (video, poster):
-            await asyncio.to_thread(shutil.copyfile, request.source_path, video)
+            with CancelScope(shield=True):
+                await asyncio.to_thread(shutil.copyfile, request.source_path, video)
             video_size = _bounded_size(video, limits.max_output_bytes)
             await self._generate_poster(video, poster, probe, limits)
             poster_size = _bounded_size(poster, limits.max_output_bytes)
