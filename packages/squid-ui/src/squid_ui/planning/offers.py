@@ -38,7 +38,6 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.planning.classic_content import CardSlot
 from squid_ui.planning.composition import (
     CandidateComposition,
     DiscoveryCompletion,
@@ -115,10 +114,13 @@ from squid_ui.planning.realizations import (
     TimeRealization,
 )
 from squid_ui.planning.resources import EMPTY_COST, Axis
-from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.planning.semantics import (
+    CardSlot,
     FieldPart,
     ItemBranch,
+    RosterLabel,
+    RosterMembers,
+    RosterSection,
     SourceScope,
     StructuralGroup,
     TableCell,

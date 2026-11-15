@@ -22,7 +22,6 @@ from squid_ui.authoring.presentations import (
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot
 from squid_ui.content.text import Text, TextLike
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.classic_content import CardSlot
 from squid_ui.planning.interaction_handlers import ForwardSelection
 from squid_ui.planning.interaction_semantics import (
     DisclosureToggle,
@@ -32,7 +31,6 @@ from squid_ui.planning.interaction_semantics import (
     NavigationChoice,
     interaction_changes,
 )
-from squid_ui.planning.roster_content import RosterLabel, RosterMembers, RosterSection
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Paginate
 from squid_ui.target_types import Renderable
@@ -57,6 +55,34 @@ class TableCell:
 class FieldPart:
     part: Literal["label", "value"]
     content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class CardSlot:
+    """Text in one named classic embed slot, which has its own character limit."""
+
+    kind: Literal["title", "field_name", "field_value", "footer", "author"]
+    text: primitive.Text
+
+
+@dataclass(frozen=True, slots=True)
+class RosterSection:
+    """One roster slot's group of members, kept so continued member lines still know their slot."""
+
+    slot: RosterSlot | None
+    count: int
+    full: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RosterLabel:
+    section: RosterSection
+    full: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RosterMembers(sem.List):
+    """Member lines use their enclosing region instead of introducing a local pager."""
 
 
 @dataclass(frozen=True, slots=True)
