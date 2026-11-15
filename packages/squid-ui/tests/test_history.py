@@ -11,7 +11,6 @@ import anyio
 import pytest
 
 from squid_reactivity import (
-    ChangeReport,
     EventLedger,
     OperationEventSnapshot,
     TransactionContribution,
@@ -362,7 +361,7 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
 
         def describe_change(self, prepared: None) -> TransactionContribution:
             # Deliberately not a ChangeToken; the runtime refusal is the behaviour under test.
-            return TransactionContribution("bad", cast(ChangeToken, BadToken()), ChangeReport(participants=1))
+            return TransactionContribution("bad", cast(ChangeToken, BadToken()))
 
         def apply(self, prepared: None) -> None:
             pass

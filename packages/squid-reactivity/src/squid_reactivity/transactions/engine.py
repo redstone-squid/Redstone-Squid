@@ -40,7 +40,6 @@ from squid_reactivity.transactions.results import (
     ChangeReport,
     CommitSequence,
     ConflictDetail,
-    ObservedRead,
     RollbackReason,
     TransactionCommit,
     TransactionContribution,
@@ -187,9 +186,8 @@ class _TransactionEngine:
     observed: dict[_Cell, int] = field(default_factory=dict)
     """Committed versions this transaction read out of addressed cells, first read per cell.
 
-    Only shared cells are recorded, because only they can move under a running transaction.
-    Recorded whether or not the read carries a precondition, because the ledger reports what
-    a transaction looked at and that is true either way.
+    Keep reads even before their cells are written: a later write makes the first
+    observed version a commit precondition.
     """
     strong: dict[_Cell, int] = field(default_factory=dict)
     """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
@@ -309,8 +307,8 @@ class _TransactionEngine:
 
         Reads of cells this transaction also writes are checked automatically. Strong
         reads and explicit patch preconditions are checked even when their cells
-        are not written. Other reads are recorded for diagnostics only. Blind writes
-        have no read precondition, so the last commit wins.
+        are not written. Ordinary reads of cells that remain unwritten impose no
+        precondition. Blind writes have no read precondition, so the last commit wins.
         """
         _checkpoint("commit.before_validation")
         if not (self.writes or self.participants):
@@ -404,17 +402,14 @@ class _TransactionEngine:
             )
         )
 
-    def reads(self) -> tuple[ObservedRead, ...]:
-        return tuple(ObservedRead(_slot_name(cell), version) for cell, version in self.observed.items())
-
     @contextmanager
     def preparing(self) -> Iterator[None]:
         """Expose staged values to participants while preventing further writes.
 
         The transaction context has already been removed before commit. Restore it
         for preparation so participants can read the values they are validating.
-        Block writes and new participants, and exclude these internal reads from
-        the observation report because conflict validation has already run.
+        Block writes and new participants, and skip recording these internal reads
+        because conflict validation has already run.
         """
         with (
             _CURRENT_TRANSACTION.set(self),
@@ -470,7 +465,6 @@ class _TransactionEngine:
             _next_commit_sequence(),
             committed_at,
             committed_at - self.context.started_at,
-            self.reads(),
             self.patches(),
             changes,
         )
@@ -562,7 +556,6 @@ class _TransactionEngine:
             rolled_back_at,
             rolled_back_at - self.context.started_at,
             _rollback_reason(error, during_commit=during_commit),
-            self.reads(),
             error.detail if isinstance(error, ReactiveConflictError) else None,
             ExceptionReport.capture(error),
             ChangeReport(len(self.writes), len(self.participants)),

@@ -18,7 +18,6 @@ from squid_reactivity.internals import Cell as _Cell
 from squid_reactivity.transactions import TransactionView, enlist, transaction, transaction_participant
 from squid_reactivity.transactions.context import ActorRef, CausalRef, TransactionContext, TransactionPurpose
 from squid_reactivity.transactions.results import (
-    ChangeReport,
     ConflictDetail,
     TransactionContribution,
 )
@@ -217,7 +216,7 @@ class _ReplicationParticipant:
         if backend_token is None:
             return None
         token = ReplicationChangeToken(weakref.ref(self.document), backend_token, self.document.token_epoch)
-        return TransactionContribution(self.document.identity, token, ChangeReport(participants=1))
+        return TransactionContribution(self.document.identity, token)
 
     def apply(self, prepared: object) -> None:
         if self.document.engine.change_token(prepared) is None:

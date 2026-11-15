@@ -38,14 +38,6 @@ class CommitSequence:
 
 
 @dataclass(frozen=True, slots=True)
-class ObservedRead:
-    """The committed version of a shared cell read by a transaction."""
-
-    target_id: str
-    version: int
-
-
-@dataclass(frozen=True, slots=True)
 class ChangeReport:
     """A safe count-only projection of staged or committed changes."""
 
@@ -77,11 +69,10 @@ class ChangeToken[InverseT = Any](Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TransactionContribution:
-    """An opaque reversible participant contribution and its safe report."""
+    """An identified participant contribution with a token for undo."""
 
     participant_id: str
     token: ChangeToken[Any]
-    report: ChangeReport = ChangeReport(participants=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +83,6 @@ class TransactionCommit:
     sequence: CommitSequence
     committed_at: datetime
     duration: timedelta
-    reads: tuple[ObservedRead, ...]
     patches: CellPatchSet
     participant_changes: tuple[TransactionContribution, ...] = ()
     tags: frozenset[str] = frozenset()
@@ -106,7 +96,6 @@ class TransactionRollback:
     rolled_back_at: datetime
     duration: timedelta
     reason: RollbackReason
-    reads: tuple[ObservedRead, ...]
     conflict: ConflictDetail | None
     exception: ExceptionReport | None
     staged_report: ChangeReport

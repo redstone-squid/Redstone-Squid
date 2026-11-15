@@ -55,8 +55,6 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.Dependencies
 
-::: squid_reactivity.ObservedRead
-
 ## Topics
 
 Optional invalidation for external dependencies, such as database records or files.

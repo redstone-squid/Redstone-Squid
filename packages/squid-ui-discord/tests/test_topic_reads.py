@@ -15,6 +15,7 @@ from typing import Any, override
 import discord
 
 import squid_ui as sl
+from squid_reactivity import TransactionCommit, strong_read
 from squid_ui import Component, resource, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic, TopicName
@@ -300,11 +301,19 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """Watching a topic tracks invalidation without adding an optimistic transaction precondition."""
+
+    class Model(sl.Reactive):
+        value: int = state(0)
+
+    model = Model()
     bus = LocalTopicBus()
-    with sl.runtime.transaction() as tx:
-        bus.topic(BUILD.kind, BUILD.key).watch()
-    assert tx.result is not None
-    assert not tx.result.reads
+    topic = bus.topic(BUILD.kind, BUILD.key)
+    with sl.runtime.transaction() as tx, strong_read():
+        topic.watch()
+        bus.publish(topic)
+        model.value = 1
+    assert isinstance(tx.result, TransactionCommit)
+    assert model.value == 1
 
 
 # --- Against the resource's own machinery ---------------------------------------------

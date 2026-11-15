@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from squid_reactivity.transactions.results import ChangeToken as ChangeToken
     from squid_reactivity.transactions.results import CommitSequence as CommitSequence
     from squid_reactivity.transactions.results import ConflictDetail as ConflictDetail
-    from squid_reactivity.transactions.results import ObservedRead as ObservedRead
     from squid_reactivity.transactions.results import RollbackReason as RollbackReason
     from squid_reactivity.transactions.results import TransactionCommit as TransactionCommit
     from squid_reactivity.transactions.results import TransactionContribution as TransactionContribution
@@ -79,7 +78,6 @@ _EXPORT_MODULES = {
     "ChangeToken": "results",
     "CommitSequence": "results",
     "ConflictDetail": "results",
-    "ObservedRead": "results",
     "RollbackReason": "results",
     "TransactionCommit": "results",
     "TransactionContribution": "results",
@@ -119,7 +117,6 @@ __all__ = [
     "ConditionalCellPatch",
     "ConflictDetail",
     "ExceptionReport",
-    "ObservedRead",
     "RollbackReason",
     "SlotValue",
     "Transaction",
