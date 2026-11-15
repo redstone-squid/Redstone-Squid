@@ -28,6 +28,7 @@ from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
+from squid_ui.selectors import Snapshot, snapshot
 from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.text import NEUTRAL, Text, TextLike, resolve_text
 
@@ -121,6 +122,14 @@ def find[NodeT](tree: Tree, kind: type[NodeT], *, key: str | None = None) -> Nod
 def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
     """Expand one component's layout without frontend loading, delivery, or lifecycle hooks."""
     return tuple(render_component_tree(component).nodes)
+
+
+def render_snapshot(component: AnyComponent) -> Snapshot:
+    """Render an authored query snapshot with component placements and local keys.
+
+    Like render_tree, this does not run frontend loading or lifecycle hooks.
+    """
+    return snapshot(render_component_tree(component))
 
 
 # --- Frontend doubles ---------------------------------------------------------------------
@@ -425,6 +434,7 @@ __all__ = [
     "page_event",
     "press",
     "press_event",
+    "render_snapshot",
     "render_tree",
     "selection_event",
     "submit",

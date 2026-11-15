@@ -12,6 +12,7 @@ from squid_ui import semantic as s
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import Match, QueryError, query, scope, select, snapshot
+from squid_ui.testing import render_snapshot
 
 
 async def pressed(event: ui.PressEvent) -> None: ...
@@ -176,3 +177,30 @@ def test_incomplete_renders_are_not_silently_queried() -> None:
     tree = render_component_tree(root, defer=lambda _component: True)
     with pytest.raises(ValueError, match="incomplete"):
         snapshot(tree)
+
+
+def test_testing_snapshot_helper_preserves_component_scope() -> None:
+    tree = render_snapshot(Screen())
+    editor = query(tree, select(Editor).key("primary")).one()
+    assert query(tree, select(s.ActionControl).key("save"), within=editor).one().owner == "primary"
+
+
+def test_authored_alternatives_and_choice_values_are_queryable() -> None:
+    alternate = s.FallbackContent(toolbar("full"), (toolbar("compact"),))
+    choices = s.Choices("pick", (s.Choice("ada", "Ada"),))
+    tree = snapshot(ui.stack(alternate, choices))
+    assert [match.key for match in query(tree, select(s.ActionControl)).all()] == ["full", "compact"]
+    assert query(tree, select(s.Choices).children(select(s.Choice).label("Ada"))).one().key == "ada"
+
+
+def test_inspection_does_not_reconstruct_nodes_or_render_components() -> None:
+    constructions: list[str] = []
+
+    @dataclass(frozen=True)
+    class Stack(s.Stack):
+        def __post_init__(self) -> None:
+            constructions.append("constructed")
+
+    node = Stack((toolbar("save"),))
+    assert query(snapshot(node), select(s.ActionControl)).count() == 1
+    assert constructions == ["constructed"]

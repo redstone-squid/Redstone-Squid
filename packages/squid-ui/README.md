@@ -155,3 +155,26 @@ adapter yielding `(edge_name, child)` pairs. Traversal follows declared UI edges
 never arbitrary application records or callbacks, and rejects ancestor cycles.
 Snapshots retain node references and fixed topology, not copies of mutable component
 state. Capture another snapshot after a new render to inspect its layout.
+
+For tests, `squid_ui.testing.render_snapshot(component)` combines explicit rendering
+and snapshot capture. Existing `find` and `find_all` keep their original general
+dataclass traversal and assertion behavior for compatibility.
+
+A CSS-inspired string form compiles to the same selector operations:
+
+```python
+from squid_ui.selectors import parse
+
+save = parse('Editor[key="editor"] ActionControl[key="save"]', types={"Editor": Editor})
+query(tree, save).one()
+query(tree, parse('ActionControls:has(> ActionControl[available=false])')).all()
+```
+
+Semantic type names are built in. Register component or primitive names explicitly
+with `types={...}`; parsing never imports or evaluates names. Supported syntax is
+`*`, types, `[attribute]`, `[attribute=value]`, `[text*=value]`, `[label*=value]`,
+descendant whitespace, `>`, comma unions, `:scope`, `:is(...)`, `:not(...)`, and
+`:has(...)`. Values use JSON literals, including double-quoted strings, booleans,
+numbers, and `null`. Malformed or unsupported syntax raises `SelectorSyntaxError`
+with a source offset. CSS IDs, classes, escaping, siblings, and positional
+pseudo-classes are outside this initial subset.

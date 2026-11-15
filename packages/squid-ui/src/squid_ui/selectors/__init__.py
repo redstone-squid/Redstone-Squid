@@ -5,6 +5,7 @@ snapshot(render_component_tree(component)). Selectors never render or dispatch a
 """
 
 from squid_ui.selectors.core import Query, QueryError, Selector, query, scope, select
+from squid_ui.selectors.parser import SelectorSyntaxError, parse
 from squid_ui.selectors.tree import Children, Match, Snapshot, snapshot, ui_children
 
 __all__ = [
@@ -13,7 +14,9 @@ __all__ = [
     "Query",
     "QueryError",
     "Selector",
+    "SelectorSyntaxError",
     "Snapshot",
+    "parse",
     "query",
     "scope",
     "select",
