@@ -1,7 +1,7 @@
 """Compile portable layout nodes for Slack messages, modals, and Home views.
 
-The HTML planner first resolves semantic structure, presentation state, and live
-handlers into an element tree. `_Lowerer` turns that tree into Block Kit scene
+The shared element compiler resolves semantic structure, presentation state, and
+live handlers. `_Lowerer` turns those elements into Block Kit scene
 data using the selected surface's limits. The final plan retains bindings for
 actions that remain visible and reports any recorded content loss.
 """
@@ -22,14 +22,14 @@ from squid_ui.document import DocumentLike, as_document
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.factories import is_portable_node
+from squid_ui.planning._html_elements import ElementCompiler, action_keys
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
-from squid_ui.planning.html_planner import HTML_PLANNER
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_nodes import html_text
+from squid_ui.presentation import PresentationState
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import SlackTarget
 from squid_ui.text import Markup, resolve_text
@@ -965,16 +965,23 @@ class SlackPlanner:
         key = stable_fingerprint((rendered, request.cache_context(target=target, chrome=request.chrome)))
         if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
             return exact
-        intermediate_request = replace(cast(Any, request), target=target, reservation=EMPTY_COST)
-        intermediate = HTML_PLANNER.plan(
-            cast(DocumentLike[Any], rendered),
-            cast(Any, intermediate_request),
+        # Without a mounted session, the compiled controls own transient presentation state.
+        compiler = ElementCompiler(
+            target.capabilities,
+            request.chrome,
+            request.localization,
+            request.palette,
+            request.session if request.session is not None else PresentationState(),
+            request.positions,
+            request.strict,
         )
+        children = compiler.compile_document(as_document(rendered))
+        element_actions, element_forms = action_keys(children)
         lowerer = _Lowerer(target=target, request=cast(Any, request), modal_form=modal_form)
-        blocks = lowerer.blocks(intermediate.scene.body.children)
+        blocks = lowerer.blocks(children)
         if target.id.endswith(".message"):
             fallback = lowerer.fit(
-                _plain_text("\n".join(_html_text(node) for node in intermediate.scene.body.children)),
+                _plain_text("\n".join(_html_text(node) for node in children)),
                 cast(SlackMessageLimits, target.limits).fallback_text,
                 "$",
                 "fallback_text",
@@ -995,7 +1002,7 @@ class SlackPlanner:
             )
         else:
             body = scene.SlackHomeView(blocks)
-        events = (*intermediate.report.events, *lowerer.events)
+        events = (*compiler.events, *lowerer.events)
         if request.strict and any(event.severity is PlanSeverity.DEGRADATION for event in events):
             raise LayoutDegradedError("; ".join(event.message for event in events))
         planned = scene.Scene(
@@ -1003,8 +1010,8 @@ class SlackPlanner:
             target.id,
             target.version,
             body,
-            intermediate.scene.assets,
-            intermediate.scene.pagers,
+            tuple(scene.Asset(asset.key, asset.name, asset.media_type) for asset in compiler.assets.values()),
+            tuple(compiler.pagers),
         )
         report = PlanReport(
             events,
@@ -1015,19 +1022,23 @@ class SlackPlanner:
         if cached is not None:
             planned = cast(scene.Scene[SlackBody], cached.scene)
             report = cached.report
-        action_keys = _action_keys(cast(SlackBody, planned.body))
+        visible_actions = _action_keys(cast(SlackBody, planned.body))
         result = PlanResult(
             scene=cast(scene.Scene[BodyT], planned),
-            bindings={key: binding for key, binding in intermediate.bindings.items() if key in action_keys},
-            form_bindings=intermediate.form_bindings,
+            bindings={
+                key: binding
+                for key, binding in compiler.bindings.items()
+                if key in element_actions and key in visible_actions
+            },
+            form_bindings={key: binding for key, binding in compiler.form_bindings.items() if key in element_forms},
             report=report,
-            resources=intermediate.resources,
+            resources={f"asset:{asset.key}": asset for asset in compiler.assets.values()},
             metrics=PlanMetrics(
-                states_explored=intermediate.metrics.states_explored,
+                states_explored=compiler.states_explored,
                 cache_hit=cached is not None,
                 reuse=PlanReuse.STRUCTURAL if cached is not None else PlanReuse.MISS,
             ),
-            session_updates=intermediate.session_updates,
+            session_updates=tuple(compiler.updates),
         )
         if cache is not None and cached is None:
             cache.put(
@@ -1035,8 +1046,8 @@ class SlackPlanner:
                 CachedPlan(
                     cast(scene.Scene[BodyT], planned),
                     report,
-                    intermediate.session_updates,
-                    states_explored=intermediate.metrics.states_explored,
+                    tuple(compiler.updates),
+                    states_explored=compiler.states_explored,
                 ),
             )
         if memo is not None:

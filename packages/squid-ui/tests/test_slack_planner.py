@@ -9,12 +9,15 @@ import squid_ui as sl
 from squid_ui import forms, scene
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.result import PlanReuse, PlanSeverity
+from squid_ui.planning.slack_planner import SLACK_PLANNER
 from squid_ui.runtime import PresentationState
-from squid_ui.target_types import SlackAdapter
+from squid_ui.target_types import SlackAdapter, SlackMessageTarget
 
 ADAPTER = AdapterProfile(SlackAdapter, "tests.slack", ">=3.43,<4")
 MESSAGE = sl.slack.message_target(adapter=ADAPTER)
@@ -292,3 +295,64 @@ def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
     builtin = sl.planning.plan(document(base), target=MESSAGE)
     custom = sl.planning.plan(document(sl.Role("app.custom", base)), target=MESSAGE)
     assert custom.scene == builtin.scene
+
+
+def test_legacy_slack_cache_rebuilds_handlers_and_preserves_document_assets() -> None:
+    async def replacement(_event: ActionEvent) -> None:
+        pass
+
+    asset = sl.document.Asset("report", "report.txt", "text/plain", sl.document.InlineAsset(b"report"))
+    cache = PlanCache[scene.SlackMessage]()
+    request = PlanRequest(target=MESSAGE)
+    first = SLACK_PLANNER.plan(
+        sl.Document[SlackMessageTarget](
+            (sl.action_controls(sl.action_control("Run", _pressed, key="run"), key="actions"),), assets=(asset,)
+        ),
+        request,
+        cache=cache,
+    )
+    second = SLACK_PLANNER.plan(
+        sl.Document[SlackMessageTarget](
+            (sl.action_controls(sl.action_control("Run", replacement, key="run"), key="actions"),), assets=(asset,)
+        ),
+        request,
+        cache=cache,
+    )
+    assert second.metrics.reuse is PlanReuse.STRUCTURAL
+    assert second.scene == first.scene
+    assert second.report == first.report
+    assert second.bindings["run"].handler is replacement
+    assert first.bindings["run"].handler is _pressed
+    assert second.resources == {"asset:report": asset}
+    assert second.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
+    assert second.session_updates == first.session_updates
+
+
+def test_legacy_slack_preserves_authored_budget_diagnostics_and_strict_failure() -> None:
+    document = sl.budget(sl.paragraph("abcdefghij"), min=2, prefer=4)
+    result = SLACK_PLANNER.plan(document, PlanRequest(target=MESSAGE))
+    assert result.scene.body.text == "abcd"
+    assert any(event.code == "html.budget.truncated" for event in result.report.events)
+    with pytest.raises(sl.LayoutDegradedError, match="omitted 6 characters"):
+        SLACK_PLANNER.plan(document, PlanRequest(target=MESSAGE, strict=True))
+
+
+def test_legacy_slack_only_retains_actions_on_the_selected_page() -> None:
+    document = sl.semantic.Paged(
+        sl.stack(
+            sl.action_controls(sl.action_control("AAAA", _pressed, key="first"), key="first-actions"),
+            sl.action_controls(sl.action_control("BBBB", _pressed, key="second"), key="second-actions"),
+        ),
+        key="manual",
+        chars=5,
+    )
+    session = PresentationState()
+    result = SLACK_PLANNER.plan(
+        document, PlanRequest(target=MESSAGE, session=session, positions={"manual": PagePosition(page=1)})
+    )
+    assert "first" not in result.bindings
+    assert "second" in result.bindings
+    assert result.scene.pagers[0].page == 1
+    assert session.cursors == {}
+    session.apply_updates(result.session_updates)
+    assert session.cursor("manual").position.page == 1

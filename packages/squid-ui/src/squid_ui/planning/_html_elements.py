@@ -14,8 +14,9 @@ from squid_ui import scene
 from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome
+from squid_ui.document import Document
 from squid_ui.entity import EntityRef
-from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
@@ -58,10 +59,10 @@ from squid_ui.planning.structure import (
     toggle_action_key,
     toggle_state,
 )
-from squid_ui.planning.target import TargetIdentity
 from squid_ui.planning.text_allocation import truncate_text
 from squid_ui.planning.text_nodes import html_text
 from squid_ui.presentation import (
+    ActivePagers,
     CursorUpdate,
     PresentationState,
     SessionUpdate,
@@ -189,7 +190,7 @@ def action_keys(nodes: Sequence[scene.HtmlNode]) -> tuple[set[str], set[str]]:
 
 @dataclass(slots=True)
 class ElementCompiler:
-    target: TargetIdentity
+    capabilities: frozenset[str]
     chrome: Chrome
     localization: Localization
     palette: Palette
@@ -203,6 +204,18 @@ class ElementCompiler:
     pagers: list[scene.Pager] = field(default_factory=list)
     updates: list[SessionUpdate] = field(default_factory=list)
     states_explored: int = 1
+
+    def compile_document(self, document: Document[Any]) -> tuple[scene.HtmlNode, ...]:
+        """Compile one document, validating authored budgets and staging its active pagers."""
+        for asset in document.assets:
+            self._asset(asset)
+        children = self.compile_children(document.children, "$")
+        if self.strict and any(event.severity is PlanSeverity.DEGRADATION for event in self.events):
+            raise LayoutDegradedError("; ".join(event.message for event in self.events))
+        self.updates.append(
+            ActivePagers(frozenset(update.key for update in self.updates if isinstance(update, CursorUpdate)))
+        )
+        return children
 
     def text(self, value: TextLike) -> scene.HtmlNode:
         return html_text(resolve_text(value, self.localization).nodes)
@@ -899,7 +912,7 @@ class ElementCompiler:
         )
 
     def _form(self, node: sem.FormTrigger) -> scene.HtmlElement:
-        spec = node.spec.adapt(self.target.capabilities)
+        spec = node.spec.adapt(self.capabilities)
         self.form_bindings[node.key] = FormBinding(node.key, spec, node.on_submit, node.mode, node.label, node.record)
         action = self.bind(
             node.key,

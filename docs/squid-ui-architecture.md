@@ -438,7 +438,11 @@ composable `Text`. Markdown is one source syntax, parsed after localization whil
 keeping captured values separate. Joining text combines structure, so fragments
 cannot complete one another's Markdown delimiters.
 
-The native HTML planner lowers that structure directly to safe scene elements.
+HTML and legacy Slack planning share an element compiler that resolves semantic
+structure, text, bindings, assets, and authored pagination. HTML wraps those elements
+in its scene; Slack lowers them into Block Kit. Each planner owns its final scene,
+report, and caches. Slack does not construct an intermediate HTML plan. Automatic
+composition uses the separate target rules described below.
 The Discord planner serializes before measuring, using its adapter's library-backed
 literal escaping. Mentions and timestamps are semantic values, not trusted raw
 Markdown. Scenes identify their serialized encoding explicitly; authored text does
@@ -503,7 +507,7 @@ parameter wants to say *which stage* a value is at, not that it happens to be dr
 Two closed unions sit beside the open one, each for a job `Renderable` cannot do:
 
 - `PortableNode` — the semantic vocabulary every backend must answer for. A traversal that
-  matches over it is provably exhaustive, which is why `html_planner` excludes the open arm
+  matches over it is provably exhaustive, which is why the element compiler excludes the open arm
   with `is_portable_node` before its `match`.
 - `BuiltinLayoutNode` — every node class this package ships, flattened into a tuple an
   `isinstance` can test. Behind `is_builtin_layout_node`.

@@ -4,14 +4,13 @@ from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning._html_elements import ElementCompiler, action_keys
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.result import PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
+from squid_ui.planning.result import PlanMetrics, PlanReport, PlanResult, PlanReuse
 from squid_ui.planning.target import Target
-from squid_ui.presentation import ActivePagers, CursorUpdate
 from squid_ui.target_types import HtmlTarget
 
 type HtmlTargetT = Target[Any, scene.HtmlBody, HtmlTarget, Any]
@@ -59,15 +58,10 @@ class HtmlPlanner:
         if memo is not None and (exact := memo.replay(rendered, key, presentation)) is not None:
             return exact
         document = as_document(rendered)
-        compiler = ElementCompiler(target, request.chrome, localization, palette, presentation, positions, strict)
-        for asset in document.assets:
-            compiler._asset(asset)
-        children = compiler.compile_children(document.children, "$")
-        if strict and any(event.severity is PlanSeverity.DEGRADATION for event in compiler.events):
-            raise LayoutDegradedError("; ".join(event.message for event in compiler.events))
-        compiler.updates.append(
-            ActivePagers(frozenset(update.key for update in compiler.updates if isinstance(update, CursorUpdate)))
+        compiler = ElementCompiler(
+            target.capabilities, request.chrome, localization, palette, presentation, positions, strict
         )
+        children = compiler.compile_document(document)
         planned = scene.Scene(
             protocol=scene.Codec.protocol,
             target=target.id,

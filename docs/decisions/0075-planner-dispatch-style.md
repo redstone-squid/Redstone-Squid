@@ -56,7 +56,7 @@ Two cleanups address the pains that prompted the question, without changing the 
   narrowest limits class that declares what it reads. `planning/control_validation.py` is the worked example, and
   `MessageLimits` already documents this contract: "a shared planning layer may read only what this class declares".
 - A `match` that has grown past readability is split into stage methods partitioned by what an arm needs, each
-  returning `None` for a node it does not claim. `_Compiler.compile` in `planning/html_planner.py` is the worked
+  returning `None` for a node it does not claim. `ElementCompiler.compile` in `planning/_html_elements.py` is the worked
   example. Splitting is by arm behaviour, not by adding a dispatch layer.
 
 ## Consequences
@@ -77,11 +77,11 @@ reviewable act rather than a drive-by.
 
 ## Addendum (2026-08-28): the worked example evolved
 
-The claim-or-`None` staging this ADR named as the worked example (`_Compiler.compile`) has been
+The claim-or-`None` staging this ADR named as the worked example (`ElementCompiler.compile`) has been
 replaced by a stronger form of the same idiom, not a revisiting of the decision. `compile` now
 rejects the open `Renderable` escape before matching, then dispatches through one grouping `match`
 over the closed `PortableNode` union whose stages are typed against private sub-union aliases, and
-every planner traversal `match` (`html_planner.py`, `semantic_adaptation/lowering.py`,
+every planner traversal `match` (`_html_elements.py`, `semantic_adaptation/lowering.py`,
 `semantic_adaptation/decisions.py`) ends in `case _ as unreachable: assert_never(unreachable)`.
 
 This delivers the exhaustiveness this ADR's Consequences section said catch-alls forfeit: a
