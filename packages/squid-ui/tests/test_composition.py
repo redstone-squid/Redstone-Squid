@@ -7,7 +7,8 @@ import pytest
 import squid_ui as ui
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.component import render_component_tree
-from squid_ui.testing import keys, texts
+from squid_ui.selectors import query, select
+from squid_ui.testing import keys, render_snapshot, texts
 
 
 class Counter(ui.Component):
@@ -84,12 +85,14 @@ def test_reordering_retains_namespaces_state_and_mounts(explicit: bool) -> None:
 
 def test_keyed_reference_does_not_change_direct_placement() -> None:
     child = Counter()
-    direct_path = next(path for path in render_component_tree(Parent(child)).components if path != "$")
+    before = render_snapshot(Parent(child))
+    direct_namespace = query(before, select(child)).one().qualified_key
     reference = child.keyed(42)
     assert reference.component is child
     assert reference.key == "42"
     assert child.keyed("other").component is child
-    assert next(path for path in render_component_tree(Parent(child)).components if path != "$") == direct_path
+    after = render_snapshot(Parent(child))
+    assert query(after, select(child)).one().qualified_key == direct_namespace
 
 
 def test_a_new_instance_at_the_same_key_gets_its_own_state_and_lifecycle() -> None:
