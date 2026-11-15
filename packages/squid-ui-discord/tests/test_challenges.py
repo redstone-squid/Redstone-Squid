@@ -282,7 +282,7 @@ class TestResuming:
         await message_root._approve_challenge("go", elsewhere, None, "1")
 
         assert panel.count == 1
-        assert message_root._handle is handle, "a resumed press must not re-address the mount"
+        assert message_root._primary.handle is handle, "a resumed press must not re-address the mount"
         assert message_root.address == address
         elsewhere.response.edit_message.assert_not_awaited()
         elsewhere.edit_original_response.assert_not_awaited()

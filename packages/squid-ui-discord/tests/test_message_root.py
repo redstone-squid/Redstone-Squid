@@ -445,7 +445,7 @@ class TestEphemeralRenewal:
                 raise delivery.StaleHandleError("expired")
 
         stale = StaleHandle()
-        message_root._handle = stale
+        message_root._primary.handle = stale
         message_root._queue_expiry_arm(stale)
         interaction.response.edit_message.records.clear()
 
@@ -1967,7 +1967,7 @@ class TestLifecycle:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message_harness()))
         component._loaded = False
-        message_root._handle = delivery.handle_from(interaction_harness(expired=True))
+        message_root._primary.handle = delivery.handle_from(interaction_harness(expired=True))
         issued = message_root._candidates.issued
 
         await message_root.refresh()
@@ -3078,7 +3078,7 @@ class TestEditHandles:
         await message_root.send(
             delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction_harness()))
         )
-        message_root._handle = delivery.handle_from(interaction_harness(expired=True))
+        message_root._primary.handle = delivery.handle_from(interaction_harness(expired=True))
         component.count += 1
 
         await message_root.refresh()
@@ -3113,7 +3113,7 @@ class TestEditHandles:
         await message_root.send(
             delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction_harness()))
         )
-        message_root._handle = _Stale()
+        message_root._primary.handle = _Stale()
         component.count += 1
 
         await message_root.refresh()

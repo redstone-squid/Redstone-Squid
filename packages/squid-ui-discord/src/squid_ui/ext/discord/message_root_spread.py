@@ -10,11 +10,11 @@ Continuations are numbered from 1 in reading order; 0 always means the first mes
 
 import logging
 from dataclasses import dataclass
-from typing import cast
 
 import discord
 from squid_ui.ext.discord import delivery as deliver
 from squid_ui.ext.discord.delivery import _is_stale
+from squid_ui.ext.discord.message_delivery import _MessageDelivery
 from squid_ui.ext.discord.message_payload import MessagePayload
 
 logger = logging.getLogger(__name__)
@@ -33,21 +33,12 @@ class _DeliveryOutcome:
     interaction_written: bool
 
 
-@dataclass(slots=True)
-class _Slot:
-    """One delivered continuation message."""
-
-    message_id: int | None
-    handle: deliver.EditHandle | None
-    delete_handle: deliver.DeleteHandle | None
-
-
 class _Continuations:
     """The delivered continuation messages of one root, in reading order."""
 
     def __init__(self, mount_id: str) -> None:
         self._mount_id = mount_id
-        self.slots: list[_Slot] = []
+        self.slots: list[_MessageDelivery] = []
         self.follow_up: deliver.MessageDestination | None = None
         """Sends another message beside the first, when the first delivery offered a way."""
 
@@ -58,42 +49,6 @@ class _Continuations:
                 if slot.message_id == message_id:
                     return index
         return 0
-
-    def renew(self, index: int, handle: deliver.EditHandle) -> None:
-        """Trade up to fresher credentials, as `MessageRoot._renew` does for the first message.
-
-        Discord lets an interaction token edit or delete only messages of that interaction,
-        so the token that sent a follow-up stops working after 15 minutes. A press on the
-        message carries a token that reaches it again, for deleting as well as editing.
-        """
-        slot = self.slots[index - 1]
-        if slot.handle is None or not slot.handle.permanent:
-            slot.handle = handle
-            if hasattr(handle, "delete"):
-                slot.delete_handle = cast(deliver.DeleteHandle, handle)
-
-    async def write(
-        self,
-        index: int,
-        payload: MessagePayload,
-        *,
-        keep_attachments: bool,
-        through: deliver.EditHandle | None,
-    ) -> deliver.EditHandle | None:
-        """Edit one continuation through the first usable handle, and return that handle."""
-        slot = self.slots[index - 1]
-        for handle in (through, slot.handle):
-            if handle is None or handle.expired():
-                continue
-            try:
-                await handle.write(payload, keep_attachments=keep_attachments)
-            except deliver.StaleHandleError:
-                logger.debug("mount %s discarded a stale handle for message %s", self._mount_id, index, exc_info=True)
-                if handle is slot.handle:
-                    slot.handle = None
-                continue
-            return handle
-        return None
 
     async def create(self, payload: MessagePayload, destination: deliver.MessageDestination | None) -> bool:
         """Send the next continuation, returning False when nothing can send it right now."""
@@ -107,7 +62,7 @@ class _Continuations:
             if not _is_stale(error):
                 raise
             return False
-        self.slots.append(_Slot(result.message_id, result.handle, result.delete_handle))
+        self.slots.append(_MessageDelivery(result.message_id, result.handle, result.delete_handle))
         return True
 
     async def trim(self, count: int) -> None:

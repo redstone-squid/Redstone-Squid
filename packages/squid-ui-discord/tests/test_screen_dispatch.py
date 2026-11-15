@@ -36,7 +36,7 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
     parent_panel = Panel()
     parent = MessageRoot(parent_panel, access=Everyone())
     await parent.send(delivered_to(message_harness(message_id=100)))
-    parent_handle = parent._handle
+    parent_handle = parent._primary.handle
     child_transaction: object = None
     child_panel: Panel
     child: MessageRoot
@@ -71,7 +71,7 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
     await child.dispatch("complete", interaction_harness(message_id=200))
     assert observed == [True]
     assert parent_panel.value == 2
-    assert parent._handle is parent_handle
+    assert parent._primary.handle is parent_handle
     assert not child._action_lock.locked()
     await child.finish()
     await parent.finish()

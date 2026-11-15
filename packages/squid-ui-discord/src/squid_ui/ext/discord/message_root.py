@@ -58,6 +58,7 @@ from squid_ui.ext.discord.classic import render_message as render_classic_messag
 from squid_ui.ext.discord.classic_renderer import ClassicRenderer
 from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.message_delivery import _MessageDelivery
 from squid_ui.ext.discord.message_payload import MessageMode, MessagePayload
 from squid_ui.ext.discord.message_root_candidates import (
     _ApplicationCandidate,
@@ -521,10 +522,9 @@ class MessageRoot[
         self.expiry = expiry
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
-        self._handle: deliver.EditHandle | None = None
+        self._primary = _MessageDelivery()
         self._unscheduled_change: str | None = None
         """What last changed outside this message's interactions and has not been drawn yet."""
-        self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
         self._continuations = _Continuations(self.id)
         self._unwatch_expiry: Callable[[], None] | None = None
@@ -562,7 +562,7 @@ class MessageRoot[
     @property
     def handle(self) -> deliver.EditHandle | None:
         """How this mount can write to its message right now, if it still can."""
-        return self._handle
+        return self._primary.handle
 
     async def adopt_handle(self, handle: deliver.EditHandle) -> None:
         """Retain newly established edit authority for this mount's existing message.
@@ -585,9 +585,9 @@ class MessageRoot[
             if handle.expired():
                 message = "cannot adopt an expired edit handle"
                 raise deliver.StaleHandleError(message)
-            if self._handle is not None and self._handle.permanent and not handle.permanent:
+            if self._primary.handle is not None and self._primary.handle.permanent and not handle.permanent:
                 return
-            self._handle = handle
+            self._primary.handle = handle
             if handle.permanent:
                 self._ephemeral = False
             if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
@@ -640,7 +640,7 @@ class MessageRoot[
         an explicit refresh(), or a press. _report_missed_redraw warns if a press or closure
         finds the change still undrawn, because the user saw stale content until then.
         """
-        if self._unscheduled_change is not None or self._handle is None or self.finished:
+        if self._unscheduled_change is not None or self._primary.handle is None or self.finished:
             return
         origin = current_causality()
         if origin is not None and origin.cause in self._dispatch_origins:
@@ -693,9 +693,13 @@ class MessageRoot[
         idle = now - self._active
         component = type(self.component)
         handle_expires_in = None
-        if self._handle is not None and not self._handle.permanent and self._handle.expires_at is not None:
+        if (
+            self._primary.handle is not None
+            and not self._primary.handle.permanent
+            and self._primary.handle.expires_at is not None
+        ):
             current = _wall_clock_now(self.scheduler)
-            handle_expires_in = max(0.0, (self._handle.expires_at - current).total_seconds())
+            handle_expires_in = max(0.0, (self._primary.handle.expires_at - current).total_seconds())
         return MessageRootSnapshot(
             id=self.id,
             component=f"{component.__module__}.{component.__qualname__}",
@@ -734,7 +738,7 @@ class MessageRoot[
             or self.finished
             or self._candidates.status is not MessageRootStatus.ACTIVE
             or self._candidates.plan is None
-            or handle is not self._handle
+            or handle is not self._primary.handle
             or handle.permanent
             or handle.expires_at is None
             or (isinstance(policy, RenewEphemeral) and self._ephemeral is not True)
@@ -777,6 +781,7 @@ class MessageRoot[
         """
         if message is None or self.address is not None:
             return
+        self._primary.message_id = message.id
         self.address = MessageAddress(
             message_id=message.id,
             channel_id=message.channel.id,
@@ -1444,7 +1449,7 @@ class MessageRoot[
                 return
             wake = asyncio.Event()
             done = asyncio.Event()
-            delivery_open = self._handle is not None and not self._handle.expired()
+            delivery_open = self._primary.handle is not None and not self._primary.handle.expired()
             if not delivery_open:
                 bindings = tuple(
                     binding for binding in bindings if async_render_policy(binding).settle_without_delivery
@@ -1607,8 +1612,7 @@ class MessageRoot[
                         with profile.span("rollback"):
                             self._rollback(candidate)
                         raise
-                    self._handle = result.handle
-                    self._delete_handle = result.delete_handle
+                    self._primary = _MessageDelivery(result.message_id, result.handle, result.delete_handle)
                     self._ephemeral = result.ephemeral
                     self._continuations.follow_up = result.follow_up
                     if result.message is not None:
@@ -1718,8 +1722,8 @@ class MessageRoot[
                 candidate.primary_written = handle is not None
             else:
                 drawn = candidate.continuations[index - 1]
-                handle = await self._continuations.write(
-                    index, drawn.payload, keep_attachments=keep_attachments, through=own
+                handle = await self._continuations.slots[index - 1].write(
+                    drawn.payload, keep_attachments=keep_attachments, through=own, profile=profile
                 )
                 drawn.written = handle is not None
             if handle is not None:
@@ -1753,24 +1757,7 @@ class MessageRoot[
         `keep_attachments` leaves the message's files alone, which is what every edit that
         changes only controls wants.
         """
-        for handle in (through, self._handle):
-            if handle is None or handle.expired():
-                continue
-            try:
-                if profile is None:
-                    await handle.write(payload, keep_attachments=keep_attachments)
-                else:
-                    source = "interaction" if handle is through else "standing"
-                    handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
-                    with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
-                        await handle.write(payload, keep_attachments=keep_attachments)
-            except deliver.StaleHandleError:
-                logger.debug("mount %s discarded a stale edit handle", self.id, exc_info=True)
-                if handle is self._handle:
-                    self._handle = None
-                continue
-            return handle
-        return None
+        return await self._primary.write(payload, keep_attachments=keep_attachments, through=through, profile=profile)
 
     def _source(self, interaction: discord.Interaction, *, resumed: bool) -> deliver.EditHandle | None:
         """The handle a dispatch may write this mount's message through, if any.
@@ -1794,12 +1781,10 @@ class MessageRoot[
         """
         fresher = self._source(interaction, resumed=resumed)
         if fresher is not None and (index := self._message_index(interaction)):
-            self._continuations.renew(index, fresher)
-            return
-        if self._handle is not None and self._handle.permanent:
+            self._continuations.slots[index - 1].renew(fresher)
             return
         if fresher is not None:
-            self._handle = fresher
+            self._primary.renew(fresher)
 
     def _message_index(self, interaction: discord.Interaction) -> int:
         """Which of this root's messages a press came from; 0 is the first."""
@@ -1978,7 +1963,7 @@ class MessageRoot[
             else:
                 # Adopt before staging or responding. A failed restore remains armed but now
                 # has the authority needed for another attempt.
-                self._handle = source
+                self._primary.handle = source
                 try:
                     candidate = await self._stage_loaded(profile=profile.operation)
                 except Exception as error:
@@ -2967,7 +2952,7 @@ class MessageRoot[
                 if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                     profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.NO_CHANGE))
                     return PresentationStatus.NO_CHANGE
-                if self._handle is None or self._handle.expired():
+                if self._primary.handle is None or self._primary.handle.expired():
                     self._candidates.mark_dirty()
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
@@ -3127,7 +3112,7 @@ class MessageRoot[
         # Even immediate low-level closure captures the caller's current render state.
         self._shutdown.start(self.config.execution_host, work)
         self._close_reason = reason
-        if not delete and disable and (self._handle is not None or interaction is not None):
+        if not delete and disable and (self._primary.handle is not None or interaction is not None):
             try:
                 self._candidates.supersede()
                 candidate = (
@@ -3161,8 +3146,8 @@ class MessageRoot[
                 async with self._render_lock:
                     try:
                         if delete:
-                            if self._delete_handle is not None:
-                                await self._delete_handle.delete()
+                            if self._primary.delete_handle is not None:
+                                await self._primary.delete_handle.delete()
                             await self._continuations.trim(0)
                         elif candidate is not None:
                             if retain_routed:

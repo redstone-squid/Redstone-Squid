@@ -13,7 +13,13 @@ import pytest
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
 from squid_ui.ext.discord import Everyone, MessageRoot
-from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, handle_for, handle_for_original
+from squid_ui.ext.discord.delivery import (
+    DeliveryResult,
+    MessageDestination,
+    handle_for,
+    handle_for_original,
+    handle_from,
+)
 from squid_ui.ext.discord.message_payload import MessagePayload
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.testing import interaction_harness, message_harness, payload_texts
@@ -196,7 +202,7 @@ async def test_a_message_that_could_not_be_sent_arrives_with_the_next_press() ->
 async def test_an_unreachable_message_goes_stale_and_is_repainted_when_pressed() -> None:
     delivery = Delivery()
     root, panel = await mounted(delivery)
-    root._handle = None  # as for an ephemeral first message nobody pressed for 15 minutes
+    root._primary.handle = None  # as for an ephemeral first message nobody pressed for 15 minutes
 
     await root.dispatch("rename", press_from(delivery, 1))
 
@@ -263,7 +269,7 @@ async def test_editing_another_ephemeral_message_acknowledges_before_the_webhook
 async def test_unreachable_spread_commits_for_recovery_without_claiming_a_write() -> None:
     delivery = Delivery()
     root, panel = await mounted(delivery)
-    root._handle = None
+    root._primary.handle = None
     for slot in root._continuations.slots:
         slot.handle = None
     panel.title = "Changed while unreachable"
@@ -285,3 +291,21 @@ async def test_unreachable_spread_commits_for_recovery_without_claiming_a_write(
     assert panel.count == 7
     assert root._candidates.stale == {0}
     assert "count: 7" in payload_texts(interaction.response.edit_message.records[0].kwargs["view"])
+
+
+async def test_a_press_renews_primary_delete_authority_too() -> None:
+    delivery = Delivery()
+    root, _ = await mounted(delivery)
+    old = press_from(delivery, 0)
+    root._primary.handle = None
+    handle = handle_from(old)
+    assert handle is not None
+    root._primary.renew(handle)
+    old.expired = True
+    fresh = press_from(delivery, 0)
+
+    await root.dispatch("rename", fresh)
+    await root.dismiss()
+
+    assert len(fresh.deletions) == 1
+    assert old.deletions == []
