@@ -163,3 +163,26 @@ require `squid-storage`.
 - [Architecture and ownership](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
 - [Classic-message guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/classic-messages.md)
 - [Migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md)
+
+## Querying rendered Discord UI
+
+`testing.query(view, selector)` inspects native Discord views, modals, or items without
+rendering. String selectors use Discord class names and native attributes:
+
+```python
+from squid_ui.selectors import select
+from squid_ui_discord import testing
+
+save = testing.query(view, 'Button[label="Save"]').one()
+assert testing.query(view, select(save.node)).one().node is save.node
+```
+
+The adapter preserves rows, containers, section accessories, modal labels, select
+options, and gallery items. Attributes such as `custom_id` and `disabled` keep their
+Discord meanings; custom IDs are not decoded into semantic keys.
+
+Inside `async with testing.stage(...) as staged`, `staged.query('Button')` inspects
+currently delivered native views, including continuation messages. It does not render
+pending component changes. Pass `view=candidate_view` explicitly to inspect a candidate.
+For scoped queries or ordering comparisons, capture `testing.snapshot(view)` or
+`staged.snapshot()` once and query that snapshot; matches belong to that capture.

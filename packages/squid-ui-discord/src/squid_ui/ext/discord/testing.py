@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from copy import copy
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, Self, Unpack, cast, override
+from typing import Any, Literal, Self, Unpack, cast, overload, override
 
 import anyio
 
@@ -44,7 +44,11 @@ from squid_ui.ext.discord.runtime import DiscordUIRuntime, install
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.runtime.component import Component
+from squid_ui.selectors import Match, Query, Selector, Snapshot
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
+from squid_ui.text import NEUTRAL, Localization
+from squid_ui.ext.discord._testing_queries import query as query
+from squid_ui.ext.discord._testing_queries import snapshot as snapshot
 
 type ComponentPayload = dict[str, Any]
 type BuiltView = discord.ui.LayoutView | discord.ui.View | list[ComponentPayload]
@@ -737,6 +741,67 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         self._client = client
         self._user_id = user_id
 
+    def snapshot(self) -> Snapshot:
+        """Capture the currently delivered Discord views, including continuation messages.
+
+        Pending candidates and undelivered component state are excluded. No refresh or
+        render runs. Returned nodes are native Discord objects, not authored controls.
+        """
+        return snapshot(tuple(view for view, _, _ in self._views()))
+
+    @overload
+    def query[T](
+        self,
+        selector: Selector[T],
+        *,
+        view: object | None = None,
+        within: Match[Any] | None = None,
+        include_scope: bool = False,
+        localization: Localization = NEUTRAL,
+    ) -> Query[T]: ...
+
+    @overload
+    def query(
+        self,
+        selector: str,
+        *,
+        types: Mapping[str, type] | None = None,
+        view: object | None = None,
+        within: Match[Any] | None = None,
+        include_scope: bool = False,
+        localization: Localization = NEUTRAL,
+    ) -> Query[object]: ...
+
+    def query[T](
+        self,
+        selector: Selector[T] | str,
+        *,
+        types: Mapping[str, type] | None = None,
+        view: object | None = None,
+        within: Match[Any] | None = None,
+        include_scope: bool = False,
+        localization: Localization = NEUTRAL,
+    ) -> Query[T] | Query[object]:
+        """Inspect delivered native controls without rendering or refreshing.
+
+        Pass view explicitly to inspect a candidate view or a previously captured
+        snapshot. Use the same snapshot for scoped queries and order comparisons.
+        """
+        captured = self.snapshot() if view is None else view
+        if isinstance(selector, str):
+            return query(
+                captured,
+                selector,
+                types=types,
+                within=within,
+                include_scope=include_scope,
+                localization=localization,
+            )
+        if types is not None:
+            message = "types is only supported for string selectors"
+            raise ValueError(message)
+        return query(captured, selector, within=within, include_scope=include_scope, localization=localization)
+
     def texts(self) -> list[str]:
         """Return display texts from the current serialized Discord payload.
 
@@ -998,6 +1063,8 @@ __all__ = [
     "payload_labels",
     "payload_problems",
     "payload_texts",
+    "query",
+    "snapshot",
     "stage",
     "stale_http_error",
     "static_view",
