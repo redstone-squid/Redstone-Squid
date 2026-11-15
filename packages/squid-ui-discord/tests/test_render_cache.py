@@ -37,6 +37,27 @@ def _classic_document(value: str) -> RenderedScene[ClassicMessage]:
     )
 
 
+def test_replacing_a_program_requires_a_new_audit() -> None:
+    cache = RenderProgramCache()
+    original = object()
+    replacement = object()
+    cache.put("scene", original, certified=True)
+    cache.put("scene", replacement, certified=False)
+
+    assert cache.get("scene") == (replacement, False)
+    assert cache.snapshot().certified == 0
+
+
+def test_reusing_a_program_preserves_its_audit_certificate() -> None:
+    cache = RenderProgramCache()
+    program = object()
+    cache.put("scene", program, certified=True)
+    cache.put("scene", program, certified=False)
+
+    assert cache.get("scene") == (program, True)
+    assert cache.snapshot().certified == 1
+
+
 def test_v2_program_hits_return_fresh_discord_objects_and_skip_certified_audit(monkeypatch) -> None:
     cache = RenderProgramCache()
     renderer = V2Renderer(cache=cache)

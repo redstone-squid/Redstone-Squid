@@ -171,7 +171,7 @@ rendering. String selectors use Discord class names and native attributes:
 
 ```python
 from squid_ui.selectors import select
-from squid_ui_discord import testing
+from squid_ui.ext.discord import testing
 
 save = testing.query(view, 'Button[label="Save"]').one()
 assert testing.query(view, select(save.node)).one().node is save.node

@@ -31,9 +31,9 @@ class _Entry:
 class RenderProgramCache:
     """A bounded LRU of callback-free Discord constructor programs.
 
-    Callers must key every input that affects the program and its audit result. Calling put
-    preserves an existing certificate for the same key, so reusing a key for a different
-    program can incorrectly skip an audit. Cache entries never hold mounted callbacks.
+    Callers must key every input that affects the program and its audit result. Certificates
+    belong to a program instance: replacing it under the same key requires a new audit.
+    Cache entries never hold mounted callbacks.
     """
 
     def __init__(self, capacity: int = 32) -> None:
@@ -57,9 +57,9 @@ class RenderProgramCache:
         return entry.program, entry.certified
 
     def put(self, key: Hashable, program: object, *, certified: bool) -> None:
-        """Retain one successfully executed program and its strongest certificate."""
+        """Retain a program, preserving its certificate only when the instance is unchanged."""
         previous = self._entries.get(key)
-        if previous is not None:
+        if previous is not None and previous.program is program:
             certified = certified or previous.certified
         self._entries[key] = _Entry(program, certified)
         self._entries.move_to_end(key)
