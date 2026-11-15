@@ -26,10 +26,10 @@ from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.suggestions.domain import Suggestion
 from squid.tags.domain import TagValueType
-from squid_ui.selectors import query, select
-from squid_ui.testing import RecordingResponder, choose, labels, press, render_index, render_tree, submit
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.testing import stage
+from squid_ui.selectors import query, select
+from squid_ui.testing import RecordingResponder, choose, labels, press, render_index, render_tree, submit
 from tests.support.notification_edits import NotificationEditRecorder
 
 

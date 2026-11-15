@@ -6,9 +6,9 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_ui_discord as sd
+import squid_ui.ext.discord as sd
+from squid_ui.ext.discord import testing
 from squid_ui.selectors import Match, QueryError, select
-from squid_ui_discord import testing
 
 
 async def test_native_views_preserve_rows_sections_and_accessories() -> None:
