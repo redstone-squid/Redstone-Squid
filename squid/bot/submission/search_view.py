@@ -30,8 +30,9 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildOpener = Callable[[int, sl.ActionEvent], Awaitable[None]]
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
+type BuildDetailFactory = Callable[[int], sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]
+"""Build the full, interactive view of one build, given its ID, for a host that has one."""
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -104,15 +105,21 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
         *,
         load_build: BuildLoader | None,
         render_build: BuildRenderer | None,
-        open_build: BuildOpener | None = None,
+        build_detail: BuildDetailFactory | None = None,
     ) -> None:
-        self._open_full_build = open_build
         self.hit = hit
         self._load_build = load_build
         self._render_build = render_build
+        build_id = _build_id(hit)
+        self._full_build = build_detail(build_id) if build_detail is not None and build_id is not None else None
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        if self._full_build is not None:
+            # The host's build view replaces the preview, so the result opens in one step.
+            if isinstance(self.hit, RecordSearchHit):
+                return (_record_heading(self.hit), self._full_build)
+            return self._full_build
         detail = self._build_node or sl.section(
             sl.heading(self.hit.title),
             sl.paragraph(_detail_text(self.hit)).truncate(),
@@ -139,9 +146,6 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
 
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
-        if build_id is not None and self._open_full_build is not None:
-            await self._open_full_build(build_id, event)
-            return
         if build_id is None or self._load_build is None or self._render_build is None:
             await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
@@ -155,6 +159,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
 class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     _show_records: bool = sl.state(False)
     _holder_id: int | None = sl.state(None)
+    _holder_build: sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+        None, opaque=True
+    )
 
     def __init__(
         self,
@@ -163,10 +170,13 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
         *,
         load_build: BuildLoader | None,
         render_build: BuildRenderer | None,
+        build_detail: BuildDetailFactory | None = None,
     ) -> None:
         self.hit = hit
         self._load_build = load_build
         self._render_build = render_build
+        self._build_detail = build_detail
+        self._full_build = build_detail(int(hit.source_id)) if build_detail is not None else None
         self._records_label = (
             tr(t"search-grouped-matching-records = Matching records")
             if scope is SearchScope.RECORDS
@@ -213,21 +223,10 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
                     key="search-build-detail-actions",
                 ),
             )
-        state = self.card.status
-        if isinstance(state, sl.resources.Ready):
-            node = state.value
-        elif isinstance(state, sl.resources.Failed):
-            node = sl.stack(
-                sl.note(tr(t"build-search-build-unavailable = That build is no longer available.")),
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"bot-submission-search-view-retry = Retry"), self._retry, key="search-build-retry"
-                    ),
-                    key="search-build-retry-actions",
-                ),
-            )
+        if self._full_build is not None:
+            node = self._holder_build if self._holder_id is not None else self._full_build
         else:
-            node = sl.note(tr(t"search-grouped-loading-build = Loading build…"))
+            node = self._card_node()
         if self._holder_id is not None:
             return (
                 node,
@@ -253,6 +252,22 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
                 ),
             )
         return (node,)
+
+    def _card_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        state = self.card.status
+        if isinstance(state, sl.resources.Ready):
+            return state.value
+        if isinstance(state, sl.resources.Failed):
+            return sl.stack(
+                sl.note(tr(t"build-search-build-unavailable = That build is no longer available.")),
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"bot-submission-search-view-retry = Retry"), self._retry, key="search-build-retry"
+                    ),
+                    key="search-build-retry-actions",
+                ),
+            )
+        return sl.note(tr(t"search-grouped-loading-build = Loading build…"))
 
     def _record_detail(
         self, record: RecordSearchHit
@@ -282,6 +297,8 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
 
     async def _open_holder(self, build_id: int, _event: sl.ActionEvent) -> None:
         self._holder_id = build_id
+        if self._build_detail is not None:
+            self._holder_build = self._build_detail(build_id)
 
     async def _back_to_records(self, _event: sl.ActionEvent) -> None:
         self._holder_id = None
@@ -309,9 +326,9 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         *,
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
-        open_build: BuildOpener | None = None,
+        build_detail: BuildDetailFactory | None = None,
     ) -> None:
-        self._open_full_build = open_build
+        self._build_detail = build_detail
         self._source = _SearchSource(service, request, page)
         self._load_build = load_build
         self._render_build = render_build
@@ -373,13 +390,17 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             # detail must not make the outer browser recreate it on navigation.
             with untracked():
                 return _GroupedBuildDetail(
-                    hit, self._source.base_request.scope, load_build=self._load_build, render_build=self._render_build
+                    hit,
+                    self._source.base_request.scope,
+                    load_build=self._load_build,
+                    render_build=self._render_build,
+                    build_detail=self._build_detail,
                 )
         return _SearchDetail(
             hit,
             load_build=self._load_build,
             render_build=self._render_build,
-            open_build=self._open_full_build,
+            build_detail=self._build_detail,
         )
 
     def _overview(
@@ -408,6 +429,15 @@ def _build_id(hit: SearchHit) -> int | None:
     if isinstance(hit, BuildSearchHit) and hit.source_id.isdigit():
         return int(hit.source_id)
     return None
+
+
+def _record_heading(hit: RecordSearchHit) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    """Name the record a result matched above the holder build that it opens."""
+    return sl.section(
+        sl.heading(hit.title),
+        sl.note(hit.subtitle) if hit.subtitle else None,
+        accent=sl.Tone.SUCCESS,
+    )
 
 
 def _metadata_label(kind: str) -> sl.TextLike:

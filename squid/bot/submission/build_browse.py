@@ -166,6 +166,8 @@ class _NeighbourBuildSource:
 class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Show one build and refresh its card when the build topic changes.
 
+    Given only an ID, the build loads on first render; a `Build` is shown immediately.
+
     Capabilities control which actions appear. Review, debug, and timing
     actions recheck permission through authorize; the routed editor checks its own access.
     """
@@ -180,7 +182,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 
     def __init__(
         self,
-        build: Build,
+        build: Build | int,
         *,
         changes: Topic,
         queries: BuildQueryService,
@@ -194,17 +196,21 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         authorize: BuildAuthorizer,
         refresh_posts: RefreshPosts,
     ) -> None:
-        assert build.id is not None
+        if isinstance(build, int):
+            build_id, seed = build, None
+        else:
+            assert build.id is not None
+            build_id, seed = build.id, build
         self._changes = changes
-        self._build_id = build.id
-        self._seed: Build | None = build
+        self._build_id = build_id
+        self._seed: Build | None = seed
         self.controller = EditController(edits, actor, self._refresh_review)
         self._queries = queries
         self._builds = builds
         self._edits = edits
         self._actor = actor
         self.schematics = SchematicTools(
-            build.id,
+            build_id,
             schematics=schematics,
             actor_account_id=actor_account_id,
             authorize=authorize,
@@ -495,19 +501,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             return (self._workspace_controls(), self._record_tools)
         nodes = [self._workspace_controls(), *self._find_nodes()]
         if self._selected is not None:
-            nodes.extend(
-                (
-                    # "List view" closes the build below it, so the two stay in one message.
-                    sl.keep_with_next(
-                        sl.action_controls(
-                            sl.action_control(tr(t"build-browse-list = List view"), self._back, key="back"),
-                            key="selected-actions",
-                            display=sl.semantic.ControlDisplay.INDIVIDUAL,
-                        )
-                    ),
-                    self._selected,
-                )
-            )
+            nodes.append(self._selected)
         elif self._results is not None:
             nodes.append(self._results)
         else:
@@ -649,10 +643,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._guided.clear()
             self._guided.query = query
 
-    def _detail(self, build: Build) -> _BuildDetail:
+    def _detail(self, build: Build | int) -> _BuildDetail:
+        build_id = build if isinstance(build, int) else build.id
         return _BuildDetail(
             build,
-            changes=self._topics.topic("build", str(build.id)),
+            changes=self._topics.topic("build", str(build_id)),
             queries=self._queries,
             builds=self._builds,
             edits=self._edits,
@@ -684,6 +679,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=_build_label,
             detail=self._detail,
             chronology=sl.sources.Chronology.NEWEST_FIRST,
+            # The browser's own list would hold only the opened build; Back returns to the
+            # catalogue, search results, or record that the build was opened from.
+            on_back=self._back,
         )
         # Prepare the detail before a modal switches views. The parent keeps its own
         # collection and focus while this explicitly opened child browses by build ID.
@@ -756,6 +754,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             sort=SearchSort.parse(sort or None),
             page_size=25,
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
+            # One row per build, listing the records it holds, as /search shows results.
+            group_by_build=True,
         )
         page = await self._search_service.search(request)
         self._results = SearchScreen(
@@ -764,7 +764,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             page,
             load_build=self._queries.get,
             render_build=self._render_build,
-            open_build=self._open_holder,
+            build_detail=self._detail,
         )
         self._query = query
         self._sort = sort

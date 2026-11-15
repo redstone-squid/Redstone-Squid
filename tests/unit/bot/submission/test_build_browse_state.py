@@ -114,8 +114,12 @@ async def toggle_help(ui: StagedUI[BuildBrowseScreen]) -> None:
 async def test_back_to_builds_replaces_the_detail_with_the_catalogue() -> None:
     async with stage(_screen(), owner=object()) as ui:
         assert "Build #7" in ui.texts()
+        # One Back: the opened build has no separate list of its own to return to.
+        assert [key for key in ui.root.snapshot().handler_keys if key.endswith("back")] == [
+            ui.key_for("linked-build.back")
+        ]
 
-        await ui.press("back")
+        await ui.press(ui.key_for("linked-build.back"))
 
         assert "## Build catalogue" in ui.texts()
         assert "Build #7" not in ui.texts()
@@ -163,17 +167,17 @@ async def test_search_opens_full_build_and_preserves_results(records: bool) -> N
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "door", "")
         results = screen._results
+        # Choosing a result opens the full build in one step.
         await ui.select(ui.key_for("search.open"), [f"{hit.resource_kind}:{hit.source_id}"])
-        await ui.press(ui.key_for("open-build"))
 
         assert "Build #7" in ui.texts()
         ui.control(ui.key_for("schematic-tools"))
         assert not any(key.endswith("open-build") for key in ui.root.snapshot().handler_keys)
         ui.assert_within_limits()
 
-        await ui.press("back")
+        await ui.press(ui.key_for("search.back"))
         assert screen._results is results
-        ui.control(ui.key_for("open-build"))
+        ui.control(ui.key_for("search.open"))
         assert service.search.await_count == 1
 
 
@@ -292,7 +296,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
         assert "Build #7" in ui.texts()
-        await ui.press("back")
+        await ui.press(ui.key_for("linked-build.back"))
         assert "## Smallest 2x2 door" in ui.texts()
         assert not any("resolved" in text or "no_candidate" in text for text in ui.texts())
         ui.control(ui.key_for("holder-9"))
@@ -627,8 +631,6 @@ async def test_a_build_with_tools_and_help_continues_in_a_second_message() -> No
         await ui.press(ui.key_for("schematic-tools"))
         continuations = ui.root._candidates.continuations
         assert len(continuations) == 1
-        # "List view" moves with the build it closes.
-        assert "back" in continuations[0].planned.keys
         ui.assert_within_limits()
 
         await ui.press(ui.key_for("schematic-info"))
