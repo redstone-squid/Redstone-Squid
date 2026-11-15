@@ -4993,7 +4993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:248"
+      "squid/bot/chrome.py:268"
     ]
   },
   "bot-ui-and-more": {
@@ -5008,7 +5008,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:215"
+      "squid/bot/chrome.py:235"
     ]
   },
   "bot-ui-apply": {
@@ -5017,7 +5017,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:242"
+      "squid/bot/chrome.py:262"
     ]
   },
   "bot-ui-back": {
@@ -5026,7 +5026,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:234"
+      "squid/bot/chrome.py:254"
     ]
   },
   "bot-ui-cancel": {
@@ -5035,7 +5035,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:241"
+      "squid/bot/chrome.py:261"
     ]
   },
   "bot-ui-close": {
@@ -5044,7 +5044,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:236"
+      "squid/bot/chrome.py:256"
     ]
   },
   "bot-ui-confirm": {
@@ -5053,7 +5053,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:240"
+      "squid/bot/chrome.py:260"
     ]
   },
   "bot-ui-continue-session": {
@@ -5062,7 +5062,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:225"
+      "squid/bot/chrome.py:245"
     ]
   },
   "bot-ui-download": {
@@ -5071,7 +5071,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:239"
+      "squid/bot/chrome.py:259"
     ]
   },
   "bot-ui-edit": {
@@ -5080,7 +5080,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:249"
+      "squid/bot/chrome.py:269"
     ]
   },
   "bot-ui-finish": {
@@ -5089,7 +5089,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:254"
+      "squid/bot/chrome.py:274"
     ]
   },
   "bot-ui-home": {
@@ -5098,7 +5098,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:235"
+      "squid/bot/chrome.py:255"
     ]
   },
   "bot-ui-live-updates-paused-press-any-control-to": {
@@ -5107,7 +5107,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:221"
+      "squid/bot/chrome.py:241"
     ]
   },
   "bot-ui-move-down": {
@@ -5116,7 +5116,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:252"
+      "squid/bot/chrome.py:272"
     ]
   },
   "bot-ui-move-up": {
@@ -5125,7 +5125,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:251"
+      "squid/bot/chrome.py:271"
     ]
   },
   "bot-ui-next": {
@@ -5134,7 +5134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:233"
+      "squid/bot/chrome.py:253"
     ]
   },
   "bot-ui-no-results": {
@@ -5143,7 +5143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:246"
+      "squid/bot/chrome.py:266"
     ]
   },
   "bot-ui-not-answered-yet": {
@@ -5152,7 +5152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:255"
+      "squid/bot/chrome.py:275"
     ]
   },
   "bot-ui-off": {
@@ -5161,7 +5161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:238"
+      "squid/bot/chrome.py:258"
     ]
   },
   "bot-ui-on": {
@@ -5170,7 +5170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:237"
+      "squid/bot/chrome.py:257"
     ]
   },
   "bot-ui-open-link": {
@@ -5199,7 +5199,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:256"
+      "squid/bot/chrome.py:276"
     ]
   },
   "bot-ui-previous": {
@@ -5208,7 +5208,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:232"
+      "squid/bot/chrome.py:252"
     ]
   },
   "bot-ui-remove": {
@@ -5217,7 +5217,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:250"
+      "squid/bot/chrome.py:270"
     ]
   },
   "bot-ui-review": {
@@ -5226,7 +5226,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:253"
+      "squid/bot/chrome.py:273"
     ]
   },
   "bot-ui-save": {
@@ -5235,7 +5235,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:243"
+      "squid/bot/chrome.py:263"
     ]
   },
   "bot-ui-search": {
@@ -5244,7 +5244,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:245"
+      "squid/bot/chrome.py:265"
     ]
   },
   "bot-ui-sent-by-direct-message": {
@@ -5253,7 +5253,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:226"
+      "squid/bot/chrome.py:246"
     ]
   },
   "bot-ui-this-reply-is-too-private-for-a": {
@@ -5262,7 +5262,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:227"
+      "squid/bot/chrome.py:247"
     ]
   },
   "bot-ui-this-session-has-ended": {
@@ -5271,7 +5271,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:217"
+      "squid/bot/chrome.py:237"
     ]
   },
   "bot-ui-this-session-is-about-to-expire": {
@@ -5280,7 +5280,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:224"
+      "squid/bot/chrome.py:244"
     ]
   },
   "bot-ui-try-again-in-seconds": {
@@ -5304,7 +5304,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:244"
+      "squid/bot/chrome.py:264"
     ]
   },
   "bot-ui-working": {
@@ -5313,7 +5313,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:220"
+      "squid/bot/chrome.py:240"
     ]
   },
   "bot-ui-you-can-t-do-that-right-now": {
@@ -5322,7 +5322,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:218"
+      "squid/bot/chrome.py:238"
     ]
   },
   "bot-ui-you-chose": {
@@ -5337,7 +5337,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:247"
+      "squid/bot/chrome.py:267"
     ]
   },
   "bot-verify-doesn-t-have-a-creator-page": {
@@ -7483,7 +7483,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:154"
+      "squid/bot/chrome.py:174"
     ]
   },
   "command-dev-name": {
@@ -7492,7 +7492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:152"
+      "squid/bot/chrome.py:172"
     ]
   },
   "command-dev-ui-choice-activity": {
@@ -7501,7 +7501,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:162"
+      "squid/bot/chrome.py:182"
     ]
   },
   "command-dev-ui-choice-overview": {
@@ -7510,7 +7510,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:158"
+      "squid/bot/chrome.py:178"
     ]
   },
   "command-dev-ui-choice-persistence": {
@@ -7519,7 +7519,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:165"
+      "squid/bot/chrome.py:185"
     ]
   },
   "command-dev-ui-choice-profile": {
@@ -7528,7 +7528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:164"
+      "squid/bot/chrome.py:184"
     ]
   },
   "command-dev-ui-choice-queues": {
@@ -7537,7 +7537,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:163"
+      "squid/bot/chrome.py:183"
     ]
   },
   "command-dev-ui-choice-roots": {
@@ -7546,7 +7546,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:159"
+      "squid/bot/chrome.py:179"
     ]
   },
   "command-dev-ui-choice-routes": {
@@ -7555,7 +7555,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:161"
+      "squid/bot/chrome.py:181"
     ]
   },
   "command-dev-ui-choice-sessions": {
@@ -7564,7 +7564,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:160"
+      "squid/bot/chrome.py:180"
     ]
   },
   "command-dev-ui-help": {
@@ -7573,7 +7573,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:155"
+      "squid/bot/chrome.py:175"
     ]
   },
   "command-dev-ui-name": {
@@ -7582,7 +7582,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:153"
+      "squid/bot/chrome.py:173"
     ]
   },
   "command-dev-ui-tab-help": {
@@ -7591,7 +7591,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:157"
+      "squid/bot/chrome.py:177"
     ]
   },
   "command-dev-ui-tab-name": {
@@ -7600,7 +7600,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:156"
+      "squid/bot/chrome.py:176"
     ]
   },
   "command-errors-help": {
@@ -18756,7 +18756,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:272"
+      "squid/bot/chrome.py:292"
     ]
   },
   "ui-chrome-approved-count": {
@@ -18810,7 +18810,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:257"
+      "squid/bot/chrome.py:277"
     ]
   },
   "ui-chrome-continue": {
@@ -18819,7 +18819,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:262"
+      "squid/bot/chrome.py:282"
     ]
   },
   "ui-chrome-full": {
@@ -18828,7 +18828,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:270"
+      "squid/bot/chrome.py:290"
     ]
   },
   "ui-chrome-jump-to-page": {
@@ -18837,7 +18837,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:267"
+      "squid/bot/chrome.py:287"
     ]
   },
   "ui-chrome-newer": {
@@ -18846,7 +18846,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:259"
+      "squid/bot/chrome.py:279"
     ]
   },
   "ui-chrome-older": {
@@ -18855,7 +18855,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:258"
+      "squid/bot/chrome.py:278"
     ]
   },
   "ui-chrome-page-option": {
@@ -18899,7 +18899,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:261"
+      "squid/bot/chrome.py:281"
     ]
   },
   "ui-chrome-slot-capacity": {
@@ -18988,7 +18988,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:260"
+      "squid/bot/chrome.py:280"
     ]
   },
   "ui-chrome-waitlist": {
@@ -18997,7 +18997,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:269"
+      "squid/bot/chrome.py:289"
     ]
   },
   "ui-chrome-withdraw": {
@@ -19006,7 +19006,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:273"
+      "squid/bot/chrome.py:293"
     ]
   },
   "ui-control-expired": {
@@ -19024,7 +19024,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:200"
+      "squid/bot/chrome.py:220"
     ]
   },
   "ui-form-date-maximum": {
@@ -19063,7 +19063,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:202"
+      "squid/bot/chrome.py:222"
     ]
   },
   "ui-form-datetime-maximum": {
@@ -19102,7 +19102,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:199"
+      "squid/bot/chrome.py:219"
     ]
   },
   "ui-form-duration-maximum": {
@@ -19141,7 +19141,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:197"
+      "squid/bot/chrome.py:217"
     ]
   },
   "ui-form-invalid-boolean": {
@@ -19150,7 +19150,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:177"
+      "squid/bot/chrome.py:197"
     ]
   },
   "ui-form-invalid-choice": {
@@ -19159,7 +19159,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:193"
+      "squid/bot/chrome.py:213"
     ]
   },
   "ui-form-invalid-choices": {
@@ -19168,7 +19168,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:194"
+      "squid/bot/chrome.py:214"
     ]
   },
   "ui-form-number-finite": {
@@ -19177,7 +19177,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:183"
+      "squid/bot/chrome.py:203"
     ]
   },
   "ui-form-number-format": {
@@ -19186,7 +19186,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:198"
+      "squid/bot/chrome.py:218"
     ]
   },
   "ui-form-number-maximum": {
@@ -19225,7 +19225,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:178"
+      "squid/bot/chrome.py:198"
     ]
   },
   "ui-form-scale-integer": {
@@ -19334,7 +19334,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:203"
+      "squid/bot/chrome.py:223"
     ]
   },
   "ui-form-time-format": {
@@ -19343,7 +19343,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:201"
+      "squid/bot/chrome.py:221"
     ]
   },
   "ui-form-time-maximum": {
@@ -19382,7 +19382,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:206"
+      "squid/bot/chrome.py:226"
     ]
   },
   "ui-form-timezone-offset-mismatch": {
@@ -19391,7 +19391,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:207"
+      "squid/bot/chrome.py:227"
     ]
   },
   "ui-list-controls-not-owned": {
@@ -19400,7 +19400,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:216"
+      "squid/bot/chrome.py:236"
     ]
   },
   "ui-page-jump-number": {
@@ -19409,7 +19409,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:212"
+      "squid/bot/chrome.py:232"
     ]
   },
   "ui-page-jump-range": {
@@ -19433,7 +19433,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:211"
+      "squid/bot/chrome.py:231"
     ]
   },
   "ui-tally-option": {
@@ -19976,7 +19976,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:130"
+      "squid/bot/chrome.py:135"
     ]
   },
   "widgets-multi-choice-exclusive": {
@@ -19991,7 +19991,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:148"
+      "squid/bot/chrome.py:168"
     ]
   },
   "widgets-multi-choice-options": {
@@ -20000,7 +20000,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:176"
+      "squid/bot/chrome.py:196"
     ]
   },
   "widgets-multi-choice-select-options": {
@@ -20009,7 +20009,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:169"
+      "squid/bot/chrome.py:189"
     ]
   },
   "widgets-multi-choice-too-few": {
@@ -20024,7 +20024,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:136"
+      "squid/bot/chrome.py:146"
     ]
   },
   "widgets-multi-choice-too-many": {
@@ -20039,7 +20039,7 @@
       }
     ],
     "locations": [
-      "squid/bot/chrome.py:142"
+      "squid/bot/chrome.py:157"
     ]
   },
   "widgets-multi-choice-unavailable": {
@@ -20048,7 +20048,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/chrome.py:172"
+      "squid/bot/chrome.py:192"
     ]
   }
 }
