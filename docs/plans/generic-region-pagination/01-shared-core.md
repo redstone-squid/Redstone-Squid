@@ -155,9 +155,11 @@ and the following input. `scene.Codec.dumps` exposes the result body and the dia
 show which operation was selected.
 
 ```python
+import squid_ui_html
+import squid_ui_slack
 import squid_ui as sl
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import components_v2_target
+from squid_ui_discord.planning.discord import components_v2_target
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
@@ -166,11 +168,11 @@ content = sl.fallback(
     sl.paragraph("10 × 5 blocks"),
 )
 v2 = components_v2_target(AdapterProfile(DiscordAdapter, "probe.discord", "1"))
-slack = sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "probe.slack", "1"))
+slack = squid_ui_slack.message_target(adapter=AdapterProfile(SlackAdapter, "probe.slack", "1"))
 for target in (
     v2.reserve(ResourceCost({Axis.COMPONENTS: 39})),
     slack.reserve(ResourceCost({Axis.BLOCKS: 49})),
-    sl.html.target(),
+    squid_ui_html.target(),
 ):
     result = sl.planning.plan(content, target=target)
     print(target.id, sl.scene.Codec.dumps(result.scene))

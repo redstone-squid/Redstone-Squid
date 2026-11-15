@@ -1,6 +1,6 @@
 # Squid UI framework suite
 
-Squid UI is a seven-package framework for declarative, stateful interfaces. Application code writes
+Squid UI is a framework for declarative, stateful interfaces. Application code writes
 semantic components; the planner produces an immutable, limits-checked scene; adapters draw and
 deliver that scene. Discord provides a complete runtime, Slack provides SDK-ready Block Kit
 messages and views without owning transport, and HTML produces native accessible markup.
@@ -17,21 +17,22 @@ pip install squid-ui-slack==0.1.0a1
 | Distribution | Import | Responsibility |
 |---|---|---|
 | `squid-reactivity` | `squid_reactivity` | Transactions, computed state, topics, operations |
-| `squid-ui` | `squid_ui` | Semantic nodes, planning, runtime, scenes, HTML |
+| `squid-ui` | `squid_ui` | Semantic nodes, shared planning, runtime, and scene vocabulary |
 | `squid-ui-widgets` | `squid_ui_widgets` | Portable wizards, editors, menus, votes, and pickers |
-| `squid-ui-discord` | `squid_ui_discord` | discord.py rendering, delivery, sessions, and routing |
-| `squid-ui-slack` | `squid_ui_slack` | Slack SDK rendering for messages, modals, and App Home |
+| `squid-ui-discord` | `squid_ui_discord` | Discord composition, limits, rendering, delivery, sessions, and routing |
+| `squid-ui-slack` | `squid_ui_slack` | Slack composition, limits, and SDK rendering |
+| `squid-ui-html` | `squid_ui_html` | HTML composition and rendering |
 | `squid-storage` | `squid_storage` | Versioned scoped stores and persisted state pools |
 | `squid-replication` | `squid_replication` | Reference, Loro, and experimental pycrdt replicas |
 
-All seven distributions release together at the same version. Dependencies between suite packages
+The distributions release together at the same version. Dependencies between suite packages
 use that exact version, so one environment cannot silently mix incompatible alphas.
 
 ## Where to start
 
 - Follow the [Discord quickstart](squid-ui-quickstart.md) for a first live screen.
 - Follow the [Slack compile quickstart](squid-ui-slack-quickstart.md) to produce SDK blocks and views.
-- Plan with `squid_ui.html.target()` and draw with `squid_ui.html.Renderer` for native HTML.
+- Plan with `squid_ui_html.target()` and draw with `squid_ui_html.Renderer` for native HTML.
 - Use the [API map](squid-ui-api.md) to find the supported entry point for each job.
 - Look up any supported name in the per-package [reference](reference/squid-ui.md).
 - Read [architecture and API interactions](squid-ui-architecture.md) for planning, ownership,

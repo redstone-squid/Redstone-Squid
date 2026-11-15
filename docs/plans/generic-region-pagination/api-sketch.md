@@ -284,11 +284,12 @@ cache optimization, and remaining target coverage continue in their assigned roa
 ## Public planning entry point
 
 ```python
+import squid_ui_html
 from squid_ui.planning import CompositionOptions, OccurrenceId
 
 planned = sl.planning.plan(
     summary,
-    target=sl.html.target(),
+    target=squid_ui_html.target(),
     strict=True,
     composition=CompositionOptions({OccurrenceId(("root", "build-summary")): "compact"}),
 )

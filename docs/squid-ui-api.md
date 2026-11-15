@@ -12,10 +12,10 @@ composition and adapter contracts.
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
 | Evaluate explicit composition choices | `squid_ui.planning.CompositionOptions`, `plan(..., composition=...)` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |
-| Select native HTML | `squid_ui.html.target` |
+| Select native HTML | `squid_ui_html.target` |
 | Encode a scene | `squid_ui.scene.Codec` |
-| Draw a native HTML scene | `squid_ui.html.Renderer` |
-| Preview Components V2 as HTML | `squid_ui.html.DiscordPreviewRenderer` |
+| Draw a native HTML scene | `squid_ui_html.Renderer` |
+| Preview Components V2 as HTML | `squid_ui_discord.preview.DiscordPreviewRenderer` |
 | Compile a Slack message | `squid_ui_slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
 | Compile a Slack modal | `squid_ui_slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
 | Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
@@ -70,14 +70,15 @@ action and view-submission listeners, routing, retries, and delivery. Action IDs
 ## Native HTML
 
 ```python
+import squid_ui_html
 import squid_ui as sl
 
 document = sl.article(
     sl.heading("Submission"),
     sl.paragraph("Ready for review."),
 )
-planned = sl.planning.plan(document, target=sl.html.target())
-html = sl.html.Renderer().draw(planned.scene, plan=planned)
+planned = sl.planning.plan(document, target=squid_ui_html.target())
+html = squid_ui_html.Renderer().draw(planned.scene, plan=planned)
 ```
 
 HTML planning retains semantic content, emits native controls and forms, and exposes action,
@@ -93,11 +94,12 @@ durability, and ownership—is in [architecture and API interactions](squid-ui-a
 All built-in targets use shared composition. Pass options to configure automatic search or fixed choices:
 
 ```python
+import squid_ui_html
 from squid_ui.planning import CompositionOptions
 
 planned = sl.planning.plan(
     sl.paragraph("Ready for review."),
-    target=sl.html.target(),
+    target=squid_ui_html.target(),
     composition=CompositionOptions(automatic=True),
 )
 ```

@@ -28,6 +28,7 @@ Home = "index.md"
         { "squid-ui-widgets" = "reference/squid-ui-widgets.md" },
         { "squid-ui-discord" = "reference/squid-ui-discord.md" },
         { "squid-ui-slack" = "reference/squid-ui-slack.md" },
+        { "squid-ui-html" = "reference/squid-ui-html.md" },
         { "squid-reactivity" = "reference/squid-reactivity.md" },
         { "squid-storage" = "reference/squid-storage.md" },
         { "squid-replication" = "reference/squid-replication.md" },
@@ -98,6 +99,7 @@ paths = [
     "packages/squid-ui/src",
     "packages/squid-ui-discord/src",
     "packages/squid-ui-slack/src",
+    "packages/squid-ui-html/src",
     "packages/squid-ui-widgets/src",
 ]
 
