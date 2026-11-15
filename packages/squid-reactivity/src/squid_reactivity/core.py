@@ -546,12 +546,19 @@ def declared_cells(owner: ReactiveStateOwner) -> dict[_Cell[Any], int]:
 
 
 def export_state(owner: ReactiveStateOwner) -> dict[str, Any]:
-    """Return the value of every persistent state descriptor that currently has one."""
-    return {
-        name: getattr(owner, name)
-        for name, descriptor in _state_fields(owner).items()
-        if descriptor.has_initial or descriptor.is_set(owner)
-    }
+    """Return the value of every persistent state descriptor that currently has one.
+
+    A field with no value is left out but still recorded as a dependency, so a reader
+    tracking the export hears about the field's first assignment.
+    """
+    exported: dict[str, Any] = {}
+    for name, descriptor in _state_fields(owner).items():
+        if descriptor.has_initial or descriptor.is_set(owner):
+            exported[name] = getattr(owner, name)
+        else:
+            cell = descriptor.cell(owner)
+            cell.track(cell.validated_version())
+    return exported
 
 
 def restore_state(owner: ReactiveStateOwner, values: Mapping[str, Any]) -> None:

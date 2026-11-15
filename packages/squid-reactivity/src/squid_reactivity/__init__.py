@@ -24,7 +24,7 @@ from squid_reactivity.errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity.subscriptions import Subscriptions
+from squid_reactivity.subscriptions import ChangeListener, Subscriptions, on_change
 from squid_reactivity.topics import CellAddress, DependencyAddress, LocalTopicBus, Topic, TopicBus, TopicName, watch
 from squid_reactivity.tracking import Dependencies, capture_reads, observe_reads, untracked
 from squid_reactivity.transactions import Transaction, current_transaction, readonly_transaction, transaction
@@ -33,6 +33,7 @@ from squid_reactivity.transactions._state import relaxed_read, strong_read
 
 __all__ = [
     "CellAddress",
+    "ChangeListener",
     "Dependencies",
     "DependencyAddress",
     "EventLedger",
@@ -62,6 +63,7 @@ __all__ = [
     "export_state",
     "observe_events",
     "observe_reads",
+    "on_change",
     "readonly_transaction",
     "relaxed_read",
     "restore_state",

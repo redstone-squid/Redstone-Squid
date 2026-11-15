@@ -85,6 +85,28 @@ A field you write without reading is never checked: the last commit wins.
 
 ## Reacting to changes
 
+```python
+from squid_reactivity import on_change
+
+listener = on_change(lambda: counter.doubled, print)
+counter.count = 5  # Prints 10.
+listener.close()
+```
+
+`on_change(read, callback)` runs `read` to learn which fields it depends on, and runs it
+again after one of them changes. It calls `callback` with the new result only when that
+result differs from the last one. A transaction that writes several of the fields causes one
+call, after it commits; one that rolls back causes none.
+
+`read` is read-only. `callback` cannot assign a field directly either, so to write it opens
+its own `transaction(...)`. Models hold listeners weakly: keep the listener for as long as
+you want the calls, and close it when you are done.
+
+### Doing it yourself
+
+`on_change` recomputes as soon as it is notified. A consumer that needs to choose when to
+recompute, such as a renderer that delivers its result later, uses the parts underneath.
+
 `observe_reads()`, used above, yields a `Dependencies` object and adds to it every field the
 block reads, directly or through computed values. Use it after the block has finished. It
 answers two questions:

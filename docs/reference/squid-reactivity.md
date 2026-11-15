@@ -75,6 +75,10 @@ bridge can publish events received from another process.
 
 ::: squid_reactivity.topics.DelimitedTopicCodec
 
+::: squid_reactivity.on_change
+
+::: squid_reactivity.ChangeListener
+
 ::: squid_reactivity.Subscriptions
 
 ## Addresses and cell inspection

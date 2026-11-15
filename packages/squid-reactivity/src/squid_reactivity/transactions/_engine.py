@@ -615,7 +615,9 @@ def _write[ValueT](owner: ReactiveStateOwner, name: str, cell: _Cell[ValueT], va
     _check_write(owner, name)
     current = _current_transaction()
     if current is None and in_continuation():
-        message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
+        message = (
+            "a result callback or change listener cannot assign reactive state directly; open a new transaction(...)"
+        )
         raise ReactiveWriteError(message)
     if current is not None and not current.writable():
         current.reject_stale(f"{type(owner).__name__}.{name}")
