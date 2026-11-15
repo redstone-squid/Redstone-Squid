@@ -46,7 +46,8 @@ class _MessageDelivery:
         profile: OperationRecorder | None = None,
     ) -> deliver.EditHandle | None:
         """Try interaction then standing authority, forgetting a stale standing handle."""
-        for handle in (through, self.handle):
+        candidates = (through,) if through is self.handle else (through, self.handle)
+        for handle in candidates:
             if handle is None or handle.expired():
                 continue
             try:
