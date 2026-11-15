@@ -80,7 +80,10 @@ def _inferred_ticks(value: str | None) -> int | None:
     """Read instant measurements and numeric op/cl shorthand without interpreting other prose."""
     if value is not None:
         normalized = value.strip().casefold()
-        if normalized in {"instant", "instantly", "instantaneous"}:
+        if re.fullmatch(
+            r"(?:instant|instantly|instantaneous)(?:\s+(?:open|opening|close|closing|extension|retraction))?",
+            normalized,
+        ):
             return 0
         # Discord titles sometimes attach an edge label to a bare duration in seconds.
         if match := re.fullmatch(r"([~≈]?\s*(?:\d+(?:\.\d+)?|\.\d+))\s*(?:op|cl)", normalized):

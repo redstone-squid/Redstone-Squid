@@ -1168,3 +1168,36 @@ async def test_outdated_reference_and_context_do_not_mark_the_current_build_outd
     [build] = await service.infer(BuildInferenceInput((message,), (context,), (), 30, 40), model="test")
 
     assert build.description is None
+
+
+async def test_instant_edge_labels_keep_zero_durations_and_separate_reset_qualifiers() -> None:
+    text = "Instant close, 6.5s reset\nInstant open, 0.15s seamless, 0.35s reset"
+    message = ContextMessage(10, "Builder", 20, text, "", "primary")
+    value = inferred(
+        opening_time={"value": "Instant open", "qualifier": "0.15s seamless, 0.35s reset"},
+        closing_time={"value": "Instant close", "qualifier": "6.5s reset"},
+    )
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+    )
+
+    [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
+
+    assert (build.normal_opening_time, build.normal_closing_time) == (0, 0)
+    assert build.description is not None
+    assert "0.15s seamless, 0.35s reset" in build.description
+    assert "6.5s reset" in build.description
+
+
+@pytest.mark.parametrize("value", ["not instant", "instant reset", "instant after reset"])
+async def test_instant_prose_does_not_establish_zero_opening_time(value: str) -> None:
+    service = BuildInferenceService(
+        FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": value, "qualifier": None})])),
+        FakeTaxonomy(),
+        FakeVersions(),
+        "system",
+    )
+
+    [build] = await service.infer(source(), model="test")
+
+    assert build.normal_opening_time is None
