@@ -15,7 +15,8 @@ from typing import Any, ClassVar, Self, overload, override
 from squid_reactivity._runtime import _runtime
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.cells import _MISSING, _Cell, _staged_value
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _equal, _ReactiveSource, settling, untracked
+from squid_reactivity.evaluation import settling
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource, untracked
 from squid_reactivity.transactions import transaction
 from squid_reactivity.transactions.engine import _write, report_undeclared_write
 from squid_reactivity.transactions.state import (
@@ -29,6 +30,16 @@ from squid_reactivity.transactions.state import (
 )
 
 _log = logging.getLogger(__name__)
+
+
+def _equal(left: object, right: object) -> bool:
+    """Compare values, treating an equality-check failure as a difference."""
+    if left is right:
+        return True
+    try:
+        return bool(left == right)
+    except Exception:
+        return False
 
 
 def _frozen(value: Any) -> Any:

@@ -1,7 +1,7 @@
 """Capture dependencies and check whether a computation's inputs are still current.
 
-Computed values, resources, and renders share a dependency collector. Cycle detection
-and invalidation epochs support evaluation; cells and transaction rules live separately.
+Computed values, resources, and renders share a dependency collector. Captured
+sources provide version checks and notification addresses for their consumers.
 """
 
 from collections.abc import Callable, Iterable, Iterator
@@ -10,8 +10,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
-from squid_reactivity._runtime import _runtime
-from squid_reactivity.errors import ReactiveCycleError
 from squid_reactivity.transactions.state import read_only
 
 if TYPE_CHECKING:
@@ -48,59 +46,6 @@ Capture scopes and loaders install their own collector; untracked clears it temp
 Child tasks inherit the same collector object. Operation loaders explicitly clear it so
 awaiting an operation does not make its inputs dependencies of the awaiting computation.
 """
-
-
-def _equal(left: object, right: object) -> bool:
-    """Compare values, treating an equality-check failure as a difference."""
-    if left is right:
-        return True
-    try:
-        return bool(left == right)
-    except Exception:
-        return False
-
-
-class _SettlingNode(Protocol):
-    """A named derived value that can participate in cycle detection."""
-
-    _label: str
-
-
-_EVALUATION_STACK: ContextVar[tuple[_SettlingNode, ...]] = ContextVar("squid_reactivity_settling", default=())
-"""The derived nodes currently producing a value on this task, outermost first.
-
-Task-local rather than global: two independent values settled concurrently each copy the
-context, so one cannot be mistaken for the other's dependency. A computed and a resource share
-one stack because a chain can run through both, and a cycle should be named whole.
-"""
-
-
-def cycle_path(node: _SettlingNode) -> tuple[str, ...] | None:
-    """Return the cycle ending at ``node``, or None if it is not already active.
-
-    The path starts at the first occurrence of the node and repeats it at the
-    end. Callers that led into the cycle are excluded from the diagnostic.
-    """
-    stack = _EVALUATION_STACK.get()
-    for index, entered in enumerate(stack):
-        if entered is node:
-            return (*(held._label for held in stack[index:]), node._label)
-    return None
-
-
-@contextmanager
-def settling(node: _SettlingNode) -> Iterator[None]:
-    """Track a computation or load, raising before it re-enters an active dependency."""
-    path = cycle_path(node)
-    if path is not None:
-        raise ReactiveCycleError(path)
-    with _EVALUATION_STACK.set((*_EVALUATION_STACK.get(), node)):
-        yield
-
-
-def _bump_epoch() -> None:
-    """Invalidate this thread's computed-cache fast path after a state change."""
-    _runtime.epoch += 1
 
 
 @contextmanager

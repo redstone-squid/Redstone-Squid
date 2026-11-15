@@ -21,6 +21,7 @@ from enum import StrEnum
 from types import TracebackType
 from typing import Any, Literal, Protocol, overload, override
 
+from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
 from squid_reactivity.async_values import (
     AsyncBinding as AsyncBinding,
@@ -47,7 +48,8 @@ from squid_reactivity.errors import (
     ReactiveCycleError,
     ReactivityError,
 )
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource, cycle_path, settling
+from squid_reactivity.evaluation import cycle_path, settling
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
 from squid_reactivity.transactions import TransactionView, enlist, transaction_participant
 from squid_reactivity.transactions.context import (
     CausalRef,

@@ -7,8 +7,9 @@ changes directly for work such as operation progress and history bookkeeping.
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from squid_reactivity._runtime import _bump_epoch
 from squid_reactivity.addresses import CellAddress, SubscriberRegistry, publish
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _bump_epoch, _ReactiveSource
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, _ReactiveSource
 from squid_reactivity.transactions.state import _READ_CONSISTENCY, _active, _ReadConsistency
 
 if TYPE_CHECKING:

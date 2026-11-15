@@ -22,7 +22,8 @@ from squid_reactivity.diagnostics import (
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR, settling
+from squid_reactivity.evaluation import settling
+from squid_reactivity.tracking import _DEPENDENCY_COLLECTOR
 from squid_reactivity.transactions import fresh_transaction
 from squid_reactivity.transactions.context import (
     CausalRef,

@@ -12,3 +12,8 @@ class _ThreadState(local):
 
 
 _runtime = _ThreadState()
+
+
+def _bump_epoch() -> None:
+    """Invalidate this thread's computed-cache fast path after a state change."""
+    _runtime.epoch += 1

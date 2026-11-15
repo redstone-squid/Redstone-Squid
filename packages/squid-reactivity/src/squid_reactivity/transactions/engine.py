@@ -15,7 +15,7 @@ from enum import Enum, auto
 from threading import Thread, current_thread
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_reactivity._runtime import _runtime
+from squid_reactivity._runtime import _bump_epoch, _runtime
 from squid_reactivity.cells import _Cell
 from squid_reactivity.diagnostics import (
     emit_continuation_failure,
@@ -29,7 +29,6 @@ from squid_reactivity.errors import (
     TransactionValidationError,
     UndeclaredStateError,
 )
-from squid_reactivity.tracking import _bump_epoch
 from squid_reactivity.transactions.context import (
     ExceptionReport,
     TransactionContext,
