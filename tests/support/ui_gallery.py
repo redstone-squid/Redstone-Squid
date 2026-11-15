@@ -12,8 +12,8 @@ output directory contains:
 - ``renders/``: one standalone HTML page per render, plus a PNG when ``--ui-gallery-screenshots`` is
   given and Chrome or Chromium is installed.
 
-The preview shows Discord Markdown literally and does not draw images from the network, so judge
-structure rather than typography.
+The preview renders Markdown, including Discord subtext and revealable text spoilers. It approximates
+Discord styling; use it to review layout rather than exact client typography.
 """
 
 import hashlib

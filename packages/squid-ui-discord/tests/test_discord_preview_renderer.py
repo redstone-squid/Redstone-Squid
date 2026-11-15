@@ -112,3 +112,23 @@ def test_preview_renders_markdown_blocks_and_preserves_literal_text() -> None:
     assert "<ul><li>" in rendered
     assert "<pre><code>x &lt; y\n</code></pre>" in rendered
     assert "**literal** &lt;script&gt;" in rendered
+
+
+def test_preview_styles_discord_subtext_and_revealable_spoilers() -> None:
+    document = replace(
+        _scene(),
+        body=scene.ComponentsV2(
+            (
+                scene.Text("-# Small ||secret||", Markup.DISCORD_MARKDOWN),
+                scene.Text("-# ||literal||", Markup.PLAIN),
+            )
+        ),
+    )
+
+    rendered = DiscordPreviewRenderer(standalone=True).draw(document)
+
+    assert '<p class="squid-subtext">Small <label class="squid-text-spoiler">' in rendered
+    assert '<input type="checkbox" aria-label="Reveal spoiler">' in rendered
+    assert "visibility:hidden" in rendered
+    assert "input:checked+.squid-text-spoiler__content{visibility:visible}" in rendered
+    assert "-# ||literal||" in rendered

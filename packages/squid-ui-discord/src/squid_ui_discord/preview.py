@@ -40,6 +40,14 @@ border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-
 .squid-gallery img{width:100%;border-radius:4px}.squid-separator{height:1px;margin:4px 0;border:0;background:#3f4147}
 .squid-separator--large{margin:12px 0}.squid-extension{padding:8px;border:1px dashed #6d6f78;border-radius:3px}
 .squid-file[aria-disabled=true]{opacity:.5}
+.squid-subtext{font-size:12px;color:#949ba4}
+.squid-text-spoiler{position:relative;border-radius:3px;background:#1e1f22;cursor:pointer;
+box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.squid-text-spoiler>input{position:absolute;width:1px;height:1px;opacity:0;margin:0}
+.squid-text-spoiler__content{visibility:hidden}
+.squid-text-spoiler:has(>input:checked){background:#ffffff1a}
+.squid-text-spoiler>input:checked+.squid-text-spoiler__content{visibility:visible}
+.squid-text-spoiler:has(>input:focus-visible){outline:2px solid #00a8fc;outline-offset:2px}
 .squid-spoiler{filter:blur(12px);transition:filter .15s}.squid-spoiler:hover,.squid-spoiler:focus{filter:none}
 """.strip()
 
@@ -49,7 +57,7 @@ type FileResolver = Callable[[scene.File | scene.GalleryItem], str | None]
 class DiscordPreviewRenderer:
     """Draw a Components V2 tree as HTML for inspection, without interaction dispatch.
 
-    Text is displayed literally rather than interpreting Discord Markdown. CSS and
+    Discord Markdown includes subtext and keyboard-accessible text spoilers. CSS and
     non-None asset_resolver results are trusted host configuration: CSS is embedded
     verbatim and resolved file URLs are escaped but not scheme-filtered. Plan resources
     can supply inline downloads when no host URL is returned.
@@ -127,7 +135,11 @@ class DiscordPreviewRenderer:
     ) -> str:
         match node:
             case scene.Text(content=content, markup=markup):
-                rendered = escape(content) if markup is Markup.PLAIN else markdown(content, block=True)
+                rendered = (
+                    escape(content)
+                    if markup is Markup.PLAIN
+                    else markdown(content, block=True, discord=markup is Markup.DISCORD_MARKDOWN)
+                )
                 return f'<div class="squid-text" data-squid-markup="{markup.value}">{rendered}</div>'
             case scene.Time(instant=instant, style=style, prefix=prefix):
                 return (
