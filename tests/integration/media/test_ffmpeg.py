@@ -99,6 +99,72 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
     assert b"private-marker" not in metadata
 
 
+@pytest.mark.parametrize(
+    ("matrix", "primaries", "transfer"),
+    [(3, 0, 6), (1, 1, 1), (1, 0, 1), (1, 1, 0)],
+)
+async def test_video_repairs_reserved_color_tags_and_preserves_valid_tags(
+    tmp_path: Path, matrix: int, primaries: int, transfer: int
+) -> None:
+    assert FFMPEG is not None
+    assert FFPROBE is not None
+    original = tmp_path / "original.mp4"
+    source = tmp_path / "tagged.mp4"
+    _generate_video(original)
+    subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-i",
+            str(original),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-bsf:v",
+            f"h264_metadata=matrix_coefficients={matrix}:colour_primaries={primaries}"
+            f":transfer_characteristics={transfer}",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+        MediaNormalizationRequest(
+            kind=MediaKind.VIDEO,
+            source_path=source,
+            output_path=tmp_path / "normalized.mp4",
+            poster_path=tmp_path / "poster.jpg",
+        )
+    )
+
+    probe = result.report.output_probe
+    assert (probe.width, probe.height) == (320, 180)
+    assert (probe.frame_rate_numerator, probe.frame_rate_denominator) == (24, 1)
+    assert probe.frame_count == result.report.input_probe.frame_count == 24
+    assert probe.duration_milliseconds is not None
+    assert result.report.input_probe.duration_milliseconds is not None
+    assert abs(probe.duration_milliseconds - result.report.input_probe.duration_milliseconds) <= 50
+    assert probe.has_audio
+    assert result.report.poster is not None
+    metadata = json.loads(
+        subprocess.run(
+            [FFPROBE, "-v", "error", "-select_streams", "v:0", "-show_streams", "-of", "json", str(result.output_path)],
+            check=True,
+            capture_output=True,
+        ).stdout
+    )["streams"][0]
+    for field, value in (("color_space", matrix), ("color_primaries", primaries), ("color_transfer", transfer)):
+        if value == 1:
+            assert metadata[field] == "bt709"
+        elif value == 6:
+            assert metadata[field] == "smpte170m"
+        else:
+            assert metadata.get(field, "unknown") == "unknown"
+
+
 async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) -> None:
     assert FFMPEG is not None
     source = tmp_path / "4k.mp4"

@@ -104,6 +104,16 @@ class FfmpegMediaNormalizer:
 
     async def probe(self, source_path: Path) -> MediaProbe:
         """Inspect the first video stream and optional first audio stream."""
+        return parse_ffprobe_output(
+            await self._probe_output(
+                source_path,
+                "format=format_name,duration:"
+                "stream=index,codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration,nb_frames:"
+                "stream_side_data=rotation",
+            )
+        )
+
+    async def _probe_output(self, source_path: Path, entries: str) -> bytes:
         stdout = await self._run(
             self._ffprobe,
             (
@@ -119,11 +129,7 @@ class FfmpegMediaNormalizer:
                 "-analyzeduration",
                 "10000000",
                 "-show_entries",
-                (
-                    "format=format_name,duration:"
-                    "stream=index,codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration,nb_frames:"
-                    "stream_side_data=rotation"
-                ),
+                entries,
                 "-of",
                 "json",
                 str(source_path.absolute()),
@@ -135,7 +141,7 @@ class FfmpegMediaNormalizer:
         )
         if len(stdout) > _MAX_PROBE_OUTPUT_BYTES:
             raise InvalidMediaError(MediaFailureReason.PROBE_INVALID)
-        return parse_ffprobe_output(stdout)
+        return stdout
 
     async def normalize(
         self,
@@ -225,6 +231,26 @@ class FfmpegMediaNormalizer:
         )
         return MediaNormalizationResult(output_path=request.output_path, poster_path=None, report=report)
 
+    async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> tuple[str, ...]:
+        if probe.video_codec != "h264":
+            return ()
+        data = json.loads(
+            await self._probe_output(source_path, "stream=codec_type,color_space,color_primaries,color_transfer")
+        )
+        stream = next(stream for stream in data["streams"] if stream["codec_type"] == "video")
+        replacements = [
+            f"{option}=2"
+            for field, option in (
+                ("color_space", "matrix_coefficients"),
+                ("color_primaries", "colour_primaries"),
+                ("color_transfer", "transfer_characteristics"),
+            )
+            if stream.get(field) == "reserved"
+        ]
+        # Reserved H.264 VUI values break FFmpeg's color conversion. Mark only
+        # those fields unspecified before decoding, preserving valid color tags.
+        return ("-bsf:v:0", "h264_metadata=" + ":".join(replacements)) if replacements else ()
+
     async def _normalize_video(
         self,
         request: MediaNormalizationRequest,
@@ -234,6 +260,7 @@ class FfmpegMediaNormalizer:
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
         assert request.poster_path is not None
+        color_arguments = await self._video_color_arguments(request.source_path, probe)
         with _staged_outputs((request.output_path, ".mp4"), (request.poster_path, ".jpg")) as (
             video_temporary,
             poster_temporary,
@@ -244,7 +271,7 @@ class FfmpegMediaNormalizer:
             await self._run(
                 self._ffmpeg,
                 (
-                    *_ffmpeg_input_arguments(request.source_path, self._process_limits),
+                    *_ffmpeg_input_arguments(request.source_path, self._process_limits, color_arguments),
                     "-map",
                     "0:v:0",
                     *audio_arguments,
@@ -590,7 +617,9 @@ def _display_dimensions(video: Mapping[str, Any]) -> tuple[int, int]:
     return (height, width) if abs(rotation) % 180 == 90 else (width, height)
 
 
-def _ffmpeg_input_arguments(source_path: Path, limits: MediaProcessLimits) -> tuple[str, ...]:
+def _ffmpeg_input_arguments(
+    source_path: Path, limits: MediaProcessLimits, stream_arguments: tuple[str, ...] = ()
+) -> tuple[str, ...]:
     return (
         "-y",
         "-nostdin",
@@ -608,6 +637,7 @@ def _ffmpeg_input_arguments(source_path: Path, limits: MediaProcessLimits) -> tu
         str(limits.threads),
         "-filter_complex_threads",
         str(limits.threads),
+        *stream_arguments,
         "-i",
         str(source_path.absolute()),
     )
