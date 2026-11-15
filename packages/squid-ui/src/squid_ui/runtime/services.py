@@ -15,6 +15,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Generator, Iterable
 from contextvars import Context, copy_context
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
@@ -392,6 +393,14 @@ class UIExecutionHost:
                 self._runs.discard(run)
 
 
+@dataclass(frozen=True, slots=True)
+class _ShutdownSnapshot:
+    """Cancelled runs to await and latest-activation failures to report to one waiter."""
+
+    pending: tuple[ServiceRun, ...]
+    observed: frozenset[ServiceRun]
+
+
 class ServiceOwner:
     """A set of services whose work stops when you call ``cancel``.
 
@@ -496,9 +505,22 @@ class ServiceOwner:
         waiters each receive their captured results. Cancelling a wait leaves cleanup
         running and allows another caller to wait for it.
         """
-        await self._wait(tuple(self._retired), frozenset(self._current.values()))
+        await self._wait(self._shutdown_snapshot())
 
-    async def _wait(self, pending: tuple[ServiceRun, ...], observed: frozenset[ServiceRun]) -> None:
+    def _shutdown_snapshot(self) -> _ShutdownSnapshot:
+        return _ShutdownSnapshot(tuple(self._retired), frozenset(self._current.values()))
+
+    def _unfinished_runs(self) -> tuple[ServiceRun, ...]:
+        return tuple(run for run in (*self._current.values(), *self._retired) if not run._execution.done)
+
+    def _owns_activity(self) -> bool:
+        return _owns_current_activity((*self._current.values(), *self._retired))
+
+    def _has_retired_runs(self) -> bool:
+        return bool(self._retired)
+
+    async def _wait(self, snapshot: _ShutdownSnapshot) -> None:
+        pending, observed = snapshot.pending, snapshot.observed
         if _owns_current_activity(pending):
             message = "service activity cannot await its own owner's shutdown"
             raise RuntimeError(message)
@@ -569,8 +591,7 @@ class _ServiceLifecycle:
             run
             for child, child_path in self._paths.items()
             if child is not owner and path is not None and (path == "$" or child_path.startswith(f"{path}."))
-            for run in (*child._current.values(), *child._retired)
-            if not run._execution.done
+            for run in child._unfinished_runs()
         )
         owner._cancel_after(dependencies)
         self._active.discard(owner)
@@ -584,27 +605,27 @@ class _ServiceLifecycle:
     def check_wait(self) -> None:
         """Reject service activity that would wait for its own component's shutdown."""
         owners = self._active | self._retired
-        if _owns_current_activity(run for owner in owners for run in (*owner._current.values(), *owner._retired)):
+        if any(owner._owns_activity() for owner in owners):
             message = "service activity cannot await its own component's shutdown"
             raise RuntimeError(message)
 
     async def wait(self, *, allow_reentry: bool) -> None:
-        if _owns_current_activity(run for owner in self._retired for run in owner._retired):
+        # Capture every owner's runs before awaiting any cleanup: another waiter or
+        # remount may change the owner while an earlier one is still stopping.
+        pending = tuple((owner, owner._shutdown_snapshot()) for owner in self._retired)
+        if _owns_current_activity(run for _, snapshot in pending for run in snapshot.pending):
             if allow_reentry:
                 return
             message = "service activity cannot await its own component's shutdown"
             raise RuntimeError(message)
-        # Capture every owner's runs before awaiting any cleanup: another waiter or
-        # remount may change the owner while an earlier one is still stopping.
-        pending = tuple((owner, tuple(owner._retired), frozenset(owner._current.values())) for owner in self._retired)
         errors: list[Exception] = []
-        for owner, runs, observed in pending:
+        for owner, snapshot in pending:
             try:
-                await owner._wait(runs, observed)
+                await owner._wait(snapshot)
             except Exception as error:
                 errors.append(error)
         # Release owners whose cleanup finished, even if another owner failed.
-        self._retired.difference_update(owner for owner, _, _ in pending if not owner._retired)
+        self._retired.difference_update(owner for owner, _ in pending if not owner._has_retired_runs())
         self._paths = {
             owner: path for owner, path in self._paths.items() if owner in self._active or owner in self._retired
         }
