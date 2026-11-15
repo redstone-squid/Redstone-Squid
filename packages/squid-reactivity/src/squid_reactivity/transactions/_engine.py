@@ -64,7 +64,9 @@ from squid_reactivity.transactions._state import (
 )
 
 if TYPE_CHECKING:
+    from squid_reactivity._core import _ComputedCache, _Derived
     from squid_reactivity.transactions._scope import Transaction
+    from squid_reactivity.transactions._state import _ReadConsistency
 
 _log = logging.getLogger(__name__)
 
@@ -158,8 +160,8 @@ class _TransactionEngine:
     owner_thread: Thread = field(default_factory=current_thread)
     owner_task: object | None = None
     """The task that opened this transaction, or `None` outside a running loop."""
-    read_view: object = field(default_factory=object)
-    """Cache identity without retaining the transaction and its owners."""
+    computed_caches: dict[tuple[_Derived, _ReadConsistency], _ComputedCache] = field(default_factory=dict)
+    """Computed results for this overlay, released when it closes."""
     writes: dict[_Cell[Any], _Staged[Any]] = field(default_factory=dict)
     observed: dict[_Cell[Any], int] = field(default_factory=dict)
     """Committed versions this transaction read out of addressed cells, first read per cell.
@@ -486,6 +488,7 @@ class _TransactionEngine:
             entry.cell.value = patch.after.raw()
             entry.cell.version = patch.after_version
         self.phase = _Phase.COMMITTED
+        self.computed_caches.clear()
         if patches:
             _bump_epoch()
 
@@ -545,6 +548,7 @@ class _TransactionEngine:
         if self.phase is _Phase.ABORTED:
             return tuple(self.cleanup_errors)
         self.phase = _Phase.ABORTED
+        self.computed_caches.clear()
         _checkpoint("rollback.before_abort")
         values = {id(participant): value for participant, value in self.prepared_participants}
         for participant in reversed(tuple(self.participants.values())):

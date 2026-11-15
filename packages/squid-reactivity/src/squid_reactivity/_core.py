@@ -9,7 +9,7 @@ Inspection and export helpers expose model state to tools and storage.
 import functools
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, Self, cast, overload, override
 
 from squid_reactivity._addresses import CellAddress, SubscriberRegistry, publish
@@ -357,76 +357,92 @@ def state(
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
 
-class _Derived(_ReactiveSource, _DependencyCollector, _SettlingNode):
-    """Cache one model's computed value and the versions of its dependencies.
+@dataclass(slots=True)
+class _ComputedCache(_DependencyCollector):
+    """A computed result and its dependencies in one transaction/read-policy view."""
+
+    sources: dict[_ReactiveSource, int] = field(default_factory=dict)
+    value: Any = None
+    version: int = 0
+    settled: bool = False
+    epoch: int = -1
+
+
+class _Derived(_ReactiveSource, _SettlingNode):
+    """Identify a computed value across its committed and transaction-local caches.
 
     The node retains its input sources, but sources do not retain the node. Checking
     versions on demand lets unused computations be collected without unsubscribe work.
+    Transactions own their caches so staged results cannot evict committed results.
     """
 
-    __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
+    __slots__ = ("_committed", "_function", "_label", "_version", "owner")
 
     def __init__(self, function: Callable[[Any], Any], owner: ReactiveStateOwner, label: str) -> None:
         self._function = function
         self._label = label
         self.owner = owner
-        self.sources: dict[_ReactiveSource, int] = {}
-        self.value: Any = None
-        self.version = 0
-        self._settled = False
-        self._epoch = -1
-        self._view: object = _MISSING
+        self._committed = _ComputedCache()
+        self._version = 0
 
     @property
     @override
     def address(self) -> None:
         return None
 
-    @property
-    def evaluated(self) -> bool:
-        """Whether this node has ever produced a value. Reading it is what does that."""
-        return self._settled
-
     def read(self) -> Any:
-        self.validated_version()
+        cache = self._validated_cache()
         consumer = _DEPENDENCY_COLLECTOR.get()
         if consumer is not None:
-            consumer.sources[self] = self.version
-        return self.value
+            consumer.sources[self] = cache.version
+        return cache.value
 
     @override
     def dependencies(self) -> Iterable[_ReactiveSource]:
-        return self.sources
+        return self._cache().sources
 
     @override
     def validated_version(self) -> int:
         """Return the version after validating this read view and its dependencies."""
+        return self._validated_cache().version
+
+    def _cache(self) -> _ComputedCache:
         current = _active()
-        view = None if current is None else (current.read_view, _READ_CONSISTENCY.get())
-        # A cache belongs to one read view. Re-evaluate on entry to a transaction or
-        # a different read policy so cache hits cannot bypass conflict observations.
-        if self._view == view:
-            if self._epoch == _runtime.epoch:
-                return self.version
-            if self._settled and all(source.validated_version() == seen for source, seen in self.sources.items()):
-                self._epoch = _runtime.epoch
-                return self.version
+        if current is None:
+            return self._committed
+        key = (self, _READ_CONSISTENCY.get())
+        cache = current.computed_caches.get(key)
+        if cache is None:
+            # A new transaction or read policy must run the body to record its own
+            # conflict observations, even if the committed result is still current.
+            cache = current.computed_caches[key] = _ComputedCache()
+        return cache
+
+    def _validated_cache(self) -> _ComputedCache:
+        cache = self._cache()
+        if cache.epoch == _runtime.epoch:
+            return cache
+        if cache.settled and all(source.validated_version() == seen for source, seen in cache.sources.items()):
+            cache.epoch = _runtime.epoch
+            return cache
         # Cleared before the run, not after: a body that raises must leave the node asking to
         # be recomputed rather than holding a value nothing verified.
-        self._settled = False
-        self._epoch = -1
-        self.sources = {}
-        with _DEPENDENCY_COLLECTOR.set(self), settling(self), read_only():
+        cache.settled = False
+        cache.epoch = -1
+        cache.sources = {}
+        with _DEPENDENCY_COLLECTOR.set(cache), settling(self), read_only():
             value = self._function(self.owner)
-        self._settled = True
-        self._view = view
+        cache.settled = True
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
         # from it, and bumping would make every settled node on the thread walk its sources.
-        self._epoch = _runtime.epoch
-        if not _equal(self.value, value):
-            self.value = value
-            self.version += 1
-        return self.version
+        cache.epoch = _runtime.epoch
+        if cache.version == 0 or not _equal(cache.value, value):
+            cache.value = value
+            # Versions are unique across this node's views. Separate caches starting
+            # at version 1 could otherwise make different results appear identical.
+            self._version += 1
+            cache.version = self._version
+        return cache
 
 
 class _Computed:
@@ -459,13 +475,13 @@ class _Computed:
 def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     """Cache a derived value and track the reactive fields its function reads.
 
-    The function runs on first access, when dependencies change, and when the
-    transaction or its read consistency policy changes. One cache serves the
-    current read view; switching views recomputes so staged values stay isolated
-    and transaction reads are recorded even if another view already evaluated it.
+    Committed state and each transaction/read-policy view have separate caches.
+    The function runs on first access in each view and when dependencies change.
+    Returning to a view reuses its cache if still valid. Transaction caches are
+    discarded on commit or rollback; committed results are validated on next access.
 
     Each run replaces the dependencies, including conditional branches. Equal
-    results preserve the computed version. The function runs read-only.
+    results preserve the computed version within that view. The function runs read-only.
     """
     # The declared return type describes what reading the attribute yields, not what the
     # decorator hands back: the descriptor below is what actually gets bound to the class.
@@ -486,11 +502,11 @@ class CellReport:
 
 @dataclass(frozen=True, slots=True)
 class ComputedReport:
-    """Describe a cached computation and the identities of its direct dependencies."""
+    """Describe a computation's cache in the current transaction/read-policy view."""
 
     identity: int
     evaluated: bool
-    """False until something reads it. An unread computed value is never evaluated."""
+    """Whether this view has a successfully evaluated result."""
     version: int
     sources: tuple[int, ...]
     """Identities of the cells and computeds its last run read, in read order."""
@@ -506,11 +522,12 @@ def inspect_cells(owner: ReactiveStateOwner) -> dict[str, CellReport]:
 
 
 def inspect_computed(owner: ReactiveStateOwner) -> dict[str, ComputedReport]:
-    """Report every computed on `owner`, without evaluating one that has never run."""
+    """Report every computed's cache in the current view without evaluating it."""
     reports: dict[str, ComputedReport] = {}
     for name, descriptor in _descriptors(type(owner), _Computed):
         node = descriptor.node(owner)
-        reports[name] = ComputedReport(id(node), node.evaluated, node.version, tuple(map(id, node.sources)))
+        cache = node._cache()
+        reports[name] = ComputedReport(id(node), cache.settled, cache.version, tuple(map(id, cache.sources)))
     return reports
 
 

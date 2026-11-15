@@ -54,6 +54,10 @@ which is cached until a reactive value it depends on changes. A `@computed` can 
 another `@computed`. Reactivity is fine-grained: changing a field affects only what read
 that field. Otherwise, a `Reactive` model is a plain object.
 
+Computed values keep separate caches for committed state and each transaction/read policy.
+The first read in a transaction evaluates the function to record conflict checks. Returning
+to a previous view reuses its cache if valid; closing a transaction discards its caches.
+
 ## Transactions
 
 A bare assignment takes effect immediately. Inside `with transaction(...)`, the block sees
