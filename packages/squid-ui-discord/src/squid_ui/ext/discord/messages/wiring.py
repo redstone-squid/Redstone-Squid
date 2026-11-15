@@ -69,7 +69,7 @@ class ClassicMountedView(_MountedBehaviour, discord.ui.View):
 type AnyMountedView = MountedView | ClassicMountedView
 
 
-def _custom_id(message_root_id: str, generation: int, key: str) -> str:
+def control_id(message_root_id: str, generation: int, key: str) -> str:
     """A per-render-unique control id for ``key``, within Discord's 100-char limit.
 
     Nested components produce long dotted keys, and truncating those makes two controls
@@ -94,7 +94,7 @@ class _WiredButton(discord.ui.Button[AnyMountedView]):
             label=node.label,
             emoji=discord_emoji(node.emoji),
             disabled=node.disabled,
-            custom_id=_custom_id(message_root.id, generation, key),
+            custom_id=control_id(message_root.id, generation, key),
         )
         self._root = message_root
         self._key = key
@@ -112,7 +112,7 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
             min_values=node.min_values,
             max_values=node.max_values,
             disabled=node.disabled,
-            custom_id=_custom_id(message_root.id, generation, key),
+            custom_id=control_id(message_root.id, generation, key),
             options=[
                 discord.SelectOption(
                     label=option.label,
@@ -230,7 +230,7 @@ def _entity_kwargs(
         "min_values": node.min_values,
         "max_values": node.max_values,
         "disabled": node.disabled,
-        "custom_id": _custom_id(message_root.id, generation, key),
+        "custom_id": control_id(message_root.id, generation, key),
         "default_values": [_default_value(value) for value in node.default_values],
     }
 

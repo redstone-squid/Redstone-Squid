@@ -54,7 +54,7 @@ from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.access import Allowed, Check, Denied
 from squid_ui.ext.discord.messages.candidates import _BusyPaint
 from squid_ui.ext.discord.messages.contracts import MessageRootStatus
-from squid_ui.ext.discord.messages.wiring import _custom_id
+from squid_ui.ext.discord.messages.wiring import control_id
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -797,8 +797,8 @@ class TestRenderAndWire:
 
     def test_custom_id_digests_do_not_collide_across_a_shared_prefix(self):
         shared_prefix = "section." * 20
-        first = _custom_id("mount", 1, shared_prefix + "one")
-        second = _custom_id("mount", 1, shared_prefix + "two")
+        first = control_id("mount", 1, shared_prefix + "one")
+        second = control_id("mount", 1, shared_prefix + "two")
 
         assert len(first) <= 100
         assert len(second) <= 100
