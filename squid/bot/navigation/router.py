@@ -233,7 +233,7 @@ class ScreenRouter:
             if value is None and type(None) in get_args(binding.annotations[name]):
                 continue
             decoded = _decode(_encode(value), binding.annotations[name])
-            if type(decoded) is not type(value) or decoded != value:
+            if decoded != value:
                 msg = "Invalid typed destination"
                 raise InvalidAddress(msg)
         path = binding.declaration.path.format(**{name: _encode(value) for name, value in values.items()})

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
+from asyncpg.pgproto.pgproto import UUID as AsyncpgUUID
 
 import squid_ui.ext.discord as sd
 from squid.bot.navigation.destinations import (
@@ -63,6 +64,10 @@ def router() -> ScreenRouter:
         (DraftIndex(), "/drafts"),
         (DraftIndex(inbox=True), "/drafts?inbox=true"),
         (DraftDetail(UUID(int=1)), "/drafts/00000000-0000-0000-0000-000000000001"),
+        (
+            DraftDetail(AsyncpgUUID("00000000-0000-0000-0000-000000000001")),
+            "/drafts/00000000-0000-0000-0000-000000000001",
+        ),
         (AccountDestination(), "/account"),
         (AccountDestination("claims"), "/account?tab=claims"),
     ],
@@ -98,6 +103,30 @@ def test_round_trip(router: ScreenRouter, destination: Destination, address: str
 def test_invalid_addresses(router: ScreenRouter, address: str) -> None:
     with pytest.raises(InvalidAddress):
         router.parse(address)
+
+
+@pytest.mark.parametrize(
+    "destination",
+    [
+        BuildDetail(build_id=True),
+        BuildDetail(0),
+        BuildDetail("12"),  # type: ignore[arg-type]
+        DraftIndex(inbox=1),  # type: ignore[arg-type]
+        DraftDetail("00000000-0000-0000-0000-000000000001"),  # type: ignore[arg-type]
+    ],
+)
+def test_invalid_typed_destinations(router: ScreenRouter, destination: Destination) -> None:
+    with pytest.raises(InvalidAddress):
+        router.format(destination)
+
+
+def test_equal_integer_subclass_round_trip(router: ScreenRouter) -> None:
+    class BuildId(int):
+        pass
+
+    destination = BuildDetail(BuildId(12))
+    assert router.format(destination) == "/builds/12"
+    assert router.parse("/builds/12") == destination
 
 
 def test_default_query_is_omitted(router: ScreenRouter) -> None:
