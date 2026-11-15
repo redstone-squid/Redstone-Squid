@@ -23,7 +23,9 @@ _MAX_RUNS = 100
 
 def schedule(run: Callable[[], None]) -> None:
     """Queue a listener, once, and run the queue now if nothing is being announced."""
-    if run not in _runtime.listeners:
+    # Bound methods compare by (instance, function), so each listener queues once.
+    if run not in _runtime.queued:
+        _runtime.queued.add(run)
         _runtime.listeners.append(run)
     deliver()
 
@@ -76,6 +78,8 @@ def _run_queue() -> None:
     runs: dict[Callable[[], None], int] = {}
     while _runtime.listeners:
         run = _runtime.listeners.popleft()
+        # Forget it before running, so a change made by `run` can queue it again.
+        _runtime.queued.discard(run)
         runs[run] = runs.get(run, 0) + 1
         if runs[run] == _MAX_RUNS + 1:
             _log.error(

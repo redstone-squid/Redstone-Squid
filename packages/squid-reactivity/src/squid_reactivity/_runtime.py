@@ -12,7 +12,9 @@ class _ThreadState(local):
         self.sequence = 0
         self.epoch = 0
         self.listeners: deque[Callable[[], None]] = deque()
-        """Change listeners waiting to run. See `_delivery`."""
+        """Change listeners waiting to run, in the order they were first notified. See `_delivery`."""
+        self.queued: set[Callable[[], None]] = set()
+        """The members of `listeners`, for constant-time duplicate checks."""
         self.holds = 0
         """Open `_delivery.hold()` blocks, plus one while the queue is running."""
 
