@@ -13,14 +13,14 @@ sinks, and optional replicated state consume that truth; none defines whether a 
 A Discord dispatch receives a `TransactionContext` before middleware. A local transaction then:
 
 1. stages reactive and participant work in an isolated overlay;
-2. closes staging and enters the runtime-local, no-await commit gate;
+2. closes staging and begins synchronous validation and publication;
 3. validates every strong shared/replicated read and explicit inverse precondition by version --
    strong meaning a cell the action also wrote, or one read inside `strong_read()`;
 4. freezes `CellPatchSet` and `TransactionView`, then prepares every participant without publication —
    prepare reads the staged overlay, so it validates what the action decided rather than what the
    world held before it, and may not write or enlist a further participant;
 5. installs cell patches and synchronously applies every prepared participant—the commit point;
-6. releases the gate, notifies reactive owners, finalizes participants, emits one immutable outcome,
+6. notifies reactive owners, finalizes participants, emits one immutable outcome,
    and runs failure-isolated aftermath hooks.
 
 Failure before publication aborts prepared participants in reverse order and emits one
@@ -28,9 +28,9 @@ Failure before publication aborts prepared participants in reverse order and emi
 Participant `apply()` is infallible by contract; an exception there is framework-integrity damage,
 is tagged on the committed diagnostic outcome, and fails loudly.
 
-The gate and `CommitSequence` belong to one runtime. They do not promise cross-process atomicity or a
-distributed total order. Network receive, authentication, limits, decoding, storage, and transport I/O
-stay outside the gate.
+Reactive state belongs to one thread; validation through publication runs without awaiting.
+`CommitSequence` belongs to one runtime and does not promise a distributed total order.
+Network receive, authentication, limits, decoding, storage, and transport I/O happen outside publication.
 
 ## Register history
 
@@ -130,8 +130,8 @@ counter contribution and removes only this action's set tag, preserving another 
 and tags. A mixed local/register/replicated inverse prepares all changes together and publishes none if
 any participant conflicts.
 
-Remote bytes are checked and decoded before admission, then imported as a `REMOTE` action under the same
-gate. A local action that *strongly* read document version 10 and intends to publish state conflicts if a
+Remote bytes are checked and decoded before admission, then imported as a `REMOTE` action through the same
+transaction pipeline. A local action that *strongly* read document version 10 and intends to publish state conflicts if a
 remote import advances the document before local commit—even though the backend can merge the document
 data. Convergence does not prove that the business decision derived from version 10 is still valid.
 
@@ -155,7 +155,7 @@ Without the `strong_read()`, the same code commits and `panel.accepted` is `True
 consulted, not written, so nothing was promised about it.
 
 The deterministic test harness drives that checkpoint in tests; production receivers decode and route
-the envelope before entering the same synchronous commit gate.
+the envelope before entering the same synchronous publication pipeline.
 
 Loro 1.13.2 now backs the production generalized adapter. Its immutable document API covers text, list,
 movable list, map, tree, exact counters, and tagged sets. The adapter selectively reverses non-latest

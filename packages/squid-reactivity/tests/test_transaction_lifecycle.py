@@ -46,7 +46,7 @@ def test_cancellation_during_notifications_preserves_the_commit_result(readonly:
     def cancel() -> None:
         raise asyncio.CancelledError
 
-    schedule.at("commit.gate_released", cancel)
+    schedule.at("commit.before_notifications", cancel)
     scope = readonly_transaction if readonly else transaction
     with schedule.installed(), pytest.raises(asyncio.CancelledError), scope() as tx:
         tx.after_result(seen.append)

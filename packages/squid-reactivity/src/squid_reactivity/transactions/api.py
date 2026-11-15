@@ -4,7 +4,6 @@ Nested blocks share a handle. The engine owns staged changes and the commit boun
 this module installs its scope and translates body and publication failures into outcomes.
 """
 
-import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
@@ -116,9 +115,6 @@ class Transaction:
         return current
 
 
-_COMMIT_GATE = threading.RLock()
-
-
 def current_transaction() -> Transaction | None:
     """Return the handle of the transaction this code is running in, or None outside one.
 
@@ -148,8 +144,7 @@ def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> 
         _CURRENT_TRANSACTION.reset(token)
         try:
             _checkpoint("transaction.close_staging")
-            with _COMMIT_GATE:
-                commit = current.commit()
+            commit = current.commit()
         except BaseException as error:
             if current.phase is _Phase.COMMITTED:
                 # Publication is the commit point. An apply failure is an adapter integrity
@@ -167,7 +162,7 @@ def _run_transaction(context: TransactionContext, *, readonly: bool = False) -> 
                 _emit_rollback(current, error, during_commit=True)
             raise
         try:
-            _checkpoint("commit.gate_released")
+            _checkpoint("commit.before_notifications")
             current.finalize_commit()
         finally:
             _emit_commit(current, commit)

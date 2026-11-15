@@ -427,7 +427,7 @@ class _TransactionEngine:
         return commit
 
     def finalize_commit(self) -> None:
-        """Notify reactive consumers after the commit gate, isolating continuation failures."""
+        """Notify reactive consumers after publication, isolating continuation failures."""
         assert self.commit_record is not None
         if not self.changed and not self.prepared_participants:
             return

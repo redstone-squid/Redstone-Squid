@@ -6,6 +6,9 @@ You declare fields on a model. The package records which fields were read and no
 reader when one of them changes. A transaction groups related writes so that all of them
 publish or none do.
 
+Access reactive state on one owning thread, normally the event-loop thread. Background
+workers must send their results back to that thread before reading or changing reactive state.
+
 There are no dependencies. The API is alpha and may change before 1.0.
 
 ## Models
