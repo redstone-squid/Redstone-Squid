@@ -22,6 +22,7 @@ from squid_ui.presentation import PresentationState
 from squid_ui.presentations import alternative, alternatives, equivalent
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
+from squid_ui.selectors import query, select
 from squid_ui.target_types import DiscordAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-controls.discord", "1")
@@ -156,25 +157,23 @@ def test_native_bindings_only_exist_on_their_visible_page(target: Target[Any, An
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
 def test_native_selectors_preserve_defaults_and_callbacks(target: Target[Any, Any, Any, Any]) -> None:
-    async def select(event: sl.SelectionEvent) -> None:
+    async def choose(event: sl.SelectionEvent) -> None:
         pytest.fail("planning selected an option")
 
     async def entities(event: sl.EntitySelectionEvent) -> None:
         pytest.fail("planning selected an entity")
 
     choices = native.SelectMenu(
-        (native.Option("One", "1", default=True), native.Option("Two", "2")), select, "choices", min_values=0
+        (native.Option("One", "1", default=True), native.Option("Two", "2")), choose, "choices", min_values=0
     )
     people = native.EntitySelect(
         EntityType.USER, entities, "people", default_values=(EntityRef(EntityKind.USER, 123),), disabled=True
     )
     result = plan(sl.region(choices, people, key="r", title="R"), target=target)
-    assert result.bindings["choices"].handler is select
+    assert result.bindings["choices"].handler is choose
     assert result.bindings["people"].handler is entities
-    body = result.scene.body
-    controls = body.children if isinstance(body, scene.ComponentsV2) else tuple(row[0] for row in rows(body))
-    selected = next(control for control in controls if isinstance(control, scene.Select))
-    entity = next(control for control in controls if isinstance(control, scene.EntitySelect))
+    selected = query(result.scene, select(scene.Select)).one().node
+    entity = query(result.scene, select(scene.EntitySelect)).one().node
     assert selected.options[0].default and selected.min_values == 0
     assert entity.default_values == people.default_values and entity.disabled
 
