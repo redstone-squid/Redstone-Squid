@@ -194,6 +194,10 @@ sinks do not register themselves; applications own serialization, storage, and r
 
 ::: squid_reactivity.TransactionResult
 
+::: squid_reactivity.PreconditionSnapshot
+
+::: squid_reactivity.TransactionValidationSnapshot
+
 ::: squid_reactivity.TransactionResultSnapshot
 
 ::: squid_reactivity.EventLedger

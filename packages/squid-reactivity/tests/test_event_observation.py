@@ -14,6 +14,7 @@ from squid_reactivity import (
     Reactive,
     RedactionPolicy,
     TransactionCommit,
+    TransactionValidationSnapshot,
     observe_events,
     transaction,
 )
@@ -74,7 +75,11 @@ def test_nested_registration_delivers_once_and_restores_outer_policy() -> None:
         with observe_events(ledger, redaction=RedactionPolicy(include_exception_messages=True)):
             emit_causal_event(event)
         emit_causal_event(event)
-    assert [event.exception.message for event in ledger.events if event.exception] == ["detail", "[redacted]"]
+    assert [
+        event.exception.message
+        for event in ledger.events
+        if not isinstance(event, TransactionValidationSnapshot) and event.exception
+    ] == ["detail", "[redacted]"]
 
 
 async def test_expired_registration_releases_sink_even_with_inherited_context() -> None:
@@ -115,6 +120,14 @@ async def test_operation_resource_and_callback_errors_use_each_observers_policy(
             await owner.data
         with transaction() as tx:
             tx.after_commit(failed_callback)
-    reports = [event.exception.message for event in privileged.events if event.exception]
+    reports = [
+        event.exception.message
+        for event in privileged.events
+        if not isinstance(event, TransactionValidationSnapshot) and event.exception
+    ]
     assert reports == ["operation detail", "resource detail", "callback detail"]
-    assert [event.exception.message for event in default.events if event.exception] == ["[redacted]"] * 3
+    assert [
+        event.exception.message
+        for event in default.events
+        if not isinstance(event, TransactionValidationSnapshot) and event.exception
+    ] == ["[redacted]"] * 3

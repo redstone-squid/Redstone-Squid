@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Literal
 
 from squid_reactivity.transactions.context import (
     ActorRef,
@@ -87,6 +88,35 @@ class TransactionResultSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class PreconditionSnapshot:
+    """One effective version condition, without retaining its cell or value.
+
+    Origin identifies the winning rule: explicit conditions override strong reads,
+    which override ordinary reads of cells subsequently written.
+    """
+
+    target_id: str
+    expected_version: int
+    actual_version: int
+    origin: Literal["read_write", "strong_read", "explicit"]
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionValidationSnapshot:
+    """Effective conditions sampled at validation, delivered after the outcome.
+
+    An empty tuple means no cell version conditions applied. A body failure before
+    validation produces no event. Participant-specific validation is not included.
+    """
+
+    transaction_id: str
+    root_transaction_id: str
+    cause: CausalRef | None
+    timestamp: datetime
+    preconditions: tuple[PreconditionSnapshot, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RedactionPolicy:
     """Explicit portable-result policy for metadata and exception messages."""
 
@@ -96,6 +126,8 @@ class RedactionPolicy:
 
     def redact[SnapshotT: CausalEventSnapshot](self, snapshot: SnapshotT) -> SnapshotT:
         """Return the same event variant with fields restricted by this policy."""
+        if isinstance(snapshot, TransactionValidationSnapshot):
+            return snapshot
         if isinstance(snapshot, TransactionResultSnapshot):
             return replace(
                 snapshot,
@@ -158,5 +190,9 @@ class ContinuationFailureSnapshot:
 
 
 type CausalEventSnapshot = (
-    TransactionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | ContinuationFailureSnapshot
+    TransactionResultSnapshot
+    | TransactionValidationSnapshot
+    | OperationEventSnapshot
+    | ResourceEventSnapshot
+    | ContinuationFailureSnapshot
 )

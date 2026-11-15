@@ -28,9 +28,11 @@ from squid_reactivity.diagnostics import (
     EventLedger,
     EventSink,
     OperationEventSnapshot,
+    PreconditionSnapshot,
     RedactionPolicy,
     ResourceEventSnapshot,
     TransactionResultSnapshot,
+    TransactionValidationSnapshot,
     observe_events,
 )
 from squid_reactivity.errors import (
@@ -119,6 +121,7 @@ __all__ = [
     "FreshTransactionError",
     "LocalTopicBus",
     "OperationEventSnapshot",
+    "PreconditionSnapshot",
     "Reactive",
     "ReactiveConflictError",
     "ReactiveCycleError",
@@ -145,6 +148,7 @@ __all__ = [
     "TransactionResultSnapshot",
     "TransactionRollback",
     "TransactionValidationError",
+    "TransactionValidationSnapshot",
     "TransactionView",
     "UndeclaredStateError",
     "addresses",

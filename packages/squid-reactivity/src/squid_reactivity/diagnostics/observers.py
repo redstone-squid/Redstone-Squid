@@ -20,6 +20,7 @@ from squid_reactivity.diagnostics.snapshots import (
     ContinuationFailureSnapshot,
     RedactionPolicy,
     TransactionResultSnapshot,
+    TransactionValidationSnapshot,
 )
 from squid_reactivity.transactions.context import (
     ExceptionReport,
@@ -67,6 +68,7 @@ class EventLedger:
 class _Observer:
     sink: EventSink | None
     redaction: RedactionPolicy
+    include_validation: bool
 
 
 _EVENT_OBSERVERS: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivity_observers", default=())
@@ -78,14 +80,20 @@ Hosts copying registrations into background work preserve that lifetime, not jus
 
 
 @contextmanager
-def observe_events(sink: EventSink, *, redaction: RedactionPolicy = DEFAULT_REDACTION) -> Iterator[EventSink]:
+def observe_events(
+    sink: EventSink,
+    *,
+    redaction: RedactionPolicy = DEFAULT_REDACTION,
+    include_validation: bool = False,
+) -> Iterator[EventSink]:
     """Observe work in this execution scope and tasks started within it.
 
     Exiting disables delivery even in child tasks that inherited the scope. The
     scope owns the registration, not the sink. Nested scopes for the same sink
-    deliver once using the innermost active scope's policy.
+    deliver once using the innermost active scope's options. Set include_validation
+    to receive effective cell preconditions sampled at commit-time validation.
     """
-    registration = _Observer(sink, redaction)
+    registration = _Observer(sink, redaction, include_validation)
     token = _EVENT_OBSERVERS.set((*_EVENT_OBSERVERS.get(), registration))
     try:
         yield sink
@@ -112,6 +120,18 @@ def has_event_observers() -> bool:
     return any(observer.sink is not None for observer in _EVENT_OBSERVERS.get())
 
 
+def has_validation_observers() -> bool:
+    """Whether a sink has opted into transaction validation details."""
+    seen: set[int] = set()
+    for observer in reversed(_EVENT_OBSERVERS.get()):
+        if observer.sink is None or id(observer.sink) in seen:
+            continue
+        seen.add(id(observer.sink))
+        if observer.include_validation:
+            return True
+    return False
+
+
 def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
     seen: set[int] = set()
     snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
@@ -121,6 +141,8 @@ def _deliver(event: TransactionResult | CausalEventSnapshot) -> None:
         if sink is None or id(sink) in seen:
             continue
         seen.add(id(sink))
+        if isinstance(event, TransactionValidationSnapshot) and not observer.include_validation:
+            continue
         try:
             snapshot = snapshots.get(observer.redaction)
             if snapshot is None:

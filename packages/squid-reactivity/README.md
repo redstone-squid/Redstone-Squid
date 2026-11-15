@@ -159,6 +159,14 @@ or operation change, and callback failure. Snapshots omit metadata and exception
 unless you pass a `RedactionPolicy`. `EventLedger` keeps the most recent ones. For logs or
 storage, write your own sink: any object with `accept(event)`.
 
+To inspect transaction validation, use `observe_events(sink, include_validation=True)`.
+It additionally delivers a `TransactionValidationSnapshot` after each outcome that reached
+validation. Its `preconditions` list opaque target IDs, expected and actual versions, and
+the effective origin: `read_write`, `strong_read`, or `explicit`. Explicit conditions take
+precedence over strong reads, which take precedence over ordinary reads of written cells.
+Versions are sampled at validation, before publication; snapshots retain no cell values or owners.
+Empty conditions mean no cell version checks applied. Participant-specific checks are not included.
+
 ## Asynchronous values
 
 ```python

@@ -18,9 +18,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 from squid_reactivity._runtime import _bump_epoch, _runtime
 from squid_reactivity.cells import _Cell
 from squid_reactivity.diagnostics import (
+    emit_causal_event,
     emit_continuation_failure,
     emit_result,
 )
+from squid_reactivity.diagnostics.observers import has_validation_observers
+from squid_reactivity.diagnostics.snapshots import PreconditionSnapshot, TransactionValidationSnapshot
 from squid_reactivity.errors import (
     FrameworkIntegrityError,
     ReactiveConflictError,
@@ -205,6 +208,7 @@ class _TransactionEngine:
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: list[tuple[TransactionParticipant[Any], Any]] = field(default_factory=list)
     commit_record: TransactionCommit | None = None
+    validation_snapshot: TransactionValidationSnapshot | None = None
 
     @property
     def context(self) -> TransactionContext:
@@ -311,12 +315,31 @@ class _TransactionEngine:
         precondition. Blind writes have no read precondition, so the last commit wins.
         """
         _checkpoint("commit.before_validation")
-        if not (self.writes or self.participants):
-            _checkpoint("commit.after_validation")
-            return
-        required = {cell: version for cell, version in self.observed.items() if cell in self.writes}
-        required.update(self.strong)
-        required.update(self.preconditions)
+        required: dict[_Cell, int] = {}
+        if self.writes or self.participants:
+            required = {cell: version for cell, version in self.observed.items() if cell in self.writes}
+            required.update(self.strong)
+            required.update(self.preconditions)
+        if has_validation_observers():
+            self.validation_snapshot = TransactionValidationSnapshot(
+                str(self.context.transaction_id),
+                str(self.context.root_transaction_id),
+                self.context.cause,
+                datetime.now(UTC),
+                tuple(
+                    PreconditionSnapshot(
+                        f"slot:{cell.identity}",
+                        version,
+                        cell.version,
+                        "explicit"
+                        if cell in self.preconditions
+                        else "strong_read"
+                        if cell in self.strong
+                        else "read_write",
+                    )
+                    for cell, version in required.items()
+                ),
+            )
         for cell, version in required.items():
             if cell.version == version:
                 continue
@@ -433,7 +456,7 @@ class _TransactionEngine:
                     tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
                 )
                 self.handle._result = integrity_commit
-                emit_result(integrity_commit)
+                self._deliver_result(integrity_commit)
                 message = f"an infallible transaction adapter failed after the commit point: {error}"
                 raise FrameworkIntegrityError(message) from error
             self.rollback(error, during_commit=True)
@@ -541,9 +564,16 @@ class _TransactionEngine:
             _bump_epoch()
         return tuple(self.cleanup_errors)
 
+    def _deliver_result(self, result: TransactionResult) -> None:
+        emit_result(result)
+        # Sinks may run application code, so validation diagnostics are delivered
+        # only once the outcome is fixed, never between validation and publication.
+        if self.validation_snapshot is not None:
+            emit_causal_event(self.validation_snapshot)
+
     def _emit_commit(self, commit: TransactionCommit) -> None:
         self.handle._result = commit
-        emit_result(commit)
+        self._deliver_result(commit)
         _notify_hooks(commit, self.commit_hooks)
         _notify_hooks(commit, self.result_hooks)
 
@@ -562,7 +592,7 @@ class _TransactionEngine:
             cleanup_errors,
         )
         self.handle._result = rollback
-        emit_result(rollback)
+        self._deliver_result(rollback)
         _notify_hooks(rollback, self.rollback_hooks)
         _notify_hooks(rollback, self.result_hooks)
         return rollback

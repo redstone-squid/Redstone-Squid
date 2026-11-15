@@ -27,6 +27,7 @@ from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     ResourceEventSnapshot,
     TransactionResultSnapshot,
+    TransactionValidationSnapshot,
 )
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
@@ -865,6 +866,8 @@ def _event_summary(event: CausalEventSnapshot) -> str:
     match event:
         case TransactionResultSnapshot():
             return _action_text(event)
+        case TransactionValidationSnapshot():
+            return f"transaction:{event.transaction_id} validation: {len(event.preconditions)} version conditions"
         case OperationEventSnapshot():
             cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
             return f"operation:{event.execution_id} {event.name} {event.status} cause={cause}"
