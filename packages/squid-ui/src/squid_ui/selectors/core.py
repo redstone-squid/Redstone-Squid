@@ -12,6 +12,18 @@ type Predicate = Callable[[Snapshot, int, int | None, Localization], bool]
 _MISSING = object()
 
 
+def _attribute(match: Match[object], name: str) -> object:
+    if name in ("key", "qualified_key"):
+        value = getattr(match, name)
+        return _MISSING if value is None else value
+    value = match.node
+    for part in name.split("."):
+        value = getattr(value, part, _MISSING)
+        if value is _MISSING:
+            break
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class Selector[T]:
     """A reusable read-only query expression. Type selection includes subclasses."""
@@ -20,14 +32,36 @@ class Selector[T]:
     description: str
 
     def attr(self, name: str, value: object) -> Selector[T]:
-        """Match an exact attribute value; missing is distinct from None and False."""
-        return self._filter(
-            lambda node: (actual := getattr(node, name, _MISSING)) is not _MISSING and actual == value,
-            f"[{name}={value!r}]",
-        )
+        """Match an attribute path; missing is distinct from None and False.
+
+        Dots follow attributes, such as overflow.key. key and qualified_key refer to
+        occurrence metadata, including component placement keys.
+        """
+        return self._attribute_filter(name, lambda actual: actual is not _MISSING and actual == value, f"={value!r}")
 
     def has_attr(self, name: str) -> Selector[T]:
-        return self._filter(lambda node: hasattr(node, name), f"[{name}]")
+        return self._attribute_filter(name, lambda actual: actual is not _MISSING, "")
+
+    def attr_starts_with(self, name: str, value: str) -> Selector[T]:
+        return self._attribute_filter(
+            name, lambda actual: isinstance(actual, str) and actual.startswith(value), f"^={value!r}"
+        )
+
+    def attr_ends_with(self, name: str, value: str) -> Selector[T]:
+        return self._attribute_filter(
+            name, lambda actual: isinstance(actual, str) and actual.endswith(value), f"$={value!r}"
+        )
+
+    def attr_contains(self, name: str, value: str) -> Selector[T]:
+        return self._attribute_filter(name, lambda actual: isinstance(actual, str) and value in actual, f"*={value!r}")
+
+    def _attribute_filter(self, name: str, predicate: Callable[[object], bool], suffix: str) -> Selector[T]:
+        return Selector(
+            lambda tree, index, scope, locale: (
+                self._predicate(tree, index, scope, locale) and predicate(_attribute(tree.matches[index], name))
+            ),
+            f"{self.description}[{name}{suffix}]",
+        )
 
     def where(self, predicate: Callable[[T], bool]) -> Selector[T]:
         """Add a Python predicate. Callers must keep it free of side effects."""
@@ -114,6 +148,8 @@ class Selector[T]:
                 return False
             parent = tree.parents[index]
             while parent is not None:
+                if scope is not None and parent < scope:
+                    break
                 if self._predicate(tree, parent, scope, locale):
                     return True
                 if direct or parent == scope:
@@ -123,18 +159,57 @@ class Selector[T]:
 
         return Selector(matches, f"{self.description}{' > ' if direct else ' '}{other.description}")
 
+    def next_sibling[U](self, other: Selector[U]) -> Selector[U]:
+        """Select an immediately following sibling; descendants do not count as siblings."""
+        return self._siblings(other, adjacent=True)
+
+    def following_siblings[U](self, other: Selector[U]) -> Selector[U]:
+        """Select later siblings with the same parent, in tree order."""
+        return self._siblings(other, adjacent=False)
+
+    def _siblings[U](self, other: Selector[U], *, adjacent: bool) -> Selector[U]:
+        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+            if index == scope or not other._predicate(tree, index, scope, locale):
+                return False
+            parent = tree.parents[index]
+            start = 0 if parent is None else parent + 1
+            if scope is not None:
+                start = max(start, scope)
+            # Walk previous occurrences backwards, skipping their descendants.
+            for previous in range(index - 1, start - 1, -1):
+                if tree.parents[previous] != parent:
+                    continue
+                if self._predicate(tree, previous, scope, locale):
+                    return True
+                if adjacent:
+                    return False
+            return False
+
+        return Selector(matches, f"{self.description}{' + ' if adjacent else ' ~ '}{other.description}")
+
     def has(self, other: Selector[Any], *, direct: bool = False) -> Selector[T]:
         """Keep nodes with a matching descendant, evaluating the inner query in that node's scope."""
-        return Selector(
-            lambda tree, index, scope, locale: (
-                self._predicate(tree, index, scope, locale)
-                and any(
-                    (not direct or tree.parents[child] == index) and other._predicate(tree, child, index, locale)
-                    for child in range(index + 1, tree.ends[index])
-                )
-            ),
-            f"{self.description}:has({' > ' if direct else ''}{other.description})",
-        )
+        return self._has(other, direct=direct, following=False)
+
+    def _has(self, other: Selector[Any], *, direct: bool, following: bool) -> Selector[T]:
+        def matches(tree: Snapshot, index: int, scope: int | None, locale: Localization) -> bool:
+            if not self._predicate(tree, index, scope, locale):
+                return False
+            if following:
+                # Relative +/~ can inspect following siblings, but never siblings of the query scope.
+                if index == scope:
+                    return False
+                parent = tree.parents[index]
+                start = tree.ends[index]
+                end = len(tree.matches) if parent is None else tree.ends[parent]
+            else:
+                start, end = index + 1, tree.ends[index]
+            return any(
+                (not direct or tree.parents[child] == index) and other._predicate(tree, child, index, locale)
+                for child in range(start, end)
+            )
+
+        return Selector(matches, f"{self.description}:has({' > ' if direct else ''}{other.description})")
 
 
 @overload

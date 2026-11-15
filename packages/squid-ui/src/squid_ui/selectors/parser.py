@@ -7,14 +7,25 @@ from dataclasses import dataclass
 from typing import NoReturn
 
 from squid_ui import semantic
+from squid_ui.scene import model as scene_model
+from squid_ui.scene import slack as scene_slack
 from squid_ui.selectors.core import Selector, scope, select
 
-_TOKEN = re.compile(r'\s+|"(?:[^"\\]|\\.)*"|[A-Za-z_][\w.-]*|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\*=|[*>\[\](),:=]')
+_TOKEN = re.compile(r'\s+|"(?:[^"\\]|\\.)*"|[A-Za-z_][\w.-]*|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[\^$*]=|[*>+~\[\](),:=]')
 _TYPES = {
     name: value
     for name, value in vars(semantic).items()
     if isinstance(value, type) and value.__module__ == semantic.__name__
 }
+
+_TYPES.update(
+    {
+        f"scene.{name}": value
+        for module in (scene_model, scene_slack)
+        for name, value in vars(module).items()
+        if isinstance(value, type) and value.__module__ == module.__name__
+    }
+)
 
 
 class SelectorSyntaxError(ValueError):
@@ -72,15 +83,21 @@ class _Parser:
         return result
 
     def complex(self, *, relative: bool) -> Selector[object]:
-        result = scope() if relative and self.peek() == ">" else self.compound()
+        result = scope() if relative and self.peek() in (">", "+", "~") else self.compound()
         while self.peek() not in ("", ",", ")"):
             if self.peek() == ">":
                 self.take()
                 result = result.children(self.compound())
+            elif self.peek() == "+":
+                self.take()
+                result = result.next_sibling(self.compound())
+            elif self.peek() == "~":
+                self.take()
+                result = result.following_siblings(self.compound())
             elif self.tokens[self.index].start > self.tokens[self.index - 1].end:
                 result = result.descendants(self.compound())
             else:
-                self.fail("expected a child or descendant combinator")
+                self.fail("expected a child, descendant, or sibling combinator")
         return result
 
     def compound(self) -> Selector[object]:
@@ -116,20 +133,27 @@ class _Parser:
                 self.depth += 1
                 if self.depth > 64:
                     self.fail("selector nesting exceeds 64 levels")
-                inner = self.selector_list(relative=name == "has")
+                inner = self.has_list() if name == "has" else self.selector_list()
                 self.depth -= 1
                 self.expect(")")
-                if name == "has":
-                    result = result.has(inner)
-                elif name == "not":
+                if name == "not":
                     result = result.excluding(inner)
                 else:
                     result = result.intersect(inner)
         return result
 
+    def has_list(self) -> Selector[object]:
+        following = self.peek() in ("+", "~")
+        result = select(object)._has(self.complex(relative=True), direct=False, following=following)
+        while self.peek() == ",":
+            self.take()
+            following = self.peek() in ("+", "~")
+            result = result.union(select(object)._has(self.complex(relative=True), direct=False, following=following))
+        return result
+
     def attribute(self, result: Selector[object]) -> Selector[object]:
         name = self.take()
-        if not re.fullmatch(r"[A-Za-z_]\w*", name):
+        if not re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", name):
             self.fail("expected an attribute name")
         if self.peek() == "]":
             self.take()
@@ -142,8 +166,8 @@ class _Parser:
                 )
             return result.has_attr("content" if name == "text" else name)
         operation = self.take()
-        if operation not in ("=", "*="):
-            self.fail("expected = or *=")
+        if operation not in ("=", "*=", "^=", "$="):
+            self.fail("expected =, *=, ^=, or $=")
         token = self.take()
         try:
             value = json.loads(token)
@@ -154,9 +178,21 @@ class _Parser:
             if not isinstance(value, str):
                 self.fail("text and label predicates require strings")
             method = result.text if name == "text" else result.label
+            if operation == "^=":
+                return method(re.compile(r"\A" + re.escape(value)))
+            if operation == "$=":
+                return method(re.compile(re.escape(value) + r"\Z"))
             return method(value, contains=operation == "*=")
-        if operation == "*=":
-            self.fail("substring matching is supported only for text and label")
+        if operation != "=":
+            if not isinstance(value, str):
+                self.fail("string attribute operators require strings")
+            match operation:
+                case "^=":
+                    return result.attr_starts_with(name, value)
+                case "$=":
+                    return result.attr_ends_with(name, value)
+                case _:
+                    return result.attr_contains(name, value)
         if name in ("key", "qualified_key"):
             if not isinstance(value, str):
                 self.fail("key predicates require strings")
@@ -167,9 +203,9 @@ class _Parser:
 def parse(source: str, *, types: Mapping[str, type] | None = None) -> Selector[object]:
     """Compile type, attribute, relationship, :scope, :is, :not, and :has selectors.
 
-    Semantic types are registered by default. Supply additional names for components
+    Semantic types and qualified scene.Type names are registered by default. Supply additional names for components
     and primitives; names never trigger imports. Attribute values use JSON literals.
-    This is a CSS-inspired subset, without CSS escaping, specificity, or sibling selectors.
+    This is a CSS-inspired subset, without CSS escaping or specificity.
     """
     parser = _Parser(source, _TYPES | dict(types or {}))
     result = parser.selector_list()
