@@ -280,6 +280,19 @@ class Panel(Component[ComponentsV2Target]):
         return self.child.keyed("child") if self.visible else Text("empty")
 
 
+class ServiceSwitch(Component[ComponentsV2Target]):
+    """Remove and remount a service-owning child without closing its runtime."""
+
+    visible: bool = state(True)
+
+    def __init__(self, child: Component[ComponentsV2Target]) -> None:
+        self.child = child
+
+    @override
+    def render(self) -> DocumentLike[ComponentsV2Target]:
+        return self.child.keyed("child") if self.visible else Text("empty")
+
+
 class OwnedPanel(Component[ComponentsV2Target]):
     def __init__(self, service: Recorder) -> None:
         self.service = self.own(service)
@@ -920,12 +933,15 @@ async def test_resource_entry_failure_unwinds_without_starting_activity() -> Non
 async def test_runtime_readiness_does_not_switch_to_a_remounted_activation() -> None:
     async with running_host() as host:
         panel = Panel()
-        runtime = ComponentRuntime(panel, execution_host=host)
+        root = ServiceSwitch(panel)
+        runtime = ComponentRuntime(root, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
 
         async def remount() -> None:
-            runtime.finish()
+            root.visible = False
+            runtime.commit(runtime.render())
+            root.visible = True
             runtime.commit(runtime.render())
 
         async with anyio.create_task_group() as tasks:
@@ -1325,17 +1341,20 @@ async def test_shutdown_observers_keep_run_failure_across_remount(through_runtim
         panel = OwnedPanel(FailsOnce())
         owner = panel._owned_services
         assert owner is not None
-        runtime = ComponentRuntime(panel, execution_host=host, on_service_error=report)
+        root = ServiceSwitch(panel)
+        runtime = ComponentRuntime(root, execution_host=host, on_service_error=report)
 
         def activate() -> None:
             if through_runtime:
+                root.visible = True
                 runtime.commit(runtime.render())
             else:
                 owner.activate(host, on_error=report)
 
         def cancel() -> None:
             if through_runtime:
-                runtime.finish()
+                root.visible = False
+                runtime.commit(runtime.render())
             else:
                 owner.cancel()
 
@@ -1380,6 +1399,7 @@ async def test_shutdown_observers_keep_run_failure_across_remount(through_runtim
         await wait()
         await wait()
         assert panel.service.stopped.is_set()
+        runtime.finish()
         await host.close()
         assert len(reports) == 1
 

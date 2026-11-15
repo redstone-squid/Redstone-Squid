@@ -28,6 +28,13 @@ Initial public alpha of the suite.
 
 Runtime ownership, still pre-release:
 
+- `ComponentRuntime.finish()` now closes the runtime permanently, even when an
+  unmount hook fails. `closed` becomes true before cleanup hooks run. Repeated
+  calls are harmless; inspection and service waits remain available. Render any
+  final view before finishing and create a new runtime to restart. To temporarily
+  unmount a child, remove it from the rendered tree and commit instead.
+- Closed runtimes reject rendering, staging, committing, claiming components, and
+  context updates with `RuntimeError`. Late invalidations are ignored.
 - `ComponentRuntime.context` and `.components` are now live read-only mappings and
   cannot be reassigned. Replace `runtime.context[key] = value` with
   `runtime.set_context(key, value)` so the change invalidates rendering. Change the

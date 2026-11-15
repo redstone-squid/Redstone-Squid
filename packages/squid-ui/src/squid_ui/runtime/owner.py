@@ -77,7 +77,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     - render produces a candidate tree, reusing unchanged component results.
     - After successful delivery, commit adopts that tree and runs mount/unmount hooks.
     - finish unmounts the tree and requests service cancellation; wait_services waits
-      for cleanup to finish.
+      for cleanup to finish. Closure is permanent, even if an unmount hook fails.
+
+    Rendering, staging, claiming components, and changing context require an open runtime.
+    Invalidation after closure is ignored so late notifications and cleanup cannot schedule
+    another render. Capture any terminal render before calling finish.
 
     Asynchronous component loading and delivery belong to the frontend. Presentation
     state, such as selected pages, is retained here for subsequent planning calls.
@@ -95,6 +99,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         execution_host: UIExecutionHost | None = None,
         on_service_error: ServiceFailure | None = None,
     ) -> None:
+        self._closed = False
         self.root = root
         self._services = _ServiceLifecycle(execution_host, on_service_error)
         self._hook_errors: list[Exception] = []
@@ -123,6 +128,16 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         """Whether the committed tree is behind the inputs a fresh render would read."""
 
     @property
+    def closed(self) -> bool:
+        """Whether finish has begun; service cleanup may still be running."""
+        return self._closed
+
+    def _require_open(self) -> None:
+        if self._closed:
+            message = "component runtime is closed"
+            raise RuntimeError(message)
+
+    @property
     def context(self) -> Mapping[ContextKey[Any], object]:
         """Live read-only root bindings. Use ``set_context`` to replace a value and invalidate."""
         return self._context_view
@@ -133,12 +148,15 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         return self._components_view
 
     def _reactive_changed(self, address: DependencyAddress) -> None:
+        if self._closed:
+            return
         self.invalidate_address(address)
         if self.on_reactive_invalidate is not None:
             self.on_reactive_invalidate(address)
 
     def claim(self, component: AnyComponent) -> None:
         """Associate a discovered instance with this runtime until its last use ends."""
+        self._require_open()
         if component._runtime is not None and component._runtime is not self:
             message = "a component instance cannot belong to multiple runtimes"
             raise LayoutInvariantError(message)
@@ -160,6 +178,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         revision. Loading can replace discovery trees while the delivered tree's
         dependencies remain subscribed throughout.
         """
+        self._require_open()
         if self._staged is not None and self._staged.tree is tree:
             return self._staged
         previous_claims = set(self._claimed)
@@ -192,6 +211,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def invalidate_addresses(self, addresses: Iterable[BusAddress]) -> None:
         """Invalidate only component snapshots that observed any current bus address."""
+        if self._closed:
+            return
         requested = set(addresses)
         if not requested:
             return
@@ -219,6 +240,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         check_dependencies: bool,
     ) -> None:
         """Record one invalidation revision for a component set."""
+        if self._closed:
+            return
         self.revision += 1
         self.dirty = True
         self._cached_tree = None
@@ -228,6 +251,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def set_context[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
         """Replace one root context value for subsequent renders."""
+        self._require_open()
         self._context[key] = value
         self.invalidate()
 
@@ -248,6 +272,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         tree must not be committed: it can describe existing state, but cannot start
         another service activation on the closing host.
         """
+        self._require_open()
         if not self.dirty and not reuse_committed:
             # A direct render is an explicit request to sample inputs outside the reactive graph.
             # Mounted scheduler paths opt into the committed fast path after recording their cause.
@@ -282,6 +307,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 defer=defer,
                 incremental=self._cache.expansion(),
             )
+            self._require_open()
             if not terminal:
                 self._validate_execution_host(tree)
         except BaseException:
@@ -471,10 +497,15 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         await self._services.wait(allow_reentry=allow_reentry)
 
     def finish(self) -> None:
-        """Unmount the tree and ask its services to stop.
+        """Permanently close the runtime and ask its services to stop.
 
-        Call ``await runtime.wait_services()`` afterwards to wait for cleanup.
+        Repeated calls do nothing, including from unmount hooks. Closure remains final
+        if a hook fails. Inspection and service waits remain available; create a new
+        runtime to render again. Call ``await runtime.wait_services()`` for cleanup.
         """
+        if self._closed:
+            return
+        self._closed = True
         self.discard()
         self.subscriptions.clear()
         visited: set[AnyComponent] = set()

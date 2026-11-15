@@ -82,7 +82,8 @@ async def test_child_observes_one_parent_run_across_panel_remount(outcome: str) 
         async with anyio.create_task_group() as tasks:
             host = UIExecutionHost()
             await tasks.start(host.run)
-            runtime = ComponentRuntime(Parent(), execution_host=host, on_service_error=report)
+            parent = Parent()
+            runtime = ComponentRuntime(parent, execution_host=host, on_service_error=report)
             runtime.commit(runtime.render())
             await entered.wait()
             await child_started.wait()
@@ -112,6 +113,8 @@ async def test_child_observes_one_parent_run_across_panel_remount(outcome: str) 
                 }[outcome]
             )
             release.set()
+            assert runtime.closed
+            runtime = ComponentRuntime(parent, execution_host=host, on_service_error=report)
             runtime.commit(runtime.render())
             await runtime.wait_services_ready()
             assert observed[-1] is connection.current_run
