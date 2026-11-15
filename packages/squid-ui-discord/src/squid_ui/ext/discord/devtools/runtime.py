@@ -106,6 +106,25 @@ class SessionInspection:
     quota: int | None = None
     domain: str | None = None
 
+    @classmethod
+    def from_session(cls, session: Session) -> SessionInspection:
+        snapshot = session.snapshot
+        return cls(
+            session.id,
+            repr(snapshot.key),
+            snapshot.actor_id,
+            snapshot.durable,
+            snapshot.local,
+            snapshot.opened_at,
+            tuple(sorted(snapshot.participants)),
+            tuple(message_root.id for message_root in session.message_roots),
+            tuple(sorted(snapshot.members)),
+            snapshot.capacity,
+            snapshot.remaining_capacity,
+            session.quota,
+            session.domain,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class MessageRootInspection:
@@ -234,7 +253,9 @@ class DevToolsRuntime:
     def snapshot(self) -> OperationalSnapshot:
         """Return all live roots and the configured services' current diagnostic state."""
         sessions = (
-            () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
+            ()
+            if self.sessions is None
+            else tuple(SessionInspection.from_session(session) for session in self.sessions.active())
         )
         topics = None if self.bus is None else _bus_snapshot(self.bus)
         return OperationalSnapshot(
@@ -399,25 +420,6 @@ class DevToolsRuntime:
     def _audit(self, operation: DevToolsOperation) -> None:
         if self.audit is not None:
             self.audit(operation)
-
-
-def _session_inspection(session: Session) -> SessionInspection:
-    snapshot = session.snapshot
-    return SessionInspection(
-        session.id,
-        repr(snapshot.key),
-        snapshot.actor_id,
-        snapshot.durable,
-        snapshot.local,
-        snapshot.opened_at,
-        tuple(sorted(snapshot.participants)),
-        tuple(message_root.id for message_root in session.message_roots),
-        tuple(sorted(snapshot.members)),
-        snapshot.capacity,
-        snapshot.remaining_capacity,
-        session.quota,
-        session.domain,
-    )
 
 
 def _address_text(address: BusAddress) -> str:

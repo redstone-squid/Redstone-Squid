@@ -36,7 +36,6 @@ from squid_ui.ext.discord import (
     contracts,
     delivery,
     devtools,
-    devtools_runtime,
     facade,
     fragments,
     grids,
@@ -106,7 +105,7 @@ from squid_ui.ext.discord.delivery import (
     send_to,
 )
 from squid_ui.ext.discord.devtools import open_devtools
-from squid_ui.ext.discord.devtools_view import DevToolsSection
+from squid_ui.ext.discord.devtools.views import DevToolsSection
 from squid_ui.ext.discord.events import (
     ActionEvent,
     ChoiceEvent,
@@ -230,7 +229,7 @@ is built on `squid_storage`, which arrives with the `durable` extra. Importing i
 make `import squid_ui.ext.discord` fail on an install that never persists a panel. It stays in
 `__all__` because it is documented surface, and `from squid_ui.ext.discord import durability` still
 works -- the import system consults this hook before falling back to the submodule.
-`devtools_runtime`, `devtools` and `devtools_view` name its types under `TYPE_CHECKING` for the same
+`devtools.runtime`, `devtools.commands` and `devtools.views` name its types under `TYPE_CHECKING` for the same
 reason; every use there is an annotation.
 """
 
@@ -380,7 +379,6 @@ __all__ = [
     "deliver_to",
     "delivery",
     "devtools",
-    "devtools_runtime",
     "durability",
     "edit_to",
     "facade",

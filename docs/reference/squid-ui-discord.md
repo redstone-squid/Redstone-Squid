@@ -277,7 +277,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui.ext.discord.conformance` | Boundary gate that keeps built views inside Discord's limits. |
 | `squid_ui.ext.discord.delivery` | Send/edit mechanics for rendered Discord messages. |
 | `squid_ui.ext.discord.devtools` | Owner-only operational diagnostics for live runtimes. |
-| `squid_ui.ext.discord.devtools_runtime` | Operational inspection and controls for live runtimes. |
+| `squid_ui.ext.discord.devtools.runtime` | Operational inspection and controls for live runtimes. |
 | `squid_ui.ext.discord.durability` | Opt-in durable component snapshots and host-owned mount management. |
 | `squid_ui.ext.discord.fragments` | Squid regions contributed to a view somebody else owns. |
 | `squid_ui.ext.discord.grids` | Exact Discord grid construction. |

@@ -152,7 +152,7 @@ ordinary immutable value; use `Base.policy.overlay(...)` to extend it explicitly
 Install `sd.devtools.DevTools` as a Cog for the hybrid `/dev ui [tab]` command (prefix: `dev ui [tab]`),
 or call `await sd.open_devtools(ctx, runtime=devtools_runtime)` from an authorized host command.
 The optional `tab` selects the starting section; it defaults to `overview`.
-`sd.devtools_runtime.DevToolsPolicy()` is read-only; mutations require `full_access()` or an
+`sd.devtools.runtime.DevToolsPolicy()` is read-only; mutations require `full_access()` or an
 explicit `allow(...)` list. Persistence records load only when the dashboard visits that section.
 
 Storage stays optional. Importing `squid_ui.ext.discord` without a durability extra does not import or

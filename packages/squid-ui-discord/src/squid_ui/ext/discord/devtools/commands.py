@@ -21,10 +21,10 @@ from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord.access import Owner
 from squid_ui.ext.discord.cog import Cog
 from squid_ui.ext.discord.contracts import ResponseSource
-from squid_ui.ext.discord.devtools_runtime import (
+from squid_ui.ext.discord.devtools.runtime import (
     DevToolsRuntime,
 )
-from squid_ui.ext.discord.devtools_view import (
+from squid_ui.ext.discord.devtools.views import (
     DevToolsSection,
     OperationalInspector,
 )

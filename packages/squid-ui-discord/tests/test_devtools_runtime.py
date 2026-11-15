@@ -8,7 +8,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 from squid_ui.ext.discord import Everyone, SessionKey, SessionManager
-from squid_ui.ext.discord.devtools_runtime import (
+from squid_ui.ext.discord.devtools.runtime import (
     ActionDisabled,
     ConfirmationRequired,
     DevToolsAction,

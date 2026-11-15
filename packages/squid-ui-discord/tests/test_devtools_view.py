@@ -12,15 +12,12 @@ import squid_ui.ext.discord
 from squid_storage import MemorySessionStore, SessionRecord
 from squid_ui.ext.discord import Everyone, MessageRoot, Owner
 from squid_ui.ext.discord import testing as sd
-from squid_ui.ext.discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
-from squid_ui.ext.discord.devtools_view import (
+from squid_ui.ext.discord.devtools.presentation import metrics_text, operational_attachment, plan_text, scene_attachment
+from squid_ui.ext.discord.devtools.runtime import DevToolsPolicy, DevToolsRuntime
+from squid_ui.ext.discord.devtools.views import (
     DevToolsSection,
     MessageRootInspector,
     OperationalInspector,
-    metrics_text,
-    operational_attachment,
-    plan_text,
-    scene_attachment,
 )
 from squid_ui.ext.discord.durability import ComponentRegistry, DiscordFrontend, DurableSessionRuntime
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness

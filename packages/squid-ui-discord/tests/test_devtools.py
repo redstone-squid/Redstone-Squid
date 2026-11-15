@@ -12,8 +12,8 @@ from squid_reactivity import EventLedger, observe_events, transaction
 from squid_reactivity.diagnostics import OperationEventSnapshot
 from squid_ui.ext.discord import Owner, live
 from squid_ui.ext.discord.devtools import DevTools, open_devtools
-from squid_ui.ext.discord.devtools_runtime import DevToolsRuntime
-from squid_ui.ext.discord.devtools_view import DevToolsSection
+from squid_ui.ext.discord.devtools.runtime import DevToolsRuntime
+from squid_ui.ext.discord.devtools.views import DevToolsSection
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,

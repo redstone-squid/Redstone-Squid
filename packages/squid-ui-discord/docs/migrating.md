@@ -308,8 +308,8 @@ DevTools mutations are no longer enabled by default. Preserve the previous opera
 set with an explicit allowlist, or opt into every operation:
 
 ```python
-runtime = sd.devtools_runtime.DevToolsRuntime(
-    policy=sd.devtools_runtime.DevToolsPolicy.full_access(),
+runtime = sd.devtools.runtime.DevToolsRuntime(
+    policy=sd.devtools.runtime.DevToolsPolicy.full_access(),
 )
 ```
 
@@ -460,3 +460,11 @@ reuse. `contracts` defines `MountedRenderer`, and `result` defines `RenderedMess
 The `rendering` package still exports `RenderedMessage`, `render_message`,
 `render_static`, and `render_item`. Replace imports from the former `renderer`,
 `classic_renderer`, `native_controls`, and `render_cache` modules with these paths.
+
+## Developer tools
+
+Developer commands, runtime operations, dashboard views, and snapshot formatting
+now live in `devtools.commands`, `devtools.runtime`, `devtools.views`, and
+`devtools.presentation`. The old `devtools_runtime`, `devtools_view`, and
+`devtools_presentation` modules are removed. `sd.open_devtools` and
+`sd.devtools.DevTools` remain the dashboard entry points.
