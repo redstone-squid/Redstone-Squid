@@ -9,6 +9,7 @@ import squid_ui_widgets as sp
 from squid_reactivity.transactions import transaction
 from squid_ui import testing as engine
 from squid_ui.runtime import ComponentRuntime
+from squid_ui.selectors import query, select, snapshot
 from squid_ui.semantic import Choices
 from squid_ui_widgets import testing as wt
 
@@ -144,19 +145,19 @@ async def test_shared_child_keeps_its_namespace_when_tab_and_position_change() -
     runtime = ComponentRuntime(tabs)
     before = runtime.render()
     runtime.commit(before)
-    child_path = next(path for path, component in before.components.items() if component is child)
+    child_placement = query(snapshot(before), select(child)).one().qualified_key
 
     await wt.driving(tabs).press("tabs.second")
     after = runtime.render(reuse_committed=True)
     runtime.commit(after)
 
-    assert after.components[child_path] is child
+    assert query(snapshot(after), select(child)).one().qualified_key == child_placement
     assert "Before" in engine.texts(after.nodes)
     assert "screen: shared" in engine.texts(after.nodes)
 
     await wt.driving(tabs).press("tabs.first")
     restored = runtime.render(reuse_committed=True)
-    assert restored.components[child_path] is child
+    assert query(snapshot(restored), select(child)).one().qualified_key == child_placement
 
 
 async def test_active_button_tab_is_emphasized_and_inactive_tabs_are_available() -> None:
