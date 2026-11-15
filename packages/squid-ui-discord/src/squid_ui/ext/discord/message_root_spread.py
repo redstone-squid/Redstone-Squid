@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class _DeliveryOutcome:
+class _DeliveryReport:
     """Separate candidate acceptance from visible writes and interaction acknowledgement.
 
     Spread candidates remain committable when some or all messages are unreachable;

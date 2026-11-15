@@ -92,7 +92,7 @@ from squid_ui.ext.discord.message_root_contracts import (
     RenewEphemeral,
 )
 from squid_ui.ext.discord.message_root_lifecycle import _CandidateLifecycle
-from squid_ui.ext.discord.message_root_spread import _Continuations, _DeliveryOutcome
+from squid_ui.ext.discord.message_root_spread import _Continuations, _DeliveryReport
 from squid_ui.ext.discord.message_root_wiring import (
     AnyMountedView,
     ClassicMountedView,
@@ -1640,7 +1640,7 @@ class MessageRoot[
         profile: OperationRecorder | None = None,
         interaction: discord.Interaction | None = None,
         everything: bool = False,
-    ) -> _DeliveryOutcome:
+    ) -> _DeliveryReport:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
 
         The outcome separates whether to commit from which messages were written and
@@ -1670,7 +1670,7 @@ class MessageRoot[
                     everything=everything,
                 )
             handle = await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
-            return _DeliveryOutcome(
+            return _DeliveryReport(
                 committable=handle is not None,
                 written=frozenset({0}) if handle is not None else frozenset(),
                 interaction_written=handle is not None and handle is through,
@@ -1685,7 +1685,7 @@ class MessageRoot[
         profile: OperationRecorder | None,
         interaction: discord.Interaction | None,
         everything: bool,
-    ) -> _DeliveryOutcome:
+    ) -> _DeliveryReport:
         """Write the messages of a spread render that do not already show it.
 
         Marks on the candidate which messages were reached, for the commit to publish.
@@ -1741,7 +1741,7 @@ class MessageRoot[
             written.add(index)
         if len(self._continuations.slots) > len(candidate.continuations):
             await self._continuations.trim(len(candidate.continuations))
-        return _DeliveryOutcome(committable=True, written=frozenset(written), interaction_written=answered)
+        return _DeliveryReport(committable=True, written=frozenset(written), interaction_written=answered)
 
     async def _write(
         self,
