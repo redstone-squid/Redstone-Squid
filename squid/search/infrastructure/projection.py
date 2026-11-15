@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.accounts.models import CreatorAlias
-from squid.builds.domain.titles import format_build_category, format_build_display_title
+from squid.builds.domain.titles import format_build_category
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
@@ -371,7 +371,9 @@ class SearchProjectionLoader:
         try:
             domain_build = await self._build_mapper.load(self._session, build)
             formatted = format_build_category(domain_build)
-            title = format_build_display_title(domain_build, markdown=False)
+            # The one-line title adds the restrictions the display title leaves out, so they
+            # can match and be highlighted, and results read like catalogue rows.
+            title = domain_build.one_line_title
             canonical_title = formatted.title
             canonical_subtitle = formatted.subtitle
             title_diagnostics = [diagnostic.as_dict() for diagnostic in formatted.diagnostics]

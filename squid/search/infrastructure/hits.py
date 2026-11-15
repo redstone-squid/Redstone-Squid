@@ -52,6 +52,7 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
             description=document.description,
             score=score,
             tags=tags,
+            dimensions=_dimensions(data.get("dimensions")),
         )
     aliases = data.get("aliases", ())
     if not isinstance(aliases, list | tuple):
@@ -65,6 +66,19 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
         score=score,
         aliases=tuple(str(alias) for alias in typed_aliases),
     )
+
+
+def _dimensions(value: object) -> tuple[int | None, int | None, int | None]:
+    """Read the projected `{"width": 3, ...}` mapping, which omits unknown dimensions."""
+    if not isinstance(value, dict):
+        return (None, None, None)
+    mapping = cast(dict[str, object], value)
+
+    def read(name: str) -> int | None:
+        item = mapping.get(name)
+        return item if type(item) is int else None
+
+    return (read("width"), read("height"), read("depth"))
 
 
 def _string(data: dict[str, object], key: str, default: str) -> str:

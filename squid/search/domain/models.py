@@ -138,6 +138,8 @@ class BuildSearchHit:
     records: tuple[RecordSearchHit, ...] = ()
     matches: tuple[SearchMatch, ...] = ()
     title_match: SearchText | None = None
+    dimensions: tuple[int | None, int | None, int | None] = (None, None, None)
+    """Width, height, and depth in blocks; None marks an unknown dimension."""
     resource_kind: Literal["build"] = field(default="build", init=False)
 
 
