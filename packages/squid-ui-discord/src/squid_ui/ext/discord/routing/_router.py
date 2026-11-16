@@ -13,6 +13,7 @@ from squid_ui.ext.discord.messages.contracts import ErrorHook
 from squid_ui.interactions.routing import Route
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.profiling import NoOpProfiler, Profiler
+from squid_ui.routing import RouteTable
 from squid_ui.target_types import DiscordPyAdapter
 
 from ._client import install
@@ -70,6 +71,7 @@ class Router[BotT: discord.Client]:
         self._middleware: list[Middleware[BotT]] = []
         self._middleware_keys: dict[str, int] = {}
         self._registered = False
+        self._tables: dict[RouteComponent, RouteTable[RouteHandle[...]]] = {}
         self.namespace = namespace_value
         self.on_gone = on_gone
         self.on_error = on_error
@@ -170,9 +172,11 @@ class Router[BotT: discord.Client]:
                 routes.extend(group._definitions)
         return tuple(routes)
 
+    def _handles(self) -> tuple[RouteHandle[...], ...]:
+        return (*self._routes, *(handle for group in self._all_groups() for handle in group._routes))
+
     def _registrations(self) -> tuple[_Registration, ...]:
-        handles = (*self._routes, *(handle for group in self._all_groups() for handle in group._routes))
-        return tuple(handle._registration for handle in handles)
+        return tuple(handle._registration for handle in self._handles())
 
     def _all_groups(self) -> tuple[RouteGroup[BotT], ...]:
         seen: list[RouteGroup[BotT]] = []
@@ -298,13 +302,21 @@ class Router[BotT: discord.Client]:
         component: RouteComponent = RouteComponent.BUTTON,
     ) -> tuple[_Registration, Mapping[str, Any]] | None:
         """The registration owning ``custom_id`` and the parameters it carries, if any."""
-        for registration in self._registrations():
-            if registration.component is not component:
-                continue
-            params = registration.route.match(custom_id)
-            if params is not None:
-                return registration, params
-        return None
+        table = self._tables.get(component)
+        if table is None:
+            table = RouteTable[RouteHandle[...]]()
+            for handle in self._handles():
+                if handle._registration.component is component:
+                    table.add(handle.route, handle)
+            # Frozen identities can be indexed once. Stable handles still expose
+            # replacement handlers after an extension reload.
+            if self._registered:
+                self._tables[component] = table
+        found = table.match(custom_id)
+        if found is None:
+            return None
+        handle, params = found
+        return handle._registration, params
 
     def template(self) -> re.Pattern[str]:
         """The one pattern covering every registered route.
