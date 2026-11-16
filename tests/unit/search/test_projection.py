@@ -1,5 +1,6 @@
 """Tests for search projection normalization and typed facets."""
 
+from dataclasses import replace
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,6 +25,8 @@ from squid.search.infrastructure.projection import (
     parse_projection_key,
     projection_source_hash,
 )
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAlias, TagAssignment, TagDefinition
 
 
 def test_loader_rejects_retired_legacy_record_keys() -> None:
@@ -77,6 +80,7 @@ def test_source_hash_changes_with_searchable_content() -> None:
 
     assert projection_source_hash(original) == projection_source_hash(original)
     assert projection_source_hash(original) != projection_source_hash(edited)
+    assert projection_source_hash(original) != projection_source_hash(replace(original, search_aliases=("Compact",)))
 
 
 def test_facet_models_assign_per_field_ordinals_and_typed_columns() -> None:
@@ -139,6 +143,51 @@ def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
 
 def test_an_unapproved_tag_is_not_indexed() -> None:
     assert build_tag_projection(_tag_source(semantic_kind="pattern", moderation_status="pending")) is None
+
+
+@pytest.mark.parametrize("semantic_kind", list(TagSemanticKind))
+@pytest.mark.parametrize("status", [TagModerationStatus.APPROVED, TagModerationStatus.PENDING])
+async def test_build_aliases_are_searchable_only_for_approved_assignments(
+    semantic_kind: TagSemanticKind, status: TagModerationStatus
+) -> None:
+    definition = TagDefinition(
+        stable_key="no-observers",
+        display_name="No Observers",
+        authority=TagAuthority.OFFICIAL,
+        semantic_kind=semantic_kind,
+        value_type=TagValueType.NONE,
+        moderation_status=status,
+        aliases=[TagAlias(alias="Observerless", normalized_alias="observerless")],
+    )
+    build = OtherBuild(tags=[TagAssignment(definition)])
+    build.id = 42
+    build.submission_status = Status.CONFIRMED
+    build.submission_time = build.edited_time = Instant.now()
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = build
+    session.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+    loader = SearchProjectionLoader(session)
+    loader._build_mapper = MagicMock()
+    loader._build_mapper.load = AsyncMock(side_effect=DataIntegrityError("Incomplete title"))
+
+    projection = await loader.load("build", "42")
+
+    assert projection is not None
+    if status is TagModerationStatus.APPROVED:
+        assert projection.search_aliases == ("Observerless",)
+        assert projection.tags == ("No Observers",)
+        names = {(facet.field_name, facet.value) for facet in projection.facets}
+        assert ("tag", "Observerless") in names
+        assert ("tag", "No Observers") in names
+        if semantic_kind is TagSemanticKind.RESTRICTION:
+            assert ("restriction", "Observerless") in names
+        elif semantic_kind is TagSemanticKind.PATTERN:
+            assert ("pattern", "Observerless") in names
+            assert ("type", "Observerless") in names
+    else:
+        assert projection.search_aliases == ()
+        assert projection.tags == ()
+        assert not any(facet.value in {"No Observers", "Observerless"} for facet in projection.facets)
 
 
 @pytest.mark.parametrize("door", [True, False])

@@ -23,6 +23,7 @@ from squid.search.domain import (
 from squid.search.models import SearchDocument, SearchDocumentFacet
 
 _DIRECT_TEXT_FIELDS = frozenset({"status"})
+_TAG_NAME_FIELDS = frozenset({"tag", "restriction", "type", "pattern"})
 _VECTOR_FIELDS = {
     "title": SearchDocument.title_vector,
     "description": SearchDocument.description_vector,
@@ -74,10 +75,6 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
         )
     if field.name in _DIRECT_TEXT_FIELDS:
         return _compile_direct(expression)
-    if field.name == "tag":
-        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-            return false()
-        return SearchDocument.tags.contains([str(expression.value)])
     # Use a separate EXISTS for each clause: a document may satisfy two clauses
     # through different facet rows, and matching rows must not duplicate results.
     facet = SearchDocumentFacet
@@ -87,8 +84,14 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
         FieldType.TIMESTAMP: facet.timestamp_value,
         FieldType.BOOLEAN: facet.boolean_value,
     }[field.value_type]
-    comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
-    return (
+    if field.name in _TAG_NAME_FIELDS:
+        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
+            return false()
+        value = " ".join(str(expression.value).split()).lower()
+        comparison = func.lower(func.btrim(func.regexp_replace(value_column, r"\s+", " ", "g"))) == value
+    else:
+        comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
+    predicate = (
         select(facet.document_id)
         .where(
             facet.document_id == SearchDocument.id,
@@ -98,6 +101,10 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
         .correlate(SearchDocument)
         .exists()
     )
+    if field.name == "tag":
+        # Keep matching the indexed creator/version terms that tag: historically accepted.
+        return or_(predicate, SearchDocument.tags.contains([" ".join(str(expression.value).casefold().split())]))
+    return predicate
 
 
 def _compile_direct(expression: FieldExpression) -> ColumnElement[bool]:

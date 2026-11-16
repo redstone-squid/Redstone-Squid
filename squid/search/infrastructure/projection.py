@@ -91,6 +91,7 @@ class SearchProjection:
     description: str | None = None
     status: str | None = None
     tags: tuple[str, ...] = ()
+    search_aliases: tuple[str, ...] = ()
     document_data: dict[str, object] = field(default_factory=dict)
     facets: tuple[ProjectionFacet, ...] = ()
 
@@ -208,8 +209,11 @@ class SearchProjectionStore:
         """
         normalized_title = normalize_search_text(projection.title)
         tags = sorted({normalize_search_text(tag) for tag in projection.tags if tag.strip()})
+        search_terms = sorted(
+            {*tags, *(normalize_search_text(alias) for alias in projection.search_aliases if alias.strip())}
+        )
         fuzzy_text = " ".join(
-            part for part in (normalized_title, normalize_search_text(projection.subtitle or ""), *tags) if part
+            part for part in (normalized_title, normalize_search_text(projection.subtitle or ""), *search_terms) if part
         )
         source_hash = projection_source_hash(projection)
         title_vector = func.to_tsvector(literal_column("'simple'"), func.unaccent(projection.title))
@@ -217,7 +221,7 @@ class SearchProjectionStore:
             literal_column("'simple'"),
             func.unaccent(projection.description or ""),
         )
-        tag_text = " ".join(tags)
+        tag_text = " ".join(search_terms)
         combined_vector = (
             func.setweight(title_vector, literal_column("'A'"))
             .op("||")(
@@ -343,6 +347,7 @@ class SearchProjectionLoader:
             .where(Build.id == build_id)
             .options(
                 selectinload(Build.tags).options(*assignment_units()),
+                selectinload(Build.tags).joinedload(TagAssignment.definition).selectinload(TagDefinition.aliases),
                 selectinload(Build.links),
             )
         )
@@ -385,6 +390,9 @@ class SearchProjectionLoader:
             assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
         )
         assigned_tag_names = tuple(_render_tag_assignment(assignment) for assignment in approved_assignments)
+        search_aliases = tuple(
+            sorted({alias.alias for assignment in approved_assignments for alias in assignment.definition.aliases})
+        )
         restriction_names = tuple(
             assignment.definition.display_name
             for assignment in approved_assignments
@@ -406,9 +414,7 @@ class SearchProjectionLoader:
         assert build.submission_time is not None and build.edited_time is not None
         # Facets preserve typed values; the text tags above support lexical matching instead.
         facets = [
-            *(ProjectionFacet("restriction", name) for name in restriction_names),
-            *(ProjectionFacet("type", name) for name in type_names),
-            *(ProjectionFacet("pattern", name) for name in type_names),
+            *build_tag_name_facets(approved_assignments),
             *(ProjectionFacet("creator", name) for name in creator_names),
             *(ProjectionFacet("version", name) for name in version_names),
             ProjectionFacet("status", build.submission_status.name.lower()),
@@ -451,6 +457,7 @@ class SearchProjectionLoader:
             description=description,
             status=build.submission_status.name.lower(),
             tags=(*assigned_tag_names, *creator_names, *version_names),
+            search_aliases=search_aliases,
             document_data={
                 "build_id": build.id,
                 "canonical_title": canonical_title,
@@ -695,7 +702,11 @@ def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None
         title=source.display_name,
         subtype=source.semantic_kind,
         tags=source.aliases,
-        extra_facets=(ProjectionFacet("kind", "tag"),),
+        extra_facets=(
+            ProjectionFacet("kind", "tag"),
+            *(ProjectionFacet(source.semantic_kind, alias) for alias in source.aliases),
+            *(ProjectionFacet("tag", name) for name in (source.display_name, *source.aliases)),
+        ),
         data={
             "tag_id": source.tag_id,
             "aliases": source.aliases,
@@ -764,6 +775,20 @@ def normalize_search_text(value: str) -> str:
     return " ".join(value.casefold().split())
 
 
+def build_tag_name_facets(assignments: Sequence[TagAssignment]) -> tuple[ProjectionFacet, ...]:
+    """Index assigned names and aliases without changing the displayed tags."""
+    facets: list[ProjectionFacet] = []
+    for assignment in assignments:
+        definition = assignment.definition
+        names = tuple(dict.fromkeys((definition.display_name, *(alias.alias for alias in definition.aliases))))
+        tag_names = tuple(dict.fromkeys((_render_tag_assignment(assignment), *names)))
+        facets.extend(ProjectionFacet("tag", name) for name in tag_names)
+        if definition.authority == "official":
+            fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
+            facets.extend(ProjectionFacet(field, name) for field in fields for name in names)
+    return tuple(facets)
+
+
 def projection_source_hash(projection: SearchProjection) -> str:
     """Hash document content to detect changes that invalidate an embedding.
 
@@ -777,6 +802,7 @@ def projection_source_hash(projection: SearchProjection) -> str:
             "description": projection.description,
             "status": projection.status,
             "tags": projection.tags,
+            "search_aliases": projection.search_aliases,
             "document_data": projection.document_data,
             "facets": tuple((facet.field_name, facet.value) for facet in projection.facets),
         },
