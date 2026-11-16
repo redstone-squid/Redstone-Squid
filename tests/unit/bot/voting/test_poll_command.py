@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen, parse_option_lines
-from squid.bot.voting.publisher import _emoji_is_usable
+from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.vote import VoteCog
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -174,5 +174,5 @@ def test_custom_emojis_are_resolved_across_the_bots_servers(available: bool, usa
     bot = MagicMock()
     bot.get_emoji.return_value = emoji if available else None
 
-    assert _emoji_is_usable(bot, "<:door:123456789012345678>") is expected
+    assert DiscordPollPublisher(bot)._emoji_is_usable("<:door:123456789012345678>") is expected
     bot.get_emoji.assert_called_once_with(123456789012345678)

@@ -89,7 +89,7 @@ class DiscordPollPublisher:
             lines,
             guild_id=guild_id,
             palette=await self.palette(guild_id),
-            emoji_is_usable=lambda emoji: _emoji_is_usable(self._bot, emoji),
+            emoji_is_usable=self._emoji_is_usable,
         )
 
     async def create_and_publish(
@@ -178,11 +178,10 @@ class DiscordPollPublisher:
             raise RuntimeError(detail)
         return result.message
 
-
-def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, emoji: str) -> bool:
-    """Whether the bot has access to the emoji, including from another server."""
-    parsed = discord.PartialEmoji.from_str(emoji)
-    if not parsed.is_custom_emoji():
-        return True
-    custom = bot.get_emoji(parsed.id or 0)
-    return custom is not None and custom.is_usable()
+    def _emoji_is_usable(self, emoji: str) -> bool:
+        """Whether the bot has access to the emoji, including from another server."""
+        parsed = discord.PartialEmoji.from_str(emoji)
+        if not parsed.is_custom_emoji():
+            return True
+        custom = self._bot.get_emoji(parsed.id or 0)
+        return custom is not None and custom.is_usable()

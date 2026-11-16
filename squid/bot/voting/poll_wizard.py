@@ -198,6 +198,19 @@ class PollDraft:
     def __post_init__(self) -> None:
         object.__setattr__(self, "question", self.question.replace("\\n", "\n").strip())
 
+    @classmethod
+    def from_answers(cls, answers: sp.WizardAnswers) -> PollDraft:
+        """Construct the draft from the completed wizard steps."""
+        content = answers["content"]
+        settings = answers["settings"]
+        return cls(
+            question=cast(str, content["question"]),
+            options_text=cast(str, content["options"]),
+            visibility=cast(VoteVisibility, settings["visibility"]),
+            duration_seconds=cast(int, settings["duration"]),
+            scope=cast(PollScope, settings.get("scope", PollScope.GUILD)),
+        )
+
     @property
     def option_lines(self) -> tuple[str, ...]:
         return parse_poll_choices(self.options_text)
@@ -323,20 +336,8 @@ def _poll_steps(
     )
 
 
-def _draft(answers: sp.WizardAnswers) -> PollDraft:
-    content = answers["content"]
-    settings = answers["settings"]
-    return PollDraft(
-        question=cast(str, content["question"]),
-        options_text=cast(str, content["options"]),
-        visibility=cast(VoteVisibility, settings["visibility"]),
-        duration_seconds=cast(int, settings["duration"]),
-        scope=cast(PollScope, settings.get("scope", PollScope.GUILD)),
-    )
-
-
 def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-    draft = _draft(answers)
+    draft = PollDraft.from_answers(answers)
     try:
         draft.validate()
         options = "\n".join(f"- {line}" for line in draft.option_lines)
@@ -456,7 +457,7 @@ class PollScreen(sd.Screen[str]):
         event: sp.TransitionEvent[sp.WizardState],
         answers: sp.WizardAnswers,
     ) -> None:
-        draft = _draft(answers)
+        draft = PollDraft.from_answers(answers)
         try:
             draft.validate()
             options = await self._resolve_options(draft.option_lines)
