@@ -298,7 +298,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
         assert "Build #7" in ui.texts()
         await ui.press(ui.key_for("linked-build.back"))
         assert "## Smallest 2x2 door" in ui.texts()
-        assert not any("resolved" in text or "no_candidate" in text for text in ui.texts())
+        assert not any("unresolved" in text or "no_candidate" in text for text in ui.texts())
         ui.control(ui.key_for("holder-9"))
         await ui.press(ui.key_for("all-builds"))
         assert "## Build catalogue" in ui.texts()
@@ -422,19 +422,20 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
         assert request.mode is SearchMode.LEXICAL
         assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
-        assert request.query == ("status:resolved AND (door AND kind:door)" if records else "door AND kind:door")
+        assert request.query == "door AND kind:door"
         assert "## Search results" in ui.texts()
         assert not any("Search by meaning" in text for text in ui.texts())
         ui.assert_within_limits()
 
 
-async def test_record_category_shortcut_requests_only_populated_standings() -> None:
-    screen = _screen(initial_id=None)
-    screen._mode = "records"
+async def test_record_category_shortcut_preserves_the_default_status() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records, initial_records=True)
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("smallest"))
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "status:resolved AND (base_title:smallest)"
+        assert request.query == "(status:resolved) AND (base_title:smallest)"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
 
@@ -449,9 +450,7 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
-        assert request.query == (
-            'status:resolved AND (title:"vault door") AND (base_title:fastest OR base_title:smallest)'
-        )
+        assert request.query == ('(title:"vault door") AND (base_title:fastest OR base_title:smallest)')
         assert request.sort is not None
         assert request.sort.field == "created_at"
         assert screen._query == 'title:"vault door"'
@@ -462,7 +461,7 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert service.search.call_args.args[0].query.endswith("AND (base_title:fastest)")
         await ui.press(ui.key_for("fastest"))
-        assert service.search.call_args.args[0].query == 'status:resolved AND (title:"vault door")'
+        assert service.search.call_args.args[0].query == 'title:"vault door"'
         ui.assert_within_limits()
 
 
@@ -485,7 +484,7 @@ async def test_all_types_clears_only_the_type_buttons() -> None:
         await ui.press(ui.key_for("all-standings"))
         assert screen._query == "door"
         assert screen._sort == "-created_at"
-        assert service.search.call_args.args[0].query == "status:resolved AND (door)"
+        assert service.search.call_args.args[0].query == "door"
         ui.assert_within_limits()
 
 
@@ -911,7 +910,7 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         await ui.press(ui.key_for("reset"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert screen._guided is not None
-        assert screen._guided.query == ""
+        assert screen._guided.query == "status:resolved"
         assert "## Records" in ui.texts()
 
 
@@ -1073,3 +1072,35 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         ui.control(ui.key_for("search.open"))
         assert screen._guided is not None
         assert screen._query == "width:3 AND height:5 AND depth:2"
+
+
+async def test_default_record_status_is_visible_and_can_be_removed() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records, initial_records=True)
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        assert screen._query == "status:resolved"
+        assert any("resolved" in text.lower() for text in ui.texts())
+        await ui.press(ui.key_for("guided-search"))
+        assert screen._guided is not None
+        assert screen._guided.query == "status:resolved"
+        await ui.press(ui.key_for("remove-0"))
+        assert screen._query == ""
+        assert service.search.call_args.args[0].query == ""
+        assert screen._results is not None
+        await ui.press(ui.key_for("all-standings"))
+        assert service.search.call_args.args[0].query == ""
+        assert screen._results is not None
+        await ui.press(ui.key_for("reset"))
+        assert screen._query == screen._guided.query == "status:resolved"
+        assert screen._results is None
+
+
+async def test_record_status_is_not_injected_into_an_explicit_expression() -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "status:unresolved OR status:no_candidate")
+        request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
+        assert request.query == "status:unresolved OR status:no_candidate"

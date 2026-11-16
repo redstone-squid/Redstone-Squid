@@ -462,6 +462,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._record_search_help = search_help(records=True, apply_example=self._apply_search_example)
         self._search_service = search
         self._mode = "records" if initial_records and records is not None else "builds"
+        self._query = self._default_query
         self._records = record_browser(records, self._open_holder) if records is not None else None
         self._record_tools = record_tools
         if record_tools is not None:
@@ -498,6 +499,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
             chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
+
+    @property
+    def _default_query(self) -> str:
+        return "status:resolved" if self._mode == "records" else ""
 
     @classmethod
     async def create(
@@ -652,12 +657,12 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if mode == self._mode:
             return
         self._results = None
-        self._query = ""
         self._sort = ""
         self._record_categories = frozenset()
         expanded = self._guided is not None
         self._guided = None
         self._mode = mode
+        self._query = self._default_query
         if expanded:
             self._open_search_editor()
         self._selected = None
@@ -731,7 +736,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 tr(t"guided-search-reset = Reset"),
                 self._reset_search,
                 key="reset",
-                available=bool(self._query or self._sort or self._record_categories),
+                available=bool(self._query != self._default_query or self._sort or self._record_categories),
             ),
         )
 
@@ -828,7 +833,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _all_types(self, _event: sl.PressEvent) -> None:
         """Clear the record type buttons, keeping the typed query and sort."""
         self._record_categories = frozenset()
-        if self._query or self._sort:
+        if self._query != self._default_query or self._sort:
             await self._run_search(self._query, self._sort)
         else:
             self._results = None
@@ -836,25 +841,25 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _reset_search(self, _event: sl.PressEvent) -> None:
         self._record_categories = frozenset()
-        self._query = ""
+        self._query = self._default_query
         self._sort = ""
         self._results = None
         self._selected = None
         if self._guided is not None:
             self._guided.clear()
+            self._guided.query = self._query
 
     async def _run_search(self, query: str, sort: str) -> None:
         if self._search_service is None:
             message = "The catalogue search service is not configured"
             raise RuntimeError(message)
         scope = SearchScope.RECORDS if self._mode == "records" else SearchScope.BUILDS
-        # Enforce standings eligibility outside the user's expression, including OR queries.
-        expression = f"status:resolved AND ({query})" if query.strip() else "status:resolved"
+        expression = query
         if self._record_categories:
             categories = " OR ".join(f"base_title:{category}" for category in sorted(self._record_categories))
-            expression += f" AND ({categories})"
+            expression = f"({query}) AND ({categories})" if query.strip() else f"({categories})"
         request = SearchRequest(
-            expression if scope is SearchScope.RECORDS else query,
+            expression,
             scope=scope,
             sort=SearchSort.parse(sort or None),
             page_size=CATALOGUE_PAGE_SIZE,
