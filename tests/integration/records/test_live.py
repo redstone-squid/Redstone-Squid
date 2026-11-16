@@ -16,7 +16,6 @@ from squid.records.application.live import DoorRecordLookup
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TimingVariant
 from squid.records.domain.regions import RegionAnalysisStatus
-from squid.records.infrastructure import repository
 from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.records.models import (
@@ -132,12 +131,13 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
         session.add(fixed)
         await session.flush()
         build_id = fixed.id
-    original_timings = repository._door_timings
+    original_timings = PostgresRecordRepository._door_timings
 
     async def edit_before_timing_read(
-        session: AsyncSession,
+        self: PostgresRecordRepository,
         build_ids: tuple[int, ...],
     ) -> dict[int, tuple[TimingVariant, ...]]:
+        session = self._session()
         assert await session.scalar(text("SHOW transaction_isolation")) == "repeatable read"
         assert await session.scalar(text("SHOW transaction_read_only")) == ("off" if publication else "on")
         async with build_edit_session(sessions) as editor:
@@ -145,9 +145,9 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
             assert build is not None
             build.width = 20
             editor.add(DoorTimingVariant(build_id=build_id, label="new", opening_time=1))
-        return await original_timings(session, build_ids)
+        return await original_timings(self, build_ids)
 
-    monkeypatch.setattr(repository, "_door_timings", edit_before_timing_read)
+    monkeypatch.setattr(PostgresRecordRepository, "_door_timings", edit_before_timing_read)
     async with sessions() as session:
         records = PostgresRecordRepository(lambda: session)
         if publication:
@@ -157,7 +157,7 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
             sources = await records.list_for_door_lookup((6, 3, 1), "Door", None)
     assert sources[0].candidate.fixed_volume == 100
     assert sources[0].candidate.timing_variants[0].values[0] == 10
-    monkeypatch.setattr(repository, "_door_timings", original_timings)
+    monkeypatch.setattr(PostgresRecordRepository, "_door_timings", original_timings)
     async with sessions() as session:
         sources = await PostgresRecordRepository(lambda: session).list_for_door_lookup((6, 3, 1), "Door", None)
     assert sources[0].candidate.fixed_volume == 200
