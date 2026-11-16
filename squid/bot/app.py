@@ -76,6 +76,7 @@ EXTENSIONS = (
     "squid.bot.submission.cog",
     "squid.bot.log_cog",
     "squid.bot.help_cog",
+    "squid.bot.feedback_cog",
     "squid.bot.voting.cog",
     "squid.bot.starboard.cog",
     "squid.bot.recount_cog",

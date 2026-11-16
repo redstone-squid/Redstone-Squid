@@ -2104,6 +2104,18 @@ command-account-user-name = user
 # squid/bot/admin_cog.py:102
 command-archive-message-name = Archive Message
 
+# squid/bot/feedback_cog.py:41
+command-bug-help = Report a bug with the bot. Your message will be public.
+
+# squid/bot/feedback_cog.py:46
+command-bug-message-help = Describe the bug
+
+# squid/bot/feedback_cog.py:45
+command-bug-message-name = message
+
+# squid/bot/feedback_cog.py:40
+command-bug-name = bug
+
 # squid/bot/submission/cog.py:181
 command-build-browse-build-id-name = id
 
@@ -2427,6 +2439,18 @@ command-starboard-help = Configure this server's starboards
 
 # squid/bot/starboard/cog.py:206
 command-starboard-name = starboard
+
+# squid/bot/feedback_cog.py:55
+command-suggestion-help = Suggest improvements to the bot. Your message will be public.
+
+# squid/bot/feedback_cog.py:60
+command-suggestion-message-help = Describe your suggestion
+
+# squid/bot/feedback_cog.py:59
+command-suggestion-message-name = message
+
+# squid/bot/feedback_cog.py:54
+command-suggestion-name = suggestion
 
 # squid/bot/admin_cog.py:60
 command-tags-build-id-help = Choose a build by name to apply tags to it

@@ -10,6 +10,7 @@ from discord.ext.commands import Command
 from squid.bot.accounts.cog import VerifyCog
 from squid.bot.admin_cog import Admin
 from squid.bot.diagnostics.cog import Diagnostics
+from squid.bot.feedback_cog import FeedbackCog
 from squid.bot.give_redstoner_cog import GiveRedstoner
 from squid.bot.permissions_cog import PermissionCog
 from squid.bot.settings.cog import SettingsCog
@@ -35,6 +36,7 @@ PUBLIC_COGS = (
     BuildCommands,
     Admin,
     Diagnostics,
+    FeedbackCog,
     VoteCog,
     VerifyCog,
     VersionTracker,

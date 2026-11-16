@@ -7011,6 +7011,42 @@
       "squid/bot/admin_cog.py:102"
     ]
   },
+  "command-bug-help": {
+    "fingerprint": "de7f32466da00fc2d8cebfce6b40d3780cd072a186c578e8d2bcde171667e265",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:41"
+    ]
+  },
+  "command-bug-message-help": {
+    "fingerprint": "1c104372eb1828bd4da9037063f617ba84521478e701c1729679a9d1e0c535f3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:46"
+    ]
+  },
+  "command-bug-message-name": {
+    "fingerprint": "57090cb4e11232a6c5c0af767cbeaa93dfd279041d8e6da9372f2eeda09deea7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:45"
+    ]
+  },
+  "command-bug-name": {
+    "fingerprint": "db00b68b3c2dad3f003aba44a8ff960c7f1cc15148bcfc99f7e0f955e059204d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:40"
+    ]
+  },
   "command-build-browse-build-id-name": {
     "fingerprint": "fb55caa4a29ef5bace563531e6cff716a47a0207c0345d1481391e2305038761",
     "attributes": [],
@@ -7981,6 +8017,42 @@
     "arguments": [],
     "locations": [
       "squid/bot/starboard/cog.py:206"
+    ]
+  },
+  "command-suggestion-help": {
+    "fingerprint": "f318f23cc3a2f2d90aabd1525cb06535b6a4c5c3f8d4fbfa1d5f9f64522805b8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:55"
+    ]
+  },
+  "command-suggestion-message-help": {
+    "fingerprint": "0a5a2013ddd346aca4f2f25536465e24452ff4ed6c473120bcb0c4d8786458f3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:60"
+    ]
+  },
+  "command-suggestion-message-name": {
+    "fingerprint": "2ad72650544730db90ac183cc84fef3809b1ae89af2bb2fb4cf46743007b94d9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:59"
+    ]
+  },
+  "command-suggestion-name": {
+    "fingerprint": "1331198b41ca460bc009f6584b49998b3ad05dd3030b073cd5a0cd79db866170",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/feedback_cog.py:54"
     ]
   },
   "command-tags-build-id-help": {
