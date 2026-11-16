@@ -176,12 +176,6 @@ BUILD_SUBMISSION_RECALC = _b.node(
     NodeScope.GLOBAL,
     tr(t"permissions-recompute-build-derived = Recompute a build's derived attributes."),
 )
-BUILD_SUBMISSION_DEBUG = _b.node(
-    "build.submission.debug",
-    NodeScope.GLOBAL,
-    tr(t"permissions-inspect-build-raw = Inspect a build's raw stored representation."),
-    tags=(Tag.DIAGNOSTIC,),
-)
 BUILD_SCHEMATIC_DOWNLOAD_PRIVATE = _b.node(
     "build.schematic.download_private",
     NodeScope.GLOBAL,

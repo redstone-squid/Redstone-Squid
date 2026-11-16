@@ -81,7 +81,6 @@ def _screen(
             view_pending=True,
             approve=True,
             reject=True,
-            debug=False,
             edit=False,
         ),
         actor_account_id=1,

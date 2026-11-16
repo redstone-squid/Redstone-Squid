@@ -1,9 +1,7 @@
 """Canonical build catalogue, review, and schematic workspace."""
 
-import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
 from functools import partial
 from typing import Any, Literal, Self, cast, override
 
@@ -38,7 +36,6 @@ from squid.edits.domain import EditValues
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
-    BUILD_SUBMISSION_DEBUG,
     BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_REJECT,
     BUILD_SUBMISSION_VIEW_PENDING,
@@ -66,27 +63,6 @@ type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
 
-def _debug_dump(build: Build) -> str:
-    """Serialize a build's internal state as readable JSON without its embedding."""
-    state: dict[str, Any] = {key: value for key, value in build.edit_values().items() if key != "embedding"}
-    state["category"] = build.category
-    state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
-    return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)
-
-
-def _jsonable(value: Any) -> Any:
-    """Render enums by name, since an IntEnum otherwise serializes as the integer."""
-    match value:
-        case Enum():
-            return value.name
-        case dict():
-            return {str(key): _jsonable(item) for key, item in value.items()}
-        case list() | tuple():
-            return [_jsonable(item) for item in value]
-        case _:
-            return value
-
-
 @dataclass(frozen=True, slots=True)
 class BuildCapabilities:
     """Initial visibility choices for build details and actions, not authorization to execute them."""
@@ -94,7 +70,6 @@ class BuildCapabilities:
     view_pending: bool
     approve: bool
     reject: bool
-    debug: bool
     edit: bool
 
 
@@ -179,8 +154,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
 
     Given only an ID, the build loads on first render; a `Build` is shown immediately.
 
-    Capabilities control which actions appear. Review, debug, and timing
-    actions recheck permission through authorize; the routed editor checks its own access.
+    Capabilities control which actions appear. Review actions recheck permission
+    through authorize; the routed editor checks its own access.
     """
 
     _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
@@ -188,7 +163,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     )
     _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: Literal["approve", "reject"] | None = sl.state(None)
-    _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _show_schematics: bool = sl.state(False)
 
     def __init__(
@@ -260,14 +234,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         nodes.append(self._detail_actions(build))
         nodes.extend(self.controller.controls())
         nodes.append(self.schematics)
-        if self._asset is not None:
-            nodes.append(
-                sl.download(
-                    self._asset,
-                    label=tr(t"bot-submission-build-browse-download-result = Download result"),
-                    key="build-download",
-                )
-            )
         return nodes
 
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
@@ -309,12 +275,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                     partial(self._request_reject, build.revision),
                     key="reject",
                     tone=sl.Tone.DANGER,
-                )
-            )
-        if self._capabilities.debug:
-            actions.append(
-                sl.action_control(
-                    tr(t"bot-submission-build-browse-debug-download = Debug download"), self._debug, key="debug"
                 )
             )
         actions.append(
@@ -399,16 +359,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     async def _refresh_review(self) -> None:
         self.projection.invalidate()
         await self._refresh_posts(self._build_id)
-
-    async def _debug(self, event: sl.PressEvent) -> None:
-        if not await self._may(event, BUILD_SUBMISSION_DEBUG):
-            return
-        build = await self._queries.get(self._build_id)
-        if build is None:
-            await event.notice(tr(t"build-no-longer-available = That build is no longer available."))
-            return
-        data = _debug_dump(build).encode()
-        self._asset = sl.file(data, filename=f"build-{self._build_id}-debug.json")
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
@@ -536,7 +486,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),
             approve=await held(BUILD_SUBMISSION_APPROVE),
             reject=await held(BUILD_SUBMISSION_REJECT),
-            debug=await held(BUILD_SUBMISSION_DEBUG),
             edit=await held(BUILD_SUBMISSION_EDIT),
         )
 
