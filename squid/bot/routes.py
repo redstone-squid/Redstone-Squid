@@ -41,7 +41,7 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
     deferral = "public" if policy.audience == "public" else "private"
 
     async def acknowledge() -> None:
-        await anyio.sleep(2.5)
+        await anyio.sleep(1.0)
         if request.interaction is not None and request.interaction.response.is_done():
             return
         try:

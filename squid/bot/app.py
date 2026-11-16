@@ -22,6 +22,7 @@ from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
+from squid.bot.interaction_metrics import InteractionMetrics
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
@@ -171,6 +172,7 @@ class RedstoneSquid(Bot):
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
         self.actors = DiscordActorResolver(self)
+        self.interaction_metrics = InteractionMetrics()
         self.layout_profiler = MemoryProfiler()
         self.action_ledger = EventLedger(limit=200)
         self.topic_bus = LocalTopicBus()
@@ -230,6 +232,9 @@ class RedstoneSquid(Bot):
         if subscription is not None:
             subscription.detach()
         return await super().remove_cog(name, guild=guild, guilds=guilds)
+
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
+        self.interaction_metrics.observe(interaction)
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -307,6 +312,7 @@ class RedstoneSquid(Bot):
         # Permission cache invalidation is needed regardless of which cogs are enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.ui.run(), name="layout-runtime")
+        self.background_tasks.start(self.interaction_metrics.run(), name="interaction-metrics")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:
