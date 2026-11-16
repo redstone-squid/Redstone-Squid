@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.bot.submission.search_help import BUILD_EXAMPLES, RECORD_EXAMPLES, _entry, _reference
+from squid.bot.catalogue.search.help import BUILD_EXAMPLES, RECORD_EXAMPLES, _entry, _reference
 from squid.search.application import SearchQueryParser
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27

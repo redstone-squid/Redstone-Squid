@@ -2,7 +2,7 @@
 
 import json
 
-from squid.bot.submission.build_browse import _debug_dump
+from squid.bot.catalogue.browse import _debug_dump
 from squid.builds.domain import Status
 from squid.builds.domain.credits import name_credits
 from squid.builds.models import DoorBuild

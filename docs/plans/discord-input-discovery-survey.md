@@ -122,9 +122,9 @@ scope, delegation, rank, and revision checks in the application services.
 ### Build and record discovery
 
 Sources: [commands.py](../../squid/bot/submission/cog.py),
-[build_browse.py](../../squid/bot/submission/build_browse.py),
-[search_help.py](../../squid/bot/submission/search_help.py), and
-[search_view.py](../../squid/bot/submission/search_view.py).
+[build_browse.py](../../squid/bot/catalogue/browse.py),
+[search_help.py](../../squid/bot/catalogue/search/help.py), and
+[search_view.py](../../squid/bot/catalogue/search/results.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -143,7 +143,7 @@ the actual field catalogue rather than duplicate the hand-authored reference.
 
 ### Record maintenance
 
-Source: [records.py](../../squid/bot/submission/records.py), reached through
+Source: [records.py](../../squid/bot/catalogue/records.py), reached through
 Record tools for authorized guild users.
 
 | Input or action | Current discovery | Recommendation | Priority |
@@ -163,7 +163,7 @@ Sources: [submit.py](../../squid/bot/submission/submit.py),
 [sections.py](../../squid/bot/submission/ui/sections.py),
 [forms.py](../../squid/submissions/application/forms.py),
 [credit_text.py](../../squid/submissions/application/credit_text.py), and
-[schematic_tools.py](../../squid/bot/submission/schematic_tools.py).
+[schematic_tools.py](../../squid/bot/catalogue/schematics/tools.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |

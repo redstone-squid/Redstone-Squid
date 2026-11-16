@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-from squid.bot.submission.schematic_tools import SchematicTools
+from squid.bot.catalogue.schematics.tools import SchematicTools
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic

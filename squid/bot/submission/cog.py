@@ -14,15 +14,15 @@ from discord.ext.commands import Context, when_mentioned
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
-from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
 from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.ui import error_node

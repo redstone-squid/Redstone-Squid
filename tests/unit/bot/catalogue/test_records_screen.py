@@ -7,7 +7,7 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-from squid.bot.submission.records import RecordsScreen
+from squid.bot.catalogue.records import RecordsScreen
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import (

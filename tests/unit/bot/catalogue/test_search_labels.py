@@ -2,8 +2,8 @@
 
 import pytest
 
-from squid.bot.submission.query_clauses import query_leaves
-from squid.bot.submission.search_labels import filter_label, sort_label
+from squid.bot.catalogue.search.clauses import query_leaves
+from squid.bot.catalogue.search.labels import filter_label, sort_label
 from squid.search.application.parser import SearchQueryParser
 from squid_i18n import Text
 

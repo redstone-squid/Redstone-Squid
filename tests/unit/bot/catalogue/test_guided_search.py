@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
-from squid.bot.submission.search_labels import filter_label
+from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
+from squid.bot.catalogue.search.labels import filter_label
 from squid.core.actors import Actor
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser

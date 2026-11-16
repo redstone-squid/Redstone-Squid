@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.submission.list_rows import build_row, record_row
+from squid.bot.catalogue.rows import build_row, record_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.builds.domain import Status
 from squid.builds.models import Build

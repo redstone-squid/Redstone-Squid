@@ -8,11 +8,11 @@ import anyio
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.submission.schematics import (
+from squid.bot.catalogue.schematics.presentation import (
     WRITABLE_EXTENSIONS,
     _describe,
 )
-from squid.bot.submission.video_editor import VideoEditor
+from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
 from squid.permissions.domain import PermissionNode

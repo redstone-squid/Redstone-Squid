@@ -12,18 +12,18 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
+from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE, record_browser
+from squid.bot.catalogue.records import RecordsScreen
+from squid.bot.catalogue.rows import build_row
+from squid.bot.catalogue.schematics.tools import SchematicTools
+from squid.bot.catalogue.search.clauses import query_leaves
+from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
+from squid.bot.catalogue.search.help import search_help
+from squid.bot.catalogue.search.labels import filter_label, sort_label
+from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
-from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
-from squid.bot.submission.list_rows import build_row
-from squid.bot.submission.query_clauses import query_leaves
-from squid.bot.submission.record_browser import CATALOGUE_PAGE_SIZE, record_browser
-from squid.bot.submission.records import RecordsScreen
-from squid.bot.submission.schematic_tools import SchematicTools
-from squid.bot.submission.search_help import search_help
-from squid.bot.submission.search_labels import filter_label, sort_label
-from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import allows

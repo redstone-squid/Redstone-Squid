@@ -8,8 +8,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.submission.schematic_tools import SchematicTools, _video_failure_reason
-from squid.bot.submission.video_editor import VideoEditor
+from squid.bot.catalogue.schematics.tools import SchematicTools, _video_failure_reason
+from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.core.actors import Actor
 from squid.schematics.application.services import SchematicService
 from squid.schematics.application.video import VideoRenderRequest
@@ -33,7 +33,7 @@ def delivery(monkeypatch: pytest.MonkeyPatch) -> tuple[SchematicTools, Mock, Moc
     request.respond = AsyncMock()
     request.client = Mock()
     request.client.actors.resolve = AsyncMock(return_value=Actor(account_id=10))
-    monkeypatch.setattr("squid.bot.submission.schematic_tools.allows", AsyncMock(return_value=True))
+    monkeypatch.setattr("squid.bot.catalogue.schematics.tools.allows", AsyncMock(return_value=True))
     return component, request, service
 
 
@@ -158,7 +158,7 @@ async def test_automatic_delivery_sends_a_visible_video_followup(
     interaction.source.filesize_limit = 100
     request = await scope.request(interaction.source)
     await interaction.response.send_message("Video queued", ephemeral=True)
-    monkeypatch.setattr("squid.bot.submission.schematic_tools.anyio.sleep", AsyncMock())
+    monkeypatch.setattr("squid.bot.catalogue.schematics.tools.anyio.sleep", AsyncMock())
 
     try:
         await component._follow_video(request, 41)

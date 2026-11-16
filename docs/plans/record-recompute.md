@@ -46,7 +46,7 @@ Three things are wrong with this today:
 3. `_compute_scope` generates the category combinations. This is synchronous Python running on the event loop.
 4. `activate` takes `record-run:{kind}:{version}` and writes the run, results, holders and history.
 
-The worker drain, the staff rebuild form (`squid/bot/submission/records.py`) and `RecordService.lookup_or_materialize`
+The worker drain, the staff rebuild form (`squid/bot/catalogue/records.py`) and `RecordService.lookup_or_materialize`
 all go through step 1. While a background rebuild of one kind holds the lock, a user's lookup for another kind waits
 for the whole rebuild to finish.
 

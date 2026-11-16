@@ -11,10 +11,10 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
+from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
-from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner

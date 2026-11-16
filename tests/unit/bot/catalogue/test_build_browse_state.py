@@ -11,9 +11,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
+from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
+from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.submission.build_card import render_build_card
-from squid.bot.submission.records import RecordsScreen
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status

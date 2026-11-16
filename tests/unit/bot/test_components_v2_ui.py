@@ -10,9 +10,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
-from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient

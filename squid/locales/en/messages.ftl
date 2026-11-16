@@ -1092,55 +1092,55 @@ bot-starboard-screen-starboards = Starboards
 # squid/bot/starboard/screen.py:452
 bot-starboard-screen-up = Up
 
-# squid/bot/submission/build_browse.py:293, squid/bot/submission/build_browse.py:349
+# squid/bot/catalogue/browse.py:293, squid/bot/catalogue/browse.py:349
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:495
+# squid/bot/catalogue/browse.py:495
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:926
+# squid/bot/catalogue/browse.py:926
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:357
+# squid/bot/catalogue/browse.py:357
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/schematic_tools.py:302
+# squid/bot/catalogue/schematics/tools.py:302
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/submission/schematic_tools.py:311, squid/bot/submission/schematic_tools.py:92
+# squid/bot/catalogue/schematics/tools.py:311, squid/bot/catalogue/schematics/tools.py:92
 bot-submission-build-browse-convert-schematic = Other format or version
 
-# squid/bot/submission/build_browse.py:311
+# squid/bot/catalogue/browse.py:311
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:261, squid/bot/submission/schematic_tools.py:74
+# squid/bot/catalogue/browse.py:261, squid/bot/catalogue/schematics/tools.py:74
 bot-submission-build-browse-download-result = Download result
 
-# squid/bot/submission/schematic_tools.py:87
+# squid/bot/catalogue/schematics/tools.py:87
 bot-submission-build-browse-download-schematic = Download
 
-# squid/bot/submission/build_browse.py:285
+# squid/bot/catalogue/browse.py:285
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:245
+# squid/bot/catalogue/browse.py:245
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:924
+# squid/bot/catalogue/browse.py:924
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:641
+# squid/bot/catalogue/browse.py:641
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/submission/schematic_tools.py:314
+# squid/bot/catalogue/schematics/tools.py:314
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:302, squid/bot/submission/build_browse.py:351
+# squid/bot/catalogue/browse.py:302, squid/bot/catalogue/browse.py:351
 bot-submission-build-browse-reject = Reject
 
-# squid/bot/submission/schematic_tools.py:98
+# squid/bot/catalogue/schematics/tools.py:98
 bot-submission-build-browse-render-schematic = Preview image
 
-# squid/bot/submission/schematic_tools.py:114
+# squid/bot/catalogue/schematics/tools.py:114
 bot-submission-build-browse-schematic-info = Details
 
 # squid/bot/submission/consent_banner.py:65
@@ -1167,128 +1167,128 @@ bot-submission-edit-size-format = Enter sizes as width x height x depth, such as
 # squid/bot/submission/edit.py:164
 bot-submission-edit-unknown-names = Not in the catalogue: { $names }. Choose from the catalogue, or propose a new tag.
 
-# squid/bot/submission/records.py:301
+# squid/bot/catalogue/records.py:301
 bot-submission-records-build-kind = Build kind
 
-# squid/bot/submission/records.py:499
+# squid/bot/catalogue/records.py:499
 bot-submission-records-current-version-id = Current version ID
 
-# squid/bot/submission/records.py:174
+# squid/bot/catalogue/records.py:174
 bot-submission-records-evidence-gaps = Missing evidence
 
-# squid/bot/submission/records.py:480
+# squid/bot/catalogue/records.py:480
 bot-submission-records-lookup-record-category = Lookup record category
 
-# squid/bot/submission/records.py:490
+# squid/bot/catalogue/records.py:490
 bot-submission-records-pinned-version-id = Pinned version ID
 
-# squid/bot/submission/records.py:240, squid/bot/submission/records.py:495
+# squid/bot/catalogue/records.py:240, squid/bot/catalogue/records.py:495
 bot-submission-records-rebuild-records = Rebuild all records
 
-# squid/bot/submission/records.py:127
+# squid/bot/catalogue/records.py:127
 bot-submission-records-record-evidence-gaps = Records missing evidence
 
-# squid/bot/submission/records.py:142
+# squid/bot/catalogue/records.py:142
 bot-submission-records-record-title-diagnostics = Unrecognised record titles
 
-# squid/bot/submission/records.py:210
+# squid/bot/catalogue/records.py:210
 bot-submission-records-records = Record tools
 
-# squid/bot/submission/records.py:187
+# squid/bot/catalogue/records.py:187
 bot-submission-records-title-issues = Unrecognised titles
 
-# squid/bot/submission/schematics.py:95
+# squid/bot/catalogue/schematics/presentation.py:95
 bot-submission-schematics-and-more-not-listed = -# …and { $count } more not listed.
 
-# squid/bot/submission/schematics.py:39
+# squid/bot/catalogue/schematics/presentation.py:39
 bot-submission-schematics-data-version = **Data version**: { $version }
 
-# squid/bot/submission/schematics.py:42
+# squid/bot/catalogue/schematics/presentation.py:42
 bot-submission-schematics-declared-author = **Declared author**: { $author }
 
-# squid/bot/submission/schematics.py:120
+# squid/bot/catalogue/schematics/presentation.py:120
 bot-submission-schematics-inconclusive = inconclusive
 
-# squid/bot/submission/schematics.py:113
+# squid/bot/catalogue/schematics/presentation.py:113
 bot-submission-schematics-no = no
 
-# squid/bot/submission/schematics.py:56
+# squid/bot/catalogue/schematics/presentation.py:56
 bot-submission-schematics-no-preview = **No preview**: { $reason }
 
-# squid/bot/submission/schematics.py:112
+# squid/bot/catalogue/schematics/presentation.py:112
 bot-submission-schematics-none-observed = none observed
 
-# squid/bot/submission/schematics.py:118
+# squid/bot/catalogue/schematics/presentation.py:118
 bot-submission-schematics-passed = passed
 
-# squid/bot/submission/schematics.py:53
+# squid/bot/catalogue/schematics/presentation.py:53
 bot-submission-schematics-signs = **Signs**: { $text }
 
-# squid/bot/submission/schematics.py:108
+# squid/bot/catalogue/schematics/presentation.py:108
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
 # squid/bot/submission/cog.py:198
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/submission/search_view.py:546
+# squid/bot/catalogue/search/results.py:546
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Base title**
     { $base_title } · { $version_scope }
 
-# squid/bot/submission/search_view.py:453
+# squid/bot/catalogue/search/results.py:453
 bot-submission-search-view-creator = Creator
 
-# squid/bot/submission/search_view.py:580
+# squid/bot/catalogue/search/results.py:580
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/submission/search_view.py:557
+# squid/bot/catalogue/search/results.py:557
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/submission/search_view.py:449
+# squid/bot/catalogue/search/results.py:449
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/submission/search_view.py:447
+# squid/bot/catalogue/search/results.py:447
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/submission/search_view.py:266, squid/bot/submission/search_view.py:350
+# squid/bot/catalogue/search/results.py:266, squid/bot/catalogue/search/results.py:350
 bot-submission-search-view-retry = Retry
 
-# squid/bot/submission/search_view.py:345
+# squid/bot/catalogue/search/results.py:345
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/submission/search_view.py:451
+# squid/bot/catalogue/search/results.py:451
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/submission/search_view.py:569
+# squid/bot/catalogue/search/results.py:569
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/submission/search_view.py:457
+# squid/bot/catalogue/search/results.py:457
 bot-submission-search-view-tag = Tag
 
-# squid/bot/submission/search_view.py:589
+# squid/bot/catalogue/search/results.py:589
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/submission/search_view.py:597
+# squid/bot/catalogue/search/results.py:597
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/submission/search_view.py:455
+# squid/bot/catalogue/search/results.py:455
 bot-submission-search-view-version = Version
 
-# squid/bot/submission/search_view.py:136
+# squid/bot/catalogue/search/results.py:136
 bot-submission-search-view-view-build = Expand
 
 # squid/bot/submission/submit.py:180
@@ -1714,13 +1714,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:125
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/submission/build_browse.py:893
+# squid/bot/catalogue/browse.py:893
 browse-query-all-builds = All builds
 
-# squid/bot/submission/build_browse.py:891
+# squid/bot/catalogue/browse.py:891
 browse-query-all-standings = All standings
 
-# squid/bot/submission/build_browse.py:675
+# squid/bot/catalogue/browse.py:675
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1729,22 +1729,22 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/build_browse.py:618
+# squid/bot/catalogue/browse.py:618
 build-browse-all-builds = Builds
 
-# squid/bot/submission/build_browse.py:634
+# squid/bot/catalogue/browse.py:634
 build-browse-record-tools = Record tools
 
-# squid/bot/submission/build_browse.py:626
+# squid/bot/catalogue/browse.py:626
 build-browse-records = Records
 
-# squid/bot/submission/build_browse.py:273
+# squid/bot/catalogue/browse.py:273
 build-browse-tags = Build tags
 
-# squid/bot/submission/build_browse.py:677
+# squid/bot/catalogue/browse.py:677
 build-browser-close-search = Done
 
-# squid/bot/submission/build_browse.py:679
+# squid/bot/catalogue/browse.py:679
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/submit.py:85
@@ -1816,7 +1816,7 @@ build-edit-history-save = Save build changes
 # squid/bot/submission/ui/build_edit.py:189
 build-edit-history-unlisted = Remove names not in the catalogue
 
-# squid/bot/submission/ui/controls.py:76
+# squid/bot/submission/ui/controls.py:74
 build-editor-build-deleted = That build no longer exists.
 
 # squid/bot/submission/ui/build_edit.py:310
@@ -1858,7 +1858,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:382
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/submission/build_browse.py:667, squid/bot/submission/build_browse.py:798
+# squid/bot/catalogue/browse.py:667, squid/bot/catalogue/browse.py:798
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1873,55 +1873,55 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:496
+# squid/bot/catalogue/browse.py:496
 build-list-empty = No builds are available.
 
-# squid/bot/submission/build_browse.py:402
+# squid/bot/catalogue/browse.py:402
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:411
+# squid/bot/catalogue/browse.py:411
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:330
+# squid/bot/catalogue/browse.py:330
 build-review-approve-effect = The build becomes visible in the public catalogue.
 
-# squid/bot/submission/build_browse.py:329
+# squid/bot/catalogue/browse.py:329
 build-review-approve-title = Approve build #{ $build_id }?
 
-# squid/bot/submission/build_browse.py:335
+# squid/bot/catalogue/browse.py:335
 build-review-reject-effect = The build is marked as denied and leaves the catalogue.
 
-# squid/bot/submission/build_browse.py:334
+# squid/bot/catalogue/browse.py:334
 build-review-reject-title = Reject build #{ $build_id }?
 
-# squid/bot/submission/build_browse.py:381, squid/bot/submission/build_browse.py:383
+# squid/bot/catalogue/browse.py:381, squid/bot/catalogue/browse.py:383
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/schematic_tools.py:130
+# squid/bot/catalogue/schematics/tools.py:130
 build-schematic-missing = This build has no schematic attached.
 
-# squid/bot/submission/schematic_tools.py:134
+# squid/bot/catalogue/schematics/tools.py:134
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/submission/build_browse.py:316
+# squid/bot/catalogue/browse.py:316
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/submission/build_browse.py:318
+# squid/bot/catalogue/browse.py:318
 build-schematic-tools-show = Schematic tools
 
-# squid/bot/submission/search_view.py:151, squid/bot/submission/search_view.py:155, squid/bot/submission/search_view.py:210, squid/bot/submission/search_view.py:263
+# squid/bot/catalogue/search/results.py:151, squid/bot/catalogue/search/results.py:155, squid/bot/catalogue/search/results.py:210, squid/bot/catalogue/search/results.py:263
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/submission/search_view.py:349
+# squid/bot/catalogue/search/results.py:349
 build-search-load-failed = Could not load search results.
 
-# squid/bot/submission/search_view.py:348
+# squid/bot/catalogue/search/results.py:348
 build-search-loading = Loading search results…
 
 # squid/bot/submission/cog.py:138
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/submission/search_view.py:346
+# squid/bot/catalogue/search/results.py:346
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/cog.py:148
@@ -1999,10 +1999,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/submission/build_browse.py:724, squid/bot/submission/search_help.py:184
+# squid/bot/catalogue/browse.py:724, squid/bot/catalogue/search/help.py:184
 catalogue-search-help = Search help
 
-# squid/bot/submission/build_browse.py:602
+# squid/bot/catalogue/browse.py:602
 catalogue-search-help-close = Close help
 
 # squid/catalogue/domain/titles.py:67
@@ -2788,7 +2788,7 @@ diagnostics-view-work-lost = Work lost
 # squid/bot/diagnostics/screen.py:262
 diagnostics-view-work-lost-only = Work lost only
 
-# squid/bot/submission/ui/drafts.py:537, squid/bot/submission/ui/drafts.py:705, squid/bot/submission/ui/drafts.py:950
+# squid/bot/submission/ui/drafts.py:538, squid/bot/submission/ui/drafts.py:706, squid/bot/submission/ui/drafts.py:951
 draft-editor-add-files = Add files
 
 # squid/bot/submission/ui/sections.py:78
@@ -2797,7 +2797,7 @@ draft-editor-build-size = Build size
 # squid/bot/submission/ui/sections.py:272
 draft-editor-choose = Choose…
 
-# squid/bot/submission/ui/drafts.py:671
+# squid/bot/submission/ui/drafts.py:672
 draft-editor-choose-file = Choose a file to manage…
 
 # squid/bot/submission/ui/build_edit.py:540, squid/bot/submission/ui/sections.py:363
@@ -2806,103 +2806,103 @@ draft-editor-done = Done
 # squid/bot/submission/ui/sections.py:83
 draft-editor-door-size = Door size
 
-# squid/bot/submission/ui/drafts.py:535, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:208
+# squid/bot/submission/ui/drafts.py:536, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:208
 draft-editor-edit = Edit
 
-# squid/bot/submission/ui/drafts.py:609
+# squid/bot/submission/ui/drafts.py:610
 draft-editor-edit-build = Edit build
 
-# squid/bot/submission/ui/drafts.py:500
+# squid/bot/submission/ui/drafts.py:501
 draft-editor-expired = This panel has closed. Your answers are saved.
 
 # squid/bot/submission/ui/drafts.py:373
 draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:904
+# squid/bot/submission/ui/drafts.py:905
 draft-editor-file-failed = ⚠️ Upload failed. Replace or remove it.
 
-# squid/bot/submission/ui/drafts.py:906
+# squid/bot/submission/ui/drafts.py:907
 draft-editor-file-failed-final = ⚠️ Upload failed
 
-# squid/bot/submission/ui/drafts.py:896
+# squid/bot/submission/ui/drafts.py:897
 draft-editor-file-kind-image = Image
 
-# squid/bot/submission/ui/drafts.py:895
+# squid/bot/submission/ui/drafts.py:896
 draft-editor-file-kind-schematic = Schematic
 
-# squid/bot/submission/ui/drafts.py:898
+# squid/bot/submission/ui/drafts.py:899
 draft-editor-file-kind-unknown = Unsupported file type
 
-# squid/bot/submission/ui/drafts.py:897
+# squid/bot/submission/ui/drafts.py:898
 draft-editor-file-kind-video = Video
 
-# squid/bot/submission/ui/drafts.py:908
+# squid/bot/submission/ui/drafts.py:909
 draft-editor-file-not-added = Not added yet. Choose it under Edit to use it.
 
-# squid/bot/submission/ui/drafts.py:910
+# squid/bot/submission/ui/drafts.py:911
 draft-editor-file-not-used = Not used
 
-# squid/bot/submission/ui/drafts.py:912
+# squid/bot/submission/ui/drafts.py:913
 draft-editor-file-uploading = Uploading…
 
-# squid/bot/submission/ui/drafts.py:887
+# squid/bot/submission/ui/drafts.py:888
 draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*
 
 # squid/bot/submission/ui/drafts.py:354
 draft-editor-files-failed = { $failed } of the files could not be added. They are listed under Files so you can replace or remove them.
 
-# squid/bot/submission/ui/drafts.py:652
+# squid/bot/submission/ui/drafts.py:653
 draft-editor-files-heading = Files
 
-# squid/bot/submission/ui/drafts.py:954
+# squid/bot/submission/ui/drafts.py:955
 draft-editor-files-label = Schematic, images, or videos
 
-# squid/bot/submission/ui/drafts.py:891
+# squid/bot/submission/ui/drafts.py:892
 draft-editor-files-none = *No files.*
 
-# squid/bot/submission/ui/drafts.py:883
+# squid/bot/submission/ui/drafts.py:884
 draft-editor-files-title = **Files**
 
-# squid/bot/submission/ui/drafts.py:1011
+# squid/bot/submission/ui/drafts.py:1012
 draft-editor-issue-media-processing = Your images or videos are still being processed.
 
-# squid/bot/submission/ui/drafts.py:1013
+# squid/bot/submission/ui/drafts.py:1014
 draft-editor-issue-media-rejected = A file could not be used. Replace or remove it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1027
+# squid/bot/submission/ui/drafts.py:1028
 draft-editor-issue-permission = You no longer have permission to submit this draft.
 
-# squid/bot/submission/ui/drafts.py:1022
+# squid/bot/submission/ui/drafts.py:1023
 draft-editor-issue-retry-exhausted = Creating the build failed several times. Press **Submit** to try again, or ask staff for help if it keeps failing.
 
-# squid/bot/submission/ui/drafts.py:993
+# squid/bot/submission/ui/drafts.py:994
 draft-editor-issue-schema-unsupported = This draft uses an old version of the form. Start a new one with `/build submit`.
 
-# squid/bot/submission/ui/drafts.py:1006
+# squid/bot/submission/ui/drafts.py:1007
 draft-editor-issue-schematic-primary = You added several schematics. Choose the main one under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1000
+# squid/bot/submission/ui/drafts.py:1001
 draft-editor-issue-schematic-processing = Your schematic is still being processed.
 
-# squid/bot/submission/ui/drafts.py:1002
+# squid/bot/submission/ui/drafts.py:1003
 draft-editor-issue-schematic-rejected = Your schematic could not be read. Replace it under **Files**.
 
-# squid/bot/submission/ui/drafts.py:998
+# squid/bot/submission/ui/drafts.py:999
 draft-editor-issue-schematic-required = Add a schematic under **Files**.
 
-# squid/bot/submission/ui/drafts.py:1017
+# squid/bot/submission/ui/drafts.py:1018
 draft-editor-issue-sponsor = The Minecraft server credited for this build is no longer available for credit. Turn off server credit to continue.
 
-# squid/bot/submission/ui/drafts.py:1029
+# squid/bot/submission/ui/drafts.py:1030
 draft-editor-issue-target-rejected = The build could not be created from these answers. Check them and press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:511
+# squid/bot/submission/ui/drafts.py:512
 draft-editor-loading = Loading your draft…
 
-# squid/bot/submission/ui/drafts.py:693
+# squid/bot/submission/ui/drafts.py:694
 draft-editor-main-schematic = Use as main schematic
 
-# squid/bot/submission/ui/drafts.py:660
+# squid/bot/submission/ui/drafts.py:661
 draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic.
 
 # squid/bot/submission/ui/sections.py:287
@@ -2929,16 +2929,16 @@ draft-editor-picker-pages-multiple = -# Page { $page_number } of { $pages }. Cho
 # squid/bot/submission/ui/sections.py:222
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/build_edit.py:433, squid/bot/submission/ui/drafts.py:543
+# squid/bot/submission/ui/build_edit.py:433, squid/bot/submission/ui/drafts.py:544
 draft-editor-preview = Preview
 
-# squid/bot/submission/ui/drafts.py:802, squid/bot/submission/ui/drafts.py:804
+# squid/bot/submission/ui/drafts.py:803, squid/bot/submission/ui/drafts.py:805
 draft-editor-preview-failed = The preview could not be drawn.
 
-# squid/bot/submission/ui/drafts.py:793
+# squid/bot/submission/ui/drafts.py:794
 draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. It updates as you edit; images and schematics appear after submission.
 
-# squid/bot/submission/ui/drafts.py:806
+# squid/bot/submission/ui/drafts.py:807
 draft-editor-preview-loading = Drawing the preview…
 
 # squid/bot/submission/ui/sections.py:281
@@ -2977,34 +2977,34 @@ draft-editor-problem-unknown-option = No longer available, choose again
 # squid/bot/submission/ui/sections.py:692
 draft-editor-problem-wrong-type = Not a valid value, enter it again
 
-# squid/bot/submission/ui/drafts.py:568
+# squid/bot/submission/ui/drafts.py:569
 draft-editor-ready = Ready to submit.
 
-# squid/bot/submission/ui/drafts.py:551, squid/bot/submission/ui/drafts.py:598
+# squid/bot/submission/ui/drafts.py:552, squid/bot/submission/ui/drafts.py:599
 draft-editor-refresh = Refresh
 
-# squid/bot/submission/ui/drafts.py:684
+# squid/bot/submission/ui/drafts.py:685
 draft-editor-remove-file = Remove
 
-# squid/bot/submission/ui/drafts.py:503
+# squid/bot/submission/ui/drafts.py:504
 draft-editor-reopen = Reopen draft
 
-# squid/bot/submission/ui/drafts.py:681
+# squid/bot/submission/ui/drafts.py:682
 draft-editor-replace-file = Replace
 
-# squid/bot/submission/ui/drafts.py:753
+# squid/bot/submission/ui/drafts.py:754
 draft-editor-replace-title = Replace file
 
 # squid/bot/submission/ui/drafts.py:403
 draft-editor-replacement-failed = The replacement could not be added. Try again or remove it.
 
-# squid/bot/submission/ui/drafts.py:754
+# squid/bot/submission/ui/drafts.py:755
 draft-editor-replacement-label = New file
 
 # squid/bot/submission/ui/sections.py:413, squid/bot/submission/ui/sections.py:437
 draft-editor-required = ⚠️ *Required*
 
-# squid/bot/submission/ui/drafts.py:559
+# squid/bot/submission/ui/drafts.py:560
 draft-editor-required-left =
     { NUMBER($missing) ->
         [one] ⚠️ **{ NUMBER($missing) } required field is empty.** Fill it in to submit.
@@ -3023,51 +3023,51 @@ draft-editor-size-format = Enter the size as width x height x depth, such as 5x7
 # squid/bot/submission/ui/sections.py:642
 draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/drafts.py:850
+# squid/bot/submission/ui/drafts.py:851
 draft-editor-status-creating = ⏳ Creating your build. This usually takes under a minute; this message updates when it is done.
 
-# squid/bot/submission/ui/drafts.py:857
+# squid/bot/submission/ui/drafts.py:858
 draft-editor-status-done = ✅ Your build was saved as **#{ $build_id }** and is now pending review. You can still edit it while it waits.
 
-# squid/bot/submission/ui/drafts.py:862
+# squid/bot/submission/ui/drafts.py:863
 draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.
 
-# squid/bot/submission/ui/drafts.py:831
+# squid/bot/submission/ui/drafts.py:832
 draft-editor-status-editing =
     Fill in each section, then press **Submit**. Your answers are saved as you go.
     -# Reopen this draft with `/build drafts` until { $expires }.
 
-# squid/bot/submission/ui/drafts.py:865
+# squid/bot/submission/ui/drafts.py:866
 draft-editor-status-expired = This draft expired before it was submitted. Start a new one with `/build submit`; your answers are listed below for reference.
 
-# squid/bot/submission/ui/drafts.py:845
+# squid/bot/submission/ui/drafts.py:846
 draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** Fix the problems below, then press **Submit** again.
 
-# squid/bot/submission/ui/drafts.py:839
+# squid/bot/submission/ui/drafts.py:840
 draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** The submission continues on its own once they are ready. If you edit anything now, press **Submit** again afterwards.
 
-# squid/bot/submission/ui/drafts.py:576
+# squid/bot/submission/ui/drafts.py:577
 draft-editor-submit = Submit
 
-# squid/bot/submission/ui/drafts.py:822
+# squid/bot/submission/ui/drafts.py:823
 draft-editor-title-creating = ## Submitting your build · { $category }
 
-# squid/bot/submission/ui/drafts.py:824
+# squid/bot/submission/ui/drafts.py:825
 draft-editor-title-done = ## Build submitted · { $category }
 
-# squid/bot/submission/ui/drafts.py:828
+# squid/bot/submission/ui/drafts.py:829
 draft-editor-title-editing = ## Submit a build · { $category }
 
-# squid/bot/submission/ui/drafts.py:826
+# squid/bot/submission/ui/drafts.py:827
 draft-editor-title-expired = ## Draft expired · { $category }
 
 # squid/bot/submission/cog.py:500
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
-# squid/bot/submission/ui/drafts.py:679
+# squid/bot/submission/ui/drafts.py:680
 draft-editor-use-file = Use this file
 
-# squid/bot/submission/ui/drafts.py:548
+# squid/bot/submission/ui/drafts.py:549
 draft-editor-waiting-hint = This message updates when your files are ready.
 
 # squid/bot/submission/ui/sections.py:447, squid/bot/submission/ui/sections.py:536
@@ -3250,94 +3250,94 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner_cog.py:127
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/submission/guided_search.py:177, squid/bot/submission/guided_search.py:198
+# squid/bot/catalogue/search/filters.py:177, squid/bot/catalogue/search/filters.py:198
 guided-search-add-filter = Add filter
 
-# squid/bot/submission/guided_search.py:204
+# squid/bot/catalogue/search/filters.py:204
 guided-search-change-field = Choose another field
 
-# squid/bot/submission/guided_search.py:175
+# squid/bot/catalogue/search/filters.py:175
 guided-search-close-filters = Close filters
 
-# squid/bot/submission/guided_search.py:312
+# squid/bot/catalogue/search/filters.py:312
 guided-search-comparison = Comparison
 
-# squid/bot/submission/guided_search.py:169
+# squid/bot/catalogue/search/filters.py:169
 guided-search-edit-query = Type a query
 
-# squid/bot/submission/guided_search.py:359
+# squid/bot/catalogue/search/filters.py:359
 guided-search-edit-text = Edit keywords
 
-# squid/bot/submission/guided_search.py:202
+# squid/bot/catalogue/search/filters.py:202
 guided-search-filter-heading = Filter by { $name }
 
-# squid/bot/submission/guided_search.py:362
+# squid/bot/catalogue/search/filters.py:362
 guided-search-keywords = Keywords
 
-# squid/bot/submission/guided_search.py:348, squid/bot/submission/guided_search.py:365
+# squid/bot/catalogue/search/filters.py:348, squid/bot/catalogue/search/filters.py:365
 guided-search-negated = Exclude matches
 
-# squid/bot/submission/guided_search.py:152
+# squid/bot/catalogue/search/filters.py:152
 guided-search-next-filters = Next filters
 
-# squid/bot/submission/guided_search.py:539
+# squid/bot/catalogue/search/filters.py:539
 guided-search-no = No
 
-# squid/bot/submission/guided_search.py:306
+# squid/bot/catalogue/search/filters.py:306
 guided-search-operator-at-least = at least
 
-# squid/bot/submission/guided_search.py:304
+# squid/bot/catalogue/search/filters.py:304
 guided-search-operator-at-most = at most
 
-# squid/bot/submission/guided_search.py:307
+# squid/bot/catalogue/search/filters.py:307
 guided-search-operator-between = between
 
-# squid/bot/submission/guided_search.py:302
+# squid/bot/catalogue/search/filters.py:302
 guided-search-operator-equal = is
 
-# squid/bot/submission/guided_search.py:305
+# squid/bot/catalogue/search/filters.py:305
 guided-search-operator-greater = more than
 
-# squid/bot/submission/guided_search.py:303
+# squid/bot/catalogue/search/filters.py:303
 guided-search-operator-less = less than
 
-# squid/bot/submission/guided_search.py:146
+# squid/bot/catalogue/search/filters.py:146
 guided-search-previous-filters = Previous filters
 
-# squid/bot/submission/guided_search.py:261
+# squid/bot/catalogue/search/filters.py:261
 guided-search-query-label = Words and filters, e.g. door width<=5
 
-# squid/bot/submission/guided_search.py:257
+# squid/bot/catalogue/search/filters.py:257
 guided-search-query-title = Search query
 
-# squid/bot/submission/guided_search.py:247
+# squid/bot/catalogue/search/filters.py:247
 guided-search-remove-clause = Remove
 
-# squid/bot/submission/build_browse.py:730
+# squid/bot/catalogue/browse.py:730
 guided-search-reset = Reset
 
-# squid/bot/submission/guided_search.py:462
+# squid/bot/catalogue/search/filters.py:462
 guided-search-search-filter = Search fields
 
-# squid/bot/submission/guided_search.py:476
+# squid/bot/catalogue/search/filters.py:476
 guided-search-search-options = Search sort orders
 
-# squid/bot/submission/guided_search.py:499
+# squid/bot/catalogue/search/filters.py:499
 guided-search-search-values = Search { $name }
 
-# squid/bot/submission/guided_search.py:223
+# squid/bot/catalogue/search/filters.py:223
 guided-search-selected-field = Set { $name } filter
 
-# squid/bot/submission/guided_search.py:163
+# squid/bot/catalogue/search/filters.py:163
 guided-search-sort = Sort by
 
-# squid/bot/submission/guided_search.py:183
+# squid/bot/catalogue/search/filters.py:183
 guided-search-sorting = Sort
 
-# squid/bot/submission/guided_search.py:339
+# squid/bot/catalogue/search/filters.py:339
 guided-search-upper = And (only for between)
 
-# squid/bot/submission/guided_search.py:539
+# squid/bot/catalogue/search/filters.py:539
 guided-search-yes = Yes
 
 # squid/bot/help_cog.py:26
@@ -3924,7 +3924,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/submission/build_browse.py:583
+# squid/bot/catalogue/browse.py:583
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:491
@@ -4456,70 +4456,70 @@ recalculation-reviewed = Build #{ $build_id }, reviewed revision { $revision }.
 # squid/bot/submission/ui/recalculation.py:72
 recalculation-target = Build #{ $target }
 
-# squid/bot/submission/record_browser.py:99
+# squid/bot/catalogue/record_browser.py:99
 record-browse-empty = No published records are available.
 
-# squid/bot/submission/record_browser.py:86
+# squid/bot/catalogue/record_browser.py:86
 record-browse-no-holders = No confirmed holders yet.
 
-# squid/bot/submission/record_browser.py:75
+# squid/bot/catalogue/record_browser.py:75
 record-browse-open-holder = Open build #{ $build_id }
 
-# squid/bot/submission/record_browser.py:98
+# squid/bot/catalogue/record_browser.py:98
 record-browse-title = Records
 
-# squid/bot/submission/build_browse.py:709
+# squid/bot/catalogue/browse.py:709
 record-browser-all = All types
 
-# squid/bot/submission/build_browse.py:704
+# squid/bot/catalogue/browse.py:704
 record-browser-fastest = Fastest
 
-# squid/bot/submission/build_browse.py:705
+# squid/bot/catalogue/browse.py:705
 record-browser-first = First
 
-# squid/bot/submission/build_browse.py:703
+# squid/bot/catalogue/browse.py:703
 record-browser-smallest = Smallest
 
 # squid/bot/submission/cog.py:215
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
-# squid/bot/submission/records.py:223
+# squid/bot/catalogue/records.py:223
 records-active-version = the active version
 
 # squid/records/application/services.py:729, squid/records/application/services.py:760
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
-# squid/bot/submission/records.py:472
+# squid/bot/catalogue/records.py:472
 records-category-id = Category definition #{ $definition_id }
 
 # squid/records/errors.py:29, squid/records/errors.py:45
 records-category-not-found-title = Record category not found
 
-# squid/bot/submission/records.py:234, squid/bot/submission/records.py:375
+# squid/bot/catalogue/records.py:234, squid/bot/catalogue/records.py:375
 records-choose-definition = Recompute a category
 
-# squid/bot/submission/records.py:268, squid/bot/submission/records.py:343
+# squid/bot/catalogue/records.py:268, squid/bot/catalogue/records.py:343
 records-choose-restriction = Add restriction
 
-# squid/bot/submission/records.py:246, squid/bot/submission/records.py:329
+# squid/bot/catalogue/records.py:246, squid/bot/catalogue/records.py:329
 records-choose-version = Use another version
 
-# squid/bot/submission/records.py:217
+# squid/bot/catalogue/records.py:217
 records-diagnostics-loading = Loading record diagnostics.
 
 # squid/records/errors.py:15
 records-errors-record-not-found = Record not found.
 
-# squid/bot/submission/records.py:273
+# squid/bot/catalogue/records.py:273
 records-exact-category = Look up exact category
 
-# squid/bot/submission/records.py:483
+# squid/bot/catalogue/records.py:483
 records-exact-category-key = Exact category key
 
-# squid/bot/submission/records.py:259
+# squid/bot/catalogue/records.py:259
 records-exact-heading = Category without a record
 
-# squid/bot/submission/records.py:261
+# squid/bot/catalogue/records.py:261
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
 # squid/records/application/services.py:773
@@ -4528,22 +4528,22 @@ records-fastest-records-unsupported = Fastest records are not supported for { $k
 # squid/records/domain/models.py:115
 records-fixed-volume-positive = Fixed volume must be positive.
 
-# squid/bot/submission/records.py:150
+# squid/bot/catalogue/records.py:150
 records-gap-needs = Needs { $needs } on these builds:
 
-# squid/bot/submission/records.py:154
+# squid/bot/catalogue/records.py:154
 records-gap-open-build = Open build #{ $build_id }
 
-# squid/bot/submission/records.py:462
+# squid/bot/catalogue/records.py:462
 records-gap-summary = { $title } · needs { $needs }
 
-# squid/bot/submission/records.py:177
+# squid/bot/catalogue/records.py:177
 records-gaps-purpose = These record categories cannot be decided yet. Add the missing values to their builds, then recompute.
 
-# squid/bot/submission/records.py:226
+# squid/bot/catalogue/records.py:226
 records-maintenance-purpose = Recalculate standings after fixing builds or title rules. These actions use the rules of { $version }.
 
-# squid/bot/submission/records.py:203
+# squid/bot/catalogue/records.py:203
 records-maintenance-tools = Recompute
 
 # squid/records/domain/categories.py:50
@@ -4552,31 +4552,31 @@ records-maximum-category-size = Maximum category size cannot be negative.
 # squid/records/errors.py:44
 records-no-confirmed-build = No confirmed build satisfies the requested record category.
 
-# squid/bot/submission/records.py:222
+# squid/bot/catalogue/records.py:222
 records-no-maintenance-actions = No maintenance actions are available.
 
-# squid/bot/submission/records.py:143
+# squid/bot/catalogue/records.py:143
 records-no-titles-need-review = Every active record title uses known terms.
 
-# squid/bot/submission/records.py:128
+# squid/bot/catalogue/records.py:128
 records-no-unresolved-categories = Every active record category has the evidence it needs.
 
 # squid/records/application/published_points.py:71
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/bot/submission/records.py:450
+# squid/bot/catalogue/records.py:450
 records-operation-permission-denied = You are no longer allowed to perform this records operation.
 
 # squid/records/application/services.py:690
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
-# squid/bot/submission/records.py:440
+# squid/bot/catalogue/records.py:440
 records-rebuild-summary = Rebuilt { $definitions } definitions; { $resolved } resolved; { $unresolved } awaiting evidence.
 
-# squid/bot/submission/records.py:377
+# squid/bot/catalogue/records.py:377
 records-recompute-definition = Recompute definition
 
-# squid/bot/submission/records.py:369, squid/bot/submission/records.py:418
+# squid/bot/catalogue/records.py:369, squid/bot/catalogue/records.py:418
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
 # squid/records/application/services.py:512
@@ -4594,19 +4594,19 @@ records-record-not-found-title = Record not found
 # squid/records/application/services.py:791
 records-records-not-supported = Records are not supported for { $kind_name }.
 
-# squid/bot/submission/records.py:476
+# squid/bot/catalogue/records.py:476
 records-remove-restriction = Remove { $label }
 
-# squid/bot/submission/records.py:250
+# squid/bot/catalogue/records.py:250
 records-reset-version = Use active version
 
-# squid/bot/submission/records.py:402
+# squid/bot/catalogue/records.py:402
 records-restriction-base-key-required = Restrictions can only be combined with a hand-typed base key.
 
-# squid/bot/submission/records.py:485
+# squid/bot/catalogue/records.py:485
 records-restriction-ids-help = Restriction IDs, comma separated
 
-# squid/bot/submission/records.py:396
+# squid/bot/catalogue/records.py:396
 records-restriction-ids-invalid = Restriction IDs must be whole numbers separated by commas.
 
 # squid/records/domain/models.py:89
@@ -4618,7 +4618,7 @@ records-title-holder-required = A resolved record title must have at least one h
 # squid/records/domain/models.py:145
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
-# squid/bot/submission/records.py:190
+# squid/bot/catalogue/records.py:190
 records-titles-purpose = These record titles contain terms the title rules do not know. Fix the taxonomy, then rebuild records.
 
 # squid/bot/recount_cog.py:112
@@ -4648,35 +4648,35 @@ redstoner-role-restored = { $member } — just kidding, here is your role back.
 # squid/bot/give_redstoner_cog.py:267
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
-# squid/bot/submission/schematics.py:59
+# squid/bot/catalogue/schematics/presentation.py:59
 schematic-block-count-disclaimer = -# Read by { $analyzer }. Block count is not the Door Rules cumulative volume.
 
-# squid/bot/submission/schematics.py:27
+# squid/bot/catalogue/schematics/presentation.py:27
 schematic-build-measured-size =
     ### Schematic for build { $id }
     { "*" }*Measured size**: { $width } x { $height } x { $length } (bounding volume { $volume })
     { "*" }*Non-air blocks**: { $blocks }
     { "*" }*Distinct block states**: { $states }
 
-# squid/bot/submission/schematic_tools.py:315
+# squid/bot/catalogue/schematics/tools.py:315
 schematic-convert-format-help = litematic for Litematica; schem for WorldEdit; mcstructure for Bedrock.
 
-# squid/bot/submission/schematic_tools.py:325
+# squid/bot/catalogue/schematics/tools.py:325
 schematic-convert-version = Minecraft version
 
-# squid/bot/submission/schematic_tools.py:326
+# squid/bot/catalogue/schematics/tools.py:326
 schematic-convert-version-help = Leave blank to keep the original. A release such as Java 1.21, or a numeric data version such as 3953.
 
-# squid/bot/submission/schematics.py:90
+# squid/bot/catalogue/schematics/presentation.py:90
 schematic-inputs-heading = **Inputs found in this schematic**:
 
-# squid/bot/submission/schematics.py:133
+# squid/bot/catalogue/schematics/presentation.py:133
 schematic-moderator-evidence-disclaimer = -# Moderator evidence only. This does not alter the human-declared or official record timing.
 
-# squid/bot/submission/schematics.py:46
+# squid/bot/catalogue/schematics/presentation.py:46
 schematic-simulated-piston-evidence = **Simulated piston activity**: { $ticks } gt (moderator evidence only)
 
-# squid/bot/submission/schematics.py:122
+# squid/bot/catalogue/schematics/presentation.py:122
 schematic-simulated-timing-evidence =
     ### Simulated timing evidence
     { "*" }*Input**: ({ $x }, { $y }, { $z }) ({ $source })
@@ -4685,52 +4685,52 @@ schematic-simulated-timing-evidence =
     { "*" }*Evidence**: { $changes } block changes; { $pistons } piston events; { $redstone } redstone events
     { "*" }*Integrity checks**: { $status }
 
-# squid/bot/submission/schematics.py:86
+# squid/bot/catalogue/schematics/presentation.py:86
 schematic-simulation-input-unresolved = ### Simulation input not resolved
 
-# squid/bot/submission/schematic_tools.py:104
+# squid/bot/catalogue/schematics/tools.py:104
 schematic-video-action = Render video
 
-# squid/bot/submission/schematic_tools.py:360
+# squid/bot/catalogue/schematics/tools.py:360
 schematic-video-crashed = The rendering process stopped unexpectedly. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/submission/schematic_tools.py:337
+# squid/bot/catalogue/schematics/tools.py:337
 schematic-video-expired = The stored video has expired. Request a new render.
 
-# squid/bot/submission/schematic_tools.py:254
+# squid/bot/catalogue/schematics/tools.py:254
 schematic-video-failure-detail = Video #{ $job_id }: { $reason }
 
-# squid/bot/submission/schematic_tools.py:364
+# squid/bot/catalogue/schematics/tools.py:364
 schematic-video-internal-failure = Rendering failed. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/submission/schematic_tools.py:356
+# squid/bot/catalogue/schematics/tools.py:356
 schematic-video-invalid-failure = The renderer could not process this schematic. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/submission/schematic_tools.py:352
+# squid/bot/catalogue/schematics/tools.py:352
 schematic-video-no-input = No usable simulation input was selected. Specify a lever or button position, or keep the build static.
 
-# squid/bot/submission/schematic_tools.py:220
+# squid/bot/catalogue/schematics/tools.py:220
 schematic-video-pending = The video is still rendering.
 
-# squid/bot/submission/schematic_tools.py:204
+# squid/bot/catalogue/schematics/tools.py:204
 schematic-video-queued = Video #{ $job_id } queued. I'll attach it here when it is ready.
 
-# squid/bot/submission/schematic_tools.py:275
+# squid/bot/catalogue/schematics/tools.py:275
 schematic-video-ready = Your schematic video is ready.
 
-# squid/bot/submission/schematic_tools.py:109
+# squid/bot/catalogue/schematics/tools.py:109
 schematic-video-refresh = Check video
 
-# squid/bot/submission/schematic_tools.py:344
+# squid/bot/catalogue/schematics/tools.py:344
 schematic-video-timeout = Rendering exceeded its time limit. Try a shorter clip or a smaller schematic.
 
-# squid/bot/submission/schematic_tools.py:266
+# squid/bot/catalogue/schematics/tools.py:266
 schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: { $url }
 
-# squid/bot/submission/schematic_tools.py:348
+# squid/bot/catalogue/schematics/tools.py:348
 schematic-video-too-large-failure = The schematic or output exceeded the rendering limits. Try a smaller schematic or shorter clip.
 
-# squid/bot/submission/schematic_tools.py:340
+# squid/bot/catalogue/schematics/tools.py:340
 schematic-video-unavailable = Video rendering is unavailable on the worker. Ask an administrator to check the video helper and FFmpeg installation.
 
 # squid/schematics/application/previews.py:52
@@ -4865,22 +4865,22 @@ search-embeddings-embedding-claim = Embedding claim limit must be between 1 and 
 # squid/search/application/embeddings.py:65
 search-embeddings-embedding-max = Embedding max_attempts must be positive.
 
-# squid/bot/submission/search_help.py:29
+# squid/bot/catalogue/search/help.py:29
 search-example-combined = Combined record titles
 
-# squid/bot/submission/search_help.py:18
+# squid/bot/catalogue/search/help.py:18
 search-example-compact = Compact doors
 
-# squid/bot/submission/search_help.py:20
+# squid/bot/catalogue/search/help.py:20
 search-example-dates = Completion date range
 
-# squid/bot/submission/search_help.py:19
+# squid/bot/catalogue/search/help.py:19
 search-example-exclude = Exclude a restriction
 
-# squid/bot/submission/search_help.py:25
+# squid/bot/catalogue/search/help.py:25
 search-example-extenders = Current smallest extenders
 
-# squid/bot/submission/search_help.py:23
+# squid/bot/catalogue/search/help.py:23
 search-example-fastest = All-time fastest doors
 
 # squid/search/application/fields.py:83
@@ -4892,199 +4892,199 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 # squid/search/application/fields.py:65
 search-expects-number = { $field_name } expects a number
 
-# squid/bot/submission/search_labels.py:61
+# squid/bot/catalogue/search/labels.py:61
 search-field-base-title = Record type
 
-# squid/bot/submission/search_labels.py:73
+# squid/bot/catalogue/search/labels.py:73
 search-field-completion-at = Completed
 
-# squid/bot/submission/search_labels.py:75
+# squid/bot/catalogue/search/labels.py:75
 search-field-created-at = Submitted
 
-# squid/bot/submission/search_labels.py:53
+# squid/bot/catalogue/search/labels.py:53
 search-field-creator = Creator
 
-# squid/bot/submission/search_labels.py:69
+# squid/bot/catalogue/search/labels.py:69
 search-field-depth = Depth
 
-# squid/bot/submission/search_labels.py:43
+# squid/bot/catalogue/search/labels.py:43
 search-field-description = Description
 
-# squid/bot/submission/search_labels.py:67
+# squid/bot/catalogue/search/labels.py:67
 search-field-height = Height
 
-# squid/bot/submission/search_labels.py:59
+# squid/bot/catalogue/search/labels.py:59
 search-field-kind = Kind
 
-# squid/bot/submission/search_labels.py:51
+# squid/bot/catalogue/search/labels.py:51
 search-field-pattern = Pattern
 
-# squid/bot/submission/search_labels.py:47
+# squid/bot/catalogue/search/labels.py:47
 search-field-restriction = Restriction
 
-# squid/bot/submission/search_labels.py:57
+# squid/bot/catalogue/search/labels.py:57
 search-field-status = Status
 
-# squid/bot/submission/search_labels.py:45
+# squid/bot/catalogue/search/labels.py:45
 search-field-tag = Tag
 
-# squid/bot/submission/search_labels.py:41
+# squid/bot/catalogue/search/labels.py:41
 search-field-title = Title
 
-# squid/bot/submission/search_labels.py:49
+# squid/bot/catalogue/search/labels.py:49
 search-field-type = Type
 
-# squid/bot/submission/search_labels.py:77
+# squid/bot/catalogue/search/labels.py:77
 search-field-updated-at = Updated
 
-# squid/bot/submission/search_labels.py:55
+# squid/bot/catalogue/search/labels.py:55
 search-field-version = Version
 
-# squid/bot/submission/search_labels.py:63
+# squid/bot/catalogue/search/labels.py:63
 search-field-version-scope = Version scope
 
-# squid/bot/submission/search_labels.py:71
+# squid/bot/catalogue/search/labels.py:71
 search-field-volume = Volume
 
-# squid/bot/submission/search_labels.py:65
+# squid/bot/catalogue/search/labels.py:65
 search-field-width = Width
 
-# squid/bot/submission/search_labels.py:126
+# squid/bot/catalogue/search/labels.py:126
 search-filter-contains = { $name } has “{ $shown }”
 
-# squid/bot/submission/search_labels.py:127
+# squid/bot/catalogue/search/labels.py:127
 search-filter-equals = { $name } is { $shown }
 
-# squid/bot/submission/search_labels.py:109
+# squid/bot/catalogue/search/labels.py:109
 search-filter-keywords = Keywords: { $words }
 
-# squid/bot/submission/search_labels.py:106
+# squid/bot/catalogue/search/labels.py:106
 search-filter-not = Not: { $inner }
 
-# squid/bot/submission/search_labels.py:122
+# squid/bot/catalogue/search/labels.py:122
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/submission/search_view.py:415
+# squid/bot/catalogue/search/results.py:415
 search-grouped-build-count = { $total } builds
 
-# squid/bot/submission/search_view.py:220
+# squid/bot/catalogue/search/results.py:220
 search-grouped-build-details = Build details
 
-# squid/bot/submission/search_view.py:271
+# squid/bot/catalogue/search/results.py:271
 search-grouped-loading-build = Loading build…
 
-# squid/bot/submission/search_view.py:182
+# squid/bot/catalogue/search/results.py:182
 search-grouped-matching-records = Matching records
 
-# squid/bot/submission/search_view.py:528
+# squid/bot/catalogue/search/results.py:528
 search-grouped-more-records = +{ $count } more records
 
-# squid/bot/submission/search_view.py:287
+# squid/bot/catalogue/search/results.py:287
 search-grouped-open-holder = View build #{ $build_id }
 
-# squid/bot/submission/search_view.py:184
+# squid/bot/catalogue/search/results.py:184
 search-grouped-records = Records
 
-# squid/bot/submission/search_view.py:417
+# squid/bot/catalogue/search/results.py:417
 search-grouped-result-count = { $total } results
 
-# squid/bot/submission/search_view.py:283
+# squid/bot/catalogue/search/results.py:283
 search-grouped-tied-holders = Tied holders
 
 # squid/search/application/ranking.py:67
 search-k-positive = k must be positive
 
-# squid/bot/submission/search_help.py:159
+# squid/bot/catalogue/search/help.py:159
 search-reference-and = - Everything you type must match: `door width<=5`.
 
-# squid/bot/submission/search_help.py:86
+# squid/bot/catalogue/search/help.py:86
 search-reference-build-kind = `kind:door` · { $categories }
 
-# squid/bot/submission/search_help.py:97
+# squid/bot/catalogue/search/help.py:97
 search-reference-credit = `creator:Steve`, `version:"Java 1.20"`
 
-# squid/bot/submission/search_help.py:108
+# squid/bot/catalogue/search/help.py:108
 search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and `updated_at`.
 
-# squid/bot/submission/search_help.py:173
+# squid/bot/catalogue/search/help.py:173
 search-reference-empty = - No results? Remove filters one at a time. Filters never reveal hidden builds.
 
-# squid/bot/submission/search_help.py:119
+# squid/bot/catalogue/search/help.py:119
 search-reference-example-description = **{ $title }** — `{ $query }`
 
-# squid/bot/submission/search_help.py:142
+# squid/bot/catalogue/search/help.py:142
 search-reference-example-reset = Running an example replaces your current query, type buttons and sort.
 
-# squid/bot/submission/search_help.py:139
+# squid/bot/catalogue/search/help.py:139
 search-reference-examples = Examples
 
-# squid/bot/submission/search_help.py:134, squid/bot/submission/search_help.py:135
+# squid/bot/catalogue/search/help.py:134, squid/bot/catalogue/search/help.py:135
 search-reference-fields = What you can search
 
-# squid/bot/submission/search_help.py:79
+# squid/bot/catalogue/search/help.py:79
 search-reference-intro = Type words to match titles and descriptions. Add filter lists every field and its known values, or type filters yourself, like `width<=5`.
 
-# squid/bot/submission/search_help.py:58
+# squid/bot/catalogue/search/help.py:58
 search-reference-kind = `kind:` { $kinds }
 
-# squid/bot/submission/search_help.py:96
+# squid/bot/catalogue/search/help.py:96
 search-reference-label-credit = Creator and version
 
-# squid/bot/submission/search_help.py:107
+# squid/bot/catalogue/search/help.py:107
 search-reference-label-dates = Dates
 
-# squid/bot/submission/search_help.py:57, squid/bot/submission/search_help.py:85
+# squid/bot/catalogue/search/help.py:57, squid/bot/catalogue/search/help.py:85
 search-reference-label-kind = Kind
 
-# squid/bot/submission/search_help.py:53
+# squid/bot/catalogue/search/help.py:53
 search-reference-label-record-type = Record type
 
-# squid/bot/submission/search_help.py:89
+# squid/bot/catalogue/search/help.py:89
 search-reference-label-size = Size
 
-# squid/bot/submission/search_help.py:100
+# squid/bot/catalogue/search/help.py:100
 search-reference-label-tags = Restrictions, patterns and tags
 
-# squid/bot/submission/search_help.py:65
+# squid/bot/catalogue/search/help.py:65
 search-reference-label-title = Title words
 
-# squid/bot/submission/search_help.py:61
+# squid/bot/catalogue/search/help.py:61
 search-reference-label-version-scope = Version scope
 
-# squid/bot/submission/search_help.py:164
+# squid/bot/catalogue/search/help.py:164
 search-reference-not = - `NOT` leaves matches out: `door NOT restriction:observerless`.
 
-# squid/bot/submission/search_help.py:168
+# squid/bot/catalogue/search/help.py:168
 search-reference-operators = - Quote phrases: `title:"vault door"`. Compare numbers and dates with `<`, `<=`, `>`, `>=` or a range like `[3 TO 5]`.
 
-# squid/bot/submission/search_help.py:160
+# squid/bot/catalogue/search/help.py:160
 search-reference-or = - `OR` matches either side. Group with brackets: `(door OR extender) width<=5`.
 
-# squid/bot/submission/search_help.py:47
+# squid/bot/catalogue/search/help.py:47
 search-reference-record-scope = Record filters describe the record. To filter by build size or creator, search Builds instead.
 
-# squid/bot/submission/search_help.py:66
+# squid/bot/catalogue/search/help.py:66
 search-reference-record-title = `title:door`
 
-# squid/bot/submission/search_help.py:54
+# squid/bot/catalogue/search/help.py:54
 search-reference-record-type = `base_title:` { $base_titles }
 
-# squid/bot/submission/search_help.py:69
+# squid/bot/catalogue/search/help.py:69
 search-reference-record-types = The Smallest, Fastest and First buttons match records of any selected type, together with your query.
 
-# squid/bot/submission/search_help.py:90
+# squid/bot/catalogue/search/help.py:90
 search-reference-size = `width<=5`, `height:[3 TO 5]`, `depth`, `volume`. The whole build in blocks, not the door opening.
 
-# squid/bot/submission/search_help.py:172
+# squid/bot/catalogue/search/help.py:172
 search-reference-sort = - Order results with Sort, not in the query.
 
-# squid/bot/submission/search_help.py:152, squid/bot/submission/search_help.py:154
+# squid/bot/catalogue/search/help.py:152, squid/bot/catalogue/search/help.py:154
 search-reference-syntax = Combining filters
 
-# squid/bot/submission/search_help.py:101
+# squid/bot/catalogue/search/help.py:101
 search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `tag:`. Quote names with spaces.
 
-# squid/bot/submission/search_help.py:62
+# squid/bot/catalogue/search/help.py:62
 search-reference-version-scope = `version_scope:` { $scopes }
 
 # squid/search/application/fields.py:151
@@ -5093,19 +5093,19 @@ search-search-numbers-finite = Search numbers must be finite
 # squid/search/application/services.py:67
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/bot/submission/search_labels.py:145
+# squid/bot/catalogue/search/labels.py:145
 search-sort-ascending = { $field }, smallest first
 
-# squid/bot/submission/search_labels.py:135
+# squid/bot/catalogue/search/labels.py:135
 search-sort-default = Default order
 
-# squid/bot/submission/search_labels.py:144
+# squid/bot/catalogue/search/labels.py:144
 search-sort-descending = { $field }, largest first
 
-# squid/bot/submission/search_labels.py:141
+# squid/bot/catalogue/search/labels.py:141
 search-sort-newest = { $field }, newest first
 
-# squid/bot/submission/search_labels.py:142
+# squid/bot/catalogue/search/labels.py:142
 search-sort-oldest = { $field }, oldest first
 
 # squid/search/application/ranking.py:76
@@ -6062,58 +6062,58 @@ versions-recognized-list-title = Recognized Minecraft versions
 # squid/versions/errors.py:13
 versions-use-supported-minecraft = Use a supported Minecraft version format and try again.
 
-# squid/bot/submission/video_editor.py:196
+# squid/bot/catalogue/schematics/video.py:196
 video-activation-outside-clip = Every activation must be before the end of the clip. Increase the duration or remove late activations.
 
-# squid/bot/submission/video_editor.py:103, squid/bot/submission/video_editor.py:105
+# squid/bot/catalogue/schematics/video.py:103, squid/bot/catalogue/schematics/video.py:105
 video-add-activation = Add activation
 
-# squid/bot/submission/video_editor.py:139
+# squid/bot/catalogue/schematics/video.py:139
 video-cancel = Cancel
 
-# squid/bot/submission/video_editor.py:119
+# squid/bot/catalogue/schematics/video.py:119
 video-coordinate-help = Leave all coordinates blank for automatic input detection.
 
-# squid/bot/submission/video_editor.py:168
+# squid/bot/catalogue/schematics/video.py:168
 video-coordinates-required = Enter all three coordinates, or leave all three blank.
 
-# squid/bot/submission/video_editor.py:46
+# squid/bot/catalogue/schematics/video.py:46
 video-detected-inputs = Detected input positions
 
-# squid/bot/submission/video_editor.py:56
+# squid/bot/catalogue/schematics/video.py:56
 video-editor-title = Video recipe
 
-# squid/bot/submission/video_editor.py:47
+# squid/bot/catalogue/schematics/video.py:47
 video-no-candidates = No detected input positions are available.
 
-# squid/bot/submission/video_editor.py:75
+# squid/bot/catalogue/schematics/video.py:75
 video-orbit = Camera orbit in degrees
 
-# squid/bot/submission/video_editor.py:93
+# squid/bot/catalogue/schematics/video.py:93
 video-remove-activation = Remove activation
 
-# squid/bot/submission/video_editor.py:138
+# squid/bot/catalogue/schematics/video.py:138
 video-render = Render video
 
-# squid/bot/submission/video_editor.py:68
+# squid/bot/catalogue/schematics/video.py:68
 video-seconds = Duration in seconds
 
-# squid/bot/submission/video_editor.py:133
+# squid/bot/catalogue/schematics/video.py:133
 video-select-detected = Choose a detected input below to replace automatic activations.
 
-# squid/bot/submission/video_editor.py:59, squid/bot/submission/video_editor.py:61
+# squid/bot/catalogue/schematics/video.py:59, squid/bot/catalogue/schematics/video.py:61
 video-settings = Clip settings
 
-# squid/bot/submission/video_editor.py:64
+# squid/bot/catalogue/schematics/video.py:64
 video-simulate = Simulate the circuit
 
-# squid/bot/submission/video_editor.py:109
+# squid/bot/catalogue/schematics/video.py:109
 video-tick = Tick (20 ticks per second)
 
-# squid/bot/submission/video_editor.py:172
+# squid/bot/catalogue/schematics/video.py:172
 video-too-many-activations = A video can contain at most 16 activations.
 
-# squid/bot/submission/video_editor.py:148
+# squid/bot/catalogue/schematics/video.py:148
 video-use-input = Use this input
 
 # squid/bot/voting/reactions.py:297

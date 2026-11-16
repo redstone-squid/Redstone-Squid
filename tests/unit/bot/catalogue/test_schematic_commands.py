@@ -1,7 +1,7 @@
 # pyright: reportPrivateUsage=false
 """Text rendered by the `/build schematic` and `/build measure-timing` commands."""
 
-from squid.bot.submission.schematics import _CANDIDATE_LIMIT, _describe, _describe_input_refusal
+from squid.bot.catalogue.schematics.presentation import _CANDIDATE_LIMIT, _describe, _describe_input_refusal
 from squid.schematics.application import RenderSkipReason, SchematicPublication, StoredSchematic
 from squid.schematics.errors import AmbiguousSimulationInputError
 from squid_ui.content.text import source_text

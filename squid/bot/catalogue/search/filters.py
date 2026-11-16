@@ -24,9 +24,9 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
+from squid.bot.catalogue.search.clauses import query_leaves, replace_clause
+from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
-from squid.bot.submission.query_clauses import query_leaves, replace_clause
-from squid.bot.submission.search_labels import field_label, filter_label, sort_label
 from squid.bot.ui import tr
 from squid.records.domain import BuildKind
 from squid.search.application import SearchService

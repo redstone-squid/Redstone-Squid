@@ -6,8 +6,8 @@ from functools import partial
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
+from squid.bot.catalogue.rows import record_row
 from squid.bot.follows import follow_control
-from squid.bot.submission.list_rows import record_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
 from squid.notifications.domain import SubscriptionKind
