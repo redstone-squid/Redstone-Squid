@@ -1,6 +1,6 @@
 """Discord screens with reusable policy and owned child flows."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
@@ -51,7 +51,9 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
     """A single presentation whose outcome and children end with its owning scope.
 
     Declare reusable delivery settings in ``policy``. Operational settings omitted there
-    inherit installation defaults. ``complete`` and ``cancel`` stage intentions in the
+    inherit installation defaults. Set ``session_key`` on an instance to override the
+    session policy's key; an explicit delivery key takes precedence. ``None`` uses the
+    policy's key. ``complete`` and ``cancel`` stage intentions in the
     current action; a rollback leaves the screen open. Child callbacks receive fresh
     parent action authority, never the request that originally opened the child.
     """
@@ -59,6 +61,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
     event_frontend: ClassVar[str | None] = "discord"
     policy: ClassVar[ResponseSpec] = ResponseSpec(audience="personal", access=invoker_only)
     __response_spec__: ClassVar[ResponseSpec]
+    session_key: Hashable | None = None
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)

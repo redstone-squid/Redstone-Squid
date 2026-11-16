@@ -229,6 +229,8 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         screen = content if isinstance(content, Screen) else None
         if screen is not None:
             screen._screen_claim(self, opening)
+            if session_key is None:
+                session_key = screen.session_key
         try:
             result = await self._deliver(
                 content,

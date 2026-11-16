@@ -122,6 +122,35 @@ async def test_replacing_a_named_session_publishes_the_replacement_reason() -> N
         assert second.session is replacement.session
 
 
+@pytest.mark.parametrize("override", [False, True])
+async def test_screen_session_key_controls_which_presentation_is_replaced(override: bool) -> None:
+    class Replaceable(Anchor):
+        policy = sd.ResponseSpec(session=sd.SessionSpec("replaceable"), timeout=None)
+
+    async with _scope() as scope:
+        first = Replaceable()
+        first.session_key = sd.SessionKey.custom("replaceable", "first")
+        initial = await _present(scope, first, "respond")
+        other = Replaceable()
+        other.session_key = sd.SessionKey.custom("replaceable", "other")
+        separate = await _present(scope, other, "respond")
+        assert isinstance(initial, sd.Presented)
+        assert isinstance(separate, sd.Presented)
+        assert not initial.root.finished
+        assert not separate.root.finished
+
+        replacement = Replaceable()
+        replacement.session_key = other.session_key if override else first.session_key
+        request = await scope.request(InteractionHarness(user_id=7, client=scope.runtime.client).source)
+        result = await request.respond(replacement, session_key=first.session_key if override else None)
+
+        assert isinstance(result, sd.Presented)
+        assert result.session is not None
+        assert result.session.key == first.session_key
+        assert await first.wait() == sd.Cancelled(sd.ScreenCancelReason.REPLACED)
+        assert not separate.root.finished
+
+
 async def test_failed_delivery_preserves_the_original_error_when_screen_cleanup_also_fails() -> None:
     class FailingClose(BackgroundScreen):
         @override
