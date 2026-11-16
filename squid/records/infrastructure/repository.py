@@ -163,7 +163,7 @@ class PostgresRecordRepository:
         if version_id is not None:
             statement = statement.where(DoorBuild.build_versions.any(version_id=version_id))
         doors = tuple((await session.execute(statement)).unique().scalars())
-        timings = await _door_timings(session, tuple(door.id for door in doors if door.expansion is None))
+        timings = await self._door_timings(tuple(door.id for door in doors if door.expansion is None))
         return tuple(
             _door_candidate(door, timings.get(door.id, ()), size="variable" if door.expansion is not None else None)
             for door in doors
@@ -644,7 +644,7 @@ class PostgresRecordRepository:
             )
         )
         doors = tuple((await session.execute(statement)).unique().scalars())
-        timing_by_build = await _door_timings(session, tuple(door.id for door in doors if door.expansion is None))
+        timing_by_build = await self._door_timings(tuple(door.id for door in doors if door.expansion is None))
         return tuple(
             _door_candidate(
                 door, timing_by_build.get(door.id, ()), size="variable" if door.expansion is not None else None
@@ -662,7 +662,7 @@ class PostgresRecordRepository:
             )
         )
         extenders = tuple((await session.execute(statement)).unique().scalars())
-        timing_by_build = await _extender_timings(session, tuple(extender.id for extender in extenders))
+        timing_by_build = await self._extender_timings(tuple(extender.id for extender in extenders))
         return tuple(
             candidate
             for extender in extenders
@@ -778,53 +778,55 @@ class PostgresRecordRepository:
             )
         return tuple(by_key[write.key] for write in writes)
 
-
-async def _door_timings(
-    session: AsyncSession,
-    build_ids: tuple[int, ...],
-) -> dict[int, tuple[TimingVariant, ...]]:
-    if not build_ids:
-        return {}
-    rows = (await session.execute(select(DoorTimingVariant).where(DoorTimingVariant.build_id.in_(build_ids)))).scalars()
-    grouped: dict[int, list[TimingVariant]] = defaultdict(list)
-    for row in rows:
-        grouped[row.build_id].append(
-            TimingVariant(
-                (
-                    row.opening_time,
-                    row.visible_opening_time,
-                    row.closing_time,
-                    row.visible_closing_time,
-                    row.opening_reset_time,
-                    row.closing_reset_time,
+    async def _door_timings(
+        self,
+        build_ids: tuple[int, ...],
+    ) -> dict[int, tuple[TimingVariant, ...]]:
+        session = self._session()
+        if not build_ids:
+            return {}
+        rows = (
+            await session.execute(select(DoorTimingVariant).where(DoorTimingVariant.build_id.in_(build_ids)))
+        ).scalars()
+        grouped: dict[int, list[TimingVariant]] = defaultdict(list)
+        for row in rows:
+            grouped[row.build_id].append(
+                TimingVariant(
+                    (
+                        row.opening_time,
+                        row.visible_opening_time,
+                        row.closing_time,
+                        row.visible_closing_time,
+                        row.opening_reset_time,
+                        row.closing_reset_time,
+                    )
                 )
             )
-        )
-    return {build_id: tuple(variants) for build_id, variants in grouped.items()}
+        return {build_id: tuple(variants) for build_id, variants in grouped.items()}
 
-
-async def _extender_timings(
-    session: AsyncSession,
-    build_ids: tuple[int, ...],
-) -> dict[int, tuple[TimingVariant, ...]]:
-    if not build_ids:
-        return {}
-    rows = (
-        await session.execute(select(ExtenderTimingVariant).where(ExtenderTimingVariant.build_id.in_(build_ids)))
-    ).scalars()
-    grouped: dict[int, list[TimingVariant]] = defaultdict(list)
-    for row in rows:
-        grouped[row.build_id].append(
-            TimingVariant(
-                (
-                    row.retraction_time,
-                    row.extension_time,
-                    row.retraction_reset_time,
-                    row.extension_reset_time,
+    async def _extender_timings(
+        self,
+        build_ids: tuple[int, ...],
+    ) -> dict[int, tuple[TimingVariant, ...]]:
+        session = self._session()
+        if not build_ids:
+            return {}
+        rows = (
+            await session.execute(select(ExtenderTimingVariant).where(ExtenderTimingVariant.build_id.in_(build_ids)))
+        ).scalars()
+        grouped: dict[int, list[TimingVariant]] = defaultdict(list)
+        for row in rows:
+            grouped[row.build_id].append(
+                TimingVariant(
+                    (
+                        row.retraction_time,
+                        row.extension_time,
+                        row.retraction_reset_time,
+                        row.extension_reset_time,
+                    )
                 )
             )
-        )
-    return {build_id: tuple(variants) for build_id, variants in grouped.items()}
+        return {build_id: tuple(variants) for build_id, variants in grouped.items()}
 
 
 def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size: str | None = None) -> CandidateBuild:
