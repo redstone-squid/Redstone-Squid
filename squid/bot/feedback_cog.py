@@ -39,7 +39,7 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @sd.command(
         name=tr(t"command-bug-name = bug"),
         description=tr(t"command-bug-help = Report a bug with the bot. Your message will be public."),
-        defer="public",
+        defer="private",
         options={
             "message": sd.Option(
                 name=tr(t"command-bug-message-name = message"),
@@ -53,7 +53,7 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @sd.command(
         name=tr(t"command-suggestion-name = suggestion"),
         description=tr(t"command-suggestion-help = Suggest improvements to the bot. Your message will be public."),
-        defer="public",
+        defer="private",
         options={
             "message": sd.Option(
                 name=tr(t"command-suggestion-message-name = message"),
@@ -67,21 +67,32 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def _report(self, request: sd.Request[Self, BotT], kind: str, message: str) -> None:
         owner_id = self.bot.owner_id
         if owner_id is None:
-            await request.respond("Feedback is unavailable: no bot owner is configured.", audience="public")
+            await request.respond("Feedback is unavailable: no bot owner is configured.", audience="personal")
             return
 
-        report = Text(f"{kind} from ") + mention(request.user.id) + f" ({request.user.id})\n{message}"
-        if await owner_can_view(request.channel, owner_id):
-            await request.respond(
-                text_node(mention(owner_id) + "\n" + report),
-                audience="public",
-                allowed_mentions=discord.AllowedMentions(
-                    users=[discord.Object(owner_id)], roles=False, everyone=False, replied_user=False
-                ),
-            )
+        channel = request.channel
+        if channel is None:
+            await request.respond("Feedback is unavailable: this channel is inaccessible.", audience="personal")
             return
 
-        await request.respond(text_node(report), audience="public")
+        report = Text(f"{kind}\n{message}")
+        owner_visible = await owner_can_view(channel, owner_id)
+        content = mention(owner_id) + "\n" + report if owner_visible else report
+        # Ordinary channel messages do not expose the invoking user through interaction metadata.
+        await sd.send_to(
+            channel,
+            allowed_mentions=discord.AllowedMentions(
+                users=[discord.Object(owner_id)] if owner_visible else False,
+                roles=False,
+                everyone=False,
+                replied_user=False,
+            ),
+        )(render_payload([text_node(content)]))
+        if owner_visible:
+            if request.interaction is not None:
+                await request.interaction.delete_original_response()
+            return
+
         if request.guild is not None and isinstance(request.channel, GuildMessageable):
             context = (
                 f"Server: {request.guild.name}\nhttps://discord.com/channels/{request.guild.id}/{request.channel.id}"
@@ -97,8 +108,11 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             logger.warning("Could not DM feedback to bot owner %s", owner_id, exc_info=True)
             await request.respond(
                 "Your feedback was posted, but I couldn't DM the bot owner. Please contact them directly.",
-                audience="public",
+                audience="personal",
             )
+            return
+        if request.interaction is not None:
+            await request.interaction.delete_original_response()
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

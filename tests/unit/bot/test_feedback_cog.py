@@ -28,6 +28,8 @@ async def test_feedback_commands_publish_and_only_ping_owner(
     cog = feedback.FeedbackCog(bot)
     interaction = interaction_harness(user_id=7)
     interaction.client = bot
+    channel_send = AsyncMock()
+    monkeypatch.setattr(feedback.sd, "send_to", Mock(return_value=channel_send))
     monkeypatch.setattr(feedback, "owner_can_view", AsyncMock(return_value=True))
     entry = cast(Any, getattr(cog, command))
 
@@ -36,11 +38,18 @@ async def test_feedback_commands_publish_and_only_ping_owner(
     assert entry.parameters[0].required
     await entry.callback(cog, interaction, "Please fix @everyone <@99>")
 
-    interaction.response.defer.assert_awaited_once_with(ephemeral=False, thinking=True)
-    interaction.edit_original_response.assert_awaited_once()
-    kwargs = interaction.edit_original_response.await_args.kwargs
-    assert kwargs["allowed_mentions"].to_dict() == {"users": [42], "parse": []}
-    assert "Please fix" in str(kwargs["view"].to_components())
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+    interaction.edit_original_response.assert_not_awaited()
+    interaction.delete_original_response.assert_awaited_once()
+    send_to = cast(Mock, feedback.sd.send_to)
+    assert send_to.call_args.args == (interaction.channel,)
+    assert send_to.call_args.kwargs["allowed_mentions"].to_dict() == {"users": [42], "parse": []}
+    assert channel_send.await_args is not None
+    payload = str(channel_send.await_args.args[0].view.to_components())
+    assert "Please fix" in payload
+    assert ("Bug report" if command == "bug" else "Suggestion") in payload
+    assert "<@7>" not in payload
+    assert " from " not in payload
 
 
 @pytest.mark.parametrize("in_guild", [True, False])
@@ -60,12 +69,14 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(
         guild=Mock(id=10, name="Test server") if in_guild else None,
         channel=Mock(spec=discord.TextChannel, id=20),
         respond=AsyncMock(),
+        interaction=Mock(delete_original_response=AsyncMock()),
     )
     monkeypatch.setattr(feedback, "owner_can_view", AsyncMock(return_value=False))
     send = AsyncMock()
     if dm_fails:
         send.side_effect = discord.Forbidden(Mock(status=403, reason="Forbidden"), "Cannot send messages")
-    send_to = Mock(return_value=send)
+    channel_send = AsyncMock()
+    send_to = Mock(side_effect=[channel_send, send])
     monkeypatch.setattr(feedback.sd, "send_to", send_to)
     monkeypatch.setattr(feedback, "render_payload", lambda nodes: nodes)
     monkeypatch.setattr(feedback, "text_node", lambda text: discord_text(resolve_text(text, NEUTRAL)))
@@ -73,15 +84,27 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(
     await cog._report(cast(Any, request), "Bug report", "Something broke")
 
     fetch_user.assert_awaited_once_with(42)
-    assert request.respond.await_args_list[0].kwargs == {"audience": "public"}
-    assert "Something broke" in str(request.respond.await_args_list[0].args)
-    assert request.respond.await_count == (2 if dm_fails else 1)
-    send_to.assert_called_once()
+    channel_send.assert_awaited_once()
+    assert channel_send.await_args is not None
+    posted = channel_send.await_args.args[0][0]
+    assert "Bug report\nSomething broke" in posted
+    assert "<@7>" not in posted
+    assert " from " not in posted
+    assert request.respond.await_count == (1 if dm_fails else 0)
+    if dm_fails:
+        assert request.respond.await_args.kwargs == {"audience": "personal"}
+        request.interaction.delete_original_response.assert_not_awaited()
+    else:
+        request.interaction.delete_original_response.assert_awaited_once()
+    assert send_to.call_count == 2
     assert send_to.call_args.args == (owner,)
     assert send_to.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     assert send.await_args is not None
     sent = str(send.await_args.args)
     assert "Something broke" in sent
+    assert "Bug report" in sent
+    assert "<@7>" not in sent
+    assert " from " not in sent
     assert ("https://discord.com/channels/10/20" if in_guild else "direct message") in sent
 
 
@@ -133,4 +156,6 @@ async def test_missing_owner_explains_feedback_is_unavailable() -> None:
 
     await cog._report(cast(Any, request), "Suggestion", "Improve things")
 
-    request.respond.assert_awaited_once_with("Feedback is unavailable: no bot owner is configured.", audience="public")
+    request.respond.assert_awaited_once_with(
+        "Feedback is unavailable: no bot owner is configured.", audience="personal"
+    )
