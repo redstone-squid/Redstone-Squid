@@ -64,3 +64,8 @@ class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
             return
         self.bot.topic_publisher.publish(resource_topic(job.resource_kind.post_kind, job.source_key))
         await self.bot.services.discord_reconciliation.complete(job)
+
+
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
+    """Register the durable reconciliation worker."""
+    await bot.add_cog(ReconciliationCog(bot))

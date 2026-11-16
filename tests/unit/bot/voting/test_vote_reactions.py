@@ -17,7 +17,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.actors import AccountIdCache
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
-from squid.bot.voting.vote import VoteCog
+from squid.bot.voting.cog import VoteCog
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import PermissionUnitOfWork

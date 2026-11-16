@@ -5,7 +5,7 @@ from typing import Any, override
 
 from whenever import Instant
 
-from squid.bot.events.dispatcher import DomainEventCog
+from squid.bot.events.cog import DomainEventCog
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.runtime import BotServices
 from tests.support.services import bot_services

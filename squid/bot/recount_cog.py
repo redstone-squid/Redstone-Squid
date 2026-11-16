@@ -29,7 +29,7 @@ from squid_ui.content.text import Text
 if TYPE_CHECKING:
     import squid.bot.app
     from squid.bot.starboard.cog import StarboardCog
-    from squid.bot.voting.vote import VoteCog
+    from squid.bot.voting.cog import VoteCog
 
 GUILD_COOLDOWN_SECONDS = 30.0
 """How long a guild waits after starting a recount before it may start another."""

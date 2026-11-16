@@ -12,7 +12,7 @@ import anyio
 import pytest
 
 from squid.bot.app import RedstoneSquid
-from squid.bot.sync.reconciler import ReconciliationCog
+from squid.bot.sync.cog import ReconciliationCog
 from squid.posts.domain import ResourceKind
 from squid.runtime import BackgroundTaskSupervisor
 from squid.sync import DiscordReconciliationService, ReconciliationAction, ReconciliationJob, ReconciliationResource

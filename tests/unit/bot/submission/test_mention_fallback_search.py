@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from discord.ext import commands
 
-from squid.bot.submission.commands import BuildCommands, SearchTarget
+from squid.bot.submission.cog import BuildCommands, SearchTarget
 
 
 @dataclass(frozen=True, slots=True)

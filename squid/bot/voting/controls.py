@@ -21,7 +21,7 @@ from squid_i18n import Text, md_tr
 
 if TYPE_CHECKING:
     import squid.bot.app
-    from squid.bot.voting.vote import VoteCog
+    from squid.bot.voting.cog import VoteCog
 
 
 polls = router.group("/polls")

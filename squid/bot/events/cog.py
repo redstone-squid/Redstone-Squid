@@ -97,3 +97,8 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
                 )
             return
         await self.bot.services.domain_events.complete(delivery)
+
+
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
+    """Register the domain-event dispatcher."""
+    await bot.add_cog(DomainEventCog(bot))

@@ -1227,7 +1227,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:108
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/commands.py:168
+# squid/bot/submission/cog.py:168
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:546
@@ -1669,7 +1669,7 @@ bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 # squid/bot/voting/poll_wizard.py:444
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/poll_wizard.py:439, squid/bot/voting/vote.py:162
+# squid/bot/voting/cog.py:162, squid/bot/voting/poll_wizard.py:439
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:321
@@ -1699,19 +1699,19 @@ bot-voting-poll-wizard-visibility = Visibility
 # squid/bot/voting/poll_wizard.py:333
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/vote.py:176
+# squid/bot/voting/cog.py:176
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/vote.py:211
+# squid/bot/voting/cog.py:211
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/vote.py:192
+# squid/bot/voting/cog.py:192
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/vote.py:191
+# squid/bot/voting/cog.py:191
 bot-voting-vote-working = Working
 
-# squid/bot/voting/vote.py:125
+# squid/bot/voting/cog.py:125
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/submission/build_browse.py:893
@@ -1918,19 +1918,19 @@ build-search-load-failed = Could not load search results.
 # squid/bot/submission/search_view.py:348
 build-search-loading = Loading search results…
 
-# squid/bot/submission/commands.py:108
+# squid/bot/submission/cog.py:108
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
 # squid/bot/submission/search_view.py:346
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/commands.py:118
+# squid/bot/submission/cog.py:118
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
-# squid/bot/submission/commands.py:103
+# squid/bot/submission/cog.py:103
 build-search-sort-help = Order results by a field, ascending or descending.
 
-# squid/bot/submission/commands.py:90
+# squid/bot/submission/cog.py:90
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
 # squid/builds/errors.py:109
@@ -2122,13 +2122,13 @@ command-account-user-name = user
 # squid/bot/admin_cog.py:102
 command-archive-message-name = Archive Message
 
-# squid/bot/submission/commands.py:167
+# squid/bot/submission/cog.py:167
 command-build-browse-build-id-name = id
 
-# squid/bot/submission/commands.py:164
+# squid/bot/submission/cog.py:164
 command-build-browse-help = Browse builds and record holders.
 
-# squid/bot/submission/commands.py:163
+# squid/bot/submission/cog.py:163
 command-build-browse-name = browse
 
 # squid/bot/submission/submit.py:359
@@ -2335,22 +2335,22 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin_cog.py:119
 command-paste-name = paste
 
-# squid/bot/voting/vote.py:57
+# squid/bot/voting/cog.py:57
 command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/vote.py:56
+# squid/bot/voting/cog.py:56
 command-poll-name = poll
 
 # squid/bot/submission/submit.py:418
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/commands.py:181
+# squid/bot/submission/cog.py:181
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/commands.py:180
+# squid/bot/submission/cog.py:180
 command-records-name = records
 
-# squid/bot/submission/commands.py:184
+# squid/bot/submission/cog.py:184
 command-records-query-name = query
 
 # squid/bot/recount_cog.py:54
@@ -2395,43 +2395,43 @@ command-runtime-settings-value-help = New JSON value, such as true or 0.25. Omit
 # squid/bot/admin_cog.py:212
 command-runtime-settings-value-name = value
 
-# squid/bot/submission/commands.py:112
+# squid/bot/submission/cog.py:112
 command-search-choice-mode-keyword = keyword
 
-# squid/bot/submission/commands.py:113
+# squid/bot/submission/cog.py:113
 command-search-choice-mode-smart = smart
 
-# squid/bot/submission/commands.py:95
+# squid/bot/submission/cog.py:95
 command-search-choice-scope-builds = builds
 
-# squid/bot/submission/commands.py:98
+# squid/bot/submission/cog.py:98
 command-search-choice-scope-everything = everything
 
-# squid/bot/submission/commands.py:96
+# squid/bot/submission/cog.py:96
 command-search-choice-scope-patterns = patterns
 
-# squid/bot/submission/commands.py:94
+# squid/bot/submission/cog.py:94
 command-search-choice-scope-records = records
 
-# squid/bot/submission/commands.py:97
+# squid/bot/submission/cog.py:97
 command-search-choice-scope-restrictions = restrictions
 
-# squid/bot/submission/commands.py:85
+# squid/bot/submission/cog.py:85
 command-search-help = Search builds, records, and taxonomy metadata
 
-# squid/bot/submission/commands.py:107
+# squid/bot/submission/cog.py:107
 command-search-mode-name = mode
 
-# squid/bot/submission/commands.py:84
+# squid/bot/submission/cog.py:84
 command-search-name = search
 
-# squid/bot/submission/commands.py:117
+# squid/bot/submission/cog.py:117
 command-search-query-name = query
 
-# squid/bot/submission/commands.py:89
+# squid/bot/submission/cog.py:89
 command-search-scope-name = scope
 
-# squid/bot/submission/commands.py:102
+# squid/bot/submission/cog.py:102
 command-search-sort-name = sort
 
 # squid/bot/settings/cog.py:29
@@ -2464,7 +2464,7 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking_cog.py:126
 command-versions-name = versions
 
-# squid/bot/voting/vote.py:169
+# squid/bot/voting/cog.py:169
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/accounts/consent.py:106
@@ -4351,25 +4351,25 @@ poll-choices-format = Separate choices with commas or line breaks; quote choices
 # squid/bot/voting/poll_wizard.py:225
 poll-choices-length = Keep the choices within 1000 characters.
 
-# squid/bot/voting/vote.py:62
+# squid/bot/voting/cog.py:62
 poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
 
-# squid/bot/voting/vote.py:65
+# squid/bot/voting/cog.py:65
 poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
 
-# squid/bot/voting/vote.py:152
+# squid/bot/voting/cog.py:152
 poll-command-network-denied = You do not have permission to publish to every server.
 
-# squid/bot/voting/vote.py:76
+# squid/bot/voting/cog.py:76
 poll-command-preview = Review and edit before publishing. Default: publish immediately.
 
-# squid/bot/voting/vote.py:60
+# squid/bot/voting/cog.py:60
 poll-command-question = Poll question; omit to open the editor.
 
-# squid/bot/voting/vote.py:72
+# squid/bot/voting/cog.py:72
 poll-command-scope = This server, or every server if you have permission.
 
-# squid/bot/voting/vote.py:68
+# squid/bot/voting/cog.py:68
 poll-command-visibility = Who can see votes and when results are shown.
 
 # squid/bot/voting/poll_wizard.py:427
@@ -4480,7 +4480,7 @@ record-browser-first = First
 # squid/bot/submission/build_browse.py:703
 record-browser-smallest = Smallest
 
-# squid/bot/submission/commands.py:185
+# squid/bot/submission/cog.py:185
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/bot/submission/records.py:223
@@ -6119,7 +6119,7 @@ video-use-input = Use this input
 # squid/bot/voting/reactions.py:297
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
-# squid/bot/voting/vote.py:177
+# squid/bot/voting/cog.py:177
 vote-message-guild-mismatch = The message is not from this guild.
 
 # squid/bot/voting/actors.py:22
@@ -6173,7 +6173,7 @@ vote-rows-title = Vote emojis
 # squid/bot/voting/actors.py:28
 vote-server-mismatch = That vote belongs to a different server.
 
-# squid/bot/voting/vote.py:101
+# squid/bot/voting/cog.py:101
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 
 # squid/bot/voting/controls.py:80

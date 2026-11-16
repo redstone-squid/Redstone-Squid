@@ -121,7 +121,7 @@ scope, delegation, rank, and revision checks in the application services.
 
 ### Build and record discovery
 
-Sources: [commands.py](../../squid/bot/submission/commands.py),
+Sources: [commands.py](../../squid/bot/submission/cog.py),
 [build_browse.py](../../squid/bot/submission/build_browse.py),
 [search_help.py](../../squid/bot/submission/search_help.py), and
 [search_view.py](../../squid/bot/submission/search_view.py).

@@ -150,7 +150,7 @@ Because `ErrorReportLogHandler` captures every logged exception at ERROR level (
 reconnection backoff floods the `error_reports` table — 47 reports filed between 2026-08-19 06:03 and 11:13 UTC
 (references `fc256f2fa85b`, `4ee47ebb17d8`, ..., `ff0faad1da07`).
 
-During the same incident, `squid.bot.sync.reconciler` (`squid/bot/sync/reconciler.py:54`) encountered a DNS timeout
+During the same incident, `squid.bot.sync.cog` (`squid/bot/sync/cog.py:54`) encountered a DNS timeout
 connecting to `discord.com:443` and dead-lettered a post reconciliation job (reference `3ad3d5bd7b99` on 2026-08-19
 09:59:35 UTC, `work_lost = true`). Transient gateway reconnect chatter should be ignored by the log-capture handler,
 and reconciler jobs need backoff/retry tolerance for transient network outages before dead-lettering.

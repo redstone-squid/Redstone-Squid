@@ -7,8 +7,8 @@ import pytest
 
 from squid.bot.recount_cog import RecountCog
 from squid.bot.starboard.cog import StarboardCog
+from squid.bot.voting.cog import VoteCog
 from squid.bot.voting.reactions import VoteReactionHandler
-from squid.bot.voting.vote import VoteCog
 from squid.messages.models import Message
 from squid.posts.application import PostService
 from squid.posts.domain import PostReference

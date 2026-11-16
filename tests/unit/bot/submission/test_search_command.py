@@ -6,7 +6,7 @@ from typing import Any, cast, override
 import pytest
 
 import squid_ui as sl
-from squid.bot.submission.commands import BuildCommands, SearchTarget
+from squid.bot.submission.cog import BuildCommands, SearchTarget
 from squid.bot.submission.search_view import SearchScreen, _highlighted, _result_description, _result_label
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
