@@ -16,6 +16,7 @@ import discord
 from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
+from squid.bot.voting.poll_wizard import parse_option_lines
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid_ui.ext.discord import send_to
@@ -84,13 +85,11 @@ class DiscordPollPublisher:
 
     async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]:
         """Turn wizard option lines into stable options, filling aliases from the palette."""
-        from squid.bot.voting.poll_wizard import parse_option_lines
-
         return parse_option_lines(
             lines,
             guild_id=guild_id,
             palette=await self.palette(guild_id),
-            emoji_is_usable=lambda emoji: _emoji_is_usable(self._bot, guild_id, emoji),
+            emoji_is_usable=lambda emoji: _emoji_is_usable(self._bot, emoji),
         )
 
     async def create_and_publish(
@@ -180,11 +179,10 @@ class DiscordPollPublisher:
         return result.message
 
 
-def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, guild_id: int, emoji: str) -> bool:
-    """Whether the bot may react with `emoji` in `guild_id`."""
+def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, emoji: str) -> bool:
+    """Whether the bot has access to the emoji, including from another server."""
     parsed = discord.PartialEmoji.from_str(emoji)
     if not parsed.is_custom_emoji():
         return True
-    guild = bot.get_guild(guild_id)
-    custom = guild.get_emoji(parsed.id or 0) if guild is not None else None
+    custom = bot.get_emoji(parsed.id or 0)
     return custom is not None and custom.is_usable()

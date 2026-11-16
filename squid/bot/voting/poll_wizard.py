@@ -20,7 +20,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 
 _DURATION = re.compile(r"(\d+)\s*(days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s)", re.IGNORECASE)
 _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -34,8 +34,9 @@ DURATION_PRESETS: tuple[tuple[sl.TextLike, int], ...] = (
     (tr(t"bot-voting-poll-wizard-days-2 = 7 days"), 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
+DEFAULT_POLL_CHOICES = "👍 | Yes\n👎 | No"
 
-VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] = (
+VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, Text, Text], ...] = (
     (
         VoteVisibility.ANONYMOUS_LIVE,
         tr(t"bot-voting-poll-wizard-live-anonymous = Live Anonymous"),
@@ -170,7 +171,7 @@ def parse_option_lines(
     return tuple(options)
 
 
-SCOPE_CHOICES: tuple[tuple[PollScope, sl.TextLike, sl.TextLike], ...] = (
+SCOPE_CHOICES: tuple[tuple[PollScope, Text, Text], ...] = (
     (
         PollScope.GUILD,
         tr(t"bot-voting-poll-wizard-this-server = This server"),
@@ -189,10 +190,13 @@ class PollDraft:
     """The wizard's editable state between the form and publication."""
 
     question: str
-    options_text: str = "👍 | Yes\n👎 | No"
+    options_text: str = DEFAULT_POLL_CHOICES
     visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE
     duration_seconds: int = 24 * 3600
     scope: PollScope = PollScope.GUILD
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "question", self.question.replace("\\n", "\n").strip())
 
     @property
     def option_lines(self) -> tuple[str, ...]:
@@ -237,7 +241,7 @@ def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(
         tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
         (
-            sl.forms.TextField(
+            sl.forms.TextAreaField(
                 key="question",
                 label=tr(t"bot-voting-poll-wizard-question = Question"),
                 default="" if draft is None else draft.question,
@@ -245,9 +249,9 @@ def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
             ),
             sl.forms.TextAreaField(
                 key="options",
-                label=tr(t"bot-voting-poll-wizard-options-one-per-line = Options (one per line)"),
-                default="" if draft is None else draft.options_text,
-                placeholder=tr(t"poll-setup-option-format-help = emoji | label (emoji may be omitted)"),
+                label=tr(t"bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)"),
+                default=DEFAULT_POLL_CHOICES if draft is None else draft.options_text,
+                placeholder=tr(t"poll-setup-option-format-help = Red, Blue or 🔴 | Red, 🔵 | Blue"),
                 minimum=3,
                 maximum=1000,
             ),
@@ -304,10 +308,12 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(tr(t"bot-voting-poll-wizard-poll-settings = Poll settings"), tuple(fields))
 
 
-def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
+def _poll_steps(
+    allow_network: bool, draft: PollDraft | None
+) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
     return (
         sp.WizardStep(
-            "content", tr(t"bot-voting-poll-wizard-question-and-options = Question and options"), poll_form()
+            "content", tr(t"bot-voting-poll-wizard-question-and-options = Question and options"), poll_form(draft)
         ),
         sp.WizardStep(
             "settings",
@@ -331,7 +337,11 @@ def _draft(answers: sp.WizardAnswers) -> PollDraft:
 
 def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
     draft = _draft(answers)
-    options = "\n".join(f"- {line}" for line in draft.option_lines)
+    try:
+        draft.validate()
+        options = "\n".join(f"- {line}" for line in draft.option_lines)
+    except InvalidVoteConfigurationError as error:
+        return sl.status(error.message, tone=sl.Tone.DANGER)
     fields = [
         sl.field(
             tr(t"bot-voting-poll-wizard-visibility = Visibility"),
@@ -370,17 +380,39 @@ class PollScreen(sd.Screen[str]):
         publish: PublishPoll,
         *,
         allow_network: bool = False,
+        draft: PollDraft | None = None,
     ) -> None:
         self._resolve_options = resolve_options
         self._publish = publish
+        initial_state = None
+        if draft is not None:
+            answers = [
+                sp.WizardAnswer(
+                    "settings",
+                    (("visibility", draft.visibility), ("duration", draft.duration_seconds), ("scope", draft.scope)),
+                ),
+            ]
+            if draft.question:
+                answers.insert(
+                    0, sp.WizardAnswer("content", (("question", draft.question), ("options", draft.options_text)))
+                )
+            initial_state = sp.WizardState(
+                current=sp.REVIEW_STEP if draft.question else "content",
+                answers=tuple(answers),
+                reviewing=bool(draft.question),
+            )
         wizard = sp.Wizard[sl.ComponentsV2Target, sd.Request](
             tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
-            _poll_steps(allow_network),
+            _poll_steps(allow_network, draft),
             key="poll",
+            initial_state=initial_state,
             review=sp.WizardReview(
                 label=tr(t"bot-voting-poll-wizard-review-poll = Review poll"),
                 summarize=_review,
-                note=tr(t"poll-publish-final = Publishing is final and cannot be undone here."),
+                note=tr(
+                    t"poll-publish-final = One vote per person; voting again changes your choice. "
+                    t"Publishing is final and cannot be undone here."
+                ),
             ),
             # Undo, Redo, and Cancel share the wizard's last row instead of adding rows below it.
             actions=self._wizard_actions,
@@ -426,6 +458,7 @@ class PollScreen(sd.Screen[str]):
     ) -> None:
         draft = _draft(answers)
         try:
+            draft.validate()
             options = await self._resolve_options(draft.option_lines)
             self.published_url = await self._publish(draft, options)
         except InvalidVoteConfigurationError as error:

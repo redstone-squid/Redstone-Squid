@@ -164,7 +164,7 @@ def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
 
 
 def test_polls_are_one_app_only_command() -> None:
-    """Poll creation opens a modal and therefore requires an application-command interaction."""
+    """Poll creation and its optional editor share one application command."""
     cog = VoteCog.__new__(VoteCog)
 
     assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll"]

@@ -1628,121 +1628,121 @@ bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.
 # squid/bot/voting/controls.py:39
 bot-voting-controls-refresh-weights = Refresh weights
 
-# squid/bot/voting/poll_wizard.py:376
+# squid/bot/voting/poll_wizard.py:450
 bot-voting-poll-wizard-cancel = Cancel
 
-# squid/bot/voting/poll_wizard.py:298
+# squid/bot/voting/poll_wizard.py:350
 bot-voting-poll-wizard-closes-after = Closes after
 
-# squid/bot/voting/poll_wizard.py:196, squid/bot/voting/poll_wizard.py:335
+# squid/bot/voting/poll_wizard.py:242, squid/bot/voting/poll_wizard.py:405
 bot-voting-poll-wizard-create-a-poll = Create a poll
 
-# squid/bot/voting/poll_wizard.py:78
+# squid/bot/voting/poll_wizard.py:86
 bot-voting-poll-wizard-day =
     { $count ->
         [one] { $count } day
        *[other] { $count } days
     }
 
-# squid/bot/voting/poll_wizard.py:32
+# squid/bot/voting/poll_wizard.py:33
 bot-voting-poll-wizard-days = 3 days
 
-# squid/bot/voting/poll_wizard.py:33
+# squid/bot/voting/poll_wizard.py:34
 bot-voting-poll-wizard-days-2 = 7 days
 
-# squid/bot/voting/poll_wizard.py:238
+# squid/bot/voting/poll_wizard.py:284
 bot-voting-poll-wizard-duration = Duration
 
-# squid/bot/voting/poll_wizard.py:172, squid/bot/voting/poll_wizard.py:304
+# squid/bot/voting/poll_wizard.py:182, squid/bot/voting/poll_wizard.py:356
 bot-voting-poll-wizard-every-server = Every server
 
-# squid/bot/voting/poll_wizard.py:50
+# squid/bot/voting/poll_wizard.py:52
 bot-voting-poll-wizard-hidden-until-close = Hidden until Close
 
-# squid/bot/voting/poll_wizard.py:28
+# squid/bot/voting/poll_wizard.py:29
 bot-voting-poll-wizard-hour = 1 hour
 
-# squid/bot/voting/poll_wizard.py:88
+# squid/bot/voting/poll_wizard.py:96
 bot-voting-poll-wizard-hour-2 =
     { $count ->
         [one] { $count } hour
        *[other] { $count } hours
     }
 
-# squid/bot/voting/poll_wizard.py:29
+# squid/bot/voting/poll_wizard.py:30
 bot-voting-poll-wizard-hours = 6 hours
 
-# squid/bot/voting/poll_wizard.py:30
+# squid/bot/voting/poll_wizard.py:31
 bot-voting-poll-wizard-hours-2 = 12 hours
 
-# squid/bot/voting/poll_wizard.py:31
+# squid/bot/voting/poll_wizard.py:32
 bot-voting-poll-wizard-hours-3 = 24 hours
 
-# squid/bot/voting/poll_wizard.py:40
+# squid/bot/voting/poll_wizard.py:42
 bot-voting-poll-wizard-live-anonymous = Live Anonymous
 
-# squid/bot/voting/poll_wizard.py:45
+# squid/bot/voting/poll_wizard.py:47
 bot-voting-poll-wizard-live-public = Live Public
 
-# squid/bot/voting/poll_wizard.py:240
-bot-voting-poll-wizard-m-h-d = 30m, 12h, 7d
+# squid/bot/voting/poll_wizard.py:286
+bot-voting-poll-wizard-m-h-d = 30m, 2h15m, 2 days
 
-# squid/bot/voting/poll_wizard.py:97
+# squid/bot/voting/poll_wizard.py:107
 bot-voting-poll-wizard-minute =
     { $count ->
         [one] { $count } minute
        *[other] { $count } minutes
     }
 
-# squid/bot/voting/poll_wizard.py:206
-bot-voting-poll-wizard-options-one-per-line = Options (one per line)
+# squid/bot/voting/poll_wizard.py:252
+bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 
-# squid/bot/voting/poll_wizard.py:369
+# squid/bot/voting/poll_wizard.py:443
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/poll_wizard.py:364
+# squid/bot/voting/poll_wizard.py:438, squid/bot/voting/vote.py:162
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
-# squid/bot/voting/poll_wizard.py:262
+# squid/bot/voting/poll_wizard.py:308
 bot-voting-poll-wizard-poll-settings = Poll settings
 
-# squid/bot/voting/poll_wizard.py:200
+# squid/bot/voting/poll_wizard.py:246
 bot-voting-poll-wizard-question = Question
 
-# squid/bot/voting/poll_wizard.py:268
+# squid/bot/voting/poll_wizard.py:316
 bot-voting-poll-wizard-question-and-options = Question and options
 
-# squid/bot/voting/poll_wizard.py:253
+# squid/bot/voting/poll_wizard.py:299
 bot-voting-poll-wizard-reach = Reach
 
-# squid/bot/voting/poll_wizard.py:303
+# squid/bot/voting/poll_wizard.py:355
 bot-voting-poll-wizard-reaches = Reaches
 
-# squid/bot/voting/poll_wizard.py:339
+# squid/bot/voting/poll_wizard.py:410
 bot-voting-poll-wizard-review-poll = Review poll
 
-# squid/bot/voting/poll_wizard.py:167
+# squid/bot/voting/poll_wizard.py:177
 bot-voting-poll-wizard-this-server = This server
 
-# squid/bot/voting/poll_wizard.py:226, squid/bot/voting/poll_wizard.py:295
+# squid/bot/voting/poll_wizard.py:272, squid/bot/voting/poll_wizard.py:347
 bot-voting-poll-wizard-visibility = Visibility
 
-# squid/bot/voting/poll_wizard.py:272
+# squid/bot/voting/poll_wizard.py:320
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/vote.py:115
+# squid/bot/voting/vote.py:176
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/vote.py:150
+# squid/bot/voting/vote.py:211
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/vote.py:131
+# squid/bot/voting/vote.py:192
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/vote.py:130
+# squid/bot/voting/vote.py:191
 bot-voting-vote-working = Working
 
-# squid/bot/voting/vote.py:90
+# squid/bot/voting/vote.py:125
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/submission/build_browse.py:805
@@ -2366,10 +2366,10 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin.py:119
 command-paste-name = paste
 
-# squid/bot/voting/vote.py:51
-command-poll-help = Create a multi-option poll through an ephemeral preview wizard.
+# squid/bot/voting/vote.py:57
+command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/vote.py:49
+# squid/bot/voting/vote.py:56
 command-poll-name = poll
 
 # squid/bot/submission/submit.py:379
@@ -2495,7 +2495,7 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking.py:126
 command-versions-name = versions
 
-# squid/bot/voting/vote.py:108
+# squid/bot/voting/vote.py:169
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/accounts/consent.py:171
@@ -4338,49 +4338,82 @@ permissions-vote-polls = Vote in polls.
 # squid/permissions/domain/catalogue.py:477
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
-# squid/bot/voting/poll_wizard.py:352
+# squid/bot/voting/poll_wizard.py:235
+poll-choices-empty = Choices cannot be empty.
+
+# squid/bot/voting/poll_wizard.py:232
+poll-choices-format = Separate choices with commas or line breaks; quote choices containing commas.
+
+# squid/bot/voting/poll_wizard.py:212
+poll-choices-length = Keep the choices within 1000 characters.
+
+# squid/bot/voting/vote.py:62
+poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
+
+# squid/bot/voting/vote.py:65
+poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
+
+# squid/bot/voting/vote.py:152
+poll-command-network-denied = You do not have permission to publish to every server.
+
+# squid/bot/voting/vote.py:76
+poll-command-preview = Review and edit before publishing. Default: publish immediately.
+
+# squid/bot/voting/vote.py:60
+poll-command-question = Poll question; omit to open the editor.
+
+# squid/bot/voting/vote.py:72
+poll-command-scope = This server, or every server if you have permission.
+
+# squid/bot/voting/vote.py:68
+poll-command-visibility = Who can see votes and when results are shown.
+
+# squid/bot/voting/poll_wizard.py:426
 poll-history-edit = Edit poll
 
-# squid/bot/voting/poll_wizard.py:341
-poll-publish-final = Publishing is final and cannot be undone here.
+# squid/bot/voting/poll_wizard.py:412
+poll-publish-final = One vote per person; voting again changes your choice. Publishing is final and cannot be undone here.
 
-# squid/bot/voting/poll_wizard.py:46
+# squid/bot/voting/poll_wizard.py:209
+poll-question-length = Enter a question between 1 and 300 characters.
+
+# squid/bot/voting/poll_wizard.py:48
 poll-setup-ballot-attribution-notice = Reactions stay on the message, so every ballot is attributable.
 
-# squid/bot/voting/poll_wizard.py:145
+# squid/bot/voting/poll_wizard.py:155
 poll-setup-custom-emoji-unavailable = The custom emoji { $emoji } is not accessible to this bot.
 
-# squid/bot/voting/poll_wizard.py:173
+# squid/bot/voting/poll_wizard.py:183
 poll-setup-distribution-all-servers = Card the poll in every server's vote channel.
 
-# squid/bot/voting/poll_wizard.py:168
+# squid/bot/voting/poll_wizard.py:178
 poll-setup-distribution-channel-only = Card the poll in this channel only.
 
-# squid/bot/voting/poll_wizard.py:61
-poll-setup-duration-format-help = Duration must look like `30m`, `12h`, or `7d`.
+# squid/bot/voting/poll_wizard.py:70
+poll-setup-duration-format-help = Use a duration like `30m`, `2h15m`, or `2 days 3 hours`.
 
-# squid/bot/voting/poll_wizard.py:66
+# squid/bot/voting/poll_wizard.py:215, squid/bot/voting/poll_wizard.py:74
 poll-setup-duration-out-of-range = Poll duration must be between 1 minute and 30 days.
 
-# squid/bot/voting/poll_wizard.py:133
+# squid/bot/voting/poll_wizard.py:143
 poll-setup-emoji-palette-too-small = The configured generic emoji palette does not have enough entries for these options.
 
-# squid/bot/voting/poll_wizard.py:124
+# squid/bot/voting/poll_wizard.py:134
 poll-setup-option-count-invalid = Enter between 2 and 10 option lines.
 
-# squid/bot/voting/poll_wizard.py:141
+# squid/bot/voting/poll_wizard.py:151
 poll-setup-option-emoji-required = Each option needs a non-empty emoji and label.
 
-# squid/bot/voting/poll_wizard.py:160
+# squid/bot/voting/poll_wizard.py:170
 poll-setup-option-emojis-unique = Poll option emojis must be unique.
 
-# squid/bot/voting/poll_wizard.py:208
-poll-setup-option-format-help = emoji | label (emoji may be omitted)
+# squid/bot/voting/poll_wizard.py:254
+poll-setup-option-format-help = Red, Blue or 🔴 | Red, 🔵 | Blue
 
-# squid/bot/voting/poll_wizard.py:51
+# squid/bot/voting/poll_wizard.py:53
 poll-setup-results-hidden-until-close = No totals at all until the poll closes.
 
-# squid/bot/voting/poll_wizard.py:41
+# squid/bot/voting/poll_wizard.py:43
 poll-setup-vote-privacy-notice = Running totals are public; who voted for what is not.
 
 # squid/posts/errors.py:10
@@ -6085,7 +6118,7 @@ video-use-input = Use this input
 # squid/bot/voting/reactions.py:297
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
-# squid/bot/voting/vote.py:116
+# squid/bot/voting/vote.py:177
 vote-message-guild-mismatch = The message is not from this guild.
 
 # squid/bot/voting/actors.py:22
@@ -6139,7 +6172,7 @@ vote-rows-title = Vote emojis
 # squid/bot/voting/actors.py:28
 vote-server-mismatch = That vote belongs to a different server.
 
-# squid/bot/voting/vote.py:66
+# squid/bot/voting/vote.py:101
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 
 # squid/bot/voting/controls.py:84

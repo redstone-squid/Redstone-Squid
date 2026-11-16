@@ -27,10 +27,10 @@ class Guild:
     id: int = 7
 
 
-def make_screen(*, failure: Exception | None = None) -> PollScreen:
+def make_screen(*, failure: Exception | None = None, draft: PollDraft | None = None) -> PollScreen:
     resolve = AsyncCallRecorder(error=failure, result=GENERIC_OPTIONS)
     publish = AsyncCallRecorder(result="https://discord.com/channels/1/2/3")
-    return PollScreen(resolve, publish, allow_network=True)
+    return PollScreen(resolve, publish, allow_network=True, draft=draft)
 
 
 async def open_screen(
@@ -161,3 +161,32 @@ async def test_history_restores_answers_without_rewinding_wizard_navigation() ->
     assert harness.state.current == sp.REVIEW_STEP
     assert (await screen.history.redo()).applied
     assert harness.state.current == sp.REVIEW_STEP
+
+
+async def test_editing_a_prefilled_poll_preserves_settings_and_can_be_undone() -> None:
+    draft = PollDraft("Best door?", "Red, Blue", VoteVisibility.ANONYMOUS_HIDDEN, 8100, PollScope.NETWORK)
+    screen = make_screen(draft=draft)
+    harness = wt.driving(screen.driver)
+    original = harness.state.answers
+    screen.driver.machine_state = screen.wizard.transition(harness.state, "goto:content")
+    trigger = sl.testing.find(sl.testing.render_tree(screen.driver), sl.semantic.FormTrigger, key="poll.content")
+    with transaction() as current:
+        await trigger.on_submit(
+            replace(
+                sl.testing.submit_event({"question": "Best colour?", "options": "Green, Blue"}), _transaction=current
+            )
+        )
+    assert harness.state.current == sp.REVIEW_STEP
+    settings = screen.wizard.live_answers(harness.state)["settings"]
+    assert settings == {"visibility": VoteVisibility.ANONYMOUS_HIDDEN, "duration": 8100, "scope": PollScope.NETWORK}
+    assert (await screen.history.undo()).applied
+    assert harness.state.answers == original
+
+
+async def test_malformed_csv_in_editor_remains_editable() -> None:
+    screen = make_screen(draft=PollDraft("Ready?", '"Red, Blue'))
+    async with sd.testing.stage(screen, owner=object()) as ui:
+        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith("poll.finish")))
+        assert not ui.root.finished
+        assert screen.outcome is None
+    cast(AsyncCallRecorder, screen._publish).assert_not_awaited()

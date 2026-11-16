@@ -247,6 +247,32 @@ This list of commands is subject to change due to improvements and new features.
 * `!submissions` is a server specific, role specific set of commands used to view, confirm and deny submissions. _This will be discussed below._
 * `!help <command>` provides a user with a help message. If a command is provided, a help message for that command will be provided.
 
+### Polls
+
+Run `/poll` to open the private editor, or supply a question to publish immediately:
+
+```text
+/poll question:Ready to start?
+/poll question:Which colour? choices:Red, Blue duration:2h15m
+/poll question:Dogs or cats? choices:🐶 | Dogs, 🐱 | Cats preview:True
+```
+
+The slash command and editor both support question, choices, duration, visibility,
+and server/network reach. `preview:True` opens a review with your arguments filled
+in; you can edit them before publishing. Question-only polls use Yes/No choices.
+
+Choices can be comma-separated or one per line. Quote a comma inside a choice
+(`"Red, white", Blue`), or use line-separated input. Use `emoji | label` for custom
+reactions; otherwise the server's configured palette supplies the emojis. Custom
+server emojis must be accessible to the bot. Literal `\n` works as a line break
+in the question and as a separator between choices.
+
+Polls allow 2–10 choices and one vote per person; voting again changes that vote.
+Durations range from one minute to 30 days and accept forms such as `2h15m` or
+`2 days 3 hours`. The default is 24 hours with anonymous live totals. The visibility
+picker also offers public votes or totals hidden until closing. Network reach
+requires permission and publishes to the configured vote channels across servers.
+
 ### Submissions Commands
 
 `!submissions open` provides an overview submissions that are open for review.

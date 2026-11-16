@@ -12,13 +12,20 @@ from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
-from squid.bot.voting.poll_wizard import PollDraft, PollScreen
+from squid.bot.voting.poll_wizard import (
+    DEFAULT_POLL_CHOICES,
+    SCOPE_CHOICES,
+    VISIBILITY_CHOICES,
+    PollDraft,
+    PollScreen,
+    parse_poll_duration,
+)
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.voting.domain import PollScope, VoteKind, VoteOption
+from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -47,16 +54,44 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.command(
         name=to_locale_str(tr(t"command-poll-name = poll")),
-        description=to_locale_str(
-            tr(t"command-poll-help = Create a multi-option poll through an ephemeral preview wizard.")
-        ),
+        description=to_locale_str(tr(t"command-poll-help = Create a poll from options or open the poll editor.")),
+        defer="private",
+        options={
+            "question": sd.Option(description=tr(t"poll-command-question = Poll question; omit to open the editor.")),
+            "choices": sd.Option(
+                description=tr(t"poll-command-choices = 2-10 choices, separated by commas or \\n; default: Yes, No.")
+            ),
+            "duration": sd.Option(
+                description=tr(t"poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.")
+            ),
+            "visibility": sd.Option(
+                description=tr(t"poll-command-visibility = Who can see votes and when results are shown."),
+                choices=[sd.Choice(value.value, label) for value, label, _ in VISIBILITY_CHOICES],
+            ),
+            "scope": sd.Option(
+                description=tr(t"poll-command-scope = This server, or every server if you have permission."),
+                choices=[sd.Choice(value.value, label) for value, label, _ in SCOPE_CHOICES],
+            ),
+            "preview": sd.Option(
+                description=tr(
+                    t"poll-command-preview = Review and edit before publishing. Default: publish immediately."
+                )
+            ),
+        },
     )
     @app_commands.guild_only()
-    async def poll(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
-        """Create a multi-option poll through an ephemeral preview wizard."""
+    async def poll(
+        self,
+        request: sd.Request[Self, BotT],
+        question: str | None = None,
+        choices: str | None = None,
+        duration: str = "24h",
+        visibility: str = VoteVisibility.ANONYMOUS_LIVE,
+        scope: str = PollScope.GUILD,
+        preview: bool = False,
+    ) -> sd.CommandResult:
+        """Publish supplied poll content, or open an editor with the supplied defaults."""
         actor = request.user
-        # A modal has to open on an unspent interaction, and showing the notice spends this one,
-        # so an unconsented author is asked here and re-runs to get the editor.
         account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
@@ -103,7 +138,33 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             )
             return publication.message.jump_url
 
-        return PollScreen(resolve_options, publish, allow_network=allow_network)
+        try:
+            draft = PollDraft(
+                question=question or "",
+                options_text=DEFAULT_POLL_CHOICES if choices is None else choices,
+                visibility=VoteVisibility(visibility),
+                duration_seconds=parse_poll_duration(duration),
+                scope=PollScope(scope),
+            )
+            if draft.scope is PollScope.NETWORK and not allow_network:
+                return sd.Response(
+                    text_node(
+                        tr(t"poll-command-network-denied = You do not have permission to publish to every server.")
+                    ),
+                    audience="personal",
+                )
+            if question is not None:
+                draft.validate()
+                options = await resolve_options(draft.option_lines)
+                if not preview:
+                    published_url = await publish(draft, options)
+                    return sd.Response(
+                        text_node(md_tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}")),
+                        audience="personal",
+                    )
+        except InvalidVoteConfigurationError as error:
+            return sd.Response(text_node(error.message), audience="personal")
+        return PollScreen(resolve_options, publish, allow_network=allow_network, draft=draft)
 
     @sd.context_menu(name=to_locale_str(tr(t"command-vote-to-delete-name = Vote to Delete")), defer="private")
     async def delete_vote_context_menu(
