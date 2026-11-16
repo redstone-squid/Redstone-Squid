@@ -293,7 +293,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
                 and sl.note(tr(t"notifications-following-empty = Nothing followed yet. Add your first follow below.")),
             ),
             *selection,
-            sl.note(self.filter_tag.label) if self.filter_tag is not None else sl.note(""),
+            *((sl.note(self.filter_tag.label),) if self.filter_tag is not None else ()),
             sl.action_controls(
                 sl.action_control(
                     tr(t"notification-choose-tag = Choose filter tag"),
@@ -308,23 +308,27 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
                 ),
                 key="filter-tag-actions",
             ),
-            sl.action_controls(
-                sl.action_control(
-                    tr(t"notification-previous = Previous follows"),
-                    self._previous,
-                    key="previous",
-                    available=self.page > 0,
-                ),
-                sl.action_control(
-                    tr(t"notification-next = Next follows"),
-                    self._next,
-                    key="next",
-                    available=(self.page + 1) * MAX_LISTED < len(self._settings.subscriptions),
-                ),
-                key="follow-pages",
-            )
-            if len(self._settings.subscriptions) > MAX_LISTED
-            else sl.note(""),
+            *(
+                (
+                    sl.action_controls(
+                        sl.action_control(
+                            tr(t"notification-previous = Previous follows"),
+                            self._previous,
+                            key="previous",
+                            available=self.page > 0,
+                        ),
+                        sl.action_control(
+                            tr(t"notification-next = Next follows"),
+                            self._next,
+                            key="next",
+                            available=(self.page + 1) * MAX_LISTED < len(self._settings.subscriptions),
+                        ),
+                        key="follow-pages",
+                    ),
+                )
+                if len(self._settings.subscriptions) > MAX_LISTED
+                else ()
+            ),
             actions,
         )
 

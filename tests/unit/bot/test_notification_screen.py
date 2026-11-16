@@ -388,3 +388,14 @@ async def test_inbox_hides_action_for_notification_without_a_build() -> None:
 
     assert "Open build" not in labels(render_tree(screen.inbox))
     assert "A build was confirmed." in labels(render_tree(screen.inbox))
+
+
+async def test_following_does_not_render_empty_subtext_markers() -> None:
+    harness = make_screen()
+    async with stage(harness.screen, owner=object()) as ui:
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if key.endswith("notification-tabs.following"))
+        )
+        assert not any(line.strip() == "-#" for text in ui.texts() for line in text.splitlines())
+        assert any(key.endswith(".filter-tag") for key in ui.root.snapshot().handler_keys)
+        assert any(key.endswith(".follow-creator") for key in ui.root.snapshot().handler_keys)
