@@ -1,5 +1,6 @@
 """Navigation controls reference the same endpoint as typed calls and address dispatch."""
 
+import inspect
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -7,6 +8,7 @@ import pytest
 
 import squid_ui as sl
 from squid.bot.accounts.workspace import AccountWorkspace
+from squid.bot.navigation.commands import NavigationCommands
 from squid.bot.routes import ScreenUnavailable, router
 from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.submission.submit import SavedDraftsScreen
@@ -93,3 +95,23 @@ async def test_account_tab_validation_and_current_request(monkeypatch: pytest.Mo
     assert opening.screen is screen
     screen.focus.assert_called_with("identity")
     create.assert_awaited_with(request)
+
+
+@pytest.mark.parametrize("address", ["builds/12", "/builds/12", "  builds/12  ", "drafts?inbox=true", "account#claims"])
+async def test_navigation_accepts_optional_leading_slash(monkeypatch: pytest.MonkeyPatch, address: str) -> None:
+    dispatch = AsyncMock()
+    monkeypatch.setattr(router, "dispatch", dispatch)
+    request = MagicMock()
+    callback = inspect.unwrap(NavigationCommands.open_screen.callback)
+    await callback(MagicMock(), request, address)
+    expected = router.resolve("/" + address.strip().lstrip("/"))
+    dispatch.assert_awaited_once_with(request, expected)
+
+
+@pytest.mark.parametrize("address", ["", "  ", "https://example.com/builds", "//example.com/builds", "?inbox=true"])
+async def test_navigation_rejects_non_screen_addresses(monkeypatch: pytest.MonkeyPatch, address: str) -> None:
+    dispatch = AsyncMock()
+    monkeypatch.setattr(router, "dispatch", dispatch)
+    callback = inspect.unwrap(NavigationCommands.open_screen.callback)
+    await callback(MagicMock(), MagicMock(), address)
+    dispatch.assert_not_awaited()

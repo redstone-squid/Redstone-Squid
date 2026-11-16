@@ -1,6 +1,7 @@
 """Open a screen address under the invoking user's identity."""
 
 from typing import TYPE_CHECKING, Self
+from urllib.parse import urlsplit
 
 import squid_ui.ext.discord as sd
 from squid.bot.routes import router
@@ -25,7 +26,12 @@ class NavigationCommands(sd.Cog):
         },
     )
     async def open_screen(self, request: sd.Request[Self, RedstoneSquid], address: str) -> sd.CommandResult:
+        address = address.strip()
         try:
+            if not address.startswith("/"):
+                parsed = urlsplit(address)
+                if parsed.path and not parsed.scheme and not parsed.netloc:
+                    address = f"/{address}"
             match = router.resolve(address)
         except InvalidAddress:
             return sd.Response(
