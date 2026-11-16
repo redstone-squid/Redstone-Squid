@@ -13,7 +13,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
-from squid.bot.notifications import render_delivery
+from squid.bot.notifications_cog import render_delivery
 from squid.events.models import DomainEvent
 from squid.notifications.domain import (
     InboxVisibility,

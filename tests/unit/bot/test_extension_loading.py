@@ -23,7 +23,7 @@ from squid.bot.app import (
     RedstoneSquid,
 )
 from squid.bot.errors import SquidCommandTree
-from squid.bot.help import DIRECTORY_CATEGORIES
+from squid.bot.help_cog import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
 from squid.config import BuildConfig
 from squid.runtime import BackgroundTaskSupervisor

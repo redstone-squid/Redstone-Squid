@@ -12,7 +12,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
+from squid.bot.help_cog import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 from squid_ui.planning.pagination.navigation import default_nav

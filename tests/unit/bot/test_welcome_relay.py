@@ -9,7 +9,7 @@ import discord
 import pytest
 from pytest_mock import MockerFixture
 
-from squid.bot import welcome_relay
+from squid.bot import welcome_relay_cog as welcome_relay
 from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
 from squid.runtime import BotServices

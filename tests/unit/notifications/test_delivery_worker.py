@@ -13,9 +13,9 @@ from aiohttp import ClientResponse
 from pytest_mock import MockerFixture
 
 import squid_ui.ext.discord as sd
-from squid.bot import notifications as notification_module
+from squid.bot import notifications_cog as notification_module
 from squid.bot.app import RedstoneSquid
-from squid.bot.notifications import NotificationCog
+from squid.bot.notifications_cog import NotificationCog
 from squid.notifications import NotificationService, PendingNotificationDelivery
 from squid.notifications.application import NotificationRepository
 from squid.notifications.domain import NotificationKind
@@ -146,7 +146,7 @@ async def test_ambiguous_delivery_failure_is_retried_and_only_dead_letters_are_l
 
     assert worker.repository.status == "failed"
     assert worker.repository.error == str(error)
-    records = [record for record in caplog.records if record.name == "squid.bot.notifications"]
+    records = [record for record in caplog.records if record.name == "squid.bot.notifications_cog"]
     assert len(records) == int(dead_lettered)
     if dead_lettered:
         assert records[0].__dict__["squid.notification.delivery_id"] == worker.repository.delivery.id

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_ui as sl
-from squid.bot.admin import Admin
+from squid.bot.admin_cog import Admin
 from squid.bot.tags_view import TagsScreen
 from squid.builds.application.restrictions import RestrictionService
 from squid.core.actors import Actor

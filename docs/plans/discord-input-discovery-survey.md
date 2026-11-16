@@ -57,7 +57,7 @@ polish work. Each row describes current behavior before proposing a change.
 ### Notifications
 
 Sources: [notifications_view.py](../../squid/bot/notifications_view.py),
-`NotificationSubscriptions`, and [notifications.py](../../squid/bot/notifications.py).
+`NotificationSubscriptions`, and [notifications.py](../../squid/bot/notifications_cog.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -73,7 +73,7 @@ separate history/navigation limitation.
 
 ### Tags and restrictions
 
-Sources: [admin.py](../../squid/bot/admin.py), `tags_workspace`, and
+Sources: [admin.py](../../squid/bot/admin_cog.py), `tags_workspace`, and
 [tags_view.py](../../squid/bot/tags_view.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
@@ -104,7 +104,7 @@ the editing tabs do not inherit that selection. Channel validation in
 
 ### Permissions and internal roles
 
-Sources: [permissions.py](../../squid/bot/permissions.py) and
+Sources: [permissions.py](../../squid/bot/permissions_cog.py) and
 [access_view.py](../../squid/bot/access_view.py).
 
 | Input or action | Current discovery | Recommendation | Priority |

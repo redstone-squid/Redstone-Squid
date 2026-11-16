@@ -16,10 +16,10 @@ from squid.suggestions.application import SuggestionRegistry
 from squid.suggestions.infrastructure.catalogue import build_registry
 
 COMMAND_MODULES = [
-    "squid.bot.admin",
-    "squid.bot.help",
-    "squid.bot.notifications",
-    "squid.bot.permissions",
+    "squid.bot.admin_cog",
+    "squid.bot.help_cog",
+    "squid.bot.notifications_cog",
+    "squid.bot.permissions_cog",
     "squid.bot.settings.cog",
     "squid.bot.starboard.cog",
     "squid.bot.submission.edit",
@@ -28,7 +28,7 @@ COMMAND_MODULES = [
     "squid.bot.submission.commands",
     "squid.bot.submission.submit",
     "squid.bot.accounts.cog",
-    "squid.bot.version_tracking",
+    "squid.bot.version_tracking_cog",
 ]
 
 

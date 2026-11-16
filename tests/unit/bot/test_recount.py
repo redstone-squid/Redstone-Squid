@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from squid.bot.recount import RecountCog
+from squid.bot.recount_cog import RecountCog
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.vote import VoteCog

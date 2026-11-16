@@ -15,7 +15,7 @@ from squid.bot.routes import router
         ("squid.bot.voting.controls", "refresh_poll", {}, "/polls/refresh"),
         ("squid.bot.submission.ui.controls", "edit_build", {"build_id": 5}, "/builds/5/edit"),
         ("squid.bot.submission.consent_banner", "open_consent_prompt", {}, "/build-log-consents/new"),
-        ("squid.bot.give_redstoner", "remove_own_redstoner_role", {}, "/redstoner-roles/self/remove"),
+        ("squid.bot.give_redstoner_cog", "remove_own_redstoner_role", {}, "/redstoner-roles/self/remove"),
     ],
 )
 def test_production_actions_are_canonical_addresses(
@@ -40,7 +40,7 @@ def test_reloading_build_controls_keeps_imported_handles_current() -> None:
 
 
 def test_reloading_role_controls_replaces_middleware_without_duplicating_it() -> None:
-    controls = import_module("squid.bot.give_redstoner")
+    controls = import_module("squid.bot.give_redstoner_cog")
     group = controls.redstoner_roles
     previous = group.middleware[0]
     reload(controls)

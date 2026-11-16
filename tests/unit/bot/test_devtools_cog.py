@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from squid.bot.devtools import _authorized, setup
+from squid.bot.devtools_cog import _authorized, setup
 from squid_reactivity import EventLedger
 from squid_ui.ext.discord import MessageRootScheduler, SessionManager, install
 from squid_ui.ext.discord.devtools import DevTools

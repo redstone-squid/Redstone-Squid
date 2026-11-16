@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import discord
 import pytest
 
-from squid.bot.guild_state import GuildStateCog
+from squid.bot.guild_state_cog import GuildStateCog
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting
 from squid.starboard.application import StarboardService

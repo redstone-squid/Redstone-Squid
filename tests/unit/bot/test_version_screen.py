@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, cast, override
 
-from squid.bot.version_tracking import VersionScreen
+from squid.bot.version_tracking_cog import VersionScreen
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition, MinecraftVersion
 from squid_ui.testing import RecordingResponder, labels, submit, submit_event

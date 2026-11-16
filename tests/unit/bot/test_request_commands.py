@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 
 import squid_ui.ext.discord as sd
-from squid.bot import notifications
+from squid.bot import notifications_cog as notifications
 from squid.bot.diagnostics import cog as diagnostics
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.diagnostics.application import ErrorReportService

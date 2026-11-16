@@ -76,7 +76,7 @@ inference actually emits.
 
 ## `on_message_version_add` has no error boundary either
 
-`VersionTracker.on_message_version_add` (`squid/bot/version_tracking.py:54-69`) is the second raw
+`VersionTracker.on_message_version_add` (`squid/bot/version_tracking_cog.py:54-69`) is the second raw
 `on_message` listener with nothing catching exceptions. Every message posted in the version-tracker
 channel has its first line fed straight to `VersionService.add`, which calls `parse_version_string`
 and raises `InvalidVersionError` for anything that is not a version — so ordinary chatter in that
@@ -164,7 +164,7 @@ immediately rather than retrying connection acquisition with exponential backoff
 
 ## `/help` command does not defer, causing `10062 Unknown interaction` and cascade in error responder
 
-`HelpCog.help` (`squid/bot/help.py:77-125`) performs async work (resolving guild locale overrides via
+`HelpCog.help` (`squid/bot/help_cog.py:77-125`) performs async work (resolving guild locale overrides via
 `resolve_locale` and inspecting command trees) before calling `interaction.response.send_message`, without
 first calling `interaction.response.defer()`. If database queries or event loop latency push the response past
 Discord's 3-second interaction token deadline, `send_message` fails with `NotFound: 404 Not Found (error code: 10062): Unknown interaction`

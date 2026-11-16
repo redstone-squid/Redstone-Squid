@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from squid.accounts.domain import IdentityProvider
-from squid.bot.admin import Admin
+from squid.bot.admin_cog import Admin
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import EditValues, LatestRevision, Revision
@@ -23,7 +23,7 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     authorize = AsyncMock()
-    monkeypatch.setattr("squid.bot.admin.enforce", authorize)
+    monkeypatch.setattr("squid.bot.admin_cog.enforce", authorize)
     account = SimpleNamespace(id=17, needs_consent_refresh=False) if linked else None
     accounts = SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account))
     edits = SimpleNamespace(
@@ -66,7 +66,7 @@ async def test_runtime_command_checks_permission_before_reading_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     authorize = AsyncMock(side_effect=AuthorizationError)
-    monkeypatch.setattr("squid.bot.admin.enforce", authorize)
+    monkeypatch.setattr("squid.bot.admin_cog.enforce", authorize)
     callback = cast(Any, Admin)._runtime_settings
     request = SimpleNamespace()
     with pytest.raises(AuthorizationError):

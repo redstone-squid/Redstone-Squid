@@ -69,31 +69,31 @@ CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"
 # write one merely by staying alive.
 
 EXTENSIONS = (
-    "squid.bot.reaction_events",
-    "squid.bot.messages",
+    "squid.bot.reaction_events_cog",
+    "squid.bot.messages_cog",
     "squid.bot.settings.cog",
-    "squid.bot.guild_state",
+    "squid.bot.guild_state_cog",
     "squid.bot.submission",
-    "squid.bot.log",
-    "squid.bot.help",
+    "squid.bot.log_cog",
+    "squid.bot.help_cog",
     "squid.bot.voting.vote",
     "squid.bot.starboard.cog",
-    "squid.bot.recount",
+    "squid.bot.recount_cog",
     "squid.bot.sync",
     "squid.bot.events",
-    "squid.bot.notifications",
+    "squid.bot.notifications_cog",
     "squid.bot.accounts.cog",
-    "squid.bot.admin",
+    "squid.bot.admin_cog",
     "squid.bot.diagnostics.cog",
-    "squid.bot.permissions",
-    "squid.bot.give_redstoner",
-    "squid.bot.version_tracking",
-    "squid.bot.welcome_relay",
+    "squid.bot.permissions_cog",
+    "squid.bot.give_redstoner_cog",
+    "squid.bot.version_tracking_cog",
+    "squid.bot.welcome_relay_cog",
     "squid.bot.navigation.cog",
 )
 """Production extensions in load order. Tests load this same set to detect registration conflicts."""
 
-DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.showcase.cog")
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools_cog", "squid.bot.showcase.cog")
 """Additional extensions loaded only in development mode."""
 
 

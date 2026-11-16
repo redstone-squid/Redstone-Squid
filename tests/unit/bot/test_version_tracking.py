@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-from squid.bot.version_tracking import VersionTracker
+from squid.bot.version_tracking_cog import VersionTracker
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
@@ -70,8 +70,8 @@ async def test_version_announcements(
         ),
     )
     send = AsyncMock()
-    monkeypatch.setattr("squid.bot.version_tracking.resolve_locale", AsyncMock(return_value="en"))
-    monkeypatch.setattr("squid.bot.version_tracking.send_to", lambda channel: send)
+    monkeypatch.setattr("squid.bot.version_tracking_cog.resolve_locale", AsyncMock(return_value="en"))
+    monkeypatch.setattr("squid.bot.version_tracking_cog.send_to", lambda channel: send)
 
     await VersionTracker(bot).on_message_version_add(message)
 

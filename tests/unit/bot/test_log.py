@@ -9,7 +9,7 @@ import pytest
 from discord.ext import commands
 from pytest_mock import MockerFixture
 
-from squid.bot.log import LoggingCog
+from squid.bot.log_cog import LoggingCog
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness
 from tests.support.discord import make_layout_bot
 
@@ -69,7 +69,7 @@ async def test_command_log_carries_only_low_cardinality_fields(
     ctx.author.id = 789
     ctx.interaction = interaction
 
-    with caplog.at_level(logging.INFO, logger="squid.bot.log"):
+    with caplog.at_level(logging.INFO, logger="squid.bot.log_cog"):
         await cog.log_command_usage(ctx)
 
     (record,) = caplog.records
@@ -85,7 +85,7 @@ async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.Log
     bot = make_layout_bot(user=Identity(111), guilds=[discord.Object(1), discord.Object(2)])
     cog = LoggingCog(bot)
 
-    with caplog.at_level(logging.INFO, logger="squid.bot.log"):
+    with caplog.at_level(logging.INFO, logger="squid.bot.log_cog"):
         await cog.log_on_ready()
 
     (record,) = caplog.records
@@ -99,7 +99,7 @@ async def test_command_errors_reach_the_shared_handler_only_when_unowned(mocker:
     Presenting twice is the failure this guards: the shared handler renders a user-facing
     message, so running it alongside a command's own handler double-replies.
     """
-    handle = mocker.patch("squid.bot.log.handle_context_error", new=AsyncCallRecorder())
+    handle = mocker.patch("squid.bot.log_cog.handle_context_error", new=AsyncCallRecorder())
     cog = LoggingCog(make_layout_bot())
 
     command_owned = context()

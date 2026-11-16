@@ -11,8 +11,8 @@ import discord
 import pytest
 
 import squid_ui.ext.discord as sd
-from squid.bot.admin import Admin
-from squid.bot.give_redstoner import RedstonerScreen
+from squid.bot.admin_cog import Admin
+from squid.bot.give_redstoner_cog import RedstonerScreen
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.testing import RecordingResponder, labels, press, press_event
 
@@ -182,7 +182,7 @@ async def test_redstoner_deploys_after_permission_recheck() -> None:
 @pytest.mark.parametrize("outcome", ["success", "send_failure", "hidden", "same_channel", "other_user", "other_guild"])
 async def test_paste_moves_only_the_callers_accessible_selection(outcome: str, monkeypatch: pytest.MonkeyPatch) -> None:
     authorize = AsyncMock()
-    monkeypatch.setattr("squid.bot.admin.enforce", authorize)
+    monkeypatch.setattr("squid.bot.admin_cog.enforce", authorize)
     source = Mock(spec=discord.TextChannel)
     source.permissions_for.return_value = SimpleNamespace(view_channel=outcome != "hidden", read_message_history=True)
     current = Mock(spec=discord.Message)
@@ -215,7 +215,7 @@ async def test_paste_moves_only_the_callers_accessible_selection(outcome: str, m
 
 
 async def test_archive_selection_does_not_move_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("squid.bot.admin.enforce", AsyncMock())
+    monkeypatch.setattr("squid.bot.admin_cog.enforce", AsyncMock())
     guild = SimpleNamespace(id=1)
     message = SimpleNamespace(guild=guild, delete=AsyncMock())
     request = SimpleNamespace(guild=guild, user=SimpleNamespace(id=7))

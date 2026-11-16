@@ -5,9 +5,9 @@ from uuid import UUID
 import discord
 import pytest
 
-from squid.bot import notifications as notification_module
+from squid.bot import notifications_cog as notification_module
 from squid.bot.notification_text import notification_build_id, notification_details
-from squid.bot.notifications import NotificationCog, render_delivery
+from squid.bot.notifications_cog import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import localization_for
 from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate

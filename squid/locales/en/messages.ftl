@@ -682,49 +682,49 @@ accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 # squid/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
-# squid/bot/admin.py:342
+# squid/bot/admin_cog.py:342
 admin-build-spreadsheet = Build spreadsheet
 
-# squid/bot/admin.py:352
+# squid/bot/admin_cog.py:352
 admin-database = Database
 
-# squid/bot/admin.py:317
+# squid/bot/admin_cog.py:317
 admin-globally = globally
 
-# squid/bot/admin.py:115
+# squid/bot/admin_cog.py:115
 admin-message-queued = Message selected. Run /paste in the destination channel to move it.
 
-# squid/bot/admin.py:354
+# squid/bot/admin_cog.py:354
 admin-open-database = Open database
 
-# squid/bot/admin.py:344
+# squid/bot/admin_cog.py:344
 admin-open-spreadsheet = Open spreadsheet
 
-# squid/bot/admin.py:137
+# squid/bot/admin_cog.py:137
 admin-paste-empty = Select a message with Apps → Archive Message first.
 
-# squid/bot/admin.py:146
+# squid/bot/admin_cog.py:146
 admin-paste-same-channel = Run /paste in a different channel to move this message.
 
-# squid/bot/admin.py:132
+# squid/bot/admin_cog.py:132
 admin-paste-server-only = Use /paste in a server channel.
 
-# squid/bot/admin.py:143
+# squid/bot/admin_cog.py:143
 admin-paste-source-hidden = You no longer have access to the source message.
 
-# squid/bot/admin.py:140
+# squid/bot/admin_cog.py:140
 admin-paste-source-unavailable = The source channel is unavailable.
 
-# squid/bot/admin.py:322
+# squid/bot/admin_cog.py:322
 admin-synced-commands = Synced { $count } commands { $scope }.
 
-# squid/bot/admin.py:335
+# squid/bot/admin_cog.py:335
 admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 
-# squid/bot/admin.py:112
+# squid/bot/admin_cog.py:112
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/bot/admin.py:319
+# squid/bot/admin_cog.py:319
 admin-to-the-current-guild = to the current guild
 
 # squid/api/errors.py:264
@@ -888,25 +888,25 @@ bot-profile-render-value = { $provider } — { $name }
 # squid/bot/accounts/profile_render.py:36
 bot-profile-render-value-2 = { $provider } — { $subject }
 
-# squid/bot/recount.py:85
+# squid/bot/recount_cog.py:85
 bot-recount-give-a-link-to-a-message-in = Give a link to a message in this server.
 
-# squid/bot/recount.py:115
+# squid/bot/recount_cog.py:115
 bot-recount-i-cannot-read-that-message = I cannot read that message.
 
-# squid/bot/recount.py:125
+# squid/bot/recount_cog.py:125
 bot-recount-starboard-reactions-recounted = Starboard reactions recounted.
 
-# squid/bot/recount.py:108
+# squid/bot/recount_cog.py:108
 bot-recount-that-message-is-not-a-vote-or = That message is not a vote or a starboard message.
 
-# squid/bot/recount.py:95
+# squid/bot/recount_cog.py:95
 bot-recount-that-vote-is-already-being-recounted = That vote is already being recounted.
 
-# squid/bot/recount.py:93
+# squid/bot/recount_cog.py:93
 bot-recount-that-vote-is-already-closed = That vote is already closed.
 
-# squid/bot/recount.py:100
+# squid/bot/recount_cog.py:100
 bot-recount-votes-recounted = Votes recounted.
 
 # squid/bot/settings/screen.py:596
@@ -1098,7 +1098,7 @@ bot-submission-build-browse-approve = Approve
 # squid/bot/submission/build_browse.py:495
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:928
+# squid/bot/submission/build_browse.py:926
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/submission/build_browse.py:357
@@ -1125,10 +1125,10 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/submission/build_browse.py:245
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:926
+# squid/bot/submission/build_browse.py:924
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:643
+# squid/bot/submission/build_browse.py:641
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:314
@@ -1552,31 +1552,31 @@ bot-verify-hidden-creator-page = Hidden creator page
 # squid/bot/accounts/cog.py:69
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
-# squid/bot/version_tracking.py:178
+# squid/bot/version_tracking_cog.py:178
 bot-version-tracking-add-minecraft-version = Add Minecraft version
 
-# squid/bot/version_tracking.py:98
+# squid/bot/version_tracking_cog.py:98
 bot-version-tracking-add-version = Add version
 
-# squid/bot/version_tracking.py:115
+# squid/bot/version_tracking_cog.py:115
 bot-version-tracking-added = Added { $version }.
 
-# squid/bot/version_tracking.py:185
+# squid/bot/version_tracking_cog.py:185
 bot-version-tracking-bedrock = Bedrock
 
-# squid/bot/version_tracking.py:181, squid/bot/version_tracking.py:81
+# squid/bot/version_tracking_cog.py:181, squid/bot/version_tracking_cog.py:81
 bot-version-tracking-edition = Edition
 
-# squid/bot/version_tracking.py:184
+# squid/bot/version_tracking_cog.py:184
 bot-version-tracking-java = Java
 
-# squid/bot/version_tracking.py:91
+# squid/bot/version_tracking_cog.py:91
 bot-version-tracking-loading-versions = Loading versions.
 
-# squid/bot/version_tracking.py:188, squid/bot/version_tracking.py:80
+# squid/bot/version_tracking_cog.py:188, squid/bot/version_tracking_cog.py:80
 bot-version-tracking-version = Version
 
-# squid/bot/version_tracking.py:161
+# squid/bot/version_tracking_cog.py:161
 bot-version-tracking-version-added-successfully = Version added successfully: { $version }
 
 # squid/bot/voting/actors.py:23
@@ -1714,13 +1714,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/vote.py:125
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/submission/build_browse.py:895
+# squid/bot/submission/build_browse.py:893
 browse-query-all-builds = All builds
 
-# squid/bot/submission/build_browse.py:893
+# squid/bot/submission/build_browse.py:891
 browse-query-all-standings = All standings
 
-# squid/bot/submission/build_browse.py:677
+# squid/bot/submission/build_browse.py:675
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1729,22 +1729,22 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/build_browse.py:620
+# squid/bot/submission/build_browse.py:618
 build-browse-all-builds = Builds
 
-# squid/bot/submission/build_browse.py:636
+# squid/bot/submission/build_browse.py:634
 build-browse-record-tools = Record tools
 
-# squid/bot/submission/build_browse.py:628
+# squid/bot/submission/build_browse.py:626
 build-browse-records = Records
 
 # squid/bot/submission/build_browse.py:273
 build-browse-tags = Build tags
 
-# squid/bot/submission/build_browse.py:679
+# squid/bot/submission/build_browse.py:677
 build-browser-close-search = Done
 
-# squid/bot/submission/build_browse.py:681
+# squid/bot/submission/build_browse.py:679
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/submit.py:104
@@ -1858,7 +1858,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:382
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/submission/build_browse.py:669, squid/bot/submission/build_browse.py:800
+# squid/bot/submission/build_browse.py:667, squid/bot/submission/build_browse.py:798
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1999,10 +1999,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/submission/build_browse.py:726, squid/bot/submission/search_help.py:184
+# squid/bot/submission/build_browse.py:724, squid/bot/submission/search_help.py:184
 catalogue-search-help = Search help
 
-# squid/bot/submission/build_browse.py:604
+# squid/bot/submission/build_browse.py:602
 catalogue-search-help-close = Close help
 
 # squid/catalogue/domain/titles.py:67
@@ -2092,22 +2092,22 @@ cli-auth-too-many-cli = Too many CLI authorization requests are active.
 # squid/cli_auth/errors.py:73
 cli-cli-device-proof-invalid = The CLI device proof is invalid.
 
-# squid/bot/permissions.py:51
+# squid/bot/permissions_cog.py:51
 command-access-help = Inspect and manage this server's access controls
 
-# squid/bot/permissions.py:50
+# squid/bot/permissions_cog.py:50
 command-access-name = access
 
-# squid/bot/permissions.py:59
+# squid/bot/permissions_cog.py:59
 command-access-role-help = Discord role whose access to inspect. Choose either a member or a role.
 
-# squid/bot/permissions.py:58
+# squid/bot/permissions_cog.py:58
 command-access-role-name = role
 
-# squid/bot/permissions.py:55
+# squid/bot/permissions_cog.py:55
 command-access-user-help = Member whose access to inspect. Defaults to you.
 
-# squid/bot/permissions.py:54
+# squid/bot/permissions_cog.py:54
 command-access-user-name = user
 
 # squid/bot/accounts/cog.py:32
@@ -2119,7 +2119,7 @@ command-account-name = account
 # squid/bot/accounts/cog.py:35
 command-account-user-name = user
 
-# squid/bot/admin.py:102
+# squid/bot/admin_cog.py:102
 command-archive-message-name = Archive Message
 
 # squid/bot/submission/commands.py:167
@@ -2275,13 +2275,13 @@ command-errors-reference-help = The error reference to open immediately
 # squid/bot/diagnostics/cog.py:27
 command-errors-reference-name = reference
 
-# squid/bot/help.py:194
+# squid/bot/help_cog.py:194
 command-help-command-name = command
 
-# squid/bot/help.py:190
+# squid/bot/help_cog.py:190
 command-help-help = Show a grouped command directory or focused command details.
 
-# squid/bot/help.py:191
+# squid/bot/help_cog.py:191
 command-help-name = help
 
 # squid/bot/showcase/cog.py:26
@@ -2314,7 +2314,7 @@ command-layout-workbench-help = Edit a sample build and watch a second message u
 # squid/bot/showcase/cog.py:34
 command-layout-workbench-name = workbench
 
-# squid/bot/notifications.py:58
+# squid/bot/notifications_cog.py:58
 command-notifications-name = notifications
 
 # squid/bot/navigation/cog.py:23
@@ -2329,10 +2329,10 @@ command-open-help = Open a screen address, such as /builds/123 or /account.
 # squid/bot/navigation/cog.py:17
 command-open-name = open
 
-# squid/bot/admin.py:120
+# squid/bot/admin_cog.py:120
 command-paste-help = Move your selected archive message into this channel
 
-# squid/bot/admin.py:119
+# squid/bot/admin_cog.py:119
 command-paste-name = paste
 
 # squid/bot/voting/vote.py:57
@@ -2353,46 +2353,46 @@ command-records-name = records
 # squid/bot/submission/commands.py:184
 command-records-query-name = query
 
-# squid/bot/recount.py:54
+# squid/bot/recount_cog.py:54
 command-recount-help = Count the reactions on a vote or starboard message again.
 
-# squid/bot/recount.py:58
+# squid/bot/recount_cog.py:58
 command-recount-message-help = Link to a vote card, a starboard post, or the message it shows
 
-# squid/bot/recount.py:57
+# squid/bot/recount_cog.py:57
 command-recount-message-name = message
 
-# squid/bot/recount.py:52
+# squid/bot/recount_cog.py:52
 command-recount-name = recount
 
-# squid/bot/give_redstoner.py:155
+# squid/bot/give_redstoner_cog.py:155
 command-redstoner-help = Inspect and deploy Redstoner automation
 
-# squid/bot/give_redstoner.py:154
+# squid/bot/give_redstoner_cog.py:154
 command-redstoner-name = redstoner
 
-# squid/bot/admin.py:201
+# squid/bot/admin_cog.py:201
 command-runtime-settings-help = View or change global runtime settings
 
-# squid/bot/admin.py:200
+# squid/bot/admin_cog.py:200
 command-runtime-settings-name = runtime-settings
 
-# squid/bot/admin.py:219
+# squid/bot/admin_cog.py:219
 command-runtime-settings-revision-help = Optional revision from the settings snapshot to prevent overwriting newer changes.
 
-# squid/bot/admin.py:218
+# squid/bot/admin_cog.py:218
 command-runtime-settings-revision-name = revision
 
-# squid/bot/admin.py:206
+# squid/bot/admin_cog.py:206
 command-runtime-settings-setting-help = Choose a setting by name. Omit to list settings and current values.
 
-# squid/bot/admin.py:205
+# squid/bot/admin_cog.py:205
 command-runtime-settings-setting-name = setting
 
-# squid/bot/admin.py:213
+# squid/bot/admin_cog.py:213
 command-runtime-settings-value-help = New JSON value, such as true or 0.25. Omit to inspect the setting.
 
-# squid/bot/admin.py:212
+# squid/bot/admin_cog.py:212
 command-runtime-settings-value-name = value
 
 # squid/bot/submission/commands.py:112
@@ -2446,22 +2446,22 @@ command-starboard-help = Configure this server's starboards
 # squid/bot/starboard/cog.py:206
 command-starboard-name = starboard
 
-# squid/bot/admin.py:60
+# squid/bot/admin_cog.py:60
 command-tags-build-id-help = Choose a build by name to apply tags to it
 
-# squid/bot/admin.py:59
+# squid/bot/admin_cog.py:59
 command-tags-build-id-name = build
 
-# squid/bot/admin.py:56
+# squid/bot/admin_cog.py:56
 command-tags-help = Browse, apply, propose, and moderate build tags
 
-# squid/bot/admin.py:55
+# squid/bot/admin_cog.py:55
 command-tags-name = tags
 
-# squid/bot/version_tracking.py:127
+# squid/bot/version_tracking_cog.py:127
 command-versions-help = Browse recognized Minecraft versions
 
-# squid/bot/version_tracking.py:126
+# squid/bot/version_tracking_cog.py:126
 command-versions-name = versions
 
 # squid/bot/voting/vote.py:169
@@ -3217,37 +3217,37 @@ events-consumer-non-empty = consumer must be a non-empty name
 # squid/events/application.py:60
 events-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/give_redstoner.py:243
+# squid/bot/give_redstoner_cog.py:243
 give-redstoner-could-not-find-the-redstoner = Could not find the redstoner role.
 
-# squid/bot/give_redstoner.py:114
+# squid/bot/give_redstoner_cog.py:114
 give-redstoner-deploy-role-controls = Deploy role controls
 
-# squid/bot/give_redstoner.py:277
+# squid/bot/give_redstoner_cog.py:277
 give-redstoner-gave-the-redstoner-role = Gave { $member } the redstoner role.
 
-# squid/bot/give_redstoner.py:231
+# squid/bot/give_redstoner_cog.py:231
 give-redstoner-in = { $reason } in { $url }
 
-# squid/bot/give_redstoner.py:119
+# squid/bot/give_redstoner_cog.py:119
 give-redstoner-redstoner-automation = Redstoner automation
 
-# squid/bot/give_redstoner.py:142
+# squid/bot/give_redstoner_cog.py:142
 give-redstoner-redstoner-role-controls = Redstoner role controls deployed.
 
-# squid/bot/give_redstoner.py:122
+# squid/bot/give_redstoner_cog.py:122
 give-redstoner-role = Role
 
-# squid/bot/give_redstoner.py:129
+# squid/bot/give_redstoner_cog.py:129
 give-redstoner-server = Server
 
-# squid/bot/give_redstoner.py:126
+# squid/bot/give_redstoner_cog.py:126
 give-redstoner-source-channel = Source channel
 
-# squid/bot/give_redstoner.py:123
+# squid/bot/give_redstoner_cog.py:123
 give-redstoner-value = { $role_mention }
 
-# squid/bot/give_redstoner.py:127
+# squid/bot/give_redstoner_cog.py:127
 give-redstoner-value-2 = { $source_channel_mention }
 
 # squid/bot/submission/guided_search.py:177, squid/bot/submission/guided_search.py:198
@@ -3313,7 +3313,7 @@ guided-search-query-title = Search query
 # squid/bot/submission/guided_search.py:247
 guided-search-remove-clause = Remove
 
-# squid/bot/submission/build_browse.py:732
+# squid/bot/submission/build_browse.py:730
 guided-search-reset = Reset
 
 # squid/bot/submission/guided_search.py:462
@@ -3340,55 +3340,55 @@ guided-search-upper = And (only for between)
 # squid/bot/submission/guided_search.py:539
 guided-search-yes = Yes
 
-# squid/bot/help.py:26
+# squid/bot/help_cog.py:26
 help-account = Account
 
-# squid/bot/help.py:29
+# squid/bot/help_cog.py:29
 help-administration-setup = Administration & setup
 
-# squid/bot/help.py:24
+# squid/bot/help_cog.py:24
 help-build = Build
 
-# squid/bot/help.py:144
+# squid/bot/help_cog.py:144
 help-command-not-found = Command not found
 
-# squid/bot/help.py:145
+# squid/bot/help_cog.py:145
 help-command-unavailable = No command named `{ $needle }` is available.
 
-# squid/bot/help.py:27
+# squid/bot/help_cog.py:27
 help-community = Community
 
-# squid/bot/help.py:25
+# squid/bot/help_cog.py:25
 help-discover = Discover
 
-# squid/bot/help.py:155
+# squid/bot/help_cog.py:155
 help-documentation = Documentation
 
-# squid/bot/help.py:34
+# squid/bot/help_cog.py:34
 help-information = Information
 
-# squid/bot/help.py:162
+# squid/bot/help_cog.py:162
 help-invite = Invite
 
-# squid/bot/help.py:100
+# squid/bot/help_cog.py:100
 help-no-commands-are-available = No commands are available.
 
-# squid/bot/help.py:116, squid/bot/help.py:176
+# squid/bot/help_cog.py:116, squid/bot/help_cog.py:176
 help-no-details-provided = No details provided
 
-# squid/bot/help.py:99
+# squid/bot/help_cog.py:99
 help-redstone-squid-help = Redstone Squid help
 
-# squid/bot/help.py:156
+# squid/bot/help_cog.py:156
 help-regulations = Regulations
 
-# squid/bot/help.py:153
+# squid/bot/help_cog.py:153
 help-source = Source
 
-# squid/bot/help.py:154
+# squid/bot/help_cog.py:154
 help-submission-form = Submission form
 
-# squid/bot/help.py:195
+# squid/bot/help_cog.py:195
 help-the-command-to-get-help-for = The command to get help for.
 
 # squid/idempotency/infrastructure/crypto.py:61
@@ -3984,7 +3984,7 @@ notifications-build = A build
 # squid/bot/notification_text.py:18
 notifications-build-number = Build #{ $build_id }
 
-# squid/bot/notifications.py:60
+# squid/bot/notifications_cog.py:60
 notifications-channel-preferences = Manage notification channels and subscriptions
 
 # squid/bot/notification_text.py:22
@@ -4047,7 +4047,7 @@ notifications-invalid-exact-tag-value = invalid exact tag value
 # squid/notifications/domain.py:284, squid/notifications/domain.py:289
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/bot/notifications.py:166
+# squid/bot/notifications_cog.py:166
 notifications-manage-hint = View your inbox and manage updates with `/notifications`.
 
 # squid/bot/notification_text.py:56
@@ -4056,7 +4056,7 @@ notifications-more-records = …and { $remaining } more records.
 # squid/bot/notifications_view.py:682
 notifications-open-build = Open build
 
-# squid/bot/notifications.py:158
+# squid/bot/notifications_cog.py:158
 notifications-open-in-discord = Open it in Discord with `/build browse id:{ $build_id }`.
 
 # squid/notifications/application.py:175
@@ -4468,16 +4468,16 @@ record-browse-open-holder = Open build #{ $build_id }
 # squid/bot/submission/record_browser.py:98
 record-browse-title = Records
 
-# squid/bot/submission/build_browse.py:711
+# squid/bot/submission/build_browse.py:709
 record-browser-all = All types
 
-# squid/bot/submission/build_browse.py:706
+# squid/bot/submission/build_browse.py:704
 record-browser-fastest = Fastest
 
-# squid/bot/submission/build_browse.py:707
+# squid/bot/submission/build_browse.py:705
 record-browser-first = First
 
-# squid/bot/submission/build_browse.py:705
+# squid/bot/submission/build_browse.py:703
 record-browser-smallest = Smallest
 
 # squid/bot/submission/commands.py:185
@@ -4621,31 +4621,31 @@ records-title-holders-forbidden = Only a resolved record title can have official
 # squid/bot/submission/records.py:190
 records-titles-purpose = These record titles contain terms the title rules do not know. Fix the taxonomy, then rebuild records.
 
-# squid/bot/recount.py:112
+# squid/bot/recount_cog.py:112
 recount-already-running = That message is already being recounted.
 
-# squid/bot/recount.py:124
+# squid/bot/recount_cog.py:124
 recount-message-has-no-starboard = No starboard counts reactions on that message.
 
-# squid/bot/recount.py:150
+# squid/bot/recount_cog.py:150
 recount-server-rate-limited = This server ran a recount recently. Try again in { $whole } seconds.
 
-# squid/bot/recount.py:102
+# squid/bot/recount_cog.py:102
 recount-votes-already-current = Votes recounted; nothing had been missed.
 
-# squid/bot/give_redstoner.py:165
+# squid/bot/give_redstoner_cog.py:165
 redstoner-control-bot-only = This is only available in the bot's home server.
 
-# squid/bot/give_redstoner.py:138
+# squid/bot/give_redstoner_cog.py:138
 redstoner-deploy-forbidden = You are no longer allowed to deploy Redstoner controls.
 
-# squid/bot/give_redstoner.py:284
+# squid/bot/give_redstoner_cog.py:284
 redstoner-role-earned = Hi { $member }, you received the { $role } role after reaching 15 upvotes in { $url }.
 
-# squid/bot/give_redstoner.py:272
+# squid/bot/give_redstoner_cog.py:272
 redstoner-role-restored = { $member } — just kidding, here is your role back.
 
-# squid/bot/give_redstoner.py:267
+# squid/bot/give_redstoner_cog.py:267
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
 # squid/bot/submission/schematics.py:59
@@ -6044,7 +6044,7 @@ verify-creator-page-hidden = This creator has hidden their page. Their build cre
 # squid/bot/accounts/cog.py:36
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
-# squid/bot/version_tracking.py:108
+# squid/bot/version_tracking_cog.py:108
 versions-add-permission-denied = You are no longer allowed to add versions.
 
 # squid/versions/errors.py:21
@@ -6053,10 +6053,10 @@ versions-minecraft-version-catalog = The Minecraft version catalog is empty.
 # squid/versions/errors.py:10
 versions-minecraft-version-invalid = The Minecraft version is invalid.
 
-# squid/bot/version_tracking.py:85
+# squid/bot/version_tracking_cog.py:85
 versions-none-recognized = No Minecraft versions are recognized yet.
 
-# squid/bot/version_tracking.py:84
+# squid/bot/version_tracking_cog.py:84
 versions-recognized-list-title = Recognized Minecraft versions
 
 # squid/versions/errors.py:13
