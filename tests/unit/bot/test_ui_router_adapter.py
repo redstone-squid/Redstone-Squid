@@ -1,6 +1,6 @@
 """Persistent buttons and direct endpoint calls share the application's delivery path."""
 
-from typing import Literal
+from typing import Literal, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import anyio
@@ -8,7 +8,7 @@ import discord
 import pytest
 
 import squid_ui.ext.discord as sd
-from squid.bot.routes import AppRequest, ScreenOpening, deliver
+from squid.bot.routes import AppRequest, deliver
 from squid_ui.ext.discord.routing.adapter import install
 from squid_ui.ext.discord.testing import InteractionHarness
 from squid_ui.routing import Router
@@ -54,8 +54,8 @@ async def test_screen_endpoint_is_delivered_without_a_forwarding_route() -> None
 
         @router.route("/screen")
         @classmethod
-        async def open(cls, request: AppRequest) -> ScreenOpening:
-            return ScreenOpening(cls())
+        async def open(cls, request: AppRequest) -> Self:
+            return cls()
 
     bot = make_layout_bot(add_dynamic_items=MagicMock())
     errors = AsyncMock()

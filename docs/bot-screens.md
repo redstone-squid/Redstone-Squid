@@ -84,14 +84,15 @@ a tree of regions supplies the joint alternative.
 
 `squid.bot.routes.router` is the single registry for screen openings and persistent
 actions. Both use `@router.route(path)`, receive an `AppRequest`, and return either a
-`ScreenOpening`, a `Response`, or `None` after handling the request themselves.
+`Screen`, a `Response`, or `None` after handling the request themselves.
 Screen classmethods inherit their screen's response policy; standalone actions can
-supply `policy=ResponseSpec(...)` on the decorator.
+supply `policy=ResponseSpec(...)` on the decorator. Screens can set an instance's
+`session_key` to override the key derived from their session policy.
 
 ```python
 @router.route("/builds/{build_id}")
 @classmethod
-async def open_detail(cls, request: AppRequest, build_id: int) -> ScreenOpening: ...
+async def open_detail(cls, request: AppRequest, build_id: int) -> Self: ...
 ```
 
 Names in `{braces}` are path parameters. Other parameters have defaults and appear

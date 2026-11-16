@@ -4,7 +4,7 @@ from functools import partial
 from uuid import UUID
 
 from squid.bot.accounts.consent import ensure_consented_account
-from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.ui import opening, recalculation
 from squid.bot.tags_view import TagsScreen
 from squid.bot.utils.permissions import allows
@@ -22,7 +22,7 @@ builds = router.group("/builds")
 
 
 @builds.route("/{build_id}/tags")
-async def build_tags(request: AppRequest, build_id: int) -> ScreenOpening | None:
+async def build_tags(request: AppRequest, build_id: int) -> TagsScreen | None:
     services = request.client.services
     account_id = await ensure_consented_account(request, services.accounts)
     if account_id is None:
@@ -44,17 +44,15 @@ async def build_tags(request: AppRequest, build_id: int) -> ScreenOpening | None
             if await authorize(node)
         ]
     )
-    return ScreenOpening(
-        TagsScreen(
-            services.tags,
-            services.restrictions,
-            services.edits,
-            partial(request.client.actors.resolve, request, refresh=True),
-            build_id=build_id,
-            actor_account_id=account_id,
-            capabilities=capabilities,
-            authorize=authorize,
-        )
+    return TagsScreen(
+        services.tags,
+        services.restrictions,
+        services.edits,
+        partial(request.client.actors.resolve, request, refresh=True),
+        build_id=build_id,
+        actor_account_id=account_id,
+        capabilities=capabilities,
+        authorize=authorize,
     )
 
 
@@ -78,10 +76,9 @@ async def _open_editor(request: AppRequest, build_id: int, *, recovered: bool = 
 
 
 @builds.route("/revision/{proposal_id}/reopen")
-async def reopen_revision(request: AppRequest, proposal_id: UUID) -> ScreenOpening:
+async def reopen_revision(request: AppRequest, proposal_id: UUID) -> recalculation.RecalculationProposalScreen:
     """Reopen a retained diff under the caller's current edit authority."""
-    screen = await recalculation.RecalculationProposalScreen.load(request.client.services, proposal_id, request)
-    return ScreenOpening(screen)
+    return await recalculation.RecalculationProposalScreen.load(request.client.services, proposal_id, request)
 
 
 __all__ = [

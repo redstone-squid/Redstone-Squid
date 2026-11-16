@@ -409,6 +409,8 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     assert call.kwargs["ephemeral"] is True
     editor = call.kwargs["view"]._root.component
     assert isinstance(editor, DraftEditorScreen)
+    assert editor.session is not None
+    assert editor.session.key == sd.SessionKey.custom("draft", (7, str(draft.snapshot.id)))
     assert editor.workspace.draft.snapshot.owner_account_id == 99
     assert await editor.workspace.may_edit()
 

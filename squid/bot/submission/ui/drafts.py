@@ -29,14 +29,14 @@ issues for the submitter to fix; the panel shows which of these happened.
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from enum import Enum, auto
 from functools import partial
-from typing import Any, cast, override
+from typing import Any, Self, cast, override
 from uuid import UUID, uuid4
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.edit_controller import EditController
-from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission import draft_intake
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
@@ -442,7 +442,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         render_card: CardRenderer | None = None,
         resolve_actor: Callable[[], Awaitable[Actor]],
         notice: sl.TextLike = "",
-    ) -> DraftEditorScreen:
+    ) -> Self:
         """Load a saved draft with the form revision it was created under.
 
         Catalogue options are loaded up front so the summary can show their labels.
@@ -472,7 +472,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     @router.route("/drafts/{draft_id}")
     @classmethod
-    async def open_draft(cls, request: AppRequest, draft_id: UUID) -> ScreenOpening | None:
+    async def open_draft(cls, request: AppRequest, draft_id: UUID) -> Self | None:
         """Open one of the opener's drafts, after the account has consented."""
         services = request.client.services
         if await ensure_consented_account(request, services.accounts) is None:
@@ -489,7 +489,8 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             )
         except DraftNotFoundError, DraftAccessDeniedError:
             raise ScreenUnavailable(tr(t"navigation-draft-unavailable = That draft is unavailable.")) from None
-        return ScreenOpening(screen, session_key=sd.SessionKey.custom("draft", (request.user.id, str(draft_id))))
+        screen.session_key = sd.SessionKey.custom("draft", (request.user.id, str(draft_id)))
+        return screen
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

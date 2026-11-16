@@ -13,7 +13,7 @@ import squid_ui_widgets as sp
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import BoundEdit, EditController
-from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.list_rows import build_row
@@ -569,19 +569,19 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @router.route("/builds")
     @classmethod
-    async def open_index(cls, request: AppRequest) -> ScreenOpening:
+    async def open_index(cls, request: AppRequest) -> Self:
         """Open the catalogue at its build list."""
-        return ScreenOpening(await cls.create(request))
+        return await cls.create(request)
 
     @router.route("/builds/{build_id}")
     @classmethod
-    async def open_detail(cls, request: AppRequest, build_id: int) -> ScreenOpening:
+    async def open_detail(cls, request: AppRequest, build_id: int) -> Self:
         """Open one build, unless it does not exist or the opener may not see it while pending."""
         screen = await cls.create(request, build_id=build_id)
         build = await request.client.services.build_queries.get(build_id)
         if build is None or (build.submission_status is not Status.CONFIRMED and not screen._capabilities.view_pending):
             raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
-        return ScreenOpening(screen)
+        return screen
 
     @override
     async def on_load(self) -> None:

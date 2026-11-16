@@ -6,7 +6,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
-from squid.bot.routes import AppRequest, ScreenOpening
+from squid.bot.routes import AppRequest
 from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
@@ -204,10 +204,10 @@ def _candidate_label(number: int, candidate: InferenceCandidate) -> sl.TextLike:
 
 
 @build_controls.builds.route("/inference/{run_id}/reopen")
-async def reopen_inference(request: AppRequest, run_id: UUID) -> ScreenOpening | None:
+async def reopen_inference(request: AppRequest, run_id: UUID) -> InferenceCandidatesScreen | None:
     """Recover candidates under current consent and owner or staff authority."""
     if await ensure_consented_account(request, request.client.services.accounts) is None:
         return None
     actor = await request.client.actors.resolve(request)
     candidates = await request.client.services.submission_inference.get(run_id, actor)
-    return ScreenOpening(InferenceCandidatesScreen(request.client.services, run_id, candidates))
+    return InferenceCandidatesScreen(request.client.services, run_id, candidates)

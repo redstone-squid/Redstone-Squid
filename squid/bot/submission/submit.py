@@ -16,7 +16,7 @@ import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
-from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.ui import controls as build_controls
@@ -58,7 +58,7 @@ class SavedDraftsScreen(sd.Screen):
 
     @router.route("/drafts")
     @classmethod
-    async def open_drafts(cls, request: AppRequest, inbox: bool = False) -> ScreenOpening | None:
+    async def open_drafts(cls, request: AppRequest, inbox: bool = False) -> Self | None:
         """List the opener's drafts, or the staff correction inbox when `inbox` is set."""
         account_id = await ensure_consented_account(request, request.client.services.accounts)
         if account_id is None:
@@ -90,7 +90,7 @@ class SavedDraftsScreen(sd.Screen):
             for run_id in runs
         )
         if nodes:
-            return ScreenOpening(cls(nodes))
+            return cls(nodes)
         if inbox:
             raise ScreenUnavailable(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
         raise ScreenUnavailable(

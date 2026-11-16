@@ -1,7 +1,5 @@
 """The application's single registry for screen openings and persistent actions."""
 
-from collections.abc import Hashable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import anyio
@@ -19,12 +17,6 @@ if TYPE_CHECKING:
 
 
 type AppRequest = sd.Request[Any, RedstoneSquid]
-
-
-@dataclass(frozen=True, slots=True)
-class ScreenOpening:
-    screen: sd.Screen[Any, Any, Any]
-    session_key: Hashable | None = None
 
 
 class ScreenUnavailable(Exception):
@@ -77,8 +69,8 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
                         text_node(error.message), audience=cast(sd.Audience, policy.audience)
                     )
                 else:
-                    if isinstance(result, ScreenOpening):
-                        result = await request.respond(result.screen, session_key=result.session_key)
+                    if isinstance(result, sd.Screen):
+                        result = await request.respond(result)
                     elif isinstance(result, sd.Response):
                         result = await request.respond(result, audience=cast(sd.Audience, policy.audience))
             except Exception as error:

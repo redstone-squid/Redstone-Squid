@@ -18,7 +18,7 @@ from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
-from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
@@ -142,7 +142,7 @@ class AccountWorkspace(sd.Screen):
 
     @router.route("/account", fragment="tab")
     @classmethod
-    async def open_account(cls, request: AppRequest, tab: AccountTab | None = None) -> ScreenOpening:
+    async def open_account(cls, request: AppRequest, tab: AccountTab | None = None) -> Self:
         """Open the opener's account, at `tab` when they can use it."""
         screen = await cls.create(request)
         if tab is not None:
@@ -150,7 +150,7 @@ class AccountWorkspace(sd.Screen):
                 screen.focus(tab)
             except ValueError as error:
                 raise ScreenUnavailable(tr(t"navigation-tab-unavailable = That account tab is unavailable.")) from error
-        return ScreenOpening(screen)
+        return screen
 
     def focus_targets(self) -> frozenset[AccountTab]:
         tabs: set[AccountTab] = {"identity"}

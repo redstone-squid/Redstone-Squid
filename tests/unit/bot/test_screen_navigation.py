@@ -60,7 +60,7 @@ async def test_build_visibility_is_checked_before_opening(
     if allowed:
         opening = await BuildBrowseScreen.open_detail.function(BuildBrowseScreen, request, 12)
         assert opening is not None
-        assert opening.screen is screen
+        assert opening is screen
     else:
         with pytest.raises(ScreenUnavailable):
             await BuildBrowseScreen.open_detail.function(BuildBrowseScreen, request, 12)
@@ -92,7 +92,7 @@ async def test_account_tab_validation_and_current_request(monkeypatch: pytest.Mo
         await AccountWorkspace.open_account.function(AccountWorkspace, request, "review")
     opening = await AccountWorkspace.open_account.function(AccountWorkspace, request, "identity")
     assert opening is not None
-    assert opening.screen is screen
+    assert opening is screen
     screen.focus.assert_called_with("identity")
     create.assert_awaited_with(request)
 
