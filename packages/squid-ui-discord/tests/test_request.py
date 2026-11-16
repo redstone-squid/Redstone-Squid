@@ -101,6 +101,18 @@ async def test_a_request_that_responded_keeps_its_scope() -> None:
     assert (await sd.request(interaction.source)).scope is ui.runtime.app
 
 
+@pytest.mark.parametrize("ping_owner", [False, True])
+async def test_deferred_response_preserves_allowed_mentions(ping_owner: bool) -> None:
+    ui, interaction = installed()
+    request = await ui.request(interaction.source)
+    mentions = discord.AllowedMentions(users=[discord.Object(42)]) if ping_owner else discord.AllowedMentions.none()
+
+    await request.defer("public")
+    await request.respond("Feedback", audience="public", allowed_mentions=mentions)
+
+    assert interaction.edit_original_response.await_args.kwargs["allowed_mentions"] is mentions
+
+
 async def test_defer_fixes_the_audience_of_what_follows() -> None:
     ui, interaction = installed()
     request = await ui.request(interaction.source)

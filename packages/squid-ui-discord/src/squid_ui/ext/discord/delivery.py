@@ -568,7 +568,7 @@ def respond_to(
         if complete_deferred:
             fields = payload._send_fields()
             fields["attachments"] = merged_files
-            message = await interaction.edit_original_response(**fields)
+            message = await interaction.edit_original_response(allowed_mentions=mentions, **fields)
             return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode), follow_up=again)
         if not interaction.response.is_done():
             try:
