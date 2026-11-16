@@ -194,6 +194,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self._builds = builds
         self._edits = edits
         self._actor = actor
+        self._schematics = schematics
         self.schematics = SchematicTools(
             build_id,
             schematics=schematics,
@@ -208,7 +209,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self._refresh_posts = refresh_posts
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
+    async def projection(
+        self,
+    ) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], bool]:
         self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
@@ -216,7 +219,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         if build is None:
             message = f"build {self._build_id} no longer exists"
             raise LookupError(message)
-        return build, await self._render_build(build)
+        has_schematic = (
+            self._schematics.available and await self._schematics.featured_for_build(self._build_id) is not None
+        )
+        return build, await self._render_build(build), has_schematic
 
     @override
     def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
@@ -224,22 +230,25 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-build-browse-loading-build = Loading build.")),)
         if isinstance(state, sl.resources.Ready):
-            build, node = state.value
+            build, node, has_schematic = state.value
         else:
             assert state.previous is not None
-            build, node = state.previous.value
+            build, node, has_schematic = state.previous.value
         if self._decision is not None:
             return (node, self._decision)
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
-        nodes.append(self._detail_actions(build))
+        nodes.append(self._detail_actions(build, has_schematic=has_schematic))
         nodes.extend(self.controller.controls())
-        nodes.append(self.schematics)
+        if has_schematic:
+            nodes.append(self.schematics)
         return nodes
 
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
 
-    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def _detail_actions(
+        self, build: Build, *, has_schematic: bool
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = [
             sl.routed_action_control(
                 tr(t"build-browse-tags = Build tags"),
@@ -277,15 +286,16 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                     tone=sl.Tone.DANGER,
                 )
             )
-        actions.append(
-            sl.action_control(
-                tr(t"build-schematic-tools-hide = Hide schematic tools")
-                if self._show_schematics
-                else tr(t"build-schematic-tools-show = Schematic tools"),
-                self._toggle_schematics,
-                key="schematic-tools",
+        if has_schematic:
+            actions.append(
+                sl.action_control(
+                    tr(t"build-schematic-tools-hide = Hide schematic tools")
+                    if self._show_schematics
+                    else tr(t"build-schematic-tools-show = Schematic tools"),
+                    self._toggle_schematics,
+                    key="schematic-tools",
+                )
             )
-        )
         return sl.action_controls(*actions, key="build-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
 
     def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:

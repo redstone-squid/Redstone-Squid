@@ -42,6 +42,7 @@ def _screen(
     initial_id: int | None = 7,
     status: Status = Status.CONFIRMED,
     schematics_available: bool = False,
+    schematic_attached: bool = True,
     video_enabled: bool = False,
     records: RecordService | None = None,
     initial_records: bool = False,
@@ -58,6 +59,8 @@ def _screen(
     schematics = Mock(
         spec=SchematicService, available=schematics_available, videos=Mock(enabled=True) if video_enabled else None
     )
+
+    schematics.featured_for_build.return_value = Mock() if schematic_attached else None
 
     async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
@@ -155,7 +158,7 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 
 @pytest.mark.parametrize("records", [False, True], ids=["build", "record"])
 async def test_search_opens_full_build_and_preserves_results(records: bool) -> None:
-    screen = _screen(initial_id=None)
+    screen = _screen(initial_id=None, schematics_available=True)
     hit = (
         RecordSearchHit("10", "Fastest door", "Java", 7, "Door", "fastest", "all_time")
         if records
@@ -228,6 +231,14 @@ async def test_open_id_through_the_discord_modal() -> None:
         assert "Build #7" in ui.texts()
         ui.control(ui.key_for("linked-build.item-next"))
         ui.control(ui.key_for("open-id"))
+
+
+@pytest.mark.parametrize("schematics_available", [False, True])
+async def test_schematic_tools_are_hidden_without_an_attachment(schematics_available: bool) -> None:
+    screen = _screen(schematics_available=schematics_available, schematic_attached=False)
+    async with stage(screen, owner=object()) as ui:
+        assert "Build #7" in ui.texts()
+        assert not any(key.endswith("schematic-tools") for key in ui.root.snapshot().handler_keys)
 
 
 async def test_schematic_tools_are_collapsed_on_arrival() -> None:
@@ -377,7 +388,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
 
 
 async def test_full_build_card_fits_with_catalogue_navigation() -> None:
-    screen = _screen(status=Status.PENDING)
+    screen = _screen(status=Status.PENDING, schematics_available=True)
     screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
     async with stage(screen, owner=object()) as ui:
         ui.control(ui.key_for("linked-build.item-next"))
