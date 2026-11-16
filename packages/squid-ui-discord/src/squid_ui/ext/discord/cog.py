@@ -1,5 +1,6 @@
 """A cog that owns a UI scope and registers its declared context menus."""
 
+from functools import wraps
 from typing import Self, cast, override
 
 import discord
@@ -17,16 +18,9 @@ class Cog[BotT: commands.Bot](commands.Cog):
 
     `@sd.command` members are ordinary discord.py commands and need nothing from the cog;
     `@sd.context_menu` methods are registered on the tree here because discord.py cannot
-    hold a `ContextMenu` on a cog class.
+    hold a `ContextMenu` on a cog class. Override `cog_load` and `cog_unload` as usual;
+    initialization wraps them to register menus before loading and close the scope after unloading.
     """
-
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-        forbidden = tuple(name for name in ("cog_load", "cog_unload") if name in cls.__dict__)
-        if forbidden:
-            names = ", ".join(forbidden)
-            message = f"sd.Cog owns {names}; override ui_load/ui_unload instead"
-            raise TypeError(message)
 
     def __init__(self, bot: BotT) -> None:
         super().__init__()
@@ -35,33 +29,43 @@ class Cog[BotT: commands.Bot](commands.Cog):
         self.ui: Scope[Self, BotT] = runtime.scope(self)
         self._squid_context_menus: list[app_commands.ContextMenu] = []
 
-    async def ui_load(self) -> None:
-        """Run application-specific work after facade declarations are installed."""
+        # Bind once per instance so super() follows the ordinary class hooks without
+        # registering menus or closing the scope again at each inheritance level.
+        load = self.cog_load
+        unload = self.cog_unload
 
-    async def ui_unload(self) -> None:
-        """Run application-specific work before facade declarations are removed."""
+        @wraps(load)
+        async def cog_load() -> None:
+            try:
+                self._register_context_menus()
+                await discord.utils.maybe_coroutine(load)
+            except BaseException:
+                try:
+                    self._remove_context_menus()
+                finally:
+                    await self.ui.close()
+                raise
+
+        @wraps(unload)
+        async def cog_unload() -> None:
+            try:
+                await discord.utils.maybe_coroutine(unload)
+            finally:
+                try:
+                    self._remove_context_menus()
+                finally:
+                    await self.ui.close()
+
+        self.cog_load = cog_load
+        self.cog_unload = cog_unload
 
     @override
     async def cog_load(self) -> None:
-        """Register declarations and roll them back if application loading fails."""
-        try:
-            self._register_context_menus()
-            await self.ui_load()
-        except BaseException:
-            self._remove_context_menus()
-            await self.ui.close()
-            raise
+        """Run application setup after the declared context menus are registered."""
 
     @override
     async def cog_unload(self) -> None:
-        """Run application teardown, unregister declarations, and close the scope."""
-        try:
-            await self.ui_unload()
-        finally:
-            try:
-                self._remove_context_menus()
-            finally:
-                await self.ui.close()
+        """Run application teardown before menus are removed and the UI scope closes."""
 
     def _remove_context_menus(self) -> None:
         for menu in self._squid_context_menus:

@@ -37,7 +37,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
         self._delivery_task: JobHandle | None = None
 
     @override
-    async def ui_load(self) -> None:
+    async def cog_load(self) -> None:
         self._delivery_task = self.bot.background_tasks.start_periodic(
             self.process_deliveries,
             name="notification-deliveries",
@@ -45,7 +45,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
         )
 
     @override
-    async def ui_unload(self) -> None:
+    async def cog_unload(self) -> None:
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 

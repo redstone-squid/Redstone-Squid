@@ -355,7 +355,7 @@ async def test_context_menu_is_registered_invoked_and_removed_with_cog() -> None
 async def test_failed_load_rolls_back_menu_and_scope() -> None:
     class Broken(Menus):
         @override
-        async def ui_load(self) -> None:
+        async def cog_load(self) -> None:
             raise RuntimeError("broken")
 
     bot = installed_bot()
@@ -368,13 +368,87 @@ async def test_failed_load_rolls_back_menu_and_scope() -> None:
     assert bot.tree.get_command("Inspect build", type=discord.AppCommandType.message) is None
 
 
-def test_native_lifecycle_hooks_cannot_bypass_scope_cleanup() -> None:
-    with pytest.raises(TypeError, match="ui_load/ui_unload"):
+@pytest.mark.parametrize("call_super", [False, True])
+async def test_native_lifecycle_hooks_keep_scope_cleanup(call_super: bool) -> None:
+    events: list[str] = []
 
-        class Unsafe(sd.Cog[commands.Bot]):
-            @override
-            async def cog_unload(self) -> None:
-                pass
+    class Parent(Menus):
+        @override
+        async def cog_load(self) -> None:
+            events.append("parent load")
+            await super().cog_load()
+
+        @override
+        async def cog_unload(self) -> None:
+            events.append("parent unload")
+            await super().cog_unload()
+
+    class Child(Parent):
+        @override
+        async def cog_load(self) -> None:
+            assert self.bot.tree.get_command("Inspect build", type=discord.AppCommandType.message) is not None
+            assert not self.ui.closed
+            events.append("child load")
+            if call_super:
+                await super().cog_load()
+
+        @override
+        async def cog_unload(self) -> None:
+            assert self.bot.tree.get_command("Inspect build", type=discord.AppCommandType.message) is not None
+            assert not self.ui.closed
+            events.append("child unload")
+            if call_super:
+                await super().cog_unload()
+
+    bot = installed_bot()
+    cog = Child(bot)
+    await bot.add_cog(cog)
+    await bot.remove_cog(cog.qualified_name)
+
+    expected = (
+        ["child load", "parent load", "child unload", "parent unload"] if call_super else ["child load", "child unload"]
+    )
+    assert events == expected
+    assert cog.ui.closed
+    assert bot.tree.get_command("Inspect build", type=discord.AppCommandType.message) is None
+
+
+async def test_failed_native_unload_still_closes_scope() -> None:
+    class Broken(Menus):
+        @override
+        async def cog_unload(self) -> None:
+            raise RuntimeError("broken")
+
+    bot = installed_bot()
+    cog = Broken(bot)
+    await bot.add_cog(cog)
+    with pytest.raises(RuntimeError, match="broken"):
+        await cog.cog_unload()
+
+    assert cog.ui.closed
+    assert bot.tree.get_command("Inspect build", type=discord.AppCommandType.message) is None
+    await bot.remove_cog(cog.qualified_name)
+
+
+async def test_inherited_lifecycle_hooks_are_bound_to_each_instance() -> None:
+    loaded: list[commands.Cog] = []
+
+    class Parent(Menus):
+        @override
+        async def cog_load(self) -> None:
+            loaded.append(self)
+
+    class Child(Parent):
+        pass
+
+    first = Child(installed_bot())
+    second = Child(installed_bot())
+    await first.bot.add_cog(first)
+    await second.bot.add_cog(second)
+    assert loaded == [first, second]
+    await first.bot.remove_cog(first.qualified_name)
+    assert not second.ui.closed
+    await second.bot.remove_cog(second.qualified_name)
 
 
 def test_request_must_occupy_the_native_source_slot() -> None:

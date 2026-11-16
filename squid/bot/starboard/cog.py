@@ -62,7 +62,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self._debouncer = EntryDebouncer(self._refresh_key, bot.background_tasks)
 
     @override
-    async def ui_unload(self) -> None:
+    async def cog_unload(self) -> None:
         await self._debouncer.close()
 
     @reaction_handler("add")

@@ -36,7 +36,7 @@ The former `DiscordUI` is now `Scope`, `DiscordRequest` is now `Request`, and
 | 12 | [“why is a cast needed here”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889202184), `request.py:312` | Original audience-selection code was removed in both snapshots. Verify the replacement preserves narrowing and deferral behavior. |
 | 13 | [“can we keep a stronger type for dict[str, object]? ParamSpec? Concatenate? idk”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889205368), `request.py:338` | Outstanding: `form` callbacks still receive `dict[str, object]`. |
 | 14 | [“we can just copy upstream and then add kwargs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889219467), `ext/cog.py:23` | Outstanding: `__init_subclass__` still accepts `**kwargs: object`. |
-| 15 | [“idk, can we do something better? this is not convenient for devs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889225280), `ext/cog.py:25` | Outstanding: overriding `cog_load`/`cog_unload` is forbidden; developers must use `ui_load`/`ui_unload`. |
+| 15 | [“idk, can we do something better? this is not convenient for devs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889225280), `ext/cog.py:25` | Resolved: `sd.Cog` wraps native `cog_load`/`cog_unload` overrides per instance to preserve UI setup and cleanup. |
 | 16 | [“urm, detecting a public attrbute isnt a good idea”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889247527), `ext/cog.py:34` | Fixed locally through `DiscordUIRuntime.of(bot)`; the PR still inspects `bot.ui`. |
 
 ## Implementation work

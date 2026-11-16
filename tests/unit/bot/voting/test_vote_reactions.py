@@ -255,6 +255,7 @@ class ReactionHarness:
         self.supervisor = BackgroundTaskSupervisor()
         self.bot: RedstoneSquid = make_layout_bot(
             user=discord.Object(999),
+            tree=Mock(spec=discord.app_commands.CommandTree),
             services=self.services,
             account_ids=AccountIdCache(),
             background_tasks=self.supervisor,
@@ -277,7 +278,7 @@ class ReactionHarness:
             finally:
                 await self.bot.reactions.close()
                 subscription.detach()
-                await self.cog.ui_unload()
+                await self.cog.cog_unload()
 
     async def fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         return cast(discord.Message | None, self.messages.get(message_id))
@@ -331,11 +332,11 @@ def reactions() -> ReactionHarness:
 async def test_loading_subscribes_without_starting_a_periodic_recount(reactions: ReactionHarness) -> None:
     """Recounts fan out Discord requests, so nothing runs them on a timer."""
     async with reactions.running():
-        await reactions.cog.ui_load()
+        await reactions.cog.cog_load()
         assert reactions.votes.resolver is reactions.cog
         assert reactions.cog.reactions._background_tasks == set()
         assert reactions.messages[100].added == []
-        await reactions.cog.ui_unload()
+        await reactions.cog.cog_unload()
 
 
 async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: ReactionHarness) -> None:

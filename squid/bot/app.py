@@ -209,7 +209,7 @@ class RedstoneSquid(Bot):
     ) -> None:
         """Add a cog and subscribe its @reaction_handler methods, as discord.py does for listeners.
 
-        The subscription starts after the cog has loaded, so handlers never run before ui_load.
+        The subscription starts after the cog has loaded, so handlers never run before cog_load.
         """
         await super().add_cog(cog, override=override, guild=guild, guilds=guilds)
         if has_reaction_handlers(cog):

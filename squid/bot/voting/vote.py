@@ -45,11 +45,11 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self.vote_service.set_actor_resolver(self)
 
     @override
-    async def ui_load(self) -> None:
+    async def cog_load(self) -> None:
         self.reactions.start()
 
     @override
-    async def ui_unload(self) -> None:
+    async def cog_unload(self) -> None:
         await self.reactions.close()
 
     @sd.command(

@@ -77,7 +77,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
         self.consent_sticky = BuildLogConsentStickyMessage(bot.background_tasks)
 
     @override
-    async def ui_unload(self) -> None:
+    async def cog_unload(self) -> None:
         await self.consent_sticky.close()
 
     @sd.command(
