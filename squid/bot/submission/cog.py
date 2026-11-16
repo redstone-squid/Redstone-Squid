@@ -10,6 +10,7 @@ from discord.ext.commands import Context, when_mentioned
 
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
 from squid.bot.submission.build_card import render_build_card
@@ -160,6 +161,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             scope=search_scope,
             mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
             sort=SearchSort.parse(sort),
+            page_size=CATALOGUE_PAGE_SIZE,
             group_by_build=True,
         )
         page = await self.search.search(request)
