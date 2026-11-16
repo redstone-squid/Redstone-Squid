@@ -2,7 +2,8 @@
 
 The query string is the single source of truth. Each top-level clause is shown as a
 filter row that can be edited or removed, and the "Add filter" and "Sort" panels
-open independently, so both can be visible at once. Every change is reported to
+open independently, so both can be visible at once. Adding a value keeps its field
+open for another filter; users can also return to the field list. Every change is reported to
 `on_apply` immediately.
 
 Adding a filter takes two steps: choose a field, then its value. How the value is
@@ -127,7 +128,9 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self._set_expression(
             BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression is not None else addition
         )
-        self._close_filter()
+        self.clause_page = (len(self.clauses) - 1) // _CLAUSES_PER_PAGE
+        if self.filter_picker is not None:
+            self.filter_picker.picked = ()
 
     @override
     def render(self) -> tuple[GuidedNode, ...]:
@@ -169,7 +172,9 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                 on_submit=self._advanced,
             ),
             sl.action_control(
-                tr(t"guided-search-add-filter = Add filter"),
+                tr(t"guided-search-close-filters = Close filters")
+                if self.filter_open
+                else tr(t"guided-search-add-filter = Add filter"),
                 self._toggle_filter,
                 key="field",
                 tone=sl.Tone.SUCCESS if self.filter_open else sl.Tone.NEUTRAL,

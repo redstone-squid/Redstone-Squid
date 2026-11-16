@@ -142,7 +142,7 @@ async def test_filter_and_sort_panels_open_together_and_stay_in_the_message(monk
 async def test_named_value_fields_open_their_value_picker_directly(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _suggestions(
         ("search_fields", (Candidate.create("creator", "Creator"),)),
-        ("creators", (Candidate.create("Steve", "Steve"),)),
+        ("creators", (Candidate.create("Steve", "Steve"), Candidate.create("Alex", "Alex"))),
     )
     screen = editor()
     async with stage(screen, owner=object()) as ui:
@@ -152,8 +152,17 @@ async def test_named_value_fields_open_their_value_picker_directly(monkeypatch: 
         assert not any(key.endswith("value") for key in ui.root.snapshot().handler_keys)
         await _choose(ui, "value-lookup", "Steve")
         assert screen.query == 'creator:"Steve"'
-        assert not screen.filter_open
+        assert screen.filter_open
         assert Text(filter_label(screen.clauses[0])).resolve() == "Creator is Steve"
+        picker = screen.filter_picker
+        assert picker is not None
+        assert picker.picked == ()
+        await _choose(ui, "value-lookup", "Alex")
+        assert screen.filter_picker is picker
+        assert picker.picked == ()
+        assert screen.query == 'creator:"Steve" AND creator:"Alex"'
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
+        ui.assert_within_limits()
 
 
 async def test_fixed_values_are_chosen_from_a_menu(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,7 +174,7 @@ async def test_fixed_values_are_chosen_from_a_menu(monkeypatch: pytest.MonkeyPat
         await _choose(ui, "filter-lookup", "kind")
         await ui.select(ui.key_for("value-choice"), ["door"])
         assert screen.query == 'kind:"door"'
-        assert not screen.filter_open
+        assert screen.filter_open
 
 
 async def test_choose_another_field_returns_to_the_field_list(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -242,7 +251,7 @@ async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monk
         await form.submit({"query": "wid"})
         assert "wid" in ui.texts()
         await _choose(ui, "filter-lookup", "width")
-        assert ui.control(ui.key_for("field")).payload["label"] == "Add filter"
+        assert ui.control(ui.key_for("field")).payload["label"] == "Close filters"
         assert ui.control(ui.key_for("value")).payload["label"] == "Set Width filter"
 
 
@@ -290,3 +299,35 @@ async def test_panels_keep_filter_rows_and_survive_filter_edits(monkeypatch: pyt
         await ui.press(ui.key_for("sort"))
         assert screen.sort_picker is None
         assert ui.control(ui.key_for("sort")).payload["style"] == 2
+
+
+async def test_add_several_bounds_then_change_fields_without_closing_panel(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("width", "Width"), Candidate.create("height", "Height"))),
+    )
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "width")
+        for value, operator in (("3", "4"), ("5", "2")):
+            form = await ui.press_for_form(ui.key_for("value"))
+            await form.submit({"value": value, "operator": operator})
+            assert screen.filter_open
+            assert screen.selected is not None
+            assert screen.selected.name == "width"
+        assert screen.query == "width>=3 AND width<=5"
+        await ui.press(ui.key_for("change-field"))
+        await _choose(ui, "filter-lookup", "height")
+        form = await ui.press_for_form(ui.key_for("value"))
+        await form.submit({"value": "7", "operator": "0"})
+        assert screen.query == "width>=3 AND width<=5 AND height:7"
+        assert screen.clause_page == 1
+        ui.control(ui.key_for("edit-2"))
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
+        ui.assert_within_limits()
+        await ui.press(ui.key_for("field"))
+        assert not screen.filter_open
+        assert screen.selected is None
+        assert screen.filter_picker is None
+        assert ui.control(ui.key_for("field")).payload["label"] == "Add filter"
