@@ -29,16 +29,14 @@ issues for the submitter to fix; the panel shows which of these happened.
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from enum import Enum, auto
 from functools import partial
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import Any, cast, override
 from uuid import UUID, uuid4
-
-from discord import Interaction
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.edit_controller import EditController
-from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
+from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
 from squid.bot.submission import draft_intake
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
@@ -83,9 +81,6 @@ from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.modal import FileField
-
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""
@@ -437,9 +432,9 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
 
-    @screen_route("/drafts/{draft_id}")
+    @router.route("/drafts/{draft_id}")
     @classmethod
-    async def open_draft(cls, request: NavigationRequest, draft_id: UUID) -> ScreenOpening | None:
+    async def open_draft(cls, request: AppRequest, draft_id: UUID) -> ScreenOpening | None:
         """Open one of the opener's drafts, after the account has consented."""
         services = request.client.services
         if await ensure_consented_account(request, services.accounts) is None:
@@ -468,7 +463,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 sl.action_controls(
                     sl.routed_action_control(
                         tr(t"draft-editor-reopen = Reopen draft"),
-                        reopen_draft.id(draft_id=str(ws.draft.snapshot.id)),
+                        DraftEditorScreen.open_draft.custom_id(draft_id=ws.draft.snapshot.id),
                         key="reopen",
                     ),
                     key="draft-reopen",
@@ -574,7 +569,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                     sl.action_controls(
                         sl.routed_action_control(
                             tr(t"draft-editor-edit-build = Edit build"),
-                            build_controls.edit_build.id(build_id=ws.result.result.build_id),
+                            build_controls.edit_build.custom_id(build_id=ws.result.result.build_id),
                             key="edit_build",
                         ),
                         key="draft-done-actions",
@@ -997,13 +992,6 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
                 t"draft-editor-issue-target-rejected = The build could not be created from these answers. "
                 t"Check them and press **Submit** again.",
             )
-
-
-@build_controls.builds.route("draft:{draft_id}:reopen")
-async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
-    """Resolve durable identity and current authority before reopening a private draft."""
-    request = await sd.request(interaction)
-    await request.client.screen_router.open(request, DraftEditorScreen.open_draft, draft_id=UUID(draft_id))
 
 
 async def draft_editor(

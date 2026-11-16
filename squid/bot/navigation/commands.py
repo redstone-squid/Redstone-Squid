@@ -3,10 +3,10 @@
 from typing import TYPE_CHECKING, Self
 
 import squid_ui.ext.discord as sd
-from squid.bot.navigation.assembly import build_screen_router
 from squid.bot.navigation.controls import invalid_address_response
-from squid.bot.navigation.router import InvalidAddress
+from squid.bot.routes import router
 from squid.core.i18n import tr
+from squid_ui.routing import InvalidAddress
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -25,15 +25,12 @@ class NavigationCommands(sd.Cog):
         },
     )
     async def open_screen(self, request: sd.Request[Self, RedstoneSquid], address: str) -> sd.CommandResult:
-        router = request.client.screen_router
         try:
-            match = router.parse(address)
+            match = router.resolve(address)
         except InvalidAddress:
             return invalid_address_response()
-        return await router.open(request, match.route, **match.arguments)
+        return await router.dispatch(request, match)
 
 
 async def setup(bot: RedstoneSquid) -> None:
-    router = build_screen_router()
     await bot.add_cog(NavigationCommands(bot))
-    bot.screen_router = router

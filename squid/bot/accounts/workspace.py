@@ -18,7 +18,7 @@ from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
-from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
+from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
@@ -84,7 +84,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @classmethod
-    async def create(cls, request: NavigationRequest) -> Self:
+    async def create(cls, request: AppRequest) -> Self:
         """Build the workspace for the requesting user, refreshing their stored Discord avatar."""
         actor = request.user
         account = await request.client.services.accounts.get_account_by_identity(
@@ -140,9 +140,9 @@ class AccountWorkspace(sd.Screen):
             can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
         )
 
-    @screen_route("/account", fragment="tab")
+    @router.route("/account", fragment="tab")
     @classmethod
-    async def open_account(cls, request: NavigationRequest, tab: AccountTab | None = None) -> ScreenOpening:
+    async def open_account(cls, request: AppRequest, tab: AccountTab | None = None) -> ScreenOpening:
         """Open the opener's account, at `tab` when they can use it."""
         screen = await cls.create(request)
         if tab is not None:
@@ -570,7 +570,7 @@ class _MergeForm(sl.forms.Form):
 
 
 async def refresh_discord_avatar_key(
-    request: NavigationRequest, account: Account, user: discord.Member | discord.User
+    request: AppRequest, account: Account, user: discord.Member | discord.User
 ) -> None:
     """Persist the supplied Discord user's avatar hash when it differs from the stored identity.
 

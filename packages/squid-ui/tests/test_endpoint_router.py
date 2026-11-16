@@ -37,7 +37,7 @@ async def test_class_and_function_endpoints_share_dispatch_and_middleware() -> N
     assert router.resolve(Screen.open.address()).endpoint is Screen.open
 
 
-async def test_reload_updates_handles_and_keeps_inflight_handler() -> None:
+async def test_reload_updates_imported_handles_and_resolved_matches() -> None:
     router = Router[object]()
 
     @router.route("/items/{id}")

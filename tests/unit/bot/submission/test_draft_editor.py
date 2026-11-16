@@ -589,7 +589,7 @@ async def test_live_projection_moves_from_creating_to_done() -> None:
     assert editor.workspace.phase is Phase.DONE
     assert "saved as **#42**" in rendered_text(editor)
     (button,) = find_all(editor.render(), sl.semantic.RoutedActionControl)
-    assert button.route_id == "r:builds:42:edit"
+    assert button.route_id == "ui:/builds/42/edit"
 
 
 async def test_needs_changes_lists_issues_the_submitter_can_act_on() -> None:
@@ -686,7 +686,7 @@ async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.M
 
     assert rendered_text(editor) == "This panel has closed. Your answers are saved."
     (reopen,) = find_all(editor.render(), sl.semantic.RoutedActionControl)
-    assert reopen.route_id == f"r:builds:draft:{drafts.current.snapshot.id}:reopen"
+    assert reopen.route_id == f"ui:/drafts/{drafts.current.snapshot.id}"
 
 
 async def test_answer_history_reverses_saved_values_without_reverting_other_fields() -> None:

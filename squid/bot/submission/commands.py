@@ -172,10 +172,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     )
     async def browse_builds(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> sd.CommandResult:
         """Browse builds and record holders."""
-        router = request.client.screen_router
         if build_id is None:
-            return await router.open(request, BuildBrowseScreen.open_index)
-        return await router.open(request, BuildBrowseScreen.open_detail, build_id=build_id)
+            return await BuildBrowseScreen.open_index(request)
+        return await BuildBrowseScreen.open_detail(request, build_id=build_id)
 
     @sd.command(
         name=tr(t"command-records-name = records"),

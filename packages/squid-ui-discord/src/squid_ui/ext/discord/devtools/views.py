@@ -611,8 +611,14 @@ class OperationalInspector(sl.Component):
             body = "Route inspection is unavailable because no Discord client was supplied."
         else:
             from squid_ui.ext.discord.routing import routers
+            from squid_ui.ext.discord.routing.adapter import installed_router
 
             lines: list[str] = []
+            if ui_router := installed_router(self._client):
+                lines.append("UI endpoints:")
+                for endpoint in ui_router.endpoints():
+                    handler = endpoint.function
+                    lines.append(f"  {endpoint.path} -> {handler.__module__}.{handler.__qualname__}")
             for index, router in enumerate(routers(self._client), start=1):
                 lines.append(f"router {index}: {type(router).__module__}.{type(router).__qualname__}")
                 for route in router.describe():

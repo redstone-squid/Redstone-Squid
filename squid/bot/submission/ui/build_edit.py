@@ -360,7 +360,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             sl.action_controls(
                 sl.routed_action_control(
                     tr(t"build-editor-open-new-editor = Open new editor"),
-                    build_controls.recover_build_editor.id(build_id=self._build_id),
+                    build_controls.recover_build_editor.custom_id(build_id=self._build_id),
                     key="restart",
                 ),
                 key="build-edit-recovery",

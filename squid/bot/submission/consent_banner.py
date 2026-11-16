@@ -1,38 +1,30 @@
 """Build log ingestion consent banner and ephemeral permission flow."""
 
 import logging
-from typing import TYPE_CHECKING, override
+from typing import override
 
-from discord import Interaction, TextChannel
+from discord import TextChannel
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.accounts.consent import ConsentPrompt
-from squid.bot.routes import routes
+from squid.bot.routes import AppRequest, router
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 from squid_i18n import md_tr
 
-if TYPE_CHECKING:
-    # importing this causes a circular import at runtime
-    from squid.bot.app import RedstoneSquid
-
 logger = logging.getLogger(__name__)
 
-build_log_consents = routes.group("build-log-consents")
-build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
-
-CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
+build_log_consents = router.group("/build-log-consents")
 
 
-@build_log_consents.route(build_log_consent)
-async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
+@build_log_consents.route("/new")
+async def open_consent_prompt(request: AppRequest) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    request = await sd.request(interaction)
-    accounts = interaction.client.services.accounts
+    accounts = request.client.services.accounts
 
-    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
+    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(request.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await request.respond(
             text_node(
@@ -50,7 +42,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         )
         return
 
-    user_id = interaction.user.id
+    user_id = request.user.id
     version = CURRENT_CONSENT_VERSION
     component = ConsentPrompt(
         user_id=user_id,
@@ -84,7 +76,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     result = await component.wait()
 
     if isinstance(result, sd.Completed):
-        await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(interaction.user.id), consent=result.value)
+        await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(request.user.id), consent=result.value)
         await request.respond(
             text_node(
                 md_tr(
@@ -99,6 +91,9 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
             ),
             audience="personal",
         )
+
+
+CONSENT_BUTTON_CUSTOM_ID = open_consent_prompt.custom_id()
 
 
 class BuildLogConsentStickyMessage(StickyMessage):

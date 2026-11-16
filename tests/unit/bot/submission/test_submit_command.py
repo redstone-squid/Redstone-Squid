@@ -10,14 +10,14 @@ import discord
 import pytest
 from whenever import Instant
 
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
-from squid.bot.navigation.controls import open_address
 from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
-from squid.bot.submission.ui.drafts import DraftEditorScreen, reopen_draft
+from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.builds.application import BuildService
 from squid.builds.domain.expansion import DoorExpansion
@@ -335,8 +335,8 @@ async def test_saved_drafts_paginate_all_entries(
     screen = _screen(harness)
     assert isinstance(screen, SavedDraftsScreen)
     expected = {
-        *(open_address.id(address=f"/drafts/{draft.snapshot.id}") for draft in drafts),
-        *(reopen_inference.id(run_id=str(run_id)) for run_id in runs),
+        *(DraftEditorScreen.open_draft.custom_id(draft_id=draft.snapshot.id) for draft in drafts),
+        *(reopen_inference.custom_id(run_id=run_id) for run_id in runs),
     }
     seen: list[str] = []
     async with stage(SavedDraftsScreen(screen.nodes), owner=object(), user_id=7) as ui:
@@ -401,7 +401,7 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     opened = InteractionHarness(user_id=7, client=cog.bot)
     opened.user = member
     opened.guild = guild
-    await reopen_draft(opened.source, str(draft.snapshot.id))
+    await DraftEditorScreen.open_draft(await sd.request(opened.source), draft.snapshot.id)
     opened.response.send_message.assert_awaited_once()
     call = opened.response.send_message.await_args
     assert call is not None
@@ -416,7 +416,7 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     member.roles = []
     assert not await editor.workspace.may_edit()
     with pytest.raises(PermissionDeniedError) as denied:
-        await reopen_draft(opened.source, str(draft.snapshot.id))
+        await DraftEditorScreen.open_draft(await sd.request(opened.source), draft.snapshot.id)
     assert denied.value.public_context == {
         "required_permission": "build.submission.edit",
         "permission_reason": "missing_grant",

@@ -17,7 +17,7 @@ def _custom_ids(payload: sd.messages.payload.MessagePayload) -> list[str]:
 
 def test_an_open_poll_card_carries_its_own_close_and_refresh_controls() -> None:
     """Pin canonical IDs for new cards; route tests separately preserve legacy aliases."""
-    assert _custom_ids(render_generic_poll(poll_snapshot())) == ["r:polls:close", "r:polls:refresh"]
+    assert _custom_ids(render_generic_poll(poll_snapshot())) == ["ui:/polls/close", "ui:/polls/refresh"]
 
 
 def test_a_closed_poll_card_has_nothing_left_to_click() -> None:

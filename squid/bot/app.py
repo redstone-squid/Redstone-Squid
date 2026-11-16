@@ -20,13 +20,12 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
-from squid.bot.errors import UI_ERRORS, SquidCommandTree
+from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
-from squid.bot.navigation.router import ScreenRouter
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
-from squid.bot.routes import router as control_router
+from squid.bot.routes import router as ui_router
 from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -55,6 +54,7 @@ from squid_reactivity import EventLedger, LocalTopicBus, observe_events
 from squid_storage import PostgresTopicBridge
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import Config, DiscordUIRuntime, SessionManager, install
+from squid_ui.ext.discord.routing.adapter import install as install_ui_router
 from squid_ui.profiling import MemoryProfiler
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,6 @@ class RedstoneSquid(Bot):
         inference_reasoning_effort: str = "low",
         development_mode: bool = False,
     ):
-        self.screen_router = ScreenRouter()
         self.services = services
         self.build_config = build_config
         self.database_config = database_config
@@ -330,8 +329,10 @@ class RedstoneSquid(Bot):
 
         # After every extension, because loading is what imports the handler modules that
         # register routes, and installing the router freezes the table.
-        control_router.profiler = self.layout_profiler
-        control_router.register(self)
+        install_ui_router(ui_router, self, on_error=self._ui_route_error, profiler=self.layout_profiler)
+
+    async def _ui_route_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
+        await handle_interaction_error(interaction, error, surface=source)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""

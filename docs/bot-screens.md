@@ -82,56 +82,46 @@ a tree of regions supplies the joint alternative.
 
 ## Addressable destinations
 
-Screen and persistent-control routes share `squid_ui.routing.RoutePattern` and
-`RouteTable` for compilation, matching, reverse generation, and overlap rejection.
-`AddressRoute` adds typed query parameters and fragments to that engine. The screen
-adapter owns discovery and delivery; the Discord control adapter owns acknowledgement,
-handler reloads, and retired-control responses. `sl.routing.Route` retains the colon
-syntax and control ID length limit. Existing imports from `squid_ui.interactions.routing`
-remain supported.
-
-The bot's `ScreenRouter` opens a route by building a fresh screen with the opening
-request's identity and services. `/open address` is an unadvertised entrypoint; screens
-have no address-sharing controls. Supported addresses are `/builds`, `/builds/{build_id}`,
-`/drafts`, `/drafts?inbox=true`, `/drafts/{draft_id}`, `/account`, and `/account#claims`
-(or another existing account tab). Account and draft-list addresses refer to the opener.
-
-Declare a route by decorating a classmethod on the screen with `@screen_route(path)`,
-above `@classmethod`:
+`squid.bot.routes.router` is the single registry for screen openings and persistent
+actions. Both use `@router.route(path)`, receive an `AppRequest`, and return either a
+`ScreenOpening`, a `Response`, or `None` after handling the request themselves.
+Screen classmethods inherit their screen's response policy; standalone actions can
+supply `policy=ResponseSpec(...)` on the decorator.
 
 ```python
-@screen_route("/builds/{build_id}")
+@router.route("/builds/{build_id}")
 @classmethod
-async def open_detail(cls, request: NavigationRequest, build_id: int) -> ScreenOpening: ...
+async def open_detail(cls, request: AppRequest, build_id: int) -> ScreenOpening: ...
 ```
 
-Names in `{braces}` are path parameters. Every other parameter is a query parameter and
-needs a default, which `url_for` leaves out of the address. Annotations choose the parsing:
-`int` (positive), `bool`, `UUID`, string `Literal`s, and an optional form of these.
-`@screen_route("/account", fragment="tab")` instead encodes the optional `tab` parameter
-as `/account#claims`; it must default to `None`. The opening method receives the typed
-value just as it would a query parameter. A class
-may declare several routes, and a subclass does not inherit them. List each screen once in
-`navigation.assembly.build_screen_router`; `register` fails for a screen with no routes.
+Names in `{braces}` are path parameters. Other parameters have defaults and appear
+in the query string when changed. A named optional fragment parameter, such as
+`@router.route("/account", fragment="tab")`, produces `/account#claims`. Integers
+are positive IDs; booleans, UUIDs, string Literals, and optional forms are supported.
 
-The method loads current data, checks access, and returns `ScreenOpening` with a fresh
-screen and an optional session key. It returns `None` when an existing consent flow has
-handled the interaction, and raises `ScreenUnavailable(message)` when there is nothing to
-show. It does not choose an audience: delivery and deferral both follow the screen's own
-`policy`, and the router sends the unavailable message under that audience. `open` also
-delivers through the request's existing scope, and the screen's session policy decides
-whether an older presentation is replaced.
+The decorated attribute is a typed endpoint handle:
 
-Refer to a route by its attribute, as in `router.open(request, BuildBrowseScreen.open_detail,
-build_id=12)` or `router.url_for(...)`. Arguments are type-checked against the method and
-checked again for addressability. A persistent control handler that opens a screen lives
-next to that screen, so it can refer to the route directly without an import cycle.
-`router.open_address(request, address)` opens a route from an address string.
+```python
+await BuildBrowseScreen.open_detail(request, build_id=12)
+address = BuildBrowseScreen.open_detail.address(build_id=12)  # /builds/12
+custom_id = BuildBrowseScreen.open_detail.custom_id(build_id=12)  # ui:/builds/12
+await router.dispatch(request, router.resolve(address))
+```
 
-Persistent destination buttons use the existing Discord control router and delegate to
-`request.client.screen_router`. Keep these component IDs separate from screen addresses:
-old buttons remain compatibility entrypoints, while addresses describe destinations.
-Neither carries permission grants, callbacks, unsaved form state, or navigation history.
+Direct calls and address dispatch use the same middleware for authorization guards,
+tracing, acknowledgement, and delivery. Handlers still check current permissions and
+reload their resources; addresses carry no permission grants. `ScreenUnavailable`
+produces a localized reply under the endpoint's policy.
+
+Persistent buttons carry `ui:` followed by the canonical address, with a hard
+100-character limit checked during construction. The Discord adapter strips the
+prefix and invokes the same endpoint. There is no forwarding navigation route or
+second screen registry. Session-bound callbacks keep their separate mount namespace.
+Old colon-form IDs are not accepted by the application adapter.
+
+Import endpoint modules before installing the adapter, which freezes route identities.
+Module reloads replace handlers on stable handles, so retained button references use
+the current handler. Reloads cannot add routes or change address parameters.
 
 An item can implement `sl.Focusable[Target]` to expose public locations through
 `focus_targets()` and reveal one with `focus(target)`. This capability is independent

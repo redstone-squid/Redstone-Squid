@@ -13,7 +13,7 @@ import squid_ui_widgets as sp
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import BoundEdit, EditController
-from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
+from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.list_rows import build_row
@@ -270,7 +270,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
     def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = [
             sl.routed_action_control(
-                tr(t"build-browse-tags = Build tags"), build_controls.build_tags.id(build_id=self._build_id), key="tags"
+                tr(t"build-browse-tags = Build tags"),
+                build_controls.build_tags.custom_id(build_id=self._build_id),
+                key="tags",
             )
         ]
         if self._capabilities.edit or (
@@ -281,7 +283,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             actions.append(
                 sl.routed_action_control(
                     tr(t"bot-submission-build-browse-edit = Edit"),
-                    build_controls.edit_build.id(build_id=self._build_id),
+                    build_controls.edit_build.custom_id(build_id=self._build_id),
                     key="edit",
                 )
             )
@@ -499,7 +501,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     @classmethod
     async def create(
         cls,
-        request: NavigationRequest,
+        request: AppRequest,
         *,
         build_id: int | None = None,
         initial_records: bool = False,
@@ -565,15 +567,15 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             initial_records=initial_records,
         )
 
-    @screen_route("/builds")
+    @router.route("/builds")
     @classmethod
-    async def open_index(cls, request: NavigationRequest) -> ScreenOpening:
+    async def open_index(cls, request: AppRequest) -> ScreenOpening:
         """Open the catalogue at its build list."""
         return ScreenOpening(await cls.create(request))
 
-    @screen_route("/builds/{build_id}")
+    @router.route("/builds/{build_id}")
     @classmethod
-    async def open_detail(cls, request: NavigationRequest, build_id: int) -> ScreenOpening:
+    async def open_detail(cls, request: AppRequest, build_id: int) -> ScreenOpening:
         """Open one build, unless it does not exist or the opener may not see it while pending."""
         screen = await cls.create(request, build_id=build_id)
         build = await request.client.services.build_queries.get(build_id)

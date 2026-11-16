@@ -11,7 +11,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.routes import routes
+from squid.bot.routes import AppRequest, router
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
@@ -24,33 +24,30 @@ if TYPE_CHECKING:
     from squid.bot.voting.vote import VoteCog
 
 
-polls = routes.group("polls")
-poll_close = polls.define("close", aliases=("poll:close",))
-poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
+polls = router.group("/polls")
 
 
 def poll_controls() -> sl.semantic.ActionControls:
     """The control row an open poll's card ends with."""
     return sl.action_controls(
         sl.routed_action_control(
-            tr(t"bot-voting-controls-close-poll = Close poll"), poll_close.id(), key="close", tone=sl.Tone.DANGER
+            tr(t"bot-voting-controls-close-poll = Close poll"), close_poll.custom_id(), key="close", tone=sl.Tone.DANGER
         ),
         sl.routed_action_control(
-            tr(t"bot-voting-controls-refresh-weights = Refresh weights"), poll_refresh.id(), key="refresh"
+            tr(t"bot-voting-controls-refresh-weights = Refresh weights"), refresh_poll.custom_id(), key="refresh"
         ),
         key="poll.controls",
     )
 
 
-@polls.route(poll_close)
-async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
+@polls.route("/close")
+async def close_poll(request: AppRequest) -> None:
     """End a poll early, recounting its cards first and then tallying it where it stands."""
-    request = await sd.request(interaction)
     authorized = await _authorize(request)
     if authorized is None:
         return
     snapshot, actor = authorized
-    bot = interaction.client
+    bot = request.client
     # Count reactions added while the bot was offline before the result is fixed. Reading
     # every voter can outlast Discord's three-second reply window, hence the deferral.
     vote_cog = cast("VoteCog | None", bot.get_cog("VoteCog"))
@@ -65,15 +62,14 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
     await request.respond(text_node(tr(t"bot-voting-controls-poll-closed = Poll closed.")), audience="personal")
 
 
-@polls.route(poll_refresh)
-async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
+@polls.route("/refresh")
+async def refresh_poll(request: AppRequest) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
-    request = await sd.request(interaction)
     authorized = await _authorize(request)
     if authorized is None:
         return
     snapshot, _actor = authorized
-    bot = interaction.client
+    bot = request.client
     result = await bot.services.votes.refresh(snapshot.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))

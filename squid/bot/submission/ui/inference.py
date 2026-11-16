@@ -3,14 +3,13 @@
 from typing import TYPE_CHECKING, Any, override
 from uuid import UUID
 
-from discord import Interaction
-
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.routes import AppRequest
 from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
-from squid.bot.submission.ui.drafts import reopen_draft
+from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.ui import tr
 from squid.builds.domain import BuildCategory
 from squid.core.errors import SquidError
@@ -134,7 +133,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                     ),
                     sl.primitives.RoutedButton(
                         tr(t"inference-candidates-open-draft = Open draft"),
-                        reopen_draft.id(draft_id=self.opened),
+                        DraftEditorScreen.open_draft.custom_id(draft_id=UUID(self.opened)),
                     ),
                 )
             )
@@ -204,14 +203,11 @@ def _candidate_label(number: int, candidate: InferenceCandidate) -> sl.TextLike:
     return md_tr(t"inference-candidate = Candidate {number}: {category}")
 
 
-@build_controls.builds.route("inference:{run_id}:reopen")
-async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str) -> None:
+@build_controls.builds.route("/inference/{run_id}/reopen")
+async def reopen_inference(request: AppRequest, run_id: UUID) -> None:
     """Recover candidates under current consent and owner or staff authority."""
-    request = await sd.request(interaction)
-    if await ensure_consented_account(request, interaction.client.services.accounts) is None:
+    if await ensure_consented_account(request, request.client.services.accounts) is None:
         return
     actor = await request.client.actors.resolve(request)
-    candidates = await interaction.client.services.submission_inference.get(UUID(run_id), actor)
-    await request.respond(
-        InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"
-    )
+    candidates = await request.client.services.submission_inference.get(run_id, actor)
+    await request.respond(InferenceCandidatesScreen(request.client.services, run_id, candidates), audience="personal")

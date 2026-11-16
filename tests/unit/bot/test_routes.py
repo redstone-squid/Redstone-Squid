@@ -1,121 +1,49 @@
-"""Production route identities and their compatibility aliases."""
+"""Screens and persistent actions occupy one production endpoint registry."""
 
 from importlib import import_module, reload
+from typing import Any
 
 import pytest
 
-from squid.bot.routes import router, routes
-from squid_ui.ext.discord.routing import RouteHandle
+from squid.bot.routes import router
 
 
 @pytest.mark.parametrize(
-    ("module_name", "route_name", "params", "canonical", "legacy"),
+    ("module", "name", "params", "address"),
     [
-        ("squid.bot.voting.controls", "poll_close", {}, "r:polls:close", "poll:close"),
-        ("squid.bot.voting.controls", "poll_refresh", {}, "r:polls:refresh", "poll:refresh"),
-        ("squid.bot.submission.ui.controls", "edit_build", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
-        (
-            "squid.bot.submission.ui.controls",
-            "recover_build_editor",
-            {"build_id": 5},
-            "r:builds:5:edit:recover",
-            "r:builds:5:edit:recover",
-        ),
-        (
-            "squid.bot.submission.consent_banner",
-            "build_log_consent",
-            {},
-            "r:build-log-consents:new",
-            "build_log:consent",
-        ),
-        (
-            "squid.bot.give_redstoner",
-            "remove_redstoner_role",
-            {},
-            "r:redstoner-roles:self:remove",
-            "remove:role:redstoner",
-        ),
+        ("squid.bot.voting.controls", "close_poll", {}, "/polls/close"),
+        ("squid.bot.voting.controls", "refresh_poll", {}, "/polls/refresh"),
+        ("squid.bot.submission.ui.controls", "edit_build", {"build_id": 5}, "/builds/5/edit"),
+        ("squid.bot.submission.consent_banner", "open_consent_prompt", {}, "/build-log-consents/new"),
+        ("squid.bot.give_redstoner", "remove_own_redstoner_role", {}, "/redstoner-roles/self/remove"),
     ],
 )
-def test_production_routes_build_canonical_ids_and_keep_legacy_ids(
-    module_name: str,
-    route_name: str,
-    params: dict[str, object],
-    canonical: str,
-    legacy: str,
+def test_production_actions_are_canonical_addresses(
+    module: str, name: str, params: dict[str, Any], address: str
 ) -> None:
-    route = getattr(import_module(module_name), route_name)
-    assert route.id(**params) == canonical
-    identity = route.route if isinstance(route, RouteHandle) else route
-    assert identity.match(canonical) == params
-    assert identity.match(legacy) == params
-
-
-def test_route_namespace_is_an_ordinary_root_group() -> None:
-    polls = import_module("squid.bot.voting.controls").polls
-    builds = import_module("squid.bot.submission.ui.controls").builds
-    redstoner_roles = import_module("squid.bot.give_redstoner").redstoner_roles
-    assert routes.prefix == "r"
-    assert polls.prefix == "r:polls"
-    assert builds.prefix == "r:builds"
-    assert redstoner_roles.prefix == "r:redstoner-roles"
-    assert router.namespace == routes.prefix
-
-
-def test_production_route_table_has_one_feature_owned_registration_per_identity() -> None:
-    for module in (
-        "squid.bot.voting.controls",
-        "squid.bot.navigation.controls",
-        "squid.bot.submission.ui.controls",
-        "squid.bot.submission.consent_banner",
-        "squid.bot.give_redstoner",
-    ):
-        import_module(module)
-
-    descriptions = router.describe()
-    assert {route.format for route in descriptions} == {
-        "r:polls:close",
-        "r:polls:refresh",
-        "r:navigation:open:{address}",
-        "r:builds:{build_id:int}:tags",
-        "r:builds:{build_id:int}:edit",
-        "r:builds:{build_id:int}:edit:recover",
-        "r:builds:draft:{draft_id}:reopen",
-        "r:builds:revision:{proposal_id}:reopen",
-        "r:builds:inference:{run_id}:reopen",
-        "r:build-log-consents:new",
-        "r:redstoner-roles:self:remove",
-    }
-    assert len(descriptions) == 11
-    assert all(route.middleware[0].endswith(".TraceRoutes") for route in descriptions)
-    redstoner = next(route for route in descriptions if route.group_prefix == "r:redstoner-roles")
-    assert redstoner.middleware[1].endswith(".OwnerGuildOnly")
+    endpoint = getattr(import_module(module), name)
+    assert endpoint.address(**params) == address
+    assert endpoint.custom_id(**params) == "ui:" + address
+    match = router.resolve(address)
+    assert match.endpoint is endpoint
+    assert match.arguments == params
 
 
 def test_reloading_build_controls_keeps_imported_handles_current() -> None:
     controls = import_module("squid.bot.submission.ui.controls")
     imported = controls.edit_build
-    old_handler = imported.__wrapped__
-    identity = imported.route
-
+    old_handler = imported.function
     reload(controls)
-
     assert controls.edit_build is imported
-    assert imported.route is identity
-    assert imported.__wrapped__ is not old_handler
-    resolved = router.resolve(imported.id(build_id=5))
-    assert resolved is not None
-    assert resolved[0].handler is imported.__wrapped__
+    assert imported.function is not old_handler
+    assert router.resolve(imported.address(build_id=5)).endpoint is imported
 
 
 def test_reloading_role_controls_replaces_middleware_without_duplicating_it() -> None:
     controls = import_module("squid.bot.give_redstoner")
     group = controls.redstoner_roles
-    previous = group._middleware[0]
-
+    previous = group.middleware[0]
     reload(controls)
-
     assert controls.redstoner_roles is group
-    assert len(group._middleware) == 1
-    assert group._middleware[0] is not previous
-    assert isinstance(group._middleware[0], controls.OwnerGuildOnly)
+    assert len(group.middleware) == 1
+    assert group.middleware[0] is not previous

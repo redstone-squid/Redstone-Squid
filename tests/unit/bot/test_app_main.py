@@ -200,14 +200,6 @@ async def _localization(locale: str) -> Localization:
     return Localization(locale=locale)
 
 
-@dataclass
-class ControlRouterRecorder:
-    clients: list[object] = field(default_factory=list)
-
-    def register(self, client: object) -> None:
-        self.clients.append(client)
-
-
 async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     bot.background_tasks = SchedulingRecorder()
@@ -221,16 +213,17 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     run = AsyncCallRecorder()
     layout_job = run()
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
-    router = ControlRouterRecorder()
     mocker.patch.object(bot_app, "EXTENSIONS", ())
-    mocker.patch.object(bot_app, "control_router", router)
+    install = mocker.patch.object(bot_app, "install_ui_router")
     mocker.patch.object(bot_app, "start_permission_epoch_watch")
 
     try:
         await bot_app.RedstoneSquid.setup_hook(bot)
 
         assert cast(SchedulingRecorder, bot.background_tasks).starts == [(layout_job, "layout-runtime")]
-        assert router.clients == [bot]
+        install.assert_called_once_with(
+            bot_app.ui_router, bot, on_error=bot._ui_route_error, profiler=bot.layout_profiler
+        )
     finally:
         layout_job.close()
 

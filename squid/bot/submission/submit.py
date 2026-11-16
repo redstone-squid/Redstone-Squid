@@ -20,7 +20,7 @@ from squid.accounts.domain import IdentityProvider
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
 from squid.bot.navigation.controls import destination_button
-from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
+from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.groups import BuildCommandGroup
@@ -76,9 +76,9 @@ class SavedDraftsScreen(sd.Screen):
     def __init__(self, nodes: Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]) -> None:
         self.nodes = tuple(nodes)
 
-    @screen_route("/drafts")
+    @router.route("/drafts")
     @classmethod
-    async def open_drafts(cls, request: NavigationRequest, inbox: bool = False) -> ScreenOpening | None:
+    async def open_drafts(cls, request: AppRequest, inbox: bool = False) -> ScreenOpening | None:
         """List the opener's drafts, or the staff correction inbox when `inbox` is set."""
         account_id = await ensure_consented_account(request, request.client.services.accounts)
         if account_id is None:
@@ -94,7 +94,6 @@ class SavedDraftsScreen(sd.Screen):
             sl.primitives.Section(
                 (sl.primitives.Text(_draft_line(draft)),),
                 destination_button(
-                    request.client.screen_router,
                     tr(t"build-drafts-open = Open"),
                     DraftEditorScreen.open_draft,
                     draft_id=draft.snapshot.id,
@@ -106,7 +105,7 @@ class SavedDraftsScreen(sd.Screen):
             sl.primitives.Section(
                 (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
                 sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), reopen_inference.id(run_id=str(run_id))
+                    tr(t"build-drafts-review = Review"), reopen_inference.custom_id(run_id=run_id)
                 ),
             )
             for run_id in runs
@@ -371,7 +370,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     async def saved_drafts(self, request: sd.Request[Self, BotT], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""
-        return await request.client.screen_router.open(request, SavedDraftsScreen.open_drafts, inbox=inbox)
+        return await SavedDraftsScreen.open_drafts(request, inbox=inbox)
 
     async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
@@ -489,7 +488,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             sl.primitives.Section(
                 (sl.primitives.Text(f"Recalculation candidate {index + 1}: review and choose its target build."),),
                 sl.primitives.RoutedButton(
-                    "Review changes", build_controls.reopen_revision.id(proposal_id=str(proposal.id))
+                    "Review changes", build_controls.reopen_revision.custom_id(proposal_id=proposal.id)
                 ),
             )
             for index, proposal in enumerate(proposals)

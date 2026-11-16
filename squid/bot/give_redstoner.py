@@ -2,17 +2,17 @@
 """Award the configured Redstoner role from community messages and expose role controls."""
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Protocol, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 
 import anyio
 import discord
-from discord import Interaction, app_commands
+from discord import app_commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.routes import routes
+from squid.bot.routes import AppRequest, router
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.application import RedstonerService
@@ -22,50 +22,39 @@ from squid_i18n import md_tr
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
+from squid_ui.routing import Proceed, RouteMatch
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class _OwnerGuildClient(Protocol):
-    owner_server_id: int
+async def owner_guild_only(request: AppRequest, match: RouteMatch[AppRequest], proceed: Proceed) -> Any:
+    if request.interaction is None or request.interaction.guild is None:
+        return None
+    if request.interaction.guild.id != request.client.owner_server_id:
+        return None
+    return await proceed()
 
 
-class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
-    """Silently ignore durable role controls outside the configured owner guild."""
-
-    async def dispatch(
-        self,
-        request: sd.routing.RouteRequest[BotT],
-        proceed: sd.routing.RouteProceed,
-    ) -> None:
-        interaction = request.interaction
-        client = cast(_OwnerGuildClient, interaction.client)
-        if interaction.guild is None or interaction.guild.id != client.owner_server_id:
-            return
-        await proceed()
+redstoner_roles = router.group("/redstoner-roles")
+redstoner_roles.add_middleware(owner_guild_only, key="owner-guild")
 
 
-redstoner_roles = routes.group("redstoner-roles")
-redstoner_roles.add_middleware(OwnerGuildOnly(), key="owner-guild")
-remove_redstoner_role = redstoner_roles.define("self:remove", aliases=("remove:role:redstoner",))
-
-
-@redstoner_roles.route(remove_redstoner_role)
-async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
+@redstoner_roles.route("/self/remove")
+async def remove_own_redstoner_role(request: AppRequest) -> None:
     """Temporarily remove the member's Redstoner role, announce it, and restore it after ten seconds.
 
     The route middleware limits this action to the owner guild. Removal and
     restoration are separate Discord calls; interruption can leave the role removed.
     """
-    assert interaction.guild is not None
+    interaction = request.interaction
+    assert interaction is not None and interaction.guild is not None
     member = interaction.user
     community = await interaction.client.services.settings.get_runtime()
     redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
     if redstoner_role is None or redstoner_role not in member.roles:
         return
 
-    request = await sd.request(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
     assert owner is not None
@@ -192,7 +181,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                         sl.action_controls(
                             sl.routed_action_control(
                                 "I'm not a redstoner",
-                                remove_redstoner_role.id(),
+                                remove_own_redstoner_role.custom_id(),
                                 key="remove-redstoner",
                                 tone=sl.Tone.DANGER,
                             ),

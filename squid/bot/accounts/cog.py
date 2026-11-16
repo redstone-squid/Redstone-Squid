@@ -47,7 +47,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)
 
-        return await request.client.screen_router.open(request, AccountWorkspace.open_account)
+        return await AccountWorkspace.open_account(request)
 
     async def _creator_page(
         self, request: sd.Request[Self, BotT], user: discord.Member | discord.User

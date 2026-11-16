@@ -1,63 +1,95 @@
-"""Route persistent Discord controls to feature handlers.
+"""The application's single registry for screen openings and persistent actions."""
 
-A routed control carries an action ID in Discord's custom_id, so it can still be
-handled after the original UI session or bot process has ended. Feature modules
-register handlers beneath the r: namespace; those handlers recover the resource
-from the route arguments or the clicked message. This module supplies the shared
-router, tracing, and unavailable-control/error replies.
-"""
+from collections.abc import Hashable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
 
-from typing import TYPE_CHECKING, override
-
+import anyio
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.bot.errors import handle_interaction_error
 from squid.bot.ui import text_node
-from squid.core.i18n import tr
-from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
+from squid.observability import TraceSurface, correlation_scope, trace_span
+from squid_i18n import TextLike
+from squid_ui.content.text import localization_scope
+from squid_ui.routing import Endpoint, Proceed, RouteMatch, Router
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
-routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
-"""The ordinary root group reserving the bot's durable ``r:`` namespace."""
+type AppRequest = sd.Request[Any, RedstoneSquid]
 
 
-class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
-    """Trace every routed interaction without recording user-controlled route values."""
-
-    @override
-    async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
-        attributes: dict[str, SpanAttribute] = {
-            "squid.surface": TraceSurface.DISCORD_ROUTE,
-            "squid.route.component": request.component.value,
-            "squid.route.matched_alias": request.matched_alias,
-        }
-        if request.route is not None:
-            attributes["squid.route.format"] = request.route.format
-        if request.group_prefix is not None:
-            attributes["squid.route.group"] = request.group_prefix
-        with trace_span("discord.route", attributes), correlation_scope():
-            await proceed()
+@dataclass(frozen=True, slots=True)
+class ScreenOpening:
+    screen: sd.Screen[Any, Any, Any]
+    session_key: Hashable | None = None
 
 
-async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
-    request = await sd.request(interaction)
-    await request.respond(
-        text_node(tr(t"ui-control-expired = This control is no longer available.")),
-        audience="personal",
-    )
+class ScreenUnavailable(Exception):
+    """Send a localized explanation under the endpoint's response policy."""
+
+    def __init__(self, message: TextLike) -> None:
+        super().__init__()
+        self.message = message
 
 
-async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    await handle_interaction_error(interaction, error, surface=source)
+def response_policy(endpoint: Endpoint[AppRequest, ...]) -> sd.ResponseSpec:
+    if isinstance(endpoint.policy, sd.ResponseSpec):
+        return sd.ResponseSpec(audience="personal").overlay(endpoint.policy)
+    if endpoint.owner is not None and issubclass(endpoint.owner, sd.Screen):
+        return endpoint.owner.__response_spec__
+    return sd.ResponseSpec(audience="personal")
 
 
-router: sd.routing.Router[RedstoneSquid] = sd.routing.Router(
-    namespace=routes,
-    on_gone=_route_gone_hook,
-    on_error=_route_error_hook,
-)
-router.add_middleware(TraceRoutes())
+async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: Proceed) -> Any:
+    """Apply the same tracing, acknowledgement, and delivery to every invocation."""
+    policy = response_policy(match.endpoint)
+    deferral = "public" if policy.audience == "public" else "private"
+
+    async def acknowledge() -> None:
+        await anyio.sleep(2.5)
+        if request.interaction is not None and request.interaction.response.is_done():
+            return
+        try:
+            await request.defer(deferral)
+        except discord.InteractionResponded:
+            pass
+        except discord.HTTPException as error:
+            if error.code != 40060:
+                raise
+
+    attributes = {
+        "squid.surface": TraceSurface.DISCORD_ROUTE,
+        "squid.route.format": match.endpoint.path,
+    }
+    with localization_scope(request.localization), trace_span("ui.route", attributes), correlation_scope():
+        failure: Exception | None = None
+        result: Any = None
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(acknowledge)
+            try:
+                try:
+                    result = await proceed()
+                except ScreenUnavailable as error:
+                    result = await request.respond(
+                        text_node(error.message), audience=cast(sd.Audience, policy.audience)
+                    )
+                else:
+                    if isinstance(result, ScreenOpening):
+                        result = await request.respond(result.screen, session_key=result.session_key)
+                    elif isinstance(result, sd.Response):
+                        result = await request.respond(result, audience=cast(sd.Audience, policy.audience))
+            except Exception as error:
+                # Preserve domain exceptions rather than wrapping them in a task-group error.
+                failure = error
+            finally:
+                tasks.cancel_scope.cancel()
+        if failure is not None:
+            raise failure
+        return result
+
+
+router = Router[AppRequest]()
+router.add_middleware(deliver)

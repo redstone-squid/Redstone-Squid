@@ -265,7 +265,7 @@ async def test_recovery_route_reloads_current_state_before_authorizing() -> None
     cog = _cog(latest, allowed=False, account_id=1)
     interaction = _interaction(cog.bot)
 
-    await recover_build_editor(interaction, 1)
+    await recover_build_editor(await sd.request(interaction), 1)
 
     component = _component(_sent_view(interaction))
     assert component is not None
@@ -279,7 +279,7 @@ async def test_recovery_route_denies_an_actor_after_reloading_current_state() ->
     cog = _cog(latest, allowed=False, account_id=1)
     interaction = _interaction(cog.bot)
 
-    await recover_build_editor(interaction, 1)
+    await recover_build_editor(await sd.request(interaction), 1)
 
     assert _component(_sent_view(interaction)) is None
     assert cast(StubBuilds, cog.builds).gets == 1
