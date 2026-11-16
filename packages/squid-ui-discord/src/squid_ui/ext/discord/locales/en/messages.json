@@ -1,0 +1,11 @@
+{
+  "ui-control-expired": {
+    "fingerprint": "ef868ce0aa810b660ade9a904bd7135d558f4a90199852b14d750c66fda19766",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui/ext/discord/routing/adapter.py:51"
+    ]
+  }
+}
