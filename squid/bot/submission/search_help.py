@@ -37,7 +37,7 @@ def search_help(
     records: bool,
     apply_example: Callable[[str, sl.PressEvent], Awaitable[None]],
 ) -> sp.Tabs[sl.ComponentsV2Target, sd.Request]:
-    """Build the tabbed search reference that the catalogue shows in place of its list."""
+    """Build the tabbed search reference shown above the catalogue's active view."""
     if records:
         base_titles = ", ".join(title.value for title in BaseTitle)
         kinds = ", ".join(kind.value for kind in BuildKind)

@@ -595,8 +595,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             return (self._workspace_controls(), self._selected or self._record_tools)
         nodes = [self._workspace_controls(), *self._find_nodes()]
         if self._show_search_help:
-            # Help takes the place of the list or build below the search controls, so it reads
-            # as part of searching. Closing it brings back the same list or build.
             nodes.append(self._record_search_help if self._mode == "records" else self._build_search_help)
             nodes.append(
                 sl.action_controls(
@@ -606,7 +604,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                     key="help-actions",
                 )
             )
-        elif self._selected is not None:
+        if self._selected is not None:
             nodes.append(self._selected)
         elif self._results is not None:
             nodes.append(self._results)
