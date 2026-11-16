@@ -113,9 +113,9 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         session = self._session()
         draft_model = await _locked_draft(session, draft.snapshot.id)
         _require_expected_draft(draft_model, draft)
-        await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
-        await _current_schematics(session, draft.snapshot.id, payload.artifacts.schematic_id)
-        job = await _locked_job(session, draft.snapshot.id)
+        await self.require_current_media(draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
+        await self._current_schematics(draft.snapshot.id, payload.artifacts.schematic_id)
+        job = await self._locked_job(draft.snapshot.id)
         status = draft_model.status
         if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
             if job is None or job.payload_sha256 != digest:
@@ -183,7 +183,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         session = self._session()
         draft_model = await _locked_draft(session, draft.snapshot.id)
         _require_expected_draft(draft_model, draft)
-        job = await _locked_job(session, draft.snapshot.id)
+        job = await self._locked_job(draft.snapshot.id)
         status = draft_model.status
         if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
             if job is None:
@@ -313,7 +313,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             raise ValueError(msg)
         session = self._session()
         draft = await _locked_draft(session, job.draft_id)
-        model = await _claimed_job(session, job)
+        model = await self._claimed_job(job)
         if model is None:
             return False
         if draft.status is not DraftStatus.PROCESSING:
@@ -351,7 +351,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             raise ValueError(msg)
         session = self._session()
         draft = await _locked_draft(session, job.draft_id)
-        model = await _claimed_job(session, job)
+        model = await self._claimed_job(job)
         if model is None:
             return FinalizationFailureOutcome(applied=False, dead=False)
         dead = model.attempts >= max_attempts
@@ -382,16 +382,34 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         """Lock the draft and return it only while the worker token still matches."""
         session = self._session()
         draft = await _locked_draft(session, job.draft_id)
-        if await _claimed_job(session, job) is None:
+        if await self._claimed_job(job) is None:
             return None
         return _to_stored(draft)
 
     async def require_current_media(self, draft_id: UUID, upload_ids: tuple[UUID, ...]) -> None:
-        await _require_current_media(self._session(), draft_id, upload_ids)
+        session = self._session()
+        rows = tuple(
+            (
+                await session.execute(
+                    select(MediaUploadRecord.id, MediaNormalizationJobRecord.status)
+                    .outerjoin(
+                        MediaNormalizationJobRecord,
+                        MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                    )
+                    .where(media_for_draft(draft_id))
+                    .with_for_update(of=MediaUploadRecord)
+                )
+            ).all()
+        )
+        retained = tuple((upload_id, status) for upload_id, status in rows if status != MediaJobStatus.DISCARDED.value)
+        if any(status != MediaJobStatus.COMPLETED.value for _, status in retained) or {
+            upload_id for upload_id, _ in retained
+        } != set(upload_ids):
+            raise DraftArtifactsChangedError
 
     async def attach_schematics(self, job: ClaimedFinalizationJob, build_id: int, *, now: Instant) -> None:
         """Attach original files and queue the primary preview within the build transaction."""
-        rows = await _current_schematics(self._session(), job.draft_id, job.payload.artifacts.schematic_id)
+        rows = await self._current_schematics(job.draft_id, job.payload.artifacts.schematic_id)
         policy = job.payload.schematic_policy
         publication = SchematicPublication(
             visibility=SchematicVisibility(policy.visibility.value),
@@ -417,7 +435,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool:
         """Record the result and retain its media, or return False if the claim was replaced."""
         session = self._session()
-        if not await _complete(session, job, result, now=now):
+        if not await self._complete(job, result, now=now):
             return False
         await session.flush()
         session.add_all(
@@ -425,6 +443,100 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             for upload_id in job.payload.artifacts.normalized_media_upload_ids
         )
         return True
+
+    async def _locked_job(self, draft_id: UUID) -> SubmissionFinalizationJob | None:
+        session = self._session()
+        return await session.scalar(
+            select(SubmissionFinalizationJob)
+            .where(SubmissionFinalizationJob.draft_id == draft_id)
+            .order_by(SubmissionFinalizationJob.attempt_number.desc())
+            .limit(1)
+            .with_for_update()
+        )
+
+    async def _claimed_job(
+        self,
+        claim: ClaimedFinalizationJob,
+    ) -> SubmissionFinalizationJob | None:
+        session = self._session()
+        return await session.scalar(
+            select(SubmissionFinalizationJob)
+            .where(
+                SubmissionFinalizationJob.id == claim.job_id,
+                SubmissionFinalizationJob.draft_id == claim.draft_id,
+                SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
+                SubmissionFinalizationJob.claim_token == claim.claim_token,
+                SubmissionFinalizationJob.requested_by_account_id == claim.requested_by_account_id,
+            )
+            .with_for_update()
+        )
+
+    async def _complete(
+        self,
+        job: ClaimedFinalizationJob,
+        result: FinalizedBuild,
+        *,
+        now: Instant,
+    ) -> bool:
+        """Record the created build only if this worker still owns the attempt.
+
+        The caller saves the build in the same transaction, so the result and the
+        draft's submitted status cannot outlive a failed build write.
+        """
+        session = self._session()
+        draft = await _locked_draft(session, job.draft_id)
+        model = await self._claimed_job(job)
+        if model is None:
+            return False
+        if draft.status is not DraftStatus.PROCESSING:
+            msg = "claimed finalization job does not own a processing draft"
+            raise InvalidStateError(msg)
+        existing = await session.get(SubmissionFinalizationResult, model.id)
+        if existing is not None:
+            if _result(existing) != result:
+                msg = "submission target returned conflicting results for one source draft"
+                raise DataIntegrityError(msg)
+        else:
+            session.add(
+                SubmissionFinalizationResult(
+                    job_id=model.id,
+                    build_id=result.build_id,
+                    created_at=now,
+                )
+            )
+        model.status = FinalizationJobStatus.COMPLETED
+        model.completed_at = now
+        model.attention_at = None
+        model.dead_at = None
+        model.last_error = None
+        model.attention_issues = []
+        _clear_claim(model)
+        model.updated_at = now
+        draft.status = DraftStatus.SUBMITTED
+        draft.updated_at = now
+        return True
+
+    async def _current_schematics(
+        self, draft_id: UUID, expected_primary: UUID | None
+    ) -> list[tuple[DraftSchematicSource, DraftSchematicLink]]:
+        """Recheck all retained sources while the caller holds the draft lifecycle lock."""
+        session = self._session()
+        result = await session.execute(
+            select(DraftSchematicSource, DraftSchematicLink)
+            .join(DraftSchematicLink, DraftSchematicLink.source_id == DraftSchematicSource.id)
+            .where(DraftSchematicLink.draft_id == draft_id, DraftSchematicLink.discarded.is_(False))
+            .order_by(DraftSchematicSource.id)
+            .with_for_update(of=DraftSchematicSource)
+        )
+        rows = [(source, link) for source, link in result]
+        primary = [source.id for source, link in rows if link.is_primary]
+        if (
+            any(source.state is not DraftSchematicState.READY or source.analysis is None for source, _ in rows)
+            or primary != ([expected_primary] if expected_primary is not None else [])
+            or bool(rows) != (expected_primary is not None)
+        ):
+            raise DraftArtifactsChangedError
+        return rows
 
 
 def _attempts_for_draft(
@@ -445,58 +557,6 @@ async def _locked_draft(session: AsyncSession, draft_id: UUID) -> SubmissionDraf
     if model is None:
         raise DraftNotFoundError(draft_id)
     return model
-
-
-async def _require_current_media(
-    session: AsyncSession,
-    draft_id: UUID,
-    expected_upload_ids: Sequence[UUID],
-) -> None:
-    rows = tuple(
-        (
-            await session.execute(
-                select(MediaUploadRecord.id, MediaNormalizationJobRecord.status)
-                .outerjoin(
-                    MediaNormalizationJobRecord,
-                    MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
-                )
-                .where(media_for_draft(draft_id))
-                .with_for_update(of=MediaUploadRecord)
-            )
-        ).all()
-    )
-    retained = tuple((upload_id, status) for upload_id, status in rows if status != MediaJobStatus.DISCARDED.value)
-    if any(status != MediaJobStatus.COMPLETED.value for _, status in retained) or {
-        upload_id for upload_id, _ in retained
-    } != set(expected_upload_ids):
-        raise DraftArtifactsChangedError
-
-
-async def _locked_job(session: AsyncSession, draft_id: UUID) -> SubmissionFinalizationJob | None:
-    return await session.scalar(
-        select(SubmissionFinalizationJob)
-        .where(SubmissionFinalizationJob.draft_id == draft_id)
-        .order_by(SubmissionFinalizationJob.attempt_number.desc())
-        .limit(1)
-        .with_for_update()
-    )
-
-
-async def _claimed_job(
-    session: AsyncSession,
-    claim: ClaimedFinalizationJob,
-) -> SubmissionFinalizationJob | None:
-    return await session.scalar(
-        select(SubmissionFinalizationJob)
-        .where(
-            SubmissionFinalizationJob.id == claim.job_id,
-            SubmissionFinalizationJob.draft_id == claim.draft_id,
-            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
-            SubmissionFinalizationJob.claim_token == claim.claim_token,
-            SubmissionFinalizationJob.requested_by_account_id == claim.requested_by_account_id,
-        )
-        .with_for_update()
-    )
 
 
 def _require_expected_draft(model: SubmissionDraft, expected: StoredDraft) -> None:
@@ -555,70 +615,3 @@ def _result(model: SubmissionFinalizationResult) -> FinalizedBuild:
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
     return tuple(dict.fromkeys(issues))
-
-
-async def _complete(
-    session: AsyncSession,
-    job: ClaimedFinalizationJob,
-    result: FinalizedBuild,
-    *,
-    now: Instant,
-) -> bool:
-    """Record the created build only if this worker still owns the attempt.
-
-    The caller saves the build in the same transaction, so the result and the
-    draft's submitted status cannot outlive a failed build write.
-    """
-    draft = await _locked_draft(session, job.draft_id)
-    model = await _claimed_job(session, job)
-    if model is None:
-        return False
-    if draft.status is not DraftStatus.PROCESSING:
-        msg = "claimed finalization job does not own a processing draft"
-        raise InvalidStateError(msg)
-    existing = await session.get(SubmissionFinalizationResult, model.id)
-    if existing is not None:
-        if _result(existing) != result:
-            msg = "submission target returned conflicting results for one source draft"
-            raise DataIntegrityError(msg)
-    else:
-        session.add(
-            SubmissionFinalizationResult(
-                job_id=model.id,
-                build_id=result.build_id,
-                created_at=now,
-            )
-        )
-    model.status = FinalizationJobStatus.COMPLETED
-    model.completed_at = now
-    model.attention_at = None
-    model.dead_at = None
-    model.last_error = None
-    model.attention_issues = []
-    _clear_claim(model)
-    model.updated_at = now
-    draft.status = DraftStatus.SUBMITTED
-    draft.updated_at = now
-    return True
-
-
-async def _current_schematics(
-    session: AsyncSession, draft_id: UUID, expected_primary: UUID | None
-) -> list[tuple[DraftSchematicSource, DraftSchematicLink]]:
-    """Recheck all retained sources while the caller holds the draft lifecycle lock."""
-    result = await session.execute(
-        select(DraftSchematicSource, DraftSchematicLink)
-        .join(DraftSchematicLink, DraftSchematicLink.source_id == DraftSchematicSource.id)
-        .where(DraftSchematicLink.draft_id == draft_id, DraftSchematicLink.discarded.is_(False))
-        .order_by(DraftSchematicSource.id)
-        .with_for_update(of=DraftSchematicSource)
-    )
-    rows = [(source, link) for source, link in result]
-    primary = [source.id for source, link in rows if link.is_primary]
-    if (
-        any(source.state is not DraftSchematicState.READY or source.analysis is None for source, _ in rows)
-        or primary != ([expected_primary] if expected_primary is not None else [])
-        or bool(rows) != (expected_primary is not None)
-    ):
-        raise DraftArtifactsChangedError
-    return rows
