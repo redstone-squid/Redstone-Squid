@@ -32,6 +32,7 @@ from squid.builds.models import (
     Build,
     BuildCredit,
     BuildVersion,
+    DoorBuild,
 )
 from squid.core.errors import DataIntegrityError
 from squid.diagnostics.log_capture import work_lost
@@ -419,6 +420,16 @@ class SearchProjectionLoader:
                 if (value := _assignment_value(assignment)) is not None
             ),
         ]
+        if isinstance(build, DoorBuild):
+            facets.extend(
+                ProjectionFacet(name, Decimal(value))
+                for name, value in (
+                    ("door_width", build.door_width),
+                    ("door_height", build.door_height),
+                    ("door_depth", build.door_depth),
+                )
+                if value is not None
+            )
         for name in (
             "normal_opening_time",
             "visible_opening_time",

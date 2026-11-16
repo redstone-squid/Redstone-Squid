@@ -1,15 +1,21 @@
 """Tests for search projection normalization and typed facets."""
 
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.builds.domain import Status
+from squid.builds.models import DoorBuild, OtherBuild
+from squid.core.errors import DataIntegrityError
 from squid.search.infrastructure.projection import (
     ProjectionFacet,
     RecordHolderProjectionSource,
     RecordProjectionSource,
     SearchProjection,
+    SearchProjectionLoader,
     TagProjectionSource,
     build_facet_models,
     build_record_projection,
@@ -133,3 +139,36 @@ def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
 
 def test_an_unapproved_tag_is_not_indexed() -> None:
     assert build_tag_projection(_tag_source(semantic_kind="pattern", moderation_status="pending")) is None
+
+
+@pytest.mark.parametrize("door", [True, False])
+async def test_build_projection_keeps_opening_dimensions_separate(door: bool) -> None:
+    now = Instant.parse_iso("2026-11-16T12:00:00Z")
+    build = DoorBuild(door_width=3, door_height=4) if door else OtherBuild()
+    build.id = 42
+    build.width, build.height, build.depth = 10, 12, 5
+    build.submission_status = Status.CONFIRMED
+    build.submission_time = build.edited_time = now
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = build
+    rows = MagicMock()
+    rows.all.return_value = []
+    session.scalars.return_value = rows
+    loader = SearchProjectionLoader(session)
+    loader._build_mapper = MagicMock()
+    loader._build_mapper.load = AsyncMock(side_effect=DataIntegrityError("Incomplete title"))
+
+    projection = await loader.load("build", "42")
+
+    assert projection is not None
+    facets = {facet.field_name: facet.value for facet in projection.facets}
+    assert facets["width"] == Decimal(10)
+    assert facets["height"] == Decimal(12)
+    assert facets["depth"] == Decimal(5)
+    assert "door_depth" not in facets
+    if door:
+        assert facets["door_width"] == Decimal(3)
+        assert facets["door_height"] == Decimal(4)
+    else:
+        assert "door_width" not in facets
+        assert "door_height" not in facets

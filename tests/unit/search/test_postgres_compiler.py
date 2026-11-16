@@ -1,5 +1,6 @@
 """PostgreSQL search predicate compiler tests."""
 
+import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,3 +123,13 @@ def test_explicit_visibility_policy_is_applied_independently_of_query() -> None:
 
 def unused_session() -> AsyncSession:
     raise AssertionError("Query compilation must not execute SQL.")
+
+
+@pytest.mark.parametrize("field", ["door_width", "door_height", "door_depth"])
+@pytest.mark.parametrize("predicate", [":3", ">=3", ":[3 TO 5]"])
+def test_door_dimensions_compile_to_numeric_facets(field: str, predicate: str) -> None:
+    sql, parameters = _compile(f"{field}{predicate}")
+
+    assert "search_document_facets.numeric_value" in sql
+    assert field in parameters.values()
+    assert "3" in {str(value) for value in parameters.values()}
