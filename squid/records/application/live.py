@@ -14,9 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from squid.builds.domain import DoorOrientationLiteral
 from squid.builds.domain.expansion_evaluation import (
     ExpansionDiagnostic,
+    NormalizedExpansion,
     PointStatus,
-    evaluate_expansion,
-    normalize_expansion,
 )
 from squid.records.application.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import CandidateBuild, CategoryIdentity
@@ -118,7 +117,7 @@ def evaluate_door_record(
                 )
             )
             continue
-        point = evaluate_expansion(normalize_expansion(source.expansion), request.opening)
+        point = NormalizedExpansion.from_source(source.expansion).evaluate(request.opening)
         if not point.configurations:
             # A document without usable branches describes no opening size. Report
             # it, but do not let it block records it makes no claim about.

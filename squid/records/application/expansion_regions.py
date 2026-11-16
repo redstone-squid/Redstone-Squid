@@ -24,8 +24,6 @@ from squid.builds.domain.expansion_evaluation import (
     NormalizedBranch,
     NormalizedExpansion,
     PointStatus,
-    evaluate_expansion,
-    normalize_expansion,
 )
 from squid.builds.domain.expansion_math import (
     Comparison,
@@ -186,7 +184,7 @@ def _translate_sources(
                 )
             )
             continue
-        expansion = normalize_expansion(source.expansion)
+        expansion = NormalizedExpansion.from_source(source.expansion)
         if not expansion.branches:
             configurations.append(
                 DoorRegionConfiguration(len(configurations), build.build_id, None, expansion.diagnostics)
@@ -302,7 +300,7 @@ def _branch_candidate(
         for start, stop in spans:
             budget.spend()
             width = period * start + residue
-            point = evaluate_expansion(single, (width, height, depth)).configurations[0]
+            point = single.evaluate((width, height, depth)).configurations[0]
             if point.status is PointStatus.UNRESOLVED:
                 msg = f"Build {build_id}, branch {branch.index}: membership is unknown at width {width}."
                 raise RegionArithmeticError(msg)

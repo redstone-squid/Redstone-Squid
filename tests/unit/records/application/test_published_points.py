@@ -7,7 +7,10 @@ import pytest
 
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.published_points import PublishedPointStatus, published_door_point
+from squid.records.application.published_points import (
+    PublishedDoorPoint,
+    PublishedPointStatus,
+)
 from squid.records.application.range_snapshots import RangeAttempt, RangePublication
 from squid.records.domain import ResolutionStatus
 from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
@@ -40,7 +43,7 @@ def test_periodic_holes_fixed_exceptions_and_large_widths() -> None:
     )
     state = publication(analyze_door_widths(sources, height=3))
     for width, expected in ((1, (1,)), (2, ()), (6, (10,)), (9999, (1,))):
-        point = published_door_point(state, width)
+        point = PublishedDoorPoint.from_publication(state, width)
         assert point.status is PublishedPointStatus.PUBLISHED
         assert point.opening == (width, 3, 1)
         assert point.region is not None
@@ -48,7 +51,7 @@ def test_periodic_holes_fixed_exceptions_and_large_widths() -> None:
         assert point.region.domain.contains(width)
         assert point.publication is not None
         assert point.publication.snapshot_hash == "snapshot-one"
-    hole = published_door_point(state, 2)
+    hole = PublishedDoorPoint.from_publication(state, 2)
     assert hole.region is not None
     assert hole.region.resolution.status is ResolutionStatus.NO_CANDIDATE
 
@@ -56,8 +59,8 @@ def test_periodic_holes_fixed_exceptions_and_large_widths() -> None:
 def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None:
     query = DoorRangeQuery(height=3, minimum=5, maximum=8)
     pending = RangePublication(7, query, None, None)
-    assert published_door_point(pending, 6).status is PublishedPointStatus.NOT_PUBLISHED
-    outside = published_door_point(pending, 9)
+    assert PublishedDoorPoint.from_publication(pending, 6).status is PublishedPointStatus.NOT_PUBLISHED
+    outside = PublishedDoorPoint.from_publication(pending, 9)
     assert outside.status is PublishedPointStatus.OUTSIDE_QUERY
     assert outside.region is None
     state = publication(analyze_door_widths((), height=3, minimum=5, maximum=8), minimum=5, maximum=8)
@@ -69,7 +72,7 @@ def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None
         is_active=False,
         result=DoorRangeAnalysis(SmallestRegionAnalysis(RegionAnalysisStatus.TIMED_OUT), ()),
     )
-    point = published_door_point(replace(state, latest=failure), 6)
+    point = PublishedDoorPoint.from_publication(replace(state, latest=failure), 6)
     assert point.status is PublishedPointStatus.PUBLISHED
     assert point.publication is not None
     assert point.publication.id == 11
@@ -82,7 +85,7 @@ def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None
 
 def test_unresolved_comparison_remains_published() -> None:
     state = publication(analyze_door_widths((family(build_id=1), family(build_id=2)), height=3))
-    point = published_door_point(state, 6)
+    point = PublishedDoorPoint.from_publication(state, 6)
     assert point.status is PublishedPointStatus.PUBLISHED
     assert point.region is not None
     assert point.region.resolution.status is ResolutionStatus.UNRESOLVED
@@ -94,10 +97,10 @@ def test_corrupt_partition_does_not_silently_award_a_record(*, duplicate: bool) 
     regions = result.analysis.regions * 2 if duplicate else ()
     state = publication(replace(result, analysis=replace(result.analysis, regions=regions)))
     with pytest.raises(DataIntegrityError, match="exactly one"):
-        published_door_point(state, 6)
+        PublishedDoorPoint.from_publication(state, 6)
 
 
 @pytest.mark.parametrize("width", [0, -1, 2**31, True])
 def test_invalid_widths_are_rejected(width: int) -> None:
     with pytest.raises(ValidationError):
-        published_door_point(RangePublication(7, DoorRangeQuery(height=3), None, None), width)
+        PublishedDoorPoint.from_publication(RangePublication(7, DoorRangeQuery(height=3), None, None), width)

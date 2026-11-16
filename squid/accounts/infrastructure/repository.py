@@ -467,7 +467,7 @@ class AccountRepository:
     async def get_creator_profile_record(self, public_id: uuid.UUID) -> CreatorProfileRecord | None:
         """Load a creator's profile, identities, and credits, following merge redirects.
 
-        Visibility has not been applied. Use present_public_profile before exposing the
+        Visibility has not been applied. Use PublicCreatorProfile.from_record before exposing the
         result publicly.
         """
         session = self._session()

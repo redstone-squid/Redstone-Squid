@@ -8,7 +8,9 @@ import anyio
 
 from squid.records.application.expansion_regions import DoorRangeQuery
 from squid.records.application.ports import DoorRangeAnalyzer
-from squid.records.application.published_points import PublishedDoorPoint, published_door_point
+from squid.records.application.published_points import (
+    PublishedDoorPoint,
+)
 from squid.records.application.range_ports import RangePublicationUnitOfWork
 from squid.records.application.range_snapshots import RangePublication, RangeSnapshotDocument, RangeSource
 from squid.records.application.services import RecordComputationService
@@ -61,7 +63,7 @@ class RangePublicationService:
     async def get_point(self, query_id: int, width: int) -> PublishedDoorPoint | None:
         """Select the published region covering width without reading live builds."""
         publication = await self.get(query_id)
-        return None if publication is None else published_door_point(publication, width)
+        return None if publication is None else PublishedDoorPoint.from_publication(publication, width)
 
     async def refresh_registered(self) -> None:
         """Recompute registered queries before acknowledging the claimed door work.

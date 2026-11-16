@@ -9,8 +9,6 @@ from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.expansion_evaluation import (
     NormalizedExpansion,
     PointStatus,
-    evaluate_expansion,
-    normalize_expansion,
 )
 from squid.records.application.live import DoorRecordLookup
 from squid.records.application.models import CandidateBuild, CategoryIdentity
@@ -47,7 +45,7 @@ def door_category_lookup(
 # A rebuild tests each family against every observed opening size.
 @lru_cache(maxsize=1024)
 def _normalized(expansion: DoorExpansion) -> NormalizedExpansion:
-    return normalize_expansion(expansion)
+    return NormalizedExpansion.from_source(expansion)
 
 
 def family_at_category(
@@ -70,7 +68,7 @@ def family_at_category(
     ):
         return None
     if competing_only and source.expansion is not None:
-        point = evaluate_expansion(_normalized(source.expansion), query.opening)
+        point = _normalized(source.expansion).evaluate(query.opening)
         if not any(c.status in (PointStatus.SUPPORTED, PointStatus.UNRESOLVED) for c in point.configurations):
             return None
     size = identity.base_key.split("|")[1]

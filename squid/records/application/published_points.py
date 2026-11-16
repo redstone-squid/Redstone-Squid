@@ -63,35 +63,38 @@ class PublishedDoorPoint:
     region: SmallestRecordRegion | None
     configurations: tuple[DoorRegionConfiguration, ...]
 
-
-def published_door_point(publication: RangePublication, width: int) -> PublishedDoorPoint:
-    if type(width) is not int or not 1 <= width <= 2**31 - 1:
-        raise ValidationError(tr(t"records-opening-width-invalid = Opening width must be a positive 32-bit integer."))
-    query = publication.query
-    active = publication.active
-    status = PublishedPointStatus.NOT_PUBLISHED
-    region = None
-    configurations: tuple[DoorRegionConfiguration, ...] = ()
-    if width < query.minimum or (query.maximum is not None and width > query.maximum):
-        status = PublishedPointStatus.OUTSIDE_QUERY
-    elif active is not None:
-        if active.result is None or active.result.analysis.status is not RegionAnalysisStatus.EXACT:
-            msg = "An active range publication must contain an exact analysis."
-            raise DataIntegrityError(msg, context={"run_id": active.id})
-        matches = [r for r in active.result.analysis.regions if r.domain.contains(width)]
-        if len(matches) != 1:
-            msg = "A published opening must belong to exactly one saved region."
-            raise DataIntegrityError(msg, context={"run_id": active.id, "width": width})
-        status = PublishedPointStatus.PUBLISHED
-        region = matches[0]
-        configurations = active.result.configurations
-    return PublishedDoorPoint(
-        publication.query_id,
-        query,
-        (width, query.height, query.depth),
-        status,
-        None if active is None else RangeAttemptSummary.from_attempt(active),
-        None if publication.latest is None else RangeAttemptSummary.from_attempt(publication.latest),
-        region,
-        configurations,
-    )
+    @classmethod
+    def from_publication(cls, publication: RangePublication, width: int) -> PublishedDoorPoint:
+        """Select an opening from a publication without evaluating live source formulas."""
+        if type(width) is not int or not 1 <= width <= 2**31 - 1:
+            raise ValidationError(
+                tr(t"records-opening-width-invalid = Opening width must be a positive 32-bit integer.")
+            )
+        query = publication.query
+        active = publication.active
+        status = PublishedPointStatus.NOT_PUBLISHED
+        region = None
+        configurations: tuple[DoorRegionConfiguration, ...] = ()
+        if width < query.minimum or (query.maximum is not None and width > query.maximum):
+            status = PublishedPointStatus.OUTSIDE_QUERY
+        elif active is not None:
+            if active.result is None or active.result.analysis.status is not RegionAnalysisStatus.EXACT:
+                msg = "An active range publication must contain an exact analysis."
+                raise DataIntegrityError(msg, context={"run_id": active.id})
+            matches = [r for r in active.result.analysis.regions if r.domain.contains(width)]
+            if len(matches) != 1:
+                msg = "A published opening must belong to exactly one saved region."
+                raise DataIntegrityError(msg, context={"run_id": active.id, "width": width})
+            status = PublishedPointStatus.PUBLISHED
+            region = matches[0]
+            configurations = active.result.configurations
+        return cls(
+            publication.query_id,
+            query,
+            (width, query.height, query.depth),
+            status,
+            None if active is None else RangeAttemptSummary.from_attempt(active),
+            None if publication.latest is None else RangeAttemptSummary.from_attempt(publication.latest),
+            region,
+            configurations,
+        )

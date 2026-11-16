@@ -43,7 +43,6 @@ from squid.accounts.domain.profiles import (
     ProfileUpdate,
     PublicCreatorProfile,
     avatar_url_for,
-    present_public_profile,
 )
 
 __all__ = [
@@ -85,5 +84,4 @@ __all__ = [
     "avatar_url_for",
     "consent_refresh_required",
     "fold_creator_name",
-    "present_public_profile",
 ]

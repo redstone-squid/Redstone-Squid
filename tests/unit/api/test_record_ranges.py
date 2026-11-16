@@ -7,7 +7,9 @@ from litestar.testing import TestClient
 
 from squid.idempotency import IdempotencyService
 from squid.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
-from squid.records.application.published_points import published_door_point
+from squid.records.application.published_points import (
+    PublishedDoorPoint,
+)
 from squid.records.application.range_publication import RangePublicationService
 from squid.records.application.range_snapshots import RangePublication
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
@@ -77,7 +79,7 @@ def test_invalid_queries_and_unknown_refresh_are_rejected() -> None:
 def test_published_point_is_public_and_retains_saved_provenance() -> None:
     publications = create_autospec(RangePublicationService, instance=True)
     state = publication(analyze_door_widths((family(),), height=3))
-    publications.get_point.return_value = published_door_point(state, 9999)
+    publications.get_point.return_value = PublishedDoorPoint.from_publication(state, 9999)
     app, _ = build_app(range_publication=publications)
     with TestClient(app) as client:
         response = client.get(f"{BASE}/7/at/9999")
@@ -104,7 +106,7 @@ def test_published_point_is_public_and_retains_saved_provenance() -> None:
 def test_unavailable_point_is_not_misrepresented_as_no_candidate(width: int, expected: str) -> None:
     publications = create_autospec(RangePublicationService, instance=True)
     state = RangePublication(7, DoorRangeQuery(height=3, minimum=5, maximum=8), None, None)
-    publications.get_point.return_value = published_door_point(state, width)
+    publications.get_point.return_value = PublishedDoorPoint.from_publication(state, width)
     app, _ = build_app(range_publication=publications)
     with TestClient(app) as client:
         response = client.get(f"{BASE}/7/at/{width}")

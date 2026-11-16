@@ -81,6 +81,41 @@ class NormalizedExpansion:
     branches: tuple[NormalizedBranch, ...]
     diagnostics: tuple[ExpansionDiagnostic, ...] = ()
 
+    @classmethod
+    def from_source(cls, source: DoorExpansion) -> NormalizedExpansion:
+        """Compile supported claims; failures stay attached to their source fields.
+
+        Source record-breaking domains and completion claims are not eligibility
+        constraints. Only branch.domain and structured parameter domains restrict
+        membership. Names are case-sensitive; prose meanings are not interpreted.
+        """
+        try:
+            parser = ExpressionParser(tuple(parameter.name for parameter in source.parameters))
+        except ExpressionError as error:
+            return cls(source, (), (ExpansionDiagnostic("parameters", "unsupported", str(error)),))
+        if not source.branches:
+            return cls(source, (), (ExpansionDiagnostic("branches", "missing", "No configurations supplied."),))
+        return cls(source, tuple(_normalize_branch(parser, branch, i) for i, branch in enumerate(source.branches)))
+
+    def evaluate(self, opening: tuple[int, int, int]) -> PointEvaluation:
+        """Evaluate each branch at a positive integer opening, without enumerating sizes.
+
+        Unknown domains produce unresolved membership. Outside branches do not
+        compete, and neither do unmapped ones, which lack an opening width or height.
+        Supported branches may still have unknown volume or timings; callers must inspect
+        metrics and diagnostics before ranking configurations.
+        """
+        if len(opening) != 3 or any(
+            type(value) is not int or value <= 0 or value.bit_length() > MAX_BITS for value in opening
+        ):
+            msg = "Opening size requires three positive integers of at most 256 bits."
+            raise ExpressionError(msg)
+        return PointEvaluation(
+            opening,
+            tuple(_evaluate_branch(self, branch, opening) for branch in self.branches),
+            self.diagnostics,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class PointConfiguration:
@@ -142,26 +177,6 @@ def _inverse(opening: tuple[Formula, ...], count: int) -> tuple[tuple[Fraction, 
                 scalar = matrix[row][column]
                 matrix[row] = [a - scalar * b for a, b in zip(matrix[row], matrix[column], strict=True)]
     return tuple(tuple(row[count:]) for row in matrix[:count])
-
-
-def normalize_expansion(source: DoorExpansion) -> NormalizedExpansion:
-    """Compile supported claims; failures stay attached to their source fields.
-
-    Source record-breaking domains and completion claims are not eligibility
-    constraints. Only branch.domain and structured parameter domains restrict
-    membership. Names are case-sensitive; prose meanings are not interpreted.
-    """
-    try:
-        parser = ExpressionParser(tuple(parameter.name for parameter in source.parameters))
-    except ExpressionError as error:
-        return NormalizedExpansion(source, (), (ExpansionDiagnostic("parameters", "unsupported", str(error)),))
-    if not source.branches:
-        return NormalizedExpansion(
-            source, (), (ExpansionDiagnostic("branches", "missing", "No configurations supplied."),)
-        )
-    return NormalizedExpansion(
-        source, tuple(_normalize_branch(parser, branch, i) for i, branch in enumerate(source.branches))
-    )
 
 
 def _normalize_branch(parser: ExpressionParser, source: ExpansionBranch, index: int) -> NormalizedBranch:
@@ -273,25 +288,6 @@ def _contains(parameter: ExpansionParameter, value: int) -> bool | None:
     if not supported:
         return False
     return True if parameter.maximum_kind != "unknown" else None
-
-
-def evaluate_expansion(expansion: NormalizedExpansion, opening: tuple[int, int, int]) -> PointEvaluation:
-    """Evaluate each branch at a positive integer opening, without enumerating sizes.
-
-    Unknown domains produce unresolved membership. Outside branches do not
-    compete, and neither do unmapped ones, which lack an opening width or height. Supported branches may still have unknown volume or
-    timings; callers must inspect metrics and diagnostics before ranking configurations.
-    """
-    if len(opening) != 3 or any(
-        type(value) is not int or value <= 0 or value.bit_length() > MAX_BITS for value in opening
-    ):
-        msg = "Opening size requires three positive integers of at most 256 bits."
-        raise ExpressionError(msg)
-    return PointEvaluation(
-        opening,
-        tuple(_evaluate_branch(expansion, branch, opening) for branch in expansion.branches),
-        expansion.diagnostics,
-    )
 
 
 def _evaluate_branch(

@@ -23,7 +23,6 @@ from squid.accounts.domain import (
     MergePreview,
     PublicCreatorProfile,
     RecentAccountProof,
-    present_public_profile,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
@@ -387,7 +386,7 @@ class AccountService:
         """Return what a stranger may see of one creator, following merge redirects."""
         async with self._uow_factory() as uow:
             record = await uow.accounts.get_creator_profile_record(public_id)
-            return None if record is None else present_public_profile(record)
+            return None if record is None else PublicCreatorProfile.from_record(record)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Fetch a linked Java identity's current name from Mojang and reconcile its credit.

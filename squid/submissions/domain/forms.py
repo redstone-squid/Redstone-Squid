@@ -246,6 +246,63 @@ class FormField:
         """Return whether this field participates for the supplied draft context."""
         return origin in self.origins and (self.visible_when is None or self.visible_when.matches(answers))
 
+    def for_purpose(self, purpose: FormPurpose) -> FormField:
+        """Return this field with the overrides for one form purpose applied."""
+        rules = self.edit_rules
+        if purpose is not FormPurpose.EDIT or rules is None:
+            return self
+        return replace(
+            self,
+            required=self.required if rules.required is None else rules.required,
+            constraints=self.constraints if rules.constraints is None else rules.constraints,
+        )
+
+    def validate_value(self, value: JSONValue) -> str | None:
+        """Return a validation reason code or None, without checking dynamic options."""
+        if not _matches_kind(value, self.value_kind):
+            return "wrong_type"
+        if (
+            self.id in LINK_FIELDS
+            and isinstance(value, list)
+            and any(not isinstance(url, str) or not valid_link_url(url) for url in value)
+        ):
+            return "wrong_type"
+        constraints = self.constraints
+        if constraints.must_equal is not None and value != constraints.must_equal:
+            return "required_value"
+        if self.value_kind in {ValueKind.INTEGER, ValueKind.NUMBER, ValueKind.GAME_TICKS}:
+            assert isinstance(value, int | float) and not isinstance(value, bool)
+            if constraints.minimum is not None and value < constraints.minimum:
+                return "below_minimum"
+            if constraints.maximum is not None and value > constraints.maximum:
+                return "above_maximum"
+        if self.value_kind is ValueKind.STRING:
+            assert isinstance(value, str)
+            if constraints.min_length is not None and len(value) < constraints.min_length:
+                return "too_short"
+            if constraints.max_length is not None and len(value) > constraints.max_length:
+                return "too_long"
+        if self.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST}:
+            assert isinstance(value, Sequence) and not isinstance(value, str | bytes)
+            if constraints.min_items is not None and len(value) < constraints.min_items:
+                return "too_few_items"
+            if constraints.max_items is not None and len(value) > constraints.max_items:
+                return "too_many_items"
+            if constraints.min_length is not None and any(
+                isinstance(item, str) and len(item) < constraints.min_length for item in value
+            ):
+                return "too_short"
+            if constraints.max_length is not None and any(
+                isinstance(item, str) and len(item) > constraints.max_length for item in value
+            ):
+                return "too_long"
+        if self.options:
+            allowed = {option.value for option in self.options}
+            supplied = value if isinstance(value, Sequence) and not isinstance(value, str | bytes) else (value,)
+            if any(item not in allowed for item in supplied):
+                return "unknown_option"
+        return None
+
 
 @dataclass(frozen=True, slots=True)
 class FormSection:
@@ -408,7 +465,7 @@ class FormManifest:
                 if item.required and require_complete:
                     errors[item.id] = "required"
                 continue
-            error = _validate_value(item, value)
+            error = item.validate_value(value)
             if error is not None:
                 errors[item.id] = error
         return errors
@@ -451,69 +508,12 @@ class FormManifest:
 def _sections_for(sections: tuple[FormSection, ...], purpose: FormPurpose) -> tuple[FormSection, ...]:
     projected: list[FormSection] = []
     for section in sections:
-        fields = tuple(_field_for(item, purpose) for item in section.fields if purpose in item.purposes)
+        fields = tuple(item.for_purpose(purpose) for item in section.fields if purpose in item.purposes)
         if not fields:
             continue
         title = section.edit_title if purpose is FormPurpose.EDIT and section.edit_title is not None else section.title
         projected.append(replace(section, title=title, fields=fields))
     return tuple(projected)
-
-
-def _field_for(item: FormField, purpose: FormPurpose) -> FormField:
-    rules = item.edit_rules
-    if purpose is not FormPurpose.EDIT or rules is None:
-        return item
-    return replace(
-        item,
-        required=item.required if rules.required is None else rules.required,
-        constraints=item.constraints if rules.constraints is None else rules.constraints,
-    )
-
-
-def _validate_value(field: FormField, value: JSONValue) -> str | None:
-    if not _matches_kind(value, field.value_kind):
-        return "wrong_type"
-    if (
-        field.id in LINK_FIELDS
-        and isinstance(value, list)
-        and any(not isinstance(url, str) or not valid_link_url(url) for url in value)
-    ):
-        return "wrong_type"
-    constraints = field.constraints
-    if constraints.must_equal is not None and value != constraints.must_equal:
-        return "required_value"
-    if field.value_kind in {ValueKind.INTEGER, ValueKind.NUMBER, ValueKind.GAME_TICKS}:
-        assert isinstance(value, int | float) and not isinstance(value, bool)
-        if constraints.minimum is not None and value < constraints.minimum:
-            return "below_minimum"
-        if constraints.maximum is not None and value > constraints.maximum:
-            return "above_maximum"
-    if field.value_kind is ValueKind.STRING:
-        assert isinstance(value, str)
-        if constraints.min_length is not None and len(value) < constraints.min_length:
-            return "too_short"
-        if constraints.max_length is not None and len(value) > constraints.max_length:
-            return "too_long"
-    if field.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST}:
-        assert isinstance(value, Sequence) and not isinstance(value, str | bytes)
-        if constraints.min_items is not None and len(value) < constraints.min_items:
-            return "too_few_items"
-        if constraints.max_items is not None and len(value) > constraints.max_items:
-            return "too_many_items"
-        if constraints.min_length is not None and any(
-            isinstance(item, str) and len(item) < constraints.min_length for item in value
-        ):
-            return "too_short"
-        if constraints.max_length is not None and any(
-            isinstance(item, str) and len(item) > constraints.max_length for item in value
-        ):
-            return "too_long"
-    if field.options:
-        allowed = {option.value for option in field.options}
-        supplied = value if isinstance(value, Sequence) and not isinstance(value, str | bytes) else (value,)
-        if any(item not in allowed for item in supplied):
-            return "unknown_option"
-    return None
 
 
 def _matches_kind(value: JSONValue, kind: ValueKind) -> bool:

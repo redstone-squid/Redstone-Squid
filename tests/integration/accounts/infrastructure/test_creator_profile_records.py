@@ -14,7 +14,7 @@ from squid.accounts.domain import (
     ClaimMethod,
     IdentityProvider,
     ProfileUpdate,
-    present_public_profile,
+    PublicCreatorProfile,
 )
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import CreatorAlias
@@ -177,7 +177,7 @@ async def test_record_follows_a_merge_redirect(repository: UnitOfWorkFactory[Sql
     assert record.account_id == surviving.id
     assert record.public_id == retired_id
     assert record.canonical_public_id == surviving.public_creator_id
-    assert present_public_profile(record).was_redirected
+    assert PublicCreatorProfile.from_record(record).was_redirected
 
 
 async def test_merge_leaves_the_surviving_profile_intact(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:

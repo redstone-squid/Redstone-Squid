@@ -1,4 +1,4 @@
-"""What a stranger sees: the visibility matrix applied by `present_public_profile`."""
+"""What a stranger sees: the visibility matrix applied by `PublicCreatorProfile.from_record`."""
 
 from dataclasses import replace
 from uuid import UUID
@@ -10,7 +10,7 @@ from squid.accounts.domain import (
     CreditedAlias,
     IdentityProvider,
     ProfileLink,
-    present_public_profile,
+    PublicCreatorProfile,
 )
 from squid.accounts.models import AccountIdentity, AccountProfile
 
@@ -49,7 +49,7 @@ class TestVisibleProfile:
             links=(ProfileLink("Site", "https://example.com"),),
             avatar_identity_id=2,
         )
-        public = present_public_profile(record(profile))
+        public = PublicCreatorProfile.from_record(record(profile))
         assert not public.hidden
         assert public.display_name == "Notch"
         assert public.bio == "I build things"
@@ -63,7 +63,7 @@ class TestVisibleProfile:
         assert public.aliases == (CreditedAlias("Notch", build_count=3),)
 
     def test_public_identity_carries_no_verification_timestamp_or_id(self) -> None:
-        public = present_public_profile(record(AccountProfile(account_id=7)))
+        public = PublicCreatorProfile.from_record(record(AccountProfile(account_id=7)))
         assert not any(hasattr(identity, "verified_at") for identity in public.identities)
         assert not any(hasattr(identity, "id") for identity in public.identities)
 
@@ -71,29 +71,29 @@ class TestVisibleProfile:
 class TestHiddenIdentities:
     def test_hidden_identity_is_stripped(self) -> None:
         hidden_discord = replace(DISCORD, is_public=False)
-        public = present_public_profile(record(AccountProfile(account_id=7), hidden_discord, JAVA))
+        public = PublicCreatorProfile.from_record(record(AccountProfile(account_id=7), hidden_discord, JAVA))
         assert [identity.provider for identity in public.identities] == [IdentityProvider.JAVA]
 
     def test_avatar_does_not_leak_a_hidden_identity(self) -> None:
         hidden_java = replace(JAVA, is_public=False)
         profile = AccountProfile(account_id=7, avatar_identity_id=2)
-        public = present_public_profile(record(profile, DISCORD, hidden_java))
+        public = PublicCreatorProfile.from_record(record(profile, DISCORD, hidden_java))
         assert public.avatar_url is None
 
     def test_avatar_clears_when_the_source_identity_is_gone(self) -> None:
         profile = AccountProfile(account_id=7, avatar_identity_id=99)
-        assert present_public_profile(record(profile)).avatar_url is None
+        assert PublicCreatorProfile.from_record(record(profile)).avatar_url is None
 
     def test_java_avatar_derives_from_the_uuid(self) -> None:
         profile = AccountProfile(account_id=7, avatar_identity_id=2)
-        public = present_public_profile(record(profile))
+        public = PublicCreatorProfile.from_record(record(profile))
         assert public.avatar_url == f"https://mc-heads.net/avatar/{JAVA.subject}"
 
     def test_discord_avatar_needs_a_stored_key(self) -> None:
         profile = AccountProfile(account_id=7, avatar_identity_id=1)
-        assert present_public_profile(record(profile)).avatar_url is not None
+        assert PublicCreatorProfile.from_record(record(profile)).avatar_url is not None
         keyless = replace(DISCORD, avatar_key=None)
-        assert present_public_profile(record(profile, keyless, JAVA)).avatar_url is None
+        assert PublicCreatorProfile.from_record(record(profile, keyless, JAVA)).avatar_url is None
 
 
 class TestHiddenProfile:
@@ -107,7 +107,7 @@ class TestHiddenProfile:
             avatar_identity_id=2,
             hidden=True,
         )
-        public = present_public_profile(record(profile))
+        public = PublicCreatorProfile.from_record(record(profile))
         assert public.hidden
         assert public.aliases == (CreditedAlias("Notch", build_count=3),)
         assert public.display_name is None
@@ -119,7 +119,7 @@ class TestHiddenProfile:
         assert public.joined_at is None
 
     def test_hidden_profile_keeps_its_public_id_so_builds_still_resolve(self) -> None:
-        public = present_public_profile(record(AccountProfile(account_id=7, hidden=True)))
+        public = PublicCreatorProfile.from_record(record(AccountProfile(account_id=7, hidden=True)))
         assert public.public_id == PUBLIC_ID
 
 
@@ -127,9 +127,9 @@ class TestRedirects:
     def test_merged_creator_reports_its_canonical_id(self) -> None:
         canonical = UUID("22222222-2222-4222-8222-222222222222")
         base = record(AccountProfile(account_id=7))
-        public = present_public_profile(replace(base, canonical_public_id=canonical))
+        public = PublicCreatorProfile.from_record(replace(base, canonical_public_id=canonical))
         assert public.was_redirected
         assert public.canonical_public_id == canonical
 
     def test_unmerged_creator_is_not_redirected(self) -> None:
-        assert not present_public_profile(record(AccountProfile(account_id=7))).was_redirected
+        assert not PublicCreatorProfile.from_record(record(AccountProfile(account_id=7))).was_redirected

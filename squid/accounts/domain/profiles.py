@@ -1,7 +1,7 @@
 """Creator profile content and visibility rules.
 
 Profile text is separate from CreatorAlias build credit. Changing a display name
-does not move credit. present_public_profile applies visibility before a profile
+does not move credit. PublicCreatorProfile.from_record applies visibility before a profile
 is exposed through any transport.
 """
 
@@ -214,7 +214,7 @@ class CreditedAlias:
 class CreatorProfileRecord:
     """A creator's profile, identities, and credits before visibility is applied.
 
-    Pass through present_public_profile before exposing this record publicly.
+    Pass through PublicCreatorProfile.from_record before exposing this record publicly.
     """
 
     public_id: UUID
@@ -247,6 +247,50 @@ class PublicCreatorProfile:
         """Whether the requested public identifier belonged to a merged account."""
         return self.canonical_public_id is not None and self.canonical_public_id != self.public_id
 
+    @classmethod
+    def from_record(cls, record: CreatorProfileRecord) -> PublicCreatorProfile:
+        """Return the public view of a creator profile.
+
+        A hidden profile still exposes its public ID, aliases, and build counts so
+        build attribution remains available. Other profile fields are omitted. Visible
+        profiles include only public identities, including when choosing an avatar.
+        """
+        aliases = record.aliases
+        if record.profile.hidden:
+            return cls(
+                public_id=record.public_id,
+                hidden=True,
+                aliases=aliases,
+                canonical_public_id=record.canonical_public_id,
+            )
+
+        visible = tuple(identity for identity in record.identities if identity.is_public)
+        avatar_source = next(
+            (identity for identity in visible if identity.id == record.profile.avatar_identity_id),
+            None,
+        )
+        # A hidden identity must not leak through its own avatar: a Java head is the UUID, and a
+        # Discord avatar URL is the snowflake.
+        avatar_url = None if avatar_source is None else avatar_url_for(avatar_source)
+        return cls(
+            public_id=record.public_id,
+            hidden=False,
+            aliases=aliases,
+            canonical_public_id=record.canonical_public_id,
+            display_name=record.profile.display_name,
+            bio=record.profile.bio,
+            pronouns=record.profile.pronouns,
+            links=record.profile.links,
+            avatar_url=avatar_url,
+            joined_at=record.joined_at,
+            identities=tuple(
+                IdentityDetails(
+                    provider=identity.provider, subject=identity.subject, display_name=identity.display_name
+                )
+                for identity in visible
+            ),
+        )
+
 
 def avatar_url_for(identity: AccountIdentity) -> str | None:
     """Return the rendered avatar for *identity*, or `None` when the provider cannot supply one."""
@@ -259,48 +303,6 @@ def avatar_url_for(identity: AccountIdentity) -> str | None:
             return DISCORD_AVATAR_URL_TEMPLATE.format(subject=identity.subject, key=identity.avatar_key)
         case IdentityProvider.BEDROCK:
             return None
-
-
-def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile:
-    """Return the public view of a creator profile.
-
-    A hidden profile still exposes its public ID, aliases, and build counts so
-    build attribution remains available. Other profile fields are omitted. Visible
-    profiles include only public identities, including when choosing an avatar.
-    """
-    aliases = record.aliases
-    if record.profile.hidden:
-        return PublicCreatorProfile(
-            public_id=record.public_id,
-            hidden=True,
-            aliases=aliases,
-            canonical_public_id=record.canonical_public_id,
-        )
-
-    visible = tuple(identity for identity in record.identities if identity.is_public)
-    avatar_source = next(
-        (identity for identity in visible if identity.id == record.profile.avatar_identity_id),
-        None,
-    )
-    # A hidden identity must not leak through its own avatar: a Java head is the UUID, and a
-    # Discord avatar URL is the snowflake.
-    avatar_url = None if avatar_source is None else avatar_url_for(avatar_source)
-    return PublicCreatorProfile(
-        public_id=record.public_id,
-        hidden=False,
-        aliases=aliases,
-        canonical_public_id=record.canonical_public_id,
-        display_name=record.profile.display_name,
-        bio=record.profile.bio,
-        pronouns=record.profile.pronouns,
-        links=record.profile.links,
-        avatar_url=avatar_url,
-        joined_at=record.joined_at,
-        identities=tuple(
-            IdentityDetails(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
-            for identity in visible
-        ),
-    )
 
 
 @dataclass(frozen=True, slots=True)
