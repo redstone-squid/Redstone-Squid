@@ -9,6 +9,7 @@ import discord
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
+from squid.bot.notification_text import notification_build_id, notification_details
 from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
@@ -20,7 +21,7 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
-from squid_i18n import md_tr
+from squid_i18n import discord_text, md_tr, resolve_text
 from squid_ui.content.text import Text, localization_scope
 
 logger = logging.getLogger(__name__)
@@ -128,36 +129,8 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
 
 
 def delivery_message(delivery: PendingNotificationDelivery) -> Text:
-    """Build deferred DM text from a materialized notification payload."""
-    build_id = delivery.payload.get("build_id")
-    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
-        if isinstance(build_id, int):
-            return md_tr(
-                t"""
-                notifications-build-review-link =
-                    A new build is awaiting staff review.
-                    Open it in Discord with `/build browse id:{build_id!s}`.
-                """,
-            )
-        return tr(t"notifications-build-awaiting-review = A new build is awaiting staff review.")
-    if delivery.kind is NotificationKind.RECORD_GAINED:
-        raw_records = delivery.payload.get("records", [])
-        count = len(raw_records) if isinstance(raw_records, list) else 1
-        return md_tr(
-            t"""
-            bot-notifications-a-credited-build-gained-record = {{ $count ->
-                [one] A credited build gained {count} record.
-               *[other] A credited build gained {count} records.
-            }}
-            """,
-        )
-    if delivery.kind is NotificationKind.BUILD_CONFIRMED:
-        return tr(t"bot-notifications-your-build-was-confirmed = Your build was confirmed.")
-    if delivery.kind is NotificationKind.BUILD_DENIED:
-        return tr(t"bot-notifications-your-build-was-denied = Your build was denied.")
-    if delivery.kind is NotificationKind.CREATOR_BUILD_CONFIRMED:
-        return tr(t"notifications-followed-creator-build = A creator you follow has a newly confirmed build.")
-    return tr(t"notifications-build-ready = A build notification is available.")
+    """Build the same contextual message shown in the notification inbox."""
+    return notification_details(delivery.kind, delivery.payload)
 
 
 def render_delivery(
@@ -171,13 +144,27 @@ def render_delivery(
     Staff-review notifications retain their Discord instructions and do not receive
     a site link, even when `site_url` is configured.
     """
+    rendered = discord_text(
+        resolve_text(delivery_message(delivery), localization_for(locale)), escape=discord.utils.escape_markdown
+    )
+    build_id = notification_build_id(delivery.payload)
+    if build_id is not None:
+        if site_url and delivery.kind is not NotificationKind.STAFF_BUILD_SUBMITTED:
+            rendered += f"\n{site_url.rstrip('/')}/builds/{build_id}"
+        else:
+            with localization_scope(localization_for(locale)):
+                rendered += (
+                    "\n"
+                    + md_tr(
+                        t"notifications-open-in-discord = Open it in Discord with `/build browse id:{build_id!s}`."
+                    ).resolve()
+                )
     with localization_scope(localization_for(locale)):
-        rendered = delivery_message(delivery).resolve()
-    build_id = delivery.payload.get("build_id")
-    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
-        return rendered
-    build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
-    return f"{rendered}\n{build_link}" if build_link is not None else rendered
+        return (
+            rendered
+            + "\n\n"
+            + md_tr(t"notifications-manage-hint = View your inbox and manage updates with `/notifications`.").resolve()
+        )
 
 
 async def setup(bot: Any) -> None:

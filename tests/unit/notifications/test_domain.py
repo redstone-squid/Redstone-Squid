@@ -2,13 +2,17 @@
 
 from uuid import UUID
 
+import discord
 import pytest
 
 from squid.bot import notifications as notification_module
+from squid.bot.notification_text import notification_build_id, notification_details
 from squid.bot.notifications import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
+from squid.core.i18n import localization_for
 from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
 from squid.notifications.domain import NotificationKind
+from squid_i18n import discord_text, resolve_text
 from squid_ui.content.text import Localization
 
 
@@ -71,7 +75,8 @@ def test_delivery_renderer_uses_configured_public_site_link() -> None:
     )
 
     assert render_delivery(delivery, "https://example.test") == (
-        "A credited build gained 2 records.\nhttps://example.test/builds/42"
+        "Build #42 gained 2 records.\n• Fastest\n• Smallest\nhttps://example.test/builds/42\n\n"
+        "View your inbox and manage updates with `/notifications`."
     )
 
 
@@ -89,7 +94,10 @@ def test_staff_submission_delivery_uses_pending_review_command_not_public_link()
 
     rendered = render_delivery(delivery, "https://example.test")
 
-    assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:42`."
+    assert rendered == (
+        "Build #42 is awaiting staff review.\nOpen it in Discord with `/build browse id:42`.\n\n"
+        "View your inbox and manage updates with `/notifications`."
+    )
 
 
 def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -108,15 +116,41 @@ def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatc
         "localization_for",
         lambda locale: Localization(
             locale=locale or "en",
-            resources=("bot-notifications-your-build-was-confirmed = 你的作品已确认。",),
+            resources=("notifications-confirmed-summary = { $build } 已确认。",),
         ),
     )
 
     assert render_delivery(delivery, "https://example.test", locale="zh-CN") == (
-        "你的作品已确认。\nhttps://example.test/builds/42"
+        "Build #42 已确认。\nhttps://example.test/builds/42\n\n"
+        "View your inbox and manage updates with `/notifications`."
     )
 
 
 def test_notification_management_is_one_slash_workspace() -> None:
     assert NotificationCog.__cog_commands__ == []
     assert {command.name for command in NotificationCog.__cog_app_commands__} == {"notifications"}
+
+
+@pytest.mark.parametrize("build_id", [None, True, 0, -1, "42"])
+def test_notification_ignores_invalid_build_ids(build_id: object) -> None:
+    assert notification_build_id({"build_id": build_id}) is None
+
+
+def test_record_details_bound_large_groups_and_escape_markdown() -> None:
+    payload = {"build_id": 42, "records": [{"title": "**Fastest** " + "x" * 300}] * 20}
+    rendered = discord_text(
+        resolve_text(notification_details(NotificationKind.RECORD_GAINED, payload), localization_for("en")),
+        escape=discord.utils.escape_markdown,
+    )
+
+    assert rendered.startswith("Build #42 gained 20 records.")
+    assert rendered.count("• ") == 5
+    assert "…and 15 more records." in rendered
+    assert "\\*\\*Fastest\\*\\*" in rendered
+    assert len(rendered) < 1000
+
+
+def test_record_notification_without_details_does_not_invent_a_count() -> None:
+    assert notification_details(NotificationKind.RECORD_GAINED, {"build_id": 42}).resolve() == (
+        "Build #42 gained records."
+    )

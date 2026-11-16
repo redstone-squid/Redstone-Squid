@@ -361,3 +361,30 @@ async def test_tag_filter_keeps_false_and_zero_as_exact_values(
     assert saved.tags[0].operator == "exact"
     assert saved.tags[0].value == value
     assert type(saved.tags[0].value) is type(value)
+
+
+async def test_inbox_selection_shows_build_context_and_routed_action() -> None:
+    screen = make_screen().screen
+    await screen.on_load()
+
+    assert "Build #9 was confirmed." in labels(render_tree(screen.inbox))
+    assert "Open build" not in labels(render_tree(screen.inbox))
+    await choose(screen.inbox, "inbox", "3")
+
+    details = screen.inbox._selected_details()
+    assert len(details) == 1
+    section = details[0]
+    assert isinstance(section, sl.primitives.Section)
+    assert isinstance(section.accessory, sl.primitives.RoutedButton)
+    assert "/builds/9" in section.accessory.route_id
+    assert "Open build" in labels(render_tree(screen.inbox))
+
+
+async def test_inbox_hides_action_for_notification_without_a_build() -> None:
+    screen = make_screen().screen
+    await screen.on_load()
+    screen.inbox._inbox[0].payload = {}
+    await choose(screen.inbox, "inbox", "3")
+
+    assert "Open build" not in labels(render_tree(screen.inbox))
+    assert "A build was confirmed." in labels(render_tree(screen.inbox))

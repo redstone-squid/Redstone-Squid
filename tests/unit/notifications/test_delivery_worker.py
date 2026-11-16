@@ -113,7 +113,10 @@ async def test_delivery_disables_mentions_and_completes_the_claim_once(worker: D
 
     worker.send.assert_awaited_once()
     assert worker.send.await_args is not None
-    assert worker.send.await_args.args == ("Your build was confirmed.\nhttps://example.test/builds/42",)
+    assert worker.send.await_args.args == (
+        "Build #42 was confirmed.\nhttps://example.test/builds/42\n\n"
+        "View your inbox and manage updates with `/notifications`.",
+    )
     assert worker.send.await_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     assert worker.send.await_args.kwargs["nonce"] == "1229782938247303441"
     assert worker.repository.status == "completed"

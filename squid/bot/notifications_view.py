@@ -13,6 +13,8 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
+from squid.bot.navigation.controls import open_address
+from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -589,7 +591,11 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Reds
         return (
             sl.section(
                 sl.heading(tr(t"notifications-inbox-heading = Recent notifications")),
-                sl.note(tr(t"notifications-inbox-help = Select notifications to mark them read or unread.")),
+                sl.note(
+                    tr(
+                        t"notifications-inbox-help = Select a notification to see details and open its build, or select several to change their read state."
+                    )
+                ),
             ),
             sl.choices(
                 *(
@@ -607,6 +613,7 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Reds
                 minimum=0,
                 maximum=len(self._inbox),
             ),
+            *self._selected_details(),
             sl.action_controls(
                 sl.action_control(
                     tr(t"bot-notifications-view-mark-selected-read = Mark selected read"),
@@ -652,21 +659,27 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Reds
 
     @staticmethod
     def _inbox_label(notification: InboxNotification) -> sl.TextLike:
-        match notification.kind.value:
-            case "build_confirmed":
-                return tr(t"bot-notifications-view-build-confirmed = Build confirmed")
-            case "build_denied":
-                return tr(t"bot-notifications-view-build-denied = Build denied")
-            case "creator_build_confirmed":
-                return tr(t"bot-notifications-view-creator-build-confirmed = Creator build confirmed")
-            case "record_gained":
-                return tr(t"bot-notifications-view-record-gained = Record gained")
-            case "staff_build_submitted":
-                return tr(t"bot-notifications-view-build-awaiting-review = Build awaiting review")
-            # The cases above cover NotificationKind exhaustively today; the default is what a
-            # kind added to the enum later renders as instead of falling off the end.
-            case _:  # pyright: ignore[reportUnnecessaryComparison]
-                return tr(t"bot-notifications-view-build-notification = Build notification")
+        return notification_summary(notification.kind, notification.payload)
+
+    def _selected_details(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        if len(self.selected_inbox_ids) != 1:
+            return ()
+        notification = next((item for item in self._inbox if str(item.id) == self.selected_inbox_ids[0]), None)
+        if notification is None:
+            return ()
+        details = sl.primitives.Text(notification_details(notification.kind, notification.payload))
+        build_id = notification_build_id(notification.payload)
+        if build_id is None:
+            return (details,)
+        return (
+            sl.primitives.Section(
+                (details,),
+                sl.primitives.RoutedButton(
+                    tr(t"notifications-open-build = Open build"),
+                    open_address.id(address=f"/builds/{build_id}"),
+                ),
+            ),
+        )
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
