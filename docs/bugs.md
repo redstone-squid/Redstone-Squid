@@ -32,7 +32,7 @@ it — the check it guards against is already handled two lines below.
 
 ## `on_message` build inference has no error boundary
 
-`SubmissionCog.infer_build_from_message` (`squid/bot/submission/submit.py:320-341`) is a raw
+`BuildCommands.infer_build_from_message` (`squid/bot/submission/cog.py`) is a raw
 `on_message` listener that calls `ingest_message_bundle` → `BuildInferenceService.infer` →
 `VersionService.resolve_spec` with nothing catching exceptions along the way. When the AI-inferred
 `version_spec` names both editions, `VersionService._edition_from_spec`

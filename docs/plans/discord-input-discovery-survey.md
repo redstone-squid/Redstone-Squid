@@ -159,7 +159,8 @@ use one universal “record ID” picker for all three.
 
 ### Submission, saved-build editing, and schematics
 
-Sources: [submit.py](../../squid/bot/submission/submit.py),
+Sources: [cog.py](../../squid/bot/submission/cog.py),
+[form.py](../../squid/bot/submission/form.py),
 [sections.py](../../squid/bot/submission/ui/sections.py),
 [forms.py](../../squid/submissions/application/forms.py),
 [credit_text.py](../../squid/submissions/application/credit_text.py), and

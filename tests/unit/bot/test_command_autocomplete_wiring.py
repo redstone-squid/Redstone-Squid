@@ -22,7 +22,6 @@ COMMAND_MODULES = [
     "squid.bot.permissions_cog",
     "squid.bot.settings.cog",
     "squid.bot.starboard.cog",
-    "squid.bot.submission.edit",
     "squid.bot.catalogue.records",
     "squid.bot.catalogue.schematics.presentation",
     "squid.bot.submission.cog",

@@ -3875,57 +3875,6 @@
       "squid/bot/submission/consent_banner.py:60"
     ]
   },
-  "bot-submission-edit-cannot-use-options": {
-    "fingerprint": "2a6dfc50451b975710801b7c579c2ec276dcb909f2f28315f442561270415253",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/edit.py:83"
-    ]
-  },
-  "bot-submission-edit-error": {
-    "fingerprint": "74d4d9508bc5bd606ee14369b730275b81fa6999c049d59a777fbf0423e9364e",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/edit.py:62"
-    ]
-  },
-  "bot-submission-edit-no-build-with-that-id": {
-    "fingerprint": "4db4edeb06c9d0093d33ae91e144099ab18c8b0b568959d36e33bd914ed8e24c",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/edit.py:63"
-    ]
-  },
-  "bot-submission-edit-size-format": {
-    "fingerprint": "980c3a17800f8a537809a2e0f5f8ffd9ce6ea9bacee423f4378299e63dd000f5",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/edit.py:128"
-    ]
-  },
-  "bot-submission-edit-unknown-names": {
-    "fingerprint": "e8270cbcb5f336873a16b55daba47e2ac521a412d8204c5616f33e5e25f070ce",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "names",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/bot/submission/edit.py:164"
-    ]
-  },
   "bot-submission-records-build-kind": {
     "fingerprint": "b46f8c1ea4b58461dd11807dab3f232d01db6aa6c897c1378826e21a3bd183ab",
     "attributes": [],
@@ -6087,21 +6036,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/ui/build_edit.py:357"
-    ]
-  },
-  "build-editor-fields-unavailable": {
-    "fingerprint": "f3f2a6a271ad81412bef800ff504c44e6adee754be4b7a5b7ad3977ee41e9321",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "names",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/bot/submission/edit.py:159"
     ]
   },
   "build-editor-open-new-editor": {

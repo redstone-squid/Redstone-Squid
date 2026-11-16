@@ -1152,21 +1152,6 @@ bot-submission-consent-banner-discord-account = Discord account
 # squid/bot/submission/consent_banner.py:60
 bot-submission-consent-banner-value = { $user_mention } ({ $user_id })
 
-# squid/bot/submission/edit.py:83
-bot-submission-edit-cannot-use-options = Cannot use these options
-
-# squid/bot/submission/edit.py:62
-bot-submission-edit-error = Error
-
-# squid/bot/submission/edit.py:63
-bot-submission-edit-no-build-with-that-id = No build with that ID.
-
-# squid/bot/submission/edit.py:128
-bot-submission-edit-size-format = Enter sizes as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
-
-# squid/bot/submission/edit.py:164
-bot-submission-edit-unknown-names = Not in the catalogue: { $names }. Choose from the catalogue, or propose a new tag.
-
 # squid/bot/catalogue/records.py:301
 bot-submission-records-build-kind = Build kind
 
@@ -1830,9 +1815,6 @@ build-editor-edit-access-required-views = Only the pending build's submitter or 
 
 # squid/bot/submission/ui/build_edit.py:357
 build-editor-expired = This editor expired. Unsaved changes were discarded.
-
-# squid/bot/submission/edit.py:159
-build-editor-fields-unavailable = This build has no { $names }. Open the workspace to see what it does have.
 
 # squid/bot/submission/ui/build_edit.py:362
 build-editor-open-new-editor = Open new editor
