@@ -1,6 +1,6 @@
-"""Screen address declarations and resolution do not own Discord delivery scopes."""
+"""Screen routes are declared on opening classmethods; the router does not own Discord delivery scopes."""
 
-from dataclasses import dataclass
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -8,73 +8,88 @@ import pytest
 from asyncpg.pgproto.pgproto import UUID as AsyncpgUUID
 
 import squid_ui.ext.discord as sd
-from squid.bot.navigation.destinations import (
-    AccountDestination,
-    BuildDetail,
-    BuildIndex,
-    Destination,
-    DraftDetail,
-    DraftIndex,
+from squid.bot.navigation.router import (
+    InvalidAddress,
+    NavigationRequest,
+    ScreenOpening,
+    ScreenRoute,
+    ScreenRouter,
+    ScreenUnavailable,
+    screen_route,
 )
-from squid.bot.navigation.router import InvalidAddress, ScreenOpening, ScreenRouter, screen_route
 
 
-@screen_route("/builds", destination=BuildIndex)
-@screen_route("/builds/{build_id}", destination=BuildDetail)
 class Browser(sd.Screen):
     def render(self) -> tuple[()]:
         return ()
 
+    @screen_route("/builds")
+    @classmethod
+    async def index(cls, request: NavigationRequest) -> ScreenOpening:
+        return ScreenOpening(cls())
 
-@screen_route("/drafts", destination=DraftIndex, query=("inbox",))
+    @screen_route("/builds/{build_id}")
+    @classmethod
+    async def detail(cls, request: NavigationRequest, build_id: int) -> ScreenOpening:
+        return ScreenOpening(cls(), session_key=build_id)
+
+
 class Drafts(sd.Screen):
-    pass
+    @screen_route("/drafts")
+    @classmethod
+    async def index(cls, request: NavigationRequest, inbox: bool = False) -> ScreenOpening:
+        return ScreenOpening(cls())
+
+    @screen_route("/drafts/{draft_id}")
+    @classmethod
+    async def detail(cls, request: NavigationRequest, draft_id: UUID) -> ScreenOpening:
+        return ScreenOpening(cls())
 
 
-@screen_route("/drafts/{draft_id}", destination=DraftDetail)
-class Draft(sd.Screen):
-    pass
-
-
-@screen_route("/account", destination=AccountDestination, query=("tab",))
 class Account(sd.Screen):
-    pass
+    @screen_route("/account")
+    @classmethod
+    async def index(cls, request: NavigationRequest, tab: Literal["identity", "claims"] | None = None) -> ScreenOpening:
+        return ScreenOpening(cls())
 
 
 @pytest.fixture
 def router() -> ScreenRouter:
     router = ScreenRouter()
-    for screen, destination in (
-        (Browser, BuildIndex),
-        (Browser, BuildDetail),
-        (Drafts, DraftIndex),
-        (Draft, DraftDetail),
-        (Account, AccountDestination),
-    ):
-        router.register(screen, destination=destination, factory=AsyncMock())
+    router.register(Browser, Drafts, Account)
     router.freeze()
     return router
 
 
 @pytest.mark.parametrize(
-    ("destination", "address"),
+    ("route", "arguments", "address"),
     [
-        (BuildIndex(), "/builds"),
-        (BuildDetail(12), "/builds/12"),
-        (DraftIndex(), "/drafts"),
-        (DraftIndex(inbox=True), "/drafts?inbox=true"),
-        (DraftDetail(UUID(int=1)), "/drafts/00000000-0000-0000-0000-000000000001"),
+        (Browser.index, {}, "/builds"),
+        (Browser.detail, {"build_id": 12}, "/builds/12"),
+        (Drafts.index, {}, "/drafts"),
+        (Drafts.index, {"inbox": True}, "/drafts?inbox=true"),
+        (Drafts.detail, {"draft_id": UUID(int=1)}, "/drafts/00000000-0000-0000-0000-000000000001"),
         (
-            DraftDetail(AsyncpgUUID("00000000-0000-0000-0000-000000000001")),
+            Drafts.detail,
+            {"draft_id": AsyncpgUUID("00000000-0000-0000-0000-000000000001")},
             "/drafts/00000000-0000-0000-0000-000000000001",
         ),
-        (AccountDestination(), "/account"),
-        (AccountDestination("claims"), "/account?tab=claims"),
+        (Account.index, {}, "/account"),
+        (Account.index, {"tab": "claims"}, "/account?tab=claims"),
     ],
 )
-def test_round_trip(router: ScreenRouter, destination: Destination, address: str) -> None:
-    assert router.format(destination) == address
-    assert router.parse(address) == destination
+def test_round_trip(router: ScreenRouter, route: ScreenRoute[...], arguments: dict[str, Any], address: str) -> None:
+    assert router.url_for(route, **arguments) == address
+    match = router.parse(address)
+    assert match.route is route
+    # Parsed arguments fill in the defaults the address omits.
+    defaults = {name: parameter.default for name, parameter in route.signature.parameters.items()}
+    assert match.arguments == {**{k: v for k, v in defaults.items() if v is not route.signature.empty}, **arguments}
+
+
+def test_parse_supplies_defaults(router: ScreenRouter) -> None:
+    assert router.parse("/drafts").arguments == {"inbox": False}
+    assert router.parse("/account").arguments == {"tab": None}
 
 
 @pytest.mark.parametrize(
@@ -106,81 +121,196 @@ def test_invalid_addresses(router: ScreenRouter, address: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "destination",
+    ("route", "arguments"),
     [
-        BuildDetail(build_id=True),
-        BuildDetail(0),
-        BuildDetail("12"),  # type: ignore[arg-type]
-        DraftIndex(inbox=1),  # type: ignore[arg-type]
-        DraftDetail("00000000-0000-0000-0000-000000000001"),  # type: ignore[arg-type]
+        (Browser.detail, {"build_id": True}),
+        (Browser.detail, {"build_id": 0}),
+        (Browser.detail, {"build_id": "12"}),
+        (Drafts.index, {"inbox": 1}),
+        (Drafts.detail, {"draft_id": "00000000-0000-0000-0000-000000000001"}),
     ],
 )
-def test_invalid_typed_destinations(router: ScreenRouter, destination: Destination) -> None:
+def test_invalid_arguments(router: ScreenRouter, route: ScreenRoute[...], arguments: dict[str, Any]) -> None:
     with pytest.raises(InvalidAddress):
-        router.format(destination)
+        router.url_for(route, **arguments)
+
+
+def test_missing_argument_is_a_programming_error(router: ScreenRouter) -> None:
+    with pytest.raises(TypeError):
+        router.url_for(Browser.detail)  # type: ignore[missing-argument]
 
 
 def test_equal_integer_subclass_round_trip(router: ScreenRouter) -> None:
     class BuildId(int):
         pass
 
-    destination = BuildDetail(BuildId(12))
-    assert router.format(destination) == "/builds/12"
-    assert router.parse("/builds/12") == destination
+    assert router.url_for(Browser.detail, build_id=BuildId(12)) == "/builds/12"
+    assert router.parse("/builds/12").arguments == {"build_id": BuildId(12)}
 
 
 def test_default_query_is_omitted(router: ScreenRouter) -> None:
-    assert router.format(router.parse("/drafts?inbox=false")) == "/drafts"
+    match = router.parse("/drafts?inbox=false")
+    assert router.url_for(match.route, **match.arguments) == "/drafts"
 
 
-def test_decorator_preserves_class_and_does_not_inherit_routes() -> None:
+def test_routes_know_their_screen() -> None:
+    assert Browser.detail.owner is Browser
+    assert repr(Browser.detail) == "Browser.detail"
+
+
+async def test_route_is_callable_like_the_classmethod() -> None:
+    opening = await Browser.detail(MagicMock(), 7)
+    assert opening is not None
+    assert isinstance(opening.screen, Browser)
+    assert opening.session_key == 7
+
+
+def test_decorator_requires_a_classmethod() -> None:
+    async def plain(cls: type[Any], request: NavigationRequest) -> ScreenOpening: ...
+
+    with pytest.raises(TypeError, match="above @classmethod"):
+        screen_route("/plain")(plain)  # type: ignore[bad-argument-type]
+
+
+def test_registration_requires_routes_declared_on_the_exact_class() -> None:
     class Child(Browser):
         pass
 
-    assert screen_route("/builds", destination=BuildIndex)(Child) is Child
+    class Unroutable(sd.Screen):
+        pass
+
     router = ScreenRouter()
-    with pytest.raises(ValueError, match="exact Screen"):
-        router.register(Child, destination=BuildDetail, factory=AsyncMock())
+    with pytest.raises(ValueError, match="no screen routes"):
+        router.register(Child)
+    with pytest.raises(ValueError, match="no screen routes"):
+        router.register(Unroutable)
 
 
 def test_duplicates_and_ambiguous_paths() -> None:
     router = ScreenRouter()
-    router.register(Browser, destination=BuildDetail, factory=AsyncMock())
+    router.register(Browser)
     with pytest.raises(ValueError, match="already registered"):
-        router.register(Browser, destination=BuildDetail, factory=AsyncMock())
+        router.register(Browser)
 
-    @dataclass(frozen=True)
-    class Other(Destination):
-        id: int
-
-    @screen_route("/builds/{id}", destination=Other)
-    class OtherScreen(sd.Screen):
-        pass
+    class Other(sd.Screen):
+        @screen_route("/builds/{id}")
+        @classmethod
+        async def detail(cls, request: NavigationRequest, id: int) -> ScreenOpening:
+            return ScreenOpening(cls())
 
     with pytest.raises(ValueError, match="Ambiguous"):
-        router.register(OtherScreen, destination=Other, factory=AsyncMock())
+        router.register(Other)
 
 
 def test_frozen(router: ScreenRouter) -> None:
     with pytest.raises(RuntimeError, match="frozen"):
-        router.register(Browser, destination=BuildIndex, factory=AsyncMock())
+        router.register(Browser)
 
 
-async def test_resolution_and_delivery() -> None:
+def test_url_for_requires_a_registered_route() -> None:
+    with pytest.raises(InvalidAddress, match="Unregistered"):
+        ScreenRouter().url_for(Browser.index)
+
+
+def test_registration_rejects_path_parameters_the_opener_lacks() -> None:
+    class Invalid(sd.Screen):
+        @screen_route("/builds/{build_id}")
+        @classmethod
+        async def detail(cls, request: NavigationRequest, other: int = 1) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    with pytest.raises(ValueError, match="path parameter"):
+        ScreenRouter().register(Invalid)
+
+
+def test_registration_requires_constant_query_defaults() -> None:
+    class Invalid(sd.Screen):
+        @screen_route("/required")
+        @classmethod
+        async def index(cls, request: NavigationRequest, tab: int) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    with pytest.raises(ValueError, match="defaults"):
+        ScreenRouter().register(Invalid)
+
+
+def test_registration_requires_addressable_parameter_types() -> None:
+    class Invalid(sd.Screen):
+        @screen_route("/typed")
+        @classmethod
+        async def index(cls, request: NavigationRequest, tab: float = 1.0) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    with pytest.raises(ValueError, match="Unsupported"):
+        ScreenRouter().register(Invalid)
+
+
+async def test_open_delivers_the_screen_once_per_call(router: ScreenRouter) -> None:
     request = MagicMock(spec=sd.Request, respond=AsyncMock())
-    factory = AsyncMock(side_effect=lambda request, destination: ScreenOpening(sd.Response(Browser()), "session"))
-    router = ScreenRouter()
-    router.register(Browser, destination=BuildIndex, factory=factory)
-    first = await router.resolve(request, BuildIndex())
-    second = await router.resolve(request, BuildIndex())
-    assert first is not None
-    assert second is not None
-    assert first.response.content is not second.response.content
+    await router.open(request, Browser.detail, build_id=3)
+    await router.open(request, Browser.detail, build_id=3)
+    first, second = (call.args[0] for call in request.respond.await_args_list)
+    assert first is not second
+    assert request.respond.call_args.kwargs == {"session_key": 3}
+
+
+async def test_open_rejects_arguments_before_calling_the_opener(router: ScreenRouter) -> None:
+    request = MagicMock(spec=sd.Request, respond=AsyncMock())
+    with pytest.raises(InvalidAddress):
+        await router.open(request, Browser.detail, build_id=0)
     request.respond.assert_not_awaited()
-    await router.open(request, BuildIndex())
-    assert request.respond.await_count == 1
-    assert request.respond.call_args.kwargs == {"session_key": "session"}
-    factory.return_value = None
-    factory.side_effect = None
-    await router.open(request, BuildIndex())
-    assert request.respond.await_count == 1
+
+
+async def test_open_delivers_nothing_when_the_opener_handled_the_interaction() -> None:
+    class Consenting(sd.Screen):
+        @screen_route("/consent")
+        @classmethod
+        async def index(cls, request: NavigationRequest) -> ScreenOpening | None:
+            return None
+
+    router = ScreenRouter()
+    router.register(Consenting)
+    request = MagicMock(spec=sd.Request, respond=AsyncMock())
+    assert await router.open(request, Consenting.index) is None
+    request.respond.assert_not_awaited()
+
+
+@pytest.mark.parametrize("audience", ["personal", "public"])
+async def test_unavailable_is_delivered_under_the_screens_audience(audience: Literal["personal", "public"]) -> None:
+    class Missing(sd.Screen):
+        policy = sd.ResponseSpec(audience=audience)
+
+        @screen_route("/missing")
+        @classmethod
+        async def index(cls, request: NavigationRequest) -> ScreenOpening:
+            raise ScreenUnavailable("Nothing here.")
+
+    router = ScreenRouter()
+    router.register(Missing)
+    request = MagicMock(spec=sd.Request, respond=AsyncMock())
+    await router.open(request, Missing.index)
+    assert request.respond.call_args.kwargs == {"audience": audience}
+
+
+async def test_open_address_parses_then_opens(router: ScreenRouter) -> None:
+    request = MagicMock(spec=sd.Request, respond=AsyncMock())
+    await router.open_address(request, "/builds/5")
+    assert request.respond.call_args.kwargs == {"session_key": 5}
+    with pytest.raises(InvalidAddress):
+        await router.open_address(request, "/builds/five")
+
+
+def test_deferral_follows_the_screens_audience_policy() -> None:
+    class Shared(sd.Screen):
+        policy = sd.ResponseSpec(audience="public")
+
+        @screen_route("/shared")
+        @classmethod
+        async def index(cls, request: NavigationRequest) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    router = ScreenRouter()
+    router.register(Shared, Browser)
+    assert router.deferral(Shared.index) == "public"
+    # Screens default to a personal audience.
+    assert router.deferral(Browser.index) == "private"

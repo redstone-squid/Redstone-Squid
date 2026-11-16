@@ -28,15 +28,17 @@ issues for the submitter to fix; the panel shows which of these happened.
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from enum import Enum, auto
+from functools import partial
 from typing import Any, cast, override
 from uuid import UUID, uuid4
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.edit_controller import EditController
-from squid.bot.navigation.destinations import DraftDetail
-from squid.bot.navigation.router import screen_route
+from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
 from squid.bot.submission import draft_intake
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.sections import (
@@ -74,6 +76,7 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
+from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
@@ -409,7 +412,6 @@ class DraftWorkspace(sl.Reactive):
         return replacement.source_id
 
 
-@screen_route("/drafts/{draft_id}", destination=DraftDetail)
 class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     """The draft panel: an overview of every section, then Submit.
 
@@ -429,6 +431,27 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
+
+    @screen_route("/drafts/{draft_id}")
+    @classmethod
+    async def open_draft(cls, request: NavigationRequest, draft_id: UUID) -> ScreenOpening | None:
+        """Open one of the opener's drafts, after the account has consented."""
+        services = request.client.services
+        if await ensure_consented_account(request, services.accounts) is None:
+            return None
+        try:
+            screen = await draft_editor(
+                services,
+                draft_id,
+                changes=request.client.topic_bus.topic("submission_draft", str(draft_id)),
+                resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
+                render_card=lambda build: render_build_card(
+                    build, request.client.media_previews, schematic_summaries=services.schematic_summaries
+                ),
+            )
+        except DraftNotFoundError, DraftAccessDeniedError:
+            raise ScreenUnavailable(tr(t"navigation-draft-unavailable = That draft is unavailable.")) from None
+        return ScreenOpening(screen, session_key=sd.SessionKey.custom("draft", (request.user.id, str(draft_id))))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

@@ -8,7 +8,6 @@ from discord import Interaction
 
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
-from squid.bot.navigation.destinations import DraftDetail
 from squid.bot.routes import routes
 from squid.bot.submission.ui import inference, opening, recalculation
 from squid.bot.tags_view import TagsScreen
@@ -101,7 +100,8 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
 async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
     """Resolve durable identity and current authority before reopening a private draft."""
     request = await sd.request(interaction)
-    await request.client.screen_router.open(request, DraftDetail(UUID(draft_id)))
+    # Addressed rather than by screen class, which imports this module for its own control IDs.
+    await request.client.screen_router.open_address(request, f"/drafts/{UUID(draft_id)}")
 
 
 @builds.route("revision:{proposal_id}:reopen")

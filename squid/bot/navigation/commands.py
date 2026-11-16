@@ -27,10 +27,10 @@ class NavigationCommands(sd.Cog):
     async def open_screen(self, request: sd.Request[Self, RedstoneSquid], address: str) -> sd.CommandResult:
         router = request.client.screen_router
         try:
-            destination = router.parse(address)
+            match = router.parse(address)
         except InvalidAddress:
             return invalid_address_response()
-        return await router.open(request, destination)
+        return await router.open(request, match.route, **match.arguments)
 
 
 async def setup(bot: RedstoneSquid) -> None:

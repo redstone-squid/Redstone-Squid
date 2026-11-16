@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import override
+from typing import Literal, Self, override
 
 import anyio
 import discord
@@ -11,27 +11,33 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import account_target
-from squid.accounts.domain import AccountConsent, IdentityProvider
+from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.accounts.models import Account
 from squid.bot.accounts.claims import ClaimReviewComponent
-from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
-from squid.bot.accounts.overview import AccountOverview, ConsentRequest
+from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
+from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
-from squid.bot.navigation.destinations import AccountDestination, AccountTab
-from squid.bot.navigation.router import screen_route
+from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
 from squid.bot.ui import tr
+from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
+from squid.permissions.domain.catalogue import (
+    ACCOUNT_CLAIM_APPROVE,
+    ACCOUNT_CLAIM_LIST,
+    ACCOUNT_CLAIM_REJECT,
+    ACCOUNT_IDENTITY_REFRESH,
+    ACCOUNT_IDENTITY_REFRESH_ANY,
+)
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+type AccountTab = Literal["overview", "identity", "claims", "merge", "review"]
 
 
-@screen_route("/account", destination=AccountDestination, query=("tab",))
 class AccountWorkspace(sd.Screen):
     """Combine account linking, profile controls, creator claims, and account merges.
 
@@ -76,6 +82,73 @@ class AccountWorkspace(sd.Screen):
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
+
+    @classmethod
+    async def create(cls, request: NavigationRequest) -> Self:
+        """Build the workspace for the requesting user, refreshing their stored Discord avatar."""
+        actor = request.user
+        account = await request.client.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(actor.id)
+        )
+        if account is not None:
+            await refresh_discord_avatar_key(request, account, actor)
+
+        async def open_consent(
+            event: sd.ActionEvent,
+            answered: ConsentAnswer,
+            *,
+            preview: LinkPreview | None = None,
+            on_abandon: Callable[[], Awaitable[None]] | None = None,
+            timeout: float = 120.0,
+        ) -> bool:
+            press = event.context
+            message_root = press.root
+            assert message_root is not None, "a press always arrives from a mounted message"
+
+            async def completed(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
+                await answered(prompt, consent)
+                if consent is not None:
+                    await message_root.schedule()
+
+            return await request_consent(
+                event,
+                user_id=actor.id,
+                on_answer=completed,
+                preview=preview,
+                on_abandon=on_abandon,
+                timeout=timeout,
+            )
+
+        async def authorize_claim(node: PermissionNode) -> bool:
+            return await allows(request, node)
+
+        async def edit_actor() -> Actor:
+            return await request.client.actors.resolve(request, refresh=True)
+
+        return cls(
+            accounts=request.client.services.accounts,
+            edits=request.client.services.edits,
+            actor=edit_actor,
+            actor_id=actor.id,
+            account=account,
+            request_consent=open_consent,
+            can_review_claims=await allows(request, ACCOUNT_CLAIM_LIST),
+            can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
+            can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
+            authorize_claim=authorize_claim,
+            can_refresh_any=await allows(request, ACCOUNT_IDENTITY_REFRESH_ANY),
+            can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
+        )
+
+    @screen_route("/account")
+    @classmethod
+    async def open_account(cls, request: NavigationRequest, tab: AccountTab | None = None) -> ScreenOpening:
+        """Open the opener's account, at `tab` when they can use it."""
+        screen = await cls.create(request)
+        if tab is not None and tab not in screen.available_tabs:
+            raise ScreenUnavailable(tr(t"navigation-tab-unavailable = That account tab is unavailable."))
+        screen.initial_tab = tab
+        return ScreenOpening(screen)
 
     @property
     def available_tabs(self) -> frozenset[str]:
@@ -474,3 +547,19 @@ class _MergeForm(sl.forms.Form):
     title = tr(t"account-workspace-preview-account-merge = Preview account merge")
 
     code = sl.forms.TextField(label=tr(t"account-workspace-merge-code = Merge code"), maximum=100)
+
+
+async def refresh_discord_avatar_key(
+    request: NavigationRequest, account: Account, user: discord.Member | discord.User
+) -> None:
+    """Persist the supplied Discord user's avatar hash when it differs from the stored identity.
+
+    Opening the owner's account provides both the linked identity and a Discord
+    user object; public profile rendering can then use the stored hash.
+    """
+    identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
+    if account.id is None or identity is None or identity.id is None:
+        return
+    key = user.avatar.key if user.avatar is not None else None
+    if key != identity.avatar_key:
+        await request.client.services.accounts.record_identity_avatar_key(account.id, identity.id, key)

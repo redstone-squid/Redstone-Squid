@@ -82,23 +82,39 @@ a tree of regions supplies the joint alternative.
 
 ## Addressable destinations
 
-The bot's `ScreenRouter` resolves a destination into a fresh screen using the opening
+The bot's `ScreenRouter` opens a route by building a fresh screen with the opening
 request's identity and services. `/open address` is an unadvertised entrypoint; screens
 have no address-sharing controls. Supported addresses are `/builds`, `/builds/{build_id}`,
 `/drafts`, `/drafts?inbox=true`, `/drafts/{draft_id}`, `/account`, and `/account?tab=claims`
 (or another existing account tab). Account and draft-list addresses refer to the opener.
 
-Declare addresses on Screen classes with `@screen_route`, using a frozen destination
-dataclass. One class may declare several destinations. The decorator preserves the class
-and attaches metadata only; subclasses do not inherit declarations. Bind each destination
-to an async factory in `navigation.assembly.build_screen_router`, then freeze the router.
+Declare a route by decorating a classmethod on the screen with `@screen_route(path)`,
+above `@classmethod`:
 
-Factories receive `(request, destination)` and return `ScreenOpening`, containing an
-`sd.Response` and an optional session key. They load current data and check access. They
-may return a static error response, or `None` when an existing consent interaction has
-handled the request. They must construct fresh screens and leave delivery to the caller.
-`resolve` only calls the factory; `open` also delivers through the request's existing scope.
-Existing screen session policies still decide whether an older presentation is replaced.
+```python
+@screen_route("/builds/{build_id}")
+@classmethod
+async def open_detail(cls, request: NavigationRequest, build_id: int) -> ScreenOpening: ...
+```
+
+Names in `{braces}` are path parameters. Every other parameter is a query parameter and
+needs a default, which `url_for` leaves out of the address. Annotations choose the parsing:
+`int` (positive), `bool`, `UUID`, string `Literal`s, and an optional form of these. A class
+may declare several routes, and a subclass does not inherit them. List each screen once in
+`navigation.assembly.build_screen_router`; `register` fails for a screen with no routes.
+
+The method loads current data, checks access, and returns `ScreenOpening` with a fresh
+screen and an optional session key. It returns `None` when an existing consent flow has
+handled the interaction, and raises `ScreenUnavailable(message)` when there is nothing to
+show. It does not choose an audience: delivery and deferral both follow the screen's own
+`policy`, and the router sends the unavailable message under that audience. `open` also
+delivers through the request's existing scope, and the screen's session policy decides
+whether an older presentation is replaced.
+
+Refer to a route by its attribute, as in `router.open(request, BuildBrowseScreen.open_detail,
+build_id=12)` or `router.url_for(...)`. Arguments are type-checked against the method and
+checked again for addressability. Code that cannot import a screen class, such as a legacy
+control in a module the screen imports, can use `router.open_address(request, "/drafts/...")`.
 
 Persistent destination buttons use the existing Discord control router and delegate to
 `request.client.screen_router`. Keep these component IDs separate from screen addresses:

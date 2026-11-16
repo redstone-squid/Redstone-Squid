@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from typing import Any, Literal, cast, override
+from typing import Any, Literal, Self, cast, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -13,8 +13,8 @@ import squid_ui_widgets as sp
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import BoundEdit, EditController
-from squid.bot.navigation.destinations import BuildDetail, BuildIndex
-from squid.bot.navigation.router import screen_route
+from squid.bot.navigation.router import NavigationRequest, ScreenOpening, ScreenUnavailable, screen_route
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.guided_search import GuidedSearch, SearchSelection
 from squid.bot.submission.list_rows import build_row
 from squid.bot.submission.query_clauses import query_leaves
@@ -26,6 +26,7 @@ from squid.bot.submission.search_labels import filter_label, sort_label
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
+from squid.bot.utils.permissions import allows
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import Status
@@ -38,7 +39,11 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_DEBUG,
+    BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_REJECT,
+    BUILD_SUBMISSION_VIEW_PENDING,
+    RECORD_ENTRY_INSPECT,
+    RECORD_ENTRY_REBUILD,
 )
 from squid.records.application import RecordService
 from squid.schematics.application import SchematicService
@@ -406,8 +411,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         return False
 
 
-@screen_route("/builds", destination=BuildIndex)
-@screen_route("/builds/{build_id}", destination=BuildDetail)
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
@@ -492,6 +495,91 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
             chronology=sl.sources.Chronology.NEWEST_FIRST,
         )
+
+    @classmethod
+    async def create(
+        cls,
+        request: NavigationRequest,
+        *,
+        build_id: int | None = None,
+        initial_records: bool = False,
+    ) -> Self:
+        """Build the catalogue with the requesting user's capabilities.
+
+        Args:
+            build_id: Open this build's detail once the screen loads.
+            initial_records: Start on the record standings instead of the build list.
+        """
+        subject = await request.client.actors.resolve(request)
+        permissions = request.client.services.permissions
+
+        async def held(node: PermissionNode) -> bool:
+            return (await permissions.check(subject, node)).allowed
+
+        capabilities = BuildCapabilities(
+            view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),
+            approve=await held(BUILD_SUBMISSION_APPROVE),
+            reject=await held(BUILD_SUBMISSION_REJECT),
+            debug=await held(BUILD_SUBMISSION_DEBUG),
+            edit=await held(BUILD_SUBMISSION_EDIT),
+        )
+
+        async def authorize(node: PermissionNode) -> bool:
+            return await allows(request, node)
+
+        async def refresh_posts(build_id: int) -> None:
+            await request.client.refresh_posts("build", str(build_id))
+
+        can_inspect = request.guild is not None and await held(RECORD_ENTRY_INSPECT)
+        can_rebuild = request.guild is not None and await held(RECORD_ENTRY_REBUILD)
+        record_tools = (
+            RecordsScreen(
+                request.client.services.records,
+                request.client.services.record_computation,
+                can_inspect=can_inspect,
+                can_rebuild=can_rebuild,
+                authorize=authorize,
+            )
+            if can_inspect or can_rebuild
+            else None
+        )
+
+        return cls(
+            request.client.services.build_queries,
+            request.client.services.builds,
+            request.client.services.edits,
+            lambda: request.client.actors.resolve(request, refresh=True),
+            request.client.services.schematics,
+            topics=request.client.topic_bus,
+            initial_id=build_id,
+            render_build=lambda build: render_build_card(
+                build, request.client.media_previews, schematic_summaries=request.client.services.schematic_summaries
+            ),
+            capabilities=capabilities,
+            actor_account_id=subject.account_id,
+            authorize=authorize,
+            refresh_posts=refresh_posts,
+            records=request.client.services.records,
+            search=request.client.services.search,
+            record_tools=record_tools,
+            initial_records=initial_records,
+        )
+
+    @screen_route("/builds")
+    @classmethod
+    async def open_index(cls, request: NavigationRequest) -> ScreenOpening:
+        """Open the catalogue at its build list."""
+        return ScreenOpening(await cls.create(request))
+
+    @screen_route("/builds/{build_id}")
+    @classmethod
+    async def open_detail(cls, request: NavigationRequest, build_id: int) -> ScreenOpening:
+        """Open one build, unless it does not exist or the opener may not see it while pending."""
+        screen = await cls.create(request, build_id=build_id)
+        build = await request.client.services.build_queries.get(build_id)
+        if build is None or (build.submission_status is not Status.CONFIRMED and not screen._capabilities.view_pending):
+            raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
+        return ScreenOpening(screen)
 
     @override
     async def on_load(self) -> None:
