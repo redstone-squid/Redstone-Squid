@@ -3,8 +3,8 @@
 from typing import TYPE_CHECKING, Self
 
 import squid_ui.ext.discord as sd
-from squid.bot.navigation.controls import invalid_address_response
 from squid.bot.routes import router
+from squid.bot.ui import text_node
 from squid.core.i18n import tr
 from squid_ui.routing import InvalidAddress
 
@@ -28,7 +28,14 @@ class NavigationCommands(sd.Cog):
         try:
             match = router.resolve(address)
         except InvalidAddress:
-            return invalid_address_response()
+            return sd.Response(
+                text_node(
+                    tr(
+                        t"navigation-invalid-address = That screen address is invalid. Try /builds, /drafts, or /account."
+                    )
+                ),
+                audience="personal",
+            )
         return await router.dispatch(request, match)
 
 

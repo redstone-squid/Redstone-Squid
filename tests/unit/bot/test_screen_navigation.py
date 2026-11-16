@@ -5,8 +5,8 @@ from uuid import UUID
 
 import pytest
 
+import squid_ui as sl
 from squid.bot.accounts.workspace import AccountWorkspace
-from squid.bot.navigation.controls import destination_button
 from squid.bot.routes import ScreenUnavailable, router
 from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.submission.submit import SavedDraftsScreen
@@ -35,11 +35,11 @@ def test_every_screen_endpoint_belongs_to_the_application_router() -> None:
 
 
 def test_persistent_button_addresses_the_screen_directly() -> None:
-    button = destination_button("Open", DraftEditorScreen.open_draft, draft_id=UUID(int=1))
+    button = sl.primitives.RoutedButton("Open", DraftEditorScreen.open_draft.custom_id(draft_id=UUID(int=1)))
     assert button.route_id == "ui:/drafts/00000000-0000-0000-0000-000000000001"
     assert router.resolve(button.route_id[3:]).endpoint is DraftEditorScreen.open_draft
     with pytest.raises(LayoutInvariantError, match="100"):
-        destination_button("Open", BuildBrowseScreen.open_detail, build_id=10**100)
+        BuildBrowseScreen.open_detail.custom_id(build_id=10**100)
 
 
 @pytest.mark.parametrize("status", [None, Status.PENDING, Status.CONFIRMED])

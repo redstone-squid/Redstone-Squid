@@ -19,7 +19,6 @@ import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
-from squid.bot.navigation.controls import destination_button
 from squid.bot.routes import AppRequest, ScreenOpening, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.draft_intake import receive_attachments
@@ -93,10 +92,9 @@ class SavedDraftsScreen(sd.Screen):
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.primitives.Section(
                 (sl.primitives.Text(_draft_line(draft)),),
-                destination_button(
+                sl.primitives.RoutedButton(
                     tr(t"build-drafts-open = Open"),
-                    DraftEditorScreen.open_draft,
-                    draft_id=draft.snapshot.id,
+                    DraftEditorScreen.open_draft.custom_id(draft_id=draft.snapshot.id),
                 ),
             )
             for draft in drafts
