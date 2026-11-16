@@ -47,7 +47,7 @@ async def test_feedback_commands_publish_and_only_ping_owner(
     assert channel_send.await_args is not None
     payload = str(channel_send.await_args.args[0].view.to_components())
     assert "Please fix" in payload
-    assert ("Bug report" if command == "bug" else "Suggestion") in payload
+    assert ("Bug report: Please fix" if command == "bug" else "Suggestion: Please fix") in payload
     assert "<@7>" not in payload
     assert " from " not in payload
 
@@ -87,7 +87,7 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(
     channel_send.assert_awaited_once()
     assert channel_send.await_args is not None
     posted = channel_send.await_args.args[0][0]
-    assert "Bug report\nSomething broke" in posted
+    assert "Bug report: Something broke" in posted
     assert "<@7>" not in posted
     assert " from " not in posted
     assert request.respond.await_count == (1 if dm_fails else 0)

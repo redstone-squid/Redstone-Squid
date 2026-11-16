@@ -75,7 +75,7 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await request.respond("Feedback is unavailable: this channel is inaccessible.", audience="personal")
             return
 
-        report = Text(f"{kind}\n{message}")
+        report = Text(f"{kind}: {message}")
         owner_visible = await owner_can_view(channel, owner_id)
         content = mention(owner_id) + "\n" + report if owner_visible else report
         # Ordinary channel messages do not expose the invoking user through interaction metadata.
