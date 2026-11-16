@@ -165,3 +165,21 @@ def test_registration_requires_constant_query_defaults() -> None:
 
     with pytest.raises(ValueError, match="defaults"):
         ScreenRouter().register(Invalid, destination=RequiredQuery, factory=AsyncMock())
+
+
+async def test_deferral_follows_the_screens_audience_policy() -> None:
+    async def factory(request: NavigationRequest, destination: BuildIndex) -> ScreenOpening | None:
+        return None
+
+    @screen_route("/shared", destination=BuildIndex)
+    class Shared(sd.Screen):
+        policy = sd.ResponseSpec(audience="public")
+
+        def render(self) -> tuple[()]:
+            return ()
+
+    router = ScreenRouter()
+    router.register(Shared, destination=BuildIndex, factory=factory)
+    assert router.deferral(BuildIndex()) == "public"
+    # Screens default to a personal audience.
+    assert build_screen_router().deferral(DraftIndex()) == "private"

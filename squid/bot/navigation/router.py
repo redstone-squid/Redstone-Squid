@@ -105,6 +105,7 @@ def _encode(value: object) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Binding:
+    screen: type[sd.Screen[Any, Any, Any]]
     declaration: ScreenRoute[Any]
     segments: tuple[str, ...]
     parameters: tuple[str, ...]
@@ -174,7 +175,7 @@ class ScreenRouter:
                 msg = "Ambiguous screen route paths"
                 raise ValueError(msg)
         self._bindings[destination] = _Binding(
-            declaration, segments, parameters, annotations, defaults, cast(ScreenFactory[Any], factory)
+            screen, declaration, segments, parameters, annotations, defaults, cast(ScreenFactory[Any], factory)
         )
 
     def freeze(self) -> None:
@@ -245,6 +246,15 @@ class ScreenRouter:
             ]
         )
         return f"{path}?{query}" if query else path
+
+    def deferral(self, destination: Destination) -> sd.Deferral:
+        """Return the deferral that matches the audience of the destination's screen policy.
+
+        A deferral fixes whether the first response is public, so it has to be chosen before the
+        screen is built. Only a public screen policy defers publicly.
+        """
+        audience = self._bindings[type(destination)].screen.__response_spec__.audience
+        return "public" if audience == "public" else "private"
 
     async def resolve(self, request: NavigationRequest, destination: Destination) -> ScreenOpening | None:
         self.format(destination)

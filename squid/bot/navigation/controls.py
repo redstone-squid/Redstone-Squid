@@ -31,13 +31,14 @@ def invalid_address_response() -> sd.Response:
 @navigation.route("open:{address}")
 async def open_address(interaction: discord.Interaction[RedstoneSquid], address: str) -> None:
     request = await sd.request(interaction)
-    await request.defer("private")
     router = interaction.client.screen_router
     try:
         destination = router.parse(address)
     except InvalidAddress:
+        await request.defer("private")
         await request.respond(invalid_address_response())
         return
+    await request.defer(router.deferral(destination))
     await router.open(request, destination)
 
 
