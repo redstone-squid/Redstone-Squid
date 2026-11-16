@@ -1,12 +1,7 @@
-"""List saved drafts and ingest consenting authors' build-log messages.
-
-Message inference and candidate admission live in ingestion.py; submission
-services decide when a retained draft is ready to become a build.
-"""
+"""Ingest consenting build-log messages and prepare recalculation proposals."""
 
 import logging
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Self, override
+from typing import TYPE_CHECKING
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import discord
@@ -14,31 +9,18 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.accounts.consent import ensure_consented_account
-from squid.bot.i18n import to_locale_str
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest
+from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.ui import controls as build_controls
-from squid.bot.submission.ui.drafts import DraftEditorScreen
-from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
-from squid.builds.application import (
-    BuildInferenceService,
-    BuildService,
-)
 from squid.core.i18n import tr
-from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
-from squid.submissions.application import StoredDraft
-from squid.submissions.domain import (
-    DraftStatus,
-)
 from squid.submissions.errors import DraftCapacityExceededError
-from squid_i18n import Text, md_tr
-from squid_ui.content.text import md
+from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -50,66 +32,16 @@ logger = logging.getLogger(__name__)
 CONSENT_STICKY_ENABLED: bool = False
 
 
-class SavedDraftsScreen(sd.Screen):
-    """Keep saved drafts and inference runs reachable across Discord message pages."""
-
-    def __init__(self, nodes: Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]) -> None:
-        self.nodes = tuple(nodes)
-
-    @router.route("/drafts")
-    @classmethod
-    async def open_drafts(cls, request: AppRequest, inbox: bool = False) -> Self | None:
-        """List the opener's drafts, or the staff correction inbox when `inbox` is set."""
-        account_id = await ensure_consented_account(request, request.client.services.accounts)
-        if account_id is None:
-            return None
-        actor = await request.client.actors.resolve(request)
-        drafts = (
-            await request.client.services.submission_drafts.attention_inbox(actor, limit=10)
-            if inbox
-            else await request.client.services.submission_drafts.list_active(account_id)
-        )
-        runs = await request.client.services.submission_inference.list_active(actor, inbox=inbox)
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.primitives.Section(
-                (sl.primitives.Text(_draft_line(draft)),),
-                sl.primitives.RoutedButton(
-                    tr(t"build-drafts-open = Open"),
-                    DraftEditorScreen.open_draft.custom_id(draft_id=draft.snapshot.id),
-                ),
-            )
-            for draft in drafts
-        ]
-        nodes.extend(
-            sl.primitives.Section(
-                (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
-                sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), reopen_inference.custom_id(run_id=run_id)
-                ),
-            )
-            for run_id in runs
-        )
-        if nodes:
-            return cls(nodes)
-        if inbox:
-            raise ScreenUnavailable(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
-        raise ScreenUnavailable(
-            md_tr(t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.")
-        )
-
-    @override
-    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
-        return sl.Document(self.nodes, key="saved-drafts")
-
-
-class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
+class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
     """Handle build-log ingestion and message recalculation."""
 
-    bot: BotT
-    builds: BuildService
-    inference: BuildInferenceService
-    messages: MessageService
-    consent_sticky: StickyMessage
+    def __init__(self, bot: BotT) -> None:
+        self.bot = bot
+        self.consent_sticky: StickyMessage = BuildLogConsentStickyMessage(bot.background_tasks)
+
+    async def close(self) -> None:
+        """Stop pending consent-banner updates when the cog unloads."""
+        await self.consent_sticky.close()
 
     async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
@@ -118,7 +50,6 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         settings = await self.bot.services.settings.get_runtime()
         return message.channel.id in settings.build_log_channel_ids
 
-    @sd.Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: discord.Message) -> None:
         """Ingest an eligible build log message when its author has current consent."""
         if not await self._is_build_log_message(message):
@@ -156,8 +87,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return
         await self.bot.refresh_posts("inference_run", str(run_id))
 
-    @sd.context_menu(name=to_locale_str(tr(t"command-recalculate-build-name = Scan Build Message")), defer="private")
-    async def recalc_context_menu(self, request: sd.Request[Self, BotT], message: discord.Message) -> sd.CommandResult:
+    async def recalculate(self, request: AppRequest, message: discord.Message) -> sd.CommandResult:
         """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not await self._is_build_log_message(message):
@@ -189,7 +119,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     async def propose_recalculation(
         self,
-        request: sd.Request[Self, BotT],
+        request: AppRequest,
         message: discord.Message,
         *,
         owner_account_id: int,
@@ -232,24 +162,3 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             )
             for index, proposal in enumerate(proposals)
         )
-
-
-def _draft_line(draft: StoredDraft) -> Text:
-    """Describe a draft in the /build drafts list by category, a name, its state, and last edit."""
-    answers = draft.snapshot.answers
-    creators = answers.get("creators")
-    name = answers.get("display_name") or (", ".join(map(str, creators)) if isinstance(creators, list) else None)
-    category = draft.snapshot.category.capitalize()
-    title = md(t"**{category}** · {name}") if name else md(t"**{category}**")
-    match draft.snapshot.status:
-        case DraftStatus.PROCESSING:
-            state = tr(t"build-drafts-state-creating = Creating the build")
-        case DraftStatus.NEEDS_ATTENTION if draft.preparation_retry_at is not None:
-            state = tr(t"build-drafts-state-waiting = Waiting for files")
-        case DraftStatus.NEEDS_ATTENTION:
-            state = tr(t"build-drafts-state-needs-changes = Needs changes")
-        case _:
-            state = tr(t"build-drafts-state-editing = In progress")
-    updated = draft.updated_at.to_stdlib()
-    edited = md_tr(t"build-drafts-edited = Edited {updated}")
-    return Text(t"{title}\n{state} · {edited}")

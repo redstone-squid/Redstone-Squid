@@ -11,9 +11,9 @@ from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.navigation.cog import NavigationCommands
 from squid.bot.routes import ScreenUnavailable, router
-from squid.bot.submission.submit import SavedDraftsScreen
 from squid.bot.submission.ui import drafts
 from squid.bot.submission.ui.drafts import DraftEditorScreen
+from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.builds.domain import Status
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError

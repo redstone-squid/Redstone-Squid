@@ -17,9 +17,9 @@ from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
 from squid.bot.submission.cog import BuildCommands
-from squid.bot.submission.submit import SavedDraftsScreen
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
+from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.builds.application import BuildService
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.actors import Actor
@@ -190,6 +190,7 @@ def _cog() -> BuildCommands[Any]:
         make_layout_bot(
             services=bot_services(
                 settings=SettingsRecorder(),
+                builds=BuildRecorder(),
                 accounts=AccountRecorder(),
                 schematics=Schematics(),
                 submission_forms=Forms(),
@@ -201,7 +202,6 @@ def _cog() -> BuildCommands[Any]:
     )
     cog.bot.is_owner = AsyncMock(return_value=False)
     cog.ui = cog.bot.ui.scope(cog)
-    cog.builds = BuildRecorder()
     return cog
 
 

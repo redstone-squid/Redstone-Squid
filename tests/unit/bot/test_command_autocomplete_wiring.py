@@ -26,7 +26,6 @@ COMMAND_MODULES = [
     "squid.bot.catalogue.records",
     "squid.bot.catalogue.schematics.presentation",
     "squid.bot.submission.cog",
-    "squid.bot.submission.submit",
     "squid.bot.accounts.cog",
     "squid.bot.version_tracking_cog",
 ]

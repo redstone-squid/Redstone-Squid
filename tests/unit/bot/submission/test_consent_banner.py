@@ -18,7 +18,7 @@ from squid.bot.submission.consent_banner import (
     BuildLogConsentStickyMessage,
     open_consent_prompt,
 )
-from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.errors import DraftCapacityExceededError
@@ -35,7 +35,7 @@ AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 @pytest.fixture(autouse=True)
 def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Enable the consent banner so these tests exercise its gated path."""
-    monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
+    monkeypatch.setattr("squid.bot.submission.message_intake.CONSENT_STICKY_ENABLED", True)
 
 
 def _discord_account(*, account_id: int = 7, consented: bool) -> Account:
@@ -117,11 +117,11 @@ class InferenceBot:
         assert resource_kind == "inference_run"
 
 
-def _make_cog(*, account: Account | None) -> BuildSubmitCommands[Any]:
-    cog = BuildSubmitCommands.__new__(BuildSubmitCommands)
-    cog.bot = cast(Any, InferenceBot(AccountRecorder(account)))
-    cog.consent_sticky = StickyRecorder()
-    return cog
+def _make_intake(*, account: Account | None) -> BuildMessageIntake[Any]:
+    intake = BuildMessageIntake.__new__(BuildMessageIntake)
+    intake.bot = cast(Any, InferenceBot(AccountRecorder(account)))
+    intake.consent_sticky = StickyRecorder()
+    return intake
 
 
 def _make_message(*, author_id: int = USER_ID, channel_id: int = BUILD_LOG_CHANNEL) -> discord.Message:
@@ -155,32 +155,32 @@ async def _empty_history():
 async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cog = _make_cog(account=None)
+    intake = _make_intake(account=None)
     message = _make_message()
     mock_ingest = AsyncCallRecorder()
-    monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
+    monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    await cog.infer_build_from_message(message)
+    await intake.infer_build_from_message(message)
 
-    assert isinstance(cog.consent_sticky, StickyRecorder)
-    assert cog.consent_sticky.triggers == [message.channel]
-    assert cog.consent_sticky.activity == []
+    assert isinstance(intake.consent_sticky, StickyRecorder)
+    assert intake.consent_sticky.triggers == [message.channel]
+    assert intake.consent_sticky.activity == []
     mock_ingest.assert_not_awaited()
 
 
 async def test_consented_message_records_activity_and_proceeds_with_ingestion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cog = _make_cog(account=_discord_account(consented=True))
+    intake = _make_intake(account=_discord_account(consented=True))
     message = _make_message()
     mock_ingest = AsyncCallRecorder(result=[])
-    monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
+    monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    await cog.infer_build_from_message(message)
+    await intake.infer_build_from_message(message)
 
-    assert isinstance(cog.consent_sticky, StickyRecorder)
-    assert cog.consent_sticky.triggers == []
-    assert cog.consent_sticky.activity == [message.channel.id]
+    assert isinstance(intake.consent_sticky, StickyRecorder)
+    assert intake.consent_sticky.triggers == []
+    assert intake.consent_sticky.activity == [message.channel.id]
     mock_ingest.assert_awaited_once()
 
 
@@ -188,12 +188,12 @@ async def test_full_inference_intake_logs_without_replying_to_the_source_channel
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    cog = _make_cog(account=_discord_account(consented=True))
+    intake = _make_intake(account=_discord_account(consented=True))
     message = _make_message()
     mock_ingest = AsyncCallRecorder(error=DraftCapacityExceededError(1_000))
-    monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
+    monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    await cog.infer_build_from_message(message)
+    await intake.infer_build_from_message(message)
 
     send = cast(AsyncCallRecorder, message.channel.send)
     send.assert_not_awaited()

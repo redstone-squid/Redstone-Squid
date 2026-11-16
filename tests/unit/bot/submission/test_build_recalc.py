@@ -9,11 +9,13 @@ import discord
 import pytest
 from whenever import Instant
 
+import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account
+from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
-from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
@@ -43,7 +45,7 @@ BUILD_LOG_CHANNEL = 500
 @pytest.fixture(autouse=True)
 def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Enable the consent banner so these tests exercise its gated path."""
-    monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
+    monkeypatch.setattr("squid.bot.submission.message_intake.CONSENT_STICKY_ENABLED", True)
 
 
 class StubPermissions(PermissionService):
@@ -109,7 +111,7 @@ class ConsentStickyRecorder(BuildLogConsentStickyMessage):
         self.calls.append(channel)
 
 
-class RecordingSubmitCommands(BuildSubmitCommands[Any]):
+class RecordingMessageIntake(BuildMessageIntake[Any]):
     def __init__(self) -> None:
         self.inferred: list[discord.Message] = []
 
@@ -121,8 +123,8 @@ class RecordingSubmitCommands(BuildSubmitCommands[Any]):
         return text_node("Review the recalculation proposal.")
 
 
-def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSubmitCommands:
-    cog = RecordingSubmitCommands()
+def _intake(*, allowed: bool = True, account_consented: bool = True) -> RecordingMessageIntake:
+    intake = RecordingMessageIntake()
     account = (
         Account(
             id=1,
@@ -133,7 +135,7 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSu
         else None
     )
 
-    cog.bot = cast(
+    intake.bot = cast(
         Any,
         make_layout_bot(
             services=bot_services(
@@ -146,9 +148,8 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSu
             community_config=CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
-    cog.ui = cog.bot.ui.scope(cog)
-    cog.consent_sticky = ConsentStickyRecorder()
-    return cog
+    intake.consent_sticky = ConsentStickyRecorder()
+    return intake
 
 
 def _interaction() -> discord.Interaction[Any]:
@@ -179,53 +180,57 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
     return cast(discord.Message, Message(author=Author(id=42, bot=from_bot), channel=channel))
 
 
-async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
+async def _run(intake: BuildMessageIntake[Any], message: discord.Message) -> discord.Interaction[Any]:
     interaction = _interaction()
-    cast(Any, interaction).client = cog.bot
+    cast(Any, interaction).client = intake.bot
+    cog = BuildCommands.__new__(BuildCommands)
+    cog.bot = intake.bot
+    cog.ui = intake.bot.ui.scope(cog)
+    cog.intake = intake
     await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
     return interaction
 
 
 async def test_the_menu_denies_the_way_the_command_did() -> None:
     """Context-menu denials use the same PermissionNodeRequired error as command checks."""
-    cog = _cog(allowed=False)
+    intake = _intake(allowed=False)
 
     with pytest.raises(PermissionNodeRequired) as denial:
-        await _run(cog, _message())
+        await _run(intake, _message())
 
     assert denial.value.nodes == ("build.submission.recalc",)
-    assert cog.inferred == []
+    assert intake.inferred == []
 
 
 async def test_a_message_no_build_can_come_from_says_so() -> None:
     """An ineligible channel gets a reply without starting inference."""
-    cog = _cog()
+    intake = _intake()
 
-    interaction = await _run(cog, _message(channel_id=999))
+    interaction = await _run(intake, _message(channel_id=999))
 
-    assert cog.inferred == []
+    assert intake.inferred == []
     assert cast(Any, interaction).edit_original_response.await_count == 1
 
 
 async def test_a_build_log_message_is_recalculated() -> None:
-    cog = _cog()
+    intake = _intake()
     message = _message()
 
-    await _run(cog, message)
+    await _run(intake, message)
 
-    assert cog.inferred == [message]
+    assert intake.inferred == [message]
 
 
 async def test_recalc_refuses_when_author_is_unconsented() -> None:
-    cog = _cog(account_consented=False)
+    intake = _intake(account_consented=False)
     message = _message()
 
-    interaction = await _run(cog, message)
+    interaction = await _run(intake, message)
 
-    assert cog.inferred == []
+    assert intake.inferred == []
     assert cast(Any, interaction).edit_original_response.await_count == 1
-    assert isinstance(cog.consent_sticky, ConsentStickyRecorder)
-    assert cog.consent_sticky.calls == [message.channel]
+    assert isinstance(intake.consent_sticky, ConsentStickyRecorder)
+    assert intake.consent_sticky.calls == [message.channel]
 
 
 class RetainedInference(SubmissionInferenceRuns):
@@ -287,18 +292,20 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
         uuid4(), run_id, 1, 7, 123, RecalculationFacts.from_draft(candidate), None, None, {}, {}, now, now.add(hours=1)
     )
     proposals = Proposals(proposal)
-    cog = _cog()
-    cog.bot.services = bot_services(submission_inference=inference, submission_recalculations=proposals)
-    cog.bot.inference_model = "test-model"
-    cog.bot.inference_reasoning_effort = None
-    monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", AsyncCallRecorder(result="retained-input"))
-    monkeypatch.setattr(cog.bot.actors, "resolve", AsyncCallRecorder(result=Actor(account_id=7)))
-    context = ContextHarness(bot=cog.bot).source
-    context.interaction = InteractionHarness(client=cog.bot).source
+    intake = _intake()
+    intake.bot.services = bot_services(submission_inference=inference, submission_recalculations=proposals)
+    intake.bot.inference_model = "test-model"
+    intake.bot.inference_reasoning_effort = None
+    monkeypatch.setattr(
+        "squid.bot.submission.message_intake.assemble_bundle", AsyncCallRecorder(result="retained-input")
+    )
+    monkeypatch.setattr(intake.bot.actors, "resolve", AsyncCallRecorder(result=Actor(account_id=7)))
+    context = ContextHarness(bot=intake.bot).source
+    context.interaction = InteractionHarness(client=intake.bot).source
     context.interaction.id = 55
-    request = await cog.ui.request(context)
-    result = await BuildSubmitCommands.propose_recalculation(
-        cog,
+    request = await sd.request(context)
+    result = await BuildMessageIntake.propose_recalculation(
+        intake,
         request,
         MessageHarness(message_id=123).source,
         owner_account_id=1,
