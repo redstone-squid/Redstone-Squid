@@ -22,7 +22,6 @@ from squid.bot.submission.ui.drafts import (
     DraftEditorScreen,
     FilesEditorScreen,
     Phase,
-    draft_editor,
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
 from squid.builds.application.input import parse_build_ticks
@@ -188,7 +187,7 @@ def setup(category: str = "other") -> tuple[BotServices, Drafts]:
 async def open_editor(
     services: BotServices, drafts: Drafts, actor: int = 7, *, render_card: Any = None
 ) -> DraftEditorScreen:
-    editor = await draft_editor(
+    editor = await DraftEditorScreen.load(
         services,
         drafts.current.snapshot.id,
         resolve_actor=AsyncMock(return_value=Actor(account_id=actor)),
@@ -245,7 +244,7 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
     monkeypatch.setattr(services.submission_finalization, "status", status)
     monkeypatch.setattr(services.submission_finalization, "submit", submit)
     draft_id = drafts.current.snapshot.id
-    editor = await draft_editor(
+    editor = await DraftEditorScreen.load(
         services,
         draft_id,
         changes=LocalTopicBus().topic("submission_draft", str(draft_id)),
@@ -281,7 +280,7 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
 async def test_undo_resolves_the_current_actor() -> None:
     services, drafts = setup()
     resolve_actor = AsyncMock(return_value=Actor(account_id=7))
-    editor = await draft_editor(
+    editor = await DraftEditorScreen.load(
         services,
         drafts.current.snapshot.id,
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
@@ -709,7 +708,7 @@ async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch:
     resolve_actor = AsyncMock(return_value=Actor(account_id=7))
     draft_id = drafts.current.snapshot.id
     ws = (
-        await draft_editor(
+        await DraftEditorScreen.load(
             services,
             draft_id,
             changes=LocalTopicBus().topic("submission_draft", str(draft_id)),

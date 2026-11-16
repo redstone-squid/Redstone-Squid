@@ -432,6 +432,44 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
 
+    @classmethod
+    async def load(
+        cls,
+        services: BotServices,
+        draft_id: UUID,
+        *,
+        changes: Topic,
+        render_card: CardRenderer | None = None,
+        resolve_actor: Callable[[], Awaitable[Actor]],
+        notice: sl.TextLike = "",
+    ) -> DraftEditorScreen:
+        """Load a saved draft with the form revision it was created under.
+
+        Catalogue options are loaded up front so the summary can show their labels.
+
+        Args:
+            render_card: Draws the build card for Preview; without it the panel has no Preview button.
+            notice: Text shown at the top of the panel until the submitter's next action, such as
+                command options that could not be used.
+
+        Raises:
+            ValueError: This server can no longer read the draft's form revision.
+        """
+        draft = await services.submission_drafts.get_accessible(draft_id, await resolve_actor())
+        manifest = await services.submission_forms.manifest_revision(
+            draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
+        )
+        if manifest is None:
+            message = "This draft's form revision is unavailable."
+            raise ValueError(message)
+        workspace = DraftWorkspace(
+            services, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
+        )
+        await workspace.reload()
+        await workspace.load_options(workspace.fields)
+        workspace.notice = notice
+        return cls(workspace)
+
     @router.route("/drafts/{draft_id}")
     @classmethod
     async def open_draft(cls, request: AppRequest, draft_id: UUID) -> ScreenOpening | None:
@@ -440,7 +478,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         if await ensure_consented_account(request, services.accounts) is None:
             return None
         try:
-            screen = await draft_editor(
+            screen = await cls.load(
                 services,
                 draft_id,
                 changes=request.client.topic_bus.topic("submission_draft", str(draft_id)),
@@ -992,40 +1030,3 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
                 t"draft-editor-issue-target-rejected = The build could not be created from these answers. "
                 t"Check them and press **Submit** again.",
             )
-
-
-async def draft_editor(
-    services: BotServices,
-    draft_id: UUID,
-    *,
-    changes: Topic,
-    render_card: CardRenderer | None = None,
-    resolve_actor: Callable[[], Awaitable[Actor]],
-    notice: sl.TextLike = "",
-) -> DraftEditorScreen:
-    """Open a saved draft with the form revision it was created under.
-
-    Catalogue options are loaded up front so the summary can show their labels.
-
-    Args:
-        render_card: Draws the build card for Preview; without it the panel has no Preview button.
-        notice: Text shown at the top of the panel until the submitter's next action, such as
-            command options that could not be used.
-
-    Raises:
-        ValueError: This server can no longer read the draft's form revision.
-    """
-    draft = await services.submission_drafts.get_accessible(draft_id, await resolve_actor())
-    manifest = await services.submission_forms.manifest_revision(
-        draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
-    )
-    if manifest is None:
-        message = "This draft's form revision is unavailable."
-        raise ValueError(message)
-    workspace = DraftWorkspace(
-        services, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
-    )
-    await workspace.reload()
-    await workspace.load_options(workspace.fields)
-    workspace.notice = notice
-    return DraftEditorScreen(workspace)

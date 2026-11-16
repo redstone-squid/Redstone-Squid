@@ -70,6 +70,77 @@ class ConsentPrompt(sd.Screen[AccountConsent]):
         self._fields = fields
         self._accept_label = accept_label
 
+    @classmethod
+    def from_preview(
+        cls,
+        *,
+        user_id: int,
+        preview: LinkPreview | None,
+    ) -> ConsentPrompt:
+        """Build the exact notice shown before an account or identity is stored."""
+        version = CURRENT_CONSENT_VERSION
+        user_mention = sl.mention(user_id)
+        if preview is None:
+            return cls(
+                user_id=user_id,
+                title=tr(t"consent-storage-prerequisite = Before Redstone Squid stores anything about you"),
+                summary=tr(
+                    t"consent-data-storage-summary = Agreeing stores your Discord user "
+                    t"ID and records this consent, so the bot can recognise you and attribute your builds. "
+                    t"Cancelling stores nothing."
+                ),
+                fields=(
+                    CardField(
+                        tr(t"consent-discord-account = Discord account"),
+                        md_tr(
+                            t"consent-value-2 = {user_mention} (`{user_id!s}`)",
+                        ),
+                    ),
+                    CardField(
+                        tr(t"consent-consent-recorded = Consent recorded"),
+                        md_tr(
+                            t"consent-notice-versioning = Notice {version}, timed at the moment you agree.",
+                        ),
+                    ),
+                ),
+                accept_label=tr(t"consent-agree = Agree"),
+            )
+        username = preview.username
+        uuid = preview.java_uuid
+        return cls(
+            user_id=user_id,
+            title=md_tr(t"consent-link-to-your-discord-account = Link {username} to your Discord account"),
+            summary=tr(
+                t"consent-agreement-details = Agreeing stores your Discord user "
+                t"ID, your Minecraft UUID and your current Minecraft username, and records this consent. "
+                t"Cancelling stores nothing."
+            ),
+            fields=(
+                CardField(
+                    tr(t"consent-minecraft-account = Minecraft account"),
+                    md_tr(
+                        t"""
+                        bot-consent-value =
+                            {{ "*" }}*{username}**
+                            `{uuid}`
+                        """,
+                    ),
+                ),
+                CardField(
+                    tr(t"consent-discord-account = Discord account"),
+                    md_tr(
+                        t"consent-value-2 = {user_mention} (`{user_id!s}`)",
+                    ),
+                ),
+                CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),
+                CardField(
+                    tr(t"consent-consent-recorded = Consent recorded"),
+                    md_tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
+                ),
+            ),
+            accept_label=tr(t"consent-agree-and-link = Agree and link"),
+        )
+
     @property
     def consent(self) -> AccountConsent | None:
         outcome = self.outcome
@@ -137,76 +208,6 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     return md_tr(t"consent-credit-attribution = **{name}** ({builds}) becomes attributed to your account.")
 
 
-def _consent_prompt(
-    *,
-    user_id: int,
-    preview: LinkPreview | None,
-) -> ConsentPrompt:
-    """Build the exact notice shown before an account or identity is stored."""
-    version = CURRENT_CONSENT_VERSION
-    user_mention = sl.mention(user_id)
-    if preview is None:
-        return ConsentPrompt(
-            user_id=user_id,
-            title=tr(t"consent-storage-prerequisite = Before Redstone Squid stores anything about you"),
-            summary=tr(
-                t"consent-data-storage-summary = Agreeing stores your Discord user "
-                t"ID and records this consent, so the bot can recognise you and attribute your builds. "
-                t"Cancelling stores nothing."
-            ),
-            fields=(
-                CardField(
-                    tr(t"consent-discord-account = Discord account"),
-                    md_tr(
-                        t"consent-value-2 = {user_mention} (`{user_id!s}`)",
-                    ),
-                ),
-                CardField(
-                    tr(t"consent-consent-recorded = Consent recorded"),
-                    md_tr(
-                        t"consent-notice-versioning = Notice {version}, timed at the moment you agree.",
-                    ),
-                ),
-            ),
-            accept_label=tr(t"consent-agree = Agree"),
-        )
-    username = preview.username
-    uuid = preview.java_uuid
-    return ConsentPrompt(
-        user_id=user_id,
-        title=md_tr(t"consent-link-to-your-discord-account = Link {username} to your Discord account"),
-        summary=tr(
-            t"consent-agreement-details = Agreeing stores your Discord user "
-            t"ID, your Minecraft UUID and your current Minecraft username, and records this consent. "
-            t"Cancelling stores nothing."
-        ),
-        fields=(
-            CardField(
-                tr(t"consent-minecraft-account = Minecraft account"),
-                md_tr(
-                    t"""
-                    bot-consent-value =
-                        {{ "*" }}*{username}**
-                        `{uuid}`
-                    """,
-                ),
-            ),
-            CardField(
-                tr(t"consent-discord-account = Discord account"),
-                md_tr(
-                    t"consent-value-2 = {user_mention} (`{user_id!s}`)",
-                ),
-            ),
-            CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),
-            CardField(
-                tr(t"consent-consent-recorded = Consent recorded"),
-                md_tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
-            ),
-        ),
-        accept_label=tr(t"consent-agree-and-link = Agree and link"),
-    )
-
-
 async def prompt_for_consent(
     request: sd.Request[Any],
     *,
@@ -221,7 +222,7 @@ async def prompt_for_consent(
     and NOT_ASKED when presentation is rejected. Use `request_consent` inside
     mounted action handlers to avoid holding their transaction and dispatch lock.
     """
-    component = _consent_prompt(user_id=user_id, preview=preview)
+    component = ConsentPrompt.from_preview(user_id=user_id, preview=preview)
     presented = await request.respond(component, timeout=timeout, parent=parent)
     if not isinstance(presented, sd.Presented):
         return NOT_ASKED
@@ -246,7 +247,7 @@ async def request_consent(
     """
     root = event.context.root
     assert root is not None and isinstance(root.component, sd.Screen), "consent actions require a parent Screen"
-    prompt = _consent_prompt(user_id=user_id, preview=preview)
+    prompt = ConsentPrompt.from_preview(user_id=user_id, preview=preview)
     opened = False
 
     async def answered(result: sd.ScreenResultEvent[AccountConsent]) -> None:

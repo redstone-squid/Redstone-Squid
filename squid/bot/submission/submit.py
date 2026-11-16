@@ -28,7 +28,7 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui import controls as build_controls
-from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor, field_names
+from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import suggests
@@ -342,7 +342,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             actor,
             tuple(attachment for attachment in (file, file_2, file_3, file_4) if attachment is not None),
         )
-        return await draft_editor(
+        return await DraftEditorScreen.load(
             services,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),

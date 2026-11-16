@@ -27,7 +27,6 @@ from squid.accounts.domain import (
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.accounts.consent import (
     ConsentPrompt,
-    _consent_prompt,
     ensure_consented_account,
     prompt_for_consent,
     request_consent,
@@ -121,7 +120,7 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
     credit: CreditPreview | None,
     expected_credit: str,
 ) -> None:
-    prompt = _consent_prompt(
+    prompt = ConsentPrompt.from_preview(
         user_id=USER_ID,
         preview=LinkPreview(JAVA_UUID, "Notch", credit),
     )
@@ -143,7 +142,7 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
 
 
 async def test_cancel_and_privacy_never_record_consent() -> None:
-    cancel_prompt = _consent_prompt(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
+    cancel_prompt = ConsentPrompt.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
     async with sd.testing.stage(cancel_prompt, owner=object(), user_id=USER_ID) as ui:
         await ui.press("cancel")
         outcome = await cancel_prompt.wait()
@@ -151,7 +150,7 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
         assert cancel_prompt.consent is None
         assert ui.root.finished
 
-    privacy_prompt = _consent_prompt(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
+    privacy_prompt = ConsentPrompt.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
     privacy_responder = RecordingResponder()
     await press(privacy_prompt, "privacy", responder=privacy_responder)
 
@@ -456,7 +455,7 @@ async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> No
 
 def test_consent_prompt_preserves_large_discord_mentions() -> None:
     user_id = 123456789012345678
-    prompt = _consent_prompt(user_id=user_id, preview=None)
+    prompt = ConsentPrompt.from_preview(user_id=user_id, preview=None)
     root = sd.MessageRoot(prompt, access=sd.Owner(user_id), timeout=120)
     content = str(commit_render(root).to_components())
     assert f"<@{user_id}>" in content

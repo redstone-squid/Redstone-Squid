@@ -69,7 +69,7 @@ async def test_build_visibility_is_checked_before_opening(
 async def test_draft_consent_stops_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(drafts, "ensure_consented_account", AsyncMock(return_value=None))
     editor = AsyncMock()
-    monkeypatch.setattr(drafts, "draft_editor", editor)
+    monkeypatch.setattr(drafts.DraftEditorScreen, "load", editor)
     assert await DraftEditorScreen.open_draft.function(DraftEditorScreen, MagicMock(), UUID(int=1)) is None
     editor.assert_not_awaited()
 
@@ -77,7 +77,7 @@ async def test_draft_consent_stops_resolution(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.parametrize("error", [DraftNotFoundError(UUID(int=1)), DraftAccessDeniedError()])
 async def test_draft_access_failure_does_not_open_editor(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
     monkeypatch.setattr(drafts, "ensure_consented_account", AsyncMock(return_value=1))
-    monkeypatch.setattr(drafts, "draft_editor", AsyncMock(side_effect=error))
+    monkeypatch.setattr(drafts.DraftEditorScreen, "load", AsyncMock(side_effect=error))
     with pytest.raises(ScreenUnavailable):
         await DraftEditorScreen.open_draft.function(DraftEditorScreen, MagicMock(), UUID(int=1))
 
