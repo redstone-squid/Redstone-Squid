@@ -1,5 +1,6 @@
 """Component-driven wizard for composing and publishing generic polls."""
 
+import csv
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
@@ -21,8 +22,8 @@ from squid.voting.domain import (
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 
-_DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
-_DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
+_DURATION = re.compile(r"(\d+)\s*(days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s)", re.IGNORECASE)
+_DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
 DURATION_PRESETS: tuple[tuple[sl.TextLike, int], ...] = (
     (tr(t"bot-voting-poll-wizard-hour = 1 hour"), 3600),
@@ -54,13 +55,19 @@ VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] 
 
 
 def parse_poll_duration(value: str) -> int:
-    """Parse a compact duration and return seconds within the supported range."""
-    match = _DURATION.fullmatch(value.strip())
-    if match is None:
+    """Parse durations such as `2h15m` or `2 days 3 hours`, in seconds."""
+    value = value.strip()
+    seconds = 0
+    end = 0
+    for match in _DURATION.finditer(value):
+        if value[end : match.start()].strip():
+            break
+        seconds += int(match.group(1)) * _DURATION_UNITS[match.group(2)[0].lower()]
+        end = match.end()
+    if not value or end != len(value):
         raise InvalidVoteConfigurationError(
-            md_tr(t"poll-setup-duration-format-help = Duration must look like `30m`, `12h`, or `7d`.")
+            md_tr(t"poll-setup-duration-format-help = Use a duration like `30m`, `2h15m`, or `2 days 3 hours`.")
         )
-    seconds = int(match.group(1)) * _DURATION_UNITS[match.group(2).lower()]
     if not MIN_POLL_DURATION_SECONDS <= seconds <= MAX_POLL_DURATION_SECONDS:
         raise InvalidVoteConfigurationError(
             tr(t"poll-setup-duration-out-of-range = Poll duration must be between 1 minute and 30 days.")
@@ -93,6 +100,8 @@ def format_duration(seconds: int) -> sl.TextLike:
             }}
             """,
         )
+    if seconds % 60:
+        return f"{seconds // 60}m {seconds % 60}s"
     count = seconds // 60
     return md_tr(
         t"""
@@ -180,14 +189,47 @@ class PollDraft:
     """The wizard's editable state between the form and publication."""
 
     question: str
-    options_text: str
+    options_text: str = "👍 | Yes\n👎 | No"
     visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE
     duration_seconds: int = 24 * 3600
     scope: PollScope = PollScope.GUILD
 
     @property
     def option_lines(self) -> tuple[str, ...]:
-        return tuple(self.options_text.splitlines())
+        return parse_poll_choices(self.options_text)
+
+    def validate(self) -> None:
+        """Apply the same content limits to slash commands and the editor."""
+        if not self.question.strip() or len(self.question) > 300:
+            raise InvalidVoteConfigurationError(
+                tr(t"poll-question-length = Enter a question between 1 and 300 characters.")
+            )
+        if len(self.options_text) > 1000:
+            raise InvalidVoteConfigurationError(tr(t"poll-choices-length = Keep the choices within 1000 characters."))
+        if not MIN_POLL_DURATION_SECONDS <= self.duration_seconds <= MAX_POLL_DURATION_SECONDS:
+            raise InvalidVoteConfigurationError(
+                tr(t"poll-setup-duration-out-of-range = Poll duration must be between 1 minute and 30 days.")
+            )
+
+
+def parse_poll_choices(value: str) -> tuple[str, ...]:
+    """Accept lines or CSV choices; line-separated choices may contain commas.
+
+    Literal backslash-n sequences become line breaks. For one-line CSV input,
+    quote a choice containing a comma, for example `"Red, white", Blue`.
+    """
+    value = value.replace("\\n", "\n").strip()
+    if "\n" in value:
+        return tuple(line.strip() for line in value.splitlines() if line.strip())
+    try:
+        choices = next(csv.reader([value], skipinitialspace=True, strict=True))
+    except csv.Error as error:
+        raise InvalidVoteConfigurationError(
+            tr(t"poll-choices-format = Separate choices with commas or line breaks; quote choices containing commas.")
+        ) from error
+    if any(not choice.strip() for choice in choices):
+        raise InvalidVoteConfigurationError(tr(t"poll-choices-empty = Choices cannot be empty."))
+    return tuple(choice.strip() for choice in choices)
 
 
 def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
@@ -237,7 +279,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
                 key="duration",
                 label=tr(t"bot-voting-poll-wizard-duration = Duration"),
                 default=24 * 3600,
-                placeholder=tr(t"bot-voting-poll-wizard-m-h-d = 30m, 12h, 7d"),
+                placeholder=tr(t"bot-voting-poll-wizard-m-h-d = 30m, 2h15m, 2 days"),
                 maximum=MAX_POLL_DURATION_SECONDS,
                 minimum=MIN_POLL_DURATION_SECONDS,
                 parser=parse_poll_duration,

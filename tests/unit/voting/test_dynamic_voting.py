@@ -7,7 +7,7 @@ import discord
 import pytest
 from whenever import Instant
 
-from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_duration
+from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_choices, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
@@ -308,12 +308,15 @@ def test_role_weights_must_be_positive_and_finite(multiplier: float) -> None:
         RoleWeight(10, VoteKind.BUILD, 20, multiplier)
 
 
-@pytest.mark.parametrize(("value", "seconds"), [("1m", 60), ("24h", 86400), ("30d", 2592000)])
+@pytest.mark.parametrize(
+    ("value", "seconds"),
+    [("1m", 60), ("24h", 86400), ("30d", 2592000), ("2h15m", 8100), ("2 days 3 hours", 183600), ("1M30s", 90)],
+)
 def test_poll_duration_parser(value: str, seconds: int) -> None:
     assert parse_poll_duration(value) == seconds
 
 
-@pytest.mark.parametrize("value", ["59s", "0m", "31d", "forever"])
+@pytest.mark.parametrize("value", ["59s", "0m", "31d", "forever", "", "2h junk 1m", "1h!", "-1h", "1.5h", "30d1s"])
 def test_poll_duration_parser_rejects_out_of_range_values(value: str) -> None:
     with pytest.raises(InvalidVoteConfigurationError):
         parse_poll_duration(value)
@@ -450,3 +453,23 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     assert votes.created["scope"] is PollScope.NETWORK
     assert votes.created["guild_id"] == 10
     assert all(option.guild_id is None for option in cast(Sequence[VoteOption], votes.created["options"]))
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("Red, Blue", ("Red", "Blue")),
+        ('"Red, white", Blue', ("Red, white", "Blue")),
+        ("Red, white\nBlue", ("Red, white", "Blue")),
+        (r"Red\nBlue", ("Red", "Blue")),
+        ("🔴 | Red, 🔵 | Blue", ("🔴 | Red", "🔵 | Blue")),
+    ],
+)
+def test_poll_choices_accept_csv_and_lines(value: str, expected: tuple[str, ...]) -> None:
+    assert parse_poll_choices(value) == expected
+
+
+@pytest.mark.parametrize("value", ["Red,,Blue", "Red,", '"Red, Blue'])
+def test_poll_choices_reject_empty_fields_and_unclosed_quotes(value: str) -> None:
+    with pytest.raises(InvalidVoteConfigurationError):
+        parse_poll_choices(value)
