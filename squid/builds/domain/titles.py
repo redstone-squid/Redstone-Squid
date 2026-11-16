@@ -37,7 +37,7 @@ def format_build_category(build: Build) -> FormattedTitle:
                     ),
                     size=_door_size(build),
                     types=(*build.patterns, *unresolved.patterns),
-                    orientation=build.orientation or "Door (orientation unknown)",
+                    orientation=build.orientation or "Door*",
                     component_restrictions=(
                         *build.component_restrictions,
                         *unresolved.restriction_names("component_restrictions"),
