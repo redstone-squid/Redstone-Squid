@@ -23,28 +23,24 @@ class InvalidAddress(ValueError):
     """A relative address or its arguments do not match the route contract."""
 
 
-def _supported(annotation: object) -> bool:
+def _parameter_type(annotation: object) -> tuple[object, bool]:
+    """Resolve aliases and optionality once when registering a parameter."""
     if isinstance(annotation, TypeAliasType):
-        return _supported(annotation.__value__)
-    if annotation in (int, bool, UUID):
-        return True
-    if get_origin(annotation) is Literal:
-        return all(isinstance(value, str) for value in get_args(annotation))
+        return _parameter_type(annotation.__value__)
     if get_origin(annotation) is UnionType:
         arguments = get_args(annotation)
-        return (
-            len(arguments) == 2
-            and type(None) in arguments
-            and all(value is type(None) or _supported(value) for value in arguments)
-        )
-    return False
+        if len(arguments) == 2 and type(None) in arguments:
+            value_type = next(argument for argument in arguments if argument is not type(None))
+            return _parameter_type(value_type)[0], True
+    elif annotation in (int, bool, UUID) or (
+        get_origin(annotation) is Literal and all(isinstance(value, str) for value in get_args(annotation))
+    ):
+        return annotation, False
+    msg = "Unsupported route parameter type"
+    raise ValueError(msg)
 
 
 def _decode(value: str, annotation: object) -> object:
-    if isinstance(annotation, TypeAliasType):
-        return _decode(value, annotation.__value__)
-    if get_origin(annotation) is UnionType:
-        return _decode(value, next(argument for argument in get_args(annotation) if argument is not type(None)))
     if annotation is int:
         if not re.fullmatch(r"[0-9]+", value) or int(value) <= 0:
             msg = "IDs must be positive integers"
@@ -116,15 +112,14 @@ class AddressRoute:
         if len(set(parameters)) != len(parameters) or not set(parameters) <= declared.keys():
             msg = "Every path parameter must be a callable parameter, exactly once"
             raise ValueError(msg)
+        types = {name: _parameter_type(annotations.get(name)) for name in declared}
+        self.optional = frozenset(name for name, (_, optional) in types.items() if optional)
         if fragment is not None:
             parameter = declared.get(fragment)
             if parameter is None or fragment in parameters or parameter.default is not None:
                 msg = "Fragment must name a non-path parameter with a None default"
                 raise ValueError(msg)
-            annotation = annotations.get(fragment)
-            while isinstance(annotation, TypeAliasType):
-                annotation = annotation.__value__
-            if type(None) not in get_args(annotation):
+            if fragment not in self.optional:
                 msg = "Fragment parameter must have an optional type"
                 raise ValueError(msg)
         defaults: dict[str, object] = {}
@@ -132,11 +127,8 @@ class AddressRoute:
             if parameter.kind not in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY):
                 msg = "Route parameters must be named, without *args or **kwargs"
                 raise ValueError(msg)
-            if not _supported(annotations.get(name)):
-                msg = "Unsupported route parameter type"
-                raise ValueError(msg)
             if name in parameters:
-                if parameter.default is not parameter.empty or type(None) in get_args(annotations[name]):
+                if parameter.default is not parameter.empty or name in self.optional:
                     msg = "Path parameters must be required"
                     raise ValueError(msg)
             elif parameter.default is parameter.empty:
@@ -148,11 +140,9 @@ class AddressRoute:
         self.fragment = fragment
         self.defaults = defaults
         self.query = tuple(name for name in declared if name not in parameters and name != fragment)
-        self.annotations = dict(annotations)
         self.converters = {
             name: Converter(name, r"[^/]+", partial(_decode, annotation=annotation), _encode)
-            for name, annotation in annotations.items()
-            if name in declared
+            for name, (annotation, _) in types.items()
         }
         # Broad segment patterns preserve conservative ambiguity rejection: paths
         # cannot depend on conversion failure to choose a different endpoint.
@@ -190,10 +180,7 @@ class AddressRoute:
         bound = self.signature.bind(*args, **kwargs)
         bound.apply_defaults()
         for name, value in bound.arguments.items():
-            annotation = self.annotations[name]
-            while isinstance(annotation, TypeAliasType):
-                annotation = annotation.__value__
-            if value is None and type(None) in get_args(annotation):
+            if value is None and name in self.optional:
                 continue
             converter = self.converters[name]
             if converter.parse(converter.build(value)) != value:

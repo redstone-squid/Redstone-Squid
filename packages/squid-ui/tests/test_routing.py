@@ -10,6 +10,10 @@ import squid_ui.routing as routing
 from squid_ui.interactions.routing import Route
 from squid_ui.routing import AddressParts, AddressRoute, Converter, InvalidAddress, RoutePattern, RouteTable
 
+type Tab = Literal["media", "versions"]
+type OptionalTab = Tab | None
+type OptionalID = int | None
+
 
 @pytest.mark.parametrize("separator", [":", "/"])
 def test_pattern_round_trip_and_aliases(separator: str) -> None:
@@ -82,3 +86,25 @@ def test_tables_conservatively_reject_unknown_converter_intersections() -> None:
     with pytest.raises(ValueError, match="overlaps"):
         table.add(RoutePattern("builds/latest", separator="/"), "second")
     assert table.match("builds/latest") == ("first", {"id": "latest"})
+
+
+def test_aliases_preserve_optional_query_and_fragment_types() -> None:
+    def destination(tab: OptionalTab = None, page: int | None = None) -> None:
+        pass
+
+    address = AddressRoute(
+        "/builds", inspect.signature(destination), {"tab": OptionalTab, "page": int | None}, fragment="tab"
+    )
+    assert address.build() == "/builds"
+    assert address.build(tab="media", page=2) == "/builds?page=2#media"
+    assert address.decode(AddressParts.parse("/builds?page=2#media"), {}) == {"tab": "media", "page": 2}
+    with pytest.raises(InvalidAddress):
+        address.build(tab="missing")
+
+
+def test_optional_path_parameter_hidden_by_alias_is_rejected() -> None:
+    def destination(build_id: OptionalID) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="Path parameters must be required"):
+        AddressRoute("/builds/{build_id}", inspect.signature(destination), {"build_id": OptionalID})
