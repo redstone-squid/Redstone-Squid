@@ -4,10 +4,13 @@ from enum import StrEnum
 
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE
+from squid.bot.catalogue.search.clauses import query_leaves
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
+from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.search.domain.query import FieldExpression, NotExpression
 
 
 class SearchTarget(StrEnum):
@@ -42,12 +45,21 @@ def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
 async def open_search(
     request: AppRequest,
     *,
-    scope: SearchTarget = SearchTarget.builds,
+    scope: SearchTarget | None = None,
     sort: str | None = None,
     mode: SearchMode = SearchMode.LEXICAL,
     query: str,
 ) -> BuildBrowseScreen | SearchScreen:
-    """Open builds and records in the catalogue, or metadata and mixed hits in search results."""
+    """Open the requested search target, inferring records from base_title when scope is omitted."""
+    if scope is None:
+        parsed = SearchQueryParser(await request.client.services.search.fields()).parse(query)
+        leaves = query_leaves(parsed.expression) if parsed.expression is not None else ()
+        fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
+        scope = (
+            SearchTarget.records
+            if any(isinstance(field, FieldExpression) and field.field.name == "base_title" for field in fields)
+            else SearchTarget.builds
+        )
     if scope in (SearchTarget.builds, SearchTarget.records):
         return await BuildBrowseScreen.create_search(
             request,

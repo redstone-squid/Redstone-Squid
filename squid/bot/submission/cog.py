@@ -106,7 +106,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def search_records(
         self,
         request: sd.Request[Self, BotT],
-        scope: SearchTarget = SearchTarget.builds,
+        scope: SearchTarget | None = None,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
         *,

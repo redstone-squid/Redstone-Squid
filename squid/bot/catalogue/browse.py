@@ -600,11 +600,13 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         """
         screen = await cls.create(request, initial_records=records)
         if records:
-            expression = screen._search_parser.parse(query).expression
+            parsed = screen._search_parser.parse(query)
+            expression = parsed.expression
             leaves = query_leaves(expression) if expression is not None else ()
             fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
             if not any(isinstance(field, FieldExpression) and field.field.name == "status" for field in fields):
-                query = f"{screen._default_query} AND ({query})" if query.strip() else screen._default_query
+                # Expand leading record shorthand before the status clause hides it from the parser.
+                query = f"{screen._default_query} AND ({parsed.normalized})" if query.strip() else screen._default_query
         screen._search_mode = mode
         await screen._run_search(query, sort)
         return screen

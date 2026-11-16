@@ -91,11 +91,13 @@ def _cog(search: RecordingSearch) -> BuildCommands[Any]:
 
 
 async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | SearchScreen:
-    records = kwargs.get("scope") is SearchTarget.records
-    screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=records)
-    screen._search_service = cog.bot.services.search
-    screen._search_parser = SearchQueryParser(await cog.bot.services.search.fields())
-    with patch.object(BuildBrowseScreen, "create", AsyncMock(return_value=screen)):
+    async def create(request: Any, *, initial_records: bool = False) -> BuildBrowseScreen:
+        screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=initial_records)
+        screen._search_service = cog.bot.services.search
+        screen._search_parser = SearchQueryParser(await cog.bot.services.search.fields())
+        return screen
+
+    with patch.object(BuildBrowseScreen, "create", side_effect=create):
         request = cast(Any, SimpleNamespace(client=cog.bot))
         result = await unwrap(cast(Any, BuildCommands).search_records.callback)(cog, request, **kwargs)
     target = kwargs.get("scope", SearchTarget.builds)
@@ -135,6 +137,58 @@ async def test_no_sort_option_leaves_relevance_ordering_alone() -> None:
     assert search.requests[0].sort is None
     assert search.requests[0].mode is SearchMode.LEXICAL
     assert search.requests[0].group_by_build
+
+
+@pytest.mark.parametrize(
+    ("query", "title"),
+    [
+        ("smallest 5x5", "smallest"),
+        ("fastest 5x5", "fastest"),
+        ("smallest fastest 5x5", "smallest_fastest"),
+        ("FASTEST smallest 5x5", "fastest_smallest"),
+        ("base_title:smallest 5x5", "smallest"),
+    ],
+)
+async def test_record_title_search_defaults_to_the_records_tab(query: str, title: str) -> None:
+    search = RecordingSearch()
+
+    screen = await _run(_cog(search), query=query)
+
+    assert isinstance(screen, BuildBrowseScreen)
+    assert screen._mode == "records"
+    assert search.requests[0].scope is SearchScope.RECORDS
+    assert search.requests[0].query == f"status:resolved AND (base_title:{title} AND 5x5)"
+    async with stage(screen, owner=object()) as ui:
+        ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("query", ['"smallest" 5x5', "5x5 smallest", "title:smallest 5x5"])
+async def test_literal_record_words_keep_the_builds_tab(query: str) -> None:
+    search = RecordingSearch()
+
+    screen = await _run(_cog(search), query=query)
+
+    assert isinstance(screen, BuildBrowseScreen)
+    assert screen._mode == "builds"
+    assert search.requests[0].scope is SearchScope.BUILDS
+
+
+async def test_explicit_build_scope_overrides_the_record_title_filter() -> None:
+    search = RecordingSearch()
+
+    screen = await _run(_cog(search), query="smallest 5x5", scope=SearchTarget.builds)
+
+    assert isinstance(screen, BuildBrowseScreen)
+    assert screen._mode == "builds"
+    assert search.requests[0].scope is SearchScope.BUILDS
+
+
+async def test_explicit_record_scope_expands_shorthand_before_adding_status() -> None:
+    search = RecordingSearch()
+
+    await _run(_cog(search), query="smallest 5x5", scope=SearchTarget.records)
+
+    assert search.requests[0].query == "status:resolved AND (base_title:smallest AND 5x5)"
 
 
 async def test_records_remain_an_explicit_search_target() -> None:
@@ -211,7 +265,8 @@ async def test_record_default_is_part_of_the_editable_query(query: str) -> None:
     search = RecordingSearch()
     screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
     assert isinstance(screen, BuildBrowseScreen)
-    expected = f"status:resolved AND ({query})" if query.strip() else "status:resolved"
+    normalized = SearchQueryParser().parse(query).normalized
+    expected = f"status:resolved AND ({normalized})" if query.strip() else "status:resolved"
     assert screen._query == search.requests[0].query == expected
 
 
