@@ -178,6 +178,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @build_group.command(
         name=tr(t"command-build-browse-name = browse"),
         description=tr(t"command-build-browse-help = Browse builds and record holders."),
+        defer="public",
         options={
             "build_id": sd.Option(
                 name=tr(t"command-build-browse-build-id-name = id"),

@@ -419,6 +419,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     # Expanded filters, a populated build with tools, and search help can each
     # need their own message. Keep all three available while browsing.
     policy = sd.ResponseSpec(
+        audience="public",
         nav=sd.navigation_controls.page_jump_nav,
         timeout=300,
         live_updates=True,
