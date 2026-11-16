@@ -13,8 +13,8 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
-from squid.bot.navigation.controls import open_address
 from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
+from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -680,7 +680,7 @@ class NotificationInbox(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Reds
                 (details,),
                 sl.primitives.RoutedButton(
                     tr(t"notifications-open-build = Open build"),
-                    open_address.id(address=f"/builds/{build_id}"),
+                    BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
                 ),
             ),
         )
