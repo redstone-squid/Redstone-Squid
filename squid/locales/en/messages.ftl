@@ -1092,16 +1092,16 @@ bot-starboard-screen-starboards = Starboards
 # squid/bot/starboard/screen.py:452
 bot-starboard-screen-up = Up
 
-# squid/bot/catalogue/browse.py:274, squid/bot/catalogue/browse.py:325
+# squid/bot/catalogue/browse.py:273, squid/bot/catalogue/browse.py:324
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/catalogue/browse.py:465
+# squid/bot/catalogue/browse.py:464
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:931
+# squid/bot/catalogue/browse.py:921
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/catalogue/browse.py:333
+# squid/bot/catalogue/browse.py:332
 bot-submission-build-browse-cancel = Cancel
 
 # squid/bot/catalogue/schematics/tools.py:302
@@ -1116,22 +1116,22 @@ bot-submission-build-browse-download-result = Download result
 # squid/bot/catalogue/schematics/tools.py:87
 bot-submission-build-browse-download-schematic = Download
 
-# squid/bot/catalogue/browse.py:266
+# squid/bot/catalogue/browse.py:265
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/catalogue/browse.py:231
+# squid/bot/catalogue/browse.py:230
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:929
+# squid/bot/catalogue/browse.py:919
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/catalogue/browse.py:644
+# squid/bot/catalogue/browse.py:634
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/catalogue/schematics/tools.py:314
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/catalogue/browse.py:283, squid/bot/catalogue/browse.py:327
+# squid/bot/catalogue/browse.py:282, squid/bot/catalogue/browse.py:326
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/catalogue/schematics/tools.py:98
@@ -1696,13 +1696,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:125
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:898
+# squid/bot/catalogue/browse.py:888
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:896
+# squid/bot/catalogue/browse.py:886
 browse-query-all-standings = All standings
 
-# squid/bot/catalogue/browse.py:679
+# squid/bot/catalogue/browse.py:669
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1711,22 +1711,22 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/catalogue/browse.py:621
+# squid/bot/catalogue/browse.py:611
 build-browse-all-builds = Builds
 
-# squid/bot/catalogue/browse.py:637
+# squid/bot/catalogue/browse.py:627
 build-browse-record-tools = Record tools
 
-# squid/bot/catalogue/browse.py:629
+# squid/bot/catalogue/browse.py:619
 build-browse-records = Records
 
-# squid/bot/catalogue/browse.py:254
+# squid/bot/catalogue/browse.py:253
 build-browse-tags = Build tags
 
-# squid/bot/catalogue/browse.py:681
+# squid/bot/catalogue/browse.py:671
 build-browser-close-search = Done
 
-# squid/bot/catalogue/browse.py:683
+# squid/bot/catalogue/browse.py:673
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/ui/saved_drafts.py:53
@@ -1837,7 +1837,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:382
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/catalogue/browse.py:671, squid/bot/catalogue/browse.py:802
+# squid/bot/catalogue/browse.py:661, squid/bot/catalogue/browse.py:792
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1852,25 +1852,25 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/catalogue/browse.py:466
+# squid/bot/catalogue/browse.py:465
 build-list-empty = No builds are available.
 
-# squid/bot/catalogue/browse.py:377
+# squid/bot/catalogue/browse.py:376
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/catalogue/browse.py:306
+# squid/bot/catalogue/browse.py:305
 build-review-approve-effect = The build becomes visible in the public catalogue.
 
-# squid/bot/catalogue/browse.py:305
+# squid/bot/catalogue/browse.py:304
 build-review-approve-title = Approve build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:311
+# squid/bot/catalogue/browse.py:310
 build-review-reject-effect = The build is marked as denied and leaves the catalogue.
 
-# squid/bot/catalogue/browse.py:310
+# squid/bot/catalogue/browse.py:309
 build-review-reject-title = Reject build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:357, squid/bot/catalogue/browse.py:359
+# squid/bot/catalogue/browse.py:356, squid/bot/catalogue/browse.py:358
 build-review-state-updated = Build review state updated.
 
 # squid/bot/catalogue/schematics/tools.py:130
@@ -1879,10 +1879,10 @@ build-schematic-missing = This build has no schematic attached.
 # squid/bot/catalogue/schematics/tools.py:134
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/catalogue/browse.py:292
+# squid/bot/catalogue/browse.py:291
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/catalogue/browse.py:294
+# squid/bot/catalogue/browse.py:293
 build-schematic-tools-show = Schematic tools
 
 # squid/bot/catalogue/search/results.py:151, squid/bot/catalogue/search/results.py:155, squid/bot/catalogue/search/results.py:210, squid/bot/catalogue/search/results.py:263
@@ -1975,10 +1975,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:728, squid/bot/catalogue/search/help.py:184
+# squid/bot/catalogue/browse.py:718, squid/bot/catalogue/search/help.py:184
 catalogue-search-help = Search help
 
-# squid/bot/catalogue/browse.py:605
+# squid/bot/catalogue/browse.py:595
 catalogue-search-help-close = Close help
 
 # squid/catalogue/domain/titles.py:67
@@ -3313,7 +3313,7 @@ guided-search-query-title = Search query
 # squid/bot/catalogue/search/filters.py:247
 guided-search-remove-clause = Remove
 
-# squid/bot/catalogue/browse.py:734
+# squid/bot/catalogue/browse.py:724
 guided-search-reset = Reset
 
 # squid/bot/catalogue/search/filters.py:462
@@ -3924,7 +3924,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/catalogue/browse.py:586
+# squid/bot/catalogue/browse.py:576
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:491
@@ -4465,16 +4465,16 @@ record-browse-open-holder = Open build #{ $build_id }
 # squid/bot/catalogue/record_browser.py:98
 record-browse-title = Records
 
-# squid/bot/catalogue/browse.py:713
+# squid/bot/catalogue/browse.py:703
 record-browser-all = All types
 
-# squid/bot/catalogue/browse.py:708
+# squid/bot/catalogue/browse.py:698
 record-browser-fastest = Fastest
 
-# squid/bot/catalogue/browse.py:709
+# squid/bot/catalogue/browse.py:699
 record-browser-first = First
 
-# squid/bot/catalogue/browse.py:707
+# squid/bot/catalogue/browse.py:697
 record-browser-smallest = Smallest
 
 # squid/bot/submission/cog.py:148
