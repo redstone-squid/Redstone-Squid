@@ -66,6 +66,15 @@ def test_compiler_allows_trigram_candidates_to_recover_typo_text() -> None:
     assert "dorr" in parameters.values()
 
 
+def test_tag_filter_accepts_name_facets_and_legacy_indexed_terms() -> None:
+    sql, parameters = _compile('tag:"  NO   OBSERVERS  "')
+
+    assert "EXISTS" in sql
+    assert "search_documents.tags @>" in sql
+    assert "no observers" in parameters.values()
+    assert ["no observers"] in parameters.values()
+
+
 def test_title_field_allows_trigram_but_description_remains_fts_only() -> None:
     title_sql, _ = _compile("title:dorr")
     description_sql, _ = _compile("description:dorr")

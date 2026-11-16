@@ -103,7 +103,7 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
     )
     if field.name == "tag":
         # Keep matching the indexed creator/version terms that tag: historically accepted.
-        return or_(predicate, SearchDocument.tags.contains([" ".join(str(expression.value).casefold().split())]))
+        return or_(predicate, SearchDocument.tags.bool_op("@>")([" ".join(str(expression.value).casefold().split())]))
     return predicate
 
 
