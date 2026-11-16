@@ -15,6 +15,9 @@ always polls `domain_event_deliveries`, so a lost notification cannot lose work.
 - Discord DMs also use database-clock UUID claims. Ambiguous network failures are retried and can rarely produce a
   duplicate. The persisted Discord nonce is a best-effort short-window deduplication hint, not an exactly-once
   guarantee. Discord `Forbidden` responses suspend only the DM channel until the user re-enables it.
+- Each worker processes at most 20 DMs per pass, claiming each immediately before sending so later deliveries do
+  not wait under an aging claim. Discord user lookup and sending share a 30-second timeout; timed-out requests
+  follow the normal retry policy. Shutdown cancellation leaves the claim to expire without counting a failed attempt.
 
 The optional `SQUID_DATABASE_LISTENER_URL` must point directly at PostgreSQL and support long-lived `LISTEN`
 connections. `SQUID_DATABASE_URL` may continue to use the normal application pooler. Without a listener URL, polling
