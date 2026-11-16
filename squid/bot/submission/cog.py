@@ -10,17 +10,16 @@ from discord.ext.commands import Context, when_mentioned
 
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen
-from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE
+from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
-from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.form import open_submission_form
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
 from squid.builds.domain import DoorOrientationLiteral
 from squid.builds.domain.models import BuildCategoryLiteral
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.search.domain import SearchMode
 from squid_i18n import md_tr, tr
 
 if TYPE_CHECKING:
@@ -36,35 +35,6 @@ class SearchModeChoice(StrEnum):
     smart = "smart"
 
 
-class SearchTarget(StrEnum):
-    """What a search looks through."""
-
-    records = "records"
-    builds = "builds"
-    patterns = "patterns"
-    restrictions = "restrictions"
-    everything = "everything"
-
-
-_SEARCH_TARGETS: dict[SearchTarget, tuple[SearchScope, str | None]] = {
-    SearchTarget.records: (SearchScope.RECORDS, None),
-    SearchTarget.builds: (SearchScope.BUILDS, None),
-    SearchTarget.patterns: (SearchScope.METADATA, "kind:pattern"),
-    SearchTarget.restrictions: (SearchScope.METADATA, "kind:restriction"),
-    SearchTarget.everything: (SearchScope.ALL, None),
-}
-
-
-def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
-    """Resolve a target to a domain scope and the query expressing it."""
-    scope, narrowing = _SEARCH_TARGETS[target]
-    if narrowing is None:
-        return scope, query
-    if not query.strip():
-        return scope, narrowing
-    return scope, f"{narrowing} ({query})"
-
-
 class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Own build search, browsing, editing, submission, and consent-message lifetime."""
 
@@ -77,8 +47,6 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
-        self.queries = bot.services.build_queries
-        self.search = bot.services.search
         self.intake = BuildMessageIntake(bot)
 
     @override
@@ -145,44 +113,12 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         query: str,
     ) -> BuildBrowseScreen | SearchScreen:
         """Search records, builds, patterns, and restrictions using text and field filters."""
-        return await self._search_screen(request, scope=scope, sort=sort, mode=mode, query=query)
-
-    async def _search_screen(
-        self,
-        request: sd.Request[Self, BotT],
-        *,
-        scope: SearchTarget = SearchTarget.builds,
-        sort: str | None = None,
-        mode: SearchModeChoice = SearchModeChoice.keyword,
-        query: str,
-    ) -> BuildBrowseScreen | SearchScreen:
-        search_mode = SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC
-        if scope in (SearchTarget.builds, SearchTarget.records):
-            return await BuildBrowseScreen.create_search(
-                request,
-                query=query,
-                records=scope is SearchTarget.records,
-                sort=sort or "",
-                mode=search_mode,
-            )
-        search_scope, targeted_query = _targeted(scope, query)
-        search_request = SearchRequest(
-            targeted_query,
-            scope=search_scope,
-            mode=search_mode,
-            sort=SearchSort.parse(sort),
-            page_size=CATALOGUE_PAGE_SIZE,
-            group_by_build=True,
-        )
-        page = await self.search.search(search_request)
-        return SearchScreen(
-            self.search,
-            search_request,
-            page,
-            load_build=self.queries.get,
-            render_build=lambda build: render_build_card(
-                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
-            ),
+        return await open_search(
+            request,
+            scope=scope,
+            sort=sort,
+            mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
+            query=query,
         )
 
     @build_group.command(
@@ -241,7 +177,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         assert trimmed_content != "", "Trimmed content should not be empty."
         request = await self.ui.request(ctx)
         await request.defer("public")
-        await request.respond(await self._search_screen(request, scope=SearchTarget.builds, query=trimmed_content))
+        await request.respond(await open_search(request, query=trimmed_content))
 
     @build_group.command(
         name=tr(t"command-build-submit-name = submit"),

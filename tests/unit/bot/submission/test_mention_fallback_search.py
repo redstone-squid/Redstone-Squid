@@ -3,12 +3,12 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from discord.ext import commands
 
-from squid.bot.submission.cog import BuildCommands, SearchTarget
+from squid.bot.submission.cog import BuildCommands
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,13 +46,12 @@ async def test_mentions_search_builds(mention: str) -> None:
     )
     request = SimpleNamespace(defer=AsyncMock(), respond=AsyncMock())
     screen = object()
-    cog = SimpleNamespace(
-        ui=SimpleNamespace(request=AsyncMock(return_value=request)), _search_screen=AsyncMock(return_value=screen)
-    )
+    cog = SimpleNamespace(ui=SimpleNamespace(request=AsyncMock(return_value=request)))
 
-    await BuildCommands.mention_fallback_search(cast(Any, cog), cast(Any, context), commands.CommandNotFound())
+    with patch("squid.bot.submission.cog.open_search", AsyncMock(return_value=screen)) as open_search:
+        await BuildCommands.mention_fallback_search(cast(Any, cog), cast(Any, context), commands.CommandNotFound())
 
-    cog._search_screen.assert_awaited_once_with(request, scope=SearchTarget.builds, query="width:5")
+    open_search.assert_awaited_once_with(request, query="width:5")
     request.defer.assert_awaited_once_with("public")
     request.respond.assert_awaited_once_with(screen)
 

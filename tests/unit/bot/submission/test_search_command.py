@@ -1,6 +1,8 @@
 """How `/search` turns its typed options into a search request."""
 
 from dataclasses import dataclass, replace
+from inspect import unwrap
+from types import SimpleNamespace
 from typing import Any, cast, override
 from unittest.mock import AsyncMock, patch
 
@@ -8,8 +10,9 @@ import pytest
 
 import squid_ui as sl
 from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.search.entry import SearchTarget
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
-from squid.bot.submission.cog import BuildCommands, SearchModeChoice, SearchTarget
+from squid.bot.submission.cog import BuildCommands, SearchModeChoice
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
@@ -80,19 +83,21 @@ class CogBot:
 
 def _cog(search: RecordingSearch) -> BuildCommands[Any]:
     cog = BuildCommands.__new__(BuildCommands)
-    cog.bot = cast(Any, CogBot(services=bot_services(settings=SettingsRecorder())))
-    cog.queries = BuildQueryRecorder()
-    cog.search = search
+    cog.bot = cast(
+        Any,
+        CogBot(services=bot_services(settings=SettingsRecorder(), build_queries=BuildQueryRecorder(), search=search)),
+    )
     return cog
 
 
 async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | SearchScreen:
     records = kwargs.get("scope") is SearchTarget.records
     screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=records)
-    screen._search_service = cog.search
-    screen._search_parser = SearchQueryParser(await cog.search.fields())
+    screen._search_service = cog.bot.services.search
+    screen._search_parser = SearchQueryParser(await cog.bot.services.search.fields())
     with patch.object(BuildBrowseScreen, "create", AsyncMock(return_value=screen)):
-        result = await cog._search_screen(cast(Any, object()), **kwargs)
+        request = cast(Any, SimpleNamespace(client=cog.bot))
+        result = await unwrap(cast(Any, BuildCommands).search_records.callback)(cog, request, **kwargs)
     target = kwargs.get("scope", SearchTarget.builds)
     assert isinstance(
         result, BuildBrowseScreen if target in (SearchTarget.builds, SearchTarget.records) else SearchScreen
