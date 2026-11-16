@@ -30,6 +30,7 @@ from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor, field_names
+from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import enforce
@@ -105,7 +106,7 @@ class SavedDraftsScreen(sd.Screen):
             sl.primitives.Section(
                 (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
                 sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), build_controls.reopen_inference.id(run_id=str(run_id))
+                    tr(t"build-drafts-review = Review"), reopen_inference.id(run_id=str(run_id))
                 ),
             )
             for run_id in runs

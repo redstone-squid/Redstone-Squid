@@ -124,8 +124,9 @@ whether an older presentation is replaced.
 
 Refer to a route by its attribute, as in `router.open(request, BuildBrowseScreen.open_detail,
 build_id=12)` or `router.url_for(...)`. Arguments are type-checked against the method and
-checked again for addressability. Code that cannot import a screen class, such as a legacy
-control in a module the screen imports, can use `router.open_address(request, "/drafts/...")`.
+checked again for addressability. A persistent control handler that opens a screen lives
+next to that screen, so it can refer to the route directly without an import cycle.
+`router.open_address(request, address)` opens a route from an address string.
 
 Persistent destination buttons use the existing Discord control router and delegate to
 `request.client.screen_router`. Keep these component IDs separate from screen addresses:

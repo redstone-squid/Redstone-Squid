@@ -15,8 +15,7 @@ from squid.bot.navigation.router import ScreenRouter, ScreenUnavailable
 from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.submission.submit import SavedDraftsScreen
 from squid.bot.submission.ui import drafts
-from squid.bot.submission.ui.controls import reopen_draft
-from squid.bot.submission.ui.drafts import DraftEditorScreen
+from squid.bot.submission.ui.drafts import DraftEditorScreen, reopen_draft
 from squid.builds.domain import Status
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
@@ -52,7 +51,6 @@ async def test_entrypoints_use_the_current_router(entrypoint: str) -> None:
     harness = InteractionHarness(user_id=77, client=bot)
     router = build_screen_router()
     router.open = AsyncMock(return_value=None)  # type: ignore[method-assign]
-    router.open_address = AsyncMock(return_value=None)  # type: ignore[method-assign]
     bot.screen_router = router
     draft_id = UUID(int=1)
     address = router.url_for(DraftEditorScreen.open_draft, draft_id=draft_id)
@@ -64,11 +62,6 @@ async def test_entrypoints_use_the_current_router(entrypoint: str) -> None:
         await open_address(harness.source, address)
     else:
         await reopen_draft(harness.source, str(draft_id))
-        router.open_address.assert_awaited_once()
-        request, opened = router.open_address.call_args.args
-        assert opened == address
-        assert request.user.id == 77
-        return
     router.open.assert_awaited_once()
     request, route = router.open.call_args.args
     assert route is DraftEditorScreen.open_draft

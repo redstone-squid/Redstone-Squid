@@ -29,8 +29,10 @@ issues for the submitter to fix; the panel shows which of these happened.
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from enum import Enum, auto
 from functools import partial
-from typing import Any, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID, uuid4
+
+from discord import Interaction
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -81,6 +83,9 @@ from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.modal import FileField
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""
@@ -463,7 +468,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 sl.action_controls(
                     sl.routed_action_control(
                         tr(t"draft-editor-reopen = Reopen draft"),
-                        build_controls.reopen_draft.id(draft_id=str(ws.draft.snapshot.id)),
+                        reopen_draft.id(draft_id=str(ws.draft.snapshot.id)),
                         key="reopen",
                     ),
                     key="draft-reopen",
@@ -992,6 +997,13 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
                 t"draft-editor-issue-target-rejected = The build could not be created from these answers. "
                 t"Check them and press **Submit** again.",
             )
+
+
+@build_controls.builds.route("draft:{draft_id}:reopen")
+async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
+    """Resolve durable identity and current authority before reopening a private draft."""
+    request = await sd.request(interaction)
+    await request.client.screen_router.open(request, DraftEditorScreen.open_draft, draft_id=UUID(draft_id))
 
 
 async def draft_editor(

@@ -9,7 +9,7 @@ from discord import Interaction
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.routes import routes
-from squid.bot.submission.ui import inference, opening, recalculation
+from squid.bot.submission.ui import opening, recalculation
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import allows
@@ -96,14 +96,6 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
     await opening.open_build_editor(request, build, recovered=True)
 
 
-@builds.route("draft:{draft_id}:reopen")
-async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
-    """Resolve durable identity and current authority before reopening a private draft."""
-    request = await sd.request(interaction)
-    # Addressed rather than by screen class, which imports this module for its own control IDs.
-    await request.client.screen_router.open_address(request, f"/drafts/{UUID(draft_id)}")
-
-
 @builds.route("revision:{proposal_id}:reopen")
 async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: str) -> None:
     """Reopen a retained diff under the caller's current edit authority."""
@@ -114,24 +106,9 @@ async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: 
     await request.respond(screen, audience="personal")
 
 
-@builds.route("inference:{run_id}:reopen")
-async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str) -> None:
-    """Recover candidates under current consent and owner or staff authority."""
-    request = await sd.request(interaction)
-    if await ensure_consented_account(request, interaction.client.services.accounts) is None:
-        return
-    actor = await request.client.actors.resolve(request)
-    candidates = await interaction.client.services.submission_inference.get(UUID(run_id), actor)
-    await request.respond(
-        inference.InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"
-    )
-
-
 __all__ = [
     "builds",
     "edit_build",
     "recover_build_editor",
-    "reopen_draft",
-    "reopen_inference",
     "reopen_revision",
 ]
