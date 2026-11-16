@@ -3281,91 +3281,94 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner.py:127
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/submission/guided_search.py:172, squid/bot/submission/guided_search.py:193
+# squid/bot/submission/guided_search.py:177, squid/bot/submission/guided_search.py:198
 guided-search-add-filter = Add filter
 
-# squid/bot/submission/guided_search.py:199
+# squid/bot/submission/guided_search.py:204
 guided-search-change-field = Choose another field
 
-# squid/bot/submission/guided_search.py:307
+# squid/bot/submission/guided_search.py:175
+guided-search-close-filters = Close filters
+
+# squid/bot/submission/guided_search.py:312
 guided-search-comparison = Comparison
 
-# squid/bot/submission/guided_search.py:166
+# squid/bot/submission/guided_search.py:169
 guided-search-edit-query = Type a query
 
-# squid/bot/submission/guided_search.py:354
+# squid/bot/submission/guided_search.py:359
 guided-search-edit-text = Edit keywords
 
-# squid/bot/submission/guided_search.py:197
+# squid/bot/submission/guided_search.py:202
 guided-search-filter-heading = Filter by { $name }
 
-# squid/bot/submission/guided_search.py:357
+# squid/bot/submission/guided_search.py:362
 guided-search-keywords = Keywords
 
-# squid/bot/submission/guided_search.py:343, squid/bot/submission/guided_search.py:360
+# squid/bot/submission/guided_search.py:348, squid/bot/submission/guided_search.py:365
 guided-search-negated = Exclude matches
 
-# squid/bot/submission/guided_search.py:149
+# squid/bot/submission/guided_search.py:152
 guided-search-next-filters = Next filters
 
-# squid/bot/submission/guided_search.py:534
+# squid/bot/submission/guided_search.py:539
 guided-search-no = No
 
-# squid/bot/submission/guided_search.py:301
+# squid/bot/submission/guided_search.py:306
 guided-search-operator-at-least = at least
 
-# squid/bot/submission/guided_search.py:299
+# squid/bot/submission/guided_search.py:304
 guided-search-operator-at-most = at most
 
-# squid/bot/submission/guided_search.py:302
+# squid/bot/submission/guided_search.py:307
 guided-search-operator-between = between
 
-# squid/bot/submission/guided_search.py:297
+# squid/bot/submission/guided_search.py:302
 guided-search-operator-equal = is
 
-# squid/bot/submission/guided_search.py:300
+# squid/bot/submission/guided_search.py:305
 guided-search-operator-greater = more than
 
-# squid/bot/submission/guided_search.py:298
+# squid/bot/submission/guided_search.py:303
 guided-search-operator-less = less than
 
-# squid/bot/submission/guided_search.py:143
+# squid/bot/submission/guided_search.py:146
 guided-search-previous-filters = Previous filters
 
-# squid/bot/submission/guided_search.py:256
+# squid/bot/submission/guided_search.py:261
 guided-search-query-label = Words and filters, e.g. door width<=5
 
-# squid/bot/submission/guided_search.py:252
+# squid/bot/submission/guided_search.py:257
 guided-search-query-title = Search query
 
-# squid/bot/submission/guided_search.py:242
+# squid/bot/submission/guided_search.py:247
 guided-search-remove-clause = Remove
 
 # squid/bot/submission/build_browse.py:732
 guided-search-reset = Reset
 
-# squid/bot/submission/guided_search.py:457
+# squid/bot/submission/guided_search.py:462
 guided-search-search-filter = Search fields
 
-# squid/bot/submission/guided_search.py:471
+# squid/bot/submission/guided_search.py:476
 guided-search-search-options = Search sort orders
 
-# squid/bot/submission/guided_search.py:494
+# squid/bot/submission/guided_search.py:499
 guided-search-search-values = Search { $name }
 
-# squid/bot/submission/guided_search.py:218
+# squid/bot/submission/guided_search.py:223
 guided-search-selected-field = Set { $name } filter
 
-# squid/bot/submission/guided_search.py:160
+# squid/bot/submission/guided_search.py:163
 guided-search-sort = Sort by
 
-# squid/bot/submission/guided_search.py:178
+# squid/bot/submission/guided_search.py:183
 guided-search-sorting = Sort
 
-# squid/bot/submission/guided_search.py:334
+# squid/bot/submission/guided_search.py:339
 guided-search-upper = And (only for between)
 
-# squid/bot/submission/guided_search.py:534
+# squid/bot/submission/guided_search.py:539
 guided-search-yes = Yes
 
 # squid/bot/help.py:26

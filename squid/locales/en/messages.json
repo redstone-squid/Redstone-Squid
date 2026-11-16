@@ -10786,8 +10786,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:172",
-      "squid/bot/submission/guided_search.py:193"
+      "squid/bot/submission/guided_search.py:177",
+      "squid/bot/submission/guided_search.py:198"
     ]
   },
   "guided-search-change-field": {
@@ -10796,7 +10796,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:199"
+      "squid/bot/submission/guided_search.py:204"
+    ]
+  },
+  "guided-search-close-filters": {
+    "fingerprint": "b61c1a354911b1b908d7c6ce9bbc15ecea0de7af449c38bbfff6a1cdff5bd4ca",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/guided_search.py:175"
     ]
   },
   "guided-search-comparison": {
@@ -10805,7 +10814,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:307"
+      "squid/bot/submission/guided_search.py:312"
     ]
   },
   "guided-search-edit-query": {
@@ -10814,7 +10823,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:166"
+      "squid/bot/submission/guided_search.py:169"
     ]
   },
   "guided-search-edit-text": {
@@ -10823,7 +10832,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:354"
+      "squid/bot/submission/guided_search.py:359"
     ]
   },
   "guided-search-filter-heading": {
@@ -10838,7 +10847,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/guided_search.py:197"
+      "squid/bot/submission/guided_search.py:202"
     ]
   },
   "guided-search-keywords": {
@@ -10847,7 +10856,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:357"
+      "squid/bot/submission/guided_search.py:362"
     ]
   },
   "guided-search-negated": {
@@ -10856,8 +10865,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:343",
-      "squid/bot/submission/guided_search.py:360"
+      "squid/bot/submission/guided_search.py:348",
+      "squid/bot/submission/guided_search.py:365"
     ]
   },
   "guided-search-next-filters": {
@@ -10866,7 +10875,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:149"
+      "squid/bot/submission/guided_search.py:152"
     ]
   },
   "guided-search-no": {
@@ -10875,7 +10884,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:534"
+      "squid/bot/submission/guided_search.py:539"
     ]
   },
   "guided-search-operator-at-least": {
@@ -10884,7 +10893,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:301"
+      "squid/bot/submission/guided_search.py:306"
     ]
   },
   "guided-search-operator-at-most": {
@@ -10893,7 +10902,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:299"
+      "squid/bot/submission/guided_search.py:304"
     ]
   },
   "guided-search-operator-between": {
@@ -10902,7 +10911,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:302"
+      "squid/bot/submission/guided_search.py:307"
     ]
   },
   "guided-search-operator-equal": {
@@ -10911,7 +10920,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:297"
+      "squid/bot/submission/guided_search.py:302"
     ]
   },
   "guided-search-operator-greater": {
@@ -10920,7 +10929,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:300"
+      "squid/bot/submission/guided_search.py:305"
     ]
   },
   "guided-search-operator-less": {
@@ -10929,7 +10938,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:298"
+      "squid/bot/submission/guided_search.py:303"
     ]
   },
   "guided-search-previous-filters": {
@@ -10938,7 +10947,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:143"
+      "squid/bot/submission/guided_search.py:146"
     ]
   },
   "guided-search-query-label": {
@@ -10947,7 +10956,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:256"
+      "squid/bot/submission/guided_search.py:261"
     ]
   },
   "guided-search-query-title": {
@@ -10956,7 +10965,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:252"
+      "squid/bot/submission/guided_search.py:257"
     ]
   },
   "guided-search-remove-clause": {
@@ -10965,7 +10974,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:242"
+      "squid/bot/submission/guided_search.py:247"
     ]
   },
   "guided-search-reset": {
@@ -10983,7 +10992,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:457"
+      "squid/bot/submission/guided_search.py:462"
     ]
   },
   "guided-search-search-options": {
@@ -10992,7 +11001,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:471"
+      "squid/bot/submission/guided_search.py:476"
     ]
   },
   "guided-search-search-values": {
@@ -11007,7 +11016,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/guided_search.py:494"
+      "squid/bot/submission/guided_search.py:499"
     ]
   },
   "guided-search-selected-field": {
@@ -11022,7 +11031,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/guided_search.py:218"
+      "squid/bot/submission/guided_search.py:223"
     ]
   },
   "guided-search-sort": {
@@ -11031,7 +11040,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:160"
+      "squid/bot/submission/guided_search.py:163"
     ]
   },
   "guided-search-sorting": {
@@ -11040,7 +11049,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:178"
+      "squid/bot/submission/guided_search.py:183"
     ]
   },
   "guided-search-upper": {
@@ -11049,7 +11058,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:334"
+      "squid/bot/submission/guided_search.py:339"
     ]
   },
   "guided-search-yes": {
@@ -11058,7 +11067,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/guided_search.py:534"
+      "squid/bot/submission/guided_search.py:539"
     ]
   },
   "help-account": {
