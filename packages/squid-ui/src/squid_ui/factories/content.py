@@ -46,7 +46,7 @@ def status(content: TextValue, *, tone: Tone | Role = Tone.NEUTRAL, emphasis: Em
 
 
 def note(content: TextValue, *, importance: Importance = Importance.LOW) -> Note:
-    """Small print: an id, a timestamp, a caveat the reader may skip."""
+    """Small print; omitted when its localized content is empty or whitespace-only."""
     content = Text(content)
     return Note(content, importance)
 

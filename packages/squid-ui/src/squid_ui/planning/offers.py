@@ -1003,6 +1003,8 @@ def _primitive_text_offers[RenderTargetT, ContextT](
     if isinstance(value, primitive.Heading):
         payload = replace(payload, role="heading", level=value.level)
     elif isinstance(value, primitive.Footer):
+        if not any(tree.plain(node).strip() for node in payload.nodes):
+            return (RealizationOffer(occurrence, "empty-note", FlowRealization(), flow=True),)
         payload = replace(payload, role="note")
     elif isinstance(value, primitive.Code):
         payload = replace(payload, role="code", language=value.lang)
@@ -2265,6 +2267,10 @@ def _text_block_offers[RenderTargetT, ContextT](
     if isinstance(value, sem.Heading):
         payload = replace(payload, role="heading", level=value.level)
     elif isinstance(value, sem.Note):
+        # Empty localized notes have no visible content or layout cost. In particular,
+        # they must not become a standalone Discord subtext marker.
+        if not any(tree.plain(node).strip() for node in payload.nodes):
+            return (RealizationOffer(occurrence, "empty-note", FlowRealization(), flow=True),)
         payload = replace(payload, role="note")
     elif isinstance(value, sem.Code):
         payload = replace(payload, role="code", language=value.language)

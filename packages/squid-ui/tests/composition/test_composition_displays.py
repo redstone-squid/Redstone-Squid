@@ -9,6 +9,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
+from squid_i18n import Localization, tr
 from squid_ui import scene
 from squid_ui.authoring.semantic import TimeStyle
 from squid_ui.content.temporal import ZonedDateTime
@@ -150,3 +151,43 @@ def test_native_time_prefixes_remain_authored_markdown(target: Target[Any, Any, 
         assert result.cost.get(Axis.DISPLAY_TEXT) == len(f"**Starts:** <t:{int(INSTANT.timestamp())}:F>") + len(
             "Local: " + ZONED.isoformat()
         )
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+@pytest.mark.parametrize("content", ["", " \n\t "])
+def test_empty_notes_have_no_output_or_layout_cost(target: Target[Any, Any, Any, Any], content: str) -> None:
+    baseline = plan(sl.stack(sl.paragraph("Visible")), target=target, strict=True)
+    result = plan(sl.stack(sl.note(content), sl.paragraph("Visible")), target=target, strict=True)
+
+    assert result.scene == baseline.scene
+    assert result.allocation is not None
+    assert baseline.allocation is not None
+    assert result.allocation.select({}).cost == baseline.allocation.select({}).cost
+    assert not result.report.events
+
+
+@pytest.mark.parametrize("target", TARGETS[:2], ids=lambda target: target.id)
+@pytest.mark.parametrize("content", ["", " \n\t "])
+def test_empty_native_footers_have_no_output(target: Target[Any, Any, Any, Any], content: str) -> None:
+    baseline = plan(sl.stack(sl.paragraph("Visible")), target=target, strict=True)
+    result = plan(sl.stack(native.Footer(content), sl.paragraph("Visible")), target=target, strict=True)
+
+    assert result.scene == baseline.scene
+    assert not result.report.events
+
+
+@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
+def test_note_visibility_uses_localized_content(target: Target[Any, Any, Any, Any]) -> None:
+    note = sl.note(tr(t"test-optional-note = Optional detail"))
+    localization = Localization("en", ('test-optional-note = { "" }',))
+    baseline = plan(sl.stack(sl.paragraph("Visible")), target=target, strict=True, localization=localization)
+    empty = plan(
+        sl.stack(note, sl.paragraph("Visible")),
+        target=target,
+        strict=True,
+        localization=localization,
+    )
+    visible = plan(sl.stack(note, sl.paragraph("Visible")), target=target, strict=True)
+
+    assert empty.scene == baseline.scene
+    assert "Optional detail" in scene.Codec.dumps(visible.scene)
