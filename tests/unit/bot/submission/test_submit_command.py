@@ -16,7 +16,8 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
-from squid.bot.submission.submit import BuildSubmitCommands, SavedDraftsScreen
+from squid.bot.submission.cog import BuildCommands
+from squid.bot.submission.submit import SavedDraftsScreen
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.builds.application import BuildService
@@ -182,8 +183,8 @@ class Intake(SubmissionAttachmentIntake):
         return ()
 
 
-def _cog() -> BuildSubmitCommands[Any]:
-    cog = BuildSubmitCommands.__new__(BuildSubmitCommands)
+def _cog() -> BuildCommands[Any]:
+    cog = BuildCommands.__new__(BuildCommands)
     cog.bot = cast(
         Any,
         make_layout_bot(
@@ -204,11 +205,11 @@ def _cog() -> BuildSubmitCommands[Any]:
     return cog
 
 
-async def _submit(cog: BuildSubmitCommands[Any], **options: Any) -> InteractionHarness:
+async def _submit(cog: BuildCommands[Any], **options: Any) -> InteractionHarness:
     harness = InteractionHarness(user_id=7, client=cog.bot)
     cast(Any, harness).id = 123
     harness.guild = None
-    await cast(Any, BuildSubmitCommands).submit_form.callback(cog, harness.source, **options)
+    await cast(Any, BuildCommands).submit_form.callback(cog, harness.source, **options)
     return harness
 
 
@@ -288,7 +289,7 @@ async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool, monkeypat
     harness = InteractionHarness(user_id=7, client=cog.bot)
     harness.guild = None
 
-    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
+    await cast(Any, BuildCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
 
     actor = Actor(account_id=1, discord_user_id=7, is_bot_owner=True)
     if inbox:
@@ -330,7 +331,7 @@ async def test_saved_drafts_paginate_all_entries(
     harness = InteractionHarness(user_id=7, client=cog.bot)
     harness.guild = None
 
-    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
+    await cast(Any, BuildCommands).saved_drafts.callback(cog, harness.source, inbox=inbox)
 
     screen = _screen(harness)
     assert isinstance(screen, SavedDraftsScreen)
@@ -395,7 +396,7 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     inbox = InteractionHarness(user_id=7, client=cog.bot)
     inbox.user = member
     inbox.guild = guild
-    await cast(Any, BuildSubmitCommands).saved_drafts.callback(cog, inbox.source, inbox=True)
+    await cast(Any, BuildCommands).saved_drafts.callback(cog, inbox.source, inbox=True)
     assert isinstance(_screen(inbox), SavedDraftsScreen)
 
     opened = InteractionHarness(user_id=7, client=cog.bot)

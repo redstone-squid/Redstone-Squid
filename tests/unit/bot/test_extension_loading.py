@@ -25,6 +25,7 @@ from squid.bot.app import (
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help_cog import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
+from squid.bot.submission.cog import BuildCommands
 from squid.config import BuildConfig
 from squid.runtime import BackgroundTaskSupervisor
 from squid.voting.application import VoteService
@@ -122,6 +123,25 @@ async def production_bot() -> AsyncIterator[commands.Bot]:
 
 async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> None:
     assert set(loaded_bot.extensions) == set(LOADABLE)
+
+
+async def test_submission_extension_reloads_with_its_own_command_group() -> None:
+    """Loading after an ordinary import and repeated reloads must preserve every build command."""
+    imported_group = BuildCommands.build_group
+    imported_commands = tuple(imported_group.commands)
+    extension = "squid.bot.submission.cog"
+    async with _loaded_bot((extension,)) as bot:
+        for _ in range(2):
+            group = bot.tree.get_command("build")
+            assert isinstance(group, discord.app_commands.Group)
+            assert {command.name for command in group.commands} == {"browse", "submit", "drafts"}
+            assert all(
+                isinstance(command, discord.app_commands.Command) and command.binding is bot.get_cog("BuildCommands")
+                for command in group.commands
+            )
+            await bot.reload_extension(extension)
+            assert bot.tree.get_command("build") is not group
+        assert tuple(imported_group.commands) == imported_commands
 
 
 async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:

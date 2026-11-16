@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from squid.bot.submission.groups import BuildCommandGroup
+import squid_ui.ext.discord as sd
 from squid.bot.submission.input import split_values
 from squid.bot.submission.parse import parse_dimensions
 from squid.bot.submission.ui.build_edit import BuildEditWorkspace
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class BuildEditCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[BotT]):
+class BuildEditCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """A cog with commands for editing builds."""
 
     bot: BotT
