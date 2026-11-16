@@ -170,3 +170,29 @@ async def test_active_button_tab_is_emphasized_and_inactive_tabs_are_available()
         assert inactive.emphasis is sl.semantic.Emphasis.NORMAL
         assert inactive.available
         await harness.press(f"settings.{other}")
+
+
+async def test_focus_reveals_content_without_overriding_later_selection() -> None:
+    tabs = _settings()
+    focusable: sl.Focusable[str] = tabs
+    assert isinstance(tabs, sl.Focusable)
+    assert focusable.focus_targets() == frozenset({"general", "privacy"})
+    focusable.focus("privacy")
+    harness = wt.driving(tabs)
+    assert "privacy body" in harness.texts()
+    await harness.press("settings.general")
+    assert "general body" in harness.texts()
+    focusable.focus("privacy")
+    assert "privacy body" in wt.driving(tabs).texts()
+    with pytest.raises(ValueError, match="Unavailable tab"):
+        focusable.focus("missing")
+    assert tabs.machine_state == sp.TabsState("privacy")
+
+
+def test_focus_does_not_invoke_action_callbacks() -> None:
+    async def changed(event: sp.TransitionEvent[sp.TabsState]) -> None:
+        pytest.fail("focus is not a user action")
+
+    tabs = sp.Tabs((sp.Tab("one", "One", "first"), sp.Tab("two", "Two", "second")), key="tabs", on_change=changed)
+    tabs.focus("two")
+    assert tabs.machine_state == sp.TabsState("two")

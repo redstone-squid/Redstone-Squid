@@ -43,3 +43,13 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
         super().__init__(
             machine, initial=machine.initial_state if initial_state is None else initial_state, on_change=on_change
         )
+
+    def focus_targets(self) -> frozenset[str]:
+        return frozenset(tab.key for tab in self.machine.tabs)
+
+    def focus(self, target: str) -> None:
+        """Select a tab without invoking the user-action callback."""
+        if target not in self.focus_targets():
+            message = f"Unavailable tab: {target!r}"
+            raise ValueError(message)
+        self.machine_state = TabsState(target)

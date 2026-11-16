@@ -182,6 +182,7 @@ from squid_ui.factories import (
     uncontrolled,
     zoned_timestamp,
 )
+from squid_ui.focus import Focusable
 from squid_ui.interactions import (
     ActionEvent,
     EntitySelectionEvent,
@@ -236,6 +237,7 @@ __all__ = [
     "ExistingLayoutError",
     "Fidelity",
     "FileInput",
+    "Focusable",
     "HtmlTarget",
     "InvalidSubmitEvent",
     "LayoutDegradedError",
