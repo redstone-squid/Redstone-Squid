@@ -127,6 +127,20 @@ class WorkerRequest:
     params: Mapping[str, Any]
     job_id: int | None
 
+    @classmethod
+    def from_frame(cls, frame: Frame) -> WorkerRequest:
+        """Check a request header and its expected payload count, raising FrameStreamClosed if invalid."""
+        try:
+            request_id = _integer(frame.header.get("id"), "request id", minimum=0)
+            operation = _operation(frame.header.get("op"))
+            params = _mapping(frame.header.get("params"), "request params")
+            job_id_value = frame.header.get("job_id")
+            job_id = None if job_id_value is None else _integer(job_id_value, "job id", minimum=0)
+            _payload_arity(frame.payloads, _REQUEST_PAYLOAD_ARITY[operation], f"{operation} request")
+        except (TypeError, ValueError, KeyError) as exc:
+            raise FrameStreamClosed(str(exc)) from exc
+        return cls(request_id, operation, params, job_id)
+
 
 async def read_frame(stream: asyncio.StreamReader) -> Frame:
     """Read exactly one frame, raising :class:`FrameStreamClosed` at end of stream."""
@@ -160,20 +174,6 @@ def read_frame_sync(stream: IO[bytes]) -> Frame | None:
         msg = "The peer closed during a frame body."
         raise FrameStreamClosed(msg)
     return Frame(header, _split_payloads(body, parts))
-
-
-def decode_worker_request(frame: Frame) -> WorkerRequest:
-    """Check a request header and its expected payload count, raising FrameStreamClosed if invalid."""
-    try:
-        request_id = _integer(frame.header.get("id"), "request id", minimum=0)
-        operation = _operation(frame.header.get("op"))
-        params = _mapping(frame.header.get("params"), "request params")
-        job_id_value = frame.header.get("job_id")
-        job_id = None if job_id_value is None else _integer(job_id_value, "job id", minimum=0)
-        _payload_arity(frame.payloads, _REQUEST_PAYLOAD_ARITY[operation], f"{operation} request")
-    except (TypeError, ValueError, KeyError) as exc:
-        raise FrameStreamClosed(str(exc)) from exc
-    return WorkerRequest(request_id, operation, params, job_id)
 
 
 def validate_durable_request_payloads(operation: object, payloads: Sequence[bytes]) -> Operation:

@@ -136,7 +136,7 @@ def test_blocking_frame_reader_applies_the_same_header_validation() -> None:
 )
 def test_worker_requests_require_known_operations_objects_and_payload_arity(frame: Frame) -> None:
     with pytest.raises(FrameStreamClosed):
-        wire.decode_worker_request(frame)
+        wire.WorkerRequest.from_frame(frame)
 
 
 @pytest.mark.parametrize(
@@ -153,14 +153,14 @@ def test_worker_requests_require_known_operations_objects_and_payload_arity(fram
 )
 def test_every_worker_request_operation_enforces_its_payload_arity(operation: wire.Operation, arity: int) -> None:
     payloads = (b"payload",) * arity
-    decoded = wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, payloads))
+    decoded = wire.WorkerRequest.from_frame(Frame({"id": 1, "op": operation, "params": {}}, payloads))
     assert decoded.operation == operation
 
     with pytest.raises(FrameStreamClosed, match="payload"):
-        wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, (*payloads, b"extra")))
+        wire.WorkerRequest.from_frame(Frame({"id": 1, "op": operation, "params": {}}, (*payloads, b"extra")))
     if payloads:
         with pytest.raises(FrameStreamClosed, match="payload"):
-            wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, payloads[:-1]))
+            wire.WorkerRequest.from_frame(Frame({"id": 1, "op": operation, "params": {}}, payloads[:-1]))
 
 
 @pytest.mark.parametrize(

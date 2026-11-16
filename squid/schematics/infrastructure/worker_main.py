@@ -235,7 +235,7 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
         frame = wire.read_frame_sync(stdin)
         if frame is None:
             return
-        request = wire.decode_worker_request(frame)
+        request = wire.WorkerRequest.from_frame(frame)
         header = frame.header
         request_id = request.request_id
         operation = request.operation
