@@ -3,6 +3,7 @@
 import logging
 from typing import TYPE_CHECKING, Any, Self, override
 
+import anyio
 import discord
 
 import squid_ui.ext.discord as sd
@@ -23,6 +24,9 @@ from squid_i18n import md_tr
 from squid_ui.content.text import Text, localization_scope
 
 logger = logging.getLogger(__name__)
+
+DELIVERY_BATCH_SIZE = 20
+DELIVERY_TIMEOUT_SECONDS = 30
 
 
 if TYPE_CHECKING:
@@ -89,17 +93,26 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
         await self.bot.wait_until_ready()
-        for delivery in await self.bot.services.notifications.claim_deliveries():
+        for _ in range(DELIVERY_BATCH_SIZE):
+            # Reserve only work we can send now; queued claims could expire while
+            # earlier sends wait on Discord, allowing another worker to send them.
+            deliveries = await self.bot.services.notifications.claim_deliveries(limit=1)
+            if not deliveries:
+                break
+            delivery = deliveries[0]
             try:
-                user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
-                await user.send(
-                    render_delivery(delivery, self.bot.notification_site_url),
-                    allowed_mentions=discord.AllowedMentions.none(),
-                    nonce=str(delivery.nonce.int & ((1 << 63) - 1)),
-                )
+                with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
+                    user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
+                    await user.send(
+                        render_delivery(delivery, self.bot.notification_site_url),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                        nonce=str(delivery.nonce.int & ((1 << 63) - 1)),
+                    )
             except discord.Forbidden as error:
                 await self.bot.services.notifications.suspend_dm(delivery, error)
             except Exception as error:
+                if isinstance(error, TimeoutError):
+                    error = TimeoutError("Discord notification delivery timed out")
                 dead_lettered = await self.bot.services.notifications.fail_delivery(delivery, error)
                 if dead_lettered:
                     logger.exception(

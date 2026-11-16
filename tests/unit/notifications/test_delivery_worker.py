@@ -6,12 +6,14 @@ from typing import Literal, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
+import anyio
 import discord
 import pytest
 from aiohttp import ClientResponse
 from pytest_mock import MockerFixture
 
 import squid_ui.ext.discord as sd
+from squid.bot import notifications as notification_module
 from squid.bot.app import RedstoneSquid
 from squid.bot.notifications import NotificationCog
 from squid.notifications import NotificationService, PendingNotificationDelivery
@@ -147,3 +149,74 @@ async def test_ambiguous_delivery_failure_is_retried_and_only_dead_letters_are_l
         assert records[0].__dict__["squid.notification.delivery_id"] == worker.repository.delivery.id
         assert records[0].exc_info is not None
         assert records[0].exc_info[1] is error
+
+
+async def test_delivery_claims_only_after_previous_send_settles(worker: DeliveryWorker, mocker: MockerFixture) -> None:
+    attempts = 0
+
+    async def claim(*, limit: int) -> tuple[PendingNotificationDelivery, ...]:
+        nonlocal attempts
+        assert limit == 1
+        if attempts:
+            assert worker.repository.status == "completed"
+        if attempts == 2:
+            return ()
+        attempts += 1
+        worker.repository.status = "claimed"
+        return (worker.repository.delivery,)
+
+    mocker.patch.object(worker.cog.bot.services.notifications, "claim_deliveries", side_effect=claim)
+
+    await worker.cog.process_deliveries()
+
+    assert attempts == 2
+    assert worker.send.await_count == 2
+
+
+async def test_delivery_stops_at_batch_limit(worker: DeliveryWorker, mocker: MockerFixture) -> None:
+    async def claim(*, limit: int) -> tuple[PendingNotificationDelivery, ...]:
+        assert limit == 1
+        worker.repository.status = "claimed"
+        return (worker.repository.delivery,)
+
+    claims = mocker.patch.object(worker.cog.bot.services.notifications, "claim_deliveries", side_effect=claim)
+
+    await worker.cog.process_deliveries()
+
+    assert claims.await_count == notification_module.DELIVERY_BATCH_SIZE
+    assert worker.send.await_count == notification_module.DELIVERY_BATCH_SIZE
+
+
+@pytest.mark.parametrize("during_lookup", [False, True])
+async def test_stalled_discord_request_is_retried(
+    worker: DeliveryWorker, mocker: MockerFixture, during_lookup: bool
+) -> None:
+    async def stall(*args: object, **kwargs: object) -> None:
+        await anyio.sleep_forever()
+
+    mocker.patch.object(notification_module, "DELIVERY_TIMEOUT_SECONDS", 0.01)
+    if during_lookup:
+        mocker.patch.object(worker.cog.bot, "get_user", return_value=None)
+        mocker.patch.object(worker.cog.bot, "fetch_user", side_effect=stall)
+    else:
+        worker.send.side_effect = stall
+
+    await worker.cog.process_deliveries()
+
+    assert worker.repository.status == "failed"
+    assert worker.repository.error == "Discord notification delivery timed out"
+
+
+async def test_shutdown_does_not_count_as_delivery_failure(worker: DeliveryWorker) -> None:
+    with anyio.CancelScope() as scope:
+
+        async def cancel(*args: object, **kwargs: object) -> None:
+            scope.cancel()
+            await anyio.sleep_forever()
+
+        worker.send.side_effect = cancel
+        await worker.cog.process_deliveries()
+
+    assert scope.cancelled_caught
+    assert worker.repository.status == "claimed"
+    assert worker.repository.error is None
