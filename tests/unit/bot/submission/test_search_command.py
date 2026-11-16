@@ -2,19 +2,24 @@
 
 from dataclasses import dataclass, replace
 from typing import Any, cast, override
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 import squid_ui as sl
+from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
-from squid.bot.submission.cog import BuildCommands, SearchTarget
+from squid.bot.submission.cog import BuildCommands, SearchModeChoice, SearchTarget
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
+from squid.records.application import RecordService
 from squid.runtime import BotServices
 from squid.search.application import SearchService
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import (
     BuildSearchHit,
     RecordSearchHit,
@@ -25,17 +30,24 @@ from squid.search.domain import (
     SearchText,
     SortDirection,
 )
+from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.settings.application import SettingsService
 from squid_i18n import source_text
 from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services
+from tests.unit.bot.catalogue.test_build_browse_state import _screen, submit_search
 
 
 class RecordingSearch(SearchService):
     """A search service that keeps the request it was handed."""
 
-    def __init__(self) -> None:
+    def __init__(self, registry: FieldRegistry = DEFAULT_FIELD_REGISTRY) -> None:
         self.requests: list[SearchRequest] = []
+        self.registry = registry
+
+    @override
+    async def fields(self) -> FieldRegistry:
+        return self.registry
 
     @override
     async def search(self, request: SearchRequest) -> SearchPage:
@@ -74,8 +86,18 @@ def _cog(search: RecordingSearch) -> BuildCommands[Any]:
     return cog
 
 
-async def _run(cog: BuildCommands[Any], **kwargs: Any) -> None:
-    await cog._search_screen(**kwargs)
+async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | SearchScreen:
+    records = kwargs.get("scope") is SearchTarget.records
+    screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=records)
+    screen._search_service = cog.search
+    screen._search_parser = SearchQueryParser(await cog.search.fields())
+    with patch.object(BuildBrowseScreen, "create", AsyncMock(return_value=screen)):
+        result = await cog._search_screen(cast(Any, object()), **kwargs)
+    target = kwargs.get("scope", SearchTarget.builds)
+    assert isinstance(
+        result, BuildBrowseScreen if target in (SearchTarget.builds, SearchTarget.records) else SearchScreen
+    )
+    return result
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:
@@ -116,6 +138,7 @@ async def test_records_remain_an_explicit_search_target() -> None:
     await _run(_cog(search), query="width:5", scope=SearchTarget.records)
 
     assert search.requests[0].scope is SearchScope.RECORDS
+    assert search.requests[0].query == "status:resolved AND (width:5)"
     assert search.requests[0].group_by_build
 
 
@@ -159,6 +182,66 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 
     assert search.requests[0].scope is SearchScope.ALL
     assert search.requests[0].query == "a OR b"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "status:unresolved",
+        "status:resolved OR status:no_candidate",
+        "NOT status:resolved",
+        "NOT (status:resolved OR kind:door)",
+    ],
+)
+async def test_explicit_record_status_overrides_the_default(query: str) -> None:
+    search = RecordingSearch()
+    screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
+    assert isinstance(screen, BuildBrowseScreen)
+    assert screen._query == query
+    assert search.requests[0].query == query
+
+
+@pytest.mark.parametrize("query", ["", "   ", "door OR kind:extender"])
+async def test_record_default_is_part_of_the_editable_query(query: str) -> None:
+    search = RecordingSearch()
+    screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
+    assert isinstance(screen, BuildBrowseScreen)
+    expected = f"status:resolved AND ({query})" if query.strip() else "status:resolved"
+    assert screen._query == search.requests[0].query == expected
+
+
+@pytest.mark.parametrize("scope", [SearchTarget.builds, SearchTarget.records])
+async def test_smart_search_and_sort_survive_editing_the_catalogue_query(scope: SearchTarget) -> None:
+    search = RecordingSearch()
+    screen = await _run(_cog(search), query="door", scope=scope, mode=SearchModeChoice.smart, sort="-width")
+    assert isinstance(screen, BuildBrowseScreen)
+    assert search.requests[0].mode is SearchMode.SEMANTIC
+    assert screen._results is not None
+    assert screen._results._build_detail is not None
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "width:5", "-height")
+        assert search.requests[-1].mode is SearchMode.SEMANTIC
+        assert search.requests[-1].sort is not None
+        assert search.requests[-1].sort.field == "height"
+        assert search.requests[-1].sort.direction is SortDirection.DESCENDING
+        assert search.requests[-1].scope is (
+            SearchScope.RECORDS if scope is SearchTarget.records else SearchScope.BUILDS
+        )
+        ui.assert_within_limits()
+
+
+@pytest.mark.parametrize("scope", [SearchTarget.builds, SearchTarget.records])
+async def test_registered_fields_survive_opening_the_catalogue(scope: SearchTarget) -> None:
+    registry = FieldRegistry((*DEFAULT_FIELD_REGISTRY.definitions, FieldDefinition("custom_flag", FieldType.BOOLEAN)))
+    search = RecordingSearch(registry)
+    screen = await _run(_cog(search), query="custom_flag:true", scope=scope)
+    assert isinstance(screen, BuildBrowseScreen)
+    async with stage(screen, owner=object()) as ui:
+        assert "custom_flag:true" in screen._query
+        assert search.requests[0].query == screen._query
+        await ui.press(ui.key_for("guided-search"))
+        ui.control(ui.key_for("edit-0"))
+        ui.assert_within_limits()
 
 
 async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_page() -> None:

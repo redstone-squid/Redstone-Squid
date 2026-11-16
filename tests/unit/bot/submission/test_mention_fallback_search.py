@@ -52,7 +52,7 @@ async def test_mentions_search_builds(mention: str) -> None:
 
     await BuildCommands.mention_fallback_search(cast(Any, cog), cast(Any, context), commands.CommandNotFound())
 
-    cog._search_screen.assert_awaited_once_with(scope=SearchTarget.builds, query="width:5")
+    cog._search_screen.assert_awaited_once_with(request, scope=SearchTarget.builds, query="width:5")
     request.defer.assert_awaited_once_with("public")
     request.respond.assert_awaited_once_with(screen)
 

@@ -143,31 +143,41 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         mode: SearchModeChoice = SearchModeChoice.keyword,
         *,
         query: str,
-    ) -> SearchScreen:
+    ) -> BuildBrowseScreen | SearchScreen:
         """Search records, builds, patterns, and restrictions using text and field filters."""
-        return await self._search_screen(scope=scope, sort=sort, mode=mode, query=query)
+        return await self._search_screen(request, scope=scope, sort=sort, mode=mode, query=query)
 
     async def _search_screen(
         self,
+        request: sd.Request[Self, BotT],
         *,
         scope: SearchTarget = SearchTarget.builds,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
         query: str,
-    ) -> SearchScreen:
+    ) -> BuildBrowseScreen | SearchScreen:
+        search_mode = SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC
+        if scope in (SearchTarget.builds, SearchTarget.records):
+            return await BuildBrowseScreen.create_search(
+                request,
+                query=query,
+                records=scope is SearchTarget.records,
+                sort=sort or "",
+                mode=search_mode,
+            )
         search_scope, targeted_query = _targeted(scope, query)
-        request = SearchRequest(
+        search_request = SearchRequest(
             targeted_query,
             scope=search_scope,
-            mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
+            mode=search_mode,
             sort=SearchSort.parse(sort),
             page_size=CATALOGUE_PAGE_SIZE,
             group_by_build=True,
         )
-        page = await self.search.search(request)
+        page = await self.search.search(search_request)
         return SearchScreen(
             self.search,
-            request,
+            search_request,
             page,
             load_build=self.queries.get,
             render_build=lambda build: render_build_card(
@@ -208,10 +218,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     )
     async def records_workspace(self, request: sd.Request[Self, BotT], query: str | None = None) -> BuildBrowseScreen:
         """Open the shared catalogue at its record standings."""
-        screen = await BuildBrowseScreen.create(request, initial_records=True)
         if query is not None:
-            await screen._run_search(query, "")
-        return screen
+            return await BuildBrowseScreen.create_search(request, query=query, records=True)
+        return await BuildBrowseScreen.create(request, initial_records=True)
 
     @sd.Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
@@ -232,7 +241,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         assert trimmed_content != "", "Trimmed content should not be empty."
         request = await self.ui.request(ctx)
         await request.defer("public")
-        await request.respond(await self._search_screen(scope=SearchTarget.builds, query=trimmed_content))
+        await request.respond(await self._search_screen(request, scope=SearchTarget.builds, query=trimmed_content))
 
     @build_group.command(
         name=tr(t"command-build-submit-name = submit"),
