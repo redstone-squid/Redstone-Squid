@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import pairwise
 from typing import NoReturn
 
 from squid.core.errors import ErrorCode, ValidationError
@@ -69,6 +70,16 @@ _PUNCTUATION = {
 }
 _UNSUPPORTED_MODIFIERS = frozenset("*?~^")
 _WORD_BREAKS = frozenset('()[]:<>"*?~^')
+_RECORD_PREFIXES = (("fastest", "smallest"), ("smallest", "fastest"), ("fastest",), ("smallest",))
+_FIELD_OPERATORS = frozenset(
+    {
+        _TokenKind.COLON,
+        _TokenKind.LESS_THAN,
+        _TokenKind.LESS_THAN_OR_EQUAL,
+        _TokenKind.GREATER_THAN,
+        _TokenKind.GREATER_THAN_OR_EQUAL,
+    }
+)
 
 
 class SearchQueryParser:
@@ -77,6 +88,10 @@ class SearchQueryParser:
     Adjacent terms mean AND. NOT binds more tightly than AND, which binds more
     tightly than OR. Parentheses override that order. For example,
     `width:3 piston OR slime` means `(width:3 AND piston) OR slime`.
+
+    Leading unquoted `smallest`, `fastest`, or their two-word combinations are
+    shorthand for a base_title filter. Queries with an explicit base_title field
+    retain their literal text. Quoting the leading word also keeps it literal.
 
     Parsing stores tokens on this instance; do not share it across threads.
     """
@@ -105,7 +120,7 @@ class SearchQueryParser:
         """
         if len(source) > self._max_length:
             _fail(f"query exceeds {self._max_length} characters", self._max_length)
-        self._tokens = self._tokenize(source)
+        self._tokens = self._expand_record_prefix(self._tokenize(source))
         self._index = 0
         if self._peek().kind is _TokenKind.END:
             return SearchQuery(expression=None, normalized="")
@@ -114,6 +129,36 @@ class SearchQueryParser:
         if trailing.kind is not _TokenKind.END:
             _fail(f"unexpected {trailing.value!r}", trailing.position)
         return SearchQuery(expression=expression, normalized=render_expression(expression))
+
+    def _expand_record_prefix(self, tokens: tuple[_Token, ...]) -> tuple[_Token, ...]:
+        field = self._registry.resolve("base_title")
+        if field is None:
+            return tokens
+        for token, following in pairwise(tokens):
+            if (
+                token.kind is _TokenKind.WORD
+                and following.kind in _FIELD_OPERATORS
+                and self._registry.resolve(token.value) == field
+            ):
+                return tokens
+        for prefix in _RECORD_PREFIXES:
+            length = len(prefix)
+            if (
+                len(tokens) > length
+                and all(
+                    tokens[index].kind is _TokenKind.WORD and tokens[index].value.casefold() == word
+                    for index, word in enumerate(prefix)
+                )
+                and tokens[length].kind not in _FIELD_OPERATORS
+            ):
+                position = tokens[0].position
+                return (
+                    _Token(_TokenKind.WORD, field.name, position),
+                    _Token(_TokenKind.COLON, ":", position),
+                    _Token(_TokenKind.WORD, "_".join(prefix), position),
+                    *tokens[length:],
+                )
+        return tokens
 
     def _tokenize(self, source: str) -> tuple[_Token, ...]:
         tokens: list[_Token] = []

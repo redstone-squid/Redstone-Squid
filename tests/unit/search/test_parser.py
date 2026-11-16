@@ -142,3 +142,48 @@ def test_parser_coerces_units_for_database_defined_data_tag() -> None:
     assert parsed.expression == FieldExpression(
         closing_delay, ComparisonOperator.EQUAL, RangeValue(Decimal("8.0"), Decimal("10"))
     )
+
+
+@pytest.mark.parametrize("prefix", ["smallest", "fastest", "fastest smallest", "smallest fastest"])
+def test_parser_expands_leading_record_titles(prefix: str) -> None:
+    parser = SearchQueryParser()
+    expected = f"base_title:{prefix.replace(' ', '_')}"
+
+    assert parser.parse(prefix).expression == parser.parse(expected).expression
+    parsed = parser.parse(f"  {prefix.upper()} kind:door width<=5")
+    assert parsed.expression == parser.parse(f"{expected} kind:door width<=5").expression
+    assert parsed.normalized == f"{expected} AND kind:door AND width<=5"
+    assert parser.parse(parsed.normalized) == parsed
+
+
+@pytest.mark.parametrize(
+    ("query", "normalized"),
+    [
+        ('"smallest" door', '"smallest" AND door'),
+        ('"fastest smallest" door', '"fastest smallest" AND door'),
+        ("door fastest", "door AND fastest"),
+        ("first attempt", "first AND attempt"),
+        ("smallestish door", "smallestish AND door"),
+        ("title:fastest", "title:fastest"),
+        ("fastest base_title:smallest", "fastest AND base_title:smallest"),
+        ("smallest NOT BASE_TITLE:fastest", "smallest AND NOT base_title:fastest"),
+    ],
+)
+def test_parser_preserves_literal_text_and_explicit_record_filters(query: str, normalized: str) -> None:
+    assert SearchQueryParser().parse(query).normalized == normalized
+
+
+def test_record_prefix_preserves_boolean_precedence_and_error_positions() -> None:
+    parser = SearchQueryParser()
+
+    assert (
+        parser.parse("fastest door OR extender").expression
+        == parser.parse("base_title:fastest door OR extender").expression
+    )
+    with pytest.raises(QuerySyntaxError) as captured:
+        parser.parse("fastest smallest AND")
+    assert captured.value.position == len("fastest smallest AND")
+
+
+def test_record_prefix_requires_a_registered_base_title_field() -> None:
+    assert SearchQueryParser(FieldRegistry(())).parse("smallest door").normalized == "smallest AND door"
