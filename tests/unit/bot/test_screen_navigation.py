@@ -24,7 +24,7 @@ from squid_ui.ext.discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
 
 
-@pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account?tab=claims"])
+@pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#claims"])
 def test_real_assembly_roundtrips(address: str) -> None:
     router = build_screen_router()
     match = router.parse(address)
@@ -126,7 +126,8 @@ async def test_draft_access_failure_does_not_open_editor(monkeypatch: pytest.Mon
 
 
 async def test_account_tab_validation_and_current_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    screen = MagicMock(available_tabs={"identity"})
+    screen = MagicMock()
+    screen.focus.side_effect = [ValueError("Unavailable tab"), None]
     create = AsyncMock(return_value=screen)
     monkeypatch.setattr(AccountWorkspace, "create", create)
     request = MagicMock()
@@ -135,7 +136,7 @@ async def test_account_tab_validation_and_current_request(monkeypatch: pytest.Mo
     opening = await AccountWorkspace.open_account(request, "identity")
     assert opening is not None
     assert opening.screen is screen
-    assert screen.initial_tab == "identity"
+    screen.focus.assert_called_with("identity")
     create.assert_awaited_with(request)
 
 

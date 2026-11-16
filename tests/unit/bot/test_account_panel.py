@@ -32,7 +32,7 @@ from squid.bot.accounts.consent import ConsentPrompt, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
 from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
-from squid.bot.accounts.workspace import AccountWorkspace
+from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
 from squid.bot.follows import FollowCard
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
@@ -1091,3 +1091,59 @@ async def test_identity_visibility_needs_a_selected_identity() -> None:
 
     assert "identity_visibility" not in keys(tree)
     assert find(tree, sl.semantic.ActionControl, key="unlink").available is False
+
+
+async def test_account_focus_before_and_after_load_preserves_user_selection() -> None:
+    account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
+
+    class FocusAccounts(NoAccountService):
+        current: Account | None = account
+
+        @override
+        async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+            return self.current
+
+        @override
+        async def get_account_by_id(self, account_id: int) -> Account:
+            return account
+
+        @override
+        async def get_profile(self, account_id: int) -> AccountProfile:
+            return AccountProfile.empty(account_id)
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    accounts = FocusAccounts()
+    workspace = _workspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=no_consent_request,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    focusable: sl.Focusable[AccountTab] = workspace
+    assert isinstance(workspace, sl.Focusable)
+    assert focusable.focus_targets() == frozenset({"overview", "identity", "claims", "merge"})
+    with pytest.raises(ValueError, match="Unavailable account tab"):
+        focusable.focus("review")
+    focusable.focus("identity")
+    focusable.focus("claims")
+    async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
+        assert workspace._tabs is not None
+        assert workspace._tabs.machine_state.selected == "claims"
+        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.merge")))
+        await workspace._rebuild()
+        assert workspace._tabs.machine_state.selected == "merge"
+        focusable.focus("identity")
+        assert workspace._tabs.machine_state.selected == "identity"
+        focusable.focus("claims")
+        accounts.current = None
+        await workspace._rebuild()
+        assert workspace._tabs.machine_state.selected == "identity"
+        assert focusable.focus_targets() == frozenset({"identity"})
+        with pytest.raises(ValueError, match="Unavailable account tab"):
+            focusable.focus("claims")

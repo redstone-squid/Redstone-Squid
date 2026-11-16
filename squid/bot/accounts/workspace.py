@@ -64,7 +64,7 @@ class AccountWorkspace(sd.Screen):
         can_refresh_any: bool = False,
         can_refresh_identity: bool = False,
     ) -> None:
-        self.initial_tab: AccountTab | None = None
+        self._pending_focus: AccountTab | None = None
         self._accounts = accounts
         self._edits = edits
         self._edit_actor = actor
@@ -79,7 +79,7 @@ class AccountWorkspace(sd.Screen):
         self._can_refresh_identity = can_refresh_identity
         self._overview: AccountOverview | None = None
         self._claims: ClaimReviewComponent | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
+        self._tabs: sp.Tabs[sl.ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
@@ -140,24 +140,41 @@ class AccountWorkspace(sd.Screen):
             can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
         )
 
-    @screen_route("/account")
+    @screen_route("/account", fragment="tab")
     @classmethod
     async def open_account(cls, request: NavigationRequest, tab: AccountTab | None = None) -> ScreenOpening:
         """Open the opener's account, at `tab` when they can use it."""
         screen = await cls.create(request)
-        if tab is not None and tab not in screen.available_tabs:
-            raise ScreenUnavailable(tr(t"navigation-tab-unavailable = That account tab is unavailable."))
-        screen.initial_tab = tab
+        if tab is not None:
+            try:
+                screen.focus(tab)
+            except ValueError as error:
+                raise ScreenUnavailable(tr(t"navigation-tab-unavailable = That account tab is unavailable.")) from error
         return ScreenOpening(screen)
 
-    @property
-    def available_tabs(self) -> frozenset[str]:
-        tabs = {"identity"}
+    def focus_targets(self) -> frozenset[AccountTab]:
+        tabs: set[AccountTab] = {"identity"}
         if self._account is not None and self._account.id is not None:
             tabs.update(("overview", "claims", "merge"))
         if self._can_review_claims:
             tabs.add("review")
         return frozenset(tabs)
+
+    def focus(self, target: AccountTab) -> None:
+        """Reveal an account tab, leaving any merge preview.
+
+        Before loading, keep the latest request. If a reload removes the requested
+        or selected tab, fall back to the first available tab.
+        """
+        if target not in self.focus_targets():
+            message = f"Unavailable account tab: {target!r}"
+            raise ValueError(message)
+        if self._tabs is None:
+            self._pending_focus = target
+        else:
+            self._tabs.focus(target)
+        self._merge_code = None
+        self._merge_decision = None
 
     @override
     async def on_load(self) -> None:
@@ -204,8 +221,11 @@ class AccountWorkspace(sd.Screen):
             tabs.append(sp.Tab("merge", tr(t"account-workspace-merge-accounts = Merge accounts"), self._merge_nodes()))
         if self._claims is not None:
             tabs.append(sp.Tab("review", tr(t"account-workspace-review-claims = Review claims"), self._claims))
-        initial = self.initial_tab if self.initial_tab in {tab.key for tab in tabs} else None
-        self.initial_tab = None
+        selected: str | None = self._pending_focus
+        if selected is None and self._tabs is not None:
+            selected = self._tabs.machine_state.selected
+        initial = selected if selected in {tab.key for tab in tabs} else None
+        self._pending_focus = None
         self._tabs = sp.Tabs(
             tabs, initial=initial, key="account-tabs", title=tr(t"account-workspace-account = Account")
         )

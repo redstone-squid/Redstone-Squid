@@ -85,7 +85,7 @@ a tree of regions supplies the joint alternative.
 The bot's `ScreenRouter` opens a route by building a fresh screen with the opening
 request's identity and services. `/open address` is an unadvertised entrypoint; screens
 have no address-sharing controls. Supported addresses are `/builds`, `/builds/{build_id}`,
-`/drafts`, `/drafts?inbox=true`, `/drafts/{draft_id}`, `/account`, and `/account?tab=claims`
+`/drafts`, `/drafts?inbox=true`, `/drafts/{draft_id}`, `/account`, and `/account#claims`
 (or another existing account tab). Account and draft-list addresses refer to the opener.
 
 Declare a route by decorating a classmethod on the screen with `@screen_route(path)`,
@@ -99,7 +99,10 @@ async def open_detail(cls, request: NavigationRequest, build_id: int) -> ScreenO
 
 Names in `{braces}` are path parameters. Every other parameter is a query parameter and
 needs a default, which `url_for` leaves out of the address. Annotations choose the parsing:
-`int` (positive), `bool`, `UUID`, string `Literal`s, and an optional form of these. A class
+`int` (positive), `bool`, `UUID`, string `Literal`s, and an optional form of these.
+`@screen_route("/account", fragment="tab")` instead encodes the optional `tab` parameter
+as `/account#claims`; it must default to `None`. The opening method receives the typed
+value just as it would a query parameter. A class
 may declare several routes, and a subclass does not inherit them. List each screen once in
 `navigation.assembly.build_screen_router`; `register` fails for a screen with no routes.
 
@@ -120,3 +123,11 @@ Persistent destination buttons use the existing Discord control router and deleg
 `request.client.screen_router`. Keep these component IDs separate from screen addresses:
 old buttons remain compatibility entrypoints, while addresses describe destinations.
 Neither carries permission grants, callbacks, unsaved form state, or navigation history.
+
+An item can implement `sl.Focusable[Target]` to expose public locations through
+`focus_targets()` and reveal one with `focus(target)`. This capability is independent
+of `Renderable` and does not move keyboard focus. The account opener calls `focus(tab)`;
+the workspace selects a tab immediately or remembers it until loading. Later renders
+preserve the user's selection, and another explicit focus call can change it. Unavailable
+targets raise `ValueError`, which the account opener translates into `ScreenUnavailable`.
+Focus changes presentation without firing action callbacks; the host delivers the render.

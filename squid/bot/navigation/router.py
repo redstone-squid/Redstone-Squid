@@ -3,7 +3,8 @@
 A screen becomes reachable by decorating a classmethod with `screen_route`. The method receives
 the opening request plus the arguments parsed from the address, and returns a fresh screen to
 deliver. Names in `{braces}` are path parameters; every other parameter is a query parameter
-and needs a default, which `url_for` omits from the address. Annotations choose the parsing, so
+and needs a default, which `url_for` omits from the address. A route can designate one
+optional parameter as its fragment instead of a query parameter. Annotations choose the parsing, so
 only `int`, `bool`, `UUID`, string `Literal`s and an optional form of those are supported.
 
 The router owns lookup and delivery only. Audience and deferral come from the screen's own
@@ -28,7 +29,7 @@ from typing import (
     get_type_hints,
     override,
 )
-from urllib.parse import parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 from uuid import UUID
 
 import squid_ui.ext.discord as sd
@@ -85,11 +86,12 @@ class ScreenRoute[**P]:
     """The screen class that declares this route, set when the class body finishes."""
     name: str
 
-    def __init__(self, path: str, opener: Opener[P]) -> None:
+    def __init__(self, path: str, opener: Opener[P], *, fragment: str | None = None) -> None:
         if not isinstance(opener, classmethod):
             msg = "Apply screen_route above @classmethod"
             raise TypeError(msg)
         self.path = path
+        self.fragment = fragment
         self._function = opener.__func__
 
     def __set_name__(self, owner: type[sd.Screen[Any, Any, Any]], name: str) -> None:
@@ -126,18 +128,20 @@ class ScreenRoute[**P]:
 @dataclass(frozen=True, slots=True)
 class _Declare:
     path: str
+    fragment: str | None = None
 
     def __call__[**P](self, opener: Opener[P], /) -> ScreenRoute[P]:
-        return ScreenRoute(self.path, opener)
+        return ScreenRoute(self.path, opener, fragment=self.fragment)
 
 
-def screen_route(path: str, /) -> _Declare:
+def screen_route(path: str, /, *, fragment: str | None = None) -> _Declare:
     """Declare the address of a classmethod that opens its screen.
 
     Apply it above `@classmethod`. A screen class may declare several routes, and a subclass
-    does not inherit its parent's routes.
+    does not inherit its parent's routes. Set `fragment` to the name of an optional
+    opening parameter to encode it after `#` instead of in the query string.
     """
-    return _Declare(path)
+    return _Declare(path, fragment)
 
 
 def _supported(annotation: object) -> bool:
@@ -240,6 +244,17 @@ class ScreenRouter:
         if len(set(parameters)) != len(parameters) or not set(parameters) <= declared.keys():
             msg = "Every path parameter must be a parameter of the opening method, exactly once"
             raise ValueError(msg)
+        if route.fragment is not None:
+            parameter = declared.get(route.fragment)
+            if parameter is None or route.fragment in parameters or parameter.default is not None:
+                msg = "Fragment must name a non-path parameter with a None default"
+                raise ValueError(msg)
+            annotation = annotations.get(route.fragment)
+            while isinstance(annotation, TypeAliasType):
+                annotation = annotation.__value__
+            if type(None) not in get_args(annotation):
+                msg = "Fragment parameter must have an optional type"
+                raise ValueError(msg)
         defaults: dict[str, object] = {}
         for name, parameter in declared.items():
             if parameter.kind not in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY):
@@ -264,7 +279,7 @@ class ScreenRouter:
             ):
                 msg = "Ambiguous screen route paths"
                 raise ValueError(msg)
-        query = tuple(name for name in declared if name not in parameters)
+        query = tuple(name for name in declared if name not in parameters and name != route.fragment)
         self._bindings.append(_Binding(route, segments, parameters, query, annotations, defaults))
 
     def freeze(self) -> None:
@@ -283,7 +298,7 @@ class ScreenRouter:
         Raises:
             InvalidAddress: The address is malformed, names no route, or has a bad argument.
         """
-        if any(character.isspace() for character in address) or "#" in address or "%" in address:
+        if any(character.isspace() for character in address) or "%" in address.partition("#")[0]:
             msg = "Expected a relative screen address"
             raise InvalidAddress(msg)
         if not address.startswith("/") or address.startswith("//"):
@@ -314,7 +329,22 @@ class ScreenRouter:
             if query.keys() - set(binding.query):
                 msg = "Unknown query parameter"
                 raise InvalidAddress(msg)
+            if "#" in address and (binding.route.fragment is None or not parsed.fragment):
+                msg = "Unexpected or empty fragment"
+                raise InvalidAddress(msg)
             values = dict(binding.defaults)
+            if parsed.fragment:
+                name = binding.route.fragment
+                assert name is not None
+                if "#" in parsed.fragment or re.search(r"%(?![0-9a-fA-F]{2})", parsed.fragment):
+                    msg = "Invalid fragment encoding"
+                    raise InvalidAddress(msg)
+                try:
+                    fragment = unquote(parsed.fragment, errors="strict")
+                except UnicodeDecodeError as error:
+                    msg = "Invalid fragment encoding"
+                    raise InvalidAddress(msg) from error
+                values[name] = _decode(fragment, binding.annotations[name])
             for expected, actual in zip(binding.segments, segments, strict=True):
                 if expected.startswith("{"):
                     name = expected[1:-1]
@@ -330,9 +360,12 @@ class ScreenRouter:
         bound = binding.route.signature.bind(*args, **kwargs)
         bound.apply_defaults()
         for name, value in bound.arguments.items():
-            if value is None and type(None) in get_args(binding.annotations[name]):
+            annotation = binding.annotations[name]
+            while isinstance(annotation, TypeAliasType):
+                annotation = annotation.__value__
+            if value is None and type(None) in get_args(annotation):
                 continue
-            if _decode(_encode(value), binding.annotations[name]) != value:
+            if _decode(_encode(value), annotation) != value:
                 msg = "Invalid route argument"
                 raise InvalidAddress(msg)
         return dict(bound.arguments)
@@ -349,7 +382,14 @@ class ScreenRouter:
         query = urlencode(
             [(name, _encode(values[name])) for name in binding.query if values[name] != binding.defaults[name]]
         )
-        return f"{path}?{query}" if query else path
+        address = f"{path}?{query}" if query else path
+        if route.fragment is not None and values[route.fragment] is not None:
+            fragment = _encode(values[route.fragment])
+            if not fragment:
+                msg = "Fragment must not be empty"
+                raise InvalidAddress(msg)
+            address += "#" + quote(fragment, safe="")
+        return address
 
     def deferral(self, route: ScreenRoute[...]) -> sd.Deferral:
         """Return the deferral that matches the audience of the route's screen policy.

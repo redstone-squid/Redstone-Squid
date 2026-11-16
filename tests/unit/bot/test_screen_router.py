@@ -1,6 +1,6 @@
 """Screen routes are declared on opening classmethods; the router does not own Discord delivery scopes."""
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -17,6 +17,8 @@ from squid.bot.navigation.router import (
     ScreenUnavailable,
     screen_route,
 )
+
+type OptionalTab = Literal["identity", "claims"] | None
 
 
 class Browser(sd.Screen):
@@ -47,9 +49,9 @@ class Drafts(sd.Screen):
 
 
 class Account(sd.Screen):
-    @screen_route("/account")
+    @screen_route("/account", fragment="tab")
     @classmethod
-    async def index(cls, request: NavigationRequest, tab: Literal["identity", "claims"] | None = None) -> ScreenOpening:
+    async def index(cls, request: NavigationRequest, tab: OptionalTab = None) -> ScreenOpening:
         return ScreenOpening(cls())
 
 
@@ -75,7 +77,7 @@ def router() -> ScreenRouter:
             "/drafts/00000000-0000-0000-0000-000000000001",
         ),
         (Account.index, {}, "/account"),
-        (Account.index, {"tab": "claims"}, "/account?tab=claims"),
+        (Account.index, {"tab": "claims"}, "/account#claims"),
     ],
 )
 def test_round_trip(router: ScreenRouter, route: ScreenRoute[...], arguments: dict[str, Any], address: str) -> None:
@@ -107,7 +109,12 @@ def test_parse_supplies_defaults(router: ScreenRouter) -> None:
         "/drafts/not-a-uuid",
         "/drafts?inbox=1",
         "/drafts?inbox=true&inbox=false",
-        "/account?tab=missing",
+        "/account#missing",
+        "/account#",
+        "/account#claims#identity",
+        "/account#%FF",
+        "/account#%zz",
+        "/account?tab=claims",
         "/account?tab",
         "/account?tab=",
         "/builds\n",
@@ -314,3 +321,66 @@ def test_deferral_follows_the_screens_audience_policy() -> None:
     assert router.deferral(Shared.index) == "public"
     # Screens default to a personal audience.
     assert router.deferral(Browser.index) == "private"
+
+
+@pytest.mark.parametrize("fragment", ["missing", "build_id", "inbox"])
+def test_fragment_must_name_an_optional_non_path_parameter(fragment: str) -> None:
+    class Invalid(sd.Screen):
+        @screen_route("/invalid/{build_id}", fragment=fragment)
+        @classmethod
+        async def detail(cls, request: NavigationRequest, build_id: int, inbox: bool = False) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    with pytest.raises(ValueError, match="Fragment"):
+        ScreenRouter().register(Invalid)
+
+
+def test_fragment_requires_optional_annotation() -> None:
+    class Invalid(sd.Screen):
+        @screen_route("/invalid", fragment="tab")
+        @classmethod
+        async def index(cls, request: NavigationRequest, tab: int = cast(int, None)) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    with pytest.raises(ValueError, match="optional type"):
+        ScreenRouter().register(Invalid)
+
+
+async def test_fragment_and_query_round_trip_and_reach_opener() -> None:
+    class FocusScreen(sd.Screen):
+        def render(self) -> tuple[()]:
+            return ()
+
+        @screen_route("/focus/{build_id}", fragment="location")
+        @classmethod
+        async def index(
+            cls,
+            request: NavigationRequest,
+            build_id: int,
+            inbox: bool = False,
+            location: Literal["media/details", "a #?%é"] | None = None,
+        ) -> ScreenOpening:
+            assert (build_id, inbox, location) == (3, True, "a #?%é")
+            return ScreenOpening(cls(), session_key=location)
+
+    router = ScreenRouter()
+    router.register(FocusScreen)
+    address = router.url_for(FocusScreen.index, 3, inbox=True, location="a #?%é")
+    assert address == "/focus/3?inbox=true#a%20%23%3F%25%C3%A9"
+    assert router.parse(address).arguments == {"build_id": 3, "inbox": True, "location": "a #?%é"}
+    request = MagicMock(spec=sd.Request, respond=AsyncMock())
+    await router.open_address(request, address)
+    assert request.respond.call_args.kwargs == {"session_key": "a #?%é"}
+
+
+def test_empty_fragment_argument_is_not_addressable() -> None:
+    class Empty(sd.Screen):
+        @screen_route("/empty", fragment="target")
+        @classmethod
+        async def index(cls, request: NavigationRequest, target: Literal[""] | None = None) -> ScreenOpening:
+            return ScreenOpening(cls())
+
+    router = ScreenRouter()
+    router.register(Empty)
+    with pytest.raises(InvalidAddress, match="must not be empty"):
+        router.url_for(Empty.index, target="")
