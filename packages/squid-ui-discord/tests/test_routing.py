@@ -1352,6 +1352,9 @@ class TestRouteHandles:
         imported = decorate("edit:{build_id:int}")(original)
         identity = imported.route
         router.register(_FakeClient())  # type: ignore[arg-type]
+        # Populate the frozen route table before replacing the handler.
+        found = router.resolve(imported.id(build_id=5), component=component)
+        assert found is not None and found[0].handler is original
 
         # Reload can switch from named parameters to **kwargs. Both dispatch and
         # retained imports must reach the replacement.

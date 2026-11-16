@@ -31,6 +31,7 @@ from squid_ui import (
     primitives,
     profiling,
     resources,
+    routing,
     runtime,
     scene,
     sources,
@@ -194,7 +195,6 @@ from squid_ui.interactions import (
 from squid_ui.interactions import forms as forms
 from squid_ui.interactions import guards as guards
 from squid_ui.interactions import ownership as ownership
-from squid_ui.interactions import routing as routing
 from squid_ui.interactions.handlers import handlers
 from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry, Role
 from squid_ui.primitives.constraints import PageEvent, RoutedPage

@@ -72,7 +72,7 @@ def _segment(
     converters: Mapping[str, Converter],
     parameters: Mapping[str, Converter],
 ) -> _Segment:
-    """Read one colon-delimited segment as either a literal or a single parameter."""
+    """Read one segment as either a literal or a single parameter."""
     if not raw:
         message = f"route {fmt!r}: segment {index} is empty"
         raise ValueError(message)
@@ -98,7 +98,7 @@ def _segment(
         case _:
             message = (
                 f"route {fmt!r}: segment {index} ({raw!r}) must be a literal or one {{parameter}}, not a mix. "
-                "Exact segments are what make route overlap decidable."
+                "Whole segments let the router reject overlapping routes."
             )
             raise ValueError(message)
 

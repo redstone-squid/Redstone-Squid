@@ -82,6 +82,14 @@ a tree of regions supplies the joint alternative.
 
 ## Addressable destinations
 
+Screen and persistent-control routes share `squid_ui.routing.RoutePattern` and
+`RouteTable` for compilation, matching, reverse generation, and overlap rejection.
+`AddressRoute` adds typed query parameters and fragments to that engine. The screen
+adapter owns discovery and delivery; the Discord control adapter owns acknowledgement,
+handler reloads, and retired-control responses. `sl.routing.Route` retains the colon
+syntax and control ID length limit. Existing imports from `squid_ui.interactions.routing`
+remain supported.
+
 The bot's `ScreenRouter` opens a route by building a fresh screen with the opening
 request's identity and services. `/open address` is an unadvertised entrypoint; screens
 have no address-sharing controls. Supported addresses are `/builds`, `/builds/{build_id}`,

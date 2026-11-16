@@ -41,7 +41,7 @@ ROOT_NAMESPACES = (
     (
         ("authoring", ("document", "semantic", "presentations", "grids", "rosters", "tallies")),
         ("content", ("assets", "emoji", "entity", "temporal", "text")),
-        ("interactions", ("forms", "guards", "ownership", "routing")),
+        ("interactions", ("forms", "guards", "ownership")),
     ),
 )
 def test_grouped_modules_preserve_root_shortcuts(package: str, names: tuple[str, ...]) -> None:
@@ -75,6 +75,7 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         [
             "squid_ui",
             "squid_ui.planning",
+            "squid_ui.routing",
             "squid_ui.profiling",
             "squid_ui.runtime",
             "squid_reactivity",
@@ -88,3 +89,11 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         "squid_ui.ext.html",
         "squid_ui_widgets",
     )
+
+
+def test_legacy_control_routing_imports_share_the_promoted_types() -> None:
+    legacy = import_module("squid_ui.interactions.routing")
+    assert sl.routing is import_module("squid_ui.routing")
+    assert legacy.Route is sl.routing.Route
+    assert legacy.Converter is sl.routing.Converter
+    assert legacy.CONVERTERS is sl.routing.CONVERTERS

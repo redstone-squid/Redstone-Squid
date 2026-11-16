@@ -13,38 +13,28 @@ stays in the bot's control router.
 """
 
 import inspect
-import re
 from collections.abc import Awaitable, Callable, Hashable, Mapping
 from dataclasses import dataclass
-from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Any,
     Concatenate,
-    Literal,
-    TypeAliasType,
     cast,
-    get_args,
-    get_origin,
     get_type_hints,
     override,
 )
-from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
-from uuid import UUID
 
 import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
 from squid_i18n import TextLike
+from squid_ui.routing import AddressParts, AddressRoute, RouteTable
+from squid_ui.routing import InvalidAddress as InvalidAddress
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
 type NavigationRequest = sd.Request[Any, RedstoneSquid]
-
-
-class InvalidAddress(ValueError):
-    """An address or route arguments do not match a registered route."""
 
 
 class ScreenUnavailable(Exception):
@@ -144,51 +134,6 @@ def screen_route(path: str, /, *, fragment: str | None = None) -> _Declare:
     return _Declare(path, fragment)
 
 
-def _supported(annotation: object) -> bool:
-    if isinstance(annotation, TypeAliasType):
-        return _supported(annotation.__value__)
-    if annotation in (int, bool, UUID):
-        return True
-    if get_origin(annotation) is Literal:
-        return all(isinstance(value, str) for value in get_args(annotation))
-    if get_origin(annotation) is UnionType:
-        arguments = get_args(annotation)
-        return (
-            len(arguments) == 2
-            and type(None) in arguments
-            and all(value is type(None) or _supported(value) for value in arguments)
-        )
-    return False
-
-
-def _decode(value: str, annotation: object) -> object:
-    if isinstance(annotation, TypeAliasType):
-        return _decode(value, annotation.__value__)
-    if get_origin(annotation) is UnionType:
-        return _decode(value, next(argument for argument in get_args(annotation) if argument is not type(None)))
-    if annotation is int:
-        if not re.fullmatch(r"[0-9]+", value) or int(value) <= 0:
-            msg = "IDs must be positive integers"
-            raise InvalidAddress(msg)
-        return int(value)
-    if annotation is UUID:
-        try:
-            return UUID(value)
-        except ValueError as error:
-            msg = "Invalid UUID"
-            raise InvalidAddress(msg) from error
-    if annotation is bool and value in ("true", "false"):
-        return value == "true"
-    if get_origin(annotation) is Literal and value in get_args(annotation):
-        return value
-    msg = "Invalid parameter value"
-    raise InvalidAddress(msg)
-
-
-def _encode(value: object) -> str:
-    return str(value).lower() if isinstance(value, bool) else str(value)
-
-
 @dataclass(frozen=True, slots=True)
 class RouteMatch:
     """The route an address names and the arguments it supplies, defaults included."""
@@ -197,21 +142,12 @@ class RouteMatch:
     arguments: dict[str, Any]
 
 
-@dataclass(frozen=True, slots=True)
-class _Binding:
-    route: ScreenRoute[...]
-    segments: tuple[str, ...]
-    parameters: tuple[str, ...]
-    query: tuple[str, ...]
-    annotations: dict[str, Any]
-    defaults: dict[str, object]
-
-
 class ScreenRouter:
     """An explicitly assembled, frozen table of screen routes."""
 
     def __init__(self) -> None:
-        self._bindings: list[_Binding] = []
+        self._bindings: dict[ScreenRoute[...], AddressRoute] = {}
+        self._table = RouteTable[ScreenRoute[...]]()
         self._frozen = False
 
     def register(self, *screens: type[sd.Screen[Any, Any, Any]]) -> None:
@@ -231,165 +167,40 @@ class ScreenRouter:
                 self._bind(route)
 
     def _bind(self, route: ScreenRoute[...]) -> None:
-        if any(binding.route is route for binding in self._bindings):
+        if route in self._bindings:
             msg = "Route already registered"
             raise ValueError(msg)
-        if not re.fullmatch(r"/(?:[a-z][a-z0-9-]*|\{[a-z_]+\})(?:/(?:[a-z][a-z0-9-]*|\{[a-z_]+\}))*", route.path):
-            msg = "Invalid route path"
-            raise ValueError(msg)
-        segments = tuple(route.path[1:].split("/"))
-        parameters = tuple(segment[1:-1] for segment in segments if segment.startswith("{"))
-        declared = route.signature.parameters
-        annotations = route.hints()
-        if len(set(parameters)) != len(parameters) or not set(parameters) <= declared.keys():
-            msg = "Every path parameter must be a parameter of the opening method, exactly once"
-            raise ValueError(msg)
-        if route.fragment is not None:
-            parameter = declared.get(route.fragment)
-            if parameter is None or route.fragment in parameters or parameter.default is not None:
-                msg = "Fragment must name a non-path parameter with a None default"
-                raise ValueError(msg)
-            annotation = annotations.get(route.fragment)
-            while isinstance(annotation, TypeAliasType):
-                annotation = annotation.__value__
-            if type(None) not in get_args(annotation):
-                msg = "Fragment parameter must have an optional type"
-                raise ValueError(msg)
-        defaults: dict[str, object] = {}
-        for name, parameter in declared.items():
-            if parameter.kind not in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY):
-                msg = "Route parameters must be named, without *args or **kwargs"
-                raise ValueError(msg)
-            if not _supported(annotations.get(name)):
-                msg = "Unsupported route parameter type"
-                raise ValueError(msg)
-            if name in parameters:
-                if parameter.default is not parameter.empty or type(None) in get_args(annotations[name]):
-                    msg = "Path parameters must be required"
-                    raise ValueError(msg)
-            elif parameter.default is parameter.empty:
-                msg = "Query parameters must have defaults"
-                raise ValueError(msg)
-            else:
-                defaults[name] = parameter.default
-        for previous in self._bindings:
-            if len(segments) == len(previous.segments) and all(
-                left == right or left.startswith("{") or right.startswith("{")
-                for left, right in zip(segments, previous.segments, strict=True)
-            ):
-                msg = "Ambiguous screen route paths"
-                raise ValueError(msg)
-        query = tuple(name for name in declared if name not in parameters and name != route.fragment)
-        self._bindings.append(_Binding(route, segments, parameters, query, annotations, defaults))
+        address = AddressRoute(route.path, route.signature, route.hints(), fragment=route.fragment)
+        try:
+            self._table.add(address.pattern, route)
+        except ValueError as error:
+            msg = "Ambiguous screen route paths"
+            raise ValueError(msg) from error
+        self._bindings[route] = address
 
     def freeze(self) -> None:
         self._frozen = True
 
-    def _binding(self, route: ScreenRoute[...]) -> _Binding:
-        for binding in self._bindings:
-            if binding.route is route:
-                return binding
-        msg = "Unregistered route"
-        raise InvalidAddress(msg)
+    def _binding(self, route: ScreenRoute[...]) -> AddressRoute:
+        try:
+            return self._bindings[route]
+        except KeyError as error:
+            msg = "Unregistered route"
+            raise InvalidAddress(msg) from error
 
     def parse(self, address: str) -> RouteMatch:
-        """Match an address to its route.
-
-        Raises:
-            InvalidAddress: The address is malformed, names no route, or has a bad argument.
-        """
-        if any(character.isspace() for character in address) or "%" in address.partition("#")[0]:
-            msg = "Expected a relative screen address"
+        """Resolve an address, raising InvalidAddress for malformed or unknown destinations."""
+        parts = AddressParts.parse(address)
+        found = self._table.match(parts.path[1:])
+        if found is None:
+            msg = "Unknown screen address"
             raise InvalidAddress(msg)
-        if not address.startswith("/") or address.startswith("//"):
-            message = "Expected a relative screen address"
-            raise InvalidAddress(message)
-        parsed = urlsplit(address)
-        if parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
-            msg = "Expected a relative screen address"
-            raise InvalidAddress(msg)
-        segments = tuple(parsed.path[1:].split("/"))
-        try:
-            pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
-        except ValueError as error:
-            msg = "Invalid query parameters"
-            raise InvalidAddress(msg) from error
-        query = dict(pairs)
-        if len(query) != len(pairs):
-            msg = "Duplicate query parameter"
-            raise InvalidAddress(msg)
-        for binding in self._bindings:
-            if len(segments) != len(binding.segments):
-                continue
-            if any(
-                expected != actual and not expected.startswith("{")
-                for expected, actual in zip(binding.segments, segments, strict=True)
-            ):
-                continue
-            if query.keys() - set(binding.query):
-                msg = "Unknown query parameter"
-                raise InvalidAddress(msg)
-            if "#" in address and (binding.route.fragment is None or not parsed.fragment):
-                msg = "Unexpected or empty fragment"
-                raise InvalidAddress(msg)
-            values = dict(binding.defaults)
-            if parsed.fragment:
-                name = binding.route.fragment
-                assert name is not None
-                if "#" in parsed.fragment or re.search(r"%(?![0-9a-fA-F]{2})", parsed.fragment):
-                    msg = "Invalid fragment encoding"
-                    raise InvalidAddress(msg)
-                try:
-                    fragment = unquote(parsed.fragment, errors="strict")
-                except UnicodeDecodeError as error:
-                    msg = "Invalid fragment encoding"
-                    raise InvalidAddress(msg) from error
-                values[name] = _decode(fragment, binding.annotations[name])
-            for expected, actual in zip(binding.segments, segments, strict=True):
-                if expected.startswith("{"):
-                    name = expected[1:-1]
-                    values[name] = _decode(actual, binding.annotations[name])
-            for name, value in query.items():
-                values[name] = _decode(value, binding.annotations[name])
-            return RouteMatch(binding.route, values)
-        msg = "Unknown screen address"
-        raise InvalidAddress(msg)
-
-    def _arguments(self, binding: _Binding, args: tuple[object, ...], kwargs: dict[str, object]) -> dict[str, object]:
-        """Bind and check the arguments for a route, so only addressable values reach the opener."""
-        bound = binding.route.signature.bind(*args, **kwargs)
-        bound.apply_defaults()
-        for name, value in bound.arguments.items():
-            annotation = binding.annotations[name]
-            while isinstance(annotation, TypeAliasType):
-                annotation = annotation.__value__
-            if value is None and type(None) in get_args(annotation):
-                continue
-            if _decode(_encode(value), annotation) != value:
-                msg = "Invalid route argument"
-                raise InvalidAddress(msg)
-        return dict(bound.arguments)
+        route, arguments = found
+        return RouteMatch(route, self._binding(route).decode(parts, arguments))
 
     def url_for[**P](self, route: ScreenRoute[P], /, *args: P.args, **kwargs: P.kwargs) -> str:
-        """Return the address of a route, omitting query parameters left at their defaults.
-
-        Raises:
-            InvalidAddress: The route is not registered or an argument cannot be addressed.
-        """
-        binding = self._binding(route)
-        values = self._arguments(binding, args, kwargs)
-        path = route.path.format(**{name: _encode(values[name]) for name in binding.parameters})
-        query = urlencode(
-            [(name, _encode(values[name])) for name in binding.query if values[name] != binding.defaults[name]]
-        )
-        address = f"{path}?{query}" if query else path
-        if route.fragment is not None and values[route.fragment] is not None:
-            fragment = _encode(values[route.fragment])
-            if not fragment:
-                msg = "Fragment must not be empty"
-                raise InvalidAddress(msg)
-            address += "#" + quote(fragment, safe="")
-        return address
+        """Build the route's address, omitting query parameters left at their defaults."""
+        return self._binding(route).build(*args, **kwargs)
 
     def deferral(self, route: ScreenRoute[...]) -> sd.Deferral:
         """Return the deferral that matches the audience of the route's screen policy.
@@ -408,7 +219,7 @@ class ScreenRouter:
         When the opener raises `ScreenUnavailable`, its message is delivered instead. Returns
         None when the opener already handled the interaction.
         """
-        values = self._arguments(self._binding(route), args, kwargs)
+        values = self._binding(route).arguments(args, kwargs)
         try:
             opening = await route.invoke(request, values)
         except ScreenUnavailable as unavailable:
