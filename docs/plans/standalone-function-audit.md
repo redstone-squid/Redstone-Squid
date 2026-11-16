@@ -1,6 +1,9 @@
 # Standalone function ownership audit
 
-Reviewed 2026-11-16 at `a8d616f00`. This is an audit, not an implemented refactor.
+Reviewed 2026-11-16 at `a8d616f00`. The existing-class recommendations below
+have since been implemented, including the consent, taxonomy, and timing-loader
+follow-ups. The proposed new `DiscordDraftIntake` adapter remains deferred.
+The findings retain the original function names and locations for reference.
 Three subagents reviewed Discord UI, domain/application code, and infrastructure;
 the primary review covered shared bot helpers and checked the leading findings.
 The scope is `squid/`, with emphasis on bot workflows and their supporting services.
@@ -111,4 +114,16 @@ project type check and installed hooks. Repository moves additionally need the
 relevant integration tests to protect locking and transaction behavior; constructor
 moves should retain privacy, validation, and error-path coverage.
 
-This audit changed no executable code. `just typecheck` passed with zero errors.
+The original audit changed no executable code. The implementation preserves the
+existing validation, privacy, and transaction rules; callers, exports, and test
+patch targets now use the owning classes. Focused unit and PostgreSQL integration
+tests cover the changed behavior.
+
+The final project type check passed with zero errors. Regenerated localization
+catalogs pass validation, with existing Chinese translation review notices.
+
+Architecture validation passed 39 checks and found three existing failures:
+process-environment access in the range analyzer, builtin exceptions in record
+application code, and a record-model import of application evidence types. All
+three failures were reproduced from pre-refactor revision `9c7584704` in an
+isolated source export. They are outside this ownership refactor.
