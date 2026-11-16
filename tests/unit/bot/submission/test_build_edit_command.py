@@ -6,14 +6,16 @@ Retained submission-draft editing is covered in ``test_draft_editor.py``.
 from typing import Any, cast, override
 
 import discord
+import pytest
 
 import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account
+from squid.bot.routes import AppRequest
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
-from squid.bot.submission.ui.controls import recover_build_editor
+from squid.bot.submission.ui.controls import edit_build, recover_build_editor
 from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
@@ -29,6 +31,7 @@ from squid.submissions.application import FormOptionSet, SubmissionFormService
 from squid.submissions.application.forms import build_edit_manifest
 from squid.submissions.domain import FormManifest
 from squid_ui.ext.discord.testing import InteractionHarness
+from squid_ui.routing import Endpoint
 from squid_ui.testing import RecordingResponder, press_event
 from tests.support.build_edit_runner import EDIT_OPTIONS
 from tests.support.discord import make_layout_bot
@@ -300,3 +303,14 @@ async def test_in_session_reload_reauthorizes_the_reloaded_non_pending_build() -
     assert screen.build is latest
     assert responder.acknowledged == 0
     assert responder.notices[0][0] == "Only the pending build's submitter or a trusted staff member can edit it."
+
+
+@pytest.mark.parametrize("endpoint", [edit_build, recover_build_editor])
+async def test_editor_routes_explain_a_deleted_build(endpoint: Endpoint[AppRequest, ...]) -> None:
+    cog = _cog(None)
+    interaction = _interaction(cog.bot)
+
+    await endpoint(await sd.request(interaction), 1)
+
+    assert _component(_sent_view(interaction)) is None
+    assert cast(StubBuilds, cog.builds).gets == 1
