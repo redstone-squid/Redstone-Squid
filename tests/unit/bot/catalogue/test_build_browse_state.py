@@ -438,14 +438,14 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
         ui.assert_within_limits()
 
 
-async def test_record_category_shortcut_preserves_the_default_status() -> None:
+async def test_record_category_shortcut_includes_all_statuses() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("smallest"))
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "(status:resolved) AND (base_title:smallest)"
+        assert request.query == "(base_title:smallest)"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
 
@@ -920,7 +920,7 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         await ui.press(ui.key_for("reset"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert screen._guided is not None
-        assert screen._guided.query == "status:resolved"
+        assert screen._guided.query == ""
         assert "## Records" in ui.texts()
 
 
@@ -1084,26 +1084,28 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         assert screen._query == "width:3 AND height:5 AND depth:2"
 
 
-async def test_default_record_status_is_visible_and_can_be_removed() -> None:
+async def test_records_default_to_all_statuses_and_reset_clears_status_filter() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
-        assert screen._query == "status:resolved"
-        assert any("resolved" in text.lower() for text in ui.texts())
+        assert screen._query == ""
         await ui.press(ui.key_for("guided-search"))
         assert screen._guided is not None
-        assert screen._guided.query == "status:resolved"
+        assert screen._guided.query == ""
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "status:unresolved"})
         await ui.press(ui.key_for("remove-0"))
         assert screen._query == ""
         assert service.search.call_args.args[0].query == ""
         assert screen._results is not None
         await ui.press(ui.key_for("all-standings"))
-        assert service.search.call_args.args[0].query == ""
-        assert screen._results is not None
+        assert screen._results is None
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        await form.submit({"query": "status:unresolved"})
         await ui.press(ui.key_for("reset"))
-        assert screen._query == screen._guided.query == "status:resolved"
+        assert screen._query == screen._guided.query == ""
         assert screen._results is None
 
 

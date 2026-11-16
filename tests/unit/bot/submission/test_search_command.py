@@ -157,7 +157,7 @@ async def test_record_title_search_defaults_to_the_records_tab(query: str, title
     assert isinstance(screen, BuildBrowseScreen)
     assert screen._mode == "records"
     assert search.requests[0].scope is SearchScope.RECORDS
-    assert search.requests[0].query == f"status:resolved AND (base_title:{title} AND 5x5)"
+    assert search.requests[0].query == f"base_title:{title} AND 5x5"
     async with stage(screen, owner=object()) as ui:
         ui.assert_within_limits()
 
@@ -183,12 +183,12 @@ async def test_explicit_build_scope_overrides_the_record_title_filter() -> None:
     assert search.requests[0].scope is SearchScope.BUILDS
 
 
-async def test_explicit_record_scope_expands_shorthand_before_adding_status() -> None:
+async def test_explicit_record_scope_expands_shorthand_without_status_filter() -> None:
     search = RecordingSearch()
 
     await _run(_cog(search), query="smallest 5x5", scope=SearchTarget.records)
 
-    assert search.requests[0].query == "status:resolved AND (base_title:smallest AND 5x5)"
+    assert search.requests[0].query == "base_title:smallest AND 5x5"
 
 
 async def test_records_remain_an_explicit_search_target() -> None:
@@ -197,7 +197,7 @@ async def test_records_remain_an_explicit_search_target() -> None:
     await _run(_cog(search), query="width:5", scope=SearchTarget.records)
 
     assert search.requests[0].scope is SearchScope.RECORDS
-    assert search.requests[0].query == "status:resolved AND (width:5)"
+    assert search.requests[0].query == "width:5"
     assert search.requests[0].group_by_build
 
 
@@ -252,7 +252,7 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
         "NOT (status:resolved OR kind:door)",
     ],
 )
-async def test_explicit_record_status_overrides_the_default(query: str) -> None:
+async def test_explicit_record_status_is_preserved(query: str) -> None:
     search = RecordingSearch()
     screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
     assert isinstance(screen, BuildBrowseScreen)
@@ -261,12 +261,12 @@ async def test_explicit_record_status_overrides_the_default(query: str) -> None:
 
 
 @pytest.mark.parametrize("query", ["", "   ", "door OR kind:extender"])
-async def test_record_default_is_part_of_the_editable_query(query: str) -> None:
+async def test_record_search_does_not_add_a_status_filter(query: str) -> None:
     search = RecordingSearch()
     screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
     assert isinstance(screen, BuildBrowseScreen)
     normalized = SearchQueryParser().parse(query).normalized
-    expected = f"status:resolved AND ({normalized})" if query.strip() else "status:resolved"
+    expected = normalized
     assert screen._query == search.requests[0].query == expected
 
 

@@ -50,7 +50,6 @@ from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSo
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
-    FieldExpression,
     NotExpression,
     QueryExpression,
 )
@@ -470,7 +469,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @property
     def _default_query(self) -> str:
-        return "status:resolved" if self._mode == "records" else ""
+        # Temporarily include all statuses: too many records are unresolved right now.
+        return ""
 
     @classmethod
     async def create(
@@ -552,20 +552,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         sort: str = "",
         mode: SearchMode = SearchMode.LEXICAL,
     ) -> Self:
-        """Open search results in the catalogue, defaulting records to resolved holders.
-
-        An explicit status clause overrides the default. Once opened, users can
-        edit or remove that clause like any other filter.
-        """
+        """Open search results in the catalogue."""
         screen = await cls.create(request, initial_records=records)
         if records:
-            parsed = screen._search_parser.parse(query)
-            expression = parsed.expression
-            leaves = query_leaves(expression) if expression is not None else ()
-            fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
-            if not any(isinstance(field, FieldExpression) and field.field.name == "status" for field in fields):
-                # Expand leading record shorthand before the status clause hides it from the parser.
-                query = f"{screen._default_query} AND ({parsed.normalized})" if query.strip() else screen._default_query
+            query = screen._search_parser.parse(query).normalized
         screen._search_mode = mode
         await screen._run_search(query, sort)
         return screen
