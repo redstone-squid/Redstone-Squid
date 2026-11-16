@@ -89,7 +89,7 @@ EXTENSIONS = (
     "squid.bot.give_redstoner",
     "squid.bot.version_tracking",
     "squid.bot.welcome_relay",
-    "squid.bot.navigation.commands",
+    "squid.bot.navigation.cog",
 )
 """Production extensions in load order. Tests load this same set to detect registration conflicts."""
 

@@ -8,7 +8,7 @@ import pytest
 
 import squid_ui as sl
 from squid.bot.accounts.workspace import AccountWorkspace
-from squid.bot.navigation.commands import NavigationCommands
+from squid.bot.navigation.cog import NavigationCommands
 from squid.bot.routes import ScreenUnavailable, router
 from squid.bot.submission.build_browse import BuildBrowseScreen
 from squid.bot.submission.submit import SavedDraftsScreen

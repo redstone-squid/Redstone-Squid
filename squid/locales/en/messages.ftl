@@ -2317,16 +2317,16 @@ command-layout-workbench-name = workbench
 # squid/bot/notifications.py:58
 command-notifications-name = notifications
 
-# squid/bot/navigation/commands.py:23
+# squid/bot/navigation/cog.py:23
 command-open-address-help = A screen address, such as /builds/123.
 
-# squid/bot/navigation/commands.py:22
+# squid/bot/navigation/cog.py:22
 command-open-address-name = address
 
-# squid/bot/navigation/commands.py:18
+# squid/bot/navigation/cog.py:18
 command-open-help = Open a screen address, such as /builds/123 or /account.
 
-# squid/bot/navigation/commands.py:17
+# squid/bot/navigation/cog.py:17
 command-open-name = open
 
 # squid/bot/admin.py:120
@@ -3930,7 +3930,7 @@ navigation-build-unavailable = That build is unavailable.
 # squid/bot/submission/ui/drafts.py:491
 navigation-draft-unavailable = That draft is unavailable.
 
-# squid/bot/navigation/commands.py:36
+# squid/bot/navigation/cog.py:36
 navigation-invalid-address = That screen address is invalid. Try /builds, /drafts, or /account.
 
 # squid/bot/accounts/workspace.py:152

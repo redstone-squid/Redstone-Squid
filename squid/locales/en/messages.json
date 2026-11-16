@@ -7668,7 +7668,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/navigation/commands.py:23"
+      "squid/bot/navigation/cog.py:23"
     ]
   },
   "command-open-address-name": {
@@ -7677,7 +7677,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/navigation/commands.py:22"
+      "squid/bot/navigation/cog.py:22"
     ]
   },
   "command-open-help": {
@@ -7686,7 +7686,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/navigation/commands.py:18"
+      "squid/bot/navigation/cog.py:18"
     ]
   },
   "command-open-name": {
@@ -7695,7 +7695,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/navigation/commands.py:17"
+      "squid/bot/navigation/cog.py:17"
     ]
   },
   "command-paste-help": {
@@ -12831,7 +12831,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/navigation/commands.py:36"
+      "squid/bot/navigation/cog.py:36"
     ]
   },
   "navigation-tab-unavailable": {
