@@ -819,7 +819,35 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         assert screen._results is results
         for key in ("edit-0", "remove-0", "edit-1", "remove-1"):
             ui.control(ui.key_for(key))
+        await ui.select(ui.key_for("filter-lookup.results"), ["width"])
+        sort_picker = editor.sort_picker
+        for value in ("7", "8", "9"):
+            form = await ui.press_for_form(ui.key_for("value"))
+            await form.submit({"value": value, "operator": "2"})
+            assert screen._guided is editor
+            assert editor.filter_open
+            assert editor.selected is not None
+            assert editor.selected.name == "width"
+            assert editor.sort_picker is sort_picker
+            assert screen._query == editor.query
+            assert screen._query.endswith(f"width<={value}")
+            assert "## Search results" in ui.texts()
+            ui.assert_within_limits()
+        assert editor.clause_page == 2
+        ui.control(ui.key_for("edit-4"))
+        results = screen._results
+        query = screen._query
+        cast(AsyncMock, screen._search_service).search.side_effect = RuntimeError("search unavailable")
+        form = await ui.press_for_form(ui.key_for("value"))
+        await form.submit({"value": "10", "operator": "2"})
+        assert screen._query == editor.query == query
+        assert screen._results is results
+        assert editor.filter_open
+        assert editor.selected is not None
+        assert editor.selected.name == "width"
+        assert editor.clause_page == 2
         await ui.press(ui.key_for("field"))
+        assert not editor.filter_open
         assert screen._guided is editor
         assert screen._results is results
         await ui.press(ui.key_for("guided-search"))
