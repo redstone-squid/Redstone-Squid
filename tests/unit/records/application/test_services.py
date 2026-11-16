@@ -10,6 +10,7 @@ import pytest
 
 from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
+from squid.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup
@@ -920,7 +921,7 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
 
 
 @pytest.mark.parametrize("unknown", [False, True])
-async def test_ordinary_records_respect_step_membership_and_unknown_bounds(unknown: bool) -> None:
+async def test_ordinary_records_exclude_unproven_expansion_sizes(unknown: bool) -> None:
     candidates = FakeCandidates(
         (
             _door(1, volume=100, opening=10, restrictions=()),
@@ -931,8 +932,14 @@ async def test_ordinary_records_respect_step_membership_and_unknown_bounds(unkno
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
     await computation.rebuild(kinds=(BuildKind.DOOR,))
     smallest = next(r for r in runs.batches[0].records if r.base_title is BaseTitle.SMALLEST)
-    assert smallest.resolution.status is (ResolutionStatus.UNRESOLVED if unknown else ResolutionStatus.RESOLVED)
-    assert smallest.resolution.holder_ids == (() if unknown else (1,))
+    assert smallest.resolution.status is ResolutionStatus.RESOLVED
+    assert smallest.resolution.holder_ids == (1,)
+    assert smallest.resolution.gaps == ()
+    if unknown:
+        assert smallest.door_evidence is not None
+        assert smallest.door_evidence.evaluation.configurations[1].membership is PointStatus.UNRESOLVED
+    else:
+        assert smallest.door_evidence is None
 
 
 async def test_family_population_respects_version_and_category_identity() -> None:

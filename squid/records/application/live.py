@@ -161,7 +161,11 @@ def resolve_door_configurations(
     *,
     evaluated_at: datetime,
 ) -> LiveDoorRecord:
-    """Compare an already evaluated population; IDs must index the configuration tuple."""
+    """Compare configurations with proven membership; IDs must index the tuple.
+
+    Uncertain expansion claims stay in the evidence but cannot compete until
+    membership at this opening is established.
+    """
     eligible = tuple(
         Candidate(
             configuration.id,
@@ -185,14 +189,6 @@ def resolve_door_configurations(
         case BaseTitle.SMALLEST_FASTEST:
             result = resolve_smallest_fastest(eligible, methods)
 
-    uncertain = tuple(c.id for c in configurations if c.membership is PointStatus.UNRESOLVED)
-    if uncertain:
-        result = TitleResolution(
-            ResolutionStatus.UNRESOLVED,
-            provisional_holder_ids=tuple(sorted(set(result.holder_ids + result.provisional_holder_ids + uncertain))),
-            gaps=result.gaps + tuple(CandidateGap(id, "expansion_membership") for id in uncertain),
-        )
-
     def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(sorted({configurations[id].build_id for id in ids}))
 
@@ -206,11 +202,7 @@ def resolve_door_configurations(
     )
     # Ties between alternatives of the same build cannot change the build-level
     # holder, even when missing facts prevent selecting its winning branch.
-    if (
-        not uncertain
-        and resolution.status is ResolutionStatus.UNRESOLVED
-        and len(resolution.provisional_holder_ids) == 1
-    ):
+    if resolution.status is ResolutionStatus.UNRESOLVED and len(resolution.provisional_holder_ids) == 1:
         resolution = TitleResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
     return LiveDoorRecord(
         request.opening,

@@ -17,7 +17,7 @@ class LiveDoorConfiguration:
 
     ID is local to this response. A null branch index represents a fixed build
     or a whole family without usable branches; the latter has unmapped membership
-    and diagnostics. Only unresolved membership blocks an official result.
+    and diagnostics. Only configurations with supported membership compete.
     Family completion dates remain unknown until per-configuration evidence is modeled.
     """
 
@@ -37,10 +37,10 @@ class LiveDoorRecord:
     """A concrete evaluation whose configuration IDs are local to this result.
 
     Resolution IDs identify builds. Configuration IDs identify the alternatives
-    selected by the resolver. Uncertain membership conservatively blocks an
-    official holder even if known candidates currently have a winner. If all tied
-    alternatives belong to one build, that build can hold the record while its
-    exact winning configuration remains provisional.
+    selected by the resolver. Configurations with uncertain membership remain
+    in the evidence but do not compete. If all tied alternatives belong to one
+    build, that build can hold the record while its exact winning configuration
+    remains provisional.
     """
 
     opening: tuple[int, int, int]
@@ -66,6 +66,6 @@ class DoorRecordEvidence(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[1] = 1
-    calculator_version: Literal["door-point-1"] = "door-point-1"
+    calculator_version: Literal["door-point-1", "door-point-2"] = "door-point-2"
     evaluation: LiveDoorRecord
     sources: tuple[DoorExpansionSource, ...]

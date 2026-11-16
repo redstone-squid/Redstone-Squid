@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.builds.domain.expansion_evaluation import PointStatus
+from squid.records.application.door_evidence import DoorRecordEvidence
 from squid.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
 from squid.records.application.models import CandidateBuild
 from squid.records.domain import BaseTitle, BuildKind, Candidate, ResolutionStatus, TimingVariant
@@ -107,13 +108,26 @@ def test_same_build_alternatives_do_not_require_completion_to_identify_holder() 
     assert result.provisional_configuration_ids == (0, 1)
 
 
-def test_unknown_membership_blocks_official_holder() -> None:
+@pytest.mark.parametrize("title", list(BaseTitle))
+def test_unknown_membership_does_not_block_official_holder(title: BaseTitle) -> None:
     source = family(parameter=ExpansionParameter(name="n", minimum=1, initial_steps=(), repeating_steps=(1,)))
-    result = lookup(fixed(), source)
-    assert result.resolution.status is ResolutionStatus.UNRESOLVED
+    result = lookup(fixed(), source, title=title)
+    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution.holder_ids == (1,)
+    assert result.resolution.provisional_holder_ids == ()
+    assert result.resolution.gaps == ()
+    configuration = result.configurations[1]
+    assert configuration.membership is PointStatus.UNRESOLVED
+    assert configuration.diagnostics
+
+
+def test_unknown_membership_alone_cannot_claim_record() -> None:
+    source = family(parameter=ExpansionParameter(name="n", minimum=1, initial_steps=(), repeating_steps=(1,)))
+    result = lookup(source)
+    assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
     assert result.resolution.holder_ids == ()
-    assert result.resolution.provisional_holder_ids == (1, 2)
-    assert result.resolution.gaps[0].field == "expansion_membership"
+    assert result.resolution.provisional_holder_ids == ()
+    assert result.configurations[0].membership is PointStatus.UNRESOLVED
 
 
 def test_document_without_branches_is_reported_but_does_not_block() -> None:
@@ -180,3 +194,11 @@ def test_request_rejects_invalid_opening(opening: tuple[object, ...]) -> None:
 def test_request_rejects_orphan_or_duplicate_thresholds(values: tuple[tuple[int, str, str], ...]) -> None:
     with pytest.raises(ValidationError):
         DoorRecordLookup.model_validate({"opening": (6, 3, 1), "restriction_ids": [1], "restriction_values": values})
+
+
+def test_point_evidence_versions_preserve_old_publications() -> None:
+    evidence = DoorRecordEvidence(evaluation=lookup(fixed()), sources=())
+    assert evidence.calculator_version == "door-point-2"
+    previous = evidence.model_dump(mode="json")
+    previous["calculator_version"] = "door-point-1"
+    assert DoorRecordEvidence.model_validate(previous).calculator_version == "door-point-1"
