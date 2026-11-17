@@ -16,12 +16,6 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition import AtomicContract, OccurrenceId
 from squid_ui.planning.composition_planner import AutomaticComposition, CompositionRejectedError, FixedComposition
 from squid_ui.planning.composition_request import CompositionOptions
-from squid_ui.planning.diagnostics import (
-    LayoutOverflowError,
-    SolveNote,
-    SolveNoteCode,
-    SolveNoteSeverity,
-)
 from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
@@ -72,7 +66,6 @@ __all__ = [
     "JointExhaustedError",
     "JointInfeasibleError",
     "JointUnsupportedError",
-    "LayoutOverflowError",
     "MessageSpread",
     "NativeComposition",
     "OccurrenceId",
@@ -100,9 +93,6 @@ __all__ = [
     "SlackSdk343Adapter",
     "SlackSdkAdapter",
     "SlackTarget",
-    "SolveNote",
-    "SolveNoteCode",
-    "SolveNoteSeverity",
     "Target",
     "TargetDialect",
     "plan",

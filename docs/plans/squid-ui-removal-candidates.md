@@ -222,10 +222,10 @@ boundaries, instead of relying solely on tests of the machinery being deleted.
   and a derived `lossless` property in `17e7f6e69` (7).
 - Removed the uncalled measured-layout dialect API and converters in
   `af4420ce0` (part of 4).
-- Remaining: retire the standalone `measure` solver and its exclusively owned
-  types, diagnostics, and degradation model (4 and the remainder of 7).
-  Migrate useful solver tests to public planning and preserve independent host
-  inspection. Finish with broad UI validation and package-build checks.
+- Retired standalone `measure`, its intermediate nodes, allocation machinery,
+  diagnostics, and degradation model (4 and the remainder of 7). Independent
+  host inspection remains.
+- Remaining: broad UI validation, package-build checks, and final scope audit.
 
 ## API changes for callers
 
@@ -241,3 +241,24 @@ event deltas. Metrics expose live composition work rather than the retired
 
 Strategy-state APIs are removed. Durable readers accept older snapshots by
 ignoring their obsolete strategy field. New snapshots omit it.
+
+### Measurement retirement and coverage
+
+Use public `plan` and `PlanResult.for_page` instead of `planning.measure` and
+mutable `MeasuredLayout` instances. The removed `SolveNote` diagnostics and
+`LayoutOverflowError` belong to the old solver; public planning reports typed
+search diagnostics and fidelity effects.
+
+Resource axes, bare controls, entity selectors, entry priorities, text alternatives,
+and count-pagination properties now run through public planning. Existing composition
+tests cover native overflow, strictness, budgets, text breaking, page navigation,
+allocation reuse, and independently validated output. Renderer properties still
+check host protocol limits. Durable restoration and callback-binding tests remain.
+
+Retired tests that specified the old mutable-layout implementation: internal text
+pools, scalar degradation-axis ranking, proportional allocation, mutable repaging,
+and constant navigation shape. Shared composition certifies whole page families
+and has its own fidelity ordering. It does not promise the old allocator's fixed
+reservation for `Condense`. Shortening-after-replacements tests use three oversized
+entries and an explicit search allowance to isolate that behavior from exhaustive
+combinations and default-budget exhaustion.

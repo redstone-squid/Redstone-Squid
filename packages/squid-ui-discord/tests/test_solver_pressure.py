@@ -6,11 +6,10 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord.limits import V2Limits
-from squid_ui.ext.discord.planning import measure
 from squid_ui.ext.discord.target import v2
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import Paginate, Text
+from squid_ui.primitives import Paginate
 
 
 class TestBudgetContract:
@@ -23,57 +22,6 @@ class TestBudgetContract:
         minimum, preferred, stretch = values
         with pytest.raises(ValueError, match="must not be negative"):
             sl.budget(sl.paragraph("body"), min=minimum, prefer=preferred, stretch=stretch)
-
-    def test_content_inside_the_stretch_band_stays_whole(self) -> None:
-        body = "a" * 519 + "\n" + "b" * 520
-
-        solved = measure(
-            [
-                sl.primitives.Budget(
-                    (Text(body, overflow=Paginate(key="body")),),
-                    minimum=500,
-                    preferred=1000,
-                    stretch=150,
-                )
-            ]
-        )
-
-        assert solved.pager is None
-        assert solved.children[0].content == body  # type: ignore[union-attr]
-
-    def test_over_band_pagination_balances_at_boundaries(self) -> None:
-        body = "a" * 519 + "\n" + "b" * 520
-
-        solved = measure(
-            [
-                sl.primitives.Budget(
-                    (Text(body, overflow=Paginate(key="body")),),
-                    minimum=400,
-                    preferred=800,
-                    stretch=100,
-                )
-            ]
-        )
-
-        assert solved.pager is not None
-        assert [len(fragment) for fragment in solved.pager.fragments] == [519, 520]
-
-    def test_over_band_pagination_can_snap_into_the_stretch_band(self) -> None:
-        body = "a" * 1040 + "\n" + "b" * 160
-
-        solved = measure(
-            [
-                sl.primitives.Budget(
-                    (Text(body, overflow=Paginate(key="body")),),
-                    minimum=500,
-                    preferred=1000,
-                    stretch=100,
-                )
-            ]
-        )
-
-        assert solved.pager is not None
-        assert [len(fragment) for fragment in solved.pager.fragments] == [1040, 160]
 
     def test_collectively_unsatisfied_floors_raise(self) -> None:
         document = (

@@ -1,4 +1,4 @@
-"""Discord protocol targets and native layout measurement."""
+"""Discord protocol target construction."""
 
 from squid_ui.ext.discord.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
@@ -6,13 +6,10 @@ from squid_ui.ext.discord.planning.discord import (
     classic_target,
     components_v2_target,
 )
-from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout, measure
 
 __all__ = [
     "CLASSIC_PROTOCOL_CAPABILITIES",
     "V2_PROTOCOL_CAPABILITIES",
-    "MeasuredLayout",
     "classic_target",
     "components_v2_target",
-    "measure",
 ]

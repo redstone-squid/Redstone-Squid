@@ -23,7 +23,6 @@ from squid_ui.authoring.document import Document, DocumentLike, PortableDocument
 from squid_ui.authoring.semantic import KeepWithNext
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.cache import PlanCache, PlanMemo
-from squid_ui.planning.diagnostics import LayoutOverflowError
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
@@ -31,7 +30,7 @@ from squid_ui.presentation import ActivePagers, RegionLayoutState, RegionLayoutU
 
 # Planning failures that a smaller document could avoid. An overflow can also come from
 # one oversized child; cutting cannot help then, and the original error is raised.
-_DOES_NOT_FIT = (UnsolvableLayoutError, LayoutSearchExhaustedError, LayoutOverflowError)
+_DOES_NOT_FIT = (UnsolvableLayoutError, LayoutSearchExhaustedError)
 
 # Above this many candidate cut combinations, balancing aims for an even share of the
 # children per message instead of planning every combination.

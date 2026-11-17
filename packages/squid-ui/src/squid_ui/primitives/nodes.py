@@ -462,9 +462,7 @@ class MediaCollection(Renderable[ComponentsV2Target]):
 class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     """An exact Components V2 section with up to three texts beside an accessory.
 
-    Target planning rejects excess text slots. The lower-level measurement helper
-    can clamp them with a diagnostic, so callers should not rely on that fallback
-    when authoring a document.
+    Planning rejects excess text slots.
     """
 
     texts: tuple[Text | Heading | Footer, ...]

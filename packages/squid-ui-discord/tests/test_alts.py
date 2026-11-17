@@ -5,15 +5,15 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
+from squid_ui import scene
+from squid_ui.authoring.presentations import Shortening
 from squid_ui.ext.discord import (
     conform,
 )
 from squid_ui.ext.discord import testing as sd
-from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.planning.measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
-from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
 from squid_ui.ext.discord.testing import assert_within_limits
-from squid_ui.planning import SolveNoteCode
+from squid_ui.planning import plan
+from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import (
     Alt,
     Condense,
@@ -24,20 +24,8 @@ from squid_ui.primitives import (
 )
 
 
-def _solved_texts(solved: MeasuredLayout) -> list[str]:
-    texts: list[str] = []
-
-    def walk(children) -> None:
-        for child in children:
-            if isinstance(child, MeasuredText):
-                texts.append(child.content)
-            elif isinstance(child, MeasuredSection):
-                texts.extend(text.content for text in child.texts)
-            elif isinstance(child, MeasuredPanel):
-                walk(child.children)
-
-    walk(solved.children)
-    return texts
+def _planned_texts(result: PlanResult[scene.ComponentsV2]) -> list[str]:
+    return [node.content for node in result.scene.body.children if isinstance(node, scene.Text)]
 
 
 class TestAltsPolicy:
@@ -58,9 +46,9 @@ class TestAltsPolicy:
     def test_exhausted_ladder_trims_the_last_alternate(self):
         node = Text("x" * 5000, overflow=alts("y" * 4500))
         filler = Text("f" * 3990, priority=10)
-        solved = measure([filler, node])
-        assert any(note.code is SolveNoteCode.ALTERNATE_EXHAUSTED for note in solved.notes)
-        assert sum(map(len, _solved_texts(solved))) <= 4000
+        solved = plan([filler, node], target=sd.target_profile("test"))
+        assert any(isinstance(effect, Shortening) for effect in solved.effects)
+        assert sum(map(len, _planned_texts(solved))) <= 4000
 
 
 class TestLinesLadders:
@@ -71,16 +59,16 @@ class TestLinesLadders:
             "another short entry",
         )
         filler = Text("f" * 3000, priority=10)
-        solved = measure([filler, Lines(entries)])
-        text = "\n".join(_solved_texts(solved))
+        solved = plan([filler, Lines(entries)], target=sd.target_profile("test"))
+        text = "\n".join(_planned_texts(solved))
         assert "long entry degraded" in text
         assert "short entry" in text and "another short entry" in text
         assert "more" not in text  # nothing spilled: degrading sufficed
 
     def test_spill_still_happens_after_ladders_exhaust(self):
         entries = tuple(Alt(f"entry {index} " + "x" * 500, (f"entry {index} " + "y" * 200,)) for index in range(60))
-        solved = measure([Lines(entries)])
-        texts = _solved_texts(solved)
+        solved = plan([Lines(entries)], target=sd.target_profile("test"))
+        texts = _planned_texts(solved)
         assert any("more" in text for text in texts)
         assert sum(map(len, texts)) <= 4000
 
@@ -94,39 +82,36 @@ class TestCondensePolicy:
             Alt("L" * 5000, ("long entry condensed",)),
             "another short entry",
         )
-        solved = measure([Lines(entries, overflow=Condense())])
-        text = "\n".join(_solved_texts(solved))
+        solved = plan([Lines(entries, overflow=Condense())], target=sd.target_profile("test"))
+        text = "\n".join(_planned_texts(solved))
         assert "long entry condensed" in text
         assert "short entry" in text and "another short entry" in text
         assert "more" not in text  # Condense never spills a whole entry
 
     def test_exhausted_ladders_trim_the_joined_block(self):
-        entries = tuple(Alt("entry " + "x" * 500, ("entry " + "y" * 400,)) for _ in range(20))
-        solved = measure([Lines(entries, overflow=Condense())])
-        assert any(note.code is SolveNoteCode.CONDENSE_TRUNCATED for note in solved.notes)
-        assert sum(map(len, _solved_texts(solved))) <= 4000
+        entries = tuple(Alt("entry " + "x" * 2000, ("entry " + "y" * 1500,)) for _ in range(3))
+        # This tests shortening after all replacements, independently of search exhaustion.
+        solved = plan([Lines(entries, overflow=Condense())], target=sd.target_profile("test"), search_budget=100_000)
+        assert any(isinstance(effect, Shortening) for effect in solved.effects)
+        assert sum(map(len, _planned_texts(solved))) <= 4000
 
     def test_plain_entries_behave_like_never(self):
         # Nothing to step, so the block trims as a whole rather than losing an entry.
-        solved = measure([Lines(tuple("line " + "x" * 500 for _ in range(20)), overflow=Condense())])
-        assert not any("more" in text for text in _solved_texts(solved))
-        assert sum(map(len, _solved_texts(solved))) <= 4000
-
-    def test_a_condensing_block_is_charged_before_flexible_neighbours(self):
-        # The card's shock absorber is the prose, not the field list: the body trims first.
-        body = Text("b" * 3000, priority=-5)
-        block = Lines(tuple(f"**F{index}:** value" for index in range(10)), overflow=Condense())
-        solved = measure([body, block, Text("f" * 2000, priority=-5)])
-        texts = _solved_texts(solved)
-        assert all(f"**F{index}:** value" in texts[1] for index in range(10))
+        solved = plan(
+            [Lines(tuple("line " + "x" * 2000 for _ in range(3)), overflow=Condense())],
+            target=sd.target_profile("test"),
+            search_budget=100_000,
+        )
+        assert not any("more" in text for text in _planned_texts(solved))
+        assert sum(map(len, _planned_texts(solved))) <= 4000
 
     def test_never_still_outranks_a_condensing_block(self):
         # A heading may not shrink at all, so it is charged ahead of a block that can.
         heading = Text("H" * 200, overflow=Never())
         block = Lines(tuple(Alt("e" * 900, ("e" * 100,)) for _ in range(6)), overflow=Condense())
-        solved = measure([heading, block])
-        assert "H" * 200 in _solved_texts(solved)
-        assert sum(map(len, _solved_texts(solved))) <= 4000
+        solved = plan([heading, block], target=sd.target_profile("test"))
+        assert "H" * 200 in _planned_texts(solved)
+        assert sum(map(len, _planned_texts(solved))) <= 4000
 
 
 class TestConstrainedShapes:

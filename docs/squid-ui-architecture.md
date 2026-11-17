@@ -1165,8 +1165,8 @@ arrives. REBASE presses keep acting on the newest state, which is what that poli
 ## Pagination
 
 Every paginator has an explicit unique string key. `sd.MessageRoot` stores a cursor per key; embedded
-components prefix it automatically. `measure()` costs active footers and navigation IR to
-a fixed point, so controls spend real text and component budgets.
+components prefix it automatically. Shared composition certifies content, footers, and
+navigation together on every page, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
 `sd.MessageRoot` resets only that cursor; keyed anchors preserve the reader's page across insertions and

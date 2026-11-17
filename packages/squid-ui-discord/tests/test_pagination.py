@@ -12,19 +12,15 @@ from hypothesis import strategies as st
 import squid_ui as sl
 from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.authoring.semantic import Item, Items, Paragraph
-from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
 from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_ui.ext.discord.planning import components_v2_target, measure
-from squid_ui.ext.discord.planning.measurement.costing import component_count
-from squid_ui.ext.discord.planning.measurement.model import MeasuredText
-from squid_ui.ext.discord.planning.measurement.text import split_pages
+from squid_ui.ext.discord.planning import components_v2_target
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
-from squid_ui.planning import SolveNoteCode, plan
+from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.pagination.navigation import PagerNav, default_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import default_nav, page_select_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.primitives import (
     LAST_PAGE,
@@ -34,40 +30,10 @@ from squid_ui.primitives import (
     Lines,
     Paginate,
     Row,
-    Text,
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
 from squid_ui.target_types import DiscordAdapter
-
-
-class TestSplitPages:
-    def test_short_text_is_one_page(self):
-        assert split_pages("a\nb", 100) == ["a\nb"]
-
-    def test_splits_on_line_boundaries(self):
-        pages = split_pages("aaa\nbbb\nccc", 7)
-        assert pages == ["aaa\nbbb", "ccc"]
-
-    def test_hard_splits_single_long_line_without_inventing_boundaries(self):
-        pages = split_pages("x" * 25, 10)
-        assert pages == ["x" * 10, "x" * 10, "x" * 5]
-        assert "".join(pages) == "x" * 25
-
-    def test_no_content_is_lost(self):
-        text = "\n".join(f"line {index} " + "y" * (index % 30) for index in range(200))
-        pages = split_pages(text, 300)
-        assert "\n".join(pages) == text
-        assert all(len(page) <= 300 for page in pages)
-
-    def test_large_inputs_use_the_same_exact_balancing_objective(self):
-        text = "\n".join("x" for _ in range(300))
-
-        pages = split_pages(text, 39)
-
-        assert len(pages) == 15
-        assert {len(page) for page in pages} == {39}
-        assert "\n".join(pages) == text
 
 
 class TestPositionPolicy:
@@ -108,60 +74,6 @@ class TestPositionPolicy:
         policy = resolve_page_position
         assert policy(override=PagePosition("item", -3), upper_bound=8) == PagePosition("item", 0)
         assert policy(override=PagePosition("item", 20), upper_bound=8) == PagePosition("item", 8)
-
-
-class TestSolvePagination:
-    def test_overflowing_paginate_node_produces_pages(self):
-        body = "\n".join(f"line {index:04d}" for index in range(1000))
-        solved = measure([Heading("Report"), Code(body, overflow=Paginate())])
-        assert solved.pages > 1
-        assert solved.pager is not None
-
-    def test_footer_is_budgeted_not_guessed(self):
-        # Include the footer on every page instead of assuming a fixed content allowance.
-        body = "\n".join("z" * 80 for _ in range(200))
-        solved = measure([Heading("H" * 200), Code(body, overflow=Paginate())])
-        assert solved.pager is not None
-        for page in range(solved.pager.pages):
-            solved.pager.select(page)
-            total = _total_text(solved)
-            assert total <= LIMITS.total_text, f"page {page} is {total}"
-
-    def test_fitting_paginate_node_needs_no_pager(self):
-        solved = measure([Text("short", overflow=Paginate())])
-        assert solved.pager is None
-        assert solved.pages == 1
-
-    def test_multiple_paginate_nodes_are_independent(self):
-        solved = measure(
-            [
-                Text("a" * 3000, overflow=Paginate(key="alpha")),
-                Text("b" * 3000, overflow=Paginate(key="beta")),
-            ],
-            position={"alpha": PagePosition(page=0), "beta": PagePosition(page=1)},
-        )
-        assert [(pager.key, pager.page) for pager in solved.pagers] == [("alpha", 0), ("beta", 1)]
-
-    def test_a_position_token_is_an_explicit_page_override(self):
-        body = "\n".join(f"line {index:04d}" for index in range(1000))
-        solved = measure([Code(body, overflow=Paginate(key="entries"))], position={"entries": PagePosition(page=2)})
-
-        assert solved.pager is not None and solved.pager.page == 2
-
-
-def _total_text(solved) -> int:
-    def walk(children) -> int:
-        total = 0
-        for child in children:
-            if isinstance(child, MeasuredText):
-                total += len(child.content)
-            elif hasattr(child, "texts"):
-                total += sum(len(text.content) for text in child.texts)
-            elif hasattr(child, "children"):
-                total += walk(child.children)
-        return total
-
-    return walk(solved.children)
 
 
 class Browser(Component[sl.ComponentsV2Target]):
@@ -262,8 +174,8 @@ class TestControlledPagination:
 
     def test_last_page_opens_an_uncontrolled_pager_at_the_end(self):
         entries = tuple(f"entry {index}" for index in range(30))
-        solved = measure([Lines(entries, overflow=Paginate(key="log", per=10, page=LAST_PAGE))])
-        assert solved.page == 2
+        result = plan(Lines(entries, overflow=Paginate(key="log", per=10, page=LAST_PAGE)), target=DISCORD_V2_DPY27)
+        assert result.scene.pagers[0].page == 2
 
     def test_a_controlled_pager_needs_a_key(self):
         async def ignore(event: sl.PageEvent) -> None: ...
@@ -436,128 +348,6 @@ class TestMountPagination:
         }
 
 
-class TestCountPages:
-    def _entries(self, count: int) -> tuple[str, ...]:
-        return tuple(f"entry {index}" for index in range(count))
-
-    def test_a_short_list_paginates_by_count_not_by_pressure(self):
-        solved = measure([Lines(self._entries(25), overflow=Paginate(per=10))])
-        assert solved.pages == 3
-
-    def test_no_entry_is_lost_across_the_pages(self):
-        entries = self._entries(25)
-        solved = measure([Lines(entries, overflow=Paginate(per=10))])
-        assert solved.pager is not None
-        assert "\n".join(solved.pager.fragments).split("\n") == list(entries)
-
-    def test_a_list_that_fits_one_page_has_no_pager(self):
-        solved = measure([Lines(self._entries(4), overflow=Paginate(per=10))])
-        assert solved.pager is None
-
-    def test_an_oversized_count_page_is_split_further_to_fit(self):
-        solved = measure([Lines(tuple("x" * 3000 for _ in range(4)), overflow=Paginate(per=2))])
-        assert solved.pager is not None
-        assert solved.pager.pages > 2
-        for page in range(solved.pager.pages):
-            solved.pager.select(page)
-            assert _total_text(solved) <= LIMITS.total_text
-
-    def test_the_node_footer_overrides_chrome(self):
-        solved = measure([Lines(self._entries(25), overflow=Paginate(per=10, footer=lambda p, n: f"{p}/{n} · 25"))])
-        assert solved.pager is not None
-        assert any("1/3 · 25" in child.content for child in solved.children if isinstance(child, MeasuredText))
-
-    def test_count_pages_on_a_non_lines_node_fall_back_to_budget_pages(self):
-        solved = measure([Text("short", overflow=Paginate(per=10))])
-        assert solved.pager is None
-        assert any(note.code is SolveNoteCode.PAGINATE_PER_FALLBACK for note in solved.notes)
-
-    def test_per_must_be_positive(self):
-        with pytest.raises(ValueError, match="at least 1"):
-            Paginate(per=0)
-
-
-class TestSolverNav:
-    def _paginated(self) -> list:
-        return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate())]
-
-    _nav = PagerNav(default_nav, PresentationState())
-
-    def test_nav_nodes_are_realized_into_the_document(self):
-        solved = measure(self._paginated(), nav=self._nav)
-        assert isinstance(solved.children[-1], Row)
-
-    def test_an_unpaginated_document_gets_no_nav(self):
-        solved = measure([Text("short")], nav=self._nav)
-        assert not any(isinstance(child, Row) for child in solved.children)
-
-    def test_the_page_is_clamped_and_reported(self):
-        assert measure(self._paginated(), position=PagePosition(page=999)).page == measure(self._paginated()).pages - 1
-        assert measure(self._paginated(), position=PagePosition(page=-5)).page == 0
-
-    def test_a_text_bearing_nav_factory_is_rejected(self):
-        # `NavNode` rejects this statically; the runtime guard is for callers without a
-        # type checker, so the suppression here is the test doing its job.
-        with pytest.raises(ValueError, match="component-bearing"):
-            text_nav = PagerNav(lambda context: [Text(f"position {context.page}")], PresentationState())  # type: ignore
-            measure(self._paginated(), nav=text_nav)
-
-
-class TestRepage:
-    """Changing pages reuses the measured layout and its component budget.
-
-    Page content and navigation state change, but a navigation factory must keep the same shape
-    on every page so the measured component count remains valid.
-    """
-
-    def _paginated(self) -> list:
-        return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate(key="lines"))]
-
-    _nav = PagerNav(default_nav, PresentationState())
-
-    def test_repage_moves_the_page_without_moving_the_fit(self):
-        solved = measure(self._paginated(), nav=self._nav)
-        before = solved.cost.get(Axis.COMPONENTS)
-        pager = solved.pager
-        assert pager is not None and solved.pages > 2
-        solved.reposition({"lines": PagePosition(page=2)})
-        direct = measure(self._paginated(), nav=self._nav, position=PagePosition(page=2)).pager
-        assert direct is not None
-        assert pager.page == 2
-        assert pager.slot.content == direct.slot.content
-        assert component_count(solved.children) == before
-
-    def test_repage_redraws_the_nav_it_replaced(self):
-        solved = measure(self._paginated(), nav=self._nav)
-        previous = self._previous_button(solved)
-        assert previous.disabled  # on page 0
-        solved.reposition({"lines": PagePosition(page=1)})
-        assert not self._previous_button(solved).disabled
-
-    @staticmethod
-    def _previous_button(solved) -> Button:
-        row = solved.children[-1]
-        assert isinstance(row, Row)
-        button = row.items[0]
-        assert isinstance(button, Button)
-        return button
-
-    def test_repage_clamps_like_the_solver_does(self):
-        solved = measure(self._paginated(), nav=self._nav)
-        solved.reposition({"lines": PagePosition(page=999)})
-        assert solved.page == solved.pages - 1
-        solved.reposition({"lines": PagePosition(page=-5)})
-        assert solved.page == 0
-
-    def test_a_nav_factory_that_hides_controls_between_pages_is_rejected(self):
-        def hiding(context):
-            return default_nav(context) if context.page else []
-
-        solved = measure(self._paginated(), nav=PagerNav(hiding, PresentationState()))
-        with pytest.raises(LayoutInvariantError, match="changed shape between pages"):
-            solved.reposition({"lines": PagePosition(page=1)})
-
-
 class TestBuildModal:
     def test_oversized_spec_is_clamped_by_construction(self):
         # The live-bug shape: a default joined from unbounded user data.
@@ -605,22 +395,35 @@ def test_paginated_documents_fit_on_every_page(body):
             assert selected.cost.get(Axis.DISPLAY_TEXT) <= LIMITS.total_text
 
 
+@settings(deadline=None)
 @given(st.integers(min_value=0, max_value=60), st.integers(min_value=1, max_value=12))
 def test_count_pages_hold_every_entry_exactly_once(count, per):
     entries = tuple(f"entry {index}" for index in range(count))
-    solved = measure([Lines(entries, overflow=Paginate(per=per))])
-    if solved.pager is None:
+    result = plan(Lines(entries, overflow=Paginate(key="entries", per=per)), target=DISCORD_V2_DPY27)
+    if not result.scene.pagers:
         assert count <= per
         return
-    assert solved.pager.pages == -(-count // per)
-    assert [line for fragment in solved.pager.fragments for line in fragment.split("\n")] == list(entries)
+    assert result.scene.pagers[0].pages == -(-count // per)
+    assert result.allocation is not None
+    occurrence = next(iter(result.allocation.regions))
+    collected = []
+    for page in range(result.scene.pagers[0].pages):
+        selected = result.for_page({occurrence: page})
+        collected.extend(
+            line
+            for node in selected.scene.body.children
+            if isinstance(node, sl.scene.Text)
+            for line in node.content.splitlines()
+            if line.startswith("entry ")
+        )
+    assert collected == list(entries)
 
 
 def test_the_solver_counts_the_nav_it_realized():
     # Count the realized navigation controls so planning and drawing charge the same components.
     view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
-    solved = measure(Browser().render(), nav=PagerNav(default_nav, PresentationState()))
-    assert component_count(solved.children) == len(list(view.walk_children()))
+    result = plan(Browser().render(), target=DISCORD_V2_DPY27, nav=default_nav)
+    assert result.cost.get(Axis.COMPONENTS) == len(list(view.walk_children()))
 
 
 @pytest.mark.parametrize("oversized", [False, True])

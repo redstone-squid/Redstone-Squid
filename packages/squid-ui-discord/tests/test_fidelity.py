@@ -10,7 +10,6 @@ from squid_ui.content.text import Markup
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
 from squid_ui.ext.discord import testing as sd
 from squid_ui.planning import plan
-from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 
@@ -107,19 +106,3 @@ class TestOrdering:
         assert plan(document, target=TARGET).scene.components_v2.children == (
             scene.Text("first", markup=Markup.DISCORD_MARKDOWN),
         )
-
-
-class TestProfileAxes:
-    def test_a_lossy_region_outranks_every_other_loss_at_its_priority(self) -> None:
-        lossy = DegradationProfile().with_effect(DegradationEffect(0, "$.a", lossy_nodes=1))
-        everything_else = DegradationProfile().with_effect(
-            DegradationEffect(0, "$.a", semantic_steps=9, truncated_chars=9, spilled_items=9, dropped_nodes=9)
-        )
-
-        assert everything_else < lossy
-
-    def test_reformatting_ranks_below_truncation_because_it_keeps_every_character(self) -> None:
-        reformatted = DegradationProfile().with_effect(DegradationEffect(0, "$.a", reformatted_nodes=9))
-        truncated = DegradationProfile().with_effect(DegradationEffect(0, "$.a", truncated_chars=1))
-
-        assert reformatted < truncated

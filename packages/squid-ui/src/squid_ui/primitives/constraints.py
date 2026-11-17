@@ -204,9 +204,8 @@ class Condense:
     hide trailing entries. Plain strings have no fallbacks and go straight to that
     final trim when space is insufficient.
 
-    Like `Never`, this policy reserves its content's fixed cost before flexible
-    nodes receive space. Its ladders engage when that fixed share itself exceeds
-    the available budget.
+    The shared planner considers these losses alongside neighboring content.
+    This policy does not reserve a fixed share of the message budget.
     """
 
 
@@ -217,11 +216,7 @@ class Drop:
 
 @dataclass(frozen=True, slots=True)
 class Never:
-    """Reserve the full text cost and report any forced shortening.
-
-    Strict planning rejects that degradation. Non-strict measurement may trim the
-    content or drop it when even its formatting cannot fit.
-    """
+    """Require the full text to fit without shortening or omission."""
 
 
 type Overflow = Truncate | Spill | Paginate | Alts | Condense | Drop | Never

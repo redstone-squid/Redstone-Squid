@@ -1,27 +1,19 @@
-"""Unit and property tests for the concrete-layout evaluator."""
-
-from typing import cast
+"""Native document rendering and protocol-fit properties."""
 
 import discord
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui.ext.discord import conform, render_static
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.conformance import ELLIPSIS
-from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.planning.measurement.model import MeasuredText
-from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout
 from squid_ui.ext.discord.testing import assert_within_limits
-from squid_ui.planning import LayoutOverflowError, SolveNoteCode
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.primitives import (
-    Budget,
     Code,
     Drop,
     Footer,
@@ -31,7 +23,6 @@ from squid_ui.primitives import (
     MediaCollection,
     Never,
     Panel,
-    RawItem,
     Row,
     Section,
     Sep,
@@ -39,30 +30,11 @@ from squid_ui.primitives import (
     Text,
     Thumbnail,
     Truncate,
-    Variants,
 )
 
 
 def _text_of(view: discord.ui.LayoutView) -> str:
     return "\n".join(sd.payload_texts(view))
-
-
-def _content_of(child: object) -> str:
-    """The text one measured child carries.
-
-    Measured layouts can contain several node types. These assertions expect text, so the
-    cast belongs here instead of being repeated at every assertion.
-    """
-    return cast(MeasuredText, child).content
-
-
-def _contents(solved: MeasuredLayout) -> list[str]:
-    """The text of every measured child.
-
-    Only for cases whose children are all text: a layout holding a `RawItem` raises here,
-    which is why the single-child assertions below index first and convert after.
-    """
-    return [_content_of(child) for child in solved.children]
 
 
 class TestFitting:
@@ -98,59 +70,6 @@ class TestFitting:
         assert ELLIPSIS in _text_of(view)
         assert conform(view) == []
 
-    def test_priority_orders_the_allocation(self):
-        # Low-priority footer shrinks before the body loses a character.
-        body = Text("b" * 3900)
-        footer = Footer("f" * 400)
-        solved = measure([body, footer])
-        rendered = _contents(solved)
-        assert rendered[0] == "b" * 3900
-        assert len(rendered[1]) <= LIMITS.total_text - 3900
-
-    def test_equal_priority_nodes_share_proportionally(self):
-        first = Text("a" * 6000)
-        second = Text("b" * 2000)
-        solved = measure([first, second])
-        lengths = [len(content) for content in _contents(solved)]
-        assert sum(lengths) <= LIMITS.total_text
-        # Need ratio is 3:1, so the later node keeps ~1000 chars instead of starving at 0.
-        assert lengths[1] >= 900
-
-    def test_dropped_node_refunds_its_budget(self):
-        # The Drop node cannot fit, so the Truncate node should get everything back.
-        keeper = Text("k" * 3999)
-        dropper = Text("d" * 500, overflow=Drop(), priority=-1)
-        solved = measure([keeper, dropper])
-        assert _contents(solved) == ["k" * 3999]
-        assert any(note.code is SolveNoteCode.NODE_DROPPED for note in solved.notes)
-
-    def test_never_wins_over_higher_priority_flexible_nodes(self):
-        pinned = Text("p" * 3500, overflow=Never(), priority=-100)
-        flexible = Text("f" * 3500, priority=100)
-        solved = measure([pinned, flexible])
-        contents = _contents(solved)
-        assert contents[0] == "p" * 3500
-        assert len(contents[1]) == LIMITS.total_text - 3500
-
-    def test_an_unresolved_alternative_is_a_planner_bug(self):
-        # measure() evaluates one concrete layout; choosing between rungs is plan()'s job.
-        with pytest.raises(LayoutInvariantError, match="resolved before measuring"):
-            measure([Variants.of(Text("rich"), Text("plain"))])
-
-    def test_an_unresolved_alternative_is_rejected_inside_a_container(self):
-        with pytest.raises(LayoutInvariantError, match="resolved before measuring"):
-            measure([Panel((Variants.of(Text("rich"), Text("plain")),))])
-
-    def test_unsatisfiable_never_raises_in_strict_mode(self):
-        with pytest.raises(LayoutOverflowError):
-            measure([Text("x" * 5000, overflow=Never())], strict=True)
-
-    def test_unsatisfiable_never_clamps_outside_strict_mode(self):
-        solved = measure([Text("x" * 5000, overflow=Never())])
-        assert len(_content_of(solved.children[0])) <= LIMITS.total_text
-        assert solved.failures[0].code is SolveNoteCode.NEVER_BUDGET
-        assert isinstance(solved.failures[0].code, str)
-
     def test_truncate_tail_keeps_the_end(self):
         view = sd.static_view([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
         text = _text_of(view)
@@ -176,23 +95,6 @@ class TestFitting:
     def test_empty_nodes_vanish(self):
         view = sd.static_view([Text(""), Lines(()), Text("real")])
         assert _text_of(view) == "real"
-
-    def test_raw_item_text_cost_reserves_budget(self):
-        raw = RawItem(factory=lambda: discord.ui.TextDisplay("r" * 100), text_cost=100)
-        solved = measure([Text("x" * 4000), raw])
-        assert len(_content_of(solved.children[0])) <= LIMITS.total_text - 100
-
-    def test_a_budget_region_leaves_its_unbudgeted_siblings_alone(self):
-        """A capped region is a sibling, not a claim on everything the document has."""
-        heading = Heading("Kept")
-        capped = Budget((Text("x" * 2000, overflow=Truncate()),), 120, 320)
-        footer = Footer("also kept")
-        solved = measure([heading, capped, footer])
-        contents = _contents(solved)
-
-        assert contents[0] == "## Kept"
-        assert len(contents[1]) <= 320, "the region is still held to its own ceiling"
-        assert contents[2] == "-# also kept"
 
 
 class TestStructure:
@@ -227,11 +129,6 @@ class TestStructure:
         )
         with pytest.raises(JointInfeasibleError):
             render_static([section])
-
-    def test_emptied_section_drops_whole(self):
-        section = Section(texts=(Text(""),), accessory=Thumbnail("https://example.invalid/a.png"))
-        solved = measure([section])
-        assert solved.children == []
 
 
 # --- Property tests ------------------------------------------------------------------------
