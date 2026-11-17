@@ -731,19 +731,21 @@ class BuildRepository:
         qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
 
         requested = set(version_strings)
-        stmt = select(qvn.c.id, qvn.c.quantified_name).where(qvn.c.quantified_name.in_(requested))
-        result = await session.execute(stmt)
-        matches = result.all()
-        found = {row.quantified_name for row in matches}
-        missing = sorted(requested - found)
+        if not requested:
+            return []
+        # Fetch names and ORM entities together; a tiny set difference gives a
+        # useful missing-name error without a second query or an input relation.
+        stmt = (
+            select(Version, qvn.c.quantified_name)
+            .join(qvn, qvn.c.id == Version.id)
+            .where(qvn.c.quantified_name.in_(requested))
+        )
+        matches = (await session.execute(stmt)).all()
+        missing = sorted(requested - {name for _, name in matches})
         if missing:
             msg = f"Unknown canonical Minecraft versions: {missing}"
             raise InvalidBuildError(msg, context={"versions": missing})
-        version_ids = [row.id for row in matches]
-
-        stmt = select(Version).where(Version.id.in_(version_ids))
-        result = await session.execute(stmt)
-        return list(result.scalars().all())
+        return list({version.id: version for version, _ in matches}.values())
 
     @staticmethod
     async def _store_source_snapshots(build: Build, session: AsyncSession) -> None:

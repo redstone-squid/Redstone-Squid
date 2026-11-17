@@ -3,7 +3,9 @@
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast, override
+from unittest.mock import Mock
 
+import discord
 import pytest
 
 from squid.accounts.application import AccountService
@@ -31,12 +33,6 @@ OTHER_GUILD_ID = 999
 @dataclass(frozen=True)
 class Guild:
     id: int
-
-
-@dataclass(frozen=True)
-class Channel:
-    id: int
-    guild: Guild
 
 
 class VoteRecorder(VoteService):
@@ -91,10 +87,10 @@ class AccountRecorder(AccountService):
 @dataclass(frozen=True)
 class Bot:
     guilds: list[Guild]
-    channels: dict[int, Channel]
+    channels: dict[int, discord.TextChannel]
     services: BotServices
 
-    def get_channel(self, channel_id: int) -> Channel | None:
+    def get_channel(self, channel_id: int) -> discord.TextChannel | None:
         return self.channels.get(channel_id)
 
 
@@ -102,7 +98,8 @@ def renderer_for(snapshot: VoteSessionSnapshot, vote_channels: dict[int, int]) -
     """A renderer whose bot sees `vote_channels` as channel id to guild id."""
     guilds = [Guild(id=guild_id) for guild_id in dict.fromkeys(vote_channels.values())]
     channels = {
-        channel_id: Channel(id=channel_id, guild=Guild(id=guild_id)) for channel_id, guild_id in vote_channels.items()
+        channel_id: Mock(spec=discord.TextChannel, id=channel_id, guild=Guild(id=guild_id))
+        for channel_id, guild_id in vote_channels.items()
     }
     bot = Bot(
         guilds=guilds,

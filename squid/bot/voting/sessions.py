@@ -5,14 +5,14 @@ The post reconciler and vote renderer own subsequent publication and updates.
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import discord
 
 from squid.bot._types import GuildMessageable
 from squid.builds.domain import Status
 from squid.builds.models import Build
-from squid.voting.domain import VoteKind, VoteOption
+from squid.voting.domain import VoteKind
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -24,7 +24,7 @@ async def configured_vote_channels(bot: squid.bot.app.RedstoneSquid) -> list[Gui
     """Every vote channel the bot can currently see, one per guild that set one."""
     configured = await bot.services.settings.get_many((guild.id for guild in bot.guilds), "Vote")
     resolved = (bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
-    return cast(list[GuildMessageable], [channel for channel in resolved if channel is not None])
+    return list({channel.id: channel for channel in resolved if isinstance(channel, GuildMessageable)}.values())
 
 
 async def ensure_build_review(
@@ -61,9 +61,10 @@ async def ensure_build_review(
         )
         return None
 
-    options: list[VoteOption] = []
-    for guild_id in {channel.guild.id for channel in unique_channels}:
-        options.extend((await bot.services.votes.emoji_preset(guild_id, VoteKind.BUILD)).options)
+    presets = await bot.services.votes.emoji_presets(
+        tuple(sorted({channel.guild.id for channel in unique_channels})), VoteKind.BUILD
+    )
+    options = [option for preset in presets.values() for option in preset.options]
 
     settings = await bot.services.settings.get_runtime()
     session_id = await bot.services.votes.ensure_build_submission_vote(

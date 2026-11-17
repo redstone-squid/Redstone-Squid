@@ -449,29 +449,36 @@ class VoteService:
             return result
 
     async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
+        return (await self.emoji_presets((guild_id,), kind))[guild_id]
+
+    async def emoji_presets(self, guild_ids: Sequence[int], kind: VoteKind) -> dict[int, EmojiPreset]:
+        """Read one preset snapshot for distinct guilds, applying defaults where unset."""
+        guilds = tuple(sorted(set(guild_ids)))
+        if not guilds:
+            return {}
         async with self._uow_factory() as uow:
-            preset = await uow.votes.get_emoji_preset(guild_id, kind)
-            if preset is not None:
-                return preset
-            if kind is VoteKind.GENERIC:
-                options = tuple(
-                    VoteOption(
-                        emoji, VoteChoice.GENERIC, identifier=str(index), guild_id=guild_id, label=f"Option {index}"
-                    )
-                    for index, emoji in enumerate(DEFAULT_GENERIC_EMOJIS, 1)
+            presets = await uow.votes.get_emoji_presets(guilds, kind)
+        return {guild_id: presets.get(guild_id) or self._default_emoji_preset(guild_id, kind) for guild_id in guilds}
+
+    @staticmethod
+    def _default_emoji_preset(guild_id: int, kind: VoteKind) -> EmojiPreset:
+        if kind is VoteKind.GENERIC:
+            options = tuple(
+                VoteOption(emoji, VoteChoice.GENERIC, identifier=str(index), guild_id=guild_id, label=f"Option {index}")
+                for index, emoji in enumerate(DEFAULT_GENERIC_EMOJIS, 1)
+            )
+        else:
+            options = tuple(
+                VoteOption(
+                    option.emoji,
+                    option.choice,
+                    identifier=option.identifier,
+                    guild_id=guild_id,
+                    position=option.position,
                 )
-            else:
-                options = tuple(
-                    VoteOption(
-                        option.emoji,
-                        option.choice,
-                        identifier=option.identifier,
-                        guild_id=guild_id,
-                        position=option.position,
-                    )
-                    for option in DEFAULT_VOTE_OPTIONS
-                )
-            return EmojiPreset(guild_id, kind, options)
+                for option in DEFAULT_VOTE_OPTIONS
+            )
+        return EmojiPreset(guild_id, kind, options)
 
     async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
         async with self._uow_factory() as uow:

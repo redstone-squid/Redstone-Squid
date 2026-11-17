@@ -1251,3 +1251,15 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         assert record is not None
         assert record.payload is not None
         assert record.payload["payload_schema"] == 7
+
+
+async def test_version_lookup_handles_empty_duplicate_and_missing_names(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await seed_account_and_version(migrated_session_factory)
+    async with migrated_session_factory() as session:
+        assert await BuildRepository._get_versions(session, []) == []
+        versions = await BuildRepository._get_versions(session, ["Java 1.21.0", "Java 1.21.0"])
+        assert len(versions) == 1
+        with pytest.raises(InvalidBuildError, match=r"Java 1.21.99"):
+            await BuildRepository._get_versions(session, ["Java 1.21.0", "Java 1.21.99"])

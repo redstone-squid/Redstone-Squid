@@ -512,31 +512,29 @@ class VoteRepository:
         )
 
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
-        session = self._session()
+        return (await self.get_emoji_presets((guild_id,), kind)).get(guild_id)
+
+    async def get_emoji_presets(self, guild_ids: Sequence[int], kind: VoteKind) -> dict[int, EmojiPreset]:
         rows = (
-            await session.scalars(
+            await self._session().scalars(
                 select(GuildVoteEmoji)
-                .where(GuildVoteEmoji.guild_id == guild_id, GuildVoteEmoji.kind == kind)
-                .order_by(GuildVoteEmoji.position)
+                .where(GuildVoteEmoji.guild_id.in_(guild_ids), GuildVoteEmoji.kind == kind)
+                .order_by(GuildVoteEmoji.guild_id, GuildVoteEmoji.position)
             )
         ).all()
-        if not rows:
-            return None
-        return EmojiPreset(
-            guild_id,
-            kind,
-            tuple(
+        options: dict[int, list[VoteOption]] = {}
+        for row in rows:
+            options.setdefault(row.guild_id, []).append(
                 VoteOption(
                     row.emoji,
                     row.choice,
                     identifier=row.identifier,
-                    guild_id=guild_id,
+                    guild_id=row.guild_id,
                     label=row.label,
                     position=row.position,
                 )
-                for row in rows
-            ),
-        )
+            )
+        return {guild_id: EmojiPreset(guild_id, kind, tuple(values)) for guild_id, values in options.items()}
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
         await self.lock_configuration(preset.guild_id)

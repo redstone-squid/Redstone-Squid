@@ -206,6 +206,9 @@ class FakeVoteRepository:
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
         return self.due
 
+    async def get_emoji_presets(self, guild_ids: Sequence[int], kind: VoteKind) -> dict[int, EmojiPreset]:
+        return {}
+
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         return None
 
