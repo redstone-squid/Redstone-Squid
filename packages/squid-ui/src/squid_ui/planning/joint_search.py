@@ -14,8 +14,7 @@ from heapq import heappop, heappush
 from itertools import count
 from types import MappingProxyType
 
-from squid_ui.authoring.presentations import Budget, FidelityEffect
-from squid_ui.authoring.semantic import Budgeted
+from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, PageFamily, allocate_family
 from squid_ui.planning.allocation_policy import (
@@ -27,30 +26,22 @@ from squid_ui.planning.allocation_policy import (
     compare_quality,
     dense_ranks,
 )
+from squid_ui.planning.certification import FamilyCertifier, FamilyRejection
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
     CandidateViolation,
-    CapacityExceeded,
-    ConstraintViolation,
     DiscoveryCompletion,
-    Evaluation,
     OccurrenceId,
     OfferDiscovery,
-    Placement,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
-    SharedResourceConflictError,
     TargetRules,
     UnsupportedCapability,
-    construct_composition,
-    evaluate_composition,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
-from squid_ui.planning.semantic_correspondence import budget_floor
-from squid_ui.primitives.nodes import Budget as NativeBudget
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -155,117 +146,6 @@ def _region_trees[RenderTargetT, ContextT, PayloadT](
     return tuple(found)
 
 
-def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, PreparationT](
-    visible: CandidateComposition[RenderTargetT, ContextT, PayloadT],
-    evaluation: Evaluation[ResourceT, PreparationT],
-    family: PageFamily[RenderTargetT, ContextT, PayloadT],
-    regions: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
-    policies: Mapping[OccurrenceId, RegionPolicy],
-    context: PlanningContext,
-) -> tuple[tuple[CandidateViolation, ...], dict[OccurrenceId, ResourceCost], dict[tuple[OccurrenceId, int], int]]:
-    violations: list[CandidateViolation] = []
-    costs: dict[OccurrenceId, ResourceCost] = {}
-    break_shortfalls: dict[tuple[OccurrenceId, int], int] = {}
-    navigation_chars: dict[OccurrenceId, int] = {}
-
-    def visit(part: CandidateComposition[RenderTargetT, ContextT, PayloadT]) -> ResourceCost:
-        context.work.consume()
-        extra = EMPTY_COST
-        for child in part.children:
-            extra += visit(child)
-        occurrence = part.offer.occurrence
-        coverage = occurrence.fragment
-        identity = coverage.logical if coverage is not None else occurrence.identity
-        cost = evaluation.scoped_costs.get(occurrence.identity, EMPTY_COST)
-        navigation_chars[occurrence.identity] = (
-            cost.get(Axis.DISPLAY_TEXT)
-            if occurrence.placement == Placement.NAVIGATION
-            else sum(navigation_chars[child.offer.occurrence.identity] for child in part.children)
-        )
-        if identity in regions and coverage is not None and occurrence.placement != Placement.NAVIGATION:
-            node = regions[identity]
-            contract = node.candidate.offer.region
-            assert contract is not None
-            # A character grant covers content and authored chrome. Navigation has
-            # its own exact cost in the enclosing composition.
-            navigation = sum(
-                evaluation.scoped_costs.get(child.offer.occurrence.identity, EMPTY_COST).get(Axis.DISPLAY_TEXT)
-                for child in part.children
-                if child.offer.occurrence.placement == Placement.NAVIGATION
-            )
-            body_cost = ResourceCost(
-                {**cost.values, Axis.DISPLAY_TEXT: max(0, cost.get(Axis.DISPLAY_TEXT) - navigation)}
-            )
-            costs[identity] = body_cost
-            if contract.chars is not None:
-                if Axis.DISPLAY_TEXT not in evaluation.resource_axes:
-                    violations.append(UnsupportedCapability(identity, "character page limit"))
-                elif body_cost.get(Axis.DISPLAY_TEXT) > contract.chars:
-                    violations.append(
-                        CapacityExceeded(identity, Axis.DISPLAY_TEXT, body_cost.get(Axis.DISPLAY_TEXT), contract.chars)
-                    )
-            if (
-                contract.per is not None
-                and coverage.end > coverage.start
-                and coverage.start // contract.per != (coverage.end - 1) // contract.per
-            ):
-                violations.append(ConstraintViolation(identity, "authored item page boundary"))
-            if any(coverage.start < boundary < coverage.end for boundary in contract.required_ends):
-                violations.append(ConstraintViolation(identity, "authored item page boundary"))
-            ends = family.regions[identity].cuts
-            if coverage.end == ends[-1]:
-                break_shortfalls[(identity, coverage.end)] = int(
-                    bool(node.units) and coverage.end - coverage.start < contract.widows
-                )
-            else:
-                break_shortfalls[(identity, coverage.end)] = int(body_cost.get(Axis.DISPLAY_TEXT) < contract.min_fill)
-            for goal in policies.get(identity, RegionPolicy()).goals:
-                context.work.consume()
-                if goal.axis not in evaluation.resource_axes:
-                    violations.append(UnsupportedCapability(identity, f"allocation goal: {goal.axis.value}"))
-                elif goal.hard:
-                    extra += ResourceCost(
-                        {goal.axis: max(0, goal.minimum - body_cost.get(goal.axis) - extra.get(goal.axis))}
-                    )
-            costs[identity] = body_cost + extra
-        semantic = occurrence.graph.units[occurrence.reference].value
-        if isinstance(semantic, Budgeted | NativeBudget):
-            actual = cost.get(Axis.DISPLAY_TEXT) - navigation_chars[occurrence.identity]
-            extra += ResourceCost(
-                {
-                    Axis.DISPLAY_TEXT: max(
-                        0,
-                        budget_floor(occurrence.graph, occurrence.reference, occurrence.ancestors())
-                        - actual
-                        - extra.get(Axis.DISPLAY_TEXT),
-                    )
-                }
-            )
-            ceiling = semantic.preferred + semantic.stretch
-            if actual + extra.get(Axis.DISPLAY_TEXT) > ceiling:
-                violations.append(
-                    CapacityExceeded(
-                        occurrence.identity,
-                        Axis.DISPLAY_TEXT,
-                        actual + extra.get(Axis.DISPLAY_TEXT),
-                        ceiling,
-                    )
-                )
-        if isinstance(semantic, Budget):
-            violations.extend(
-                CapacityExceeded(occurrence.identity, axis, used, cap)
-                for axis, used, cap in (cost + extra).over(semantic.limits)
-            )
-        return extra
-
-    extra = visit(visible)
-    violations.extend(
-        CapacityExceeded(visible.offer.occurrence.identity, axis, used, cap)
-        for axis, used, cap in (evaluation.cost + extra).over(context.capacities)
-    )
-    return tuple(violations), costs, break_shortfalls
-
-
 class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT]:
     """One run of `search_composition`, with the queue and bookkeeping its phases share.
 
@@ -308,9 +188,10 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             ]
         ] = []
         self.retained: list[tuple[AllocationQuality, AllocationSnapshot[OutputT]]] = []
+        self.certifier = FamilyCertifier(rules, context, self.policy, finalize)
         self.unsupported: set[OccurrenceId] = set()
         self.violations: list[CandidateViolation] = []
-        self.generated = self.certified = 0
+        self.generated = 0
         self.initial_evaluations = self.context.work.target_evaluations
         self.exhausted = False
         self.seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...], bool]] = set()
@@ -546,68 +427,23 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                     self._push(_Partitions(assignment, candidate, task.choices, regions, unilateral, probe=True))
 
     def _certify(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> tuple[bool, bool]:
-        """Evaluate every page of a partition and retain it if nothing retained dominates it.
-
-        Returns:
-            Whether every page fits, and whether the allocation also meets every soft goal and break.
-        """
+        """Certify a partition and retain its measured result when feasible."""
         self.context.work.consume()
         family = allocate_family(task.candidate, task.regions, task.cuts, self.context)
         region_map = {node.candidate.offer.occurrence.identity: node for node in task.regions}
-        peaks: dict[OccurrenceId, ResourceCost] = {}
-        page_violations: dict[tuple[OccurrenceId, int], int] = {}
-        pages: list[CertifiedPage[OutputT]] = []
-        feasible = True
-        for coordinates, visible in family.combinations(self.context):
-            self.context.work.consume()
-            try:
-                admitted = evaluate_composition(visible, self.rules, self.context)
-            except SharedResourceConflictError as error:
-                # Conflict is contextual: separate pages may use different
-                # values of one identity. Only coexistence is forbidden.
-                admitted = Evaluation(
-                    violations=(
-                        ConstraintViolation(
-                            visible.offer.occurrence.identity, f"shared resource conflict: {error.identity}"
-                        ),
-                    )
-                )
-            if isinstance(admitted, Evaluation):
-                self.context.work.consume(len(admitted.violations))
-                self.violations.extend(admitted.violations)
-                self.unsupported.update(
-                    v.occurrence for v in admitted.violations if isinstance(v, UnsupportedCapability)
-                )
-                feasible = False
-                break
-            failures, costs, shortfalls = _allocation_checks(
-                visible, admitted.evaluation, family, region_map, self.policy, self.context
+        certificate = self.certifier.certify(family, region_map)
+        if isinstance(certificate, FamilyRejection):
+            self.violations.extend(certificate.violations)
+            self.unsupported.update(
+                violation.occurrence
+                for violation in certificate.violations
+                if isinstance(violation, UnsupportedCapability)
             )
-            if failures:
-                self.context.work.consume(len(failures))
-                self.violations.extend(failures)
-                self.unsupported.update(v.occurrence for v in failures if isinstance(v, UnsupportedCapability))
-                feasible = False
-                break
-            for identity, cost in costs.items():
-                self.context.work.consume()
-                previous = peaks.get(identity, EMPTY_COST)
-                peaks[identity] = ResourceCost(
-                    {axis: max(cost.get(axis), previous.get(axis)) for axis in {*cost.values, *previous.values}}
-                )
-            # Count each logical page once, even across many sibling combinations.
-            for key, shortfall in shortfalls.items():
-                self.context.work.consume()
-                page_violations[key] = max(page_violations.get(key, 0), shortfall)
-            built = construct_composition(admitted, self.rules, self.context)
-            self.context.work.consume()
-            output = self.finalize(built, self.context)
-            pages.append(CertifiedPage(coordinates, output))
-            self.certified += 1
-        satisfied = False
-        if feasible:
-            satisfied = self._retain(task, family, region_map, peaks, page_violations, pages)
-        return feasible, satisfied
+            return False, False
+        satisfied = self._retain(
+            task, family, region_map, certificate.peaks, certificate.break_shortfalls, certificate.pages
+        )
+        return True, satisfied
 
     def _retain(
         self,
@@ -616,7 +452,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         region_map: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
         peaks: Mapping[OccurrenceId, ResourceCost],
         page_violations: Mapping[tuple[OccurrenceId, int], int],
-        pages: list[CertifiedPage[OutputT]],
+        pages: tuple[CertifiedPage[OutputT], ...],
     ) -> bool:
         """Score a feasible allocation and keep it unless a retained one is at least as good.
 
@@ -788,7 +624,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             self.context.work.limit,
             self.generated,
             self.context.work.target_evaluations - self.initial_evaluations,
-            self.certified,
+            self.certifier.certified_combinations,
             tuple(self.violations),
             tuple(sorted(self.unsupported, key=lambda identity: identity.path)),
         )
