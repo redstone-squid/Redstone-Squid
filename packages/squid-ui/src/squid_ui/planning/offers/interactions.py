@@ -56,9 +56,7 @@ from squid_ui.planning.realizations import (
     TextRealization,
     TextSequenceRealization,
 )
-from squid_ui.planning.semantics import (
-    ItemBranch,
-)
+from squid_ui.planning.semantic_index import ItemBranch
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, toggle_state
 from squid_ui.primitives.constraints import (
     FIRST_PAGE,

@@ -15,7 +15,7 @@ from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph, variant_alternatives
+from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph, variant_alternatives
 from squid_ui.primitives import nodes as primitive
 from squid_ui.target_types import Renderable
 

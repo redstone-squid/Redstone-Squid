@@ -34,7 +34,7 @@ from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
-from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
+from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
 
 _logger = logging.getLogger(__name__)
 

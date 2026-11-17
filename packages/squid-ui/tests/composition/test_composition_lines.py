@@ -14,7 +14,7 @@ from squid_ui.ext.discord.planning.discord import classic_target, components_v2_
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.planning.semantics import check_alternative
+from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate, alts

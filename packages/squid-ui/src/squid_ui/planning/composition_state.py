@@ -24,7 +24,7 @@ from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.pagination.reuse import same_allocation_document
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
-from squid_ui.planning.semantics import ItemBranch, SemanticGraph, semantic_graph
+from squid_ui.planning.semantic_index import ItemBranch, SemanticGraph, semantic_graph
 from squid_ui.planning.structure import disclosure_state, opened_item
 from squid_ui.presentation import (
     ActivePagers,

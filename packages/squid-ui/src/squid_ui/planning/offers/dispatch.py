@@ -74,7 +74,8 @@ from squid_ui.planning.realizations import (
     Realization,
 )
 from squid_ui.planning.resources import EMPTY_COST, Axis
-from squid_ui.planning.semantics import (
+from squid_ui.planning.semantic_correspondence import interaction
+from squid_ui.planning.semantic_index import (
     CardSlot,
     FieldPart,
     ItemBranch,
@@ -82,7 +83,6 @@ from squid_ui.planning.semantics import (
     RosterSection,
     StructuralGroup,
     TableCell,
-    interaction,
 )
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import (

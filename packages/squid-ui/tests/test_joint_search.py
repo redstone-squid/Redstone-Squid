@@ -22,7 +22,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, search_composition
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import semantic_graph
+from squid_ui.planning.semantic_index import semantic_graph
 from squid_ui.target_types import RenderTarget
 
 

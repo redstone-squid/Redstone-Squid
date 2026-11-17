@@ -12,7 +12,7 @@ from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import check_alternative
+from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never, Paginate, Truncate

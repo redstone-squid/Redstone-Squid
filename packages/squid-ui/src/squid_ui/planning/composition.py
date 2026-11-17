@@ -23,7 +23,8 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
-from squid_ui.planning.semantics import SemanticGraph, SemanticValue, SourceScope, budget_floor
+from squid_ui.planning.semantic_correspondence import SourceScope, budget_floor
+from squid_ui.planning.semantic_index import SemanticGraph, SemanticValue
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Budget as NativeBudget

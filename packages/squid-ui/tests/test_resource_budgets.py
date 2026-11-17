@@ -32,7 +32,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.realizations import Realization
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.planning.semantics import semantic_graph
+from squid_ui.planning.semantic_index import semantic_graph
 from squid_ui.target_types import Renderable, RenderTarget
 
 

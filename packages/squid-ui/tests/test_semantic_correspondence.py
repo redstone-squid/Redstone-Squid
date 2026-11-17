@@ -16,7 +16,8 @@ from squid_ui.authoring.presentations import (
     ref,
 )
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.semantics import TableCell, check_alternative, semantic_graph
+from squid_ui.planning.semantic_correspondence import check_alternative
+from squid_ui.planning.semantic_index import TableCell, semantic_graph
 
 
 def test_reordered_choices_share_meaning_without_a_baseline() -> None:

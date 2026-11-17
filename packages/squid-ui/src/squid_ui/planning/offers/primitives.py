@@ -40,9 +40,7 @@ from squid_ui.planning.realizations import (
     TextSequenceRealization,
     ThumbnailRealization,
 )
-from squid_ui.planning.semantics import (
-    CardSlot,
-)
+from squid_ui.planning.semantic_index import CardSlot
 from squid_ui.planning.text_presentations import (
     _slice,
     text_ends,

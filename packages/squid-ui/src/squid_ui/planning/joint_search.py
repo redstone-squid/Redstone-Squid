@@ -49,7 +49,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
-from squid_ui.planning.semantics import budget_floor
+from squid_ui.planning.semantic_correspondence import budget_floor
 from squid_ui.primitives.nodes import Budget as NativeBudget
 
 

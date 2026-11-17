@@ -10,7 +10,7 @@ from squid_i18n import tree
 from squid_ui.authoring.presentations import alternative, alternatives, equivalent, losses, present_text, ref, shorten
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.semantics import check_alternative
+from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.text_presentations import ResolvedText, resolve_presentation_text
 
 

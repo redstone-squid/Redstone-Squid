@@ -29,7 +29,7 @@ from squid_ui.planning.joint_search import (
     search_composition,
 )
 from squid_ui.planning.realizations import Realization
-from squid_ui.planning.semantics import semantic_graph
+from squid_ui.planning.semantic_index import semantic_graph
 from squid_ui.target_types import RenderTarget
 
 

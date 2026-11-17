@@ -55,14 +55,8 @@ from squid_ui.planning.realizations import (
     TextSequenceRealization,
     TimeRealization,
 )
-from squid_ui.planning.semantics import (
-    RosterLabel,
-    RosterMembers,
-    RosterSection,
-    SourceScope,
-    StructuralGroup,
-    check_alternative,
-)
+from squid_ui.planning.semantic_correspondence import SourceScope, check_alternative
+from squid_ui.planning.semantic_index import RosterLabel, RosterMembers, RosterSection, StructuralGroup
 from squid_ui.planning.structure import resolve_accent
 from squid_ui.planning.text_presentations import (
     UnsupportedText,

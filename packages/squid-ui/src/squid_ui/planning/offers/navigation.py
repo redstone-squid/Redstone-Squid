@@ -40,9 +40,7 @@ from squid_ui.planning.realizations import (
     SelectRealization,
     TextRealization,
 )
-from squid_ui.planning.semantics import (
-    UnsupportedSemanticError,
-)
+from squid_ui.planning.semantic_index import UnsupportedSemanticError
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import (
     FIRST_PAGE,

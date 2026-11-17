@@ -18,7 +18,7 @@ from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantics import check_alternative
+from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
