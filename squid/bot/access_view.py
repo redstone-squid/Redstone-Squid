@@ -436,7 +436,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @staticmethod
     def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        nodes = tuple(CATALOGUE)
+        nodes = tuple(CATALOGUE.values())
         return sp.Browser(
             sl.sources.list_source(nodes),
             key="permission-catalogue",

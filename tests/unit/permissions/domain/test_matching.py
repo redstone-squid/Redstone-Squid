@@ -106,9 +106,9 @@ def test_expansion_agrees_with_matching(raw: str) -> None:
     parsed = Pattern.parse(raw)
     expanded = CATALOGUE.expand(raw)
 
-    assert expanded == {node.name for node in CATALOGUE if parsed.matches(node)}
+    assert expanded == {node for node in CATALOGUE.values() if parsed.matches(node)}
 
 
 @given(raw=st.sampled_from(("build.**", "**", "@destructive", "settings.server.edit")))
 def test_scopes_reached_matches_expansion(raw: str) -> None:
-    assert CATALOGUE.scopes_reached(raw) == {CATALOGUE[name].scope for name in CATALOGUE.expand(raw)}
+    assert CATALOGUE.scopes_reached(raw) == {node.scope for node in CATALOGUE.expand(raw)}

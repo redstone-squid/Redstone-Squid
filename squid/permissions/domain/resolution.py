@@ -39,11 +39,12 @@ one implementation.
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.errors import InvalidStateError
 from squid.permissions.domain.catalogue import CATALOGUE, Catalogue
 from squid.permissions.domain.matching import Pattern
 from squid.permissions.domain.models import Default, Effect, NodeScope, PermissionNode
@@ -82,14 +83,24 @@ class Reason(StrEnum):
     DEFAULT = "default"
 
 
-RANK_COMPONENTS = ("specificity", "scope", "subject", "origin", "effect")
+RANK_COMPONENTS: tuple[LossReason, ...] = ("specificity", "scope", "subject", "origin", "effect")
 """Names of the rank tuple's components, in comparison order, for trace rendering."""
 
-TIE = "tie"
+TIE: LossReason = "tie"
 """`TraceStep.lost_on` when a rule tied the winner on every rank component, and so
 would have produced the same verdict had it won."""
 
-type Rank = tuple[tuple[int, int, int, int], int, int, int, int]
+type LossReason = Literal["specificity", "scope", "subject", "origin", "effect", "tie"]
+
+
+class Rank(NamedTuple):
+    """Lexicographic precedence; larger components win, then stable rule ordering breaks ties."""
+
+    specificity: tuple[int, int, int, int]
+    scope: int
+    subject: int
+    origin: int
+    effect: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +133,7 @@ class Rule:
 
     def rank(self) -> Rank:
         """This rule's precedence, compared descending against sibling rules."""
-        return (
+        return Rank(
             self.pattern.specificity,
             1 if self.scope_guild_id is not None else 0,
             int(self.subject_kind),
@@ -138,7 +149,7 @@ class TraceStep:
     rule: Rule
     rank: Rank
     decisive: bool = False
-    lost_on: str | None = None
+    lost_on: LossReason | None = None
     """Which rank component this rule lost on, `TIE` if it lost only the stable
     tiebreaker, or None on the decisive step itself."""
 
@@ -209,6 +220,71 @@ class RoleExpansion:
     excluded: frozenset[str]
 
 
+class RoleGraphError(InvalidStateError):
+    """Persisted role composition cannot be evaluated completely."""
+
+
+class MissingRoleError(RoleGraphError):
+    """A composition references a role absent from the snapshot."""
+
+
+class RoleCycleError(RoleGraphError):
+    """Role composition contains a cycle."""
+
+
+class RoleDepthError(RoleGraphError):
+    """Role composition exceeds the supported depth."""
+
+
+class RoleGraph:
+    """Validate a role snapshot and expand each shared subtree once.
+
+    Exclusions subtract from this role's contribution, including inherited patterns.
+    They never deny a grant contributed by an independent role. Expansions belong
+    to this snapshot only; a new permission epoch builds a new graph.
+    """
+
+    def __init__(
+        self, roles: Mapping[str, RoleSpec], *, catalogue: Catalogue = CATALOGUE, max_depth: int = MAX_ROLE_DEPTH
+    ) -> None:
+        self._roles = roles
+        self._catalogue = catalogue
+        self._max_depth = max_depth
+        self._expanded: dict[str, RoleExpansion] = {}
+        self._heights: dict[str, int] = {}
+        for key in roles:
+            self._visit(key, ())
+
+    def expand(self, key: str) -> RoleExpansion:
+        return self._visit(key, ())
+
+    def _visit(self, key: str, path: tuple[str, ...]) -> RoleExpansion:
+        if key in path:
+            message = f"Role composition cycle: {' -> '.join((*path, key))}"
+            raise RoleCycleError(message)
+        if len(path) + self._heights.get(key, 1) > self._max_depth:
+            message = f"Role composition exceeds depth {self._max_depth}: {' -> '.join((*path, key))}"
+            raise RoleDepthError(message)
+        if key in self._expanded:
+            return self._expanded[key]
+        if key not in self._roles:
+            message = f"Missing permission role {key!r} referenced by {path!r}"
+            raise MissingRoleError(message)
+        role = self._roles[key]
+        includes = set(role.includes)
+        excluded = {node.name for pattern in role.excludes for node in self._catalogue.expand(pattern)}
+        height = 1
+        for child_key in role.includes_roles:
+            child = self._visit(child_key, (*path, key))
+            includes.update(child.includes)
+            excluded.update(child.excluded)
+            height = max(height, 1 + self._heights[child_key])
+        result = RoleExpansion(frozenset(includes), frozenset(excluded))
+        self._heights[key] = height
+        self._expanded[key] = result
+        return result
+
+
 def expand_role(
     key: str,
     roles: Mapping[str, RoleSpec],
@@ -216,37 +292,8 @@ def expand_role(
     catalogue: Catalogue = CATALOGUE,
     max_depth: int = MAX_ROLE_DEPTH,
 ) -> RoleExpansion:
-    """Collect include patterns and excluded node names through role composition.
-
-    Exclusions from every visited role apply to the whole expansion, including
-    patterns inherited through other branches. Missing roles, cycles on the current
-    path, and branches beyond `max_depth` contribute nothing further.
-    """
-    return _expand(key, roles, catalogue, frozenset(), max_depth)
-
-
-def _expand(
-    key: str,
-    roles: Mapping[str, RoleSpec],
-    catalogue: Catalogue,
-    visited: frozenset[str],
-    depth: int,
-) -> RoleExpansion:
-    role = roles.get(key)
-    if role is None or key in visited or depth <= 0:
-        return RoleExpansion(frozenset(), frozenset())
-
-    includes = set(role.includes)
-    excluded: set[str] = set()
-    for pattern in role.excludes:
-        excluded |= catalogue.expand(pattern)
-
-    for child_key in role.includes_roles:
-        child = _expand(child_key, roles, catalogue, visited | {key}, depth - 1)
-        includes |= child.includes
-        excluded |= child.excluded
-
-    return RoleExpansion(frozenset(includes), frozenset(excluded))
+    """Expand a role, rejecting missing roles, cycles, and excessive depth."""
+    return RoleGraph(roles, catalogue=catalogue, max_depth=max_depth).expand(key)
 
 
 def rules_from_role(
@@ -307,7 +354,7 @@ def _ordering(rule: Rule) -> tuple[object, ...]:
     return (negated_specificity, *negated_rank, rule.source, rule.pattern.raw, int(rule.effect))
 
 
-def _lost_on(winner: Rank, loser: Rank) -> str:
+def _lost_on(winner: Rank, loser: Rank) -> LossReason:
     for name, won, lost in zip(RANK_COMPONENTS, winner, loser, strict=True):
         if won != lost:
             return name

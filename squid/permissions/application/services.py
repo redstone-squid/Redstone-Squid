@@ -28,10 +28,9 @@ from squid.permissions.domain import (
     Pattern,
     PermissionCheck,
     PermissionNode,
-    RoleSpec,
+    RoleGraph,
     Rule,
     SubjectKind,
-    expand_role,
     resolve,
     rules_from_role,
 )
@@ -121,25 +120,23 @@ class PermissionService:
 
     def _assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
         """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
-        specs = role_specs(records.roles)
+        graph = RoleGraph(role_specs(records.roles), catalogue=self._catalogue)
         rules = [_grant_rule(grant) for grant in records.grants]
-        rules.extend(self._assignment_rules(records, specs))
+        rules.extend(self._assignment_rules(records, graph))
 
-        bridge = self._bridge_rules(records, specs, subject)
+        bridge = self._bridge_rules(records, graph, subject)
         rules.extend(bridge)
         return tuple(rules)
 
-    def _assignment_rules(self, records: SubjectRecords, specs: dict[str, RoleSpec]) -> list[Rule]:
+    def _assignment_rules(self, records: SubjectRecords, graph: RoleGraph) -> list[Rule]:
         slugs = {str(role.id): role.slug for role in records.roles}
         rules: list[Rule] = []
         for assignment in records.assignments:
             key = str(assignment.role_id)
-            if key not in specs:
-                continue
             by_account = assignment.subject_account_id is not None
             rules.extend(
                 rules_from_role(
-                    expand_role(key, specs, catalogue=self._catalogue),
+                    graph.expand(key),
                     subject_kind=SubjectKind.ACCOUNT if by_account else SubjectKind.DISCORD_ROLE,
                     origin=Origin.ROLE,
                     scope_guild_id=assignment.scope_guild_id,
@@ -153,7 +150,7 @@ class PermissionService:
     def _bridge_rules(
         self,
         records: SubjectRecords,
-        specs: dict[str, RoleSpec],
+        graph: RoleGraph,
         subject: Actor,
     ) -> list[Rule]:
         """Add guild-admin rules for Discord members with Manage Server.
@@ -168,7 +165,7 @@ class PermissionService:
             return []
         return list(
             rules_from_role(
-                expand_role(key, specs, catalogue=self._catalogue),
+                graph.expand(key),
                 subject_kind=SubjectKind.DISCORD_ROLE,
                 origin=Origin.GUILD_ADMIN_BRIDGE,
                 scope_guild_id=subject.guild_id,

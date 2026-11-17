@@ -118,7 +118,7 @@ class ApiKeyService:
         requested_nodes = frozenset(node for pattern in patterns for node in CATALOGUE.expand(pattern))
         held = (await self._permissions.check(subject, *requested_nodes, uow=uow)).allowed_nodes
         for pattern in patterns:
-            reached = CATALOGUE.expand(pattern)
+            reached = frozenset(node.name for node in CATALOGUE.expand(pattern))
             if missing := sorted(reached - held):
                 msg = f"{missing[0]} is outside your authority; you cannot grant what you do not hold."
                 raise AuthorizationError(msg, public_context={"pattern": pattern.raw, "node": missing[0]})

@@ -22,12 +22,12 @@ def builtin_leaves(key: str) -> frozenset[str]:
     """The node names a built-in role resolves to right now."""
     roles = {role.key: RoleSpec(role.key, role.includes, role.excludes) for role in BUILTIN_ROLES}
     expansion = expand_role(key, roles)
-    reached = {name for pattern in expansion.includes for name in CATALOGUE.expand(pattern)}
+    reached = {node.name for pattern in expansion.includes for node in CATALOGUE.expand(pattern)}
     return frozenset(reached - expansion.excluded)
 
 
 def test_node_names_follow_the_convention() -> None:
-    for node in CATALOGUE:
+    for node in CATALOGUE.values():
         segments = node.segments
         assert MIN_SEGMENTS <= len(segments) <= MAX_SEGMENTS, node.name
         assert all(segment.replace("_", "a").isalnum() for segment in segments), node.name
@@ -36,13 +36,13 @@ def test_node_names_follow_the_convention() -> None:
 
 def test_every_node_is_described() -> None:
     """Descriptions are user-facing: they are what `/perm nodes` shows."""
-    assert all(node.description.resolve().strip() for node in CATALOGUE)
+    assert all(node.description.resolve().strip() for node in CATALOGUE.values())
 
 
 def test_nodes_can_form_capability_sets_after_description_localization() -> None:
-    capabilities = frozenset(CATALOGUE)
+    capabilities = frozenset(CATALOGUE.values())
 
-    assert all(node in capabilities for node in CATALOGUE)
+    assert all(node in capabilities for node in CATALOGUE.values())
 
 
 def test_unknown_nodes_raise_rather_than_deny() -> None:
@@ -90,8 +90,8 @@ class TestBuiltinRoles:
     def test_global_admin_stops_short_of_the_owner_only_powers(self) -> None:
         leaves = builtin_leaves("global-admin")
 
-        assert not leaves & CATALOGUE.expand("@destructive")
-        assert not leaves & CATALOGUE.expand("bot.**")
+        assert not leaves & {node.name for node in CATALOGUE.expand("@destructive")}
+        assert not leaves & {node.name for node in CATALOGUE.expand("bot.**")}
         assert "perm.grant.global" not in leaves
         assert "role.definition.manage" not in leaves
 
@@ -102,11 +102,11 @@ class TestBuiltinRoles:
         """
         withheld = frozenset(CATALOGUE.names) - builtin_leaves("global-admin")
         owner_only = (
-            CATALOGUE.expand("@destructive")
-            | CATALOGUE.expand("bot.**")
+            {node.name for node in CATALOGUE.expand("@destructive")}
+            | {node.name for node in CATALOGUE.expand("bot.**")}
             | {"perm.grant.global", "role.definition.manage"}
         )
-        ungrantable = {node.name for node in CATALOGUE if node.default is Default.ALLOW}
+        ungrantable = {node.name for node in CATALOGUE.values() if node.default is Default.ALLOW}
 
         assert withheld <= owner_only | ungrantable
 
@@ -133,3 +133,8 @@ def test_runtime_settings_belong_to_global_administrators() -> None:
     assert names.isdisjoint(builtin_leaves("guild-admin"))
     assert names.isdisjoint(builtin_leaves("trusted"))
     assert all(CATALOGUE[name].scope is NodeScope.GLOBAL for name in names)
+
+
+def test_catalogue_is_a_mapping_with_sorted_keys() -> None:
+    assert tuple(CATALOGUE) == tuple(sorted(CATALOGUE.names))
+    assert dict(CATALOGUE) == {node.name: node for node in CATALOGUE.values()}

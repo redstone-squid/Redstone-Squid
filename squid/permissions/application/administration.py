@@ -34,6 +34,8 @@ from squid.permissions.domain import (
     InvalidPatternError,
     NodeScope,
     Pattern,
+    RoleGraph,
+    RoleGraphError,
     expand_role,
 )
 from squid.permissions.domain.catalogue import (
@@ -227,7 +229,7 @@ class PermissionAdministrationService:
         # A malformed pattern raises InvalidPatternError from the catalogue; a
         # well-formed one matching nothing is refused here, because "every leaf
         # it reaches is allowed" is vacuously true of a typo.
-        reached = self._catalogue.expand(pattern)
+        reached = frozenset(node.name for node in self._catalogue.expand(pattern))
         if not reached:
             msg = f"{pattern} matches no permission node."
             raise ValidationError(msg, public_context={"pattern": pattern})
@@ -314,6 +316,15 @@ class PermissionAdministrationService:
         if self._would_cycle(role.id, included.id, roles):
             msg = f"Including {included.slug} in {role.slug} would create a cycle."
             raise ConflictError(msg, public_context={"role": role.slug, "included": included.slug})
+        specs = role_specs(roles)
+        parent_key = str(role.id)
+        specs[parent_key] = replace(
+            specs[parent_key], includes_roles=(*specs[parent_key].includes_roles, str(included.id))
+        )
+        try:
+            RoleGraph(specs, catalogue=self._catalogue)
+        except RoleGraphError as error:
+            raise ValidationError(str(error)) from error
         # Check inherited capabilities just as we check direct include patterns.
         self._require_authority(actor, self.resolved_leaves(included, roles))
 
@@ -454,7 +465,7 @@ class PermissionAdministrationService:
             if rule.effect == int(Effect.ALLOW)
             and rule.subject_account_id is not None
             and _is_live(rule.expires_at, now)
-            and PERM_GRANT_GLOBAL.name in self._catalogue.expand(rule.pattern)
+            and PERM_GRANT_GLOBAL in self._catalogue.expand(rule.pattern)
         }
         return len(granting)
 
@@ -516,7 +527,7 @@ class PermissionAdministrationService:
         expansion = expand_role(str(role.id), specs, catalogue=catalogue)
         leaves: set[str] = set()
         for pattern in expansion.includes:
-            leaves |= catalogue.expand(pattern)
+            leaves.update(node.name for node in catalogue.expand(pattern))
         return tuple(sorted(leaves - expansion.excluded))
 
     def _is_delegable_by_guild_admin(self, pattern: str) -> bool:

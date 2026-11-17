@@ -9,15 +9,14 @@ WILDCARD = "**"
 def permission_node_candidates() -> tuple[Candidate, ...]:
     """Suggest concrete permission nodes."""
     return tuple(
-        Candidate.create(node.name, description=node.scope.value, kind="permission_node")
-        for node in sorted(CATALOGUE, key=lambda node: node.name)
+        Candidate.create(node.name, description=node.scope.value, kind="permission_node") for node in CATALOGUE.values()
     )
 
 
 def permission_pattern_candidates() -> tuple[Candidate, ...]:
     """Suggest anything a grant may be written against: nodes, wildcards, and tag selectors."""
     patterns: dict[str, str] = {WILDCARD: "every permission"}
-    for node in CATALOGUE:
+    for node in CATALOGUE.values():
         patterns[node.name] = node.scope.value
         segments = node.name.split(".")
         for depth in range(1, len(segments)):

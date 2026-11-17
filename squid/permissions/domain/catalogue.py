@@ -8,7 +8,7 @@ such as `build.*.view` to select related capabilities. The builder rejects
 duplicate or structurally invalid declarations when this module is imported.
 """
 
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -29,7 +29,7 @@ MIN_SEGMENTS = 2
 collide with a namespace and make `foo.**` ambiguous."""
 
 
-class Catalogue:
+class Catalogue(Mapping[str, PermissionNode]):
     """Permission nodes indexed by name. Use `CatalogueBuilder` to validate declarations."""
 
     def __init__(self, nodes: Iterable[PermissionNode]):
@@ -44,9 +44,9 @@ class Catalogue:
     def __contains__(self, name: object) -> bool:
         return name in self._nodes
 
-    def __iter__(self) -> Iterator[PermissionNode]:
-        """Iterate nodes in name order, so renderings and snapshots are stable."""
-        return iter(sorted(self._nodes.values(), key=lambda node: node.name))
+    def __iter__(self) -> Iterator[str]:
+        """Iterate names in stable order."""
+        return iter(sorted(self._nodes))
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -56,15 +56,15 @@ class Catalogue:
         """Every node name, sorted."""
         return tuple(sorted(self._nodes))
 
-    def expand(self, pattern: Pattern | str) -> frozenset[str]:
-        """The names of every node `pattern` currently selects.
+    def expand(self, pattern: Pattern | str) -> frozenset[PermissionNode]:
+        """Every node `pattern` currently selects.
 
         Expansion is a read-time convenience for rendering and validation. It is
         never stored: a grant keeps the pattern, so nodes added later fall under
         it automatically.
         """
         parsed = Pattern.parse(pattern) if isinstance(pattern, str) else pattern
-        return frozenset(node.name for node in self if parsed.matches(node))
+        return frozenset(node for node in self.values() if parsed.matches(node))
 
     def scopes_reached(self, pattern: Pattern | str) -> frozenset[NodeScope]:
         """The distinct scopes of the nodes `pattern` selects.
@@ -73,7 +73,7 @@ class Catalogue:
         pattern that reaches `NodeScope.GUILD` nodes and nothing else.
         """
         parsed = Pattern.parse(pattern) if isinstance(pattern, str) else pattern
-        return frozenset(node.scope for node in self if parsed.matches(node))
+        return frozenset(node.scope for node in self.values() if parsed.matches(node))
 
 
 class CatalogueBuilder:

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from pytest_mock import MockerFixture
 from whenever import Instant
 
 from squid.core.actors import Actor
@@ -14,10 +15,14 @@ from squid.permissions.domain import (
     Decision,
     Default,
     Effect,
+    MissingRoleError,
     NodeScope,
     Origin,
     Pattern,
     Reason,
+    RoleCycleError,
+    RoleDepthError,
+    RoleGraph,
     RoleSpec,
     Rule,
     SubjectKind,
@@ -132,7 +137,7 @@ class TestRoleExpansion:
         expansion = expand_role("moderator", roles)
 
         assert "build.**" in expansion.includes
-        assert expansion.excluded == CATALOGUE.expand("@diagnostic")
+        assert expansion.excluded == {node.name for node in CATALOGUE.expand("@diagnostic")}
 
     def test_a_childs_subtraction_survives_into_the_parent(self) -> None:
         roles = {
@@ -142,23 +147,23 @@ class TestRoleExpansion:
 
         assert "build.submission.approve" in expand_role("moderator", roles).excluded
 
-    def test_a_cycle_terminates_instead_of_raising(self) -> None:
-        """A broken composition graph must not take every check down with it."""
+    def test_a_cycle_is_rejected(self) -> None:
+        """An incomplete exclusion traversal must never broaden a grant."""
         roles = {
             "a": RoleSpec("a", includes=("build.**",), includes_roles=("b",)),
             "b": RoleSpec("b", includes=("vote.**",), includes_roles=("a",)),
         }
 
-        assert expand_role("a", roles).includes == {"build.**", "vote.**"}
+        with pytest.raises(RoleCycleError):
+            expand_role("a", roles)
 
     def test_depth_is_capped(self) -> None:
         roles = {
             str(index): RoleSpec(str(index), includes=(f"a{index}.b.c",), includes_roles=(str(index + 1),))
             for index in range(20)
         }
-        expansion = expand_role("0", roles, max_depth=3)
-
-        assert expansion.includes == {"a0.b.c", "a1.b.c", "a2.b.c"}
+        with pytest.raises(RoleDepthError):
+            expand_role("0", roles, max_depth=3)
 
 
 @given(name=node_names(), ruleset=rule_sets(), data=st.data())
@@ -228,13 +233,18 @@ def test_p7_role_expansion_terminates_and_ignores_edge_order(keys: list[str], da
         edges = data.draw(st.lists(st.sampled_from(keys), max_size=3, unique=True))
         specs[key] = RoleSpec(key, includes=(f"{key}x.b.c",), includes_roles=tuple(edges))
 
-    first = expand_role(keys[0], specs)
     reordered = {
         key: dataclasses.replace(spec, includes_roles=tuple(reversed(spec.includes_roles)))
         for key, spec in specs.items()
     }
 
-    assert expand_role(keys[0], reordered) == first
+    try:
+        first = expand_role(keys[0], specs)
+    except RoleCycleError:
+        with pytest.raises(RoleCycleError):
+            expand_role(keys[0], reordered)
+    else:
+        assert expand_role(keys[0], reordered) == first
 
 
 @given(name=node_names(), ruleset=rule_sets(), pattern=patterns())
@@ -311,3 +321,32 @@ def test_an_unauthenticated_subject_resolves_without_an_account(subject: Actor) 
     rule = allow("settings.**", subject_kind=SubjectKind.DISCORD_ROLE, scope_guild_id=GUILD_ID)
 
     assert resolve("settings.server.edit", subject, [rule]).allowed
+
+
+def test_missing_role_is_rejected() -> None:
+    with pytest.raises(MissingRoleError, match="missing"):
+        expand_role("parent", {"parent": RoleSpec("parent", includes_roles=("missing",))})
+
+
+def test_cached_child_still_counts_toward_depth() -> None:
+    roles = {
+        "leaf": RoleSpec("leaf"),
+        "child": RoleSpec("child", includes_roles=("leaf",)),
+        "parent": RoleSpec("parent", includes_roles=("child",)),
+    }
+    with pytest.raises(RoleDepthError):
+        RoleGraph(roles, max_depth=2)
+
+
+def test_diamond_reuses_shared_expansion(mocker: MockerFixture) -> None:
+    roles = {
+        "leaf": RoleSpec("leaf", includes=("build.**",), excludes=("@diagnostic",)),
+        "left": RoleSpec("left", includes_roles=("leaf",)),
+        "right": RoleSpec("right", includes_roles=("leaf",)),
+        "root": RoleSpec("root", includes_roles=("left", "right")),
+    }
+    expand = mocker.spy(CATALOGUE, "expand")
+    graph = RoleGraph(roles)
+    assert expand.call_count == 1
+    assert graph.expand("root").includes == {"build.**"}
+    assert graph.expand("leaf") is graph.expand("leaf")
