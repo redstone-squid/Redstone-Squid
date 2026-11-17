@@ -10,19 +10,7 @@ from typing import TypeIs
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.entity import ConversationType
 from squid_ui.errors import SquidUiError
-from squid_ui.scene._json import (
-    JsonArray,
-    JsonObject,
-    optional_integer,
-    optional_string,
-    require_array,
-    require_array_value,
-    require_boolean,
-    require_integer,
-    require_object,
-    require_string,
-    require_string_array,
-)
+from squid_ui.scene._json import JsonObject, JsonReader
 from squid_ui.scene.slack import (
     SlackActionRef,
     SlackActions,
@@ -65,6 +53,9 @@ class SlackSceneCodecError(SquidUiError, ValueError):
     """A Slack scene body has an invalid shape."""
 
 
+_json = JsonReader(SlackSceneCodecError)
+
+
 def _narrow[InputT, OutputT](
     values: Iterable[InputT],
     predicate: Callable[[InputT], TypeIs[OutputT]],
@@ -91,35 +82,6 @@ def _is_card(value: SlackBlock) -> TypeIs[SlackCard]:
     return isinstance(value, SlackCard)
 
 
-def _object(value: object, name: str) -> JsonObject:
-    return require_object(value, f"{name} must be an object", SlackSceneCodecError)
-
-
-def _array(raw: JsonObject, key: str) -> JsonArray:
-    return require_array(raw, key, SlackSceneCodecError)
-
-
-def _string(raw: JsonObject, key: str) -> str:
-    return require_string(raw, key, SlackSceneCodecError)
-
-
-def _optional_string(raw: JsonObject, key: str) -> str | None:
-    return optional_string(raw, key, SlackSceneCodecError)
-
-
-def _integer(raw: JsonObject, key: str) -> int:
-    return require_integer(raw, key, SlackSceneCodecError)
-
-
-def _boolean(raw: JsonObject, key: str) -> bool:
-    return require_boolean(raw, key, SlackSceneCodecError)
-
-
-def _optional_object(raw: JsonObject, key: str) -> JsonObject | None:
-    value = raw.get(key)
-    return None if value is None else _object(value, key)
-
-
 def _text(value: SlackText) -> dict[str, object]:
     return {
         "content": value.content,
@@ -130,13 +92,13 @@ def _text(value: SlackText) -> dict[str, object]:
 
 
 def _text_from(value: object) -> SlackText:
-    raw = _object(value, "Slack text")
+    raw = _json.require_object(value, name="Slack text")
     emoji = raw.get("emoji")
     verbatim = raw.get("verbatim")
     if (emoji is not None and not isinstance(emoji, bool)) or (verbatim is not None and not isinstance(verbatim, bool)):
         message = "Slack text emoji and verbatim flags must be booleans or null"
         raise SlackSceneCodecError(message)
-    return SlackText(_string(raw, "content"), SlackTextKind(_string(raw, "kind")), emoji, verbatim)
+    return SlackText(_json.string(raw, "content"), SlackTextKind(_json.string(raw, "kind")), emoji, verbatim)
 
 
 def _option(value: SlackOption) -> dict[str, object]:
@@ -148,11 +110,11 @@ def _option(value: SlackOption) -> dict[str, object]:
 
 
 def _option_from(value: object) -> SlackOption:
-    raw = _object(value, "Slack option")
+    raw = _json.require_object(value, name="Slack option")
     description = raw.get("description")
     return SlackOption(
         _text_from(raw.get("label")),
-        _string(raw, "value"),
+        _json.string(raw, "value"),
         None if description is None else _text_from(description),
     )
 
@@ -164,8 +126,8 @@ def _action(value: SlackActionRef | None) -> dict[str, object] | None:
 def _action_from(value: object) -> SlackActionRef | None:
     if value is None:
         return None
-    raw = _object(value, "Slack action")
-    return SlackActionRef(_string(raw, "action"), ActionMode(_string(raw, "mode")))
+    raw = _json.require_object(value, name="Slack action")
+    return SlackActionRef(_json.string(raw, "action"), ActionMode(_json.string(raw, "mode")))
 
 
 def _route(value: SlackRouteRef | None) -> dict[str, object] | None:
@@ -175,7 +137,7 @@ def _route(value: SlackRouteRef | None) -> dict[str, object] | None:
 def _route_from(value: object) -> SlackRouteRef | None:
     if value is None:
         return None
-    return SlackRouteRef(_string(_object(value, "Slack route"), "route_id"))
+    return SlackRouteRef(_json.string(_json.require_object(value, name="Slack route"), "route_id"))
 
 
 def _element(value: SlackElement) -> dict[str, object]:
@@ -268,85 +230,86 @@ def _element(value: SlackElement) -> dict[str, object]:
 
 
 def _element_from(value: object) -> SlackElement:
-    raw = _object(value, "Slack element")
-    kind = _string(raw, "kind")
+    raw = _json.require_object(value, name="Slack element")
+    kind = _json.string(raw, "kind")
     placeholder = raw.get("placeholder")
     match kind:
         case "button":
-            asset = _optional_object(raw, "asset")
+            asset_value = raw.get("asset")
+            asset = None if asset_value is None else _json.require_object(asset_value, name="asset")
             return SlackButton(
                 _text_from(raw.get("label")),
                 _action_from(raw.get("action")),
                 _route_from(raw.get("route")),
-                _optional_string(raw, "url"),
+                _json.optional_string(raw, "url"),
                 (
                     None
                     if asset is None
                     else SlackAssetRef(
-                        _string(asset, "key"),
-                        _string(asset, "name"),
-                        _string(asset, "media_type"),
+                        _json.string(asset, "key"),
+                        _json.string(asset, "name"),
+                        _json.string(asset, "media_type"),
                     )
                 ),
-                _optional_string(raw, "value"),
-                SlackButtonStyle(_string(raw, "style")),
+                _json.optional_string(raw, "value"),
+                SlackButtonStyle(_json.string(raw, "style")),
             )
         case "select":
             return SlackSelect(
                 _action_from(raw.get("action")),
                 _route_from(raw.get("route")),
-                _optional_string(raw, "action_id"),
-                SlackSelectKind(_string(raw, "select_kind")),
+                _json.optional_string(raw, "action_id"),
+                SlackSelectKind(_json.string(raw, "select_kind")),
                 None if placeholder is None else _text_from(placeholder),
-                tuple(_option_from(option) for option in _array(raw, "options")),
+                tuple(_option_from(option) for option in _json.array(raw, "options")),
                 tuple(
-                    _string(_object({"value": item}, "initial value"), "value")
-                    for item in _array(raw, "initial_values")
+                    _json.string(_json.require_object({"value": item}, name="initial value"), "value")
+                    for item in _json.array(raw, "initial_values")
                 ),
-                tuple(ConversationType(item) for item in _array(raw, "conversation_types")),
-                _integer(raw, "minimum"),
-                _integer(raw, "maximum"),
+                tuple(ConversationType(item) for item in _json.array(raw, "conversation_types")),
+                _json.integer(raw, "minimum"),
+                _json.integer(raw, "maximum"),
             )
         case "text_input":
             return SlackTextInput(
-                _string(raw, "action_id"),
-                _optional_string(raw, "initial_value"),
+                _json.string(raw, "action_id"),
+                _json.optional_string(raw, "initial_value"),
                 None if placeholder is None else _text_from(placeholder),
-                _boolean(raw, "multiline"),
-                optional_integer(raw, "minimum_length", SlackSceneCodecError),
-                optional_integer(raw, "maximum_length", SlackSceneCodecError),
+                _json.boolean(raw, "multiline"),
+                _json.optional_integer(raw, "minimum_length"),
+                _json.optional_integer(raw, "maximum_length"),
             )
         case "number_input":
             return SlackNumberInput(
-                _string(raw, "action_id"),
-                _optional_string(raw, "initial_value"),
-                _boolean(raw, "decimal_allowed"),
-                _optional_string(raw, "minimum"),
-                _optional_string(raw, "maximum"),
+                _json.string(raw, "action_id"),
+                _json.optional_string(raw, "initial_value"),
+                _json.boolean(raw, "decimal_allowed"),
+                _json.optional_string(raw, "minimum"),
+                _json.optional_string(raw, "maximum"),
             )
         case "date_picker":
             return SlackDatePicker(
-                _string(raw, "action_id"),
-                _optional_string(raw, "initial_date"),
+                _json.string(raw, "action_id"),
+                _json.optional_string(raw, "initial_date"),
                 None if placeholder is None else _text_from(placeholder),
             )
         case "time_picker":
             return SlackTimePicker(
-                _string(raw, "action_id"),
-                _optional_string(raw, "initial_time"),
+                _json.string(raw, "action_id"),
+                _json.optional_string(raw, "initial_time"),
                 None if placeholder is None else _text_from(placeholder),
             )
         case "checkboxes":
             return SlackCheckboxes(
-                _string(raw, "action_id"),
-                tuple(_option_from(option) for option in _array(raw, "options")),
-                tuple(require_string_array(raw, "initial_values", SlackSceneCodecError)),
+                _json.string(raw, "action_id"),
+                tuple(_option_from(option) for option in _json.array(raw, "options")),
+                tuple(_json.string_array(raw, "initial_values")),
             )
         case "radio_buttons":
             return SlackRadioButtons(
-                _string(raw, "action_id"),
-                tuple(_option_from(option) for option in _array(raw, "options")),
-                _optional_string(raw, "initial_value"),
+                _json.string(raw, "action_id"),
+                tuple(_option_from(option) for option in _json.array(raw, "options")),
+                _json.optional_string(raw, "initial_value"),
             )
         case _:
             message = f"unknown Slack element kind {kind!r}"
@@ -408,35 +371,35 @@ def _block(value: SlackBlock) -> dict[str, object]:
 
 
 def _block_from(value: object) -> SlackBlock:
-    raw = _object(value, "Slack block")
-    kind = _string(raw, "kind")
+    raw = _json.require_object(value, name="Slack block")
+    kind = _json.string(raw, "kind")
     match kind:
         case "section":
             text = raw.get("text")
             accessory = raw.get("accessory")
             return SlackSection(
                 None if text is None else _text_from(text),
-                tuple(_text_from(item) for item in _array(raw, "fields")),
+                tuple(_text_from(item) for item in _json.array(raw, "fields")),
                 None if accessory is None else _element_from(accessory),
             )
         case "header":
             return SlackHeader(_text_from(raw.get("text")))
         case "context":
-            return SlackContext(tuple(_text_from(item) for item in _array(raw, "elements")))
+            return SlackContext(tuple(_text_from(item) for item in _json.array(raw, "elements")))
         case "divider":
             return SlackDivider()
         case "image":
             title = raw.get("title")
             return SlackImage(
-                _string(raw, "image_url"),
-                _string(raw, "alt_text"),
+                _json.string(raw, "image_url"),
+                _json.string(raw, "alt_text"),
                 None if title is None else _text_from(title),
             )
         case "actions":
-            elements = tuple(_element_from(item) for item in _array(raw, "elements"))
+            elements = tuple(_element_from(item) for item in _json.array(raw, "elements"))
             return SlackActions(
                 _narrow(elements, _is_action_element, "Slack actions contain an unsupported element"),
-                _optional_string(raw, "block_id"),
+                _json.optional_string(raw, "block_id"),
             )
         case "input":
             element = _element_from(raw.get("element"))
@@ -445,41 +408,38 @@ def _block_from(value: object) -> SlackBlock:
                 raise SlackSceneCodecError(message)
             hint = raw.get("hint")
             return SlackInput(
-                _string(raw, "block_id"),
+                _json.string(raw, "block_id"),
                 _text_from(raw.get("label")),
                 element,
-                _boolean(raw, "optional"),
+                _json.boolean(raw, "optional"),
                 None if hint is None else _text_from(hint),
             )
         case "table":
             return SlackTable(
                 tuple(
-                    tuple(
-                        _text_from(cell)
-                        for cell in require_array_value(row, "Slack table row must be an array", SlackSceneCodecError)
-                    )
-                    for row in _array(raw, "rows")
+                    tuple(_text_from(cell) for cell in _json.array_value(row, "Slack table row must be an array"))
+                    for row in _json.array(raw, "rows")
                 )
             )
         case "card":
             title = raw.get("title")
             description = raw.get("description")
-            actions = tuple(_element_from(item) for item in _array(raw, "actions"))
+            actions = tuple(_element_from(item) for item in _json.array(raw, "actions"))
             return SlackCard(
                 None if title is None else _text_from(title),
                 None if description is None else _text_from(description),
-                _optional_string(raw, "image_url"),
+                _json.optional_string(raw, "image_url"),
                 _narrow(actions, _is_button, "Slack card actions must be buttons"),
             )
         case "carousel":
-            cards = tuple(_block_from(item) for item in _array(raw, "cards"))
+            cards = tuple(_block_from(item) for item in _json.array(raw, "cards"))
             return SlackCarousel(_narrow(cards, _is_card, "Slack carousels must contain cards"))
         case "alert":
             text = raw.get("text")
             return SlackAlert(
                 _text_from(raw.get("title")),
                 None if text is None else _text_from(text),
-                SlackAlertStyle(_string(raw, "style")),
+                SlackAlertStyle(_json.string(raw, "style")),
             )
         case _:
             message = f"unknown Slack block kind {kind!r}"
@@ -516,25 +476,25 @@ def slack_body_from_dict(raw: JsonObject) -> SlackBody:
     Unknown fields are ignored. This does not enforce the JSON Schema's length
     and item limits; enum and model constructor errors propagate unchanged.
     """
-    kind = _string(raw, "kind")
-    blocks = tuple(_block_from(block) for block in _array(raw, "blocks"))
+    kind = _json.string(raw, "kind")
+    blocks = tuple(_block_from(block) for block in _json.array(raw, "blocks"))
     match kind:
         case SlackMessage.KIND:
-            return SlackMessage(_string(raw, "text"), blocks)
+            return SlackMessage(_json.string(raw, "text"), blocks)
         case SlackModalView.KIND:
             return SlackModalView(
-                _string(raw, "callback_id"),
+                _json.string(raw, "callback_id"),
                 _text_from(raw.get("title")),
                 _text_from(raw.get("submit")),
                 _text_from(raw.get("close")),
                 blocks,
-                _optional_string(raw, "private_metadata"),
+                _json.optional_string(raw, "private_metadata"),
             )
         case SlackHomeView.KIND:
             return SlackHomeView(
                 blocks,
-                _optional_string(raw, "callback_id"),
-                _optional_string(raw, "private_metadata"),
+                _json.optional_string(raw, "callback_id"),
+                _json.optional_string(raw, "private_metadata"),
             )
         case _:
             message = f"unknown Slack body kind {kind!r}"

@@ -12,15 +12,7 @@ from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, Ent
 from squid_ui.content.text import Markup
 from squid_ui.errors import SquidUiError
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.scene._json import (
-    JsonObject,
-    optional_string,
-    require_boolean,
-    require_integer,
-    require_object,
-    require_string,
-    require_string_array,
-)
+from squid_ui.scene._json import JsonObject, JsonReader
 from squid_ui.scene.model import (
     Asset,
     Body,
@@ -78,6 +70,9 @@ from squid_ui.scene.slack_codec import SlackSceneCodecError, slack_body_from_dic
 
 class CodecError(SquidUiError, ValueError):
     """A scene payload is malformed or uses an unsupported protocol."""
+
+
+_json = JsonReader(CodecError)
 
 
 class Codec:
@@ -173,7 +168,7 @@ class Codec:
         Nullable fields generally accept omission as `None`. The `target` name and
         version are carried through without selecting or validating a renderer.
         """
-        protocol = _integer(raw, "protocol")
+        protocol = _json.integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
             raise CodecError(msg)
@@ -184,23 +179,23 @@ class Codec:
             raise CodecError(msg)
         return Scene(
             protocol=protocol,
-            target=_string(raw, "target"),
-            target_version=_integer(raw, "target_version"),
-            body=_body_from_dict(_object(raw.get("body"))),
+            target=_json.string(raw, "target"),
+            target_version=_json.integer(raw, "target_version"),
+            body=_body_from_dict(_json.require_object(raw.get("body"))),
             assets=tuple(
                 Asset(
-                    key=_string(_object(asset), "key"),
-                    name=_string(_object(asset), "name"),
-                    media_type=_string(_object(asset), "media_type"),
+                    key=_json.string(_json.require_object(asset), "key"),
+                    name=_json.string(_json.require_object(asset), "name"),
+                    media_type=_json.string(_json.require_object(asset), "media_type"),
                 )
                 for asset in assets
             ),
             pagers=tuple(
                 Pager(
-                    key=_string(_object(pager), "key"),
-                    page=_integer(_object(pager), "page"),
-                    pages=_integer(_object(pager), "pages"),
-                    content_fingerprint=_string(_object(pager), "content_fingerprint"),
+                    key=_json.string(_json.require_object(pager), "key"),
+                    page=_json.integer(_json.require_object(pager), "page"),
+                    pages=_json.integer(_json.require_object(pager), "pages"),
+                    content_fingerprint=_json.string(_json.require_object(pager), "content_fingerprint"),
                 )
                 for pager in pagers
             ),
@@ -229,14 +224,14 @@ def _body_to_dict(body: Body) -> dict[str, Any]:
 
 
 def _body_from_dict(raw: JsonObject) -> Body:
-    kind = _string(raw, "kind")
+    kind = _json.string(raw, "kind")
     match kind:
         case ComponentsV2.KIND:
             children = raw.get("children")
             if not isinstance(children, list):
                 msg = "components_v2 children must be an array"
                 raise CodecError(msg)
-            return ComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
+            return ComponentsV2(tuple(_node_from_dict(_json.require_object(child)) for child in children))
         case ClassicMessage.KIND:
             embeds = raw.get("embeds")
             rows = raw.get("rows")
@@ -244,9 +239,9 @@ def _body_from_dict(raw: JsonObject) -> Body:
                 msg = "classic_message embeds and rows must be arrays"
                 raise CodecError(msg)
             return ClassicMessage(
-                content=_optional_string(raw, "content"),
-                embeds=tuple(_embed_from_dict(_object(embed)) for embed in embeds),
-                rows=tuple(_row_from_dict(_object(row)) for row in rows),
+                content=_json.optional_string(raw, "content"),
+                embeds=tuple(_embed_from_dict(_json.require_object(embed)) for embed in embeds),
+                rows=tuple(_row_from_dict(_json.require_object(row)) for row in rows),
             )
         case HtmlBody.KIND:
             children = raw.get("children")
@@ -254,8 +249,8 @@ def _body_from_dict(raw: JsonObject) -> Body:
                 msg = "HTML body children must be an array"
                 raise CodecError(msg)
             return HtmlBody(
-                tuple(_html_node_from_dict(_object(child)) for child in children),
-                locale=_optional_string(raw, "locale"),
+                tuple(_html_node_from_dict(_json.require_object(child)) for child in children),
+                locale=_json.optional_string(raw, "locale"),
             )
         case SlackMessage.KIND | SlackModalView.KIND | SlackHomeView.KIND:
             try:
@@ -303,9 +298,9 @@ def _html_node_to_dict(node: HtmlNode) -> dict[str, Any]:
 
 
 def _html_node_from_dict(raw: JsonObject) -> HtmlNode:
-    kind = _string(raw, "kind")
+    kind = _json.string(raw, "kind")
     if kind == HtmlText.KIND:
-        return HtmlText(_string(raw, "content"), Markup(_string(raw, "markup")))
+        return HtmlText(_json.string(raw, "content"), Markup(_json.string(raw, "markup")))
     if kind != HtmlElement.KIND:
         msg = f"unknown HTML scene node kind {kind!r}"
         raise CodecError(msg)
@@ -317,7 +312,7 @@ def _html_node_from_dict(raw: JsonObject) -> HtmlNode:
 
     def optional_ref(key: str) -> JsonObject | None:
         value = raw.get(key)
-        return None if value is None else _object(value)
+        return None if value is None else _json.require_object(value)
 
     action = optional_ref("action")
     route = optional_ref("route")
@@ -327,35 +322,41 @@ def _html_node_from_dict(raw: JsonObject) -> HtmlNode:
     colour = optional_ref("colour")
     asset = optional_ref("asset")
     return HtmlElement(
-        tag=HtmlTag(_string(raw, "tag")),
-        children=tuple(_html_node_from_dict(_object(child)) for child in children),
+        tag=HtmlTag(_json.string(raw, "tag")),
+        children=tuple(_html_node_from_dict(_json.require_object(child)) for child in children),
         attributes=tuple(
             HtmlAttribute(
-                HtmlAttributeName(_string(_object(attribute), "name")),
-                _html_attribute_value(_object(attribute).get("value")),
+                HtmlAttributeName(_json.string(_json.require_object(attribute), "name")),
+                _html_attribute_value(_json.require_object(attribute).get("value")),
             )
             for attribute in attributes
         ),
         action=(
-            None if action is None else HtmlActionRef(_string(action, "action"), ActionMode(_string(action, "mode")))
+            None
+            if action is None
+            else HtmlActionRef(_json.string(action, "action"), ActionMode(_json.string(action, "mode")))
         ),
-        route=None if route is None else HtmlRouteRef(_string(route, "route_id")),
-        form=None if form is None else HtmlFormRef(_string(form, "key"), _optional_string(form, "field_name")),
-        url=None if url is None else HtmlUrlRef(_string(url, "url")),
+        route=None if route is None else HtmlRouteRef(_json.string(route, "route_id")),
+        form=None
+        if form is None
+        else HtmlFormRef(_json.string(form, "key"), _json.optional_string(form, "field_name")),
+        url=None if url is None else HtmlUrlRef(_json.string(url, "url")),
         time=(
             None
             if time is None
             else HtmlTimeRef(
-                _string(time, "instant"),
-                timezone=_optional_string(time, "timezone"),
-                style=_optional_string(time, "style"),
+                _json.string(time, "instant"),
+                timezone=_json.optional_string(time, "timezone"),
+                style=_json.optional_string(time, "style"),
             )
         ),
-        colour=None if colour is None else HtmlColourRef(_integer(colour, "value")),
+        colour=None if colour is None else HtmlColourRef(_json.integer(colour, "value")),
         asset=(
             None
             if asset is None
-            else HtmlAssetRef(_string(asset, "key"), _string(asset, "name"), _string(asset, "media_type"))
+            else HtmlAssetRef(
+                _json.string(asset, "key"), _json.string(asset, "name"), _json.string(asset, "media_type")
+            )
         ),
     )
 
@@ -372,7 +373,7 @@ def _row_from_dict(raw: JsonObject) -> ClassicRow:
     if not isinstance(controls, list):
         msg = "classic row controls must be an array"
         raise CodecError(msg)
-    decoded = tuple(_node_from_dict(_object(control)) for control in controls)
+    decoded = tuple(_node_from_dict(_json.require_object(control)) for control in controls)
     if not all(
         isinstance(
             control,
@@ -422,14 +423,14 @@ def _embed_from_dict(raw: JsonObject) -> Embed:
     footer = raw.get("footer")
     author = raw.get("author")
     return Embed(
-        title=_optional_string(raw, "title"),
-        url=_optional_string(raw, "url"),
-        description=_optional_string(raw, "description"),
+        title=_json.optional_string(raw, "title"),
+        url=_json.optional_string(raw, "url"),
+        description=_json.optional_string(raw, "description"),
         fields=tuple(
             EmbedField(
-                name=_string(_object(field), "name"),
-                value=_string(_object(field), "value"),
-                inline=_boolean(_object(field), "inline"),
+                name=_json.string(_json.require_object(field), "name"),
+                value=_json.string(_json.require_object(field), "value"),
+                inline=_json.boolean(_json.require_object(field), "inline"),
             )
             for field in fields
         ),
@@ -437,22 +438,23 @@ def _embed_from_dict(raw: JsonObject) -> Embed:
             None
             if footer is None
             else EmbedFooter(
-                text=_string(_object(footer), "text"), icon_url=_optional_string(_object(footer), "icon_url")
+                text=_json.string(_json.require_object(footer), "text"),
+                icon_url=_json.optional_string(_json.require_object(footer), "icon_url"),
             )
         ),
         author=(
             None
             if author is None
             else EmbedAuthor(
-                name=_string(_object(author), "name"),
-                url=_optional_string(_object(author), "url"),
-                icon_url=_optional_string(_object(author), "icon_url"),
+                name=_json.string(_json.require_object(author), "name"),
+                url=_json.optional_string(_json.require_object(author), "url"),
+                icon_url=_json.optional_string(_json.require_object(author), "icon_url"),
             )
         ),
         colour=colour,
         image=_media_from_dict(raw.get("image")),
         thumbnail=_media_from_dict(raw.get("thumbnail")),
-        timestamp=_optional_string(raw, "timestamp"),
+        timestamp=_json.optional_string(raw, "timestamp"),
     )
 
 
@@ -460,9 +462,9 @@ def _media_from_dict(raw: object) -> EmbedMedia | None:
     if raw is None:
         return None
     return EmbedMedia(
-        url=_string(_object(raw), "url"),
-        description=_optional_string(_object(raw), "description"),
-        asset_name=_optional_string(_object(raw), "asset_name"),
+        url=_json.string(_json.require_object(raw), "url"),
+        description=_json.optional_string(_json.require_object(raw), "description"),
+        asset_name=_json.optional_string(_json.require_object(raw), "asset_name"),
     )
 
 
@@ -633,56 +635,56 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
 def _node_from_dict(
     raw: JsonObject,
 ) -> Node | Link | PremiumButton | Button | RoutedButton:
-    kind = _string(raw, "kind")
+    kind = _json.string(raw, "kind")
     match kind:
         case Text.KIND:
-            return Text(_string(raw, "content"), Markup(_string(raw, "markup")))
+            return Text(_json.string(raw, "content"), Markup(_json.string(raw, "markup")))
         case Time.KIND:
             return Time(
-                _string(raw, "instant"),
-                _string(raw, "style"),
-                _optional_string(raw, "prefix"),
+                _json.string(raw, "instant"),
+                _json.string(raw, "style"),
+                _json.optional_string(raw, "prefix"),
             )
         case ZonedTime.KIND:
             return ZonedTime(
-                _string(raw, "instant"),
-                _string(raw, "timezone"),
-                _optional_string(raw, "prefix"),
+                _json.string(raw, "instant"),
+                _json.string(raw, "timezone"),
+                _json.optional_string(raw, "prefix"),
             )
         case File.KIND:
             return File(
-                _string(raw, "asset_key"),
-                _string(raw, "name"),
-                _string(raw, "media_type"),
-                _boolean(raw, "spoiler", default=False),
+                _json.string(raw, "asset_key"),
+                _json.string(raw, "name"),
+                _json.string(raw, "media_type"),
+                _json.boolean(raw, "spoiler", default=False),
             )
         case Separator.KIND:
-            return Separator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
+            return Separator(large=_json.boolean(raw, "large"), visible=_json.boolean(raw, "visible"))
         case Link.KIND:
             return Link(
-                label=_optional_string(raw, "label"),
-                url=_string(raw, "url"),
+                label=_json.optional_string(raw, "label"),
+                url=_json.string(raw, "url"),
                 emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_boolean(raw, "disabled", default=False),
+                disabled=_json.boolean(raw, "disabled", default=False),
             )
         case PremiumButton.KIND:
-            return PremiumButton(_integer(raw, "sku_id"))
+            return PremiumButton(_json.integer(raw, "sku_id"))
         case Button.KIND:
             return Button(
-                label=_optional_string(raw, "label"),
-                action=_string(raw, "action"),
-                style=ActionStyle(_string(raw, "style")),
+                label=_json.optional_string(raw, "label"),
+                action=_json.string(raw, "action"),
+                style=ActionStyle(_json.string(raw, "style")),
                 emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "mode")),
+                disabled=_json.boolean(raw, "disabled"),
+                mode=ActionMode(_json.string(raw, "mode")),
             )
         case RoutedButton.KIND:
             return RoutedButton(
-                label=_optional_string(raw, "label"),
-                route_id=_string(raw, "route_id"),
-                style=ActionStyle(_string(raw, "style")),
+                label=_json.optional_string(raw, "label"),
+                route_id=_json.string(raw, "route_id"),
+                style=ActionStyle(_json.string(raw, "style")),
                 emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_boolean(raw, "disabled"),
+                disabled=_json.boolean(raw, "disabled"),
             )
         case Select.KIND:
             options = raw.get("options")
@@ -692,20 +694,20 @@ def _node_from_dict(
             return Select(
                 options=tuple(
                     Option(
-                        label=_string(_object(option), "label"),
-                        value=_string(_object(option), "value"),
-                        description=_optional_string(_object(option), "description"),
-                        default=_boolean(_object(option), "default"),
-                        emoji=_emoji_from_value(_object(option).get("emoji")),
+                        label=_json.string(_json.require_object(option), "label"),
+                        value=_json.string(_json.require_object(option), "value"),
+                        description=_json.optional_string(_json.require_object(option), "description"),
+                        default=_json.boolean(_json.require_object(option), "default"),
+                        emoji=_emoji_from_value(_json.require_object(option).get("emoji")),
                     )
                     for option in options
                 ),
-                action=_string(raw, "action"),
-                placeholder=_optional_string(raw, "placeholder"),
-                min_values=_integer(raw, "min_values"),
-                max_values=_integer(raw, "max_values"),
-                disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "mode")),
+                action=_json.string(raw, "action"),
+                placeholder=_json.optional_string(raw, "placeholder"),
+                min_values=_json.integer(raw, "min_values"),
+                max_values=_json.integer(raw, "max_values"),
+                disabled=_json.boolean(raw, "disabled"),
+                mode=ActionMode(_json.string(raw, "mode")),
             )
         case RoutedSelect.KIND:
             options = raw.get("options")
@@ -715,19 +717,19 @@ def _node_from_dict(
             return RoutedSelect(
                 options=tuple(
                     Option(
-                        label=_string(_object(option), "label"),
-                        value=_string(_object(option), "value"),
-                        description=_optional_string(_object(option), "description"),
-                        default=_boolean(_object(option), "default"),
-                        emoji=_emoji_from_value(_object(option).get("emoji")),
+                        label=_json.string(_json.require_object(option), "label"),
+                        value=_json.string(_json.require_object(option), "value"),
+                        description=_json.optional_string(_json.require_object(option), "description"),
+                        default=_json.boolean(_json.require_object(option), "default"),
+                        emoji=_emoji_from_value(_json.require_object(option).get("emoji")),
                     )
                     for option in options
                 ),
-                route_id=_string(raw, "route_id"),
-                placeholder=_optional_string(raw, "placeholder"),
-                min_values=_integer(raw, "min_values"),
-                max_values=_integer(raw, "max_values"),
-                disabled=_boolean(raw, "disabled"),
+                route_id=_json.string(raw, "route_id"),
+                placeholder=_json.optional_string(raw, "placeholder"),
+                min_values=_json.integer(raw, "min_values"),
+                max_values=_json.integer(raw, "max_values"),
+                disabled=_json.boolean(raw, "disabled"),
             )
         case EntitySelect.KIND:
             defaults = raw.get("default_values")
@@ -735,34 +737,39 @@ def _node_from_dict(
                 msg = "entity select default_values must be an array"
                 raise CodecError(msg)
             return EntitySelect(
-                entity_type=EntityType(_string(raw, "entity_type")),
-                action=_string(raw, "action"),
-                placeholder=_optional_string(raw, "placeholder"),
+                entity_type=EntityType(_json.string(raw, "entity_type")),
+                action=_json.string(raw, "action"),
+                placeholder=_json.optional_string(raw, "placeholder"),
                 default_values=tuple(
-                    EntityRef(EntityKind(_string(_object(value), "kind")), _entity_id(_object(value)))
+                    EntityRef(
+                        EntityKind(_json.string(_json.require_object(value), "kind")),
+                        _entity_id(_json.require_object(value)),
+                    )
                     for value in defaults
                 ),
-                conversation_types=tuple(ConversationType(value) for value in _string_array(raw, "conversation_types")),
-                min_values=_integer(raw, "min_values"),
-                max_values=_integer(raw, "max_values"),
-                disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "mode")),
+                conversation_types=tuple(
+                    ConversationType(value) for value in _json.string_array(raw, "conversation_types")
+                ),
+                min_values=_json.integer(raw, "min_values"),
+                max_values=_json.integer(raw, "max_values"),
+                disabled=_json.boolean(raw, "disabled"),
+                mode=ActionMode(_json.string(raw, "mode")),
             )
         case Row.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "row items must be an array"
                 raise CodecError(msg)
-            decoded = tuple(_node_from_dict(_object(item)) for item in items)
+            decoded = tuple(_node_from_dict(_json.require_object(item)) for item in items)
             if not all(isinstance(item, Link | PremiumButton | Button | RoutedButton | Extension) for item in decoded):
                 msg = "row contains an unsupported child"
                 raise CodecError(msg)
             return Row(cast(tuple[Link | PremiumButton | Button | RoutedButton | Extension, ...], decoded))
         case Thumbnail.KIND:
             return Thumbnail(
-                url=_string(raw, "url"),
-                description=_optional_string(raw, "description"),
-                spoiler=_boolean(raw, "spoiler", default=False),
+                url=_json.string(raw, "url"),
+                description=_json.optional_string(raw, "description"),
+                spoiler=_json.boolean(raw, "spoiler", default=False),
             )
         case Gallery.KIND:
             items = raw.get("items")
@@ -772,10 +779,10 @@ def _node_from_dict(
             return Gallery(
                 tuple(
                     GalleryItem(
-                        url=_string(_object(item), "url"),
-                        description=_optional_string(_object(item), "description"),
-                        spoiler=_boolean(_object(item), "spoiler", default=False),
-                        asset_name=_optional_string(_object(item), "asset_name"),
+                        url=_json.string(_json.require_object(item), "url"),
+                        description=_json.optional_string(_json.require_object(item), "description"),
+                        spoiler=_json.boolean(_json.require_object(item), "spoiler", default=False),
+                        asset_name=_json.optional_string(_json.require_object(item), "asset_name"),
                     )
                     for item in items
                 )
@@ -785,8 +792,8 @@ def _node_from_dict(
             if not isinstance(texts, list):
                 msg = "section texts must be an array"
                 raise CodecError(msg)
-            decoded_texts = tuple(_node_from_dict(_object(text)) for text in texts)
-            accessory = _node_from_dict(_object(raw.get("accessory")))
+            decoded_texts = tuple(_node_from_dict(_json.require_object(text)) for text in texts)
+            accessory = _node_from_dict(_json.require_object(raw.get("accessory")))
             if not all(isinstance(text, Text) for text in decoded_texts):
                 msg = "section contains a non-text slot"
                 raise CodecError(msg)
@@ -804,39 +811,21 @@ def _node_from_dict(
                 msg = "panel children or accent is malformed"
                 raise CodecError(msg)
             return Panel(
-                tuple(_node_from_dict(_object(child)) for child in children),
+                tuple(_node_from_dict(_json.require_object(child)) for child in children),
                 accent=accent,
-                spoiler=_boolean(raw, "spoiler", default=False),
+                spoiler=_json.boolean(raw, "spoiler", default=False),
             )
         case Extension.KIND:
             payload = raw.get("payload")
             if not isinstance(payload, dict):
                 msg = "extension payload must be an object"
                 raise CodecError(msg)
-            return Extension(kind=_string(raw, "extension"), version=_integer(raw, "version"), payload=payload)
+            return Extension(
+                kind=_json.string(raw, "extension"), version=_json.integer(raw, "version"), payload=payload
+            )
         case _:
             msg = f"unknown scene node kind {kind!r}"
             raise CodecError(msg)
-
-
-def _object(value: object) -> JsonObject:
-    return require_object(value, "expected an object", CodecError)
-
-
-def _string(raw: JsonObject, key: str) -> str:
-    return require_string(raw, key, CodecError)
-
-
-def _optional_string(raw: JsonObject, key: str) -> str | None:
-    return optional_string(raw, key, CodecError)
-
-
-def _string_array(raw: JsonObject, key: str) -> list[str]:
-    return require_string_array(raw, key, CodecError)
-
-
-def _integer(raw: JsonObject, key: str) -> int:
-    return require_integer(raw, key, CodecError)
 
 
 def _entity_id(raw: JsonObject) -> int | str:
@@ -845,10 +834,6 @@ def _entity_id(raw: JsonObject) -> int | str:
         message = "id must be an integer or string"
         raise CodecError(message)
     return value
-
-
-def _boolean(raw: JsonObject, key: str, *, default: bool | None = None) -> bool:
-    return require_boolean(raw, key, CodecError, default=default)
 
 
 def _emoji_to_dict(emoji: Emoji | None) -> dict[str, object] | None:
@@ -862,13 +847,13 @@ def _emoji_from_value(value: object) -> Emoji | None:
         return None
     if isinstance(value, str):
         return Emoji(value)
-    raw = _object(value)
+    raw = _json.require_object(value)
     emoji_id = raw.get("id")
     if emoji_id is not None and (not isinstance(emoji_id, int) or isinstance(emoji_id, bool)):
         message = "emoji id must be an integer or null"
         raise CodecError(message)
     return Emoji(
-        name=_string(raw, "name"),
+        name=_json.string(raw, "name"),
         id=emoji_id,
-        animated=_boolean(raw, "animated", default=False),
+        animated=_json.boolean(raw, "animated", default=False),
     )
