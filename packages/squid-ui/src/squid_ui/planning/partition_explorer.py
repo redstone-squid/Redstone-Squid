@@ -6,7 +6,7 @@ partition tasks. The coordinator decides when to certify or enqueue them.
 """
 
 from collections.abc import Iterator, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import count
 
 from squid_ui.planning.allocation_policy import AllocationQuality, RegionPolicy, compare_quality
@@ -19,7 +19,18 @@ from squid_ui.planning.composition import (
     SemanticOccurrence,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
-from squid_ui.planning.search_tasks import AssignmentTask, PartitionTask
+
+
+@dataclass(frozen=True, slots=True)
+class PartitionTask[RenderTargetT, ContextT, PayloadT]:
+    assignment: int
+    candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT]
+    choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...]
+    regions: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]
+    cuts: tuple[tuple[int, ...], ...]
+    probe: bool = False
+    expand_only: bool = False
+    repair: bool = False
 
 
 class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
@@ -89,15 +100,17 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
 
     def seed(
         self,
-        task: AssignmentTask[RenderTargetT, ContextT, PayloadT],
+        choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...],
         retained: tuple[AllocationQuality, ...],
+        *,
+        repair: bool,
     ) -> Iterator[PartitionTask[RenderTargetT, ContextT, PayloadT]]:
         """Turn a complete assignment into partition probes, starting from each region's required cuts."""
-        self.context.work.consume(len(task.choices))
-        choices = {offer.occurrence.identity: offer for offer, _ in task.choices}
-        if self.selected.keys() - choices.keys():
+        self.context.work.consume(len(choices))
+        selected = {offer.occurrence.identity: offer for offer, _ in choices}
+        if self.selected.keys() - selected.keys():
             return
-        candidate = self._candidate(self.root, choices)
+        candidate = self._candidate(self.root, selected)
         regions = self._region_trees(fragment_tree(candidate, self.context))
         self.seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
         if self.fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
@@ -106,16 +119,16 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
             # Partitions cannot improve representation preferences or remove their
             # effects. Grant every other quality axis its best possible value; only
             # strict dominance is safe because ties still use the final partition key.
-            self.context.work.consume(len(task.choices) + len(retained))
+            self.context.work.consume(len(choices) + len(retained))
             optimistic = AllocationQuality(
                 (),
                 preference_tree(
                     candidate,
-                    {offer.occurrence.identity: rank for offer, rank in task.choices},
+                    {offer.occurrence.identity: rank for offer, rank in choices},
                     self.policy,
                     self.context,
                 ),
-                frozenset(effect for offer, _ in task.choices for effect in offer.effects),
+                frozenset(effect for offer, _ in choices for effect in offer.effects),
                 (),
                 0,
                 (),
@@ -150,10 +163,8 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
                 ):
                     ends = required
                 hinted.append(ends)
-            yield PartitionTask(assignment, candidate, task.choices, regions, tuple(hinted), probe=True)
-        yield PartitionTask(
-            assignment, candidate, task.choices, regions, cuts, probe=True, repair=task.repair is not None
-        )
+            yield PartitionTask(assignment, candidate, choices, regions, tuple(hinted), probe=True)
+        yield PartitionTask(assignment, candidate, choices, regions, cuts, probe=True, repair=repair)
         # Try preserving every sibling while splitting just one region. Balanced
         # probes alone can miss a small feasible family when both pagers' chrome
         # cannot coexist. This only changes search order, not admissible cuts.
@@ -161,7 +172,7 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
             for index, node in enumerate(regions):
                 if node.candidate.offer.occurrence.identity not in self.fixed_cuts and len(node.legal_ends) <= 64:
                     unilateral = (*cuts[:index], node.legal_ends or (0,), *cuts[index + 1 :])
-                    yield PartitionTask(assignment, candidate, task.choices, regions, unilateral, probe=True)
+                    yield PartitionTask(assignment, candidate, choices, regions, unilateral, probe=True)
 
     def refine_probe(
         self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]

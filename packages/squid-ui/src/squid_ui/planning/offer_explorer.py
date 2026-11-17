@@ -6,7 +6,7 @@ that mark the search exhausted without preventing a feasible certificate.
 """
 
 from collections.abc import Iterator, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import dense_ranks
@@ -21,7 +21,15 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.search_tasks import AssignmentTask, PartitionTask
+
+
+@dataclass(frozen=True, slots=True)
+class AssignmentTask[RenderTargetT, ContextT, PayloadT]:
+    pending: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...]
+    choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
+    probe: bool = False
+    fraction: float = 1.0
+    repair: Mapping[OccurrenceId, str] | None = None
 
 
 class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT]:
@@ -134,14 +142,14 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
             raise LayoutInvariantError(message)
 
     def repair(
-        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
+        self, choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...]
     ) -> Iterator[AssignmentTask[RenderTargetT, ContextT, PayloadT]]:
         # Try one structural step at a time before the broad compact
         # probes. This finds useful fits under component pressure without
         # shortening every independent text ladder. Failed probes never prune.
         self.repair_started = True
         steps: list[tuple[int, int, tuple[str, ...], RealizationOffer[RenderTargetT, ContextT, PayloadT]]] = []
-        for current, rank in task.choices:
+        for current, rank in choices:
             if current.occurrence.identity in self.selected:
                 continue
             discovery = self.discoveries[id(current.occurrence)]
@@ -162,13 +170,16 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 )
         if steps:
             _, _, _, changed = min(steps, key=lambda entry: entry[:3])
-            self.context.work.consume(len(task.choices))
-            hints = {offer.occurrence.identity: offer.key for offer, _ in task.choices}
+            self.context.work.consume(len(choices))
+            hints = {offer.occurrence.identity: offer.key for offer, _ in choices}
             hints[changed.occurrence.identity] = changed.key
             yield AssignmentTask((self.root,), probe=True, repair=hints)
 
     def degradation_probes(
-        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
+        self,
+        choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...],
+        *,
+        has_regions: bool,
     ) -> Iterator[AssignmentTask[RenderTargetT, ContextT, PayloadT]]:
         # Find a compact certificate before enumerating combinations of
         # independent ladders. This changes work order only: ordinary
@@ -176,14 +187,14 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.degradation_probed = True
         # Intermediate rungs avoid an empty incumbent when several prose
         # blocks must share space. This samples work order, never feasibility.
-        self.context.work.consume(len(task.choices))
+        self.context.work.consume(len(choices))
         adjustable = 0
-        for current, _ in task.choices:
+        for current, _ in choices:
             discovery = self.discoveries[id(current.occurrence)]
             domain = discovery.offers if isinstance(discovery, OfferDiscovery) else discovery
             self.context.work.consume(len(domain))
             if self.choice_counts.get(current.occurrence.identity, 0) > 1 and (
-                not task.regions or any(offer.effects for offer in domain)
+                not has_regions or any(offer.effects for offer in domain)
             ):
                 adjustable += 1
         if adjustable:

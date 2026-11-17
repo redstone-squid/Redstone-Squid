@@ -49,6 +49,13 @@ def test_shared_contracts_and_planning_do_not_import_runtime() -> None:
     assert not violations
 
 
+def test_search_explorers_do_not_import_each_other_or_the_coordinator() -> None:
+    for explorer, other in (("offer_explorer", "partition_explorer"), ("partition_explorer", "offer_explorer")):
+        imports = runtime_imports(SOURCE / "planning" / f"{explorer}.py")
+        assert f"squid_ui.planning.{other}" not in imports
+        assert "squid_ui.planning.joint_search" not in imports
+
+
 def test_existing_contract_imports_preserve_identity() -> None:
     assert sl.ContextKey is ContextKey
     assert sl.runtime.ContextKey is ContextKey

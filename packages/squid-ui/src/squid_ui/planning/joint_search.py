@@ -35,10 +35,9 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.fragments import FragmentTree
-from squid_ui.planning.offer_explorer import OfferExplorer
-from squid_ui.planning.partition_explorer import PartitionExplorer
+from squid_ui.planning.offer_explorer import AssignmentTask, OfferExplorer
+from squid_ui.planning.partition_explorer import PartitionExplorer, PartitionTask
 from squid_ui.planning.resources import EMPTY_COST
-from squid_ui.planning.search_tasks import AssignmentTask, PartitionTask
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -73,8 +72,8 @@ class JointResult[OutputT]:
     nondominated: tuple[AllocationQuality, ...]
 
 
-class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT]:
-    """One run of `search_composition`, with the queue and bookkeeping its phases share.
+class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT]:
+    """Schedule one joint search across offer, partition, and certification work.
 
     The queue holds two kinds of task. An `AssignmentTask` chooses one offer per occurrence, depth first;
     once every occurrence has an offer, it becomes `PartitionTask` tasks that try region page cuts.
@@ -130,18 +129,24 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                     if task.pending:
                         self._enqueue(self.offers.branch(task))
                     else:
-                        self._enqueue(self.partitions.seed(task, tuple(quality for quality, _ in self.retained)))
+                        self._enqueue(
+                            self.partitions.seed(
+                                task.choices,
+                                tuple(quality for quality, _ in self.retained),
+                                repair=task.repair is not None,
+                            )
+                        )
                     continue
                 if task.expand_only:
                     self._enqueue(self.partitions.expand(task))
                     continue
                 feasible, satisfied = self._certify(task)
                 if not feasible and (task.repair or not self.offers.repair_started):
-                    self._enqueue(self.offers.repair(task))
+                    self._enqueue(self.offers.repair(task.choices))
                 if feasible and satisfied:
                     continue
                 if not feasible and not self.offers.degradation_probed:
-                    self._enqueue(self.offers.degradation_probes(task))
+                    self._enqueue(self.offers.degradation_probes(task.choices, has_regions=bool(task.regions)))
                 if task.probe:
                     self._enqueue(self.partitions.refine_probe(task))
                 else:
@@ -308,7 +313,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     are independent of the requested cursor. Only terminal status is added after
     exhaustion.
     """
-    return _JointSearch(
+    return _SearchCoordinator(
         root,
         rules,
         context,
