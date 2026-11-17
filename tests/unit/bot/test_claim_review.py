@@ -191,7 +191,7 @@ async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_
     await message_root.dispatch(approve, retry, generation=generation)
 
     assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
-    assert "Take the name" in str(retry.response.edit_message.await_args.kwargs["view"].to_components())
+    assert "Take the name" in str(message.edit.await_args.kwargs["view"].to_components())
 
 
 async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:

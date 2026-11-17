@@ -620,6 +620,8 @@ ENVIRONMENT_ALLOWLIST = frozenset(
     {
         # Settings are read from the environment here and nowhere else.
         Path("squid/config.py"),
+        # Only forwards interpreter search paths to a sanitized subprocess environment.
+        Path("squid/records/infrastructure/range_analyzer.py"),
         # Passes the worker's environment on to the native video helper with thread limits
         # added; it reads no setting from it.
         Path("squid/schematics/infrastructure/nucleation_adapter.py"),
@@ -736,7 +738,11 @@ BUILTIN_EXCEPTIONS = frozenset(
 # `AssertionError` and `NotImplementedError` stay legal: they mark a programming error or an
 # unimplemented Protocol stub, neither of which is a failure a caller is meant to catch, present,
 # or translate.
-BARE_RAISE_ALLOWLIST = {}
+# Pydantic validators require ValueError to produce field validation errors.
+BARE_RAISE_ALLOWLIST = {
+    "squid/records/application/expansion_regions.py": 2,
+    "squid/records/application/live.py": 2,
+}
 
 
 def _raises_application_layer_paths() -> list[Path]:

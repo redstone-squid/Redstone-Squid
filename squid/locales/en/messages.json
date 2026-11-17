@@ -5522,7 +5522,7 @@
       }
     ],
     "locations": [
-      "squid/bot/voting/cog.py:162",
+      "squid/bot/voting/cog.py:168",
       "squid/bot/voting/poll_wizard.py:439"
     ]
   },
@@ -5614,7 +5614,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:176"
+      "squid/bot/voting/cog.py:182"
     ]
   },
   "bot-voting-vote-deletion-vote-opened": {
@@ -5623,7 +5623,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:211"
+      "squid/bot/voting/cog.py:217"
     ]
   },
   "bot-voting-vote-getting-information": {
@@ -5632,7 +5632,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:192"
+      "squid/bot/voting/cog.py:198"
     ]
   },
   "bot-voting-vote-working": {
@@ -5641,7 +5641,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:191"
+      "squid/bot/voting/cog.py:197"
     ]
   },
   "bot-voting-vote-you-may-no-longer-publish-a-poll": {
@@ -5650,7 +5650,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:125"
+      "squid/bot/voting/cog.py:131"
     ]
   },
   "browse-query-all-builds": {
@@ -8096,7 +8096,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:169"
+      "squid/bot/voting/cog.py:175"
     ]
   },
   "consent-agree": {
@@ -14179,7 +14179,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:62"
+      "squid/bot/voting/cog.py:64"
+    ]
+  },
+  "poll-command-choices-name": {
+    "fingerprint": "0161262d184085374dcee48869c966169ff3a5b65a285ac3c71a9b1bb2a5149c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:63"
     ]
   },
   "poll-command-duration": {
@@ -14188,7 +14197,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:65"
+      "squid/bot/voting/cog.py:68"
+    ]
+  },
+  "poll-command-duration-name": {
+    "fingerprint": "1d0647f8e2544f096a96c1e2b4ada5e3b4b167b997e316a640e383220810798d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:67"
     ]
   },
   "poll-command-network-denied": {
@@ -14197,7 +14215,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:152"
+      "squid/bot/voting/cog.py:158"
     ]
   },
   "poll-command-preview": {
@@ -14206,7 +14224,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:76"
+      "squid/bot/voting/cog.py:82"
+    ]
+  },
+  "poll-command-preview-name": {
+    "fingerprint": "7a0d2145ab31acbb187d0df2263f836035b6e9399866a9167a4491fb4d5dbcbc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:81"
     ]
   },
   "poll-command-question": {
@@ -14215,7 +14242,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:60"
+      "squid/bot/voting/cog.py:61"
+    ]
+  },
+  "poll-command-question-name": {
+    "fingerprint": "6835bbec0dad300df30779d20ffdc1aae881aa6584deb0d3a522f8f68551146d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:61"
     ]
   },
   "poll-command-scope": {
@@ -14224,7 +14260,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:72"
+      "squid/bot/voting/cog.py:77"
+    ]
+  },
+  "poll-command-scope-name": {
+    "fingerprint": "511b5dc00313b48e0dc8ca868e6adf69b12c1349e8537b870c97681926f1891d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:76"
     ]
   },
   "poll-command-visibility": {
@@ -14233,7 +14278,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:68"
+      "squid/bot/voting/cog.py:72"
+    ]
+  },
+  "poll-command-visibility-name": {
+    "fingerprint": "fdf3b7f0c74a884116009724f7c8fe816c7675e177ab0ae5ebd8bed14a090976",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:71"
     ]
   },
   "poll-history-edit": {
@@ -20474,7 +20528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:177"
+      "squid/bot/voting/cog.py:183"
     ]
   },
   "vote-message-not-open": {
@@ -20636,7 +20690,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/voting/cog.py:101"
+      "squid/bot/voting/cog.py:107"
     ]
   },
   "vote-unresolved-voter-cache-retained": {

@@ -212,6 +212,8 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     bot.load_extension = AsyncCallRecorder()
     run = AsyncCallRecorder()
     layout_job = run()
+    metrics_job = run()
+    bot.interaction_metrics = cast(Any, UIRuntimeRecorder(metrics_job))
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
     mocker.patch.object(bot_app, "EXTENSIONS", ())
     install = mocker.patch.object(bot_app, "install_ui_router")
@@ -220,12 +222,16 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     try:
         await bot_app.RedstoneSquid.setup_hook(bot)
 
-        assert cast(SchedulingRecorder, bot.background_tasks).starts == [(layout_job, "layout-runtime")]
+        assert cast(SchedulingRecorder, bot.background_tasks).starts == [
+            (layout_job, "layout-runtime"),
+            (metrics_job, "interaction-metrics"),
+        ]
         install.assert_called_once_with(
             bot_app.ui_router, bot, on_error=bot._ui_route_error, profiler=bot.layout_profiler
         )
     finally:
         layout_job.close()
+        metrics_job.close()
 
 
 async def test_ui_cleanup_failure_still_closes_application_resources(mocker: MockerFixture) -> None:

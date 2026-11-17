@@ -57,25 +57,33 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         description=to_locale_str(tr(t"command-poll-help = Create a poll from options or open the poll editor.")),
         defer="private",
         options={
-            "question": sd.Option(description=tr(t"poll-command-question = Poll question; omit to open the editor.")),
+            "question": sd.Option(
+                name=tr(t"poll-command-question-name = question"),
+                description=tr(t"poll-command-question = Poll question; omit to open the editor."),
+            ),
             "choices": sd.Option(
-                description=tr(t"poll-command-choices = 2-10 choices, separated by commas or \\n; default: Yes, No.")
+                name=tr(t"poll-command-choices-name = choices"),
+                description=tr(t"poll-command-choices = 2-10 choices, separated by commas or \\n; default: Yes, No."),
             ),
             "duration": sd.Option(
-                description=tr(t"poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.")
+                name=tr(t"poll-command-duration-name = duration"),
+                description=tr(t"poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h."),
             ),
             "visibility": sd.Option(
+                name=tr(t"poll-command-visibility-name = visibility"),
                 description=tr(t"poll-command-visibility = Who can see votes and when results are shown."),
                 choices=[sd.Choice(value.value, label) for value, label, _ in VISIBILITY_CHOICES],
             ),
             "scope": sd.Option(
+                name=tr(t"poll-command-scope-name = scope"),
                 description=tr(t"poll-command-scope = This server, or every server if you have permission."),
                 choices=[sd.Choice(value.value, label) for value, label, _ in SCOPE_CHOICES],
             ),
             "preview": sd.Option(
+                name=tr(t"poll-command-preview-name = preview"),
                 description=tr(
                     t"poll-command-preview = Review and edit before publishing. Default: publish immediately."
-                )
+                ),
             ),
         },
     )

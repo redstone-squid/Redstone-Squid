@@ -5,7 +5,7 @@ import weakref
 from typing import Any, Self, override
 
 import discord
-from squid_ui.content.text import tr
+from squid_ui.content.text import plain
 from squid_ui.ext.discord.messages.contracts import ErrorHook
 from squid_ui.ext.discord.request import Request, request
 from squid_ui.ext.discord.routing._dispatch import handle_error
@@ -47,9 +47,7 @@ def install[Bot: discord.Client](
             try:
                 match = router.resolve(self.custom_id.removeprefix("ui:"))
             except InvalidAddress:
-                await context.respond(
-                    paragraph(tr(t"ui-control-expired = This control is no longer available.")), audience="personal"
-                )
+                await context.respond(paragraph(plain("This control is no longer available.")), audience="personal")
                 return
             with profiler.operation(OperationKind.ROUTE_DISPATCH, name=match.endpoint.path) as profile:
                 try:

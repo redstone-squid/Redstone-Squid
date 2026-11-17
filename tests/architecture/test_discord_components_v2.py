@@ -109,7 +109,7 @@ def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
                 listeners[str(path.relative_to(BOT_ROOT))].add(node.name)
 
     assert dict(listeners) == {
-        "reaction_events.py": {
+        "reaction_events_cog.py": {
             "on_raw_reaction_add",
             "on_raw_reaction_clear",
             "on_raw_reaction_clear_emoji",

@@ -199,4 +199,7 @@ def _assert_localized(
 
 async def test_command_decorators_supply_localized_metadata(loaded_bot: commands.Bot) -> None:
     for command in loaded_bot.tree.get_commands():
+        # Framework devtools use host-supplied chrome rather than the bot's Fluent catalog.
+        if command.module and command.module.startswith("squid_ui."):
+            continue
         _assert_localized(command)
