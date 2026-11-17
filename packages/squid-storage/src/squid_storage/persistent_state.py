@@ -127,20 +127,23 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
         commits cannot overwrite the new handle's slot. Return None if the scope was not loaded.
         """
         async with self._load_lock:
-            retired = self._models.pop(scope, None)
+            retired = self._models.get(scope)
             if retired is None:
                 return None
+            # Finish the old generation's writes before making its scope available
+            # for hydration. Cancellation leaves the existing handle attached.
+            await self.flush()
             self._detach(scope)
-        await self.flush()
-        return retired
+            del self._models[scope]
+            return retired
 
     async def clear(self) -> None:
         """Retire every cached handle as delete does, preserving the stored values."""
         async with self._load_lock:
+            await self.flush()
             for scope in tuple(self._models):
                 self._detach(scope)
             self._models.clear()
-        await self.flush()
 
     async def flush(self) -> None:
         """Wait until the worker is idle, including any writes queued while waiting.

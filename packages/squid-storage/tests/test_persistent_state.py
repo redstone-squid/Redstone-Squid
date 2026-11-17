@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Hashable, Mapping
+from datetime import timedelta
 from typing import override
 
 import anyio
@@ -418,3 +419,48 @@ async def test_failed_construction_leaves_no_cached_model(
             await pool.load("guild")
         assert pool.active() == {}
         await pool.close()
+
+
+@pytest.mark.parametrize("retire_all", [False, True])
+async def test_reload_waits_for_retired_writes(retire_all: bool, slot: Slot[str, Mapping[str, object]]) -> None:
+    entered, resume = asyncio.Event(), asyncio.Event()
+    reloaded: list[Preferences] = []
+
+    class PausedStore(MemoryScopedStore):
+        @override
+        async def put[S: Hashable, V](
+            self, slot: Slot[S, V], scope: S, value: V, *, ttl: timedelta | None = None
+        ) -> None:
+            entered.set()
+            await resume.wait()
+            await super().put(slot, scope, value, ttl=ttl)
+
+    pool = PersistentStatePool(make_preferences, store=PausedStore(), slot=slot)
+
+    async def retire() -> None:
+        if retire_all:
+            await pool.clear()
+        else:
+            await pool.delete("guild")
+
+    async def reload() -> None:
+        reloaded.append(await pool.load("guild"))
+
+    with anyio.fail_after(2):
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(pool.run)
+            original = await pool.load("guild")
+            with transaction():
+                original.theme = "light"
+            await entered.wait()
+            tasks.start_soon(retire)
+            await anyio.wait_all_tasks_blocked()
+            tasks.start_soon(reload)
+            await anyio.wait_all_tasks_blocked()
+            assert reloaded == []
+            resume.set()
+            await anyio.wait_all_tasks_blocked()
+            assert len(reloaded) == 1
+            assert reloaded[0] is not original
+            assert reloaded[0].theme == "light"
+            await pool.close()
