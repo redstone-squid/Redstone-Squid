@@ -173,6 +173,7 @@ class SchematicMetrics:
     declared_name: str | None = None
     declared_author: str | None = None
     signs: tuple[SchematicSign, ...] = ()
+    block_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

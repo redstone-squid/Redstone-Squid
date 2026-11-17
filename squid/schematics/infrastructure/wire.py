@@ -164,6 +164,7 @@ class _MetricsJson(_WorkerJson):
     declared_name: str | None = None
     declared_author: str | None = None
     signs: tuple[_SignJson, ...] = ()
+    block_counts: dict[str, _NonnegativeInt] | None = None
 
 
 class _FingerprintsJson(_WorkerJson):

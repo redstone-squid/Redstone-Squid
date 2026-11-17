@@ -58,7 +58,7 @@ from squid.schematics.infrastructure.java_structure import (
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_SCHEMA_VERSION = 1
+ANALYSIS_SCHEMA_VERSION = 2
 """Bumped whenever the set of facts we derive changes, independently of the engine version."""
 
 _UNKNOWN_DATA_VERSION = -1
@@ -127,6 +127,7 @@ _SNAPSHOT_WIRE = TypeAdapter(list[_SnapshotBlock])
 _EVENTS_WIRE = TypeAdapter(list[_SimulationEvent])
 _AUDIT_WIRE = TypeAdapter(_BlockEntityAudit)
 _PROBES_WIRE = TypeAdapter(list[str])
+_BLOCK_COUNTS_WIRE = TypeAdapter(dict[str, Annotated[StrictInt, Field(ge=0)]])
 _REGION_NAMES_WIRE = TypeAdapter(list[str])
 _LOSSES_WIRE = TypeAdapter(list[_LossWire])
 
@@ -558,6 +559,7 @@ def _metrics(
         declared_name=_non_empty(schematic.name()),
         declared_author=_non_empty(schematic.author()),
         signs=_signs(schematic),
+        block_counts=_engine_json(schematic.count_blocks_json(), _BLOCK_COUNTS_WIRE, "block counts"),
     )
 
 
