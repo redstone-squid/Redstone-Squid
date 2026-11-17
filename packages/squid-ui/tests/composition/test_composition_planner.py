@@ -44,7 +44,7 @@ def test_public_opt_in_builds_a_selected_alternative(target: Literal["v2", "slac
     assert "Reworded" in scene.Codec.dumps(result.scene)
     assert "Description" not in scene.Codec.dumps(result.scene)
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
-    assert result.degradation.lossless
+    assert result.lossless
     assert result.session_updates == ()
     assert not result.metrics.cache_hit
 

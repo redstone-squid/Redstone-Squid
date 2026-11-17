@@ -9,12 +9,12 @@ from dataclasses import field, replace
 from enum import StrEnum
 
 from squid_ui._dataclass import immutable
+from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.allocation import AllocationSelection
 from squid_ui.planning.allocation_policy import SearchDiagnostics
 from squid_ui.planning.composition import OccurrenceId
-from squid_ui.planning.degradation import DegradationProfile
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentation import SessionUpdate
 from squid_ui.scene.model import Body, Scene
@@ -100,7 +100,8 @@ class PlanResult[BodyT = Body]:
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     cost: ResourceCost = field(default=EMPTY_COST, kw_only=True)
-    degradation: DegradationProfile = field(default_factory=DegradationProfile, kw_only=True)
+    effects: tuple[FidelityEffect, ...] = field(default=(), kw_only=True)
+    """Scoped fidelity losses from the selected composition, without a second ranking model."""
     session_updates: tuple[SessionUpdate, ...] = ()
     """Presentation changes to apply only after successful delivery.
 
@@ -114,6 +115,11 @@ class PlanResult[BodyT = Body]:
     page_selector: Callable[[Mapping[OccurrenceId, int]], PlanResult[BodyT]] | None = field(
         default=None, kw_only=True, repr=False, compare=False
     )
+
+    @property
+    def lossless(self) -> bool:
+        """Whether the selected output preserves all authored content."""
+        return not self.effects
 
     def for_page(self, coordinates: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
         """Select already certified output while retaining allocation diagnostics."""

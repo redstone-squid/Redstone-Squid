@@ -28,7 +28,6 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.composition_input import prepare_composition
 from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
-from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
@@ -237,9 +236,7 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
         resources=resources,
         metrics=PlanMetrics(work_used=context.work.spent),
         cost=built.evaluation.cost,
-        degradation=DegradationProfile.from_effects(
-            [DegradationEffect(0, "/".join(effect.source.keys), semantic_steps=1) for effect in effects]
-        ),
+        effects=effects,
     )
 
 

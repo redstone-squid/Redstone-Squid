@@ -118,7 +118,7 @@ def test_authored_alternatives_participate_in_allocation() -> None:
     with pytest.raises(UnsolvableLayoutError):
         plan(document, target=target(5), nav=default_nav, strict=True)
     preferred = plan(document, target=target(10), nav=default_nav, strict=True)
-    assert preferred.degradation.lossless
+    assert preferred.lossless
     assert len(preferred.scene.components_v2.children) == 8
 
 

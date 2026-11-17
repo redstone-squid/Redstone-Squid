@@ -161,5 +161,6 @@ def test_atomic_effects_remain_scoped_and_require_non_strict_admission() -> None
         sl.planning.plan(node, target=TARGET, composition=FixedComposition(BadgeRules()), strict=True)
     result = sl.planning.plan(node, target=TARGET, composition=FixedComposition(BadgeRules()), strict=False)
     assert not result.scene.body.children
-    assert not result.degradation.lossless
+    assert not result.lossless
+    assert result.effects == (sl.omit(sl.ref("@document", "badge")),)
     assert any(event.code == "composition.effect" and event.path == "@document/badge" for event in result.report.events)
