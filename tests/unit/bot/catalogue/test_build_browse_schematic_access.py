@@ -1,6 +1,7 @@
 """Check which actors the Discord build browser lets use a build's featured schematic."""
 
 from dataclasses import dataclass, field, replace
+from types import SimpleNamespace
 from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
@@ -16,6 +17,7 @@ from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from squid.schematics.domain.models import SchematicFormat
 from squid.suggestions.domain import Suggestion
 from squid_ui.testing import press_event, submit_event
+from tests.support.discord import make_layout_bot
 from tests.unit.schematics.fakes import make_analysis
 
 UPLOADER_ID = 11
@@ -138,7 +140,9 @@ async def test_schematic_actions_publish_their_results_inside_a_transaction(monk
 
     with sl.runtime.transaction():
         await detail._schematic_info(press_event())
-        await detail._schematic_download(press_event())
+        await detail._schematic_download(
+            replace(press_event(), context=SimpleNamespace(client=make_layout_bot(), user=SimpleNamespace(id=1)))
+        )
 
     assert detail._schematic_result is not None
     assert detail._asset is not None
@@ -153,7 +157,9 @@ async def test_a_failed_schematic_action_discards_its_results(monkeypatch: pytes
 
     async def download_then_fail() -> None:
         await detail._schematic_info(press_event())
-        await detail._schematic_download(press_event())
+        await detail._schematic_download(
+            replace(press_event(), context=SimpleNamespace(client=make_layout_bot(), user=SimpleNamespace(id=1)))
+        )
         raise RuntimeError("later failure")
 
     with pytest.raises(RuntimeError, match="later failure"), sl.runtime.transaction():
@@ -174,6 +180,7 @@ async def test_conversion_paths_keep_access_checks_and_separate_version_inputs(
     convert = AsyncMock(return_value=(b"schematic", ()))
     monkeypatch.setattr(detail._schematics, "convert", convert)
     event = submit_event({"format": SchematicFormat.LITEMATIC, "data_version": 3953})
+    event = replace(event, context=SimpleNamespace(client=make_layout_bot(), user=SimpleNamespace(id=1)))
     with sl.runtime.transaction():
         if numeric:
             await detail._convert_maintenance(event)

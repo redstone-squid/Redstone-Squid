@@ -50,7 +50,7 @@ class GuildPermissionDiagnostics(sl.Component[sl.ComponentsV2Target, sd.Request]
         if redstoner_role_id is not None:
             findings.append(self.role(redstoner_role_id))
         self.findings = tuple(findings)
-        self.browser = sp.Browser(
+        self.browser = sp.Browser[PermissionFinding, sl.ComponentsV2Target, sd.Request](
             sl.sources.list_source(self.findings),
             key="permission-findings",
             identity=lambda finding: finding.key,

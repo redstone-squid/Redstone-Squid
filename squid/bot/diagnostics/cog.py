@@ -1,5 +1,6 @@
 """Look up a stored error report from the reference a user quoted."""
 
+from math import isfinite
 from typing import TYPE_CHECKING, Self
 
 import squid_ui.ext.discord as sd
@@ -32,7 +33,7 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         counts = history.counts
         identifies, resumes, disconnects = counts["identify"], counts["resume"], counts["disconnect"]
         ready = self.bot.is_ready()
-        latency = round(self.bot.latency * 1000) if ready else None
+        latency = round(self.bot.latency * 1000) if isfinite(self.bot.latency) else None
         events = Text.join(
             "\n",
             (
@@ -49,7 +50,7 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             fields=(
                 CardField(tr(t"connection-ready = Ready"), str(ready)),
                 CardField(tr(t"connection-latency = Heartbeat latency (ms)"), str(latency)),
-                CardField(tr(t"connection-events = Recent events (UTC)"), events or "—"),
+                CardField(tr(t"connection-events = Recent events"), events or "—"),
             ),
         )
 

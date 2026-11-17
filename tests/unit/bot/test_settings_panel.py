@@ -23,6 +23,7 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT
 from squid.settings.application import SettingsService
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
@@ -32,10 +33,11 @@ from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid.voting.domain.models import VoteConfiguration
 from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import readonly_transaction
-from squid_ui.ext.discord.testing import commit_render, http_error, interaction_harness
+from squid_ui.ext.discord.testing import commit_render, delivered_to, http_error, interaction_harness, message_harness
 from squid_ui.testing import submit_event
 from tests.support.discord import make_layout_bot
 from tests.support.edits import bound_revisions
+from tests.support.services import bot_services
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
@@ -55,6 +57,8 @@ class FakeRole:
 
 
 class FakeGuild:
+    me: None = None
+
     def __init__(self, channels: dict[int, str], roles: dict[int, str]) -> None:
         self.id = GUILD_ID
         self.channels = [FakeChannel(channel_id, name) for channel_id, name in channels.items()]
@@ -377,6 +381,36 @@ async def test_a_large_guild_still_fits_one_message() -> None:
 
     assert len(list(view.walk_children())) <= 40
     assert len([item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect)]) == 5
+
+
+async def test_diagnostics_rechecks_access_and_refreshes_settings() -> None:
+    panel, settings, message_root = make_component_panel(stored={"Vote": 3})
+    allowed = True
+
+    async def authorize(node: PermissionNode) -> bool:
+        return allowed and node == settings_view.SETTINGS_SERVER_VIEW
+
+    panel.settings.authorize = authorize
+    await message_root.send(delivered_to(message_harness()))
+    diagnostics = next(key for key in message_root.snapshot().handler_keys if key.endswith("diagnostics"))
+    interaction = interaction_harness(user_id=1)
+    interaction.client = make_layout_bot(services=bot_services())
+    await message_root.dispatch(diagnostics, interaction, generation=message_root.generation)
+    assert panel.page == "diagnostics"
+    assert panel.diagnostics is not None
+    assert len(list(commit_render(message_root).walk_children())) <= 40
+
+    settings.stored["Vote"] = 13
+    interaction = interaction_harness(user_id=1)
+    interaction.client = make_layout_bot(services=bot_services())
+    await message_root.dispatch(diagnostics, interaction, generation=message_root.generation)
+    assert panel.settings.snapshot is not None
+    assert panel.settings.snapshot.voting_channel_id == 13
+
+    allowed = False
+    settings.stored["Vote"] = 14
+    await message_root.dispatch(diagnostics, interaction_harness(user_id=1), generation=message_root.generation)
+    assert panel.settings.snapshot.voting_channel_id == 13
 
 
 async def test_each_channel_picker_writes_its_own_setting() -> None:

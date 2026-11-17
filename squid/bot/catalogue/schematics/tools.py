@@ -165,7 +165,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         self._schematic_result = _describe(stored, render_skip=await self._schematics.explain_render_skip(stored))
 
     async def _schematic_download(self, event: sl.PressEvent) -> None:
-        event.context.client.command_limits.check(event.context.user.id, cost=4)
+        request = cast(SchematicRequest, event.context)
+        request.client.command_limits.check(request.user.id, cost=4)
         if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
         data, _ = await self._schematics.convert(
@@ -174,7 +175,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         self._asset = self._schematic_asset(data, "litematic")
 
     async def _schematic_render(self, event: sl.PressEvent) -> None:
-        event.context.client.command_limits.check(event.context.user.id, cost=4)
+        request = cast(SchematicRequest, event.context)
+        request.client.command_limits.check(request.user.id, cost=4)
         if await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None:
             return
         try:
@@ -336,7 +338,8 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     async def _convert_output(
         self, event: sl.SubmitEvent, request: ConvertRequest, *, version_label: str | None = None
     ) -> None:
-        event.context.client.command_limits.check(event.context.user.id, cost=4)
+        source = cast(SchematicRequest, event.context)
+        source.client.command_limits.check(source.user.id, cost=4)
         if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
         data, losses = await self._schematics.convert(self._build_id, request, version_label=version_label)

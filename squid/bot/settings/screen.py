@@ -33,7 +33,10 @@ from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import NUMBER, Text, emoji_text, md_tr
 
 if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
     from squid.settings.application import SettingsService
+
+type SettingsRequest = sd.Request[Any, RedstoneSquid]
 
 SESSION_SECONDS = 300
 
@@ -182,7 +185,7 @@ class SettingsPanel(sd.Screen):
             content = self.server
         return (navigation, content, *self.edits.refresh_controls())
 
-    async def _show_diagnostics(self, event: sd.PressEvent) -> None:
+    async def _show_diagnostics(self, event: sl.PressEvent) -> None:
         if not (
             await self.settings.authorize(SETTINGS_SERVER_VIEW) or await self.settings.authorize(SETTINGS_SERVER_EDIT)
         ):
@@ -191,7 +194,8 @@ class SettingsPanel(sd.Screen):
         await self.settings.refresh()
         snapshot = self.settings.snapshot
         assert snapshot is not None
-        services = event.context.client.services
+        request = cast(SettingsRequest, event.context)
+        services = request.client.services
         boards = (
             await services.starboards.list_for_guild(self._guild.id)
             if await self.settings.authorize(STARBOARD_BOARD_VIEW)

@@ -54,7 +54,7 @@ def test_full_table_preserves_existing_users_budgets_until_expiry() -> None:
 async def test_prefix_slash_context_menu_and_actions_share_one_budget() -> None:
     bot = RedstoneSquid(bot_services())
     context = cast(Context[Any], SimpleNamespace(author=SimpleNamespace(id=7), interaction=None))
-    tree = cast(SquidCommandTree[RedstoneSquid], bot.tree)
+    tree = cast(SquidCommandTree[discord.Client], bot.tree)
     interaction = make_command_interaction(bot, name="example", user_id=7)
     with (
         patch.object(app_commands.CommandTree, "_call", new_callable=AsyncMock) as dispatch,
