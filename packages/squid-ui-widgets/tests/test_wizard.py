@@ -166,7 +166,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     rendered = sp.Wizard("Build", _review_steps, review=True, initial_state=state).render()
     values = [match.node.value for match in query(rendered, select(sl.semantic.Field)).all()]
 
-    assert values == [sl.plain("Ada"), sl.plain("advanced"), sl.chrome.DEFAULT_CHROME.unanswered]
+    assert values == [sl.plain("Ada"), sl.plain("advanced"), sl.plain(sl.chrome.DEFAULT_CHROME.unanswered)]
     assert "Finish" in _labels(rendered)
 
 

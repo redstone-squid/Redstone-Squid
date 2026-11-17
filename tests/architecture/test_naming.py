@@ -81,8 +81,8 @@ A `Summary` becomes a live `Snapshot` or a completed `Report`; `Locator` becomes
 or `Policy` for an injected one. The former `Feedback` concept is now a `Spec`.
 """
 
-RETIRED_SUFFIX_EXEMPTIONS = frozenset({"Summary"})
-"""`semantic.Summary` mirrors the HTML `<summary>` element inside a `Details` disclosure."""
+RETIRED_SUFFIX_EXEMPTIONS = frozenset({"Summary", "ItemSummary"})
+"""Summary names refer to disclosure labels, including an item's summary control."""
 
 RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "protection", "reactor", "receipt", "verdict"})
 """Retired words checked in definition names, attributes, parameters, and local references.
@@ -196,6 +196,7 @@ AGENT_NOUNS = {
     "Router": "route",
     "Runner": "run",
     "Scheduler": "schedule",
+    "Selector": "select",
     "Supervisor": "supervise",
 }
 """Approved class suffixes and the operations their names describe."""
@@ -231,6 +232,7 @@ NOT_AGENT_NOUNS = frozenset(
 
 
 SAME_CONCEPT_TWO_LAYERS = {
+    "Fidelity",  # Author declarations and primitive variant fidelity.
     "Choice",  # A labelled option in semantic UI and Discord command metadata.
     # Reactive operations and Discord screens each expose a cancellation arm. Their
     # namespaces distinguish operation progress from a screen's cancellation reason.

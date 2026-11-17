@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import NoReturn, override
 
 from squid_ui.authoring import semantic
+from squid_ui.errors import SquidUiError
 from squid_ui.scene import model as scene_model
 from squid_ui.scene import slack as scene_slack
 from squid_ui.selectors.core import Selector, scope, select
@@ -29,7 +30,7 @@ _TYPES.update(
 )
 
 
-class SelectorSyntaxError(ValueError):
+class SelectorSyntaxError(SquidUiError, ValueError):
     """An unsupported or malformed selector, with a source offset and caret."""
 
 

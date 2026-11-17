@@ -16,10 +16,11 @@ from typing import Any, Literal, TypeAliasType, get_args, get_origin
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
 from uuid import UUID
 
+from squid_ui.errors import SquidUiError
 from squid_ui.routing.pattern import Converter, RoutePattern
 
 
-class InvalidAddress(ValueError):
+class InvalidAddress(SquidUiError, ValueError):
     """A relative address or its arguments do not match the route contract."""
 
 

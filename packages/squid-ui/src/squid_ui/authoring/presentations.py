@@ -28,6 +28,7 @@ class SemanticRef:
 
 
 def ref(*keys: str) -> SemanticRef:
+    """Reference semantic keys relative to the shared content."""
     return SemanticRef(keys)
 
 
@@ -88,22 +89,27 @@ class Fidelity:
 
 
 def equivalent() -> Fidelity:
+    """Declare that a presentation preserves the shared content."""
     return Fidelity()
 
 
 def omit(source: SemanticRef | str) -> Omission:
+    """Authorize omission of one source unit."""
     return Omission(_ref(source))
 
 
 def shorten(source: SemanticRef | str, *, max_chars: int, keep: Literal["head", "tail"] = "head") -> Shortening:
+    """Authorize retaining the head or tail of a source text."""
     return Shortening(_ref(source), max_chars, keep)
 
 
 def change_interaction(source: SemanticRef | str, *, attribute: str) -> InteractionChange:
+    """Authorize a change to one interaction attribute."""
     return InteractionChange(_ref(source), attribute)
 
 
 def losses(*effects: FidelityEffect) -> Fidelity:
+    """Declare the specific changes a presentation may make."""
     if not effects:
         msg = "losses() needs specific effects; use equivalent() for preservation"
         raise LayoutInvariantError(msg)
@@ -124,6 +130,7 @@ class Correspondence:
 
 
 def corresponds(presentation: SemanticRef | str, *content: SemanticRef | str) -> Correspondence:
+    """Map a presentation unit to its source units."""
     if not content:
         msg = "a correspondence needs at least one source unit"
         raise LayoutInvariantError(msg)
@@ -172,6 +179,7 @@ def alternative[RenderTargetT, ContextT](
     preference: int = 0,
     correspondence: tuple[Correspondence, ...] = (),
 ) -> Alternative[RenderTargetT, ContextT]:
+    """Offer one presentation with declared fidelity and preference."""
     return Alternative(node, key, fidelity, preference, correspondence)
 
 
@@ -180,6 +188,7 @@ def alternatives[RenderTargetT, ContextT](
     content: Renderable[RenderTargetT, ContextT],
     key: str,
 ) -> Alternatives[RenderTargetT, ContextT]:
+    """Group presentations of the same semantic content."""
     return Alternatives(content, choices, key)
 
 
@@ -202,6 +211,7 @@ class TextPresentation(Renderable[RenderTarget]):
 
 
 def present_text(*parts: TextLike | SemanticRef | Shortening, key: str) -> TextPresentation:
+    """Assemble text from source references and literal fragments."""
     return TextPresentation(
         tuple(part if isinstance(part, SemanticRef | Shortening) else Text(part) for part in parts), key
     )

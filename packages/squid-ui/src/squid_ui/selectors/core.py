@@ -6,6 +6,7 @@ from re import Pattern
 from typing import Any, cast, overload
 
 from squid_ui.content.text import Localization, TextLike, resolve_text
+from squid_ui.errors import SquidUiError
 from squid_ui.selectors.tree import Match, TreeIndex
 
 type Predicate = Callable[[TreeIndex, int, int | None, Localization], bool]
@@ -265,7 +266,7 @@ def scope() -> Selector[object]:
     return Selector(lambda _tree, index, root, _locale: index == root, ":scope")
 
 
-class QueryError(LookupError):
+class QueryError(SquidUiError, LookupError):
     """A query requiring zero or one, or exactly one occurrence could not be satisfied."""
 
 
