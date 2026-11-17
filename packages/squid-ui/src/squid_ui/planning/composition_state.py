@@ -1,13 +1,14 @@
 """Reconcile certified pages with their owners, staging the displayed state for delivery."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from functools import partial
 from hashlib import sha256
 from typing import Any
 from urllib.parse import quote
 
 from squid_ui import scene
-from squid_ui.authoring.document import Document, DocumentLike, as_document
+from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
@@ -23,7 +24,7 @@ from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.pagination.reuse import same_allocation_document
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
-from squid_ui.planning.semantics import ItemBranch, semantic_graph
+from squid_ui.planning.semantics import ItemBranch, SemanticGraph, semantic_graph
 from squid_ui.planning.structure import disclosure_state, opened_item
 from squid_ui.presentation import (
     ActivePagers,
@@ -43,11 +44,49 @@ def _navigation_version(nav: PlannedNav | None) -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT = Any]:
+    """One certified allocation and the authored structure needed to present its pages.
+
+    The request retains the live presentation session so page callbacks resolve current
+    cursors. Graph and fingerprint describe the authored snapshot, not that mutable state.
+    Delivery installs this owner on the session; failed delivery leaves the old owner intact.
+    """
+
     document: Document[RenderTargetT]
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
     navigation_version: int | None
     options: CompositionOptions
     result: PlanResult[BodyT]
+    graph: SemanticGraph[RenderTargetT, Any] = field(init=False, repr=False, compare=False)
+    fingerprint: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fingerprint", stable_fingerprint((self.document,)))
+        object.__setattr__(
+            self, "graph", semantic_graph(Group(self.document.children, key=self.document.key or "@document"))
+        )
+
+    @classmethod
+    def prepare(
+        cls,
+        document: Document[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions,
+        result: PlanResult[BodyT],
+    ) -> RetainedComposition[BodyT, RenderTargetT, AdapterT]:
+        """Capture allocation inputs, excluding the transient page coordinates."""
+        return cls(document, request, _navigation_version(request.nav), replace(options, pages={}), result)
+
+    def reuse(
+        self,
+        document: Document[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions,
+    ) -> PlanResult[BodyT]:
+        """Present matching certified cuts with the current authored ownership values."""
+        # Controlled coordinates do not invalidate cuts, but their new values must
+        # participate in cursor resolution. Unchanged snapshots keep the prepared graph.
+        owner = self if document == self.document else self.prepare(document, request, options, self.result)
+        return owner.present(options.pages, request=request, options=options)
 
     def matches(
         self,
@@ -74,185 +113,191 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             and replace(options, pages={}) == self.options
         )
 
+    def present(
+        self,
+        pages: Mapping[OccurrenceId, int] | None = None,
+        *,
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT] | None = None,
+        options: CompositionOptions | None = None,
+    ) -> PlanResult[BodyT]:
+        """Select certified output against current cursors without rebuilding authored structure."""
+        request = self.request if request is None else request
+        options = self.options if options is None else options
+        result = self.result
+        if pages is not None:
+            options = replace(options, pages=pages)
+            result = replace(result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
+        allocation = result.allocation
+        assert allocation is not None
+        fingerprint = self.fingerprint
+        graph = self.graph
+        overrides = {**request.presentation.pending_positions, **(request.positions or {})}
+        coordinator = CursorCoordinator(request.presentation, request.chrome, overrides=overrides)
+        coordinates: dict[OccurrenceId, int] = {}
+        requests: dict[OccurrenceId, MaterializedCursorRequest] = {}
+        positions: dict[OccurrenceId, PagePosition] = {}
+        seen: set[str] = set()
+        for identity, region in allocation.regions.items():
+            key = region.cursor_key
+            if key in seen:
+                msg = f"duplicate pager key {key!r}"
+                raise LayoutInvariantError(msg)
+            seen.add(key)
 
-def present_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
-    result: PlanResult[BodyT],
-    rendered: DocumentLike[RenderTargetT],
-    request: PlanRequest[BodyT, RenderTargetT, AdapterT],
-    options: CompositionOptions,
-) -> PlanResult[BodyT]:
-    allocation = result.allocation
-    assert allocation is not None
-    document = as_document(rendered)
-    fingerprint = stable_fingerprint((document,))
-    graph = semantic_graph(Group(document.children, key=document.key or "@document"))
-    overrides = {**request.presentation.pending_positions, **(request.positions or {})}
-    coordinator = CursorCoordinator(request.presentation, request.chrome, overrides=overrides)
-    coordinates: dict[OccurrenceId, int] = {}
-    requests: dict[OccurrenceId, MaterializedCursorRequest] = {}
-    positions: dict[OccurrenceId, PagePosition] = {}
-    seen: set[str] = set()
-    for identity, region in allocation.regions.items():
-        key = region.cursor_key
-        if key in seen:
-            msg = f"duplicate pager key {key!r}"
-            raise LayoutInvariantError(msg)
-        seen.add(key)
+            def keyed(ref: SemanticRef) -> bool:
+                unit = graph.units.get(ref)
+                return not ref.keys[-1].startswith("@") or (unit is not None and isinstance(unit.value, ItemSummary))
 
-        def keyed(ref: SemanticRef) -> bool:
-            unit = graph.units.get(ref)
-            return not ref.keys[-1].startswith("@") or (unit is not None and isinstance(unit.value, ItemSummary))
+            def anchor(ref: tuple[str, ...], prefix: tuple[str, ...] = region.source_prefix) -> str:
+                unit = graph.units.get(SemanticRef(ref))
+                if unit is not None and isinstance(unit.value, ItemSummary):
+                    ref = ref[:-1]
+                return "/".join(quote(part, safe="") for part in ref[len(prefix) :])
 
-        def anchor(ref: tuple[str, ...], prefix: tuple[str, ...] = region.source_prefix) -> str:
-            unit = graph.units.get(SemanticRef(ref))
-            if unit is not None and isinstance(unit.value, ItemSummary):
-                ref = ref[:-1]
-            return "/".join(quote(part, safe="") for part in ref[len(prefix) :])
-
-        anchors: dict[str, int] = {}
-        for page, sources in enumerate(region.anchors):
-            for source in sources:
-                if keyed(source):
-                    anchors.setdefault(anchor(source.keys), page)
-        order = tuple(anchor(ref.keys) for ref in region.source_order if keyed(ref))
-        authored = graph.units.get(SemanticRef(region.source_prefix))
-        owner = (
-            authored.value.page
-            if authored is not None and isinstance(authored.value, Region | Paged | List)
-            else region.owner
-        )
-        content = (
-            replace(authored.value, page=FIRST_PAGE)
-            if authored is not None and isinstance(authored.value, Region | Paged | List)
-            else None
-        )
-        if (
-            authored is not None
-            and isinstance(
-                authored.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            anchors: dict[str, int] = {}
+            for page, sources in enumerate(region.anchors):
+                for source in sources:
+                    if keyed(source):
+                        anchors.setdefault(anchor(source.keys), page)
+            order = tuple(anchor(ref.keys) for ref in region.source_order if keyed(ref))
+            authored = graph.units.get(SemanticRef(region.source_prefix))
+            owner = (
+                authored.value.page
+                if authored is not None and isinstance(authored.value, Region | Paged | List)
+                else region.owner
             )
-            and isinstance(authored.value.overflow, Paginate)
-        ):
-            owner = authored.value.overflow.page
-            content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
-        if authored is not None and isinstance(authored.value, Grid):
-            content = authored.value
-        cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
-        if not isinstance(owner, Controlled | RoutedPage):
-            stored = request.presentation.cursor(key)
-            if stored.fingerprint == cursor_fingerprint and 0 <= stored.position.page < len(region.cuts):
-                covered = {anchor(ref.keys) for ref in region.anchors[stored.position.page]}
-                if stored.position.anchor is not None and stored.position.anchor in covered:
-                    anchors[stored.position.anchor] = stored.position.page
-        cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
-        grant = coordinator.grant(cursor)
-        position = grant.position
-        if identity in options.pages:
-            position = PagePosition(page=max(0, min(options.pages[identity], len(region.cuts) - 1)))
-        coordinates[identity] = position.page
-        requests[identity] = cursor
-        positions[identity] = position
-    if options.pages.keys() - allocation.regions.keys():
-        msg = "page coordinates contain an unknown region occurrence"
-        raise LayoutInvariantError(msg)
-    visible = allocation.visible(coordinates)
-    reports: list[RegionReport] = []
-    retained: set[str] = set()
-    for identity, region in allocation.regions.items():
-        cursor = requests[identity]
-        position = positions[identity]
-        page_anchors = cursor.anchors or {}
-        selected_anchor = position.anchor
-        if selected_anchor is None or page_anchors.get(selected_anchor) != position.page:
-            selected_anchor = next((key for key in cursor.source_order if page_anchors.get(key) == position.page), None)
-        reports.append(
-            RegionReport(region.cursor_key, region.allocation, len(region.cuts), position.page, selected_anchor)
-        )
-        if identity in visible:
-            coordinator.record(cursor, position, anchor=selected_anchor)
-        elif not isinstance(cursor.owner, Controlled | RoutedPage):
-            retained.add(region.cursor_key)
-    selected = allocation.select(coordinates)
-    output = replace(selected.scene, pagers=coordinator.pagers)
-    updates = list(coordinator.updates[:-1])
-    active = coordinator.updates[-1]
-    assert isinstance(active, ActivePagers)
-    # A closed disclosure hides its layout scopes without deleting their delivered cursors.
-    # Hidden pagers receive no new position or allocation until the reader opens them.
-    for reference, unit in graph.units.items():
-        if isinstance(unit.value, Items):
-            keys = (f"{unit.value.key}.items", *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items))
-            retained.update(key for key in keys if key in request.presentation.cursors)
-        if not isinstance(unit.value, Region | Paged | List | Navigation | Grid) and not (
-            isinstance(
-                unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            content = (
+                replace(authored.value, page=FIRST_PAGE)
+                if authored is not None and isinstance(authored.value, Region | Paged | List)
+                else None
             )
-            and isinstance(unit.value.overflow, Paginate)
-        ):
-            continue
-        parent = unit.parent
-        hidden = nested_region = False
-        while parent is not None:
-            ancestor = graph.units[parent]
-            hidden |= isinstance(ancestor.value, Details) and not disclosure_state(ancestor.value, request.presentation)
-            if isinstance(ancestor.value, ItemBranch):
-                hidden |= opened_item(ancestor.value.items, request.presentation) != ancestor.value.item.key
-            nested_region |= isinstance(ancestor.value, Region)
-            parent = ancestor.parent
-        if hidden:
-            if isinstance(
-                unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+            if (
+                authored is not None
+                and isinstance(
+                    authored.value,
+                    primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code,
+                )
+                and isinstance(authored.value.overflow, Paginate)
             ):
-                assert isinstance(unit.value.overflow, Paginate)
-                key = unit.value.overflow.key or region_cursor_key(
-                    SemanticOccurrence(OccurrenceId(reference.keys), graph, reference)
+                owner = authored.value.overflow.page
+                content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
+            if authored is not None and isinstance(authored.value, Grid):
+                content = authored.value
+            cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
+            if not isinstance(owner, Controlled | RoutedPage):
+                stored = request.presentation.cursor(key)
+                if stored.fingerprint == cursor_fingerprint and 0 <= stored.position.page < len(region.cuts):
+                    covered = {anchor(ref.keys) for ref in region.anchors[stored.position.page]}
+                    if stored.position.anchor is not None and stored.position.anchor in covered:
+                        anchors[stored.position.anchor] = stored.position.page
+            cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
+            grant = coordinator.grant(cursor)
+            position = grant.position
+            if identity in options.pages:
+                position = PagePosition(page=max(0, min(options.pages[identity], len(region.cuts) - 1)))
+            coordinates[identity] = position.page
+            requests[identity] = cursor
+            positions[identity] = position
+        if options.pages.keys() - allocation.regions.keys():
+            msg = "page coordinates contain an unknown region occurrence"
+            raise LayoutInvariantError(msg)
+        visible = allocation.visible(coordinates)
+        reports: list[RegionReport] = []
+        retained: set[str] = set()
+        for identity, region in allocation.regions.items():
+            cursor = requests[identity]
+            position = positions[identity]
+            page_anchors = cursor.anchors or {}
+            selected_anchor = position.anchor
+            if selected_anchor is None or page_anchors.get(selected_anchor) != position.page:
+                selected_anchor = next(
+                    (key for key in cursor.source_order if page_anchors.get(key) == position.page), None
                 )
-            else:
-                key = (
-                    region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
-                    if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
-                    else f"{unit.value.key}.destinations"
-                    if isinstance(unit.value, Navigation)
-                    else f"{unit.value.key}.cells"
-                    if isinstance(unit.value, Grid)
-                    else unit.value.key
-                )
-            if key in request.presentation.cursors:
-                retained.add(key)
-    updates.append(ActivePagers(active.keys | retained))
-    layout = RegionLayoutState(
-        fingerprint,
-        tuple(
-            RegionAllocation(
-                region.cursor_key,
-                tuple((str(axis), value) for axis, value in region.allocation.values.items()),
-                tuple(end - start for start, end in zip((0, *region.cuts[:-1]), region.cuts, strict=True)),
+            reports.append(
+                RegionReport(region.cursor_key, region.allocation, len(region.cuts), position.page, selected_anchor)
             )
-            for region in allocation.regions.values()
-        ),
-    )
-    updates.append(RegionLayoutUpdate(layout))
-    updates.append(
-        RetainedCompositionUpdate(
-            RetainedComposition(document, request, _navigation_version(request.nav), replace(options, pages={}), result)
+            if identity in visible:
+                coordinator.record(cursor, position, anchor=selected_anchor)
+            elif not isinstance(cursor.owner, Controlled | RoutedPage):
+                retained.add(region.cursor_key)
+        selected = allocation.select(coordinates)
+        output = replace(selected.scene, pagers=coordinator.pagers)
+        updates = list(coordinator.updates[:-1])
+        active = coordinator.updates[-1]
+        assert isinstance(active, ActivePagers)
+        # A closed disclosure hides its layout scopes without deleting their delivered cursors.
+        # Hidden pagers receive no new position or allocation until the reader opens them.
+        for reference, unit in graph.units.items():
+            if isinstance(unit.value, Items):
+                keys = (
+                    f"{unit.value.key}.items",
+                    *(f"{unit.value.key}.{item.key}.detail" for item in unit.value.items),
+                )
+                retained.update(key for key in keys if key in request.presentation.cursors)
+            if not isinstance(unit.value, Region | Paged | List | Navigation | Grid) and not (
+                isinstance(
+                    unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+                )
+                and isinstance(unit.value.overflow, Paginate)
+            ):
+                continue
+            parent = unit.parent
+            hidden = nested_region = False
+            while parent is not None:
+                ancestor = graph.units[parent]
+                hidden |= isinstance(ancestor.value, Details) and not disclosure_state(
+                    ancestor.value, request.presentation
+                )
+                if isinstance(ancestor.value, ItemBranch):
+                    hidden |= opened_item(ancestor.value.items, request.presentation) != ancestor.value.item.key
+                nested_region |= isinstance(ancestor.value, Region)
+                parent = ancestor.parent
+            if hidden:
+                if isinstance(
+                    unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+                ):
+                    assert isinstance(unit.value.overflow, Paginate)
+                    key = unit.value.overflow.key or region_cursor_key(
+                        SemanticOccurrence(OccurrenceId(reference.keys), graph, reference)
+                    )
+                else:
+                    key = (
+                        region_cursor_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
+                        if isinstance(unit.value, Region) or (isinstance(unit.value, Paged) and nested_region)
+                        else f"{unit.value.key}.destinations"
+                        if isinstance(unit.value, Navigation)
+                        else f"{unit.value.key}.cells"
+                        if isinstance(unit.value, Grid)
+                        else unit.value.key
+                    )
+                if key in request.presentation.cursors:
+                    retained.add(key)
+        updates.append(ActivePagers(active.keys | retained))
+        layout = RegionLayoutState(
+            fingerprint,
+            tuple(
+                RegionAllocation(
+                    region.cursor_key,
+                    tuple((str(axis), value) for axis, value in region.allocation.values.items()),
+                    tuple(end - start for start, end in zip((0, *region.cuts[:-1]), region.cuts, strict=True)),
+                )
+                for region in allocation.regions.values()
+            ),
         )
-    )
+        updates.append(RegionLayoutUpdate(layout))
+        updates.append(RetainedCompositionUpdate(self))
 
-    def select_page(pages: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
-        reused = replace(result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
-        return present_composition(reused, rendered, request, replace(options, pages=pages))
-
-    return replace(
-        selected,
-        page_selector=select_page,
-        scene=output,
-        allocation=allocation,
-        report=replace(
-            selected.report,
-            search=result.report.search,
-            regions=tuple(reports),
-            scene_fingerprint=sha256(scene.Codec.dumps(output).encode()).hexdigest(),
-        ),
-        metrics=result.metrics,
-        session_updates=tuple(updates) if request.session is not None or request.composition is None else (),
-    )
+        return replace(
+            selected,
+            page_selector=partial(self.present, request=request, options=options),
+            scene=output,
+            allocation=allocation,
+            report=replace(
+                selected.report,
+                search=result.report.search,
+                regions=tuple(reports),
+                scene_fingerprint=sha256(scene.Codec.dumps(output).encode()).hexdigest(),
+            ),
+            metrics=result.metrics,
+            session_updates=tuple(updates) if request.session is not None or request.composition is None else (),
+        )

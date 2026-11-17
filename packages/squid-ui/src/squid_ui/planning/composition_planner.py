@@ -26,14 +26,14 @@ from squid_ui.planning.composition import (
     build_composition,
 )
 from squid_ui.planning.composition_request import CompositionOptions
-from squid_ui.planning.composition_state import present_composition
+from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 
 _logger = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
             cache.remember_partitions(
                 cache_key, {key: region.cuts for key, region in result.allocation.regions.items()}
             )
-        return present_composition(planned, rendered, request, options)
+        return RetainedComposition.prepare(document, request, options, planned).present(options=options)
     candidate = select_composition(
         SemanticOccurrence(OccurrenceId(("root",)), graph, root), rules, context, selections=selections
     )
@@ -288,9 +288,9 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
 ) -> PlanResult[BodyT]:
     """Plan with rules supplied by the target dialect."""
     retained = request.presentation.retained_composition
-    if options.automatic and retained is not None and retained.matches(as_document(rendered), request, options):
-        reused = replace(retained.result, metrics=PlanMetrics(cache_hit=True, reuse=PlanReuse.ALLOCATION))
-        return present_composition(reused, rendered, request, options)
+    document = as_document(rendered)
+    if options.automatic and retained is not None and retained.matches(document, request, options):
+        return retained.reuse(document, request, options)
     if not options.automatic or has_routed_page(rendered):
         cache = None
     effective = request.target.reserve(request.reservation)

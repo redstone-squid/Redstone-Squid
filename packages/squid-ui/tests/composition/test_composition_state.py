@@ -44,6 +44,7 @@ def test_navigation_is_certified_and_cursor_only_selection_reuses_allocation(mon
         pytest.fail("a cursor turn reran allocation search")
 
     monkeypatch.setattr("squid_ui.planning.composition_planner.search_composition", fail)
+    monkeypatch.setattr("squid_ui.planning.composition_state.semantic_graph", fail)
     next_page = plan(document, target=V2, session=session, nav=page_select_nav, composition=OPTIONS)
     assert next_page.allocation is allocation
     assert next_page.scene.pagers[0].page == 1
