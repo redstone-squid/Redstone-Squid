@@ -149,9 +149,9 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
         """Prepare the first useful render, once per successfully loaded instance.
 
         Required database or network work may await here. Optional enrichment
-        belongs in a resource with useful initial content. Declared slots prepare
-        eagerly, including slots the eventual layout hides; loading starts no
-        owned services. Failure permits retry on the next delivery attempt.
+        belongs in a resource with useful initial content. Loading may be
+        speculative and starts no owned services. Failure permits retry on the
+        next delivery attempt.
         Reads here are untracked, so watch() establishes no subscription.
         """
 

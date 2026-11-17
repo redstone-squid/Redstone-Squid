@@ -1,6 +1,8 @@
 # Layout introspection: design and typing spike
 
-This is an experiment, not a production API or a change to pagination. The agreed
+Contextual layout remains a design and experiment; pagination is unchanged. Live
+selector roots, explicit query captures, and eager preparation diagnostics are now
+implemented. The agreed
 requirements are general contextual content, pure computations over a render
 snapshot, region-relative pages, explicit target capabilities, and bounded
 resolution that preserves the last delivered UI on failure.
@@ -61,8 +63,8 @@ API over a `live=True` flag or unrelated functions. A returned match identifies
 one occurrence and does not retarget itself when another element matches.
 
 Layout evaluations pin queries to their candidate and coordinate. They never
-read another candidate's latest answers. The current typing spike covers these
-pinned results; live root queries and capture types need the next typing pass.
+read another candidate's latest answers. Use `query(runtime.queries, selector)` for committed live reads; `.capture()`
+returns a `QuerySnapshot`. Raw trees retain their captured structural index.
 Context exposes three explicit scopes:
 
 | Scope | Meaning |
@@ -191,8 +193,7 @@ location queries retain all fragments rather than choosing an arbitrary page.
 
 Eleven tests in `spikes/test_experiment.py` pass. Both Pyrefly and BasedPyright
 accept the signatures/examples and reject the six negative probes for the intended
-type errors. The whole-project Pyrefly check also passes. Nothing in the runtime
-or planner has changed.
+type errors. The experiment remains separate from the production planner.
 
 | Experiment | Result |
 | --- | --- |
@@ -233,7 +234,7 @@ pass its `.py`/`.pyi` files. BasedPyright needs an explicit spike include (docs 
 normally excluded), a merged workspace package tree as in CI's installed-package
 approach, and its missing-source warning disabled for the intentional stub module.
 
-The next implementation slice should connect contextual content to candidate
+The next implementation slice must connect contextual content to candidate
 construction and recertification, using a page footer as the first query consumer.
 It should preserve the general query boundary and produce a measured integration
 cost before adding a broader public vocabulary.

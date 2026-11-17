@@ -938,16 +938,30 @@ Application commit settles before component hooks run, so a hook failure cannot 
 a second settlement of the same candidate. Application and renewal commits share view installation,
 while suppression retains the current view and generation.
 
-`async def on_load(self)` is where a component fetches what it cannot render without. The
-frontend awaits it before the first delivery that would show the component, once per instance,
-and **before `render()` is ever called on it**: expansion stops at an embedded component that
-still owes a load, so the tier is loaded and then re-rendered rather than rendered empty. The
-delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
-for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
-leaves the load eligible to retry. `MessageRoot.send` and `refresh` load; `finish`,
-`finish_via` and `_stage_view` deliberately do not. Use `sl.resource` for reactive async data whose
-pending, stale, or failed states the component can render. `on_load` remains the imperative, atomic
-hook for initialization that must finish before the component can render at all.
+`async def on_load(self)` prepares a component's first useful render. Expansion stops
+at instances that still need loading; the frontend prepares independent siblings
+concurrently through `runtime.preparation`, then resumes discovery. Shared instances load
+once. Failure delivers nothing and permits retry; speculative loading starts no owned
+services. Required database or network work belongs here. Optional enrichment belongs in
+a resource with useful initial content. `send` and `refresh` prepare components; terminal
+and stage-only paths deliberately do not.
+
+Preparation reports retain declaring paths, execution time, outcome, and reuse status.
+Batch elapsed time measures concurrent wall time separately. Slow preparation logs use
+`runtime.preparation.slow_threshold` (seconds); this diagnostic never cancels a load. The
+Discord developer inspector shows preparation separately from planning work.
+
+Live selector queries follow committed trees:
+
+```python
+editors = query(runtime.queries, select(Editor))
+captured = editors.capture()
+```
+
+Each live read tracks a reactive dependency. Rendering or discarding a candidate leaves
+its answers unchanged; successful commit publishes the new tree. `captured` pins membership
+and occurrence identity, while its application objects may still change. Querying a raw
+node or an explicit tree index retains that tree's captured structure.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `ToggleState`. It belongs to a message/viewer session and stays separate

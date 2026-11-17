@@ -1342,10 +1342,10 @@ class MessageRoot[
                     continue
                 if _needs_load(root := self.runtime.root):
                     if profile is None:
-                        await self._load_all((root,))
+                        await self._load_all({"$": root})
                     else:
                         with profile.span("component_load", attributes={"count": 1, "pass": pass_index}):
-                            await self._load_all((root,))
+                            await self._load_all({"$": root})
                     continue
                 if profile is None:
                     tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
@@ -1354,13 +1354,13 @@ class MessageRoot[
                         tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
                 if tree.deferred:
                     if profile is None:
-                        await self._load_all(tree.deferred, paths=tree.deferred_paths)
+                        await self._load_all(tree.deferred_paths)
                     else:
                         with profile.span(
                             "component_load",
                             attributes={"count": len(tree.deferred), "pass": pass_index},
                         ):
-                            await self._load_all(tree.deferred, paths=tree.deferred_paths)
+                            await self._load_all(tree.deferred_paths)
                     continue
                 atomic = self._pending_resources(tree, PendingMode.ATOMIC)
                 if atomic:
@@ -1540,14 +1540,8 @@ class MessageRoot[
                     self._candidates.commit_presented(candidate)
             return candidate
 
-    async def _load_all(
-        self,
-        components: Sequence[Component[RenderTargetT, Any]],
-        *,
-        paths: Mapping[str, Component[Any, Any]] | None = None,
-    ) -> None:
+    async def _load_all(self, placements: Mapping[str, Component[Any, Any]]) -> None:
         """Prepare one tier; preserve the frontend's single-error unwrapping."""
-        placements = paths if paths is not None else {"$": components[0]}
         with _unwrapped():
             await self.runtime.preparation.prepare(placements)
 

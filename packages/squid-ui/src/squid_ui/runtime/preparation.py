@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Literal
 
-import anyio
-
 from squid_ui.runtime.definition import AnyComponent
+from squid_ui.runtime.tasks import anyio
 
 _logger = logging.getLogger(__name__)
 
