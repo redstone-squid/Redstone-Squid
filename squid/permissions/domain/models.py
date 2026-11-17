@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
-from typing import Self, override
+from typing import ClassVar, Self, override
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
@@ -128,3 +128,35 @@ class AuditAction(StrEnum):
 class AuditSubjectKind(StrEnum):
     ACCOUNT = "account"
     DISCORD_ROLE = "discord_role"
+
+
+@dataclass(frozen=True, slots=True)
+class AccountGrantSubject:
+    """A permission membership attached to one internal account."""
+
+    account_id: int
+    kind: ClassVar[AuditSubjectKind] = AuditSubjectKind.ACCOUNT
+
+    @property
+    def discord_role_id(self) -> None:
+        return None
+
+    @property
+    def guild_id(self) -> None:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalRoleGrantSubject:
+    """A Discord role principal, scoped to the server that owns it."""
+
+    guild_id: int
+    discord_role_id: int
+    kind: ClassVar[AuditSubjectKind] = AuditSubjectKind.DISCORD_ROLE
+
+    @property
+    def account_id(self) -> None:
+        return None
+
+
+type GrantSubject = AccountGrantSubject | ExternalRoleGrantSubject

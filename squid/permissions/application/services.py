@@ -17,40 +17,19 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
-from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
-from squid.permissions.application.roles import role_specs
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.permissions.application.roles import PermissionRuleSnapshot
 from squid.permissions.domain import (
     CATALOGUE,
-    BuiltinRoleKeys,
     Catalogue,
     CheckMode,
-    Effect,
-    Origin,
-    Pattern,
     PermissionCheck,
     PermissionNode,
-    RoleGraph,
     Rule,
-    SubjectKind,
     resolve,
-    rules_from_role,
 )
 from squid.permissions.errors import require_check
-from squid.permissions.models import PermissionGrant
 from squid.unit_of_work import UnitOfWorkFactory
-
-
-def _grant_rule(record: PermissionGrant) -> Rule:
-    by_account = record.subject_account_id is not None
-    return Rule(
-        pattern=Pattern.parse(record.pattern),
-        effect=Effect(record.effect),
-        subject_kind=SubjectKind.ACCOUNT if by_account else SubjectKind.DISCORD_ROLE,
-        origin=Origin.ACCOUNT_GRANT if by_account else Origin.DISCORD_ROLE_GRANT,
-        scope_guild_id=record.scope_guild_id,
-        expires_at=record.expires_at,
-        source=f"account:{record.subject_account_id}" if by_account else f"discord-role:{record.subject_role_id}",
-    )
 
 
 class PermissionService:
@@ -113,62 +92,7 @@ class PermissionService:
         if records.subject != subject:
             message = "Permission inputs belong to a different identity or context"
             raise InvalidStateError(message)
-        rules = self._assemble(records)
+        rules = PermissionRuleSnapshot(records, catalogue=self._catalogue).rules
         if cache is not None:
             cache.put(key, rules, epoch=records.epoch)
         return rules
-
-    def _assemble(self, records: SubjectRecords) -> tuple[Rule, ...]:
-        """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
-        graph = RoleGraph(role_specs(records.roles), catalogue=self._catalogue)
-        rules = [_grant_rule(grant) for grant in records.grants]
-        rules.extend(self._assignment_rules(records, graph))
-
-        bridge = self._bridge_rules(records, graph, records.subject)
-        rules.extend(bridge)
-        return tuple(rules)
-
-    def _assignment_rules(self, records: SubjectRecords, graph: RoleGraph) -> list[Rule]:
-        slugs = {str(role.id): role.slug for role in records.roles}
-        rules: list[Rule] = []
-        for assignment in records.assignments:
-            key = str(assignment.role_id)
-            by_account = assignment.subject_account_id is not None
-            rules.extend(
-                rules_from_role(
-                    graph.expand(key),
-                    subject_kind=SubjectKind.ACCOUNT if by_account else SubjectKind.DISCORD_ROLE,
-                    origin=Origin.ROLE,
-                    scope_guild_id=assignment.scope_guild_id,
-                    expires_at=assignment.expires_at,
-                    source=f"role:{slugs.get(key, key)}",
-                    via=None if by_account else f"discord-role:{assignment.subject_role_id}",
-                )
-            )
-        return rules
-
-    def _bridge_rules(
-        self,
-        records: SubjectRecords,
-        graph: RoleGraph,
-        subject: Actor,
-    ) -> list[Rule]:
-        """Add guild-admin rules for Discord members with Manage Server.
-
-        The bridge has the lowest origin rank. Specificity, scope, and subject rank
-        still take precedence, so an explicit rule does not always outrank it.
-        """
-        if not subject.discord_guild_admin or subject.guild_id is None:
-            return []
-        key = next((str(role.id) for role in records.roles if role.builtin_key == BuiltinRoleKeys.GUILD_ADMIN), None)
-        if key is None:
-            return []
-        return list(
-            rules_from_role(
-                graph.expand(key),
-                subject_kind=SubjectKind.DISCORD_ROLE,
-                origin=Origin.GUILD_ADMIN_BRIDGE,
-                scope_guild_id=subject.guild_id,
-                source="discord:manage-server",
-            )
-        )

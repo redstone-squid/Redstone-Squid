@@ -541,7 +541,7 @@ class PostgresPermissionAdminRepository:
 
 
 def _role_records(
-    rows: Sequence[Row[tuple[PermissionRole, list[str] | None, list[str] | None, list[int] | None]]],
+    rows: Sequence[Row[PermissionRole, list[str] | None, list[str] | None, list[int] | None]],
 ) -> tuple[PermissionRole, ...]:
     """Attach separately aggregated patterns and edges to each loaded role."""
     roles: list[PermissionRole] = []

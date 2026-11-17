@@ -14,7 +14,13 @@ from squid.edits.fields import Aggregate, FieldCommand, PreparedFields
 from squid.permissions.application.administration import MAX_ROLE_RANK, PermissionAdministrationService
 from squid.permissions.application.ports import AuditEntry, PermissionAdminRepository, PermissionAdminUnitOfWork
 from squid.permissions.domain import Effect
-from squid.permissions.domain.models import AuditAction, PatternMode
+from squid.permissions.domain.models import (
+    AccountGrantSubject,
+    AuditAction,
+    ExternalRoleGrantSubject,
+    GrantSubject,
+    PatternMode,
+)
 from squid.permissions.models import PermissionRole
 
 PERMISSION_GRAPH = EditTarget("permission-graph", "1")
@@ -65,6 +71,14 @@ class SubjectValues(PermissionValues):
         if self.discord_role_id is not None and self.guild_id is None:
             raise ValidationError
         return self
+
+    @property
+    def subject(self) -> GrantSubject:
+        """Translate validated transport fields into one explicit application principal."""
+        if self.account_id is not None:
+            return AccountGrantSubject(self.account_id)
+        assert self.discord_role_id is not None and self.guild_id is not None
+        return ExternalRoleGrantSubject(self.guild_id, self.discord_role_id)
 
     @property
     def expiry(self) -> Instant | None:
@@ -181,11 +195,9 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
             actor,
             pattern=after.pattern,
             effect=after.effect,
-            account_id=after.account_id,
-            discord_role_id=after.discord_role_id,
-            guild_id=after.guild_id,
             scope_guild_id=after.scope_guild_id,
             reason=after.reason,
+            subject=after.subject,
         )
         return after
 
@@ -195,23 +207,17 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
     ) -> None:
         if after.effect is None:
             await root.admin.revoke(
-                root.current_actor,
-                pattern=after.pattern,
-                account_id=after.account_id,
-                discord_role_id=after.discord_role_id,
-                scope_guild_id=after.scope_guild_id,
+                root.current_actor, pattern=after.pattern, scope_guild_id=after.scope_guild_id, subject=after.subject
             )
         else:
             await root.admin.grant(
                 root.current_actor,
                 pattern=after.pattern,
                 effect=after.effect,
-                account_id=after.account_id,
-                discord_role_id=after.discord_role_id,
-                guild_id=after.guild_id,
                 scope_guild_id=after.scope_guild_id,
                 expires_at=after.expiry,
                 reason=after.reason,
+                subject=after.subject,
             )
 
 
@@ -251,13 +257,7 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
         role = root.role(after.role_id)
         if after.present:
             await root.admin.check_assignment(
-                uow,
-                root.current_actor,
-                role,
-                account_id=after.account_id,
-                discord_role_id=after.discord_role_id,
-                guild_id=after.guild_id,
-                scope_guild_id=after.scope_guild_id,
+                uow, root.current_actor, role, scope_guild_id=after.scope_guild_id, subject=after.subject
             )
             return after
         await root.admin.check_unassignment(uow, root.current_actor, role, after.scope_guild_id)
@@ -272,20 +272,14 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
             await root.admin.assign(
                 root.current_actor,
                 role,
-                account_id=after.account_id,
-                discord_role_id=after.discord_role_id,
-                guild_id=after.guild_id,
                 scope_guild_id=after.scope_guild_id,
                 expires_at=after.expiry,
                 reason=after.reason,
+                subject=after.subject,
             )
         else:
             await root.admin.unassign(
-                root.current_actor,
-                role,
-                account_id=after.account_id,
-                discord_role_id=after.discord_role_id,
-                scope_guild_id=after.scope_guild_id,
+                root.current_actor, role, scope_guild_id=after.scope_guild_id, subject=after.subject
             )
 
 

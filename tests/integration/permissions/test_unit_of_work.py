@@ -11,7 +11,7 @@ from squid.core.actors import Actor
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
 from squid.permissions.application.administration import PermissionAdministrationService
 from squid.permissions.application.ports import AuditEntry
-from squid.permissions.domain.models import AuditAction, AuditSubjectKind, PatternMode
+from squid.permissions.domain.models import AuditAction, AuditSubjectKind, ExternalRoleGrantSubject, PatternMode
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -111,3 +111,25 @@ async def test_role_aggregation_preserves_empty_roles_and_independent_pattern_ed
     assert roles[parent.id].includes == ("build.**", "vote.**")
     assert roles[parent.id].excludes == ("@destructive",)
     assert roles[parent.id].includes_roles == tuple(sorted((empty.id, child.id)))
+
+
+async def test_tagged_role_subject_retains_guild_identity_and_audit(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    permissions = PermissionService(uow_factory=factory)
+    admin = PermissionAdministrationService(permissions, uow_factory=factory)
+    owner = await admin.resolve_actor(Actor(is_bot_owner=True))
+    await admin.grant(
+        owner, subject=ExternalRoleGrantSubject(100, 200), pattern="settings.server.edit", scope_guild_id=100
+    )
+    assert (
+        await permissions.check(Actor(guild_id=100, discord_role_ids=frozenset({200})), "settings.server.edit")
+    ).allowed
+    assert not (
+        await permissions.check(Actor(guild_id=101, discord_role_ids=frozenset({200})), "settings.server.edit")
+    ).allowed
+    entry = (await admin.audit())[0]
+    assert entry.subject_kind == "discord_role"
+    assert entry.subject_id == 200
+    assert entry.subject_guild_id == 100

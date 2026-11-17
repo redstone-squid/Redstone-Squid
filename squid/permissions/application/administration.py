@@ -24,7 +24,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
 from squid.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
-from squid.permissions.application.roles import role_specs
+from squid.permissions.application.roles import PermissionRuleSnapshot
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import (
     CATALOGUE,
@@ -44,7 +44,12 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
-from squid.permissions.domain.models import AuditAction, AuditSubjectKind, PatternMode
+from squid.permissions.domain.models import (
+    AuditAction,
+    AuditSubjectKind,
+    GrantSubject,
+    PatternMode,
+)
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -237,11 +242,9 @@ class PermissionAdministrationService:
         self,
         actor: Actor,
         *,
+        subject: GrantSubject,
         pattern: str,
         effect: Effect,
-        account_id: int | None,
-        discord_role_id: int | None,
-        guild_id: int | None,
         scope_guild_id: int | None,
         reason: str | None,
     ) -> None:
@@ -257,13 +260,6 @@ class PermissionAdministrationService:
                 raise ValidationError(msg, public_context={"field": "reason"})
         self._require_scope(actor, pattern, scope_guild_id)
         self._require_authority(actor, (pattern,))
-        if (account_id is None) == (discord_role_id is None):
-            msg = "A rule applies to exactly one subject: an account or a Discord role."
-            raise ValidationError(msg)
-        if discord_role_id is not None and guild_id is None:
-            # Report the missing guild before the database constraint rejects it.
-            msg = "Granting to a Discord role has to be done inside that role's server."
-            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
 
     async def check_revoke(
         self,
@@ -314,7 +310,7 @@ class PermissionAdministrationService:
         if self._would_cycle(role.id, included.id, roles):
             msg = f"Including {included.slug} in {role.slug} would create a cycle."
             raise ConflictError(msg, public_context={"role": role.slug, "included": included.slug})
-        specs = role_specs(roles)
+        specs = PermissionRuleSnapshot.role_specs(roles)
         parent_key = str(role.id)
         specs[parent_key] = replace(
             specs[parent_key], includes_roles=(*specs[parent_key].includes_roles, str(included.id))
@@ -332,17 +328,9 @@ class PermissionAdministrationService:
         actor: Actor,
         role: PermissionRole,
         *,
-        account_id: int | None,
-        discord_role_id: int | None,
-        guild_id: int | None,
+        subject: GrantSubject,
         scope_guild_id: int | None,
     ) -> None:
-        if (account_id is None) == (discord_role_id is None):
-            msg = "A role is assigned to exactly one subject: an account or a Discord role."
-            raise ValidationError(msg)
-        if discord_role_id is not None and guild_id is None:
-            msg = "Assigning to a Discord role has to be done inside that role's server."
-            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
         self._require_rank(actor, role)
         roles = await uow.permission_admin.list_roles()
         leaves = self.resolved_leaves(role, roles)
@@ -365,26 +353,20 @@ class PermissionAdministrationService:
         self,
         actor: Actor,
         *,
+        subject: GrantSubject,
         pattern: str,
         effect: Effect = Effect.ALLOW,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        guild_id: int | None = None,
         scope_guild_id: int | None = None,
         expires_at: Instant | None = None,
         reason: str | None = None,
     ) -> None:
         """Write one allow, deny or forbid rule."""
+        account_id = subject.account_id
+        discord_role_id = subject.discord_role_id
+        guild_id = subject.guild_id
         async with self._write() as uow:
             self.check_grant(
-                actor,
-                pattern=pattern,
-                effect=effect,
-                account_id=account_id,
-                discord_role_id=discord_role_id,
-                guild_id=guild_id,
-                scope_guild_id=scope_guild_id,
-                reason=reason,
+                actor, pattern=pattern, effect=effect, scope_guild_id=scope_guild_id, reason=reason, subject=subject
             )
             await uow.permission_admin.upsert_grant(
                 pattern=pattern,
@@ -411,19 +393,15 @@ class PermissionAdministrationService:
             )
 
     async def revoke(
-        self,
-        actor: Actor,
-        *,
-        pattern: str,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        scope_guild_id: int | None = None,
+        self, actor: Actor, *, subject: GrantSubject, pattern: str, scope_guild_id: int | None = None
     ) -> bool:
         """Remove a stored rule, returning whether it existed.
 
         Remaining rules determine the result; the catalogue default applies only if
         none match.
         """
+        account_id = subject.account_id
+        discord_role_id = subject.discord_role_id
         async with self._write() as uow:
             await self.check_revoke(uow, actor, pattern=pattern, account_id=account_id, scope_guild_id=scope_guild_id)
             return await uow.permission_admin.delete_grant(
@@ -520,7 +498,7 @@ class PermissionAdministrationService:
 
     def resolved_leaves(self, role: PermissionRole, roles: Sequence[PermissionRole]) -> tuple[str, ...]:
         """The node names a role actually confers, composition and subtraction applied."""
-        specs = role_specs(roles)
+        specs = PermissionRuleSnapshot.role_specs(roles)
         catalogue = self._permissions.catalogue
         expansion = expand_role(str(role.id), specs, catalogue=catalogue)
         leaves: set[str] = set()
@@ -707,24 +685,17 @@ class PermissionAdministrationService:
         actor: Actor,
         role: PermissionRole,
         *,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        guild_id: int | None = None,
+        subject: GrantSubject,
         scope_guild_id: int | None = None,
         expires_at: Instant | None = None,
         reason: str | None = None,
     ) -> None:
         """Give a role to an account or to everyone holding a Discord role."""
+        account_id = subject.account_id
+        discord_role_id = subject.discord_role_id
+        guild_id = subject.guild_id
         async with self._write() as uow:
-            await self.check_assignment(
-                uow,
-                actor,
-                role,
-                account_id=account_id,
-                discord_role_id=discord_role_id,
-                guild_id=guild_id,
-                scope_guild_id=scope_guild_id,
-            )
+            await self.check_assignment(uow, actor, role, scope_guild_id=scope_guild_id, subject=subject)
             await uow.permission_admin.assign_role(
                 role.id,
                 subject_account_id=account_id,
@@ -749,14 +720,10 @@ class PermissionAdministrationService:
             )
 
     async def unassign(
-        self,
-        actor: Actor,
-        role: PermissionRole,
-        *,
-        account_id: int | None = None,
-        discord_role_id: int | None = None,
-        scope_guild_id: int | None = None,
+        self, actor: Actor, role: PermissionRole, *, subject: GrantSubject, scope_guild_id: int | None = None
     ) -> bool:
+        account_id = subject.account_id
+        discord_role_id = subject.discord_role_id
         async with self._write() as uow:
             await self.check_unassignment(uow, actor, role, scope_guild_id)
             return await uow.permission_admin.unassign_role(

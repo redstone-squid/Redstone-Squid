@@ -40,6 +40,7 @@ from squid.permissions.application.edits import (
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import Effect
 from squid.permissions.domain.catalogue import PERM_NODE_VIEW, ROLE_DEFINITION_MANAGE
+from squid.permissions.domain.models import AccountGrantSubject
 from squid.permissions.models import PermissionAuditEntry
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
@@ -145,14 +146,14 @@ async def test_permission_commands_resolve_current_rank_and_authority_even_for_n
     factory, admin, executor, owner, subject = await setup(migrated_session_factory)
     guardian = await admin.create_role(owner, slug="guardian-role", name="Guardian", rank=100)
     target = await admin.create_role(owner, slug="editable-role", name="Editable", rank=1)
-    await admin.assign(owner, guardian, account_id=subject)
-    await admin.grant(owner, pattern=ROLE_DEFINITION_MANAGE.name, account_id=subject)
+    await admin.assign(owner, guardian, subject=AccountGrantSubject(subject))
+    await admin.grant(owner, pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject))
     actor = Actor(account_id=subject)
     saved = await executor.execute(await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=10)), actor)
     assert saved.receipt is not None
     with pytest.raises(AuthorizationError):
         await executor.execute(await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=100)), actor)
-    await admin.revoke(owner, pattern=ROLE_DEFINITION_MANAGE.name, account_id=subject)
+    await admin.revoke(owner, pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject))
     current = (Revision(PERMISSION_GRAPH, await admin.revision()),)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.undo(current), actor)
