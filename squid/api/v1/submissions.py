@@ -27,6 +27,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
+from squid.api.private_responses import private_response
 from squid.api.revisions import InvalidRevisionError, expected_revision, revision_etag
 from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submissions import (
@@ -326,6 +327,7 @@ async def list_correction_inbox(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListResponse:
     """Return at most ten compact active drafts owned by the signed-in account."""
     return DraftListResponse.from_domain(await drafts.list_active(account_id))
@@ -398,6 +400,7 @@ async def form_options(
         "caller": Provide(authenticated_submission_caller),
     },
 )
+@private_response
 async def create_draft(
     data: JSONBody[DraftCreateRequest],
     request: Request,
@@ -435,6 +438,7 @@ async def create_draft(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: AccountId) -> Response[StoredDraftResponse]:
     """Return one draft after enforcing caller ownership."""
     response_headers: dict[str, str] = {}
@@ -460,6 +464,7 @@ async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: Accoun
         "edits": Provide(get_submission_edits, sync_to_thread=False),
     },
 )
+@private_response
 async def change_draft(
     draft_id: FromPath[UUID],
     data: JSONBody[DraftChangeRequest],
@@ -501,6 +506,7 @@ async def change_draft(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def upgrade_draft_manifest(
     draft_id: FromPath[UUID],
     data: JSONBody[DraftManifestUpgradeRequest],
@@ -537,6 +543,7 @@ async def upgrade_draft_manifest(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def submit_draft(
     draft_id: FromPath[UUID],
     request: Request,
@@ -570,6 +577,7 @@ async def submit_draft(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def get_draft_submission(
     draft_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
@@ -594,6 +602,7 @@ async def get_draft_submission(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def list_draft_attempts(
     draft_id: FromPath[UUID],
     finalization: Finalization,
@@ -618,6 +627,7 @@ async def list_draft_attempts(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def get_draft_attempt(
     draft_id: FromPath[UUID], attempt_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
 ) -> SubmissionAttemptResponse:
@@ -644,6 +654,7 @@ async def get_draft_attempt(
         "account_id": Provide(authenticated_account),
     },
 )
+@private_response
 async def delete_draft(
     draft_id: FromPath[UUID],
     drafts: Drafts,

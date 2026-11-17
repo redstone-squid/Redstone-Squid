@@ -528,6 +528,7 @@ async def list_my_builds(
 
 
 router = Router(
+    opt={"private_response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
         "build_queries": Provide(get_build_queries, sync_to_thread=False),
@@ -551,6 +552,7 @@ router = Router(
 
 
 accounts_router = Router(
+    opt={"private_response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
         "build_queries": Provide(get_build_queries, sync_to_thread=False),

@@ -30,7 +30,8 @@ from squid.core.errors import (
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
 from squid.edits.domain import ConcurrentEditError, RevisionConflictError
-from squid.observability import correlation_id
+from squid.observability import correlated_log_buffer, correlation_id, correlation_reference
+from squid.runtime import ApiServices, ApplicationRuntime
 from squid_i18n import localization_scope
 
 logger = logging.getLogger(__name__)
@@ -59,13 +60,11 @@ async def _capture(request: Request, error: Exception, request_id: str) -> None:
     service on app.state and allow it to be absent. Catch lookup, buffer, and
     storage errors so reporting cannot prevent the HTTP error response.
     """
-    from squid.observability import correlated_log_buffer, correlation_reference
-
     try:
-        services = getattr(getattr(request.app.state, "runtime", None), "services", None)
-        reports = getattr(services, "error_reports", None)
-        if reports is None:
+        runtime = request.app.state.get("runtime")
+        if not isinstance(runtime, ApplicationRuntime) or not isinstance(runtime.services, ApiServices):
             return
+        reports = runtime.services.error_reports
         buffer = correlated_log_buffer()
         await reports.record(
             error,

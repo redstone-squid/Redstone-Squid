@@ -40,7 +40,7 @@ from squid.api.openapi import (
     ContractSwaggerRenderPlugin,
     install_openapi_contract,
 )
-from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
+from squid.api.private_responses import PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter
 from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.request_context import RequestContextMiddleware
@@ -240,13 +240,14 @@ def create_api_app(
         middleware=[
             DefineMiddleware(LocaleContextMiddleware),
             DefineMiddleware(RequestContextMiddleware),
-            DefineMiddleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES),
             DefineMiddleware(BoundedRequestBodyMiddleware),
             DefineMiddleware(CompleteIdempotentResponseMiddleware),
             DefineMiddleware(RateLimitMiddleware),
             DefineMiddleware(CallerAuthenticationMiddleware, scopes={"http"}),
         ],
     )
+    # Wrap routing too: unmatched private descendants must also be uncacheable.
+    api.asgi_handler = PrivateResponseHeadersMiddleware(api.asgi_handler)
     install_openapi_contract(api)
     assert_idempotency_completion_installed(api)
     if config is not None:

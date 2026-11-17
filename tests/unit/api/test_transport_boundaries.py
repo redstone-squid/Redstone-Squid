@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
-from litestar import Litestar, Request, get, post
+from litestar import Litestar, Request, Router, get, post
 from litestar.exceptions import HTTPException
 from litestar.middleware import DefineMiddleware
 
@@ -97,11 +97,11 @@ async def test_an_unmarked_route_on_the_same_prefix_is_still_bounded() -> None:
 
 async def test_private_paths_are_no_store_on_success_and_errors() -> None:
 
-    @get("/v1/submissions/drafts/{draft_id:uuid}")
+    @get("/v1/submissions/drafts/{draft_id:uuid}", opt={"private_response": True})
     async def private_draft(draft_id: UUID) -> dict[str, str]:
         return {"id": str(draft_id)}
 
-    @get("/v1/users/me/failure")
+    @get("/v1/users/me/failure", opt={"private_response": True})
     async def private_failure() -> None:
         raise HTTPException(status_code=404)
 
@@ -124,3 +124,28 @@ async def test_private_paths_are_no_store_on_success_and_errors() -> None:
         assert response.headers["Pragma"] == "no-cache"
     assert "Cache-Control" not in public_response.headers
     assert "Pragma" not in public_response.headers
+
+
+async def test_private_router_policy_follows_renaming_and_covers_early_errors() -> None:
+
+    @post("/item")
+    async def item(data: dict[str, str]) -> dict[str, str]:
+        return data
+
+    app = Litestar(
+        route_handlers=[Router(path="/renamed", opt={"private_response": True}, route_handlers=[item])],
+        middleware=[
+            DefineMiddleware(BoundedRequestBodyMiddleware, max_bytes=8),
+        ],
+    )
+    app.asgi_handler = PrivateResponseHeadersMiddleware(app.asgi_handler)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:  # type: ignore[bad-argument-type]
+        responses = (
+            await client.post("/renamed/item", json={}),
+            await client.post("/renamed/item", content=b"too many bytes"),
+            await client.get("/renamed/unknown"),
+        )
+    assert [response.status_code for response in responses] == [201, 413, 404]
+    for response in responses:
+        assert response.headers["Cache-Control"] == "no-store"
+        assert response.headers["Pragma"] == "no-cache"

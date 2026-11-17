@@ -97,5 +97,8 @@ async def update_runtime_settings(
 
 
 router = Router(
-    path="/settings/runtime", tags=["settings"], route_handlers=[get_runtime_settings, update_runtime_settings]
+    opt={"private_response": True},
+    path="/settings/runtime",
+    tags=["settings"],
+    route_handlers=[get_runtime_settings, update_runtime_settings],
 )

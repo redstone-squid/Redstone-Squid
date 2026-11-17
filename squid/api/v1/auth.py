@@ -13,6 +13,7 @@ from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import CurrentCaller, WebAuth, get_web_auth
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
+from squid.api.private_responses import private_response
 from squid.api.v1.schemas.auth import CsrfTokenResponse
 from squid.core.errors import AuthenticationError, ValidationError
 
@@ -30,6 +31,7 @@ resource, not a credential failure: "this deployment has no GitHub login" is a f
     opt=contract(cli=browser_only()),
     status_code=200,
 )
+@private_response
 async def csrf_token(request: Request, caller: CurrentCaller) -> Response[CsrfTokenResponse]:
     """Return the session-bound write token to a credentialed CORS frontend."""
     response_headers: dict[str, str] = {}
