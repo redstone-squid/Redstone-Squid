@@ -7,13 +7,13 @@ from hashlib import sha256
 from types import MappingProxyType
 
 from squid_ui import scene
-from squid_ui.authoring.document import DocumentLike, as_document
+from squid_ui.authoring.document import Document, DocumentLike, as_document
 from squid_ui.authoring.semantic import Group
 from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
-from squid_ui.planning.cache import PlanCache
+from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
@@ -25,6 +25,7 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
+from squid_ui.planning.composition_input import prepare_composition
 from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
@@ -34,6 +35,7 @@ from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
+from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 
 _logger = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     work_limit: int | None = None,
 ) -> PlanningContext:
+    effective = request.target.reserve(request.reservation)
     nav = request.nav
     if nav is None and request.composition is None:
         nav = request.target.dialect.navigation
@@ -60,14 +63,14 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.strict,
         request.palette,
         request.target.capabilities,
-        request.target.reserve(request.reservation).capacities,
+        effective.capacities,
         request.chrome,
         PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
         request.composition is None or request.session is not None or nav is not None or request.positions is not None,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
         extensions=request.target.extensions,
-        limits=request.target.reserve(request.reservation).limits,
+        limits=effective.limits,
     )
 
 
@@ -297,19 +300,91 @@ class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, Pre
         return _plan(rendered, request, self.rules, options.selections, options, cache)
 
 
+@dataclass(frozen=True, slots=True)
+class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
+    """Resolved built-in planning policy and its prepared input.
+
+    Implicit plans validate and normalize authoring input, derive their search allowance,
+    and allow exact replay. Explicit options preserve authored occurrence identities and
+    their chosen allowance. Both modes share allocation reuse and rule execution.
+    """
+
+    document: Document[RenderTargetT]
+    request: PlanRequest[BodyT, RenderTargetT, AdapterT]
+    options: CompositionOptions
+    exact_replay: bool
+
+    @classmethod
+    def prepare(
+        cls,
+        rendered: DocumentLike[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions | None,
+    ) -> CompositionPlan[RenderTargetT, AdapterT, BodyT]:
+        document = as_document(rendered)
+        implicit = options is None
+        if options is None:
+            prepared = prepare_composition(document, request)
+            if prepared.limitation is not None:
+                identity = OccurrenceId(("root",))
+                raise JointUnsupportedError(
+                    SearchDiagnostics(
+                        SearchCompletion.UNSUPPORTED,
+                        optimal=False,
+                        work_used=0,
+                        work_limit=request.search_budget,
+                        violations=(UnsupportedCapability(identity, prepared.limitation),),
+                        unsupported=(identity,),
+                    )
+                )
+            document = prepared.document
+            options = CompositionOptions(
+                automatic=True,
+                work_limit=(
+                    max(CompositionOptions().work_limit, min(2_000_000, prepared.combinations * 200))
+                    if request.search_budget == DEFAULT_SEARCH_BUDGET
+                    else request.search_budget
+                ),
+            )
+        return cls(document, request, options, implicit)
+
+    def execute(
+        self,
+        rendered: DocumentLike[RenderTargetT],
+        *,
+        cache: PlanCache[BodyT] | None = None,
+        memo: PlanMemo[BodyT] | None = None,
+    ) -> PlanResult[BodyT]:
+        request, options, document = self.request, self.options, self.document
+        # Route factories can change IDs without changing their callable identity.
+        if has_routed_page(rendered):
+            cache = None
+            memo = None
+        if not self.exact_replay:
+            memo = None
+        key = request.exact_key()
+        if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
+            return exact
+        retained = request.presentation.retained_composition
+        if options.automatic and retained is not None and retained.matches(document, request, options):
+            result = retained.reuse(document, request, options)
+        else:
+            effective = request.target.reserve(request.reservation)
+            result = effective.dialect.composer(document, effective.limits).plan(
+                document, request, options, cache if options.automatic else None
+            )
+        if memo is not None:
+            memo.store(rendered, key, request.presentation, result)
+        return result
+
+
 def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
-    options: CompositionOptions,
+    options: CompositionOptions | None,
     *,
     cache: PlanCache[BodyT] | None = None,
+    memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
-    """Plan with rules supplied by the target dialect."""
-    retained = request.presentation.retained_composition
-    document = as_document(rendered)
-    if options.automatic and retained is not None and retained.matches(document, request, options):
-        return retained.reuse(document, request, options)
-    if not options.automatic or has_routed_page(rendered):
-        cache = None
-    effective = request.target.reserve(request.reservation)
-    return effective.dialect.composer(rendered, effective.limits).plan(rendered, request, options, cache)
+    """Resolve planning policy, then reuse or execute the target's bound rules."""
+    return CompositionPlan.prepare(rendered, request, options).execute(rendered, cache=cache, memo=memo)

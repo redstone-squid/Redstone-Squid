@@ -4,20 +4,15 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from squid_ui import scene
-from squid_ui.authoring.document import DocumentLike, PortableDocumentLike, as_document
+from squid_ui.authoring.document import DocumentLike, PortableDocumentLike
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache, PlanMemo
-from squid_ui.planning.composition import OccurrenceId, UnsupportedCapability
-from squid_ui.planning.composition_input import prepare_composition
 from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
-from squid_ui.planning.identity import has_routed_page
-from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
@@ -90,44 +85,12 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
-    if isinstance(request.composition, CompositionOptions):
+    if request.composition is None or isinstance(request.composition, CompositionOptions):
         result = plan_composition(
-            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache
+            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache, memo=memo
         )
-    elif request.composition is not None:
-        result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
     else:
-        # Routed factories must not replay stale IDs from structural caches.
-        if has_routed_page(rendered):
-            cache = None
-            memo = None
-        prepared = prepare_composition(as_document(cast(DocumentLike[RenderTargetT], rendered)), request)
-        if prepared.limitation is not None:
-            identity = OccurrenceId(("root",))
-            raise JointUnsupportedError(
-                SearchDiagnostics(
-                    SearchCompletion.UNSUPPORTED,
-                    optimal=False,
-                    work_used=0,
-                    work_limit=request.search_budget,
-                    violations=(UnsupportedCapability(identity, prepared.limitation),),
-                    unsupported=(identity,),
-                )
-            )
-        options = CompositionOptions(
-            automatic=True,
-            work_limit=(
-                max(CompositionOptions().work_limit, min(2_000_000, prepared.combinations * 200))
-                if request.search_budget == DEFAULT_SEARCH_BUDGET
-                else request.search_budget
-            ),
-        )
-        key = request.exact_key()
-        if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
-            return exact
-        result = plan_composition(prepared.document, request, options, cache=cache)
-        if memo is not None:
-            memo.store(rendered, key, request.presentation, result)
+        result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
     # Automatic composition prepares every reachable output inside its work
     # allowance. Cursor selection must not leave other pages with raw handlers.
     return result if result.allocation is not None else prepare_bindings(result, request)

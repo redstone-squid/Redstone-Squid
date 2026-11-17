@@ -20,6 +20,7 @@ from squid_ui.planning import (
     SearchCompletion,
 )
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.cache import PlanMemo
 from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
@@ -195,3 +196,22 @@ def test_shared_downloads_retain_the_delivery_asset(target: Any) -> None:
     assert result.resources[f"asset:{asset.key}"] is asset
     assert result.scene.assets == (scene.Asset(asset.key, asset.name, asset.media_type),)
     assert "Report" in scene.Codec.dumps(result.scene)
+
+
+def test_explicit_options_do_not_replay_an_implicit_plan() -> None:
+    document = sl.region(sl.paragraph("Body"), key="r", title="R")
+    session = PresentationState()
+    memo = PlanMemo[scene.ComponentsV2]()
+    implicit = sl.planning.plan(document, target=V2, session=session, memo=memo)
+    with pytest.raises(JointExhaustedError):
+        sl.planning.plan(
+            document,
+            target=V2,
+            session=session,
+            memo=memo,
+            composition=CompositionOptions(automatic=True, work_limit=1),
+        )
+    # Explicit options neither read nor replace the implicit owner's exact memo.
+    replay = sl.planning.plan(document, target=V2, session=session, memo=memo)
+    assert replay.allocation is implicit.allocation
+    assert replay.metrics.cache_hit
