@@ -3,7 +3,6 @@
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from enum import StrEnum
 from hashlib import sha256
 from types import MappingProxyType
 
@@ -32,7 +31,7 @@ from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
-from squid_ui.planning.pagination.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
@@ -48,18 +47,14 @@ class CompositionRejectedError(LayoutError):
         super().__init__(f"explicit composition rejected: {violations!r}")
 
 
-class CompositionMode(StrEnum):
-    IMPLICIT = "implicit"
-    AUTOMATIC = "automatic"
-    FIXED = "fixed"
-
-
 @dataclass(frozen=True, slots=True)
 class ResolvedComposition:
-    """The execution mode and work allowance after input preparation."""
+    """The automatic or fixed execution inputs after defaults are resolved."""
 
-    mode: CompositionMode
+    automatic: bool
     work_limit: int
+    navigation: PlannedNav | None
+    mounted: bool
 
     @classmethod
     def for_options[BodyT: scene.Body, RenderTargetT, AdapterT](
@@ -67,16 +62,17 @@ class ResolvedComposition:
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         options: CompositionOptions | None,
     ) -> ResolvedComposition:
-        if options is None:
-            return cls(CompositionMode.FIXED, request.search_budget)
-        if options.automatic:
-            mode = CompositionMode.IMPLICIT if request.composition is None else CompositionMode.AUTOMATIC
-            return cls(mode, options.work_limit)
-        return cls(CompositionMode.FIXED, request.search_budget)
-
-    @property
-    def automatic(self) -> bool:
-        return self.mode is not CompositionMode.FIXED
+        automatic = options is not None and options.automatic
+        navigation = request.nav
+        if navigation is None and request.composition is None:
+            navigation = request.target.dialect.navigation
+        mounted = (
+            request.composition is None
+            or request.session is not None
+            or navigation is not None
+            or request.positions is not None
+        )
+        return cls(automatic, options.work_limit if automatic else request.search_budget, navigation, mounted)
 
 
 def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
@@ -84,9 +80,6 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     resolved: ResolvedComposition,
 ) -> PlanningContext:
     effective = request.target.reserve(request.reservation)
-    nav = request.nav
-    if nav is None and resolved.mode is CompositionMode.IMPLICIT:
-        nav = request.target.dialect.navigation
     return PlanningContext(
         WorkBudget(resolved.work_limit),
         request.localization,
@@ -95,11 +88,8 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.capabilities,
         effective.capacities,
         request.chrome,
-        PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
-        resolved.mode is CompositionMode.IMPLICIT
-        or request.session is not None
-        or nav is not None
-        or request.positions is not None,
+        PagerNav(resolved.navigation, request.presentation, staged=True) if resolved.navigation is not None else None,
+        resolved.mounted,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
         extensions=request.target.extensions,
@@ -344,7 +334,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
     document: Document[RenderTargetT]
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
     options: CompositionOptions
-    resolved: ResolvedComposition
+    exact_replay: bool
 
     @classmethod
     def prepare(
@@ -354,6 +344,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         options: CompositionOptions | None,
     ) -> CompositionPlan[RenderTargetT, AdapterT, BodyT]:
         document = as_document(rendered)
+        exact_replay = options is None
         if options is None:
             prepared = prepare_composition(document, request)
             if prepared.limitation is not None:
@@ -377,8 +368,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
                     else request.search_budget
                 ),
             )
-        resolved = ResolvedComposition.for_options(request, options)
-        return cls(document, request, options, resolved)
+        return cls(document, request, options, exact_replay)
 
     def execute(
         self,
@@ -392,7 +382,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         if has_routed_page(rendered):
             cache = None
             memo = None
-        if self.resolved.mode is not CompositionMode.IMPLICIT:
+        if not self.exact_replay:
             memo = None
         key = request.exact_key()
         if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
