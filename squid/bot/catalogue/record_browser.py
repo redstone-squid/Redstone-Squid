@@ -3,6 +3,8 @@
 from collections.abc import Awaitable, Callable
 from functools import partial
 
+from discord.utils import format_dt
+
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
@@ -13,6 +15,7 @@ from squid.core.pagination import PageSelector
 from squid.notifications.domain import SubscriptionKind
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
+from squid.records.domain.models import BaseTitle
 from squid_i18n import md_tr
 from squid_ui.sources import window_fingerprint
 
@@ -57,6 +60,20 @@ def _record_summary(record: PublishedTitle) -> sl.TextLike:
     return record_row(record.one_line_title, record.version_scope)
 
 
+def _comparison_rule(base_title: BaseTitle) -> sl.TextLike:
+    match base_title:
+        case BaseTitle.FIRST:
+            return tr(t"record-rule-first = Earliest known completion date.")
+        case BaseTitle.SMALLEST:
+            return tr(t"record-rule-smallest = Lowest volume; earliest completion breaks a tie.")
+        case BaseTitle.FASTEST:
+            return tr(t"record-rule-fastest = Fastest worst-case timing; earliest completion breaks a tie.")
+        case BaseTitle.FASTEST_SMALLEST:
+            return tr(t"record-rule-fastest-smallest = Lowest volume, then fastest timing, then earliest completion.")
+        case BaseTitle.SMALLEST_FASTEST:
+            return tr(t"record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.")
+
+
 def record_browser(
     records: RecordService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
@@ -64,8 +81,11 @@ def record_browser(
     """Keep the selected record available while its holder is opened in the catalogue."""
 
     def detail(record: PublishedTitle) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        computed_at = format_dt(record.computed_at, style="R")
         return sl.section(
             sl.heading(record.title),
+            sl.paragraph(_comparison_rule(record.base_title)),
+            sl.note(md_tr(t"record-browse-computed = Computed {computed_at}")),
             record.subtitle and sl.paragraph(record.subtitle),
             sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
             sl.action_controls(follow_control(SubscriptionKind.RECORD, record.title_id), key="record-follow"),
