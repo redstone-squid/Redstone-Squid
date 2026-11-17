@@ -9,7 +9,9 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import override
+from typing import Annotated, override
+
+from pydantic import PlainSerializer
 
 
 class OperationKind(StrEnum):
@@ -143,12 +145,22 @@ class SpanId:
         return self.value.hex()
 
 
+# The Pydantic snapshot export uses the readable W3C IDs and ISO timestamps that
+# diagnostic consumers already receive, rather than exposing dataclass byte fields.
+type _TraceIdJson = Annotated[TraceId, PlainSerializer(str, return_type=str)]
+type _SpanIdJson = Annotated[SpanId, PlainSerializer(str, return_type=str)]
+type _OptionalSpanIdJson = Annotated[
+    SpanId | None, PlainSerializer(lambda value: None if value is None else str(value), return_type=str | None)
+]
+type _TimestampJson = Annotated[datetime, PlainSerializer(lambda value: value.isoformat(), return_type=str)]
+
+
 @dataclass(frozen=True, slots=True)
 class TraceLink:
     """A causal edge to work outside the current trace tree."""
 
-    trace_id: TraceId
-    span_id: SpanId
+    trace_id: _TraceIdJson
+    span_id: _SpanIdJson
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,8 +185,8 @@ class TraceResult:
 class RuntimeSpan:
     """A finished interval; started is seconds from its trace start and duration is elapsed seconds."""
 
-    span_id: SpanId
-    parent_span_id: SpanId | None
+    span_id: _SpanIdJson
+    parent_span_id: _OptionalSpanIdJson
     name: str
     started: float
     duration: float
@@ -188,8 +200,8 @@ class RuntimeSpan:
 class RuntimeTrace:
     """A completed operation; started is seconds from profiler startup and spans are parent-linked."""
 
-    trace_id: TraceId
-    root_span_id: SpanId
+    trace_id: _TraceIdJson
+    root_span_id: _SpanIdJson
     operation: OperationKind
     name: str
     started: float
@@ -206,8 +218,8 @@ class RuntimeTrace:
 class ActiveSpanSnapshot:
     """An unfinished span with start offset from its trace and elapsed duration, both in seconds."""
 
-    span_id: SpanId
-    parent_span_id: SpanId | None
+    span_id: _SpanIdJson
+    parent_span_id: _OptionalSpanIdJson
     name: str
     started: float
     elapsed: float
@@ -217,7 +229,7 @@ class ActiveSpanSnapshot:
 class ActiveTraceSnapshot:
     """An unfinished operation with start offset from profiler startup and elapsed seconds."""
 
-    trace_id: TraceId
+    trace_id: _TraceIdJson
     operation: OperationKind
     name: str
     started: float
@@ -349,8 +361,8 @@ class RuntimeSnapshot:
 
     schema_version: int
     process_id: str
-    started_at: datetime
-    captured_at: datetime
+    started_at: _TimestampJson
+    captured_at: _TimestampJson
     uptime: float
     window_seconds: float
     active: tuple[ActiveTraceSnapshot, ...]
