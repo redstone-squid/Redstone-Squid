@@ -624,7 +624,7 @@ def encode_resource_pack(resource_pack: VerifiedResourcePack) -> Mapping[str, st
 def decode_resource_pack(payload: object, data: bytes) -> VerifiedResourcePack:
     """Rebuild a verified pack from raw bytes and its JSON metadata."""
     metadata = _ResourcePackJson.model_validate(payload)
-    return VerifiedResourcePack(data, metadata.sha256, metadata.media_type)
+    return VerifiedResourcePack(data, metadata.sha256, RESOURCE_PACK_MEDIA_TYPE)
 
 
 def encode_simulation(result: SimulationResult) -> Mapping[str, Any]:
