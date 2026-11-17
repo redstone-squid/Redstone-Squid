@@ -189,3 +189,30 @@ async def test_malformed_csv_in_editor_remains_editable() -> None:
         assert not ui.root.finished
         assert screen.outcome is None
     cast(AsyncCallRecorder, screen._publish).assert_not_awaited()
+
+
+async def test_choice_rows_preserve_other_answers_and_cancel_edits() -> None:
+    screen = make_screen(draft=PollDraft(question="Best door?", options_text="Red, white\n🔵 | Blue"))
+    event = cast(Any, None)
+    with transaction():
+        await screen._edit_options(event)
+    assert screen.editing_options
+    assert screen.option_editor.values(screen.option_driver.machine_state)[0]["label"] == "Red, white"
+    before = screen.driver.machine_state.answers
+    with transaction():
+        screen.option_driver.machine_state = screen.option_editor.initial_from(
+            (
+                {"label": "Green, gold", "emoji": "🟢"},
+                {"label": "Blue", "emoji": ""},
+            )
+        )
+        await screen._save_options(event)
+    content = next(answer for answer in screen.driver.machine_state.answers if answer.step == "content")
+    assert dict(content.values) == {"question": "Best door?", "options": "🟢 | Green, gold\nBlue"}
+    assert screen.driver.machine_state.answers[1:] == before[1:]
+    saved = screen.driver.machine_state.answers
+    with transaction():
+        await screen._edit_options(event)
+        screen.option_driver.machine_state = screen.option_editor.initial_from(())
+        await screen._cancel_options(event)
+    assert screen.driver.machine_state.answers == saved

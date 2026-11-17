@@ -19,17 +19,20 @@ maintenance tools.
 
 ## Implementation status
 
-The five delivery stages below now have implementations. The inventory records
+The delivery stages below have implementations, with a follow-up audit on 2026-11-17
+covering all areas except Build and record discovery. The inventory records
 what was present at the survey revision; it is not a description of the current UI.
 
 | Area | Implemented behavior |
 | --- | --- |
 | Starboards | Select a board once, then edit its settings, emoji aliases, and role weights. Channel and role inputs use native selectors; deletion requires confirmation. |
-| Notifications | Search creators and records by name, or follow from their detail. Subscription labels resolve public names and all subscriptions are paged. Record-filter enums and tag values use typed choices. |
+| Notifications | Search creators and records by name, or follow from their detail. Subscription labels resolve public names and all subscriptions are paged. Record-filter enums and tag values use typed choices. Review DMs include an authorized Open build action. |
 | Shared lookup | Enumerable catalogues support paging. Queried sources explicitly offer up to 25 matches and ask users to refine the search. Provider failures expose retry instead of appearing as empty results. |
-| Tags and access | Choose a build/tag or a restriction before editing. Permission and internal-role pickers retain identities and expose operation-specific forms. Custom permission patterns act on the selected subject or role. |
-| Search and records | Keyword input, removable filter rows, named values, and sort selection build queries while preserving advanced expressions. Maintenance tools select definitions, versions, and restrictions by name. |
+| Tags and access | Choose a build/tag or a restriction before editing. Permission and internal-role pickers retain identities and expose operation-specific forms. Custom permission patterns act on the selected subject or role. New roles derive collision-checked slugs; new tags derive query fields, with advanced overrides. |
+| Search and records | Keyword input, removable filter rows, named values, and sort selection build queries while preserving advanced expressions. Maintenance tools select definitions, versions, and restrictions by name. Evidence diagnostics carry their definition and kind into recomputation. |
 | Submission and specialist tools | Credits use rows and a native Discord user picker while retaining identity evidence. Catalogue fields support name search without losing offscreen selections. Vote emojis and video activations use rows; ambiguous video inputs can be selected for retry. Conversion versions and runtime-setting names have discovery; numeric world-format versions are in Conversion maintenance. |
+
+| Account and operator polish | Creator and credited-name searches retain profile/name context; unlisted credit claims remain possible. Link codes explain their source. Recount has a message-context action. Poll choices support editable rows alongside bulk entry. Runtime inspection includes JSON types, bounds, and default examples; sync flags are documented in [Operator commands](../operator-commands.md). |
 
 Each ordinary workflow has one editor. Query expressions live inside Search &
 filters; custom wildcard patterns use a dedicated permission form. Credits have

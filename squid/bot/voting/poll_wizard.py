@@ -376,6 +376,7 @@ class PollScreen(sd.Screen[str]):
 
     published_url: str | None = sl.state(None)
     cancelled: bool = sl.state(False)
+    editing_options: bool = sl.state(False)
 
     def __init__(
         self,
@@ -385,6 +386,20 @@ class PollScreen(sd.Screen[str]):
         allow_network: bool = False,
         draft: PollDraft | None = None,
     ) -> None:
+        self.option_editor = sp.CollectionEditor(
+            "Poll choices",
+            create=sl.forms.FormSpec(
+                "Poll choice",
+                (
+                    sl.forms.TextField(key="label", label="Label", maximum=100),
+                    sl.forms.TextField(key="emoji", label="Emoji (optional)", required=False, maximum=100),
+                ),
+            ),
+            label=lambda value: f"{value.get('emoji') or ''} {value['label']}",
+            minimum=2,
+            maximum=25,
+        )
+        self.option_driver = self.option_editor.build_component()
         self._resolve_options = resolve_options
         self._publish = publish
         initial_state = None
@@ -444,15 +459,66 @@ class PollScreen(sd.Screen[str]):
             )
         if self.cancelled:
             return (sl.status(tr(t"bot-voting-poll-wizard-poll-cancelled = Poll cancelled.")),)
+        if self.editing_options:
+            return (
+                self.option_driver,
+                sl.action_controls(
+                    sl.action_control(
+                        "Use choices",
+                        self._save_options,
+                        key="save-options",
+                        available=not self.option_editor.errors(self.option_driver.machine_state),
+                    ),
+                    sl.action_control("Cancel", self._cancel_options, key="cancel-options"),
+                    key="option-actions",
+                ),
+            )
         return (self.driver,)
 
     def _wizard_actions(self) -> tuple[sl.semantic.ActionControl[sd.Request], ...]:
         return (
             *history_actions(self.history),
             sl.action_control(
+                "Edit choice rows",
+                self._edit_options,
+                key="option-rows",
+                available=any(answer.step == "content" for answer in self.driver.machine_state.answers),
+            ),
+            sl.action_control(
                 tr(t"bot-voting-poll-wizard-cancel = Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER
             ),
         )
+
+    async def _edit_options(self, _event: sd.PressEvent) -> None:
+        content = next(answer for answer in self.driver.machine_state.answers if answer.step == "content")
+        lines = parse_poll_choices(str(dict(content.values)["options"]))
+        rows = []
+        for line in lines:
+            emoji, separator, label = line.partition("|")
+            rows.append({"label": label.strip() if separator else line, "emoji": emoji.strip() if separator else ""})
+        self.option_driver.machine_state = self.option_editor.initial_from(rows)
+        self.editing_options = True
+
+    async def _cancel_options(self, _event: sd.PressEvent) -> None:
+        self.editing_options = False
+
+    async def _save_options(self, _event: sd.PressEvent) -> None:
+        if self.option_editor.errors(self.option_driver.machine_state):
+            return
+        lines = []
+        for row in self.option_editor.values(self.option_driver.machine_state):
+            label = str(row["label"])
+            emoji = str(row.get("emoji") or "").strip()
+            lines.append(f"{emoji} | {label}" if emoji else label)
+        options = "\n".join(lines)
+        answers = tuple(
+            replace(answer, values=tuple((key, options if key == "options" else value) for key, value in answer.values))
+            if answer.step == "content"
+            else answer
+            for answer in self.driver.machine_state.answers
+        )
+        self.driver.machine_state = replace(self.driver.machine_state, answers=answers)
+        self.editing_options = False
 
     async def _finish(
         self,
