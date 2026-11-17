@@ -254,9 +254,14 @@ class PostgresSessionStore:
                 reservation.owner,
                 reservation._fence,
             )
+            if valid is not True:
+                return None
+            # A row lock cannot protect an unused destination key. Serialize admissions
+            # for that key across scopes before checking or modifying any records.
+            await connection.execute("SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))", self.table_name, key)
             # asyncpg builds `PoolConnectionProxy`'s query methods with a metaclass, so nothing
             # static records that the object a pool yields is a `Connection`.
-            if valid is not True or not await self._retirement_is_valid(
+            if not await self._retirement_is_valid(
                 connection,  # pyright: ignore[reportArgumentType]  # asyncpg's pool proxy is untyped
                 reservation.scope,
                 key,
