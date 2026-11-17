@@ -33,6 +33,28 @@ MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
 
 
+MERGE_CODE_BYTES = 5
+"""Random bytes in a merge code, rendered as eight base32 characters.
+
+The short code is intended for typing between sessions. One live ticket per
+account, expiry, and route rate limits restrict guessing."""
+
+MERGE_TICKET_TTL_SECONDS = 10 * 60
+"""Lifetime of a merge ticket, matching MERGE_PROOF_MAX_AGE_SECONDS.
+
+Ticket creation supplies the absorbed account's proof timestamp during a merge."""
+
+
+@dataclass(frozen=True, slots=True)
+class MergePreview:
+    """The identities and build credits that a merge would move, shown before confirmation."""
+
+    absorbed_public_creator_id: UUID
+    alias_names: tuple[str, ...] = ()
+    identity_count: int = 0
+    build_count: int = 0
+
+
 def fold_creator_name(name: str) -> str:
     """Return the normalized spelling used to compare creator names.
 

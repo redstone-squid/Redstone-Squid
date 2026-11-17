@@ -1,8 +1,8 @@
 """Creator profile content and visibility rules.
 
-Profile text is separate from CreatorAlias build credit. Changing a display name
-does not move credit. PublicCreatorProfile.from_record applies visibility before a profile
-is exposed through any transport.
+ProfileUpdate distinguishes omitted fields from clearing. CreatorProfileRecord carries
+private storage data; PublicCreatorProfile applies visibility before transport output.
+Profile text is separate from CreatorAlias build credit: editing it never moves credit.
 """
 
 import unicodedata
@@ -37,17 +37,6 @@ JAVA_AVATAR_URL_TEMPLATE: Final = "https://mc-heads.net/avatar/{subject}"
 
 DISCORD_AVATAR_URL_TEMPLATE: Final = "https://cdn.discordapp.com/avatars/{subject}/{key}.png"
 """Discord needs the avatar hash, which only the gateway knows: see `AccountIdentity.avatar_key`."""
-
-MERGE_CODE_BYTES: Final = 5
-"""Random bytes in a merge code, rendered as eight base32 characters.
-
-The short code is intended for typing between sessions. One live ticket per
-account, expiry, and route rate limits restrict guessing."""
-
-MERGE_TICKET_TTL_SECONDS: Final = 10 * 60
-"""Lifetime of a merge ticket, matching MERGE_PROOF_MAX_AGE_SECONDS.
-
-Ticket creation supplies the absorbed account's proof timestamp during a merge."""
 
 
 def _reject_control_characters(value: str, *, field_name: str | Text, allow_newlines: bool = False) -> None:
@@ -303,16 +292,6 @@ def avatar_url_for(identity: AccountIdentity) -> str | None:
             return DISCORD_AVATAR_URL_TEMPLATE.format(subject=identity.subject, key=identity.avatar_key)
         case IdentityProvider.BEDROCK:
             return None
-
-
-@dataclass(frozen=True, slots=True)
-class MergePreview:
-    """The identities and build credits that a merge would move, shown before confirmation."""
-
-    absorbed_public_creator_id: UUID
-    alias_names: tuple[str, ...] = ()
-    identity_count: int = 0
-    build_count: int = 0
 
 
 if TYPE_CHECKING:
