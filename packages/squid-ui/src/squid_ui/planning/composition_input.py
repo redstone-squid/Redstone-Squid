@@ -148,6 +148,10 @@ class InputPreparation:
                 return replace(
                     node, primary=self.visit(node.primary), alternates=tuple(map(self.visit, node.alternates))
                 )
+            case primitive.Extension() if self.native is None:
+                # Extensions retain their portable fallback on targets without native adapters.
+                self.visit(node.fallback)
+                return node
             case primitive.Variants():
                 self.variant_index += 1
                 # Conditional trees charge assignment copying and independent sibling probes.

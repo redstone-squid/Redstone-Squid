@@ -5,8 +5,10 @@ from typing import Any
 
 from squid_ui.authoring import semantic as sem
 from squid_ui.content.text import NEUTRAL, plain
+from squid_ui.extensions import ExtensionKind
 from squid_ui.planning.composition_input import InputPreparation
 from squid_ui.planning.dialect import InputPolicy, NativeInput
+from squid_ui.primitives import nodes as primitive
 from squid_ui.target_types import Renderable
 
 
@@ -32,3 +34,11 @@ def test_native_lowering_inherits_portable_shortening_and_work_estimates() -> No
     assert isinstance(result.node, sem.Paragraph)
     assert preparation.combinations == 7
     assert preparation.shortening_depth == 0
+
+
+def test_target_without_native_visitor_checks_the_extension_fallback() -> None:
+    fallback = primitive.Variants.of(sem.Paragraph(plain("Portable")), sem.Paragraph(plain("Short")))
+    node = primitive.Extension(ExtensionKind[str, object]("test.label"), 1, "Native", fallback)
+    preparation = InputPreparation(InputPolicy(), NEUTRAL, frozenset(), {})
+    assert preparation.visit(node) is node
+    assert preparation.variant_index == 1

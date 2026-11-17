@@ -312,7 +312,8 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
     memo = PlanMemo()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
 
-    monkeypatch.setattr("squid_ui.planning.planner.plan_composition", _never_measured)
+    monkeypatch.setattr("squid_ui.planning.composition_planner.RuleComposition.plan", _never_measured)
+    monkeypatch.setattr("squid_ui.planning.planner.prepare_bindings", _never_measured)
     exact = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
 
     assert exact.scene is first.scene
