@@ -1,196 +1,233 @@
 # Record recomputation
 
-> **Status:** proposed, not started. This came out of closing durable queues,
-> whose open question about dead-lettering `record_recompute_queue` turned out to be the wrong question.
+Status: engineering design; implementation has not started.
 
-## Problem
+Records are derived from confirmed builds, taxonomy, comparison rules, and requested
+categories. Concrete door records already compare fixed builds with expandable
+configurations. Range records currently compute smallest-record outcomes across
+widths at a fixed height and depth. They should agree at a particular opening when
+computed from identical inputs, but they need not publish together.
 
-Records (the fastest door, the smallest extender, and so on) are derived data. `RecordComputationService.rebuild`
-(`squid/records/application/services.py`) reloads every confirmed build of a kind, recomputes every category and
-publishes a replacement run. Whenever a source change makes a kind's records out of date,
-`record_recompute_queue` tells the worker to rebuild that kind.
+## Agreed behavior
 
-Three things are wrong with this today:
+- One shared current Minecraft version applies to all build kinds.
+- Version scopes support all versions, a fixed version, and following current.
+- Publish a consistent snapshot even if builds changed during computation, then
+  catch up. Never replace a publication with an older input snapshot.
+- Keep the existing publication when its meaningful contents are unchanged;
+  separately record when those contents were last checked.
+- Concrete records and registered ranges refresh and retry independently.
+- Keep superseded runs. Notifications read previous runs to calculate holder gains.
 
-1. The table is set up as a durable work queue, but it acts as a per-kind "needs rebuilding" flag. The queue
-   machinery adds cost and failure modes without adding anything.
-2. Every records operation waits on one global lock for the length of a full rebuild.
-3. We rebuild far more often than the records change, and every rebuild rewrites every row.
+## What changes from the earlier proposal
 
-### The queue only carries a kind
+Current candidate loading already uses repeatable-read snapshots. Updating a dirty
+state row in that same transaction after another writer changes it can cause a
+serialization failure. A transaction advisory lock also does not refresh a snapshot
+established before waiting for the lock. The earlier proposal's transaction and
+ordering argument therefore does not apply to the current implementation.
 
-- **The consumer reads only `build_kind`.** `process_queue` claims rows, reduces them to a set of kinds, and rebuilds
-  each kind in full. It never reads `scope_key`, `build_id` or `reasons`.
-- **There is effectively one row per kind.** The `enqueue_build_change` trigger in
-  `squid/persistence/postgres_entities/functions/enqueue_build_change.sql` upserts with `scope_key` set to
-  the kind. Each change overwrites `build_id` with the most recent build, so the column records nothing useful.
-  `active_rules_revision_id` enqueues the same keys.
-- **Kinds succeed and fail together.** All claimed kinds are rebuilt under one lease, and `fail_batch` releases
-  every row in it. An extender failure makes doors rebuild again for no reason.
-- **The lease can expire while a rebuild is still running.** Claiming, rebuilding and acknowledging use three
-  separate transactions, connected by the shared five-minute `VISIBILITY_TIMEOUT`. A rebuild that runs longer than that
-  lets a second worker claim and rebuild the same kind concurrently.
-- **Failures are hard to see.** Dead-lettering would be wrong here: it would mean "stop computing door records".
-  The rebuild is deterministic, so a failure is a bug that blocks every record of that kind until someone fixes it.
-  Retrying forever is correct, but nothing alerts on it. Each source change resets `attempts` to 0, so the count never
-  shows how long a kind has been broken. When nothing changes, the backoff grows to its cap of 15 s × 2¹², about
-  17 hours.
+Use three phases: capture and save immutable inputs, compute without a database
+transaction, then publish in a short transaction. Keep expiring worker claims for
+crash recovery. Permanent generation counters represent changed inputs; claim
+ownership represents permission to finish an attempt. Neither is the publication ID.
 
-### One global lock covers the whole rebuild
+This deliberately replaces the earlier proposal to remove leases entirely. Avoiding
+both leases and long-lived database connections would require another durable
+ownership mechanism with essentially the same responsibilities.
 
-`rebuild_in` runs these steps in the caller's transaction:
+## State and identities
 
-1. `active_rules_revision_id` takes `pg_advisory_xact_lock('record-rules-revision-activation')`. A transaction-level
-   lock is held until commit.
-2. `list_confirmed` and `list_requested_categories` load the source data.
-3. `_compute_scope` generates the category combinations. This is synchronous Python running on the event loop.
-4. `activate` takes `record-run:{kind}:{version}` and writes the run, results, holders and history.
+Introduce a singleton record-settings row with the nullable current-version ID and
+an increasing settings revision. Null means no current version has been configured;
+current-scope work waits until one exists. Setting the pin is an explicit staff
+operation, not a side effect of rebuilding an arbitrary fixed version.
 
-The worker drain, the staff rebuild form (`squid/bot/catalogue/records.py`) and `RecordService.lookup_or_materialize`
-all go through step 1. While a background rebuild of one kind holds the lock, a user's lookup for another kind waits
-for the whole rebuild to finish.
+Keep permanent input-state rows for doors and extenders. Each contains an increasing
+source generation and its change time. Build changes increment the appropriate
+row in the same transaction as the source edit. Audit taxonomy edits, tag thresholds,
+version membership, deletions, and category changes as producers too. Moving a build
+between kinds invalidates both kinds. Rules activation is explicit deployment or
+maintenance work, never a side effect of an ordinary candidate read. Workers must
+refuse revisions their deployed calculator cannot implement; an older worker must
+not reactivate its own revision during a rolling deployment.
 
-The lock does one useful thing, by accident. Because it serializes rebuilds, a rebuild that read older data can never
-publish after one that read newer data. Any redesign has to keep that guarantee.
+Define durable work targets:
 
-The long transaction itself is not the problem. It holds no row locks until step 4, and at READ COMMITTED it pins no
-snapshot between statements. The problem is the scope of the lock, and step 3 blocking the event loop. The staff form
-and `lookup_or_materialize` run step 3 inside the bot process, where a long synchronous computation delays every
-other Discord interaction and the gateway heartbeat.
+- A concrete catalogue for one kind and one version scope.
+- One registered range query, including its version scope.
 
-### Most rebuilds change nothing, and each one rewrites everything
+All-time and current catalogues are permanent targets. Explicit fixed-version
+materializations create persistent targets so future build edits refresh them too.
+Requested categories remain durable inputs to the relevant catalogues; adding one
+invalidates every target whose category set changes.
 
-- **The trigger fires for builds that cannot affect records.** It fires on any change to any door or extender build,
-  but `list_confirmed` reads only confirmed builds. Every edit to a pending submission rebuilds the whole kind.
-- **Every rebuild publishes a full new run.** `activate` inserts a new run with all its results, holders and history,
-  and publishes `record_run.activated`, even when the computed records equal the active run's.
-  `record_computation_runs` also has an enqueue-search trigger, so each activation creates search projection work.
-- **Superseded runs appear to be kept forever.** Nothing in `squid/records` or the worker deletes them, so the
-  result, holder and history tables grow with every build edit.
+Use an explicit scope discriminator: `all_time`, `fixed`, or `current`. Only fixed
+scope takes a version ID. At capture, current scope resolves to a concrete version;
+store both the requested scope and resolved version in attempt provenance. A query's
+identity includes the scope, so fixed-version and current queries never alias.
 
-## Proposal
+Each target stores its local request generation, last successful input stamp,
+last-checked time, retry state, and expiring claim token. An input stamp contains:
 
-Steps 1-3 are independent of how long rebuilds take. Step 4 is the larger saving and depends on the measurement
-below. Step 5 is deferred.
+- Source generation for its build kind.
+- Target request generation, incremented by explicit refresh or relevant category changes.
+- Active rules revision.
+- Settings revision for current scopes only.
 
-### 1. Replace the queue with one state row per kind
+A target needs work when its successful stamp differs from its desired stamp.
+Workers find this by joining targets to input state and settings. Build triggers
+update one kind row, not every registered range. This preserves inexpensive source
+writes as registrations grow. Initial targets have no successful stamp and need work.
 
-```
-record_kind_state(build_kind PK, generation bigint, built_generation bigint,
-                  dirty_since, attempts, available_at, last_error)
-```
+## Capture, computation, and publication
 
-The migration creates one row for each kind and the rows are never deleted. A kind needs rebuilding when
-`generation > built_generation`.
+### 1. Claim and capture
 
-`generation` only ever increases. That is why the row is permanent: if the worker deleted the row to clear the flag,
-the next change would insert a new row and the counter would start again. A counter that can go backwards cannot be
-used later to order runs (step 5), and a mistake in a `DELETE` condition would silently lose a change.
+Claim one due target in a short transaction using a random ownership token and an
+expiry. Concurrent workers skip claimed targets. A claim records an attempt ID but
+does not decide its input stamp: capture does that.
 
-- **Producers** (the trigger and rules-revision activation) increment `generation`, set `available_at` to now, and set
-  `dirty_since` if it is null. They do not touch `attempts` or `last_error`.
-- **The worker** handles each kind that needs rebuilding in its own transaction:
-  1. Try to take the kind's rebuild lock (step 2). If another rebuild holds it, skip the kind.
-  2. Read `generation` as `g`, and read the current-version pin.
-  3. Rebuild the kind.
-  4. Set `built_generation = g`, reset `attempts` and `last_error`, and clear `dirty_since` if `generation` is still
-     `g`. Commit.
-- **On failure**, roll back, then increment `attempts` and record `available_at` and `last_error` in a separate short
-  transaction.
+In a fresh repeatable-read transaction, read the rules, settings, input generations,
+requested categories, and all candidate facts. Serialize a versioned immutable input
+document and persist it with the captured stamp before computation. Concrete inputs
+need the same explicit serialization contract that ranges already have. Copy values
+into data objects; never send ORM entities or sessions into computation.
 
-How this answers each problem above:
+Check claim ownership when attaching the snapshot. A lost claim aborts the attempt.
+Retry serialization failures from the beginning of capture, with bounded retries;
+otherwise release for normal backoff. Snapshot capture must not activate rules or
+mutate source generations.
 
-- **No lease.** If the worker crashes, its transaction rolls back and the kind still needs rebuilding. The advisory
-  lock is released automatically, so we need no visibility timeout, no claim token and no claim-complete check.
-- **Changes made mid-rebuild are not lost.** A change that arrives during the rebuild increments `generation` past
-  `g`, so the kind still needs rebuilding after the worker commits. The claim token does this job today.
-- **Kinds fail independently.**
-- **Failures become visible.** A source change makes the kind retry immediately, because the new data may be what
-  fixes the failure. It does not reset `attempts`; only a successful rebuild does. So `attempts` counts consecutive
-  failures and `dirty_since` shows how long the records have been out of date. Alert on both.
+### 2. Compute
 
-Only the worker advances `built_generation`. The staff form and `lookup_or_materialize` can rebuild a scope other than
-the pinned current version, so they leave the row alone. The cost is one extra worker rebuild when a staff rebuild
-happens to run while the kind already needs rebuilding.
+Compute exclusively from the saved document, without holding a database connection.
+Use the existing range analyzer's bounded execution for ranges. Offload concrete
+computation from the event loop using a bounded thread worker initially; measure
+CPU time before choosing process isolation. Cancellation must not release capacity
+while abandoned arithmetic continues running. Use structured task lifetimes and
+explicit limits on candidates, categories, runtime, and concurrent computations.
 
-This takes `record_recompute_queue` out of `ClaimedRowQueue`. The durable-queues audit brought it in to fix two real
-bugs: acknowledging a lease deleted work enqueued during the run, and a crashed worker's lease was never reclaimed.
-The generation check and the transaction-scoped lock fix the same two bugs without a lease. `squid/worker/queue_health.py`
-needs its own small entry for the new table, so it keeps reporting how many kinds need rebuilding and for how long.
+Renew claims with a supervised heartbeat. Failure to renew prevents publication.
+A lease is an efficiency and recovery mechanism; the ownership check at publication
+is the correctness boundary. Expiry can cause duplicate computation but cannot let
+an obsolete owner publish.
 
-### 2. Lock per kind instead of globally
+### 3. Publish and acknowledge
 
-- **`active_rules_revision_id` locks only to activate.** A plain read first checks whether the expected revision is
-  already active, and returns it without locking. That is almost every call. Otherwise it takes the lock and checks
-  again before activating.
-- **Every rebuild takes a per-kind lock.** `rebuild_in` takes `pg_advisory_xact_lock('record-rebuild:{kind}')` before
-  it reads anything for that kind, and holds it until commit. The worker uses the try-lock form and skips a busy
-  kind. The staff form and `lookup_or_materialize` wait. A caller that rebuilds several kinds locks them in a fixed
-  order so two callers cannot deadlock.
+Use a short read-committed transaction. Lock in this order everywhere:
 
-Rebuilds of one kind still run one at a time, from reading to publishing, so an older read still cannot publish after
-a newer one. Rebuilds of different kinds no longer wait for each other. The existing `record-run:{kind}:{version}`
-lock in `activate` becomes redundant but harmless.
+1. Settings/rules coordination row, shared for publication and exclusive for changes.
+2. Target state row, exclusively.
+3. Attempt and publication rows belonging to that target.
 
-Two inputs do not go through the build trigger, and the lock is what keeps them correct:
+Settings/rules mutations never acquire these locks in reverse order. Source changes
+need only their input-state row; publishers do not lock that row during arithmetic.
 
-- **Requested categories.** `lookup_or_materialize` saves the category and rebuilds in one transaction. It should take
-  the kind lock before saving, so the save and the run that includes it commit together.
-- **The current-version pin.** The worker reads it in a separate transaction today, before the rebuild starts. Step 1
-  moves that read under the kind lock.
+Verify the attempt still owns an unexpired claim. Verify its rules revision and,
+for current scopes, settings revision still match. A changed pin or rules revision
+supersedes the attempt: retain its diagnostics, leave work pending, and publish
+nothing under the obsolete meaning of current or obsolete rules.
 
-The rule for any future input: a change either increments `generation`, or is published by the same transaction that
-makes it, under the kind lock. A test should list every input to a rebuild and check that each one follows the rule.
-If an input is missed, records stay out of date and nothing reports it.
+Ordinary source edits and refresh requests do not supersede a valid attempt. Publish
+its coherent snapshot and acknowledge only its captured stamp. The newer desired
+stamp still differs, so another computation follows. A newer successful stamp must
+never be replaced by an older one; check this independently of ownership.
 
-### 3. Compute off the event loop
+Compare the semantic fingerprint with the active publication. If different, activate
+a replacement and emit its event atomically. Otherwise retain the existing run and
+emit no holder-change event. In both cases update the successful stamp and
+last-checked time, clear owned failure state, and release the claim in this transaction.
 
-Run `_compute_scope` with `asyncio.to_thread` if it takes more than about 50 ms. It is a pure function of data already
-loaded, so this needs no other change. It matters most in the bot process.
+No acknowledgement transaction follows publication. A crash commits both or neither.
 
-### 4. Publish only when the records changed
+## Independent range work
 
-Before `activate`, compare the computed batch with the active run for the same kind and version. If they are equal,
-skip the write: no new run, no `record_run.activated` event, no search projection work. Most rebuilds then only read.
+Remove `refresh_registered` from concrete rebuild completion. New range registration
+and explicit refresh dirty that range target alone. Door input changes make both
+concrete and range targets eligible through their shared source generation.
 
-The comparison has to cover everything a run stores: the rules revision, titles, statuses, gap reasons, holders with
-their metric snapshots, and history. A stored hash of the batch on the run is probably simpler than loading and
-comparing rows. A new rules revision must always publish.
+Each range has independent backoff and claim ownership. An unsupported or
+limit-exceeded analysis is an unsuccessful refresh even when the analyzer returns a
+structured result rather than raising. Keep its diagnostics and previous exact
+publication; do not mark the desired stamp successfully processed. Retry with capped
+backoff, and expose the reason for staff action. One failing range does not delay other
+targets. Schedule concrete and range targets fairly with separate capacity limits.
 
-Skipping unchanged runs is safer than making the trigger ignore unconfirmed builds. A trigger filter has to get every
-status transition right, and a mistake there leaves records out of date without any error.
+Range attempt generations currently count reservations and reject an attempt as soon
+as a newer reservation exists. Replace that policy with the common ownership and
+input-stamp protocol. Keep attempt IDs for inspection, not as source freshness.
 
-Also delete superseded runs after a retention period, once we have confirmed nothing reads them.
+## Unchanged results and freshness
 
-### 5. Deferred: compute outside the transaction
+Define a versioned canonical fingerprint of publication contents. Include rules,
+resolved version, category identities and labels, outcomes, gaps, holder metrics,
+history and completeness, evaluated configurations, and substantive source evidence.
+For ranges include regions, configurations, and diagnostics. Sort semantically
+unordered collections; preserve order where it controls comparison priority.
 
-The earlier version of this plan split the rebuild into a `REPEATABLE READ READ ONLY` snapshot read, a computation
-with no transaction open, and a short publish transaction that refuses to replace a run computed from a newer
-`generation`. Compared with step 2, that adds two things:
+Exclude generated database IDs, attempt IDs, capture/evaluation timestamps, claim
+metadata, and request generations. Inject the evaluation time into computations
+rather than reading the clock inside arithmetic. Timestamp-only differences must
+not force publication. New rules or a changed resolved version must force publication.
 
-- All inputs come from one snapshot. Today each read statement sees its own, so a build edited mid-read can be loaded
-  half-changed. The edit also increments `generation`, so the next rebuild corrects it, but the wrong run is public
-  until then.
-- No database connection is held during the computation.
+Expose publication time, source capture time, last successful check time, pending
+work, and latest failure separately. Last checked does not mean caught up if the
+successful stamp still differs from desired inputs. Public reads load publication
+and freshness metadata consistently. Preserve the existing publication's original
+evidence timestamps when skipping an unchanged result.
 
-It costs a stored generation on every run, an ordering check in `activate`, and the loss of the simple "one rebuild at
-a time per kind" argument. Do it only if rebuilds still take seconds after steps 1-4, or if a half-read run is
-actually observed.
+Failure updates require the same ownership token. An old worker cannot overwrite a
+newer's success or retry state. A source change makes the new input stamp immediately
+eligible without erasing consecutive-failure history. Failure backoff belongs to its
+captured stamp, so recording an old failure cannot postpone newer inputs. Successful
+processing resets failures. Report pending age, consecutive failures, capture/compute/
+publish durations, expired claims, unchanged publications, and serialization retries.
 
-## Before starting
+## Migration and rollout
 
-- **Measure.** Find the distribution of `squid.worker.record_maintenance` span durations in production, how many
-  rebuilds run per day, and how many produce records that differ from the previous run. Durations decide step 3. The
-  other two numbers decide how much step 4 saves.
-- **Decide whether incremental, per-build recomputation is planned.** If it is, a real queue keyed by build is the
-  right shape and step 1 is wrong. Nothing on the roadmap suggests it is.
-- **Confirm nothing reads superseded runs** before adding retention in step 4.
+1. Add explicit settings and scope identity. Seed the shared pin using the existing
+   newest-active-version rule once; record the chosen version. Preserve existing
+   concrete definitions and public title identities. Existing versioned range queries
+   remain fixed; null-version queries remain all-time. New current queries are opt-in.
+2. Add target state, immutable concrete snapshots, input stamps, and fingerprint
+   versions. Seed targets dirty, including outstanding queue work and registered
+   ranges. Backfill current versus fixed catalogue mappings without deleting runs.
+3. Route every producer to input state or target requests. Coordinate worker cutover:
+   old workers must stop before generation-based consumers become authoritative.
+   Migrations and application rollout must not leave a gap in invalidation recording.
+4. Implement the common capture/publish protocol, then independent concrete and range
+   consumers. Change staff rebuild/materialization to request the same target work;
+   return pending status and publication links instead of doing unbounded arithmetic
+   in the interaction. Explicit refresh still recomputes even with unchanged sources.
+5. Enable semantic deduplication after comparison tests pass. Keep the old queue until
+   producer and consumer audits show it is unused, then remove it separately.
 
-## Already done
+Do not delete superseded runs or snapshots in this project. Retention requires a
+separate design covering notification processing, event replay, and public links.
 
-These came out of the same review and landed with the durable-queues close-out:
+## Required verification
 
-- Removed `RecordRepository.enqueue`. Nothing called it, and its `kind:build_id` keys did not match the keys the real
-  producers use.
-- Revision `f3c6b9e4a1d7` now gives a token to any claim made without one before it adds the `<table>_claim_complete`
-  checks.
+Use real PostgreSQL transactions for concurrency tests, not only repository fakes.
+
+- Edit inputs during capture: the saved document contains one consistent snapshot.
+- Edit inputs during arithmetic: the old snapshot publishes and newer work remains due.
+- Expire/reclaim a lease: the old owner cannot publish, acknowledge, or record failure.
+- Crash before and after publication commit: publication and successful stamp agree.
+- Change current pin or rules during arithmetic: reject obsolete publication; fixed
+  scopes ignore pin changes and current scopes eventually use the new version.
+- Race a failed attempt with newer inputs or success: neither gets delayed or overwritten.
+- Run door and extender work concurrently; one failure does not roll back the other.
+- Fail one range, including structured unsupported results: concrete work and other
+  ranges succeed while the previous range publication stays readable.
+- Repeat equal computation: preserve publication IDs and events, advance last checked.
+- Change evidence, diagnostics, rules, history, or metrics without changing holder IDs:
+  publish when meaningful contents change. Timestamp-only changes do not publish.
+- Compare concrete smallest outcomes with corresponding range points from identical
+  input fixtures, including fixed builds, families, missing dates, and ties.
+- Audit every invalidation producer and exercise migration with pending old work.
+- Exercise bounded cancellation, heartbeat loss, serialization retries, and fair scheduling.
+
+Production measurements guide capacity and performance tuning, not correctness:
+record input counts, computation duration distributions, unchanged-result rates,
+and pending age before and after rollout.
