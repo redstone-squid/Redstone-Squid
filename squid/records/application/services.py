@@ -42,6 +42,7 @@ from squid.records.application.ports import (
     RecordQueryUnitOfWork,
     RecordUnitOfWork,
 )
+from squid.records.application.snapshots import RecordSnapshot
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -90,6 +91,7 @@ class RecordComputationService:
         self._formatter = formatter or RulesTitleFormatter()
         self._category_limit = category_limit
         self._refresh_ranges = refresh_ranges
+        self._compute_limiter = anyio.CapacityLimiter(1)
 
     async def rebuild(
         self,
@@ -125,24 +127,20 @@ class RecordComputationService:
         for kind in kinds:
             source = tuple(await uow.record_candidates.list_confirmed(kind))
             requested = tuple(await uow.records.list_requested_categories(kind))
-            all_time = self._compute_scope(
-                rules_revision_id,
-                kind,
-                source,
+            snapshot = RecordSnapshot(
+                rules_revision_id=rules_revision_id,
+                kind=kind,
+                sources=source,
                 version_id=None,
                 requested=requested,
+                captured_at=datetime.now(UTC),
             )
+            all_time = await self._compute_snapshot(snapshot)
             run_ids.append(await uow.records.activate(all_time))
             records.extend(all_time.records)
 
             if current_version_id is not None:
-                current = self._compute_scope(
-                    rules_revision_id,
-                    kind,
-                    source,
-                    version_id=current_version_id,
-                    requested=requested,
-                )
+                current = await self._compute_snapshot(snapshot.model_copy(update={"version_id": current_version_id}))
                 run_ids.append(await uow.records.activate(current))
                 records.extend(current.records)
 
@@ -153,15 +151,18 @@ class RecordComputationService:
             unresolved=sum(record.resolution.status is ResolutionStatus.UNRESOLVED for record in records),
         )
 
-    def _compute_scope(
-        self,
-        rules_revision_id: int,
-        kind: BuildKind,
-        source: Sequence[CandidateBuild],
-        *,
-        version_id: int | None,
-        requested: Sequence[CategoryIdentity],
-    ) -> ComputationBatch:
+    async def _compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
+        # Non-abandoning cancellation keeps the capacity token until arithmetic
+        # finishes, so repeated cancelled requests cannot spawn unbounded work.
+        return await anyio.to_thread.run_sync(self.compute_snapshot, snapshot, limiter=self._compute_limiter)
+
+    def compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
+        """Calculate one scope using only detached, replayable inputs."""
+        rules_revision_id = snapshot.rules_revision_id
+        kind = snapshot.kind
+        source = snapshot.sources
+        version_id = snapshot.version_id
+        requested = snapshot.requested
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
         # Only observed fixed openings seed eager categories. Explicit requests
         # add individual openings; a family's measured example never seeds one.
@@ -193,7 +194,7 @@ class RecordComputationService:
                 query = door_category_lookup(category.identity, base_title=base_title, version_id=version_id)
                 if families and query is not None:
                     evaluation = (
-                        evaluate_door_record(query, sources, evaluated_at=datetime.now(UTC))
+                        evaluate_door_record(query, sources, evaluated_at=snapshot.captured_at)
                         if evaluation is None
                         else resolve_door_configurations(
                             query, evaluation.configurations, evaluated_at=evaluation.evaluated_at
