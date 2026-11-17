@@ -136,6 +136,7 @@ class _ConvertParamsJson(_WorkerJson):
 
 class _CompareParamsJson(_WorkerJson):
     preset: FingerprintPreset
+    timeout_seconds: _PositiveFloat | None = None
 
 
 class _DimensionsJson(_WorkerJson):

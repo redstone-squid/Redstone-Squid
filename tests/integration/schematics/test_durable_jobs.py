@@ -107,6 +107,11 @@ async def test_every_native_operation_crosses_the_durable_worker_boundary(
     assert await _with_runner(runner, client.convert(data, target=SchematicFormat.LITEMATIC)) == (b"converted", ())
     comparison = await _with_runner(runner, client.compare(data, data, preset=FingerprintPreset.SHAPE))
     assert comparison.identical is True
+    assert native.compare_calls[-1][-1] is None
+    assert (
+        await _with_runner(runner, client.compare(data, data, preset=FingerprintPreset.SHAPE, timeout_seconds=1.0))
+    ).identical
+    assert native.compare_calls[-1][-1] == 1.0
     assert (
         await _with_runner(
             runner,

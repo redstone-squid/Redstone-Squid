@@ -451,3 +451,11 @@ def test_native_renderer_diagnostics_survive_the_worker_pipe() -> None:
     assert isinstance(rebuilt, InvalidSchematicError)
     assert str(rebuilt) == "Native renderer failed"
     assert rebuilt.context["renderer_log"] == "encoder unavailable"
+
+
+@pytest.mark.parametrize("timeout", [None, 0.5])
+def test_comparison_params_accept_the_durable_operation_deadline(timeout: float | None) -> None:
+    assert (
+        wire.decode_compare_params({"preset": FingerprintPreset.SHAPE.value, "timeout_seconds": timeout})
+        is FingerprintPreset.SHAPE
+    )
