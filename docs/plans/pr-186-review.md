@@ -67,12 +67,9 @@ service/Discord limits, form-option compatibility, and command binding tests pas
 
 ## Validation
 
-The focused search, publisher, wizard, reconciliation, resource-key, and channel
-safety tests pass. Commit hooks format and lint changed files. Whole-project
-Pyrefly passes. GitHub review threads were not changed.
-
-Final whole-checkout validation: 8,982 local-suite tests passed, with 20 opt-in
-cases skipped. Whole-project Pyrefly reports zero errors.
+Focused search, publisher, wizard, reconciliation, resource-key, and channel
+safety tests pass. Final local suite: 8,982 passed, 20 opt-in cases skipped.
+Whole-project Pyrefly reports zero errors. Commit hooks format/lint changed files.
 
 ## Original comments
 

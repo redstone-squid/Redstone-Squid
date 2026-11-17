@@ -59,14 +59,10 @@ boundaries were changed by this review cleanup.
 remain. Dependency adapters retain browser-only versus account-owned credential
 restrictions and supply dependency injection rather than duplicating validation.
 
-Validation: account unit tests, consent dependencies, profile routes, account panel,
-and consent-gate tests passed. Coverage includes patch normalization and clearing,
-hidden profiles and private avatars, redirects, verification failure and lockout,
-reservation release, and single-use merge behavior. Repository behavior is unchanged;
-no profile schema migration was needed.
-
-Final whole-checkout validation: 8,982 local-suite tests passed, with 20 opt-in
-cases skipped. Whole-project Pyrefly reports zero errors.
+Validation: 8,982 local-suite tests passed (20 opt-in cases skipped); whole-project
+Pyrefly reports zero errors. Account/profile/consent coverage includes patch clearing,
+visibility, verification, cancellation, reservations, and merges. Repository behavior
+is unchanged; no profile schema migration was needed.
 
 ## Original comments
 
