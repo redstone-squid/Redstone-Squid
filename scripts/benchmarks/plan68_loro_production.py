@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from squid_reactivity import (
-    ConflictDetail,
     TransactionCommit,
     transaction,
 )
+from squid_reactivity.transactions import ConflictDetail
 from squid_replication import LoroBackend, Replica, ReplicationChangeToken
 
 _FIXTURE = Path(__file__).with_name("fixtures") / "loro_document_v1.json"

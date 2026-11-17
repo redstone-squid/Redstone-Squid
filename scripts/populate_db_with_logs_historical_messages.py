@@ -132,7 +132,11 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
             account = await services.accounts.get_account_by_identity(
                 IdentityProvider.DISCORD, str(primary[0].author.id)
             )
-            if account is None or account.id is None or account.needs_consent_refresh:
+            if (
+                account is None
+                or account.id is None  # pyright: ignore[reportUnnecessaryComparison]  # Unflushed identity.
+                or account.needs_consent_refresh
+            ):
                 return ImportSummary(groups=1, skipped_consent=1)
         retained = await services.submission_inference.public_status(message_bundle_run_id(primary))
         # A saved build may be only one candidate of a retained run. Resume its other
@@ -356,7 +360,9 @@ async def main(arguments: argparse.Namespace) -> int:
         # Freeze the upper boundary so a retry cannot merge new posts into the last group.
         if options.before is None:
             options = replace(options, before=datetime.now().astimezone())
-        boundary = options.before.id if isinstance(options.before, discord.Object) else options.before.isoformat()
+        before = options.before
+        assert before is not None
+        boundary = before.id if isinstance(before, discord.Object) else before.isoformat()
         logger.info("History upper boundary: --before %s", boundary)
         try:
             summary = await run_import(client, runtime.services, channel_ids, options)
