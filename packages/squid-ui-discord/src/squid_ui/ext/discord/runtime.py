@@ -10,8 +10,6 @@ opened by one application owner, so unloading a cog can finish its live panels t
 """
 
 import logging
-import weakref
-from collections.abc import Iterator
 from typing import Any, Never, Unpack, cast, overload
 
 import anyio
@@ -19,7 +17,6 @@ from anyio.abc import TaskStatus
 
 import discord
 from discord.ext import commands
-from squid_ui.errors import SquidUiError
 from squid_ui.ext.discord.access import AccessPolicy
 from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui.ext.discord.closure import CloseReason
@@ -27,7 +24,7 @@ from squid_ui.ext.discord.config import Config
 from squid_ui.ext.discord.contracts import LocalizationResolver
 from squid_ui.ext.discord.delivery import DeliveryResult, Replyable
 from squid_ui.ext.discord.facade import Scope
-from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.lifetime import DiscordUIRuntimeMissing, Lifetime
 from squid_ui.ext.discord.messages.contracts import MessageRootBehaviorOptions
 from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
 from squid_ui.ext.discord.messages.root import MessageRoot
@@ -42,36 +39,6 @@ from squid_ui.target_types import ComponentsV2Target
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
-
-_INSTALLED: weakref.WeakKeyDictionary[Any, DiscordUIRuntime[Any]] = weakref.WeakKeyDictionary()
-"""Hosts installed per client, so a second `install` on one client can be refused."""
-
-
-class DiscordUIRuntimeMissing(SquidUiError, LookupError):
-    """Nothing was installed on the client this source names.
-
-    A wiring bug rather than a runtime condition: every reachable path from a click runs
-    through a client the host built, so the answer is to call :func:`install` at
-    construction, not to guard each call site.
-    """
-
-
-def _candidates(source: RuntimeSource) -> Iterator[Any]:
-    """The client `source` might be, then the ones it might carry.
-
-    Duck-typed rather than isinstance-dispatched so a test double reaches its own
-    installation: `discord.Interaction` carries `client`, a command context carries `bot`,
-    and a client is itself.
-    """
-    yield source
-    for attribute in ("client", "bot"):
-        carried = getattr(source, attribute, None)
-        if carried is not None:
-            yield carried
-    state = getattr(source, "_state", None)
-    get_client = getattr(state, "_get_client", None)
-    if callable(get_client):
-        yield get_client()
 
 
 class DiscordUIRuntime[ClientT: discord.Client]:
@@ -169,8 +136,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                 if self.execution_host is not None:
                     await self.execution_host.close()
             finally:
-                if _INSTALLED.get(self.client) is self:
-                    del _INSTALLED[self.client]
+                if Lifetime.installations.get(self.client) is self:
+                    del Lifetime.installations[self.client]
         if errors:
             message = "Discord runtime shutdown failed"
             raise ExceptionGroup(message, errors)
@@ -196,18 +163,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         Raises:
             DiscordUIRuntimeMissing: Nothing was installed on it.
         """
-        for candidate in _candidates(source):
-            try:
-                runtime = _INSTALLED.get(candidate)
-            except TypeError:
-                # Unhashable, or not weak-referenceable: it was never a key here.
-                continue
-            if runtime is not None:
-                return runtime
-        message = (
-            f"no layout host is installed on this {type(source).__name__}; call sd.install(client) once at startup"
-        )
-        raise DiscordUIRuntimeMissing(message)
+        return Lifetime.runtime_for(source)
 
     @overload
     def scope(self, owner: None) -> Never: ...
@@ -315,7 +271,7 @@ def install[ClientT: discord.Client](
     bus = selected.bus
     profiler = selected.profiler
     localization = selected.localization
-    if _INSTALLED.get(client) is not None:
+    if Lifetime.installations.get(client) is not None:
         message = "client already has a layout host installed"
         raise ValueError(message)
     scheduler = MessageRootScheduler(bus, profiler=profiler)
@@ -334,7 +290,7 @@ def install[ClientT: discord.Client](
         response_defaults=selected.responses,
         config=selected,
     )
-    _INSTALLED[client] = runtime
+    Lifetime.installations[client] = runtime
     return runtime
 
 

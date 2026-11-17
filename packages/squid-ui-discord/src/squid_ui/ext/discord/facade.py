@@ -18,7 +18,7 @@ from squid_ui.content.text import Localization
 from squid_ui.ext.discord._shutdown import cleanup_outside_action
 from squid_ui.ext.discord.audience import Audience
 from squid_ui.ext.discord.closure import CloseReason
-from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
+from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, RequestSource, SendDestination
 from squid_ui.ext.discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui.ext.discord.lifetime import Lifetime
@@ -219,7 +219,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         destination: MessageDestination,
         policy: ResolvedResponse,
         localization: Localization,
-        source: ResponseSource | None,
+        source: RequestSource | None,
         actor_id: int | None,
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
@@ -265,7 +265,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         destination: MessageDestination,
         policy: ResolvedResponse,
         localization: Localization,
-        source: ResponseSource | None,
+        source: RequestSource | None,
         actor_id: int | None,
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,

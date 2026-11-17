@@ -11,7 +11,7 @@ Rejected and Abandoned recording admission refusal and deliberate non-delivery.
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any, TypedDict, Unpack, override
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack, override
 
 import discord
 from squid_ui.chrome import Chrome
@@ -21,12 +21,14 @@ from squid_ui.ext.discord.contracts import FacadeContent
 from squid_ui.ext.discord.delivery import DeliveryResult
 from squid_ui.ext.discord.messages.contracts import ExpiryPolicy
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.ext.discord.messages.root import MessageRoot
-from squid_ui.ext.discord.session_specs import SessionSpec
-from squid_ui.ext.discord.sessions import RejectionReason, Session
 from squid_ui.planning.pagination.navigation import NavFactory
 from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
+
+if TYPE_CHECKING:
+    from squid_ui.ext.discord.messages.root import MessageRoot
+    from squid_ui.ext.discord.session_specs import SessionSpec
+    from squid_ui.ext.discord.sessions import RejectionReason, Session
 
 
 class _Unset(Enum):

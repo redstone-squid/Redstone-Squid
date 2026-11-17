@@ -95,7 +95,7 @@ from squid_ui.ext.discord.commands import (
 )
 from squid_ui.ext.discord.config import Config, ErrorObserver, ErrorPolicy, ErrorRenderer
 from squid_ui.ext.discord.conformance import conform
-from squid_ui.ext.discord.contracts import LocalizationResolver, RequestSource, ResponseSource
+from squid_ui.ext.discord.contracts import LocalizationResolver, RequestSource
 from squid_ui.ext.discord.delivery import (
     MessageDestination,
     deliver_to,
@@ -329,7 +329,6 @@ __all__ = [
     "ResourceCost",
     "Response",
     "ResponseResult",
-    "ResponseSource",
     "ResponseSpec",
     "RoleCategory",
     "RoleConfigurationUnavailable",

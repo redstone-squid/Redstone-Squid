@@ -1,5 +1,6 @@
 """Pyrefly fixture pinning owner, request, and outcome inference."""
 
+from collections.abc import Mapping
 from typing import Any, Self, assert_type, override
 
 import discord
@@ -8,6 +9,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.interactions.forms import Form, FormResult, IntField, TextField
 
 
 class Panel(sd.Screen[None, object]):
@@ -79,3 +81,20 @@ async def facade_inference(
     assert_type(click.root, sd.MessageRoot | None)
 
     runtime.respond(interaction, "wrong owner")  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
+
+
+class Details(Form):
+    title = "Details"
+    amount = IntField()
+    note = TextField(required=False)
+
+
+async def typed_form(request: sd.Request) -> None:
+    async def submit(interaction: discord.Interaction, form: Details) -> None:
+        assert_type(form.amount, int)
+        assert_type(form.note, str | None)
+
+    async def invalid(interaction: discord.Interaction, result: FormResult) -> None:
+        assert_type(result.attempted, Mapping[str, object])
+
+    await request.form(Details(), on_submit=submit, on_invalid=invalid)

@@ -10,7 +10,8 @@ import anyio
 import pytest
 from hypothesis import settings
 
-from squid_ui.ext.discord import MessageRoot, live, runtime
+from squid_ui.ext.discord import MessageRoot, live
+from squid_ui.ext.discord.lifetime import Lifetime
 from squid_ui.runtime import UIExecutionHost
 
 settings.register_profile(
@@ -30,10 +31,10 @@ def _isolated_process_state() -> Iterator[None]:
     would make registry assertions depend on test order.
     """
     live._LIVE.clear()
-    runtime._INSTALLED.clear()
+    Lifetime.installations.clear()
     yield
     live._LIVE.clear()
-    runtime._INSTALLED.clear()
+    Lifetime.installations.clear()
 
 
 @pytest.fixture(autouse=True)

@@ -5,17 +5,61 @@ same tree instead of owning additional cleanup graphs. Nodes remain attached unt
 shutdown callbacks settle, so closing a parent also joins children already closing.
 """
 
+import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+import discord
+from discord.ext import commands
+from squid_ui.errors import SquidUiError
 from squid_ui.ext.discord.closure import CloseReason
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
     from squid_ui.ext.discord.messages.root import AnyMessageRoot
+    from squid_ui.ext.discord.runtime import DiscordUIRuntime
+
+
+class DiscordUIRuntimeMissing(SquidUiError, LookupError):
+    """Nothing was installed on the client this source names.
+
+    A wiring bug rather than a runtime condition: every reachable path from a click runs
+    through a client the host built, so the answer is to call :func:`install` at
+    construction, not to guard each call site.
+    """
 
 
 class Lifetime:
+    installations: ClassVar[weakref.WeakKeyDictionary[Any, DiscordUIRuntime[Any]]] = weakref.WeakKeyDictionary()
+
+    @classmethod
+    def runtime_for(cls, source: object) -> DiscordUIRuntime[Any]:
+        """Locate the installed lifetime owner without importing runtime construction."""
+        candidates: list[object] = [source]
+        match source:
+            case discord.Interaction():
+                candidates.append(source.client)
+            case commands.Context():
+                candidates.append(source.bot)
+            case discord.Message():
+                # discord.py exposes the client of a fetched message through its state.
+                candidates.append(source._state._get_client())
+            case _:
+                # Structural Replyable adapters and gateway-free harnesses carry
+                # their client explicitly; this is their one ownership boundary.
+                candidates.extend(getattr(source, name, None) for name in ("client", "bot"))
+        for candidate in candidates:
+            try:
+                runtime = cls.installations.get(candidate)
+            except TypeError:
+                continue
+            if runtime is not None:
+                return runtime
+        message = (
+            f"no layout host is installed on this {type(source).__name__}; call sd.install(client) once at startup"
+        )
+        raise DiscordUIRuntimeMissing(message)
+
     def __init__(self, *, root: AnyMessageRoot | None = None, scope: Scope[Any, Any] | None = None) -> None:
         self.root = root
         self.scope = scope

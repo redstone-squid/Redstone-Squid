@@ -20,7 +20,7 @@ from squid_reactivity.topics import TopicBus
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord.access import Owner
 from squid_ui.ext.discord.cog import Cog
-from squid_ui.ext.discord.contracts import ResponseSource
+from squid_ui.ext.discord.contracts import RequestSource
 from squid_ui.ext.discord.devtools.runtime import (
     DevToolsRuntime,
 )
@@ -51,7 +51,7 @@ async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
 
 
 async def open_devtools(
-    source: ResponseSource,
+    source: RequestSource,
     *,
     runtime: DevToolsRuntime,
     action_ledger: EventLedger | None = None,

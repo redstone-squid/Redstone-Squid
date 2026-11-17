@@ -1,5 +1,6 @@
 """One request per Discord event: resolution, memoization, and the response ledger."""
 
+import importlib
 from typing import Any, cast, override
 
 import discord
@@ -10,6 +11,7 @@ import squid_ui.ext.discord as sd
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 from squid_ui.interactions import ActionEvent, Actor
+from squid_ui.interactions.forms import Form, FormResult, IntField, TextField
 
 
 class FakeClient:
@@ -294,3 +296,41 @@ async def test_a_finished_component_cannot_fall_back_to_the_application_scope() 
 
     with pytest.raises(RuntimeError, match="finished message root"):
         await sd.request(event)
+
+
+@pytest.mark.parametrize("raw, valid", [("42", True), ("bad", False)])
+async def test_typed_form_parses_values_before_dispatch(raw: str, valid: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    class Details(Form):
+        title = "Details"
+        amount = IntField()
+        note = TextField(required=False)
+
+    ui, interaction = installed()
+    request = await ui.request(interaction.source)
+    form = Details()
+    accepted: list[Details] = []
+    rejected: list[FormResult] = []
+    handlers = []
+
+    def build(spec, *, on_submit, localization):
+        handlers.append(on_submit)
+        return discord.ui.Modal(title="Details")
+
+    async def submit(current: discord.Interaction, values: Details) -> None:
+        accepted.append(values)
+
+    async def invalid(current: discord.Interaction, result: FormResult) -> None:
+        rejected.append(result)
+
+    monkeypatch.setattr(importlib.import_module("squid_ui.ext.discord.request"), "build_form_modal", build)
+    await request.form(form, on_submit=submit, on_invalid=invalid)
+    await handlers[0](interaction.source, {"amount": raw})
+    if valid:
+        assert accepted == [form]
+        assert form.amount == 42
+        assert form.note is None
+        assert not rejected
+    else:
+        assert not accepted
+        assert rejected[0].attempted == {"amount": "bad"}
+        assert rejected[0].errors

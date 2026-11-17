@@ -12,7 +12,8 @@ import squid_ui.ext.discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_reactivity.topics import TopicName
 from squid_ui.ext.discord import DiscordUIRuntime, install
-from squid_ui.ext.discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
+from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.runtime import DiscordUIRuntimeMissing
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -95,7 +96,7 @@ async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None
     with pytest.raises(ExceptionGroup):
         await runtime.close()
 
-    assert client not in _INSTALLED
+    assert client not in Lifetime.installations
 
 
 async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> None:
@@ -141,4 +142,4 @@ async def test_close_drops_installation_when_execution_host_cleanup_fails() -> N
     with pytest.raises(RuntimeError, match="service host cleanup failed"):
         await runtime.close()
 
-    assert client not in _INSTALLED
+    assert client not in Lifetime.installations

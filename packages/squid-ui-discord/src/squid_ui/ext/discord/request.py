@@ -23,7 +23,7 @@ from squid_ui import paragraph
 from squid_ui.content.text import Localization
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.audience import Private, Visibility
-from squid_ui.ext.discord.contracts import FacadeContent, ResponseSource
+from squid_ui.ext.discord.contracts import FacadeContent, RequestSource
 from squid_ui.ext.discord.delivery import (
     DeliveryAbandoned,
     DeliveryResult,
@@ -34,23 +34,24 @@ from squid_ui.ext.discord.delivery import (
     respond_to,
     send_to,
 )
+from squid_ui.ext.discord.lifetime import Lifetime
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui.ext.discord.response import Response, ResponseOverrides, ResponseResult
-from squid_ui.ext.discord.sessions import Session
 from squid_ui.interactions import ActionEvent
-from squid_ui.interactions.forms import FormSpec
+from squid_ui.interactions.forms import Form, FormResult, FormSpec
 from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
+    from squid_ui.ext.discord.messages.root import MessageRoot
     from squid_ui.ext.discord.runtime import DiscordUIRuntime
+    from squid_ui.ext.discord.sessions import Session
 
 type Deferral = Literal["private", "public"]
 type SourceKind = Literal["interaction", "context", "message"]
-type RequestOrigin = ResponseSource | ActionEvent
+type RequestOrigin = RequestSource | ActionEvent
 """Anything a request can be resolved from: a native source, or a component event."""
 
 _MEMO_KEY = "squid_ui.ext.discord.request"
@@ -58,19 +59,74 @@ _MEMO: weakref.WeakKeyDictionary[Any, Request[Any, Any]] = weakref.WeakKeyDictio
 """Requests for sources without an `extras` mapping (command contexts, messages, test doubles)."""
 
 
-def _kind(source: object) -> SourceKind:
-    """Classify a native source once, so nothing downstream sniffs attributes again.
+@dataclass(frozen=True, slots=True)
+class _SourceDetails:
+    """Normalize native and structural sources once at the Discord adapter boundary."""
 
-    Duck-typed rather than isinstance-dispatched so gateway-free test doubles count.
-    """
-    if hasattr(source, "response") and hasattr(source, "followup"):
-        return "interaction"
-    if callable(getattr(source, "send", None)) and hasattr(source, "author"):
-        return "context"
-    if isinstance(source, discord.Message):
-        return "message"
-    message = f"{type(source).__name__} is not an interaction, command context, or message"
-    raise TypeError(message)
+    native: RequestSource
+    kind: SourceKind
+    user: discord.User | discord.Member
+    guild: discord.Guild | None
+    channel: discord.abc.Messageable | discord.CategoryChannel | discord.ForumChannel | None
+    interaction: discord.Interaction[Any] | None = None
+    context: Replyable | None = None
+    message: discord.Message | None = None
+    command: Any = None
+
+    @classmethod
+    def read(cls, source: RequestSource) -> _SourceDetails:
+        match source:
+            case discord.Interaction():
+                return cls(
+                    source,
+                    "interaction",
+                    source.user,
+                    source.guild,
+                    source.channel,
+                    interaction=source,
+                    command=source.command,
+                )
+            case commands.Context():
+                return cls(
+                    source,
+                    "context",
+                    source.author,
+                    source.guild,
+                    source.channel,
+                    interaction=source.interaction,
+                    context=source,
+                    command=source.command,
+                )
+            case discord.Message():
+                return cls(source, "message", source.author, source.guild, source.channel, message=source)
+        # Structural contexts remain supported. Their adapters own conformance to
+        # Discord's user/channel/interaction interfaces; reflection stays here.
+        if hasattr(source, "response") and hasattr(source, "followup"):
+            kind: SourceKind = "interaction"
+            user = getattr(source, "user", None)
+            interaction = cast(discord.Interaction[Any], source)
+            context = None
+        elif callable(getattr(source, "send", None)) and hasattr(source, "author"):
+            kind = "context"
+            user = getattr(source, "author", None)
+            interaction = getattr(source, "interaction", None)
+            context = cast(Replyable, source)
+        else:
+            message = f"{type(source).__name__} is not an interaction, command context, or message"
+            raise TypeError(message)
+        if user is None:
+            message = "request source identifies no user"
+            raise TypeError(message)
+        return cls(
+            source,
+            kind,
+            user,
+            getattr(source, "guild", None),
+            getattr(source, "channel", None),
+            interaction=interaction,
+            context=context,
+            command=getattr(source, "command", None),
+        )
 
 
 def _memo_get(source: object) -> Request[Any, Any] | None:
@@ -109,11 +165,8 @@ class Request(Generic[OwnerT, ClientT]):
 
     _runtime: DiscordUIRuntime[ClientT]
     _scope: Scope[OwnerT, ClientT]
-    source: ResponseSource
-    kind: SourceKind
+    _source: _SourceDetails
     localization: Localization
-    _user: discord.User | discord.Member
-    _guild: discord.Guild | None
     root: MessageRoot | None = None
     """The message root whose control raised this request, when it came from a click."""
     _transaction: Transaction | None = None
@@ -121,6 +174,14 @@ class Request(Generic[OwnerT, ClientT]):
     _deferred: Deferral | None = None
     _form_opened: bool = False
     _audience: Visibility | None = None
+
+    @property
+    def source(self) -> RequestSource:
+        return self._source.native
+
+    @property
+    def kind(self) -> SourceKind:
+        return self._source.kind
 
     @property
     def runtime(self) -> DiscordUIRuntime[ClientT]:
@@ -143,41 +204,34 @@ class Request(Generic[OwnerT, ClientT]):
     @property
     def user(self) -> discord.User | discord.Member:
         """The actor, whichever kind of source named them."""
-        return self._user
+        return self._source.user
 
     @property
     def guild(self) -> discord.Guild | None:
         """The guild this request arrived in, if any."""
-        return self._guild
+        return self._source.guild
 
     @property
-    def channel(self) -> discord.abc.Messageable | None:
+    def channel(self) -> discord.abc.Messageable | discord.CategoryChannel | discord.ForumChannel | None:
         """The channel this request arrived in, if any."""
-        return cast(discord.abc.Messageable | None, getattr(self.source, "channel", None))
+        return self._source.channel
 
     @property
     def interaction(self) -> discord.Interaction[ClientT] | None:
         """The native interaction, including one carried by a hybrid context."""
-        if self.kind == "interaction":
-            return cast(discord.Interaction[ClientT], self.source)
-        if self.kind == "context":
-            return cast(discord.Interaction[ClientT] | None, getattr(self.source, "interaction", None))
-        return None
+        return self._source.interaction
 
     @property
     def context(self) -> Replyable | None:
-        """The prefix or hybrid command context, when that is what arrived."""
-        return cast(Replyable, self.source) if self.kind == "context" else None
+        return self._source.context
 
     @property
     def message(self) -> discord.Message | None:
-        """The message, when a bare message is what arrived."""
-        return cast(discord.Message, self.source) if self.kind == "message" else None
+        return self._source.message
 
     @property
     def command(self) -> Any:
-        """The discord.py command being invoked, if the source names one."""
-        return getattr(self.source, "command", None)
+        return self._source.command
 
     @property
     def session(self) -> Session | None:
@@ -219,8 +273,10 @@ class Request(Generic[OwnerT, ClientT]):
         """
         mentions = discord.AllowedMentions.none() if allowed_mentions is None else allowed_mentions
         if self._responses == 0 and self._deferred is not None:
+            interaction = self.interaction
+            assert interaction is not None  # Only interaction deferral sets this ledger state.
             inner = respond_to(
-                cast(discord.Interaction[discord.Client], self.interaction),
+                interaction,
                 ephemeral=isinstance(audience, Private) or audience == "personal",
                 wait=True,
                 files=files,
@@ -248,19 +304,19 @@ class Request(Generic[OwnerT, ClientT]):
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
     ) -> MessageDestination:
-        if self.kind == "context":
-            context = cast(Replyable, self.source)
-            ephemeral = personal and getattr(context, "interaction", None) is not None
+        if (context := self.context) is not None:
+            ephemeral = personal and self.interaction is not None
             return reply_to(context, ephemeral=ephemeral, files=files, allowed_mentions=allowed_mentions)
-        if self.kind == "interaction":
+        if self.kind == "interaction" and (interaction := self.interaction) is not None:
             return respond_to(
-                cast(discord.Interaction[discord.Client], self.source),
+                interaction,
                 ephemeral=personal,
                 wait=True,
                 files=files,
                 allowed_mentions=allowed_mentions,
             )
-        message = cast(discord.Message, self.source)
+        message = self.message
+        assert message is not None
 
         async def reply(payload: MessagePayload) -> DeliveryResult:
             delivered = await message.reply(
@@ -280,18 +336,16 @@ class Request(Generic[OwnerT, ClientT]):
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
     ) -> MessageDestination:
-        if self.kind == "interaction":
+        if self.kind == "interaction" and (interaction := self.interaction) is not None:
             return respond_to(
-                cast(discord.Interaction[discord.Client], self.source),
+                interaction,
                 ephemeral=True,
                 wait=True,
                 files=files,
                 allowed_mentions=allowed_mentions,
             )
-        if self.kind == "context" and (getattr(self.source, "interaction", None) is not None or self.guild is None):
-            return reply_to(
-                cast(Replyable, self.source), ephemeral=True, files=files, allowed_mentions=allowed_mentions
-            )
+        if (context := self.context) is not None and (self.interaction is not None or self.guild is None):
+            return reply_to(context, ephemeral=True, files=files, allowed_mentions=allowed_mentions)
         if self.kind == "message" and self.guild is None:
             return self._ordinary_destination(personal=False, files=files, allowed_mentions=allowed_mentions)
 
@@ -411,15 +465,36 @@ class Request(Generic[OwnerT, ClientT]):
         await interaction.response.defer(ephemeral=policy == "private", thinking=True)
         self._deferred = policy
 
+    @overload
+    async def form[FormT: Form[Any]](
+        self,
+        form: FormT,
+        *,
+        on_submit: Callable[[discord.Interaction[discord.Client], FormT], Awaitable[None]],
+        on_invalid: Callable[[discord.Interaction[discord.Client], FormResult], Awaitable[None]],
+    ) -> None: ...
+
+    @overload
     async def form(
         self,
         form: FormSpec | ModalSpec | discord.ui.Modal,
         *,
         on_submit: Callable[[discord.Interaction[discord.Client], dict[str, object]], Awaitable[None]] | None = None,
+    ) -> None: ...
+
+    async def form(
+        self,
+        form: Form[Any] | FormSpec | ModalSpec | discord.ui.Modal,
+        *,
+        on_submit: Callable[[discord.Interaction[discord.Client], Any], Awaitable[None]] | None = None,
+        on_invalid: Callable[[discord.Interaction[discord.Client], FormResult], Awaitable[None]] | None = None,
     ) -> None:
         """Open a modal as the initial acknowledgement, before deferring or responding.
 
-        For a FormSpec, ``on_submit`` receives raw values read from the native controls;
+        A Form instance parses and validates before passing its typed fields to
+        on_submit. on_invalid receives parsed values, attempted input, and errors
+        so the caller can present a correction or retry. For a FormSpec, on_submit
+        receives raw values read from the native controls;
         callers own schema evaluation and validation. ModalSpec and native Modal callbacks
         remain responsible for their own submission handling.
         """
@@ -430,7 +505,22 @@ class Request(Generic[OwnerT, ClientT]):
         if interaction.response.is_done() or self._responses:
             message = "a form must be the interaction's initial response"
             raise RuntimeError(message)
-        if isinstance(form, discord.ui.Modal):
+        if isinstance(form, Form):
+            if on_submit is None or on_invalid is None:
+                message = "typed forms require submission and invalid-input handlers"
+                raise TypeError(message)
+            spec = form.spec()
+
+            async def submit_typed(current: discord.Interaction[discord.Client], values: dict[str, object]) -> None:
+                result = await spec.evaluate(values)
+                if result.errors:
+                    await on_invalid(current, result)
+                else:
+                    # spec's validator binds this instance after every field parses.
+                    await on_submit(current, form)
+
+            modal = build_form_modal(spec, on_submit=submit_typed, localization=self.localization)
+        elif isinstance(form, discord.ui.Modal):
             modal = form
         elif isinstance(form, ModalSpec):
             modal = build_modal(form)
@@ -468,9 +558,8 @@ async def request(source: RequestOrigin) -> Request[Any, Any]:
     return await _resolve_request(source)
 
 
-def _command_binding(source: object) -> object | None:
+def _command_binding(command: object) -> object | None:
     """Read only discord.py command objects; arbitrary source attributes are not ownership."""
-    command = getattr(source, "command", None)
     if isinstance(command, commands.Command):
         return command.cog
     if isinstance(command, app_commands.Command):
@@ -485,10 +574,7 @@ def _binding_scope(runtime: DiscordUIRuntime[Any], binding: object) -> Scope[Any
 
 async def _request_for_binding(source: RequestOrigin, binding: object | None) -> Request[Any, Any]:
     """Apply the wrapper's actual binding, including context-menu and autocomplete callbacks."""
-    # Runtime constructs scopes, whose request method imports this resolver.
-    from squid_ui.ext.discord.runtime import DiscordUIRuntime
-
-    runtime = DiscordUIRuntime.of(cast(Any, source))
+    runtime = Lifetime.runtime_for(source)
     scope = runtime.app if binding is None else _binding_scope(runtime, binding)
     return await _resolve_request(source, scope=scope)
 
@@ -509,10 +595,6 @@ async def _resolve_request(
     source: RequestOrigin, *, scope: Scope[Any, Any] | None = None, root: MessageRoot | None = None
 ) -> Request[Any, Any]:
     """Share source normalization and memoization between inferred and bound resolution."""
-    # Runtime imports Scope, and Scope imports this module.
-    from squid_ui.ext.discord.runtime import DiscordUIRuntime
-
-    native: object = source
     localization: Localization | None = None if root is None else root.localization
     if isinstance(source, ActionEvent):
         responder = source.responder
@@ -523,7 +605,10 @@ async def _resolve_request(
         native = responder.interaction
         root = responder.message_root
         localization = root.localization
-    runtime = DiscordUIRuntime.of(cast(Any, native))
+    else:
+        native = source
+    details = _SourceDetails.read(native)
+    runtime = Lifetime.runtime_for(native)
     if scope is not None:
         scope._require_live()
         if scope.runtime is not runtime:
@@ -532,7 +617,7 @@ async def _resolve_request(
     inferred: Scope[Any, Any] | None = None
     if root is not None:
         inferred = runtime.scope_of_root(root)
-    elif (binding := _command_binding(native)) is not None:
+    elif (binding := _command_binding(details.command)) is not None:
         inferred = _binding_scope(runtime, binding)
     if scope is not None and inferred is not None and scope is not inferred:
         message = "the request source belongs to a different UI scope"
@@ -550,25 +635,17 @@ async def _resolve_request(
             found.root = root
             found.localization = root.localization
         return found
-    kind = _kind(native)
     if localization is None:
         localization = runtime.defaults.localization
         if runtime.localization is not None:
-            localization = await runtime.localization(cast(Any, native))
-    user = getattr(native, "user", None) if kind == "interaction" else getattr(native, "author", None)
-    if user is None:
-        message = "request source identifies no user"
-        raise TypeError(message)
+            localization = await runtime.localization(native)
     selected = runtime.app if selected is None else selected
     selected._require_live()
     resolved = Request[Any, Any](
         runtime,
         selected,
-        cast(ResponseSource, native),
-        kind,
+        details,
         localization,
-        cast(discord.User | discord.Member, user),
-        cast(discord.Guild | None, getattr(native, "guild", None)),
         root,
     )
     _memo_set(native, resolved)

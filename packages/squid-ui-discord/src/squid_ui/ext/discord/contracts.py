@@ -16,11 +16,7 @@ from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.runtime.definition import Component
 from squid_ui.target_types import ComponentsV2Target
 
-type InteractionSource[ClientT: discord.Client = discord.Client] = discord.Interaction[ClientT]
-type CommandSource[BotT: commands.Bot = commands.Bot] = commands.Context[BotT]
-type RequestSource = InteractionSource | CommandSource | discord.Message
-type ResponseSource = RequestSource
-type LocalizationSource = ResponseSource | Replyable
+type RequestSource = discord.Interaction[Any] | commands.Context[Any] | discord.Message | Replyable
 
 type DocumentContent[ClientT: discord.Client = discord.Client] = (
     Document[ComponentsV2Target, Request[Any, ClientT]]
@@ -36,20 +32,14 @@ type FacadeContent[ClientT: discord.Client = discord.Client] = (
 # Both halves for the same reason `send_to` has two overloads: discord.py's overloaded `send`
 # does not structurally satisfy the protocol, so a real channel needs naming on its own.
 type SendDestination = discord.abc.Messageable | Messageable
-type ResolvableRuntimeSource = discord.Client | RequestSource | Replyable
-type LocalizationResolver = Callable[[LocalizationSource], Awaitable[Localization]]
+type LocalizationResolver = Callable[[RequestSource], Awaitable[Localization]]
 
 
 __all__ = [
-    "CommandSource",
     "DocumentContent",
     "FacadeContent",
-    "InteractionSource",
     "LocalizationResolver",
-    "LocalizationSource",
     "RequestSource",
-    "ResolvableRuntimeSource",
-    "ResponseSource",
     "SendDestination",
     "StaticContent",
 ]
