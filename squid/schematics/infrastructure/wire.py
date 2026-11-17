@@ -90,6 +90,7 @@ type _NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
 type _NonnegativeFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, ge=0.0)]
 type _PositiveInt = Annotated[int, Field(strict=True, ge=1)]
 type _PositiveFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, gt=0.0)]
+type _OptionalTimeout = _PositiveFloat | None
 type _StrictVector3 = tuple[StrictInt, StrictInt, StrictInt]
 
 
@@ -136,7 +137,7 @@ class _ConvertParamsJson(_WorkerJson):
 
 class _CompareParamsJson(_WorkerJson):
     preset: FingerprintPreset
-    timeout_seconds: _PositiveFloat | None = None
+    timeout_seconds: _OptionalTimeout = None
 
 
 class _DimensionsJson(_WorkerJson):
@@ -295,7 +296,7 @@ _COMPARISON = TypeAdapter(SchematicComparison)
 _LOSSES = TypeAdapter(tuple[VersionLossEntry, ...])
 _CAPABILITIES = TypeAdapter(AnalyzerCapabilities)
 _SIMULATION = TypeAdapter(SimulationResult)
-_OPTIONAL_TIMEOUT = TypeAdapter(_PositiveFloat | None)
+_OPTIONAL_TIMEOUT = TypeAdapter(_OptionalTimeout)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

@@ -51,6 +51,7 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
     release = anyio.Event()
     old_results: list[RebuildSummary] = []
     inputs: list[RecordSnapshot] = []
+    newer: RebuildSummary | None = None
 
     class BlockedComputation(RecordComputationService):
         @override
@@ -70,8 +71,7 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
         async with anyio.create_task_group() as group:
             group.start_soon(rebuild_old)
             await captured.wait()
-            original = inputs[0]
-            assert original.sources[0].candidate.fixed_volume == 100
+            assert inputs[0].sources[0].candidate.fixed_volume == 100
             async with build_edit_session(sessions) as session:
                 door = await session.get(DoorBuild, build_id)
                 assert door is not None
@@ -79,11 +79,12 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
             newer = await new.rebuild(kinds=(BuildKind.DOOR,))
             release.set()
 
+    assert newer is not None
     assert old_results[0].run_ids == newer.run_ids
     async with sessions() as session:
         active = (await session.scalars(select(ComputationRun).where(ComputationRun.is_active))).one()
         assert active.checked_generation is not None
-        assert active.checked_generation > original.input_generation
+        assert active.checked_generation > inputs[0].input_generation
         holders = (await session.scalars(select(TitleHolder))).all()
         assert holders
         assert all(holder.metric_snapshot.get("volume") == 50 for holder in holders)

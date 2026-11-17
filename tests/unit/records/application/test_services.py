@@ -1008,6 +1008,7 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
 
 async def test_failed_kind_does_not_roll_back_other_kind_publication() -> None:
     class FailingRuns(FakeRuns):
+        @override
         async def activate(self, batch: ComputationBatch) -> int:
             if batch.kind is BuildKind.DOOR:
                 raise RuntimeError("door computation failed")

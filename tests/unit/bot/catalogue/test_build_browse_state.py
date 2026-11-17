@@ -770,7 +770,9 @@ async def test_schematic_conversion_separates_releases_from_maintenance() -> Non
             ui.control(ui.key_for(key))
         ui.control(ui.key_for("convert-version"))
         maintenance = await ui.press_for_form(ui.key_for("conversion-maintenance"))
-        assert {item.custom_id for item in maintenance.modal.walk_children() if hasattr(item, "custom_id")} == {
+        assert {
+            getattr(item, "custom_id", None) for item in maintenance.modal.walk_children() if hasattr(item, "custom_id")
+        } == {
             "format",
             "data_version",
         }

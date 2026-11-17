@@ -12,6 +12,7 @@ from collections import OrderedDict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import override
 
 from squid.core.i18n import tr
 from squid.permissions.domain.matching import MAX_SEGMENTS, Pattern
@@ -37,19 +38,23 @@ class Catalogue(Mapping[str, PermissionNode]):
         self._nodes = {node.name: node for node in nodes}
         self._expansions: OrderedDict[Pattern, frozenset[PermissionNode]] = OrderedDict()
 
+    @override
     def __getitem__(self, name: str) -> PermissionNode:
         try:
             return self._nodes[name]
         except KeyError:
             raise UnknownPermissionNodeError.for_name(name) from None
 
+    @override
     def __contains__(self, name: object) -> bool:
         return name in self._nodes
 
+    @override
     def __iter__(self) -> Iterator[str]:
         """Iterate names in stable order."""
         return iter(sorted(self._nodes))
 
+    @override
     def __len__(self) -> int:
         return len(self._nodes)
 

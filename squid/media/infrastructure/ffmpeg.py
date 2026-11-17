@@ -17,6 +17,8 @@ from typing import Any
 import ffmpeg
 from anyio import CancelScope, fail_after
 from ffmpeg.dag.nodes import OutputStream
+from ffmpeg.options.codec import decoder_codec_context, encoder_codec_context
+from ffmpeg.options.format import encoder_format_context
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 try:
@@ -327,10 +329,8 @@ class FfmpegMediaProcessor:
                 vcodec="mjpeg",
                 q=2,
                 pix_fmt="yuvj420p",
-                codec_options=ffmpeg.options.codec.encoder_codec_context(
-                    threads=self._process_limits.threads, flags="+bitexact"
-                ),
-                format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
+                codec_options=encoder_codec_context(threads=self._process_limits.threads, flags="+bitexact"),
+                format_options=encoder_format_context(fflags="+bitexact"),
                 f="image2",
                 extra_options={"update": 1},
             ),
@@ -362,7 +362,7 @@ class FfmpegMediaProcessor:
         return ffmpeg.input(
             source_path.absolute(),
             ss=seek,
-            codec_options=ffmpeg.options.codec.decoder_codec_context(threads=self._process_limits.threads),
+            codec_options=decoder_codec_context(threads=self._process_limits.threads),
             extra_options={
                 "protocol_whitelist": _INPUT_PROTOCOLS,
                 "protocol_blacklist": _NETWORK_PROTOCOLS,

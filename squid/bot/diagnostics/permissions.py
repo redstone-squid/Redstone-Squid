@@ -67,7 +67,7 @@ class GuildPermissionDiagnostics(sl.Component[ComponentsV2Target, sd.Request]):
             return PermissionFinding(key, title, tr(t"permission-channel-unset = No channel configured."))
         channel = self.guild.get_channel_or_thread(channel_id)
         member = self.guild.me
-        if channel is None or member is None:
+        if channel is None:
             return PermissionFinding(
                 key,
                 title,
@@ -98,7 +98,7 @@ class GuildPermissionDiagnostics(sl.Component[ComponentsV2Target, sd.Request]):
     def role(self, role_id: int) -> PermissionFinding:
         title = tr(t"permission-redstoner-role = Redstoner role assignment")
         role, member = self.guild.get_role(role_id), self.guild.me
-        if role is None or member is None:
+        if role is None:
             detail = tr(t"permission-role-unavailable = The configured role or bot membership is unavailable.")
         elif not member.guild_permissions.manage_roles:
             detail = tr(t"permission-role-manage = Missing Manage Roles.")

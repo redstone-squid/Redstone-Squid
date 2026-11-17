@@ -232,7 +232,12 @@ class PostgresRangePublicationRepository:
         # One statement prevents activation between reading active and latest.
         rows = (
             await self._session().execute(
-                select(DoorRangeRegistration, DoorRangeRun, DoorRangeSnapshot, DoorRangeRecomputeQueueItem.query_id)
+                select(
+                    DoorRangeRegistration,
+                    DoorRangeRun,
+                    DoorRangeSnapshot,
+                    DoorRangeRecomputeQueueItem.query_id.is_not(None),
+                )
                 .outerjoin(
                     DoorRangeRun,
                     and_(
@@ -262,7 +267,7 @@ class PostgresRangePublicationRepository:
             next((a for a in attempts if a.is_active), None),
             attempts[0] if attempts else None,
             last_checked_at=None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
-            refresh_pending=rows[0][3] is not None,
+            refresh_pending=rows[0][3],
         )
 
 

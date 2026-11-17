@@ -13,6 +13,7 @@ import aiohttp
 import anyio
 import bs4
 import ffmpeg
+from ffmpeg.options.codec import decoder_codec_context
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ async def extract_video_preview(video_data: bytes, *, timeout_seconds: float = 1
                         ffmpeg.input(
                             str(source),
                             ss=offset,
-                            codec_options=ffmpeg.options.codec.decoder_codec_context(threads=1),
+                            codec_options=decoder_codec_context(threads=1),
                             extra_options={"protocol_whitelist": "file,pipe"},
                         )
                         .video_stream(0)
