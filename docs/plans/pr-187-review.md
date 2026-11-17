@@ -12,15 +12,17 @@ exhausted. There are no conversation comments by `Glinte`; the sole
 [review summary](https://github.com/redstone-squid/Redstone-Squid/pull/187#pullrequestreview-5831031408)
 has an empty body. All four comments are preserved verbatim below.
 
-The plan uses the review anchors and a preliminary inspection of the current
-`schematics-phase-0-stack-23` checkout. Unchecked tasks describe follow-up work,
-not GitHub thread status. The broad design comments require investigation before
-choosing a replacement; moving code alone does not establish that they are resolved.
+All four requests have a local implementation below. GitHub was rechecked on
+2026-11-17: PR 187 is merged at the same head; all four threads remain unresolved
+(one anchor is outdated). Follow-ups are local on master; no replies, resolutions,
+or pushes were made.
 
-## Implementation progress — 2026-11-17
+## Completion audit — 2026-11-17
 
-P3 is satisfied in `637e9a9c7`: one optional runtime lookup is followed by typed
-`ApplicationRuntime`/`ApiServices` access. Observability imports are module-level;
+P3 is satisfied in `637e9a9c7` and `8df7ef991`: one optional runtime lookup is
+followed by typed `ApplicationRuntime[ApiServices]` access. Runtime imports stay
+annotation-only so exception handling does not load the application graph.
+Observability imports are module-level;
 reporting failures remain contained. API application tests passed.
 
 P4 is satisfied in `63af9dd89`: the workspace owns reservation cleanup, while the account service
@@ -31,62 +33,37 @@ reservation. Cleanup is shielded and catches cancellation during redemption as
 well as ordinary failures. Account panel, consent, and service tests passed,
 including new cancellation/failure and duplicate-answer regressions.
 
-P1 and P2 remain open. Shared `Actor` has replaced several former identity shapes,
-but the REST lifecycle and remaining wrappers still require a complete audit.
+P1 is satisfied in `54564e6f4`: reusable REST lifecycle belongs to
+`squid/discord_rest.py`; the voter adapter owns membership lookup and capability
+resolution. Bootstrap creates one cached client and registers its close callback.
+The HTTP subclass is necessary because discord.py has no per-client Route base
+and its public login fetches unused application details. The isolated adapter
+updates both Client and ConnectionState HTTP references so returned models share
+rate-limit state. Concurrent login, retry after failure/cancellation, shutdown,
+TTL expiry, absent membership, unreadable guilds, and transient failures are tested.
+Membership caches contain Discord facts, with account ownership and permissions
+resolved again so identity merges and permission changes cannot reuse stale authority.
 
-## Follow-up work
-
-### P1 Discord REST responsibilities
-
-Comment 1 concerns the whole `squid/voting/infrastructure/discord_rest.py` file.
-The current module combines a gateway-less discord.py client, lazy login and URL
-rebasing, and cached member lookup with voting capability resolution.
-
-- [ ] Trace bootstrap, shutdown, and adapter callers. Separate reusable REST
-  client lifecycle from voting-specific member resolution where this gives each
-  responsibility a clear owner. Keep one shared client per process for rate limits.
-- [ ] Review the HTTPClient subclass and replacement of the client's connection
-  state. Isolate and explain any necessary discord.py internals; evaluate simpler
-  supported construction before introducing another abstraction.
-- [ ] Make login, failed-login retry, concurrent first requests, cancellation,
-  and close behavior explicit. Preserve configurable API URLs and bounded
-  rate-limit waits.
-- [ ] Verify member-cache expiry and the distinction between absent members,
-  unreadable guilds, and transient failures. Preserve interactive errors and the
-  background refresh behavior that retains cached weights when lookup fails.
-
-**Acceptance:** focused client/resolver tests cover lifecycle and lookup outcomes;
-callers can follow client ownership without tracing voting policy code.
-
-### P2 Access-control actor types
-
-Comment 2 targets `BuildEditor`, originally a subject plus optional Discord ID.
-It now wraps only `Subject`. Related representations include permission-admin
+P2 is satisfied in `8918bdf90`: build authorization accepts `Actor` directly,
+with history source supplied by the edit operation. `Subject`, permission-admin
 `Actor`, `VoteActor`, `ReactionActor`, `SuggestionViewer`, and
-`AuthenticatedSubmissionActor`.
-
-- [ ] Inventory these types and their callers: distinguish authenticated identity,
-  permission subject, resource ownership, and resolved capabilities. Identify
-  duplicate wrappers and conversions without assuming every actor means the same thing.
-- [ ] Decide whether build editing can accept `Subject` directly, and remove
-  redundant wrappers where they add no contract. Keep domain-specific facts where
-  policies actually need them; avoid one actor with many optional fields.
-- [ ] Coordinate the suggestion identity decision with P2 of
-  [the PR 186 plan](pr-186-review.md), so the two efforts use the same conclusion.
-- [ ] Update transport adapters and application callers together. Preserve
-  authorization rechecks inside write transactions and the distinction between
-  account IDs and Discord IDs.
-
-**Acceptance:** build-edit, submission, and affected permission tests preserve
-allowed and denied outcomes, including missing identity and scoped permissions;
-remaining actor types have a clear reason to exist.
+`AuthenticatedSubmissionActor` have converged on `squid.core.actors.Actor`.
+It carries trusted identity/context, with require methods for account, Discord ID,
+and delegation rank. Capabilities are feature-specific resolved results; permission
+checks still resolve current authority independently. Persistence/history IDs remain
+distinct from account/Discord IDs. Transactional edit and recalculation authorization
+checks remain in their write transactions. Build unit tests and PostgreSQL
+recalculation tests pass; suggestions reuse the same identity contract (PR 186 P2).
 
 ## Validation
 
 API application, account service, account panel, and consent tests pass, including
 redemption cancellation and repeated callbacks. Whole-project Pyrefly passes.
-Remaining REST and actor work must retain transactional authorization checks and
-shared client ownership. GitHub threads were not changed.
+REST lifecycle, voter cache, build authorization, and PostgreSQL recalculation
+tests also pass. GitHub threads were not changed.
+
+Final whole-checkout validation: 8,982 local-suite tests passed, with 20 opt-in
+cases skipped. Whole-project Pyrefly reports zero errors.
 
 ## Original comments
 

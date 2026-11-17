@@ -12,12 +12,12 @@ and reviews were exhausted. There are no general conversation comments by `Glint
 The sole [review summary](https://github.com/redstone-squid/Redstone-Squid/pull/186#pullrequestreview-5724756118)
 by `Glinte` has an empty body and adds no request.
 
-The inventory below preserves every inline comment verbatim, with its original
-file, line, and link. The work packages interpret those comments using their PR
-diff context. All tasks await an implementation audit: unchecked items do not
-claim the current checkout still has the problem, or that a GitHub thread is
-unresolved. Questions remain decisions to investigate rather than predetermined
-implementation requirements.
+The inventory below preserves every inline comment verbatim. All work packages
+have a completed implementation or explicit design disposition below.
+
+GitHub recheck on 2026-11-17: PR 186 is merged at the same published head;
+all 15 threads remain unresolved, with no outdated anchors. Follow-up commits are
+local on master; no GitHub replies, resolutions, or pushes were made.
 
 ## Implementation audit — 2026-11-17
 
@@ -46,7 +46,7 @@ session; publication attaches a Discord message and reconciliation owns its card
 `PollPublicationError` retains retry state so failed attachment reuses a returned
 message and never creates a second session. Publisher and wizard tests pass.
 
-P2 is satisfied: provider modules own source definitions; deployment composition
+P2 is satisfied in `d67b4d696`: provider modules own source definitions; deployment composition
 selects provider groups and accepts additional sources without a central ID list.
 The service resolves a source, checks visibility and context, bounds provider work,
 and ranks candidates; composed providers preserve their ranking but cannot exceed
@@ -70,6 +70,9 @@ service/Discord limits, form-option compatibility, and command binding tests pas
 The focused search, publisher, wizard, reconciliation, resource-key, and channel
 safety tests pass. Commit hooks format and lint changed files. Whole-project
 Pyrefly passes. GitHub review threads were not changed.
+
+Final whole-checkout validation: 8,982 local-suite tests passed, with 20 opt-in
+cases skipped. Whole-project Pyrefly reports zero errors.
 
 ## Original comments
 

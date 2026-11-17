@@ -16,8 +16,10 @@ and anchors are preserved below.
 
 ## Completion audit — 2026-11-17
 
-All three requests are addressed in the implementation checkout. GitHub review
-state and propagation to the published stack are separate from this audit.
+All three requests are addressed in the implementation checkout. GitHub was
+rechecked on 2026-11-17: PR 188 is merged at the same head; all three threads remain
+unresolved, with no outdated anchors. Follow-ups are local on master; no GitHub
+replies, resolutions, or pushes were made.
 
 ### P1 Profile contracts
 
@@ -60,8 +62,11 @@ restrictions and supply dependency injection rather than duplicating validation.
 Validation: account unit tests, consent dependencies, profile routes, account panel,
 and consent-gate tests passed. Coverage includes patch normalization and clearing,
 hidden profiles and private avatars, redirects, verification failure and lockout,
-reservation release, and single-use merge behavior. Repository code is unchanged;
-no new database migration or repository integration run was needed.
+reservation release, and single-use merge behavior. Repository behavior is unchanged;
+no profile schema migration was needed.
+
+Final whole-checkout validation: 8,982 local-suite tests passed, with 20 opt-in
+cases skipped. Whole-project Pyrefly reports zero errors.
 
 ## Original comments
 

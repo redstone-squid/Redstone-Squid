@@ -1,148 +1,118 @@
-# PR 200 review follow-up plan
+# PR 200 review follow-up
 
-## Scope and audit baseline
+## Completion audit — 2026-11-17
 
-Address all 16 inline comments by `Glinte` on
-[PR 200](https://github.com/redstone-squid/Redstone-Squid/pull/200),
-“Schematics phase 0 stack 16”. The review was inspected on 2026-11-13 against
-published head `e899338aab396f7b951511130dec2350fe391e09` and local commit
-`f4263a3a7`. All 16 threads were unresolved. The review summary was empty;
-the general conversation contained no additional comments by `Glinte`.
+All 16 inline comments by `Glinte` on
+[PR 200](https://github.com/redstone-squid/Redstone-Squid/pull/200) have a local
+implementation or the explicit disposition below. The original audit inspected
+published head `e899338aab396f7b951511130dec2350fe391e09` on 2026-11-13.
+The review summary was empty and the conversation added no requests.
 
-The local branch is `schematics-phase-0-stack-23`; PR 200 publishes
-`schematics-phase-0-stack-16`. A local fix does not establish that the published
-PR contains it. Recheck both heads before implementation or reporting completion.
-An outdated GitHub anchor also does not establish that its concern is resolved.
+GitHub was rechecked on 2026-11-17: PR 200 is closed without merging and retains
+that head on `schematics-phase-0-stack-16`. All 16 threads remain unresolved
+(seven anchors are outdated). Follow-ups are committed locally on `master`;
+this audit does not change the closed PR, post replies, resolve threads, or push.
+The implementation must be published from the current branch independently of
+the closed stack snapshot.
 
-Paths below are relative to `packages/squid-ui-discord/src/squid_ui/ext/discord/`.
-The former `DiscordUI` is now `Scope`, `DiscordRequest` is now `Request`, and
-`ext/cog.py` has moved to `cog.py`.
+Paths below refer to `packages/squid-ui-discord/src/squid_ui/ext/discord/`.
+The former DiscordUI/DiscordRequest are now Scope/Request, and ext/cog.py is cog.py.
 
-## Implementation progress — 2026-11-17
+## P1 Typed requests and source normalization
 
-This plan remains open. The following local changes supersede the older inventory:
+Scope/Request propagate concrete client and owner types through runtime construction,
+command bindings, source factories, and public accessors. Typing fixtures pin bot,
+owner, native context, interaction, and component-event inference. Destinations
+retain MessageDestination; no untyped presentation boundary was reintroduced.
 
-- Scope and Request already preserve concrete owner/client types; whole-project
-  Pyrefly checks the existing inference fixtures without errors.
-- In `1f7f88355`, response settings now narrow sentinel types explicitly, removing both resolver
-  casts. Screen policy discovery uses the typed `Screen` contract. Retain compiled
-  class defaults: they supply inherited audience/access and session naming before
-  runtime defaults and per-call overrides are combined.
-- Static dispatch now uses `match`, with LayoutView before View. Native payloads
-  pass through; component/document rendering remains unchanged. Facade and screen
-  tests passed.
+`b7bfe72bd` consolidates source contracts into RequestSource, accepting native
+Interaction, Context, Message, and structural Replyable adapters. Native matching
+populates one immutable source record. Accessors and delivery use that record;
+structural reflection is confined to adapter normalization and memo storage.
+Interaction casts express the already established same-runtime client type;
+structural casts are confined to the adapter's native-conformance boundary.
+Useful content, destination, and localization-resolver contracts remain distinct.
+The bot's localization adapter and test support use the consolidated source type
+(`866beac72`).
 
-Import-cycle removal, source normalization, typed form results, and the remaining
-inventory dispositions still need work. Published heads and GitHub thread state
-have not been rechecked or changed.
+`1f7f88355` removes both policy sentinel casts with explicit narrowing. Existing
+ledger tests retain private replies, managed deferral, external acknowledgement,
+hybrid contexts, and audience mismatch checks.
+
+## P2 Imports, policy, and static dispatch
+
+Lifetime now owns the weak installation registry and source lookup. Request factories
+call that owner directly; they no longer import runtime construction locally.
+Annotation-only MessageRoot/Session/SessionSpec dependencies remove the reverse
+runtime dependency, allowing root request resolution at module scope. A fresh
+interpreter imports the package successfully.
+
+Keep compiled Screen defaults behind the typed Screen contract. They combine
+inherited audience/access and implicit session names before installation defaults
+and per-call overrides are resolved. Removing them would move that work to every
+caller. Policy precedence is covered by screen/facade tests. Static rendering uses
+match, with LayoutView before View and native payloads passed through.
+
+## P3 Diagnostics and validated forms
+
+Keep the session-without-source TypeError as an English developer diagnostic: it
+reports an invalid API call before delivery, rather than a reader-correctable error.
+The bot's unexpected-error presenter records the exception and sends a translated
+generic notice with a reference, without exposing the diagnostic text.
+
+Request.form now accepts a typed Form instance. Its schema parses fields and runs
+cross-field validation before on_submit receives the same typed instance. Required
+and optional descriptors retain their value types. A separate required on_invalid
+handler receives FormResult, including attempted input and errors, so application
+presentation owns correction/retry. Invalid input never reaches on_submit.
+Runtime tests cover valid/invalid integers and omitted optional text; typing fixtures
+pin int and str | None access.
+
+Dynamic FormSpec callbacks still receive raw control dictionaries and own evaluation;
+native Modal/ModalSpec handling remains native. ParamSpec describes callable argument
+lists, not the runtime keys of a dynamic schema, so it cannot strengthen that raw
+mapping. Static declarations use Form descriptors for this relationship instead.
+
+## P4 Cog lifecycle and native keywords
+
+Inspected the installed discord.py CogMeta implementation and typing. The library
+has no __init_subclass__ override or additional class keywords; native CogMeta owns
+name, description, command_attrs, and group keyword behavior directly. Copying its
+implementation would introduce a second keyword contract without adding behavior.
+
+Keep per-instance wrappers around ordinary cog_load/cog_unload hooks. Native bot
+registration invokes those hooks; subclass authors use familiar overrides and
+super() without opting into a separate registration API. A separate bot integration
+or copying private injection/removal code would require hosts to coordinate the
+same cleanup manually. Wrapping once per instance avoids repeating setup through
+an inheritance chain. Menus register before loading; failed load and failing unload
+both close scopes and remove menus in finally blocks. Focused tests cover rollback,
+context menus, inherited hooks with/without super(), and runtime lookup without ui.
+
+## Validation
+
+Fresh package import, concrete client/owner typing, request, runtime, command/cog,
+facade response/scope, and screen tests pass. Commit hooks format/lint changed files.
+The final full local suite passed: 8,982 tests, with 20 opt-in cases skipped.
+Whole-project Pyrefly reports zero errors; `git diff --check` passes.
 
 ## Comment inventory
 
 | # | Comment and original location | Audit result |
 | --- | --- | --- |
-| 1 | [“should be generic to the ClientT too”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889164939), `facade.py:44` | Outstanding: `Scope` retains only `OwnerT`; its runtime uses `discord.Client`. |
-| 2 | [“why is request untyped”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889170843), `facade.py:206` | Addressed in both snapshots with `request: Request[Any]`. Verify owner/client precision during P1. |
-| 3 | [“some of these are needed, but too many new types for no good reason”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172055), `contracts.py:29` | Outstanding: the alias layers remain substantially intact. |
-| 4 | [“I wonder if this is really needed”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172568), `facade.py:82` | Outstanding design decision: `_policy` still discovers `__response_spec__` on the content class. |
-| 5 | [“we gotta eliminate circular imports that make this needed”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172982), `facade.py:90` | Outstanding: the facade import moved, but request resolution still imports the runtime locally to break cycles. |
-| 6 | [“match statement?”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889173466), `facade.py:98` | Outstanding: `render` still uses an `isinstance` ladder. |
-| 7 | [“why is destination untyped”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889175526), `facade.py:237` | Fixed locally with `MessageDestination`; still untyped in the PR snapshot. |
-| 8 | [“untranslated?”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889177167), `facade.py:264` | Needs a disposition: the anchored string is a `TypeError` diagnostic about session delivery without a source. |
-| 9 | [“why is a cast needed here”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889179227), `facade.py:307` | Outstanding: the sentinel-unwrapping cast moved into `ResponseSpec.resolve`. |
-| 10 | [“so many casts...”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889182612), `facade.py:325` | Partially restructured: policy resolution still casts access, and facade/request casts remain. |
-| 11 | [“too many getattr, we should just discriminate the types of the source”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889185667), `request.py:58` | Outstanding: source normalization and accessors still use `getattr` and casts. |
-| 12 | [“why is a cast needed here”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889202184), `request.py:312` | Original audience-selection code was removed in both snapshots. Verify the replacement preserves narrowing and deferral behavior. |
-| 13 | [“can we keep a stronger type for dict[str, object]? ParamSpec? Concatenate? idk”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889205368), `request.py:338` | Outstanding: `form` callbacks still receive `dict[str, object]`. |
-| 14 | [“we can just copy upstream and then add kwargs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889219467), `ext/cog.py:23` | Outstanding: `__init_subclass__` still accepts `**kwargs: object`. |
-| 15 | [“idk, can we do something better? this is not convenient for devs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889225280), `ext/cog.py:25` | Resolved: `sd.Cog` wraps native `cog_load`/`cog_unload` overrides per instance to preserve UI setup and cleanup. |
-| 16 | [“urm, detecting a public attrbute isnt a good idea”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889247527), `ext/cog.py:34` | Fixed locally through `DiscordUIRuntime.of(bot)`; the PR still inspects `bot.ui`. |
-
-## Implementation work
-
-### P1 Preserve types through the facade and request boundary
-
-Comments: 1–3, 7, 9–12.
-
-- [ ] Trace runtime, scope, request, and command callback types. Preserve the concrete
-  client type alongside the owner type through construction and public accessors.
-  Avoid replacing lost type information with `Any` at the next boundary.
-- [ ] Audit alias consumers before consolidating `InteractionSource`, `CommandSource`,
-  `RequestSource`, and `ResponseSource`. Keep aliases that express a useful contract;
-  remove redundant names and update exports, callers, and documentation together.
-- [ ] Retain the existing request and destination annotations. Tighten their type
-  parameters where the enclosing scope establishes the relationship.
-- [ ] Narrow native interaction, command context, and message sources by their
-  actual types. Inspect structural `Replyable` support and its callers before
-  changing accepted inputs; isolate any necessary adapter boundary.
-- [x] Review sentinel and access-policy narrowing in `ResponseSpec.resolve`.
-  Remove redundant casts and justify genuinely necessary ones at the boundary
-  that establishes their invariant. Moving casts does not close the concern.
-- [ ] Verify concrete client/owner inference, hybrid contexts, bare messages,
-  private delivery, and deferred response audience compatibility.
-
-### P2 Remove import cycles and clarify response policy discovery
-
-Comments: 4–6.
-
-- [ ] Trace the dependency cycle between runtime, scope, and request resolution.
-  Move ownership lookup or request construction to its natural owner so runtime
-  imports can be module-level. Do not add forwarding modules merely to hide cycles.
-- [x] Inspect screen declarations and policy precedence. Decide whether
-  `__response_spec__` discovery is needed or can be replaced by an explicit typed
-  contract. Preserve installation defaults, screen defaults, and per-call overrides.
-  Record the rationale if class-level declarations remain useful.
-- [x] Express static render dispatch with `match`, preserving `LayoutView` before
-  `View`, native payload passthrough, and component/document rendering behavior.
-- [ ] Verify imports in a fresh interpreter and focused rendering/policy tests.
-
-### P3 Decide diagnostic localization and form value typing
-
-Comments: 8, 13.
-
-- [ ] Trace the session-delivery `TypeError` through error handling. If it is only a
-  programmer diagnostic, retain it and record that rationale. If users can see it,
-  translate the user-facing error at the presentation boundary.
-- [ ] Inspect `FormSpec`, schema evaluation, modal construction, and callback callers.
-  Choose a typed result contract that relates declared fields to submitted values.
-  Distinguish raw control values from validated values and preserve validation ownership.
-  `ParamSpec` alone does not describe the keys and values in a result dictionary.
-- [ ] Verify callback type inference and runtime submission/validation behavior,
-  including optional fields and invalid input, for the chosen contract.
-
-### P4 Improve cog integration without weakening cleanup
-
-Comments: 14–16.
-
-- [ ] Inspect the pinned discord.py implementation and typing for cog class keywords.
-  Reuse or mirror its supported keyword contract, adding only library-owned options.
-- [ ] Design a lifecycle integration that allows familiar cog hooks while ensuring
-  scope closure and context-menu cleanup. Evaluate composition or integration at
-  registration/removal before choosing an interception mechanism.
-- [ ] Migrate existing cog subclasses consistently. Preserve cleanup when loading
-  fails, unloading raises, or subclasses inherit hooks.
-- [ ] Retain `DiscordUIRuntime.of(bot)` and verify runtime lookup does not depend on
-  an arbitrary public `ui` attribute.
-- [ ] Run focused lifecycle, rollback, context-menu, and runtime-lookup tests.
-
-## Execution and completion
-
-Start with P1's type boundaries, then P2's dependency and policy changes. P3 and P4
-can follow as separate reviewable changes. Commit independently valid pieces as
-they are completed. Preserve unrelated work already present in the checkout.
-
-For implementation changes, run affected tests with `--no-cov` during development
-and after the final edit. Format and lint affected files, confirm installed commit
-hooks, run `just typecheck` once for the whole project, and run `git diff --check`.
-Leave the full suite to CI unless the resulting scope or uncertainty warrants it.
-
-Before declaring the review addressed:
-
-- [ ] Give every inventory item an implementation commit or a concrete, justified
-  disposition, including items already addressed at the audit baseline.
-- [ ] Recheck the published PR head separately from the implementation branch.
-  Identify which fixes still need propagation through the stack; do not claim that
-  local completion means PR 200 has been updated.
-- [ ] Report remaining GitHub thread state separately from code status. Posting
-  replies or resolving threads requires an explicit request to do so.
-
-Local implementation is in progress; GitHub threads have not been updated.
+| 1 | [“should be generic to the ClientT too”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889164939), `facade.py:44` | Satisfied: Scope and Request preserve both owner and concrete client types; typing fixtures pin their accessors. |
+| 2 | [“why is request untyped”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889170843), `facade.py:206` | Satisfied: facade request annotations retain the enclosing owner/client relationship. |
+| 3 | [“some of these are needed, but too many new types for no good reason”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172055), `contracts.py:29` | Satisfied in `b7bfe72bd`: one RequestSource contract replaces redundant source aliases; content/destination contracts remain useful. |
+| 4 | [“I wonder if this is really needed”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172568), `facade.py:82` | Disposition: typed Screen policy discovery preserves inherited defaults and session naming; see P2. |
+| 5 | [“we gotta eliminate circular imports that make this needed”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889172982), `facade.py:90` | Satisfied in `b7bfe72bd`: Lifetime owns lookup; request/root imports are module-level, rendering dependencies annotation-only. |
+| 6 | [“match statement?”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889173466), `facade.py:98` | Satisfied in `1f7f88355`: match dispatch preserves LayoutView priority and native passthrough. |
+| 7 | [“why is destination untyped”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889175526), `facade.py:237` | Satisfied: MessageDestination annotates delivery; concrete target/client inference is tested. |
+| 8 | [“untranslated?”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889177167), `facade.py:264` | Disposition: retain the developer-only TypeError; public errors use the translated generic notice, see P3. |
+| 9 | [“why is a cast needed here”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889179227), `facade.py:307` | Satisfied in `1f7f88355`: explicit sentinel narrowing removes resolver casts. |
+| 10 | [“so many casts...”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889182612), `facade.py:325` | Satisfied: policy/access narrowing removes casts; remaining adapter casts have their source/client invariant at the boundary. |
+| 11 | [“too many getattr, we should just discriminate the types of the source”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889185667), `request.py:58` | Satisfied in `b7bfe72bd`: native source discrimination fills one normalized record; reflection is confined to structural adapters. |
+| 12 | [“why is a cast needed here”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889202184), `request.py:312` | Satisfied: replacement request ledger narrows native interaction/context delivery and tests deferral audience compatibility. |
+| 13 | [“can we keep a stronger type for dict[str, object]? ParamSpec? Concatenate? idk”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889205368), `request.py:338` | Satisfied in `b7bfe72bd`: typed Form callbacks receive validated instances; invalid results retain attempted input. |
+| 14 | [“we can just copy upstream and then add kwargs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889219467), `ext/cog.py:23` | Disposition: no __init_subclass__ override remains; native CogMeta owns its complete keyword contract. |
+| 15 | [“idk, can we do something better? this is not convenient for devs”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889225280), `ext/cog.py:25` | Satisfied: ordinary cog_load/cog_unload overrides retain cleanup, inherited hooks, and rollback tests. |
+| 16 | [“urm, detecting a public attrbute isnt a good idea”](https://github.com/redstone-squid/Redstone-Squid/pull/200#discussion_r3889247527), `ext/cog.py:34` | Satisfied: installation lookup uses Lifetime through DiscordUIRuntime.of, independent of bot.ui. |
