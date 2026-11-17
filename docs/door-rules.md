@@ -14,7 +14,7 @@ The post should also contain a link to all previous records that were beaten, st
 
 # 2 Build Categorisation
 
-A build is a collection of blocks and entities that serves a specific function, with one [input device](#bookmark=id.376yito2774y) to control the whole build. Every function of a build must always be achievable with a single use of the [input device](#bookmark=id.376yito2774y). (This purple text means it is a definition in [Terminology](#5-terminology)).
+A build is a collection of blocks and entities that serves a specific function, with one input device to control the whole build. Every function of a build must always be achievable with a single use of the input device. (This purple text means it is a definition in [Terminology](#5-terminology)).
 
 We currently have support and recognise records for these types of builds.
 
@@ -32,15 +32,15 @@ Builds can break with every Minecraft update. To acknowledge this, builds workin
 
 A Piston Door is a type of [entrance](#2.2-entrances) where:
 
-* the [hallway](#bookmark=id.u3zwg5scbk10) is only horizontal or vertical
+* the hallway is only horizontal or vertical
 
-* the [hallway](#bookmark=id.u3zwg5scbk10) is [CONTINUABLE](#bookmark=id.9ril221an9j8)
+* the hallway is CONTINUABLE
 
 The name of a piston door is as follows.
 
-| Title:  | [\<wiring placement restrictions\>](#bookmark=id.dw1u10bmv4zy) [\<animated restrictions\>](#bookmark=id.71ilnvs5ujkt) \<size\> \<type\> \<orientation\> |
+| Title:  | \<wiring placement restrictions\> \<animated restrictions\> \<size\> \<type\> \<orientation\> |
 | :---- | :---- |
-| Subtitle: | [**\<component restrictions\>**](#bookmark=id.ny3ght6f4bhl) **[\<miscellaneous restrictions\>](#bookmark=id.34l6fv2mkho2)** |
+| Subtitle: | **\<component restrictions\>** **\<miscellaneous restrictions\>** |
 | e.g.  | flush seamless full-sync 5x5 iris funnel trapdoor |
 |  | No slimes, honey, observers, directional |
 
@@ -114,7 +114,7 @@ If the door expands in two or more dimensions, use algebraic notations to descri
 
 **\<orientation\>** refers to the orientation of the frame:
 
-1) SKYDOOR: if the door faces up or down, or TRAPDOOR under [certain circumstances](#bookmark=id.nfxdw85x60ra).
+1) SKYDOOR: if the door faces up or down, or TRAPDOOR under certain circumstances.
 
 2) DOOR: If the door faces one of the four cardinal directions.
 
@@ -122,7 +122,7 @@ If the door expands in two or more dimensions, use algebraic notations to descri
 
 **\<wiring placement restrictions\>** are optional. They describe how the circuitry and frame must be positioned relative to each other and the floor/walls/ceiling.
 
-1) SEAMLESS: Generally, a door is seamless if you can’t tell if it’s there inside the hallway.  Specifically, seamless doors must match the \<type\>’s [hallway composition](#bookmark=id.u2f6cgbeoybs) i.e. no circuitry is visible inside the hallway. The operations/states this condition is followed determines the tier of seamless.
+1) SEAMLESS: Generally, a door is seamless if you can’t tell if it’s there inside the hallway.  Specifically, seamless doors must match the \<type\>’s hallway composition i.e. no circuitry is visible inside the hallway. The operations/states this condition is followed determines the tier of seamless.
 
    4 tiers where:  
    \= No circuitry AND no entities must be visible inside the hallway  
@@ -137,7 +137,7 @@ If the door expands in two or more dimensions, use algebraic notations to descri
 
    NOTE: Certain SEAMLESS tiers are not compatible with certain \<type\>, e.g. QUART SEAMLESS and GLASS / HIDDEN SAND / HIDDEN LAMP.
 
-2) DENTLESS: There must be no protrusions or recessions present on the hallway, except those that match the \<type\>’s [hallway composition](#bookmark=id.4ewp9eay2vdg).
+2) DENTLESS: There must be no protrusions or recessions present on the hallway, except those that match the \<type\>’s hallway composition.
 
    protrusions inside the hallway include:
 
@@ -206,7 +206,7 @@ recessions include:
 6) EXPANDABLE: sets of additional layers can be repeated to expand the frame to create a single larger door simultaneously with each other, with the original wiring needing only  minor changes.  
    All layers are controlled from one input block, located on the original wiring.
 
-   1) INFINITELY EXPANDABLE: The door can be expanded indefinitely, [ignoring world border](#bookmark=id.86enyuqr85h3).
+   1) INFINITELY EXPANDABLE: The door can be expanded indefinitely, ignoring world border.
 
    2) FINITELY EXPANDABLE:  There is a limit (8 at minimum[**)**](https://dictionary.cambridge.org/vi/dictionary/british-grammar/future-be-going-to-i-am-going-to-work) to how much the door can be expanded
 
@@ -332,7 +332,7 @@ Title:		**\<wiring placement restrictions\> \<size\> \<type\>**
 
 Subtitle:	**\<component restrictions\> \<miscellaneous restrictions\>**
 
-1) **\<size\>** is similar to [here](#bookmark=id.qqqpwejd11cl).[1](#bookmark=id.gcaq4hw724k)
+1) **\<size\>** is similar to here.1
 
 2) **\<type\>** refers to the type, placement, orientation and composition of the entrance blocks.
 
@@ -358,16 +358,16 @@ Subtitle:	**\<component restrictions\> \<miscellaneous restrictions\>**
 
 3) **\<wiring placement restrictions\>** are optional. They describe how the wiring and entrance blocks must be positioned relative to each other and the (outer) wall/floor/ceiling.
 
-   1) SEAMLESS, FLUSH, HIPSTER, DELUXE, DENTLESS, EXPANDABLE, TILEABLE, ***M*** WIDE, ***N*** HIGH: similar to the piston door restrictions [here](#bookmark=id.dw1u10bmv4zy).[1](#bookmark=id.gcaq4hw724k)
+   1) SEAMLESS, FLUSH, HIPSTER, DELUXE, DENTLESS, EXPANDABLE, TILEABLE, ***M*** WIDE, ***N*** HIGH: similar to the piston door restrictions here.1
 
    2) CONTINUABLE: the entrance pattern can be continued beyond the wiring region indefinitely.
 
    3) SWAPPED: The hallway is made of only quartz-like blocks when opened.  
       This restriction only applies to staircases.
 
-4) **\<component restrictions\>** are similar to the piston door restrictions [here](#bookmark=id.ny3ght6f4bhl).[1](#bookmark=id.gcaq4hw724k)
+4) **\<component restrictions\>** are similar to the piston door restrictions here.1
 
-5) **\<miscellaneous restrictions\>** are similar to the piston door restrictions [here](#bookmark=id.34l6fv2mkho2).[1](#bookmark=id.gcaq4hw724k)
+5) **\<miscellaneous restrictions\>** are similar to the piston door restrictions here.1
 
 ## 2.3 Piston Extenders {#2.3-piston-extenders}
 
@@ -406,11 +406,11 @@ Subtitle: **\<component restrictions\> \<miscellaneous restrictions\>**
 
    2) FLUSH // DELUXE: the block is flat with // 1 block in front of  the wall, floor or ceiling when retracted. All the circuitry must be behind the wall, floor or ceiling.
 
-   3) DENTLESS, EXPANDABLE, TILEABLE, ***M*** WIDE, ***N*** HIGH: similar to the piston door restrictions [here](#bookmark=id.dw1u10bmv4zy). [1](#bookmark=id.gcaq4hw724k)
+   3) DENTLESS, EXPANDABLE, TILEABLE, ***M*** WIDE, ***N*** HIGH: similar to the piston door restrictions here. 1
 
-5) **\<component restrictions\>** are similar to the piston door restrictions [here](#bookmark=id.ny3ght6f4bhl).[1](#bookmark=id.gcaq4hw724k)
+5) **\<component restrictions\>** are similar to the piston door restrictions here.1
 
-6) **\<miscellaneous restrictions\>** are similar to the piston door restrictions [here](#bookmark=id.34l6fv2mkho2).[1](#bookmark=id.gcaq4hw724k)
+6) **\<miscellaneous restrictions\>** are similar to the piston door restrictions here.1
 
 ## 2.4 Utilities {#2.4-utilities}
 
@@ -568,7 +568,7 @@ A build is considered **FIRST** if there is no other build in the same \<record 
 
 A build is considered **SMALLEST** if there is no other build in the same \<record category\> with a smaller volume. If there are multiple builds tied in volume, the SMALLEST record title holder is the one with an earlier proveable date of completion.
 
-**Volume \= width \* height \* depth** of the [circuitrywiring](#bookmark=id.9ltm257ngphf) of the build, measured along the x, y, and z dimensions, rounded up to the nearest integer. If the build is EXPANDABLE, there are additional guidelines, please scroll down three paragraphs. Both blocks and entities are considered in volume calculation, per the definition of [circuitrywiring](#bookmark=id.9ltm257ngphf).
+**Volume \= width \* height \* depth** of the circuitrywiring of the build, measured along the x, y, and z dimensions, rounded up to the nearest integer. If the build is EXPANDABLE, there are additional guidelines, please scroll down three paragraphs. Both blocks and entities are considered in volume calculation, per the definition of circuitrywiring.
 
 Each dimension is cumulatively measured across every closing/opening operation and opened/closed state. Hence the Volume is the **cumulative volume** that the wiring “covers” throughout all operations and states.
 
@@ -619,7 +619,7 @@ CONTAINED **Volume:** The diagram on the right explains how to convert an uncont
 
 A build is considered **FASTEST** if there is no other build in the same **\<record category\>** with a smaller time, using an equally or higher ranked method. If there are still multiple builds tied after all timing methods are considered, the **FASTEST** record title holder is the one with an earlier proveable date of completion.
 
-Methods for measuring the time of different types of builds are listed below. The time should be measured in-game using gameticks or seconds, where 1 second \= 20 gameticks. **Use repeater input when timing.** Note that a record [must work with both player input and repeater input](#bookmark=id.m25j8hjr6s0g), so this is always possible. The ending time of any block or piston movement is measured using the following method:
+Methods for measuring the time of different types of builds are listed below. The time should be measured in-game using gameticks or seconds, where 1 second \= 20 gameticks. **Use repeater input when timing.** Note that a record must work with both player input and repeater input, so this is always possible. The ending time of any block or piston movement is measured using the following method:
 
 * 0 to 2gt pulse extension: Starting time of block or piston movement \+ Pulse length received
 
@@ -750,7 +750,7 @@ This section includes principles commonly agreed by the community or decided to 
 
    3) There is no world border.
 
-      In reality, the world border and computational limits prevent any door from being expanded to infinity horizontally, and the world height limit prevents any door from being expanded infinitely vertically, but we still consider doors to be infinitely expandable if the world border is the only thing stopping it. [⤴](#bookmark=id.fyhkk573xy5d)
+      In reality, the world border and computational limits prevent any door from being expanded to infinity horizontally, and the world height limit prevents any door from being expanded infinitely vertically, but we still consider doors to be infinitely expandable if the world border is the only thing stopping it. ⤴
 
       This also means you cannot use the world border as a locational immoveable barrier.
 

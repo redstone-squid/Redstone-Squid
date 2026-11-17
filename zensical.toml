@@ -23,16 +23,6 @@ Home = "index.md"
     { "API map" = "squid-ui-api.md" },
     { Architecture = "squid-ui-architecture.md" },
     { Vocabulary = "squid-vocabulary.md" },
-    { Reference = [
-        { "squid-ui" = "reference/squid-ui.md" },
-        { "squid-ui-widgets" = "reference/squid-ui-widgets.md" },
-        { "squid-ui-discord" = "reference/squid-ui-discord.md" },
-        { "squid-ui-slack" = "reference/squid-ui-slack.md" },
-        { "squid-ui-html" = "reference/squid-ui-html.md" },
-        { "squid-reactivity" = "reference/squid-reactivity.md" },
-        { "squid-storage" = "reference/squid-storage.md" },
-        { "squid-replication" = "reference/squid-replication.md" },
-    ] },
 ]
 
 [[project.nav]]
@@ -86,33 +76,3 @@ line_spans = "__span"
 pygments_lang_class = true
 [project.markdown_extensions.pymdownx.inlinehilite]
 [project.markdown_extensions.pymdownx.superfences]
-
-[project.plugins.mkdocstrings.handlers.python]
-inventories = ["https://docs.python.org/3/objects.inv"]
-# Read workspace sources even when an optional adapter is not installed.
-paths = [
-    ".",
-    "packages/squid-i18n/src",
-    "packages/squid-reactivity/src",
-    "packages/squid-replication/src",
-    "packages/squid-storage/src",
-    "packages/squid-ui/src",
-    "packages/squid-ui-discord/src",
-    "packages/squid-ui-slack/src",
-    "packages/squid-ui-html/src",
-    "packages/squid-ui-widgets/src",
-]
-
-[project.plugins.mkdocstrings.handlers.python.options]
-# Resolve adapter re-exports independently of the order pages are rendered.
-preload_modules = ["squid_i18n", "squid_reactivity", "squid_ui"]
-docstring_style = "google"
-heading_level = 3
-merge_init_into_class = true
-separate_signature = true
-show_root_full_path = false
-show_root_heading = true
-show_signature_annotations = true
-show_source = false
-show_symbol_type_heading = true
-signature_crossrefs = true

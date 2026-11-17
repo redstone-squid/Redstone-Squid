@@ -35,16 +35,6 @@ composition and adapter contracts.
 | Persist reactive state | `squid_storage.PersistentStatePool` |
 | Replicate state | `squid_replication.Replica` and a selected backend |
 
-## Reference
-
-Each package has a curated reference page rendering every supported name:
-[squid-ui](reference/squid-ui.md), [squid-ui-widgets](reference/squid-ui-widgets.md),
-[squid-ui-discord](reference/squid-ui-discord.md),
-[squid-ui-slack](reference/squid-ui-slack.md),
-[squid-reactivity](reference/squid-reactivity.md),
-[squid-storage](reference/squid-storage.md), and
-[squid-replication](reference/squid-replication.md).
-
 ## Stability boundary
 
 Names in each package's `__all__` are the supported alpha surface and are snapshot-tested. A module
@@ -114,7 +104,3 @@ They use target protocol counts and preserve structural boundaries across altern
 separate from the legacy `sl.budget(min=..., prefer=...)` API. Platform limits remain automatic.
 
 `AtomicNode`, `AtomicContract`, and `FixedComposition` provide the typed custom-widget path.
-See the [composition API](plans/generic-region-pagination/api-sketch.md) for occurrence paths,
-source references, and custom rule responsibilities, and the
-[migration notes](plans/generic-region-pagination/07-single-planner.md)
-for caller and extension contract changes.

@@ -16,13 +16,13 @@ This is a design assessment, not an implementation decision. Runtime code and de
 ## Existing foundation
 
 - `uv.lock` already selects Advanced Alchemy 1.12.0 and SQLAlchemy 2.1.6.
-- [BaseAsyncRepository](../../squid/persistence/repository.py) already subclasses
+- BaseAsyncRepository already subclasses
   `SQLAlchemyAsyncRepository`. Versions, settings, and voting use private model repositories built on it.
 - The [shared entity base](../../squid/persistence/base.py) already includes Advanced Alchemy's
   `BasicAttributes`, alongside `MappedAsDataclass`. Adoption does not require replacing our models.
 - The [database engine](../../squid/persistence/engine.py) owns the session factories and uses
   `expire_on_commit=False`. Most repositories open short sessions and return loaded, detached entities.
-- [Entity unification](completed/merge_domain_and_persistence_models.md) is implemented; its second phase,
+- Entity unification is implemented; its second phase,
   application-owned units of work, has not started. The current contract is documented in
   [Entities and persistence](../models.md).
 
@@ -162,7 +162,7 @@ included in this assessment.
 
 1. Fix and test the existing settings configuration. Audit the three current helpers for identifier,
    commit, refresh, exception, and conflict behavior before treating them as migration examples.
-2. Build on the completed [entity unification](completed/merge_domain_and_persistence_models.md), starting with a
+2. Build on the completed entity unification, starting with a
    small write workflow such as version creation. Establish an explicit terminal commit, rollback on
    exceptions/cancellation or uncommitted exit, and one session per operation. Retain the existing
    engine, mapped entities, ports, and transport schemas.

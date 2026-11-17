@@ -1226,8 +1226,7 @@ are only hints. An exhausted search may return a valid certificate without provi
 Unsupported explicit regions produce capability diagnostics rather than another planner attempt.
 The old V2 resource-frontier region planner has been removed. Target fitters remain for
 non-region vocabulary that has no shared realization contract and for Slack modal forms.
-See the [region API](squid-ui-quickstart.md#joint-page-regions) and the
-[final capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix).
+See the [region API](squid-ui-quickstart.md#joint-page-regions).
 
 ## Scenes and renderers
 
@@ -1256,8 +1255,7 @@ a `match` proven exhaustive by an `assert_never` terminal arm where the walked u
 closing with a structured raise where it is not. Nodes carry no `accept` method and there is no
 type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
 the open node set through `target.extensions`, and attach per-case behaviour through
-`GeneratedHandler`. See [ADR 0075](decisions/0075-planner-dispatch-style.md) for why, and for what
-to do when a `match` grows too long or two dialects start sharing rules.
+`GeneratedHandler`.
 
 ## Durable sessions
 

@@ -1,6 +1,6 @@
 # Record recomputation
 
-> **Status:** proposed, not started. This came out of closing [durable queues](completed/durable-queues.md),
+> **Status:** proposed, not started. This came out of closing durable queues,
 > whose open question about dead-lettering `record_recompute_queue` turned out to be the wrong question.
 
 ## Problem

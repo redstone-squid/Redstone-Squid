@@ -282,8 +282,7 @@ they never retry through another region solver. Slack modals retain their separa
 form-only contract. Native `Variants` participates with checked source correspondence
 and loss contracts; V2 `NativeItem` participates through the Discord adapter's native
 validation contract. All documents use shared composition, including ordinary
-non-region layouts and Slack modal forms. Platform implementations live in their adapter packages. See the [target capability matrix](plans/generic-region-pagination/06-target-coverage.md#target-capability-matrix)
-for supported vocabulary and deliberate limitations.
+non-region layouts and Slack modal forms. Platform implementations live in their adapter packages.
 
 
 ## Native alternatives inside regions

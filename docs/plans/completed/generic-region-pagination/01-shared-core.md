@@ -105,13 +105,6 @@ The Discord V2 and classic dialects already share `DiscordPlanner` and provide o
 normalization, validation, root pagination, and scene construction. This is useful precedent,
 but its intermediate primitives and measurement machinery remain Discord-shaped.
 
-Source entry points:
-[dispatcher](../../../packages/squid-ui/src/squid_ui/planning/planner.py),
-[Discord](../../../packages/squid-ui/src/squid_ui/planning/discord_planner.py),
-[HTML](../../../packages/squid-ui/src/squid_ui/planning/html_planner.py),
-[Slack](../../../packages/squid-ui/src/squid_ui/planning/slack_planner.py), and
-[joint regions](../../../packages/squid-ui/src/squid_ui/planning/regions.py).
-
 ## Initial target matrix
 
 These are properties of the current code. They are not a new support contract or a claim

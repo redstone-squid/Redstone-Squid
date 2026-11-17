@@ -35,8 +35,8 @@ for the implementation, not proof of a general composition or search contract. R
 working behavior and tests where they fit; the current internal structure is open to replacement.
 
 Start from `planning/joint_search.py`, `planning/planner.py`, `planning/composition.py`, and the target
-backends in `packages/squid-ui/src/squid_ui/`. The [architecture guide](../../squid-ui-architecture.md)
-and [pagination ownership contract](../pagination-ownership.md) describe surrounding behavior.
+backends in `packages/squid-ui/src/squid_ui/`. The architecture guide
+and pagination ownership contract describe surrounding behavior.
 
 ## How to execute the phases
 

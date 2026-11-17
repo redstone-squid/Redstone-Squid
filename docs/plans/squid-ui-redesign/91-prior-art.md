@@ -34,10 +34,10 @@ Each row is the mechanism the survey named and the thing in the tree that is it.
 | Salsa revisions: per-input change versions plus a database-wide revision | Per-cell `version` plus the global `_EPOCH`; a node settled in the current epoch skips walking its sources | `core.py:394`, `core.py:1636` |
 | Salsa backdating: a recompute producing an equal value does not propagate | `_Derived.settle` bumps its version only when the new value differs | `core.py:1656` |
 | Salsa dynamic tracked dependencies, no declared lists | `_CONSUMER` records what the last run read, so a conditional dependency is exact | `core.py:1646`, `computed` at `core.py:1699` |
-| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in [41](../completed/squid-layouts-redesign/41-reactivity-cells.md) | `core.py:1699` |
+| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in 41 | `core.py:1699` |
 | Dioxus: signal reads tracked *through* `await` inside a resource | `_CONSUMER` is a `ContextVar` set around the loader await, so reads before and after an `await` both land in that generation's read set | `resources.py:533`–`resources.py:541` |
 | Dioxus: invalidation cancels the old future | `_new_generation` cancels the superseded load's scope | `resources.py:578`, seam at `resources.py:122` |
-| Jane Street Incremental: demand-driven, only observed nodes are necessary | Pull model throughout — a computed nobody reads is never evaluated, and no source holds a back-edge to its readers | `core.py:1614` docstring, [32](../completed/squid-layouts-redesign/32-demand-driven.md) |
+| Jane Street Incremental: demand-driven, only observed nodes are necessary | Pull model throughout — a computed nobody reads is never evaluated, and no source holds a back-edge to its readers | `core.py:1614` docstring, 32 |
 | Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactivity` (`dependencies = []`); the task-group hierarchy is `squid-ui`' mount lifetime | `resources.py:78` |
 | TanStack DB: optimistic overlay distinct from the remote write | `Resource.replace` stages through a participant; the remote half is an `operation` | `resources.py:434`, plan 48 |
 | TanStack DB: explicit transaction lifecycle states | `Pending`/`Ready`/`Failed` for resources, `Pending`/`Succeeded`/`Failed`/`Cancelled` for operations | `resources.py:145`, `operations.py:48` |
@@ -118,7 +118,7 @@ high-durability; a paginating cursor is not.
 
 **Decision: file, do not build.** The cliff is real but unmeasured, and the fix would change the
 hottest path in the package. The removal condition is a measurement, not a consumer: profile a
-settle pass under many live mounts — [37](../completed/squid-layouts-redesign/37-runtime-profiling.md)'s counters, reachable through
+settle pass under many live mounts — 37's counters, reachable through
 `sl.discord.devtools`' `ui metrics`, already carry the data — and act if source-walking shows up.
 Recorded now so that when it does show up, the answer is not re-derived from first principles.
 
@@ -138,7 +138,7 @@ conflict. The two grounds below are the load-bearing ones.)
 
 `ReplicatedCounter`/`ReplicatedSet` already answer the commutative cases with real CRDT
 semantics, an encodable inverse for history, and a backend chosen on measured evidence
-([the backend ADR](../completed/68-replicated-backend-adr.md)). A hand-written `commutative_add` would be a
+(the backend ADR). A hand-written `commutative_add` would be a
 second, weaker spelling of a shipped one.
 
 And the motivating concurrency is thin here. Compose merges snapshots because composition and
@@ -222,8 +222,7 @@ shape it draws is already available: the "common `ReactiveSource` interface" it 
 facto, since `_Cell`, `_Derived` and `Resource` all answer `settle() -> int`, carry `sources`, and
 are walked structurally by `Observation.addresses()` (`core.py:1756`). A `TableView` would join by
 implementing those two members. So this needs no preparatory seam either. The "do not teach
-`state()` about collections" half is also the standing position, for the same reason [41
-](../completed/squid-layouts-redesign/41-reactivity-cells.md) rejected deep proxies over `dict`/`list`/`set`.
+`state()` about collections" half is also the standing position, because the design rejected deep proxies over `dict`/`list`/`set`.
 
 **CRDT/local-first as a third tier — `State` / `Shared` / `Replicated`, each implementing one
 observation/version interface, "a remarkably clean extension point".** Shipped, and it is the

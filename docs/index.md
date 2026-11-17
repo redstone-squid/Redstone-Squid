@@ -16,7 +16,6 @@ or native accessible HTML.
 - [Slack compile quickstart](squid-ui-slack-quickstart.md) — SDK-ready messages and views
 - [API map](squid-ui-api.md) — the supported entry point for each job
 - [Architecture](squid-ui-architecture.md) — planning, ownership, cancellation, durability
-- [Reference](reference/squid-ui.md) — every supported name, per package
 
 ## The bot
 

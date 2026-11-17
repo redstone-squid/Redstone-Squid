@@ -20,7 +20,7 @@ Supported layout pagination uses certified shared allocations on Components V2, 
 and HTML. Page turns select from the mounted owner's committed allocation without changing sibling
 partitions. Content, constraints, callback, or environment changes require reconciliation and may
 require a new allocation. Historical page counts and breaks are not compatibility guarantees.
-The [phase 4 handoff](generic-region-pagination/04-pagination-state.md) lists remaining legacy routes.
+The phase 4 handoff lists remaining legacy routes.
 
 An uncontrolled cursor follows its stable source anchor across new page breaks. If that anchor is
 deleted, it chooses the nearest surviving source from the last committed order, preferring the next
