@@ -8,7 +8,7 @@ also need no partition refinements, which necessarily add page turns.
 Opaque payloads and scalar resource envelopes never establish dominance.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from heapq import heappop, heappush
 from itertools import count
@@ -22,7 +22,6 @@ from squid_ui.planning.allocation_policy import (
     SearchCompletion,
     SearchDiagnostics,
     compare_quality,
-    dense_ranks,
 )
 from squid_ui.planning.allocation_scoring import preference_tree, score_family
 from squid_ui.planning.certification import FamilyCertificate, FamilyCertifier, FamilyRejection
@@ -30,9 +29,7 @@ from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
     CandidateViolation,
-    DiscoveryCompletion,
     OccurrenceId,
-    OfferDiscovery,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
@@ -40,7 +37,9 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
+from squid_ui.planning.offer_explorer import OfferExplorer
 from squid_ui.planning.resources import EMPTY_COST
+from squid_ui.planning.search_tasks import AssignmentTask, PartitionTask
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -75,32 +74,11 @@ class JointResult[OutputT]:
     nondominated: tuple[AllocationQuality, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class _Assignment[RenderTargetT, ContextT, PayloadT]:
-    pending: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...]
-    choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
-    probe: bool = False
-    fraction: float = 1.0
-    repair: Mapping[OccurrenceId, str] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class _Partitions[RenderTargetT, ContextT, PayloadT]:
-    assignment: int
-    candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT]
-    choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...]
-    regions: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]
-    cuts: tuple[tuple[int, ...], ...]
-    probe: bool = False
-    expand_only: bool = False
-    repair: bool = False
-
-
 class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT]:
     """One run of `search_composition`, with the queue and bookkeeping its phases share.
 
-    The queue holds two kinds of task. An `_Assignment` chooses one offer per occurrence, depth first;
-    once every occurrence has an offer, it becomes `_Partitions` tasks that try region page cuts.
+    The queue holds two kinds of task. An `AssignmentTask` chooses one offer per occurrence, depth first;
+    once every occurrence has an offer, it becomes `PartitionTask` tasks that try region page cuts.
     Certifying a partition evaluates every page combination and retains the allocation if no retained
     allocation dominates it. Probe tasks only change the order of work: every legal choice and cut is
     still queued, so the result does not depend on the probes.
@@ -119,9 +97,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None,
     ) -> None:
         self.root = root
-        self.rules = rules
         self.context = context
-        self.finalize = finalize
         self.partition_hint = partition_hint
         self.selected = selections or {}
         self.policy = policies or {}
@@ -134,28 +110,19 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 int,
                 int,
                 int,
-                _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
+                AssignmentTask[RenderTargetT, ContextT, PayloadT] | PartitionTask[RenderTargetT, ContextT, PayloadT],
             ]
         ] = []
         self.retained: list[tuple[AllocationQuality, AllocationSnapshot[OutputT]]] = []
         self.certifier = FamilyCertifier(rules, context, self.policy, finalize)
         self.unsupported: set[OccurrenceId] = set()
         self.violations: list[CandidateViolation] = []
+        self.offers = OfferExplorer(root, rules, context, self.selected, self.violations, self.unsupported)
         self.generated = 0
         self.initial_evaluations = self.context.work.target_evaluations
         self.exhausted = False
         self.seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...], bool]] = set()
-        self.seen_occurrences: set[OccurrenceId] = set()
         self.seen_regions: set[OccurrenceId] = set()
-        self.degradation_probed = False
-        self.choice_counts: dict[OccurrenceId, int] = {}
-        self.discoveries: dict[
-            int,
-            tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
-            | OfferDiscovery[RenderTargetT, ContextT, PayloadT],
-        ] = {}
-        self.discovery_owners: dict[int, SemanticOccurrence[RenderTargetT, ContextT]] = {}
-        self.repair_started = False
 
     def _candidate(
         self,
@@ -181,13 +148,13 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
 
     def run(self) -> JointResult[OutputT]:
         try:
-            self._push(_Assignment((self.root,)))
+            self._push(AssignmentTask((self.root,)))
             while self.queue:
                 self.context.work.consume()
                 _, _, _, _, _, task = heappop(self.queue)
-                if isinstance(task, _Assignment):
+                if isinstance(task, AssignmentTask):
                     if task.pending:
-                        self._branch(task)
+                        self._enqueue(self.offers.branch(task))
                     else:
                         self._partition(task)
                     continue
@@ -195,12 +162,12 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                     self._expand(task)
                     continue
                 feasible, satisfied = self._certify(task)
-                if not feasible and (task.repair or not self.repair_started):
-                    self._push_repair(task)
+                if not feasible and (task.repair or not self.offers.repair_started):
+                    self._enqueue(self.offers.repair(task))
                 if feasible and satisfied:
                     continue
-                if not feasible and not self.degradation_probed:
-                    self._push_degradation_probes(task)
+                if not feasible and not self.offers.degradation_probed:
+                    self._enqueue(self.offers.degradation_probes(task))
                 if task.probe:
                     self._refine_probe(task)
                 else:
@@ -209,19 +176,23 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             self.exhausted = True
         return self._result()
 
+    def _enqueue(self, tasks: Iterator[AssignmentTask[RenderTargetT, ContextT, PayloadT]]) -> None:
+        for task in tasks:
+            self._push(task)
+
     def _push(
         self,
-        task: _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
+        task: AssignmentTask[RenderTargetT, ContextT, PayloadT] | PartitionTask[RenderTargetT, ContextT, PayloadT],
     ) -> None:
         self.context.work.consume(1 + len(task.choices))
-        if isinstance(task, _Partitions):
+        if isinstance(task, PartitionTask):
             identity = (task.assignment, task.cuts, task.expand_only)
             if identity in self.seen_partitions:
                 return
             self.seen_partitions.add(identity)
         self.generated += 1
         ranks = tuple(sorted((rank for _, rank in task.choices if rank), reverse=True))
-        turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, _Partitions) else 0
+        turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, PartitionTask) else 0
         probe = task.probe
         # Finish a probe before discovering every other probe's large offer ladder.
         # Candidate quality still compares the original preferences after certification.
@@ -237,7 +208,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             ),
         )
 
-    def _expand(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
+    def _expand(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> None:
         """Queue every partition that adds one more legal cut to one region."""
         for index, node in enumerate(task.regions):
             if node.candidate.offer.occurrence.identity in self.fixed_cuts:
@@ -248,85 +219,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                     changed = (*task.cuts[:index], tuple(sorted((*task.cuts[index], end))), *task.cuts[index + 1 :])
                     self._push(replace(task, cuts=changed, probe=False, expand_only=False))
 
-    def _branch(self, task: _Assignment[RenderTargetT, ContextT, PayloadT]) -> None:
-        """Queue one assignment per eligible offer for the task's next pending occurrence."""
-        occurrence, *rest = task.pending
-        self.seen_occurrences.add(occurrence.identity)
-        self.context.work.consume()
-        # An occurrence's immutable context is shared by queued assignments.
-        # Keep its owner alive so object identities cannot be recycled.
-        discovery = self.discoveries.get(id(occurrence))
-        if discovery is None:
-            discovery = self.rules.offers(
-                occurrence,
-                replace(self.context, palette=occurrence.palette) if occurrence.palette is not None else self.context,
-            )
-            self.discoveries[id(occurrence)] = discovery
-            self.discovery_owners[id(occurrence)] = occurrence
-        if isinstance(discovery, OfferDiscovery):
-            offers = discovery.offers
-            if discovery.completion == DiscoveryCompletion.EXHAUSTED:
-                self.exhausted = True
-            elif discovery.completion == DiscoveryCompletion.UNSUPPORTED:
-                self.unsupported.add(occurrence.identity)
-                if discovery.limitation is not None:
-                    self.violations.append(UnsupportedCapability(occurrence.identity, discovery.limitation))
-        else:
-            offers = discovery
-            if not offers:
-                self.unsupported.add(occurrence.identity)
-        self.context.work.consume(len(offers))
-        ranks = dense_ranks(tuple(offer.preference for offer in offers))
-        keys: set[str] = set()
-        eligible_count = 0
-        for offer in offers:
-            self.context.work.consume()
-            if offer.key in keys or offer.occurrence != occurrence:
-                message = "offers must have unique keys and retain their requested occurrence"
-                raise LayoutInvariantError(message)
-            keys.add(offer.key)
-            if (occurrence.identity not in self.selected or offer.key == self.selected[occurrence.identity]) and not (
-                self.context.strict and offer.effects
-            ):
-                eligible_count += 1
-        self.choice_counts[occurrence.identity] = eligible_count
-        ordered = sorted(zip(offers, ranks, strict=True), key=lambda entry: (entry[1], entry[0].key))
-        if task.probe:
-            eligible = [
-                entry
-                for entry in ordered
-                if (occurrence.identity not in self.selected or entry[0].key == self.selected[occurrence.identity])
-                and not (self.context.strict and entry[0].effects)
-            ]
-            if task.repair is not None:
-                preferred = task.repair.get(occurrence.identity)
-                ordered = next(([entry] for entry in eligible if entry[0].key == preferred), eligible[:1])
-            else:
-                position = min(len(eligible) - 1, int((len(eligible) - 1) * task.fraction + 0.5))
-                ordered = eligible[position : position + 1] if eligible else []
-        for offer, rank in ordered:
-            if occurrence.identity in self.selected and self.selected[occurrence.identity] != offer.key:
-                continue
-            if self.context.strict and offer.effects:
-                continue
-            self.context.work.consume(len(task.choices))
-            if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
-                message = "cyclic or duplicate occurrence in offer structure"
-                raise LayoutInvariantError(message)
-            self._push(
-                _Assignment(
-                    (*offer.children, *rest),
-                    (*task.choices, (offer, rank)),
-                    probe=task.probe,
-                    fraction=task.fraction,
-                    repair=task.repair,
-                )
-            )
-        if occurrence.identity in self.selected and self.selected[occurrence.identity] not in keys:
-            message = f"unknown fixed offer for {occurrence.identity.path!r}"
-            raise LayoutInvariantError(message)
-
-    def _partition(self, task: _Assignment[RenderTargetT, ContextT, PayloadT]) -> None:
+    def _partition(self, task: AssignmentTask[RenderTargetT, ContextT, PayloadT]) -> None:
         """Turn a complete assignment into partition probes, starting from each region's required cuts."""
         self.context.work.consume(len(task.choices))
         choices = {offer.occurrence.identity: offer for offer, _ in task.choices}
@@ -385,9 +278,11 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 ):
                     ends = required
                 hinted.append(ends)
-            self._push(_Partitions(assignment, candidate, task.choices, regions, tuple(hinted), probe=True))
+            self._push(PartitionTask(assignment, candidate, task.choices, regions, tuple(hinted), probe=True))
         self._push(
-            _Partitions(assignment, candidate, task.choices, regions, cuts, probe=True, repair=task.repair is not None)
+            PartitionTask(
+                assignment, candidate, task.choices, regions, cuts, probe=True, repair=task.repair is not None
+            )
         )
         # Try preserving every sibling while splitting just one region. Balanced
         # probes alone can miss a small feasible family when both pagers' chrome
@@ -396,9 +291,9 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             for index, node in enumerate(regions):
                 if node.candidate.offer.occurrence.identity not in self.fixed_cuts and len(node.legal_ends) <= 64:
                     unilateral = (*cuts[:index], node.legal_ends or (0,), *cuts[index + 1 :])
-                    self._push(_Partitions(assignment, candidate, task.choices, regions, unilateral, probe=True))
+                    self._push(PartitionTask(assignment, candidate, task.choices, regions, unilateral, probe=True))
 
-    def _certify(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> tuple[bool, bool]:
+    def _certify(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> tuple[bool, bool]:
         """Certify a partition and retain its measured result when feasible."""
         self.context.work.consume()
         family = allocate_family(task.candidate, task.regions, task.cuts, self.context)
@@ -417,7 +312,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
 
     def _retain(
         self,
-        task: _Partitions[RenderTargetT, ContextT, PayloadT],
+        task: PartitionTask[RenderTargetT, ContextT, PayloadT],
         family: PageFamily[RenderTargetT, ContextT, PayloadT],
         region_map: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
         certificate: FamilyCertificate[OutputT],
@@ -463,60 +358,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             self.retained.append((quality, allocation))
         return satisfied
 
-    def _push_repair(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
-        # Try one structural step at a time before the broad compact
-        # probes. This finds useful fits under component pressure without
-        # shortening every independent text ladder. Failed probes never prune.
-        self.repair_started = True
-        steps: list[tuple[int, int, tuple[str, ...], RealizationOffer[RenderTargetT, ContextT, PayloadT]]] = []
-        for current, rank in task.choices:
-            if current.occurrence.identity in self.selected:
-                continue
-            discovery = self.discoveries[id(current.occurrence)]
-            domain = discovery.offers if isinstance(discovery, OfferDiscovery) else discovery
-            self.context.work.consume(len(domain))
-            domain_ranks = dense_ranks(tuple(offer.preference for offer in domain))
-            better = [
-                (offer_rank, offer)
-                for offer, offer_rank in zip(domain, domain_ranks, strict=True)
-                if offer_rank > rank
-                and (not self.context.strict or not offer.effects)
-                and (not offer.effects or current.children or offer.children)
-            ]
-            if better:
-                next_rank, next_offer = min(better, key=lambda entry: (entry[0], entry[1].key))
-                steps.append(
-                    (current.preference_priority or 0, next_rank, current.occurrence.identity.path, next_offer)
-                )
-        if steps:
-            _, _, _, changed = min(steps, key=lambda entry: entry[:3])
-            self.context.work.consume(len(task.choices))
-            hints = {offer.occurrence.identity: offer.key for offer, _ in task.choices}
-            hints[changed.occurrence.identity] = changed.key
-            self._push(_Assignment((self.root,), probe=True, repair=hints))
-
-    def _push_degradation_probes(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
-        # Find a compact certificate before enumerating combinations of
-        # independent ladders. This changes work order only: ordinary
-        # assignments remain queued and still establish optimality.
-        self.degradation_probed = True
-        # Intermediate rungs avoid an empty incumbent when several prose
-        # blocks must share space. This samples work order, never feasibility.
-        self.context.work.consume(len(task.choices))
-        adjustable = 0
-        for current, _ in task.choices:
-            discovery = self.discoveries[id(current.occurrence)]
-            domain = discovery.offers if isinstance(discovery, OfferDiscovery) else discovery
-            self.context.work.consume(len(domain))
-            if self.choice_counts.get(current.occurrence.identity, 0) > 1 and (
-                not task.regions or any(offer.effects for offer in domain)
-            ):
-                adjustable += 1
-        if adjustable:
-            for fraction in dict.fromkeys((1.0, 1 - 1 / max(2, adjustable), 0.5, 0.75, 0.875, 0.9375)):
-                self._push(_Assignment((self.root,), probe=True, fraction=fraction))
-
-    def _refine_probe(self, task: _Partitions[RenderTargetT, ContextT, PayloadT]) -> None:
+    def _refine_probe(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> None:
         # Balanced refinement is only a work-order heuristic. Every legal
         # cut is still enqueued below; no fit assumption prunes that domain.
         refined: list[tuple[int, ...]] = []
@@ -538,22 +380,23 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
     def _result(self) -> JointResult[OutputT]:
         """Return the best retained allocation, or raise why the search found none."""
 
-        if not self.exhausted and (
-            self.selected.keys() - self.seen_occurrences
+        exhausted = self.exhausted or self.offers.exhausted
+        if not exhausted and (
+            self.selected.keys() - self.offers.seen_occurrences
             or (self.policy.keys() | self.fixed_cuts.keys()) - self.seen_regions
         ):
             message = "joint search options contain unknown occurrences"
             raise LayoutInvariantError(message)
         completion = (
             SearchCompletion.EXHAUSTED
-            if self.exhausted
+            if exhausted
             else SearchCompletion.UNSUPPORTED
             if self.unsupported
             else SearchCompletion.COMPLETE
         )
         diagnostics = SearchDiagnostics(
             completion,
-            not self.exhausted and not self.unsupported,
+            not exhausted and not self.unsupported,
             self.context.work.spent,
             self.context.work.limit,
             self.generated,
@@ -563,7 +406,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             tuple(sorted(self.unsupported, key=lambda identity: identity.path)),
         )
         if not self.retained:
-            if self.exhausted:
+            if exhausted:
                 raise JointExhaustedError(diagnostics)
             if self.unsupported:
                 raise JointUnsupportedError(diagnostics)
