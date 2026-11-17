@@ -408,10 +408,9 @@ or bindings that change require current certification. Partition caches supply h
 they do not authorize stale callbacks or old route encodings. Rejected candidates publish
 no bindings, assets, or staged presentation changes.
 
-The target fitters remain active for ordinary layouts outside shared routing and for
-unsupported compatibility vocabulary. Their strategy caches and measurement budgets
-are separate from shared allocation metrics. Explicit regions never retry through a
-fitter after shared search fails.
+Built-in targets use shared composition for ordinary layouts and explicit regions.
+Unsupported vocabulary produces capability diagnostics; a failed search does not
+retry through a separate target fitter.
 
 Target-shaped nodes live under `squid_ui.primitives`. Their policies are explicit:
 
@@ -1224,8 +1223,8 @@ the chosen allocation, and cursor-only turns reuse it with zero new search opera
 Content, bindings, or target changes require current certification; partition cache entries
 are only hints. An exhausted search may return a valid certificate without proving optimality.
 Unsupported explicit regions produce capability diagnostics rather than another planner attempt.
-The old V2 resource-frontier region planner has been removed. Target fitters remain for
-non-region vocabulary that has no shared realization contract and for Slack modal forms.
+Discord, HTML, and Slack targets all bind their rules through the shared composition
+contract, including Slack modal forms.
 See the [region API](squid-ui-quickstart.md#joint-page-regions).
 
 ## Scenes and renderers

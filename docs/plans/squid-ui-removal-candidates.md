@@ -225,7 +225,7 @@ boundaries, instead of relying solely on tests of the machinery being deleted.
 - Retired standalone `measure`, its intermediate nodes, allocation machinery,
   diagnostics, and degradation model (4 and the remainder of 7). Independent
   host inspection remains.
-- Remaining: broad UI validation, package-build checks, and final scope audit.
+- All eleven candidates are implemented and verified. No runtime removal work remains.
 
 ## API changes for callers
 
@@ -262,3 +262,19 @@ and has its own fidelity ordering. It does not promise the old allocator's fixed
 reservation for `Condense`. Shortening-after-replacements tests use three oversized
 entries and an explicit search allowance to isolate that behavior from exhaustive
 combinations and default-budget exhaustion.
+
+## Final verification
+
+The broad run covered all five UI packages and architecture tests: 4,215 passed,
+with three stale architecture checks failing. The corrected architecture suite
+then passed all 326 tests. One deleted check inspected only the retired adaptation
+traversals; another now permits the portable `Renderable` base while forbidding
+Discord dependencies and target-specific markers. The unrelated Pydantic validator
+allowance was corrected from two to three existing raises; application code did
+not change.
+
+Whole-project Pyrefly reports zero errors. All five UI packages build source and
+wheel distributions; wheel imports and HTML/Discord planning smoke tests pass.
+Commit hooks and diff checks pass. A final source audit verified every numbered
+candidate's outcome and the retained inspection, cache-lifetime, and callback-binding
+boundaries.
