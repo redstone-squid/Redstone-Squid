@@ -11,3 +11,6 @@ __all__ = [
     "Renderer",
     "target",
 ]
+
+from squid_ui.ext.html.target_types import HtmlAdapter as HtmlAdapter
+from squid_ui.ext.html.target_types import HtmlTarget as HtmlTarget

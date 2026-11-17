@@ -479,9 +479,9 @@ class BuildPanel(sl.Component[sl.ComponentsV2Target]):
 ```
 
 An unannotated `sl.Component` is portable: it may render semantic nodes and can be planned for
-either frontend. `Component` is contravariant in its mode. The markers live at the package root:
-`sl.RenderTarget`, `sl.DiscordTarget`, `sl.HtmlTarget`, `sl.ComponentsV2Target`, and
-`sl.ClassicTarget`.
+either frontend. `Component` is contravariant in its mode. Core exports `sl.RenderTarget`
+and currently the Discord dialect markers. HTML and Slack target markers, along with
+each platform's adapter markers, belong to their extension package's `target_types` module.
 
 Two cases this does not catch, both deliberate. A container mixing a V2-only and a
 classic-only child works in neither, but contravariance makes the union the solver's natural

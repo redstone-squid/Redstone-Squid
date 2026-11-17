@@ -62,3 +62,10 @@ from squid_ui.ext.slack.protocol import SlackModalLimits as SlackModalLimits
 from squid_ui.ext.slack.protocol import home_target as home_target
 from squid_ui.ext.slack.protocol import message_target as message_target
 from squid_ui.ext.slack.protocol import modal_target as modal_target
+from squid_ui.ext.slack.target_types import SlackAdapter as SlackAdapter
+from squid_ui.ext.slack.target_types import SlackHomeTarget as SlackHomeTarget
+from squid_ui.ext.slack.target_types import SlackMessageTarget as SlackMessageTarget
+from squid_ui.ext.slack.target_types import SlackModalTarget as SlackModalTarget
+from squid_ui.ext.slack.target_types import SlackSdk343Adapter as SlackSdk343Adapter
+from squid_ui.ext.slack.target_types import SlackSdkAdapter as SlackSdkAdapter
+from squid_ui.ext.slack.target_types import SlackTarget as SlackTarget

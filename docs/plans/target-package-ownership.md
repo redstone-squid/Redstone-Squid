@@ -13,3 +13,8 @@ native nodes and validate package import isolation as well as rendering behavior
 
 Update callers directly; core must not re-export target definitions. Existing
 unrelated working-tree changes are outside this refactor.
+
+Adapter markers and HTML/Slack target markers now live in their target packages.
+Discord dialect markers still require extracting native primitive planning. Core
+scene bodies, codecs, and selectors also retain platform definitions; the boundary
+described above is not yet complete.
