@@ -4,6 +4,143 @@ squid-ui separates UI intent, target planning, and drawing. Discord is one front
 not the data model: the same semantic document can be planned independently into a Discord
 scene or a native HTML scene, serialized to JSON, and handed to another process.
 
+## End-to-end flow
+
+squid-ui turns “what this interface means” into a platform-valid message, then keeps
+that message synchronized with state. The word *rendering* appears at two different
+stages: a component describes the interface, and a frontend renderer constructs the
+objects that display it.
+
+```mermaid
+flowchart TD
+    state[Component state] -->|Component.render| document[Semantic Document]
+    document -->|Plan: choose representations, fit limits, paginate| result[PlanResult]
+    result --> scene[Scene: exact display description]
+    result --> bindings[Callbacks, resources, diagnostics]
+    scene -->|Renderer.draw| payload[MessagePayload: discord.py view, text, files]
+    bindings --> payload
+    payload -->|Send or edit| message[Discord message]
+    message -->|Interaction: handler changes state| state
+```
+
+This diagram follows a live Discord interface. HTML and Slack use the same planning
+boundary but produce HTML markup or Slack SDK objects; their adapters do not own a
+live delivery loop. A static document can enter directly at planning, without a
+component runtime.
+
+### 1. Component rendering: describe what you want
+
+A component's synchronous `render()` reads state and returns headings, paragraphs,
+collections, buttons, and child components. `ComponentRuntime` expands the children
+into a complete Document, tracking component identity and reactive dependencies.
+
+For a build browser, this means “show these build details, this list of results,
+and these actions.” The Document describes the content and permitted presentation
+choices. It does not yet establish exactly how they fit within Discord's limits,
+and rendering it sends nothing. Data loading happens outside this synchronous pass;
+the planner consumes the supplied snapshot rather than fetching more results.
+
+### 2. Planning: decide how it can fit
+
+`plan(document, target=...)` chooses the layout. The target specifies a frontend,
+such as Discord Components V2, classic Discord messages, HTML, or Slack, together
+with its capabilities and limits.
+
+The planner examines the authored content, finds supported representations, and
+measures their costs: text, controls, containers, attachments, and other target
+resources. It chooses representations and page boundaries that fit, accounting for
+persistent headers, footers, and navigation controls too.
+
+These choices interact. A compact representation may leave room for another result;
+pagination itself consumes space. The implementation uses these terms:
+
+| Term | Meaning |
+|---|---|
+| Composition | Combining representations of the authored pieces into a complete layout. |
+| Allocation | Distributing available space and resources among regions and their pages. |
+| Search | Trying combinations of representations and page boundaries. |
+| Certification | Checking that a proposed layout and its reachable page combinations satisfy the constraints. |
+
+Search has a work budget. Failure can mean that no layout fits, or that the budget
+ran out before a verified layout was found. A verified layout can also be returned
+without proving it is optimal. Strict mode rejects declared content loss, while
+allowing equivalent representations and lossless pagination.
+
+### 3. PlanResult and Scene: separate display from behavior
+
+The planner returns a `PlanResult` containing:
+
+- A **Scene**, the exact display structure selected for that target.
+- Action and form bindings, file resources, diagnostics, resource costs, and proposed
+  presentation-state updates, such as remembered page positions.
+
+A Document expresses intent; a Scene records the chosen output. The Scene is immutable
+and serializable, with no Python callbacks or native SDK objects. A button references
+an action key; its Python handler lives in the accompanying bindings. This lets tools
+inspect, serialize, or preview a Scene without serializing running application code.
+
+### 4. Drawing: construct the SDK objects
+
+`Renderer.draw()` takes the Scene and constructs a `MessagePayload`: the appropriate
+discord.py view, controls, content or embeds, and assets. Mounted controls also need
+the plan's bindings and the live runtime's wiring.
+
+The renderer makes no new layout compromises. Planning already decided what fits.
+If drawing violates the planned limits, it raises `DrawInvariantError` rather than
+silently shortening or dropping content.
+
+The Discord renderer also has a smaller compilation step:
+
+```text
+Scene → cached drawing instructions → fresh discord.py objects
+```
+
+For example, an instruction says “construct a TextDisplay with this text.” Reusing
+instructions avoids translating an identical Scene repeatedly while still creating
+fresh views and controls. `_compile_item`, `_V2Program`, and `_execute` in the Discord
+renderer implement this step.
+
+Here, *compilation* means an in-memory transformation during execution. Planning is
+also sometimes called compilation: it transforms the authored Document into a Scene.
+These are distinct transformations, not an additional build command the application
+must run before showing a message.
+
+### 5. Delivery and commit: make the result current
+
+`MessageRoot` coordinates sending or editing a live Discord message. A new render is
+initially a **candidate**. Successful presentation commits its component tree,
+current bindings, and remembered presentation details. Failed delivery discards the
+candidate so the runtime does not remember a page the user never saw. A layout spread
+across multiple messages also tracks which messages were actually written.
+
+An unchanged display can skip the Discord edit while still committing updated
+internal bindings. This presentation commit is separate from an action's state
+transaction: failure to edit Discord does not automatically undo an already committed
+action.
+
+### 6. Interactions repeat the cycle
+
+A click resolves to an action binding, passes dispatch and access checks, and runs the
+handler. State changes invalidate affected components and trigger another render,
+plan, draw, and delivery cycle. External changes can also trigger refreshes when live
+updates are enabled.
+
+Caching can shorten that cycle:
+
+- Unchanged component subtrees can reuse their rendered output.
+- Page turns can reuse an already verified allocation.
+- Identical Scenes can reuse drawing instructions.
+- Identical visible output can avoid a Discord API edit.
+
+In the build browser, the component supplies results and controls; the planner decides
+which results fit on each page; the renderer constructs the Discord controls; and the
+message root sends them. Pressing **Next** changes the presentation position and shows
+the next page, often reusing the existing allocation.
+
+The component describes content, the planner chooses the layout, the renderer
+constructs it, and the message root delivers and maintains it. The sections below
+explain the APIs and ownership rules within those boundaries.
+
 ## Concepts at a glance
 
 Seven buckets, and every API in the package belongs to one of them. The rest of this document
@@ -22,120 +159,6 @@ expands them in roughly this order.
 The two rules that decide which bucket something lands in are in
 [Ownership and lifetime](#ownership-and-lifetime): identity is never authority, and anything
 owning background work ends through one named method.
-
-### Framework relationship map
-
-Solid arrows show the live render and interaction cycle. Dashed arrows show optional integration
-or ownership rather than data flowing through every render.
-
-```mermaid
-flowchart TB
-    subgraph authoring[Application and portable authoring]
-        host[Host application<br/>domain facts and services]
-        widgets[Reusable components<br/><code>squid-ui-widgets</code>]
-        component["Component or Screen<br/>declared state and synchronous <code>render()</code>"]
-        reactive[Reactive model<br/><code>state · computed · resource · operation</code>]
-        shared[Reusable reactive models<br/><code>Reactive</code>]
-        actions[Portable actions and form handlers<br/>events · guards · history]
-
-        host -->|constructs and injects| component
-        widgets -->|supplies| component
-        component -->|declares| actions
-        reactive -->|drives| component
-        shared -->|is read by| component
-        actions -->|transactional writes| reactive
-        actions -->|publishes changes| shared
-    end
-
-    subgraph engine[Frontend-neutral engine — <code>squid-ui</code>]
-        runtime[ComponentRuntime<br/>identity · lifecycle · context · invalidation]
-        document[Semantic Document<br/>meaning · stable keys · target-neutral controls]
-        planner[Planner plus selected Target<br/>adapt · search · measure · paginate]
-        result[PlanResult]
-        scene[Immutable Scene<br/>frontend body · no callbacks]
-        sidetables[Ephemeral side tables<br/>action and form bindings · resources · report]
-        codec[Scene Codec<br/>canonical JSON · schema · fingerprints]
-
-        runtime -->|expands and renders| document
-        document --> planner --> result
-        result --> scene
-        result --> sidetables
-        scene --> codec
-    end
-
-    component -->|is mounted in| runtime
-    reactive -.->|dependency tracking and transactions<br/><code>squid-reactivity</code>| runtime
-
-    subgraph frontends[Frontend targets and outputs]
-        discord[Discord target and renderer<br/><code>squid-ui-discord</code>]
-        slack[Slack target and renderer<br/><code>squid-ui-slack</code>]
-        html[Native HTML target and renderer<br/><code>squid-ui-html</code>]
-        payload[MessagePayload<br/>content · embeds · view · assets]
-        sdk[Slack SDK blocks and views]
-        markup[Accessible HTML]
-
-        discord --> payload
-        slack --> sdk
-        html --> markup
-    end
-
-    discord -->|target rules| planner
-    slack -->|target rules| planner
-    html -->|target rules| planner
-    scene -->|mechanical draw| discord
-    scene -->|mechanical draw| slack
-    scene -->|mechanical draw| html
-
-    subgraph discord_runtime[Discord live runtime]
-        invocation[Owner-scoped Scope and Request<br/>source · audience · localization · acknowledgement]
-        root[MessageRoot<br/>owns one message and one ComponentRuntime]
-        session[SessionManager and Session<br/>index identity and membership]
-        lifetime[Lifetime tree<br/>scope and presentation ownership]
-        router[Router and RouteGroup<br/>stateless durable route identity]
-        dispatch[Dispatch boundary<br/>access · concurrency · stale checks · middleware · responder]
-        handle[MessageDestination and EditHandle<br/>delivery and expiring write authority]
-        discord_api[discord.py and Discord]
-
-        invocation -->|respond · send · edit| root
-        session -->|indexes| root
-        invocation -->|owns| lifetime
-        lifetime -->|owns| root
-        root -->|delivers through| handle --> discord_api
-        discord_api -->|component interaction| dispatch
-        router -->|routed interaction| dispatch
-        dispatch -->|bound portable event| actions
-        dispatch -->|fresh authority| handle
-    end
-
-    root -->|owns| runtime
-    sidetables -->|installs current callbacks| root
-    payload --> root
-    actions -->|commit schedules a new render| root
-    shared -->|cross-root invalidation| root
-
-    subgraph optional[Optional state infrastructure]
-        storage[Versioned scoped storage<br/><code>squid-storage</code>]
-        durable[DurableSessionRuntime<br/>records · recovery · claims · checkpoints]
-        replication[Replicated state<br/><code>squid-replication</code>]
-        bridge[PostgresTopicBridge<br/>cross-process invalidation hints]
-
-        storage --> durable
-        storage -->|hydrates| shared
-        replication -->|enlists transaction participants| actions
-        bridge -->|publishes addresses| shared
-    end
-
-    durable -.->|recovers and checkpoints| session
-    durable -.->|reconnects roots and handles| root
-    host -.->|provides the backing store| storage
-    host -.->|owns transport and authentication| replication
-    host -.->|supervises| durable
-    host -.->|supervises| bridge
-```
-
-The semantic `Document` is the portability seam. Everything above it expresses application intent;
-the selected target and everything below it solve, draw, deliver, and route one frontend. The
-`Scene` is the process boundary, while ephemeral bindings remain with the live runtime.
 
 ## Internal dependency boundaries
 
@@ -178,32 +201,6 @@ for snapshot storage, invalidation causes, and component-path indexing. Expansio
 its mutable view for one synchronous render; reconciliation prunes it after delivery
 without clearing writes made by lifecycle hooks.
 Candidate and committed trees and lifecycle decisions remain with `ComponentRuntime`.
-
-## End-to-end flow
-
-    Component state
-        |
-        | render()
-        v
-    semantic Document -- keyed components, assets, semantic content
-        |
-        | plan(..., target=...)
-        v
-    shared composition -- representations, allocation, pagination, bindings
-        |
-        +-- Discord rules --> Scene[ComponentsV2 | ClassicMessage] --> sd.Renderer
-        +-- HTML rules ----> Scene[HtmlBody] ----------------------> squid_ui.ext.html.Renderer
-        +-- Slack rules ---> Scene[SlackMessage | SlackHomeView | SlackModalView]
-                                                                    |
-                                                                    v
-                                                              Slack SDK renderer
-
-    Every PlanResult also carries PlanReport, PlanMetrics, and ephemeral ActionBindings.
-    Every immutable Scene supports `sl.scene.Codec` JSON and JSON Schema.
-
-The planner is the only layer allowed to choose an alternate, drop content, split a page, or
-spend a target resource. A renderer is mechanical. If Discord drawing needs to clamp after
-planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 ## Which entry point to use
 
