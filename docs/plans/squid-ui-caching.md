@@ -14,8 +14,19 @@ successive wrappers so callback updates cannot form an unbounded chain.
 
 All other control fields still participate in allocation comparison. Forms, native
 controls, and actions inside alternative/fallback presentations remain conservative.
-This is owner-local reuse: the underlying certificate still contains its original
-callback-bearing outputs. It is not yet the callback-free shared artifact model below.
+On the first callback replacement, built-in allocations detach their page outputs
+and navigation metadata from the search graph. Replaced actions become unbound slots
+in those templates; current handlers live in the owner-local projection. The retained
+diagnostic envelope also drops its obsolete page bindings. After the new generation
+commits and callers release the previous result, superseded action receivers can be
+collected. An undelivered candidate leaves the displayed generation intact.
+
+Detachment visits the certified outputs when a new action needs a slot. Later changes
+to the same actions reuse that snapshot. No new layout search or certificate is needed.
+Custom selectors retain their existing ownership contract because the framework cannot
+enumerate their outputs. Forms, unchanged handlers, resources, and region owners may
+still hold live objects: these snapshots remain owner-local, not generally shareable
+callback-free artifacts.
 Rebound page projections now have an owner-local LRU capped at 32 entries. It is
 keyed by the certified output identity, so clamped or hidden coordinates that select
 the same output reuse one projection. Controlled page turns keep the cache; changed
@@ -36,6 +47,9 @@ updates, frontend selection, shared callback identity, and invalidation by displ
 dispatch-policy changes. Projection tests cover LRU eviction, failed binding, coordinate
 clamping, generation isolation, and retention across controlled page turns. Work-count
 tests verify that page revisits do not rebuild the graph or rehash unchanged content.
+Weak-reference tests cover retirement of individual and grouped action receivers after
+commit while preserving the displayed generation before commit. Snapshot tests cover
+nested coordinate selection; grouped actions with repeated local keys retain their scope.
 Existing composition and Discord cache tests exercise the surrounding planning and
 rendering paths.
 

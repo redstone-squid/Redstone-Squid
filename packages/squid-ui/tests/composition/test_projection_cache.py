@@ -17,7 +17,8 @@ from squid_ui.interactions.handlers import FrontendHandler
 from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
 from squid_ui.planning.action_reuse import ReboundAllocation
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.allocation import RegionPages
+from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, RegionPages
+from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState
 from squid_ui.target_types import DiscordAdapter
@@ -35,11 +36,13 @@ async def page_changed(event: sl.PageEvent) -> None:
     pass
 
 
-def document(handler: PressHandler, page: int = 0) -> sl.Document:
+def document(
+    handler: PressHandler, page: int = 0, *, display: sl.semantic.ControlDisplay = sl.semantic.ControlDisplay.AUTO
+) -> sl.Document:
     return sl.Document(
         (
             sl.region(
-                sl.action_controls(sl.action_control("Open", handler, key="open"), key="actions"),
+                sl.action_controls(sl.action_control("Open", handler, key="open"), key="actions", display=display),
                 sl.paragraph("Second", key="second"),
                 key="r",
                 title="Region",
@@ -78,6 +81,7 @@ async def test_page_revisits_keep_projection_but_new_handlers_start_a_fresh_cach
     assert isinstance(updated.allocation, ReboundAllocation)
     assert updated.allocation is not allocation
     assert updated.allocation.identity == allocation.identity
+    assert updated.allocation.source is allocation.source  # Existing slots need no further detachment.
     assert updated.allocation.cache_snapshot().entries == 1
     await updated.bindings["open"].handler(testing.press_event())
     await page.bindings["open"].handler(testing.press_event())
@@ -157,7 +161,8 @@ def test_rebinding_prepares_the_authored_snapshot_once() -> None:
         assert session.retained_composition is retained
 
 
-async def test_reused_layout_releases_superseded_callback_receivers() -> None:
+@pytest.mark.parametrize("display", [sl.semantic.ControlDisplay.INDIVIDUAL, sl.semantic.ControlDisplay.GROUPED])
+async def test_reused_layout_releases_superseded_callback_receivers(display: sl.semantic.ControlDisplay) -> None:
     class Receiver:
         def __init__(self, name: str) -> None:
             self.name = name
@@ -169,18 +174,73 @@ async def test_reused_layout_releases_superseded_callback_receivers() -> None:
     session = PresentationState()
     original = Receiver("old")
     reference = weakref.ref(original)
-    initial = plan(document(original.handle), target=TARGET, session=session, composition=OPTIONS)
+    initial = plan(document(original.handle, display=display), target=TARGET, session=session, composition=OPTIONS)
     session.apply_updates(initial.session_updates)
     replacement = Receiver("new")
-    candidate = plan(document(replacement.handle), target=TARGET, session=session, composition=OPTIONS)
+    candidate = plan(document(replacement.handle, display=display), target=TARGET, session=session, composition=OPTIONS)
     # An undelivered candidate cannot retire the displayed generation.
     del original
     gc.collect()
     assert reference() is not None
-    await initial.bindings["open"].handler(testing.press_event())
+    initial_binding = next(binding for key, binding in initial.bindings.items() if not key.startswith("__cursor"))
+    event = testing.selection_event("open") if initial_binding.routes else testing.press_event()
+    await initial_binding.handler(event)
+    del initial_binding
     session.apply_updates(candidate.session_updates)
     del initial
     gc.collect()
     assert reference() is None
-    await candidate.bindings["open"].handler(testing.press_event())
+    binding = next(binding for key, binding in candidate.bindings.items() if not key.startswith("__cursor"))
+    await binding.handler(event)
     assert calls == ["old", "new"]
+
+
+async def test_grouped_callbacks_with_repeated_local_keys_keep_their_scope() -> None:
+    called: list[str] = []
+
+    def grouped(version: str) -> sl.Document:
+        def group(name: str) -> sl.semantic.ActionControls:
+            async def handler(event: sl.PressEvent) -> None:
+                called.append(f"{version}:{name}")
+
+            return sl.action_controls(
+                sl.action_control("Run", handler, key="run"), key=name, display=sl.semantic.ControlDisplay.GROUPED
+            )
+
+        return sl.Document((group("left"), group("right")))
+
+    session = PresentationState()
+    initial = plan(grouped("old"), target=TARGET, session=session)
+    session.apply_updates(initial.session_updates)
+    current = plan(grouped("new"), target=TARGET, session=session)
+    assert current.metrics.target_evaluations == 0
+    assert len(current.bindings) == 2
+    for binding in current.bindings.values():
+        assert "run" in binding.routes
+        await binding.handler(testing.selection_event("run"))
+    assert sorted(called) == ["new:left", "new:right"]
+
+
+def test_detached_allocation_preserves_nested_coordinate_selection() -> None:
+    outer = OccurrenceId(("outer",))
+    inner = OccurrenceId(("outer", "inner"))
+    regions = {
+        identity: RegionPages(str(identity), (1, 2), (frozenset(), frozenset()), EMPTY_COST, ((), ()))
+        for identity in (outer, inner)
+    }
+    snapshot = AllocationSnapshot(
+        "certificate",
+        regions,
+        (
+            CertifiedPage(((outer, 0),), "outer-only"),
+            CertifiedPage(((outer, 1), (inner, 0)), "inner-first"),
+            CertifiedPage(((outer, 1), (inner, 1)), "inner-last"),
+        ),
+    )
+    assert snapshot.select({outer: -3, inner: 1}) == "outer-only"
+    assert snapshot.visible({outer: 0, inner: 1}) == {outer: 0}
+    assert snapshot.select({outer: 1}) == "inner-first"
+    assert snapshot.select({outer: 99, inner: 99}) == "inner-last"
+    assert snapshot.visible({outer: 99, inner: 99}) == {outer: 1, inner: 1}
+    with pytest.raises(sl.LayoutInvariantError, match="unknown region"):
+        snapshot.select({OccurrenceId(("unknown",)): 0})
