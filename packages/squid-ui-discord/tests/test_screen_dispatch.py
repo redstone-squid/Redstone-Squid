@@ -8,12 +8,13 @@ import anyio
 import pytest
 
 from squid_reactivity import current_transaction
-from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, state
+from squid_ui import ActionEvent, Component, DocumentLike, state
 from squid_ui.ext.discord import CloseReason, Everyone, MessageRoot, Owner
 from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.primitives import Button, Row, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.interactions import ActionMiddleware, ActionProceed, ActionRequest
-from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import transaction
 
 

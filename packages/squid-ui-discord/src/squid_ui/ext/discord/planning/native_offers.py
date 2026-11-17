@@ -4,7 +4,6 @@ from dataclasses import replace
 from typing import cast
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
     FidelityEffect,
@@ -12,42 +11,25 @@ from squid_ui.authoring.presentations import (
     Replacement,
     Shortening,
 )
-from squid_ui.content.text import resolve_text
-from squid_ui.planning.composition import (
-    FragmentContract,
-    OccurrenceId,
-    OfferDiscovery,
-    RealizationOffer,
-    RegionContract,
-    SemanticOccurrence,
-)
-from squid_ui.planning.offers.navigation import RegionNavigation, _control_key, navigation_candidate, region_cursor_key
-from squid_ui.planning.offers.policy import Offers, _OfferScope
-from squid_ui.planning.realizations import (
-    ActionsRealization,
+from squid_ui.content.text import Text, resolve_text
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.planning.native import CardSlot, _timestamp_offers
+from squid_ui.ext.discord.planning.native_extensions import ComposableExtension
+from squid_ui.ext.discord.planning.policy import DiscordOfferScope
+from squid_ui.ext.discord.planning.realizations import (
     CardRealization,
     ClassicContentRealization,
     FileRealization,
-    FlowRealization,
     GalleryRealization,
     NativeSectionRealization,
-    PanelRealization,
-    Realization,
-    ReferencedText,
-    RowRealization,
+    OpaqueRealization,
     SeparatorRealization,
-    TextRealization,
-    TextSequenceRealization,
     ThumbnailRealization,
 )
-from squid_ui.planning.semantic_index import CardSlot
-from squid_ui.planning.text_presentations import (
-    _slice,
-    text_ends,
-    text_fragments,
-)
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import (
+from squid_ui.ext.discord.primitives import nodes as primitive
+from squid_ui.ext.discord.resources import DiscordAxis
+from squid_ui.native import NativeValue
+from squid_ui.overflow import (
     Alt,
     Alts,
     Condense,
@@ -57,10 +39,47 @@ from squid_ui.primitives.constraints import (
     Spill,
     Truncate,
 )
+from squid_ui.planning.composition import (
+    DiscoveryCompletion,
+    FragmentContract,
+    OccurrenceId,
+    OfferDiscovery,
+    RealizationOffer,
+    RegionContract,
+    ResourceIdentity,
+    SemanticOccurrence,
+    SharedUse,
+)
+from squid_ui.planning.offers.content import container_offers
+from squid_ui.planning.offers.navigation import (
+    RegionNavigation,
+    control_key,
+    navigation_candidate,
+    region_cursor_key,
+)
+from squid_ui.planning.offers.policy import Offers
+from squid_ui.planning.realizations import (
+    ActionsRealization,
+    FlowRealization,
+    PanelRealization,
+    Realization,
+    ReferencedText,
+    RowRealization,
+    TextRealization,
+    TextSequenceRealization,
+)
+from squid_ui.planning.resources import EMPTY_COST, Axis
+from squid_ui.planning.semantic_correspondence import interaction
+from squid_ui.planning.semantic_index import UnsupportedSemanticError
+from squid_ui.planning.text_presentations import (
+    slice_text,
+    text_ends,
+    text_fragments,
+)
 
 
 def _lines_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: primitive.Lines
+    scope: DiscordOfferScope[RenderTargetT, ContextT], value: primitive.Lines
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -258,7 +277,7 @@ def _lines_offers[RenderTargetT, ContextT](
 
 
 def _primitive_text_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
+    scope: DiscordOfferScope[RenderTargetT, ContextT],
     value: primitive.Text | primitive.Heading | primitive.Footer | primitive.Code,
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
@@ -276,7 +295,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
         slot_plain = "".join(tree.plain(node) for node in payload.nodes)
         payload = replace(
             payload,
-            nodes=_slice(payload.nodes, len(slot_plain) - len(slot_plain.lstrip()), len(slot_plain.rstrip())),
+            nodes=slice_text(payload.nodes, len(slot_plain) - len(slot_plain.lstrip()), len(slot_plain.rstrip())),
         )
     if isinstance(value, primitive.Heading):
         payload = replace(payload, role="heading", level=value.level)
@@ -311,7 +330,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
         parts: list[ReferencedText] = []
         ends: list[int] = []
         for index, (start, end) in enumerate(spans):
-            chunk = _slice(nodes, start, end)
+            chunk = slice_text(nodes, start, end)
             pieces = (
                 text_fragments(chunk, max(1, min(256, scope.text_capacity // 8)))
                 if scope.text_capacity is not None and end - start > scope.text_capacity // 2
@@ -407,7 +426,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
 
 
 def _gallery_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: primitive.Gallery | primitive.MediaCollection
+    scope: DiscordOfferScope[RenderTargetT, ContextT], value: primitive.Gallery | primitive.MediaCollection
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -443,7 +462,7 @@ def _gallery_offers[RenderTargetT, ContextT](
 
 
 def _file_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: primitive.File
+    scope: DiscordOfferScope[RenderTargetT, ContextT], value: primitive.File
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     return (
@@ -467,7 +486,7 @@ def _file_offers[RenderTargetT, ContextT](
 
 
 def _thumbnail_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: primitive.Thumbnail
+    scope: DiscordOfferScope[RenderTargetT, ContextT], value: primitive.Thumbnail
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -482,7 +501,7 @@ def _thumbnail_offers[RenderTargetT, ContextT](
 
 
 def _separator_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: primitive.Sep
+    scope: DiscordOfferScope[RenderTargetT, ContextT], value: primitive.Sep
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     return (
@@ -499,7 +518,7 @@ def _separator_offers[RenderTargetT, ContextT](
 
 
 def _primitive_container_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
+    scope: DiscordOfferScope[RenderTargetT, ContextT],
     value: primitive.Row[ContextT]
     | primitive.ControlGroup[ContextT]
     | primitive.Section[ContextT]
@@ -551,7 +570,7 @@ def _primitive_container_offers[RenderTargetT, ContextT](
 
 
 def _primitive_control_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
+    scope: DiscordOfferScope[RenderTargetT, ContextT],
     value: primitive.Button[ContextT]
     | primitive.RoutedButton
     | primitive.LinkButton
@@ -565,6 +584,132 @@ def _primitive_control_offers[RenderTargetT, ContextT](
     if not scope.policy.native_controls:
         return ()
     if isinstance(value, primitive.Button | primitive.SelectMenu | primitive.EntitySelect) and len(value.key) > 64:
-        value = replace(value, key=_control_key(occurrence, context))
+        value = replace(value, key=control_key(occurrence, consume=context.work.consume))
     candidate = navigation_candidate(value, occurrence, context)
     return (replace(candidate.offer, key="native-control", interaction=True),)
+
+
+def native_offers[RenderTargetT, ContextT](
+    value: NativeValue, scope: DiscordOfferScope[RenderTargetT, ContextT]
+) -> Offers[RenderTargetT, ContextT]:
+    occurrence, context, policy = scope.occurrence, scope.context, scope.policy
+    text_capacity = scope.text_capacity
+    if isinstance(value, primitive.Extension):
+        adapter = context.extensions.get(value.kind.name)
+        if adapter is None or not policy.native_v2:
+            ref = occurrence.graph.children[occurrence.reference][0]
+            child = SemanticOccurrence(
+                OccurrenceId((*occurrence.identity.path, "@fallback")),
+                occurrence.graph,
+                ref,
+                occurrence.placement,
+                occurrence.origin,
+                palette=context.palette,
+                enclosing=occurrence.enclosing,
+            )
+            return (
+                RealizationOffer[RenderTargetT, ContextT, Realization](
+                    occurrence, "extension-fallback", FlowRealization(), (child,), flow=True
+                ),
+            )
+        if not isinstance(adapter, ComposableExtension):
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "extension adapter needs compose()")
+        if any(
+            interaction(occurrence.graph.units[ref].value) is not None
+            for ref in occurrence.graph.atoms(occurrence.reference)
+        ):
+            return OfferDiscovery(
+                (), DiscoveryCompletion.UNSUPPORTED, "interactive extensions need typed control offers"
+            )
+        value = replace(adapter.compose(value.payload, context=context), kind=value.kind.name, version=value.version)
+    if isinstance(value, primitive.RawItem):
+        native = value.composition
+        if not policy.native_v2 or native is None:
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "RawItem needs a native composition contract")
+        if set(native.contract.cost.axes) - {Axis.COMPONENTS, Axis.DISPLAY_TEXT}:
+            return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "native V2 additive resource axes")
+        resource = SharedUse(
+            ResourceIdentity("native", "native:" + "/".join(occurrence.identity.path)), value.factory(), EMPTY_COST
+        )
+        node = scene.Extension(
+            value.kind,
+            value.version,
+            cast(dict[str, scene.JsonValue], {**value.payload, "resource": resource.identity.key}),
+        )
+        contract = replace(
+            native.contract, shared_costs={**native.contract.shared_costs, resource.identity: EMPTY_COST}
+        )
+        return (
+            RealizationOffer[RenderTargetT, ContextT, Realization](
+                occurrence, "native-extension", OpaqueRealization(node, resource, native), atomic=contract
+            ),
+        )
+    if isinstance(value, CardSlot):
+        if policy.embed_limits is None:
+            return ()
+        text_capacity = policy.embed_limits[value.kind]
+        value = value.text
+    if any(isinstance(ancestor, primitive.Content) for ancestor in occurrence.ancestors()):
+        text_capacity = context.capacities.get(DiscordAxis.CONTENT_TEXT, text_capacity)
+
+    if isinstance(value, primitive.Lines) and isinstance(value.overflow, Alts):
+        value = primitive.Text(
+            Text.join(value.join, (line.primary if isinstance(line, Alt) else line for line in value.lines)),
+            overflow=value.overflow,
+            priority=value.priority,
+        )
+    scope = replace(scope, text_capacity=text_capacity)
+    match value:
+        case primitive.Lines():
+            return _lines_offers(scope, value)
+
+        case primitive.Text() | primitive.Heading() | primitive.Footer() | primitive.Code():
+            return _primitive_text_offers(scope, value)
+
+        case primitive.Gallery() | primitive.MediaCollection():
+            return _gallery_offers(scope, value)
+
+        case primitive.File():
+            return _file_offers(scope, value)
+
+        case primitive.Thumbnail():
+            return _thumbnail_offers(scope, value)
+
+        case primitive.Sep():
+            return _separator_offers(scope, value)
+
+        case (
+            primitive.Row()
+            | primitive.ControlGroup()
+            | primitive.Section()
+            | primitive.Panel()
+            | primitive.Card()
+            | primitive.Content()
+        ):
+            return _primitive_container_offers(scope, value)
+
+        case (
+            primitive.Button()
+            | primitive.RoutedButton()
+            | primitive.LinkButton()
+            | primitive.PremiumButton()
+            | primitive.SelectMenu()
+            | primitive.RoutedSelect()
+            | primitive.EntitySelect()
+        ):
+            return _primitive_control_offers(scope, value)
+
+        case primitive.Budget() if not policy.character_budgets:
+            return ()
+
+        case primitive.Time() | primitive.ZonedTime():
+            return _timestamp_offers(scope, value)
+
+        case primitive.Budget() | primitive.Break():
+            return container_offers(scope, value)
+
+        case primitive.GalleryItem():
+            return ()
+
+        case _:
+            raise UnsupportedSemanticError(type(value).__name__)

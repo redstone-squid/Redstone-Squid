@@ -5,10 +5,10 @@ from typing import assert_type, override
 import pytest
 
 import squid_ui as ui
-from squid_ui import scene
 from squid_ui.authoring import semantic as s
-from squid_ui.primitives import Lines
-from squid_ui.primitives.constraints import Paginate
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.primitives import Lines
+from squid_ui.overflow import Paginate
 from squid_ui.selectors import Match, Selector, SelectorSyntaxError, index_tree, parse, query, scope, select
 from squid_ui.testing import render_index
 
@@ -106,7 +106,7 @@ def test_relative_has_siblings_and_descendant_branches_stay_separate() -> None:
 
 
 def test_qualified_scene_types_are_registered_without_shadowing_semantics() -> None:
-    text = scene.Text("planned")
+    text = discord_scene.Text("planned")
     paragraph = ui.paragraph("authored")
     tree = index_tree((text, paragraph))
     assert query(tree, "scene.Text").one().node is text

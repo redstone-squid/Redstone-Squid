@@ -9,7 +9,8 @@ from anyio.abc import TaskStatus
 
 import squid_ui as sl
 from squid_reactivity import CellAddress, Reactive, transaction
-from squid_ui.primitives import Text
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import ManagedService
 from squid_ui.runtime.owner import ComponentRuntime
 
@@ -22,7 +23,7 @@ class Search(sl.Reactive):
         return self.query.strip().upper()
 
 
-class Reader(sl.Component[sl.ComponentsV2Target]):
+class Reader(sl.Component[ComponentsV2Target]):
     def __init__(self, search: Search) -> None:
         self.search = search
         self.renders = 0
@@ -59,7 +60,7 @@ def test_nested_model_invalidates_multiple_runtimes_without_a_bus() -> None:
 
 
 def test_a_sibling_reading_component_state_is_invalidated_with_its_owner() -> None:
-    class Source(sl.Component[sl.ComponentsV2Target]):
+    class Source(sl.Component[ComponentsV2Target]):
         count: int = sl.state(0)
 
         @override
@@ -68,12 +69,12 @@ def test_a_sibling_reading_component_state_is_invalidated_with_its_owner() -> No
 
     source = Source()
 
-    class Sibling(sl.Component[sl.ComponentsV2Target]):
+    class Sibling(sl.Component[ComponentsV2Target]):
         @override
         def render(self) -> Text:
             return Text(f"also {source.count}")
 
-    class Parent(sl.Component[sl.ComponentsV2Target]):
+    class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.sibling = Sibling()
 
@@ -90,7 +91,7 @@ def test_a_sibling_reading_component_state_is_invalidated_with_its_owner() -> No
 def test_discard_preserves_old_reads_and_releases_prospective_reads() -> None:
     first, second = Search(), Search()
 
-    class Switch(sl.Component[sl.ComponentsV2Target]):
+    class Switch(sl.Component[ComponentsV2Target]):
         search: Search = sl.state(opaque=True)
 
         def __init__(self) -> None:

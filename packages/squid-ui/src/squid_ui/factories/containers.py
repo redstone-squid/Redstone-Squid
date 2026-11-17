@@ -22,8 +22,8 @@ from squid_ui.authoring.semantic import (
     Tone,
 )
 from squid_ui.factories._inputs import ChildLike, TextValue, _children
+from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette, Role
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.target_types import RenderTarget
 
 

@@ -1,6 +1,5 @@
 """Resolve inherited text constraints shared by all realization handlers."""
 
-from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from types import EllipsisType
 from typing import Literal
@@ -11,6 +10,7 @@ from squid_ui.authoring.presentations import (
     Budget,
     Shortening,
 )
+from squid_ui.native import NativeTraits
 from squid_ui.planning.composition import (
     DiscoveryCompletion,
     OfferDiscovery,
@@ -28,7 +28,6 @@ from squid_ui.planning.text_presentations import (
     _unsupported,
     text_ends,
 )
-from squid_ui.primitives import nodes as primitive
 
 type Offers[RenderTargetT, ContextT] = (
     tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
@@ -52,10 +51,7 @@ class OfferPolicy:
         native_controls: Whether controls may use the target's native selects and entity pickers.
         panel_text_limit: Replaces `text_limit` for text inside a panel.
         heading_limit: Further caps the text of a shortened heading.
-        native_v2: Whether extensions and raw items may use their native Components V2 composition.
         grid_columns: Controls one row may hold.
-        embed_limits: Character limit for each classic embed slot (`CardSlot.kind`). When None,
-            card slots produce no offers.
     """
 
     table_forms: tuple[TableForm, ...]
@@ -67,13 +63,11 @@ class OfferPolicy:
     native_controls: bool = False
     panel_text_limit: int | None = None
     heading_limit: int | None = None
-    native_v2: bool = False
     grid_columns: int | None = None
-    embed_limits: Mapping[str, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class _OfferScope[RenderTargetT, ContextT]:
+class OfferScope[RenderTargetT, ContextT]:
     """One occurrence's offer inputs, after its ancestors have set the text rules.
 
     Attributes:
@@ -98,15 +92,16 @@ class _OfferScope[RenderTargetT, ContextT]:
         occurrence: SemanticOccurrence[RenderTargetT, ContextT],
         context: PlanningContext,
         policy: OfferPolicy,
-    ) -> _OfferScope[RenderTargetT, ContextT]:
+    ) -> OfferScope[RenderTargetT, ContextT]:
         """Resolve ancestor constraints before proposing this occurrence's realizations."""
         text_capacity = context.capacities.get(Axis.DISPLAY_TEXT, policy.text_limit)
         keep: Literal["head", "tail"] | None = None
         spill = False
         inside_panel = False
         for ancestor in occurrence.ancestors():
-            inside_panel |= isinstance(
-                ancestor, sem.Block | sem.Section | sem.Article | sem.Aside | primitive.Panel | primitive.Card
+            inside_panel |= (
+                isinstance(ancestor, sem.Block | sem.Section | sem.Article | sem.Aside)
+                or NativeTraits.of(ancestor).panel
             )
             if isinstance(ancestor, sem.Truncated):
                 keep = ancestor.keep
@@ -122,11 +117,13 @@ class _OfferScope[RenderTargetT, ContextT]:
                 ancestor.chars
                 if isinstance(ancestor, sem.Paged)
                 else ancestor.preferred + ancestor.stretch
-                if isinstance(ancestor, sem.Budgeted | primitive.Budget)
+                if isinstance(ancestor, sem.Budgeted)
                 else ancestor.limits.get(Axis.DISPLAY_TEXT)
                 if isinstance(ancestor, Budget)
                 else None
             )
+            if (native_budget := NativeTraits.of(ancestor).budget) is not None:
+                cap = native_budget.preferred + native_budget.stretch
             if cap is not None:
                 text_capacity = min(text_capacity, cap) if text_capacity is not None else cap
         return cls(occurrence, context, policy, text_capacity, keep, spill, inside_panel)

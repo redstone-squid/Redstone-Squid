@@ -7,7 +7,9 @@ __all__ = [
     "DEFAULT_CSS",
     "HTML_ADAPTER",
     "HTML_LIMITS",
+    "HtmlAdapter",
     "HtmlLimits",
+    "HtmlTarget",
     "Renderer",
     "target",
 ]

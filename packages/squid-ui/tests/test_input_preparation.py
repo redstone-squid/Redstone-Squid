@@ -5,10 +5,10 @@ from typing import Any
 
 from squid_ui.authoring import semantic as sem
 from squid_ui.content.text import NEUTRAL, plain
+from squid_ui.ext.discord.primitives import nodes as primitive
 from squid_ui.extensions import ExtensionKind
 from squid_ui.planning.composition_input import InputPreparation
 from squid_ui.planning.dialect import InputPolicy, NativeInput
-from squid_ui.primitives import nodes as primitive
 from squid_ui.target_types import Renderable
 
 

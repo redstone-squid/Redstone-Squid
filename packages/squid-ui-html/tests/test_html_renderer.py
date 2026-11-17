@@ -10,7 +10,9 @@ import squid_ui.ext.html
 from squid_ui import scene
 from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.html import DEFAULT_CSS, Renderer
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.interactions.forms import FormSpec, TextField
 
@@ -23,12 +25,12 @@ async def _submitted(event: SubmitEvent) -> None:
     del event
 
 
-def _html_scene(*children: scene.HtmlNode, locale: str | None = "en-GB") -> scene.Scene[scene.HtmlBody]:
+def _html_scene(*children: html_scene.HtmlNode, locale: str | None = "en-GB") -> scene.Scene[html_scene.HtmlBody]:
     return scene.Scene(
         protocol=scene.Codec.protocol,
         target="html.semantic",
         target_version=1,
-        body=scene.HtmlBody(tuple(children), locale),
+        body=html_scene.HtmlBody(tuple(children), locale),
     )
 
 
@@ -66,7 +68,9 @@ def test_renderer_parses_only_safe_allowlisted_markdown() -> None:
         "![preview](https://example.invalid/image.png) [bad](javascript:alert(1)) "
         "<t:123:R> <:wave:123> ||spoiler||"
     )
-    document = _html_scene(scene.HtmlElement(scene.HtmlTag.P, (scene.HtmlText(content, Markup.DISCORD_MARKDOWN),)))
+    document = _html_scene(
+        html_scene.HtmlElement(html_scene.HtmlTag.P, (html_scene.HtmlText(content, Markup.DISCORD_MARKDOWN),))
+    )
 
     rendered = Renderer().draw(document)
 
@@ -85,16 +89,16 @@ def test_renderer_parses_only_safe_allowlisted_markdown() -> None:
 
 def test_renderer_validates_scene_urls_and_escapes_attributes() -> None:
     document = _html_scene(
-        scene.HtmlElement(
-            scene.HtmlTag.A,
-            (scene.HtmlText("unsafe"),),
-            attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.TITLE, '"><script>alert(1)</script>'),),
-            url=scene.HtmlUrlRef('javascript:alert("x")'),
+        html_scene.HtmlElement(
+            html_scene.HtmlTag.A,
+            (html_scene.HtmlText("unsafe"),),
+            attributes=(html_scene.HtmlAttribute(html_scene.HtmlAttributeName.TITLE, '"><script>alert(1)</script>'),),
+            url=html_scene.HtmlUrlRef('javascript:alert("x")'),
         ),
-        scene.HtmlElement(
-            scene.HtmlTag.IMG,
-            attributes=(scene.HtmlAttribute(scene.HtmlAttributeName.ALT, '"><img src=x>'),),
-            url=scene.HtmlUrlRef("data:text/html,<script>alert(1)</script>"),
+        html_scene.HtmlElement(
+            html_scene.HtmlTag.IMG,
+            attributes=(html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ALT, '"><img src=x>'),),
+            url=html_scene.HtmlUrlRef("data:text/html,<script>alert(1)</script>"),
         ),
     )
 
@@ -127,14 +131,16 @@ def test_renderer_resolves_declared_inline_assets_without_exposing_callbacks() -
 
 def test_renderer_emits_only_typed_css_variable_colours() -> None:
     document = _html_scene(
-        scene.HtmlElement(scene.HtmlTag.SECTION, colour=scene.HtmlColourRef(0x00A1FF)),
+        html_scene.HtmlElement(html_scene.HtmlTag.SECTION, colour=html_scene.HtmlColourRef(0x00A1FF)),
     )
 
     assert 'style="--squid-accent:#00a1ff"' in Renderer().draw(document)
 
 
 def test_standalone_renderer_escapes_title_and_sets_locale_viewport_and_neutral_css() -> None:
-    document = _html_scene(scene.HtmlElement(scene.HtmlTag.P, (scene.HtmlText("Hello"),)), locale="de-DE")
+    document = _html_scene(
+        html_scene.HtmlElement(html_scene.HtmlTag.P, (html_scene.HtmlText("Hello"),)), locale="de-DE"
+    )
 
     rendered = Renderer(standalone=True, title="Builds </title><script>alert(1)</script>").draw(document)
 
@@ -147,17 +153,19 @@ def test_standalone_renderer_escapes_title_and_sets_locale_viewport_and_neutral_
 
 
 def test_renderer_rejects_non_html_bodies_versions_and_invalid_reference_placement() -> None:
-    document = _html_scene(scene.HtmlElement(scene.HtmlTag.DIV))
-    discord_scene = scene.Scene(
+    document = _html_scene(html_scene.HtmlElement(html_scene.HtmlTag.DIV))
+    discord_document = scene.Scene(
         protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,
-        body=scene.ComponentsV2(),
+        body=discord_scene.ComponentsV2(),
     )
-    misplaced = _html_scene(scene.HtmlElement(scene.HtmlTag.DIV, url=scene.HtmlUrlRef("https://example.invalid")))
+    misplaced = _html_scene(
+        html_scene.HtmlElement(html_scene.HtmlTag.DIV, url=html_scene.HtmlUrlRef("https://example.invalid"))
+    )
 
     with pytest.raises(DrawInvariantError, match="ComponentsV2"):
-        Renderer().draw(cast(Any, discord_scene))
+        Renderer().draw(cast(Any, discord_document))
     with pytest.raises(DrawInvariantError, match="version 99"):
         Renderer().draw(replace(document, target_version=99))
     with pytest.raises(DrawInvariantError, match="anchor or image"):

@@ -3,7 +3,7 @@
 from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.styles import Color
+from squid_ui.styles import Color
 
 
 def resolve_accent(accent: Accent, palette: Palette) -> Color | None:

@@ -32,6 +32,7 @@ from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, Sea
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_reactivity import LocalTopicBus
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage
 from squid_ui.testing import press_event, submit_event
 from tests.unit.suggestions.test_services import RecordingProvider
@@ -62,7 +63,7 @@ def _screen(
 
     schematics.featured_for_build.return_value = Mock() if schematic_attached else None
 
-    async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    async def render_build(build: Build) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
 
     async def authorize(_node: PermissionNode) -> bool:

@@ -11,16 +11,19 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.authoring.presentations import budget
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.primitives import nodes as primitive
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanningSnapshot
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as primitive
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "composition.slack", ">=1"))
@@ -58,13 +61,15 @@ def test_failed_explicit_choice_is_not_a_claim_of_unsolvability() -> None:
         sl.table_row("b", key="b"),
         key="table",
     )
-    content = budget(table, limits={Axis.BLOCKS: 1})
+    content = budget(table, limits={SlackAxis.BLOCKS: 1})
     path = OccurrenceId(("root", "@0", "table"))
     with pytest.raises(CompositionRejectedError) as caught:
         sl.planning.plan(content, target=SLACK, composition=CompositionOptions({path: "records"}))
     assert any(isinstance(violation, CapacityExceeded) for violation in caught.value.violations)
     assert (
-        sl.planning.plan(content, target=SLACK, composition=CompositionOptions({path: "table"})).cost.get(Axis.BLOCKS)
+        sl.planning.plan(content, target=SLACK, composition=CompositionOptions({path: "table"})).cost.get(
+            SlackAxis.BLOCKS
+        )
         == 1
     )
 
@@ -93,7 +98,7 @@ def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> 
     async def second(event: sl.PressEvent[object]) -> None:
         pytest.fail("planning invoked second handler")
 
-    cache, snapshot = PlanCache(), PlanningSnapshot[scene.HtmlBody]()
+    cache, snapshot = PlanCache(), PlanningSnapshot[html_scene.HtmlBody]()
     session = PresentationState()
     for handler in (first, second):
         result = sl.planning.plan(
@@ -124,7 +129,7 @@ def test_fixed_composition_uses_options_work_limit() -> None:
 def test_automatic_memo_replays_only_the_same_composition_options() -> None:
     document = sl.paragraph("Body")
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2]()
     options = CompositionOptions(automatic=True)
     first = sl.planning.plan(document, target=V2, composition=options, session=session, snapshot=snapshot)
     replay = sl.planning.plan(document, target=V2, composition=options, session=session, snapshot=snapshot)

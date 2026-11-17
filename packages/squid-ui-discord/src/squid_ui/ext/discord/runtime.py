@@ -32,10 +32,10 @@ from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
 from squid_ui.ext.discord.request import Request, request
 from squid_ui.ext.discord.response import Presented, ResponseSpec, Sent
 from squid_ui.ext.discord.sessions import SessionManager
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.services import UIExecutionHost
-from squid_ui.target_types import ComponentsV2Target
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""

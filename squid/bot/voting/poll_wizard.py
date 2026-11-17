@@ -21,6 +21,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import Text, md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 _DURATION = re.compile(r"(\d+)\s*(days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s)", re.IGNORECASE)
 _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -325,7 +326,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec[sd.Request[Any, Any
 
 def _poll_steps(
     allow_network: bool, draft: PollDraft | None
-) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
+) -> tuple[sp.WizardStep[ComponentsV2Target, sd.Request], ...]:
     return (
         sp.WizardStep(
             "content", tr(t"bot-voting-poll-wizard-question-and-options = Question and options"), poll_form(draft)
@@ -338,7 +339,7 @@ def _poll_steps(
     )
 
 
-def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
     draft = PollDraft.from_answers(answers)
     try:
         draft.validate()
@@ -421,7 +422,7 @@ class PollScreen(sd.Screen[str]):
                 answers=tuple(answers),
                 reviewing=bool(draft.question),
             )
-        wizard = sp.Wizard[sl.ComponentsV2Target, sd.Request](
+        wizard = sp.Wizard[ComponentsV2Target, sd.Request](
             tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
             _poll_steps(allow_network, draft),
             key="poll",
@@ -450,7 +451,7 @@ class PollScreen(sd.Screen[str]):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
             published_url = sl.text_link(self.published_url, self.published_url)
             return (

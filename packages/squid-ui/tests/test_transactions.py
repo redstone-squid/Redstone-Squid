@@ -9,8 +9,9 @@ import pytest
 
 from squid_reactivity import export_state, restore_state
 from squid_reactivity.transactions import TransactionCommit, block_writes, readonly_transaction
-from squid_ui import Component, DiscordTarget, computed, state
-from squid_ui.primitives import Text
+from squid_ui import Component, computed, state
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, enlist, transaction
 
 

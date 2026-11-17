@@ -26,7 +26,7 @@ from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.suggestions.domain import Suggestion
 from squid.tags.domain import TagValueType
-from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord import SessionSpec, primitives
 from squid_ui.ext.discord.testing import stage
 from squid_ui.selectors import query, select
 from squid_ui.testing import RecordingResponder, choose, labels, press, render_index, render_tree, submit
@@ -374,8 +374,8 @@ async def test_inbox_selection_shows_build_context_and_routed_action() -> None:
     details = screen.inbox._selected_details()
     assert len(details) == 1
     section = details[0]
-    assert isinstance(section, sl.primitives.Section)
-    assert isinstance(section.accessory, sl.primitives.RoutedButton)
+    assert isinstance(section, primitives.Section)
+    assert isinstance(section.accessory, primitives.RoutedButton)
     assert "/builds/9" in section.accessory.route_id
     assert "Open build" in labels(render_tree(screen.inbox))
 

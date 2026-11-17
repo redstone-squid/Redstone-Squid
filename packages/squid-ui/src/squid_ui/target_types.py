@@ -1,22 +1,10 @@
-"""Dependency-leaf static vocabulary for render targets and adapter families."""
+"""Dependency-leaf static vocabulary for portable render targets."""
 
 from typing import Generic, TypeVar
 
 
 class RenderTarget:
     """Marker for portable values renderable by every semantic target."""
-
-
-class DiscordTarget(RenderTarget):
-    """Marker for values renderable to any Discord component mode."""
-
-
-class ComponentsV2Target(DiscordTarget):
-    """Marker for Discord Components V2 renderables."""
-
-
-class ClassicTarget(DiscordTarget):
-    """Marker for classic Discord message renderables."""
 
 
 # Explicit variance also preserves these constraints when Component inherits Renderable.

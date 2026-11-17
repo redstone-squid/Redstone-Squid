@@ -11,11 +11,12 @@ import squid_ui.ext.discord as sd
 from squid_ui import Component, PressEvent, TextLike
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.primitives import Button, Row
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.interactions import ActionMode, Actor, Visibility
 from squid_ui.interactions import ActionResponder as ActionResponderProtocol
 from squid_ui.interactions.forms import FormLike, SubmitHandler
-from squid_ui.primitives import Button, Row
 from squid_ui.testing import text_component
 
 
@@ -97,7 +98,7 @@ async def test_request_names_the_responder_type_when_context_omits_the_frontend(
 async def test_handlers_reach_the_dispatching_interaction_through_request() -> None:
     seen: list[object] = []
 
-    class Inspect(Component[sl.ComponentsV2Target]):
+    class Inspect(Component[ComponentsV2Target]):
         @override
         def render(self):
             return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))

@@ -13,6 +13,7 @@ from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui import testing as st
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
@@ -55,7 +56,7 @@ async def open_screen(
     return outcome.component, sessions[0].root, interaction
 
 
-async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target, sd.Request]:
+async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, ComponentsV2Target, sd.Request]:
     harness = wt.driving(screen.driver)
 
     async def submit(key: str, values: dict[str, object]) -> None:

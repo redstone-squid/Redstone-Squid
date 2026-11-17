@@ -9,6 +9,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.ext.discord.actions import ActionResponder
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 from squid_ui.interactions import ActionEvent, Actor
 from squid_ui.interactions.forms import Form, FormResult, IntField, TextField
@@ -22,7 +23,7 @@ class Owner:
     pass
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     @override
     def render(self):
         return sl.heading("Panel")

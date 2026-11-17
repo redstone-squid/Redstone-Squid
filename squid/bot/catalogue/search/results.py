@@ -24,6 +24,7 @@ from squid.search.domain import (
 )
 from squid_i18n import Text, md_tr, strong
 from squid_reactivity import untracked
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint
 
 if TYPE_CHECKING:
@@ -31,8 +32,8 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
-type BuildDetailFactory = Callable[[int], sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]
+type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
+type BuildDetailFactory = Callable[[int], sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]
 """Build the full, interactive view of one build, given its ID, for a host that has one."""
 
 
@@ -95,10 +96,8 @@ class _SearchSource:
         return page
 
 
-class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
-    _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        None, opaque=True
-    )
+class _SearchDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+    _build_node: sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -115,7 +114,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
         self._full_build = build_detail(build_id) if build_detail is not None and build_id is not None else None
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         if self._full_build is not None:
             # The host's build view replaces the preview, so the result opens in one step.
             if isinstance(self.hit, RecordSearchHit):
@@ -157,10 +156,10 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
         self._build_node = await self._render_build(build)
 
 
-class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     _show_records: bool = sl.state(False)
     _holder_id: int | None = sl.state(None)
-    _holder_build: sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _holder_build: sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
 
@@ -201,7 +200,7 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
         )
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def card(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    async def card(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         build_id = self._holder_id or int(self.hit.source_id)
         if self._load_build is None or self._render_build is None:
             return sl.section(sl.heading(self.hit.title), sl.paragraph(_detail_text(self.hit)))
@@ -211,7 +210,7 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
         return await self._render_build(build)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._show_records and self._holder_id is None:
             return (
                 self._records,
@@ -254,7 +253,7 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
             )
         return (node,)
 
-    def _card_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def _card_node(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         state = self.card.status
         if isinstance(state, sl.resources.Ready):
             return state.value
@@ -272,7 +271,7 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
 
     def _record_detail(
         self, record: RecordSearchHit
-    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         others = tuple(build_id for build_id in record.holder_build_ids if build_id != int(self.hit.source_id))
         metrics = ", ".join(f"{key}: {value}" for key, value in record.metrics.items())
         return sl.section(
@@ -406,7 +405,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _overview(
         self, loaded: sl.sources.LoadedWindow[SearchHit]
-    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | tuple[()]:
+    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | tuple[()]:
         page = self._source.page_for(loaded)
         notes: list[sl.TextLike] = []
         if self.request.group_by_build:
@@ -420,7 +419,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         return sl.note(Text.join("\n", notes)) if notes else ()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         return (self._browser,)
 
 
@@ -432,7 +431,7 @@ def _build_id(hit: SearchHit) -> int | None:
     return None
 
 
-def _record_heading(hit: RecordSearchHit) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+def _record_heading(hit: RecordSearchHit) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
     """Name the record a result matched above the holder build that it opens."""
     return sl.section(
         sl.heading(hit.title),

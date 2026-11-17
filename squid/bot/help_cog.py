@@ -16,6 +16,7 @@ from squid.bot.utils.autocomplete import AUTOCOMPLETE_CHOICE_LIMIT
 from squid.suggestions.application import Candidate, rank
 from squid_i18n import md, md_tr
 from squid_ui.content.text import TextLike
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -116,7 +117,7 @@ class HelpScreen(sd.Screen):
         folded = needle.casefold().removeprefix("/")
         return next((item for item in self._commands if item.qualified_name.casefold() == folded), None)
 
-    def _detail(self, command: AnyCommand) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _detail(self, command: AnyCommand) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         signature = getattr(command, "signature", "")
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
@@ -147,10 +148,10 @@ class HelpScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         if self._needle is not None and self._focused is None:
             needle = self._needle
-            body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = sl.section(
+            body: sl.LayoutNode[ComponentsV2Target, sd.Request] = sl.section(
                 sl.heading(tr(t"help-command-not-found = Command not found")),
                 sl.paragraph(md_tr(t"help-command-unavailable = No command named `{needle}` is available.")),
             )

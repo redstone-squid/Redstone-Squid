@@ -9,26 +9,22 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 import discord
-from squid_ui import scene
 from squid_ui.content.text import Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.form_planning import DiscordFormPlan, plan_form
 from squid_ui.ext.discord.inspection import _walk, audit_items, cost
 from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.planning.native_extensions import NativeComposition, NativePlacement
+from squid_ui.ext.discord.primitives.nodes import RawItem
 from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.extensions import ExtensionKind
 from squid_ui.interactions.forms import FormSpec
-from squid_ui.planning.adapter import (
-    AdapterCapability,
-    AdapterProfile,
-    ExtensionAdapter,
-    PreparedExtension,
-)
+from squid_ui.planning.adapter import AdapterProfile, ExtensionAdapter, PreparedExtension
 from squid_ui.planning.composition import AtomicContract, PlanningContext, ResourceIdentity, SharedUse
-from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import AnyTarget
-from squid_ui.primitives.nodes import RawItem
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 
@@ -122,11 +118,11 @@ def _measure_native_item(node: scene.Extension, resource: object, context: Plann
     return measured
 
 
-DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)
+DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(DiscordAdapterCapability)
 
 
 def _plan_form(spec: FormSpec, *, target: AnyTarget, localization: Localization, strict: bool) -> DiscordFormPlan:
-    require_discord_py_target(target, AdapterCapability.MODAL_FORMS, "plan a modal form")
+    require_discord_py_target(target, DiscordAdapterCapability.MODAL_FORMS, "plan a modal form")
     return plan_form(spec, localization=localization, limits=target.limits.components, strict=strict)
 
 
@@ -170,7 +166,7 @@ def discord_py_adapter_profile(
     name: str,
     version_expression: str,
     *,
-    capabilities: frozenset[AdapterCapability] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
+    capabilities: frozenset[str] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Declare the SDK versions and capabilities verified by the application.
@@ -191,7 +187,7 @@ def discord_py_adapter_profile(
 
 
 def require_discord_py_capability(
-    profile: AdapterProfile[DiscordPyAdapter], capability: AdapterCapability, operation: str
+    profile: AdapterProfile[DiscordPyAdapter], capability: DiscordAdapterCapability, operation: str
 ) -> None:
     """Verify the selected profile and installed discord.py at an adapter boundary."""
     if capability not in profile.capabilities:
@@ -212,7 +208,7 @@ def require_discord_py_capability(
 
 
 def require_discord_py_target(
-    target: AnyTarget, capability: AdapterCapability, operation: str
+    target: AnyTarget, capability: DiscordAdapterCapability, operation: str
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter

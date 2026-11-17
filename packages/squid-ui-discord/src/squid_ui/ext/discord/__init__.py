@@ -44,11 +44,13 @@ from squid_ui.ext.discord import (
     live,
     messages,
     navigation,
+    primitives,
     rendering,
     response,
     roles,
     routing,
     runtime,
+    scene,
     screen,
     session_specs,
     sessions,
@@ -61,6 +63,7 @@ from squid_ui.ext.discord import limits as limits
 from squid_ui.ext.discord import (
     modal as modals,
 )
+from squid_ui.ext.discord import navigation_controls as navigation_controls
 from squid_ui.ext.discord.access import (
     AccessPolicy,
     Everyone,
@@ -218,7 +221,6 @@ from squid_ui.ext.discord.target import (
     DISCORD_V1_DPY27,
     DISCORD_V2_DPY27,
 )
-from squid_ui.planning.pagination import navigation as navigation_controls
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 
 _LAZY_NAMESPACES = frozenset({"durability"})
@@ -270,15 +272,21 @@ __all__ = [
     "ChallengeSupervisor",
     "Choice",
     "ChoiceEvent",
+    "ClassicTarget",
     "CloseReason",
     "Cog",
     "CommandPolicy",
     "CommandResult",
     "Completed",
+    "ComponentsV2Target",
     "Config",
     "Deferral",
     "DevToolsSection",
     "DialogPresenter",
+    "DiscordAdapter",
+    "DiscordPy27Adapter",
+    "DiscordPyAdapter",
+    "DiscordTarget",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
     "EntityEvent",
@@ -410,6 +418,7 @@ __all__ = [
     "open_devtools",
     "owner_message_root",
     "prefix_command",
+    "primitives",
     "render_item",
     "render_message",
     "render_static",
@@ -421,6 +430,7 @@ __all__ = [
     "roles",
     "routing",
     "runtime",
+    "scene",
     "screen",
     "send_to",
     "session_specs",
@@ -430,3 +440,14 @@ __all__ = [
     "testing",
     "v2",
 ]
+
+from squid_ui.ext.discord.planning import semantics as _native_semantics
+
+_native_semantics.install()
+
+from squid_ui.ext.discord.target_types import ClassicTarget as ClassicTarget
+from squid_ui.ext.discord.target_types import ComponentsV2Target as ComponentsV2Target
+from squid_ui.ext.discord.target_types import DiscordAdapter as DiscordAdapter
+from squid_ui.ext.discord.target_types import DiscordPy27Adapter as DiscordPy27Adapter
+from squid_ui.ext.discord.target_types import DiscordPyAdapter as DiscordPyAdapter
+from squid_ui.ext.discord.target_types import DiscordTarget as DiscordTarget

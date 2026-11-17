@@ -2,7 +2,7 @@
 
 from squid_ui.authoring.semantic import Emphasis, Tone
 from squid_ui.palette import Role
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.styles import ActionStyle
 
 
 def button_style(tone: Tone | Role, emphasis: Emphasis) -> ActionStyle:

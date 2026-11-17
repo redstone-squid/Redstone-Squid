@@ -6,6 +6,7 @@ from typing import override
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +28,7 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B")))
     built: list[str] = []
 
-    class Detail(sl.Component[sl.ComponentsV2Target]):
+    class Detail(sl.Component[ComponentsV2Target]):
         def __init__(self, entry: Entry) -> None:
             self.entry = entry
 

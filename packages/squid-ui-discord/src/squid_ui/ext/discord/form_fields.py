@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, cast, override
 
 import discord
-from squid_ui.capabilities import Capability
 from squid_ui.content.entity import EntityType
 from squid_ui.content.text import TextLike
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.interactions.forms import ChoiceOption, ExtensionField, FormValueError, MultiChoiceField, UploadedFile
 
 
@@ -19,7 +19,7 @@ class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Ex
     minimum: int = 1
     maximum: int = 1
     placeholder: TextLike | None = None
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
+    capability: ClassVar[str] = DiscordCapability.FORMS_ENTITY
 
     @override
     def parse(self, raw: object) -> object | None:
@@ -42,7 +42,7 @@ class FileField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Exte
 
     minimum: int = 1
     maximum: int = 1
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_FILE
+    capability: ClassVar[str] = DiscordCapability.FORMS_FILE
 
     @override
     def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
@@ -75,7 +75,7 @@ class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Li
     options: tuple[ChoiceOption[ValueT], ...] = ()
     minimum: int = 0
     maximum: int | None = None
-    capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
+    capability: ClassVar[str] = DiscordCapability.FORMS_CHECKBOX_GROUP
 
     def __post_init__(self) -> None:
         self._portable_field()

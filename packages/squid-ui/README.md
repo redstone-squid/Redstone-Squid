@@ -38,8 +38,8 @@ Pass the same instance to components that should share it; the runtime automatic
 fields each render reads. Models need no bus, scope, or `super().__init__()` call. See
 [reusable reactive models](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/#reusable-reactive-models).
 
-The base package contains semantic nodes, planning, exact primitives, the component runtime,
-and the resolved-scene codec. Platform rules, limits, and renderers belong to
+The base package contains semantic nodes, shared planning, the component runtime, and
+the scene envelope. Native primitives, scene vocabularies, codecs, and renderers belong to
 `squid-ui-discord`, `squid-ui-slack`, and `squid-ui-html`. The core has no dependency
 on those packages or their SDKs.
 

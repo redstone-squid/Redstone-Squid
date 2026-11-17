@@ -7,13 +7,17 @@ import pytest
 
 import squid_ui as sl
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import ref
 from squid_ui.authoring.semantic import TableDisplay
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
+from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.html.composition import HtmlCompositionRules
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.composition import SlackCompositionRules
 from squid_ui.ext.slack.protocol import SlackComponentLimits, SlackMessageLimits
 from squid_ui.planning.composition import (
@@ -33,7 +37,7 @@ from squid_ui.planning.offers import select_composition
 from squid_ui.planning.realizations import TableRealization
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_index import semantic_graph
-from squid_ui.target_types import ComponentsV2Target, RenderTarget
+from squid_ui.target_types import RenderTarget
 
 
 def test_v2_shares_an_unread_attachment_across_sibling_regions(tmp_path: Path) -> None:
@@ -83,7 +87,7 @@ def test_v2_repeated_header_and_container_costs_remain_per_occurrence() -> None:
 
 
 def test_v2_checks_container_nesting_in_the_composed_context() -> None:
-    node = sl.block(sl.primitives.Panel((sl.primitives.Text("Nested"),)), key="outer")
+    node = sl.block(primitives.Panel((primitives.Text("Nested"),)), key="outer")
     rules, context = V2CompositionRules[ComponentsV2Target, object](), PlanningContext(WorkBudget(100))
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("outer"))
     candidate = select_composition(occurrence, rules, context, selections={})
@@ -146,7 +150,7 @@ def test_independent_validation_detects_changed_text_even_at_equal_cost() -> Non
     assert evaluation.preparation is not None
     body = rules.build(evaluation.preparation, context)
     text = body.children[0]
-    assert isinstance(text, scene.Text)
+    assert isinstance(text, discord_scene.Text)
     corrupt = replace(body, children=(replace(text, content="replaced"),))
     with pytest.raises(DrawInvariantError, match="disagrees with evaluation"):
         rules.validate(corrupt, evaluation, context)
@@ -162,7 +166,7 @@ def test_v2_validation_checks_container_metadata() -> None:
     assert evaluation.preparation is not None
     body = rules.build(evaluation.preparation, context)
     panel = body.children[0]
-    assert isinstance(panel, scene.Panel)
+    assert isinstance(panel, discord_scene.Panel)
     with pytest.raises(DrawInvariantError, match="disagrees with evaluation"):
         rules.validate(replace(body, children=(replace(panel, accent=None),)), evaluation, context)
 
@@ -179,7 +183,7 @@ def test_slack_validation_preserves_cell_relationships_at_equal_text_and_cost() 
     assert evaluation.preparation is not None
     body = rules.build(evaluation.preparation, context)
     table = body.blocks[0]
-    assert isinstance(table, scene.SlackTable)
+    assert isinstance(table, slack_scene.SlackTable)
     a, b, one, two = (cell for row in table.rows for cell in row)
     corrupt = replace(body, blocks=(replace(table, rows=((a,), (b, one, two))),))
     with pytest.raises(DrawInvariantError, match="disagrees with evaluation"):
@@ -198,7 +202,7 @@ def test_slack_builds_the_prepared_native_table_without_losing_rows() -> None:
     assert isinstance(result, BuiltComposition)
     assert result.body is result.evaluation.preparation
     table = result.body.blocks[0]
-    assert isinstance(table, scene.SlackTable)
+    assert isinstance(table, slack_scene.SlackTable)
     assert tuple(tuple(cell.content for cell in row) for row in table.rows) == (("A", "B"), ("1", "2"))
 
 
@@ -263,10 +267,10 @@ def test_html_preserves_table_structure_and_source_references() -> None:
     assert isinstance(result, BuiltComposition)
     assert result.evaluation.text == ("A", "B", "1", "2")
     table = result.body.children[0]
-    assert isinstance(table, scene.HtmlElement) and table.tag == scene.HtmlTag.TABLE
-    assert tuple(child.tag for child in table.children if isinstance(child, scene.HtmlElement)) == (
-        scene.HtmlTag.THEAD,
-        scene.HtmlTag.TBODY,
+    assert isinstance(table, html_scene.HtmlElement) and table.tag == html_scene.HtmlTag.TABLE
+    assert tuple(child.tag for child in table.children if isinstance(child, html_scene.HtmlElement)) == (
+        html_scene.HtmlTag.THEAD,
+        html_scene.HtmlTag.TBODY,
     )
 
 
@@ -298,11 +302,11 @@ def test_html_retains_styled_links_and_shared_asset_references(tmp_path: Path) -
     assert len(result.evaluation.resources.uses) == 1
     assert result.evaluation.text == ("Docs", "Download", "Download")
     paragraph = result.body.children[0]
-    assert isinstance(paragraph, scene.HtmlElement)
+    assert isinstance(paragraph, html_scene.HtmlElement)
     strong = paragraph.children[0]
-    assert isinstance(strong, scene.HtmlElement) and strong.tag == scene.HtmlTag.STRONG
+    assert isinstance(strong, html_scene.HtmlElement) and strong.tag == html_scene.HtmlTag.STRONG
     link = strong.children[0]
-    assert isinstance(link, scene.HtmlElement) and link.url == scene.HtmlUrlRef("https://example.com")
+    assert isinstance(link, html_scene.HtmlElement) and link.url == html_scene.HtmlUrlRef("https://example.com")
 
 
 def test_representation_preference_does_not_forbid_lossless_alternatives() -> None:

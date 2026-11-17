@@ -1,7 +1,7 @@
 """Lower resolved text structure into the HTML scene's existing safe elements."""
 
 from squid_i18n import tree
-from squid_ui import scene
+from squid_ui.ext.html import scene
 
 
 def html_text(nodes: tuple[tree.Node, ...]) -> scene.HtmlNode:

@@ -21,15 +21,16 @@ from squid_ui.ext.discord.delivery import (
     handle_from,
 )
 from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.primitives import Button, Row
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import interaction_harness, message_harness, payload_texts
-from squid_ui.primitives import Button, Row
 
 # A paragraph costs one component and a button row two, so a message holds four paragraphs.
 TARGET = replace(DISCORD_V2_DPY27, limits=replace(DISCORD_V2_DPY27.limits, total_components=4))
 
 
-class Panel(Component[sl.ComponentsV2Target]):
+class Panel(Component[ComponentsV2Target]):
     """Two paragraphs and a button, then `notes` paragraphs and a second button."""
 
     count: int = state(0)

@@ -7,8 +7,7 @@ import pytest
 import squid_ui.ext.discord as sd
 from squid_i18n import plain
 from squid_ui.content.assets import Asset, InlineAsset
-from squid_ui.interactions import PressEvent
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     ActionStyle,
     Button,
     Card,
@@ -29,6 +28,7 @@ from squid_ui.primitives import (
     Text,
     Thumbnail,
 )
+from squid_ui.interactions import PressEvent
 
 
 def test_v2_factories_build_the_exact_primitive_ir() -> None:

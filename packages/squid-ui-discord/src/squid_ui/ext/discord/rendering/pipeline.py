@@ -9,8 +9,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.rendering.contracts import MountedRenderer
 from squid_ui.ext.discord.rendering.controls import Wire

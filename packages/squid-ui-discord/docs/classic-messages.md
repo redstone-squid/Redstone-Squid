@@ -147,16 +147,16 @@ replacing the whole payload.
 Where the semantic layer is not enough, the classic primitives are exact:
 
 ```python
-from squid_ui.primitives import Card, CardField, CardFooter, Content, Text, Truncate
+from squid_ui.ext.discord import primitives
 
 document = [
-    Content("@here the build is ready"),
-    Card(
+    primitives.Content("@here the build is ready"),
+    primitives.Card(
         title="Piston door",
         url="https://example.invalid/door",
-        children=(Text("A 2x2 flush door."),),
-        fields=(CardField("Width", "2", inline=True),),
-        footer=CardFooter("submitted by squid"),
+        children=(primitives.Text("A 2x2 flush door."),),
+        fields=(primitives.CardField("Width", "2", inline=True),),
+        footer=primitives.CardFooter("submitted by squid"),
         accent=0x00FF00,
     ),
 ]

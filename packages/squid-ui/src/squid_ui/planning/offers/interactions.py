@@ -4,7 +4,6 @@ from dataclasses import replace
 from itertools import pairwise
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.grids import coordinate
 from squid_ui.authoring.presentations import (
@@ -16,6 +15,10 @@ from squid_ui.content.text import resolve_text
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.overflow import (
+    FIRST_PAGE,
+)
+from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     FragmentContract,
     OccurrenceId,
@@ -42,8 +45,8 @@ from squid_ui.planning.interaction_handlers import (
     ToggleDetails,
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
-from squid_ui.planning.offers.navigation import RegionNavigation, _control_key
-from squid_ui.planning.offers.policy import Offers, _OfferScope
+from squid_ui.planning.offers.navigation import RegionNavigation, control_key
+from squid_ui.planning.offers.policy import Offers, OfferScope
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
@@ -58,14 +61,11 @@ from squid_ui.planning.realizations import (
 )
 from squid_ui.planning.semantic_index import ItemBranch
 from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, toggle_state
-from squid_ui.primitives.constraints import (
-    FIRST_PAGE,
-)
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.styles import ActionStyle
 
 
 def _item_summary_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: ItemSummary[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: ItemSummary[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -81,11 +81,11 @@ def _item_summary_offers[RenderTargetT, ContextT](
 
 
 def _item_back_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: ItemBack[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: ItemBack[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     label = "".join(tree.plain(node) for node in resolve_text(context.chrome.back, context.localization).nodes)
     return (
         RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -101,7 +101,7 @@ def _item_back_offers[RenderTargetT, ContextT](
 
 
 def _item_branch_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: ItemBranch[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: ItemBranch[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -126,7 +126,7 @@ def _item_branch_offers[RenderTargetT, ContextT](
 
 
 def _items_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Items[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Items[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -170,17 +170,17 @@ def _items_offers[RenderTargetT, ContextT](
                 occurrence, "items.empty", FlowRealization(), flow=True
             ),
         )
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     summaries: list[ReferencedText] = []
-    item_options: list[scene.Option] = []
+    item_options: list[controls.Option] = []
     for item, ref in zip(value.items, refs[:-1], strict=True):
         label = resolve_text(item.label.content, context.localization).nodes
         nodes = label
         if item.summary is not None:
             nodes += (tree.literal(" — "), *resolve_text(item.summary, context.localization).nodes)
         summaries.append(ReferencedText(SemanticRef((*ref.keys, "@summary")), nodes))
-        item_options.append(scene.Option("".join(tree.plain(node) for node in label), item.key))
-    payload = SelectRealization(scene.Select(tuple(item_options), key, "Choose an item"), summaries=tuple(summaries))
+        item_options.append(controls.Option("".join(tree.plain(node) for node in label), item.key))
+    payload = SelectRealization(controls.Select(tuple(item_options), key, "Choose an item"), summaries=tuple(summaries))
     cursor_key = f"{value.key}.items"
     return (
         RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -206,13 +206,13 @@ def _items_offers[RenderTargetT, ContextT](
 
 
 def _disclosure_toggle_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: DisclosureToggle[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: DisclosureToggle[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
     details = value.details
     open_ = disclosure_state(details, context.presentation)
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     label = "".join(tree.plain(node) for node in resolve_text(details.summary.content, context.localization).nodes)
     return (
         RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -226,7 +226,7 @@ def _disclosure_toggle_offers[RenderTargetT, ContextT](
 
 
 def _details_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Details[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Details[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -254,13 +254,13 @@ def _details_offers[RenderTargetT, ContextT](
 
 
 def _navigation_choice_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: NavigationChoice[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: NavigationChoice[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
     navigation, option = value.navigation, value.option
     current = navigation_current(navigation, context.presentation)
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     label = "".join(tree.plain(node) for node in resolve_text(option.label, context.localization).nodes)
     return (
         RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -283,7 +283,7 @@ def _navigation_choice_offers[RenderTargetT, ContextT](
 
 
 def _navigation_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Navigation[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Navigation[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -318,11 +318,11 @@ def _navigation_offers[RenderTargetT, ContextT](
     if not available:
         return (individual,)
     current = navigation_current(value, context.presentation)
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     payload = SelectRealization(
-        scene.Select(
+        controls.Select(
             tuple(
-                scene.Option(
+                controls.Option(
                     "".join(tree.plain(node) for node in resolve_text(option.label, context.localization).nodes),
                     option.key,
                     default=option.key == current,
@@ -353,7 +353,7 @@ def _navigation_offers[RenderTargetT, ContextT](
 
 
 def _grid_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Grid[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Grid[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -415,17 +415,17 @@ def _grid_offers[RenderTargetT, ContextT](
             ),
         )
     options = tuple(
-        scene.Option(f"{coordinate(index, value.columns)} — {labels[index]}", value.cells[index].key)
+        controls.Option(f"{coordinate(index, value.columns)} — {labels[index]}", value.cells[index].key)
         for index in available
     )
-    action = _control_key(occurrence, context)
+    action = control_key(occurrence, consume=context.work.consume)
     # Attach unavailable cells to a neighbouring available cell. Every selector
     # fragment then retains its contextual labels and at least one valid option.
     boundaries = (0, *available[1:], len(refs))
 
     def grid_fragment(start: int, end: int) -> Realization:
         return SelectRealization(
-            scene.Select(options[start:end], action), summaries=grid_summaries[boundaries[start] : boundaries[end]]
+            controls.Select(options[start:end], action), summaries=grid_summaries[boundaries[start] : boundaries[end]]
         )
 
     select = RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -447,7 +447,7 @@ def _grid_offers[RenderTargetT, ContextT](
 
 
 def _entities_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Entities[ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Entities[ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -461,10 +461,10 @@ def _entities_offers[RenderTargetT, ContextT](
             ).selected
         )
     )
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     commit = EntityCommit(value.selection, value.key, previous, context.presentation)
     options = tuple(
-        scene.Option(
+        controls.Option(
             "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
             choice.ref.encode(),
             "".join(tree.plain(node) for node in resolve_text(choice.description, context.localization).nodes)
@@ -484,7 +484,7 @@ def _entities_offers[RenderTargetT, ContextT](
         occurrence,
         "entity",
         EntityRealization(
-            scene.EntitySelect(
+            controls.EntitySelect(
                 value.entity_type,
                 key,
                 placeholder,
@@ -505,7 +505,7 @@ def _entities_offers[RenderTargetT, ContextT](
     fallback = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "entity-choices",
-        SelectRealization(scene.Select(options, key, placeholder, value.minimum, value.maximum)),
+        SelectRealization(controls.Select(options, key, placeholder, value.minimum, value.maximum)),
         preference=1,
         interaction=True,
         binding=ActionBinding(
@@ -525,7 +525,7 @@ def _entities_offers[RenderTargetT, ContextT](
 
 
 def _choices_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Choices[ContextT] | sem.RoutedChoices
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Choices[ContextT] | sem.RoutedChoices
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -537,7 +537,7 @@ def _choices_offers[RenderTargetT, ContextT](
         else context.presentation.selection(value.key, initial=value.selection.initial).selected
     )
     options = tuple(
-        scene.Option(
+        controls.Option(
             "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
             choice.key,
             "".join(tree.plain(node) for node in resolve_text(choice.description, context.localization).nodes)
@@ -548,7 +548,7 @@ def _choices_offers[RenderTargetT, ContextT](
         for choice in value.choices
         if choice.available
     )
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     if isinstance(value, sem.RoutedChoices):
         placeholder = (
             "".join(tree.plain(node) for node in resolve_text(value.placeholder, context.localization).nodes)
@@ -556,11 +556,13 @@ def _choices_offers[RenderTargetT, ContextT](
             else None
         )
         payload = SelectRealization(
-            scene.RoutedSelect(options, value.route_id, placeholder, value.minimum, value.maximum, not value.available)
+            controls.RoutedSelect(
+                options, value.route_id, placeholder, value.minimum, value.maximum, not value.available
+            )
         )
         binding = None
     else:
-        payload = SelectRealization(scene.Select(options, key, min_values=value.minimum, max_values=value.maximum))
+        payload = SelectRealization(controls.Select(options, key, min_values=value.minimum, max_values=value.maximum))
         binding = ActionBinding(
             key,
             SelectChoices(ChoiceCommit(value.selection, value.key, previous, context.presentation)),
@@ -591,7 +593,7 @@ def _choices_offers[RenderTargetT, ContextT](
 
 
 def _action_control_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
+    scope: OfferScope[RenderTargetT, ContextT],
     value: sem.ActionControl[ContextT]
     | sem.RoutedActionControl
     | sem.Link
@@ -601,7 +603,7 @@ def _action_control_offers[RenderTargetT, ContextT](
     occurrence = scope.occurrence
     context = scope.context
     # Wire IDs follow semantic ownership, independently of presentation keys.
-    key = _control_key(occurrence, context)
+    key = control_key(occurrence, consume=context.work.consume)
     label = "".join(tree.plain(node) for node in resolve_text(value.label, context.localization).nodes)
     binding = None
     form: FormBinding[ContextT] | None = None

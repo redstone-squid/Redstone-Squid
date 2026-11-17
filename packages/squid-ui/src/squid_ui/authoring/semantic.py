@@ -12,7 +12,7 @@ These declarations are frozen, but referenced application objects need not be.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 from squid_ui._dataclass import immutable
 from squid_ui.authoring.grids import GridCell, validate_grid
 from squid_ui.authoring.rosters import RosterPlacement
+from squid_ui.boundary import Boundary
 from squid_ui.content.assets import Asset
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
@@ -28,9 +29,9 @@ from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandle
 from squid_ui.interactions.forms import FormSpec, SubmitHandler
 from squid_ui.interactions.guards import Guard
 from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled
+from squid_ui.native import NativeNode
+from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
-from squid_ui.primitives.nodes import Node
 from squid_ui.target_types import Renderable, RenderTarget
 
 if TYPE_CHECKING:
@@ -295,7 +296,8 @@ class List(Adaptable[RenderTarget]):
     """A keyed list with application-owned or remembered paging.
 
     HTML uses `page_size` when supplied. Discord also pages on text overflow and
-    may split a count-based page further. Ordered numbering spans the full list.
+    may split a count-based page further. Ordered numbering spans the full list;
+    `markers=False` leaves entries unmarked.
     """
 
     items: tuple[ListItem, ...]
@@ -303,6 +305,7 @@ class List(Adaptable[RenderTarget]):
     ordered: bool = False
     page_size: int | None = None
     page: PageOwnership = FIRST_PAGE
+    markers: bool = field(default=True, kw_only=True)
 
     def __post_init__(self) -> None:
         if self.page_size is not None and self.page_size < 1:
@@ -958,7 +961,7 @@ type PortableNode[RenderTargetT = RenderTarget, ContextT = object] = (
 `LayoutNode` minus the open `Renderable` escape. A traversal that matches over this union
 can be proven exhaustive, which `AnyLayoutNode` structurally cannot.
 """
-type BuiltinLayoutNode = SemanticNode | Adaptation | FallbackContent | Node
+type BuiltinLayoutNode = SemanticNode | Adaptation | FallbackContent | NativeNode[Any, Any] | Boundary[Any, Any]
 """Every layout node the framework itself ships, as classes an `isinstance` can test.
 
 The closed spelling of `LayoutNode`, which is open at its `Renderable` arm. "Builtin" is

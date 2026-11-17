@@ -9,10 +9,7 @@ from typing import NoReturn
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import MessageLimits
-from squid_ui.planning.resolved import optional_text as resolved_optional_text
-from squid_ui.planning.resolved import text as resolved_text
-from squid_ui.primitives.constraints import Paginate
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Boundary,
     Break,
     Budget,
@@ -27,6 +24,9 @@ from squid_ui.primitives.nodes import (
     SelectMenu,
     Variants,
 )
+from squid_ui.overflow import Paginate
+from squid_ui.planning.resolved import optional_text as resolved_optional_text
+from squid_ui.planning.resolved import text as resolved_text
 
 type Walk = Callable[[Node, str], None]
 """How a dialect re-enters its own validator for a child it owns."""

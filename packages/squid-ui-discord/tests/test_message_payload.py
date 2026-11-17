@@ -21,14 +21,15 @@ from squid_ui.ext.discord.durability import FrontendAddress
 from squid_ui.ext.discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_ui.ext.discord.limits import LIMITS
 from squid_ui.ext.discord.messages.payload import MessageMode, MessageModeError, MessagePayload, message_mode
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
-from squid_ui.primitives import Text
 
 CLASSIC = MessageMode.CLASSIC
 V2 = MessageMode.COMPONENTS_V2
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     count: int = sl.state(0)
 
     @override

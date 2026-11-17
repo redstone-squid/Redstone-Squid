@@ -5,27 +5,20 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.authoring.presentations import Shortening
 from squid_ui.ext.discord import (
     conform,
 )
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.primitives import Alt, Condense, Lines, Never, Text, alts
 from squid_ui.ext.discord.testing import assert_within_limits
 from squid_ui.planning import plan
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import (
-    Alt,
-    Condense,
-    Lines,
-    Never,
-    Text,
-    alts,
-)
 
 
-def _planned_texts(result: PlanResult[scene.ComponentsV2]) -> list[str]:
-    return [node.content for node in result.scene.body.children if isinstance(node, scene.Text)]
+def _planned_texts(result: PlanResult[discord_scene.ComponentsV2]) -> list[str]:
+    return [node.content for node in result.scene.body.children if isinstance(node, discord_scene.Text)]
 
 
 class TestAltsPolicy:

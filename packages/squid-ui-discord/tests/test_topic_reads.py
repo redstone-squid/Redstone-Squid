@@ -20,15 +20,16 @@ from squid_ui import Component, resource, state
 from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.delivery import DeliveryResult, handle_for
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, message_harness
-from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic, TopicName
 
 BUILD = TopicName("build", "1")
 OTHER = TopicName("build", "2")
 
 
-class Watcher(Component[sl.ComponentsV2Target]):
+class Watcher(Component[ComponentsV2Target]):
     """One resource, one watched topic, chosen by state so a branch can drop it."""
 
     topic: TopicName = state(default=BUILD)
@@ -114,7 +115,7 @@ async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
 async def test_a_topic_watched_in_render_is_followed_too() -> None:
     """`watch` is a tracked read, so the render's own consumer collects it directly."""
 
-    class Direct(Component[sl.ComponentsV2Target]):
+    class Direct(Component[ComponentsV2Target]):
         @override
         def render(self):
             bus.topic(BUILD.kind, BUILD.key).watch()

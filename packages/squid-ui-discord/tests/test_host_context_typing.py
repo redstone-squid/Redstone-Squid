@@ -15,12 +15,12 @@ class HtmlContext:
     pass
 
 async def check(
-    wrong: sl.Component[sl.ComponentsV2Target, HtmlContext],
-    wrong_classic: sl.Component[sl.ClassicTarget, HtmlContext],
-    wrong_node: sl.LayoutNode[sl.ComponentsV2Target, HtmlContext],
-    wrong_classic_node: sl.LayoutNode[sl.ClassicTarget, HtmlContext],
-    portable: sl.Component[sl.ComponentsV2Target],
-    matching: sl.Component[sl.ComponentsV2Target, sd.Request],
+    wrong: sl.Component[sd.ComponentsV2Target, HtmlContext],
+    wrong_classic: sl.Component[sd.ClassicTarget, HtmlContext],
+    wrong_node: sl.LayoutNode[sd.ComponentsV2Target, HtmlContext],
+    wrong_classic_node: sl.LayoutNode[sd.ClassicTarget, HtmlContext],
+    portable: sl.Component[sd.ComponentsV2Target],
+    matching: sl.Component[sd.ComponentsV2Target, sd.Request],
     request: sd.Request,
     runtime: sd.DiscordUIRuntime,
 ) -> None:

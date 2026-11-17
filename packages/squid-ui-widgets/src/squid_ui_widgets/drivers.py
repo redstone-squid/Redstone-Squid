@@ -21,6 +21,8 @@ from squid_ui.authoring.semantic import (
     Emphasis,
     FormTrigger,
     LayoutNode,
+    List,
+    ListItem,
     RoutedActionControl,
     RoutedChoices,
     Tone,
@@ -38,11 +40,10 @@ from squid_ui.factories import (
 )
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.interactions.forms import Form, FormLike, FormSpec
+from squid_ui.overflow import PageEvent, RoutedPage
 from squid_ui.palette import Role
-from squid_ui.primitives import Lines, Paginate
-from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import DiscordTarget, RenderTarget
+from squid_ui.target_types import RenderTarget
 
 type FormValues = Mapping[str, object]
 """Values submitted by a heterogeneous form schema."""
@@ -174,11 +175,8 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
 
     def paged_lines(
         self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
-    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+    ) -> tuple[LayoutNode[RenderTarget, ContextT], ...]:
         """Show ``lines`` ``per`` at a time, starting at the zero-based ``page`` from machine state.
-
-        The result is Discord-only because ``Lines`` is a Discord primitive; portable
-        machines should not call it.
 
         A page turn dispatches ``action_name`` with the target page as its only value, so
         the transition should store ``int(values[0])``. The mounted driver hands paging to
@@ -358,13 +356,21 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
 
     def paged_lines(
         self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
-    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+    ) -> tuple[LayoutNode[RenderTarget, ContextT], ...]:
         """Page the lines with a planner pager whose page the machine state controls."""
 
         async def turn(event: PageEvent) -> None:
             await self.owner._dispatch(event, action_name, values=(str(event.page),))
 
-        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=controlled(page, turn))),)
+        return (
+            List(
+                tuple(ListItem(str(index), line) for index, line in enumerate(lines)),
+                key,
+                page_size=per,
+                page=controlled(page, turn),
+                markers=False,
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,7 +507,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
 
     def paged_lines(
         self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
-    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+    ) -> tuple[LayoutNode[RenderTarget, ContextT], ...]:
         """Let the planner resolve page boundaries and encode persistent navigation."""
 
         def turn(target: int) -> str:
@@ -518,4 +524,12 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
             return jump_route(TransitionRoute(action_name, self.current, "input"), current_page, pages)
 
         owner = RoutedPage(page, turn, seek, jump if jump_route is not None else None)
-        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=owner)),)
+        return (
+            List(
+                tuple(ListItem(str(index), line) for index, line in enumerate(lines)),
+                key,
+                page_size=per,
+                page=owner,
+                markers=False,
+            ),
+        )

@@ -14,15 +14,15 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui.ext.discord.preview
-from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import render_static
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.routing._client import _dispatch_item
 from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 from squid_ui.selectors import select as select_node
@@ -1126,9 +1126,9 @@ class TestDrawing:
         assert '"route_id":"edit:build:3"' in payload
         assert '"custom_id"' not in payload
         assert sl.scene.Codec.loads(payload) == planned
-        row = planned.components_v2.children[0].children[0]  # type: ignore[union-attr]
-        assert isinstance(row, scene.Row)
-        assert row.items == (scene.RoutedButton("Edit", "edit:build:3"),)
+        row = planned.expect_body(discord_scene.ComponentsV2).children[0].children[0]  # type: ignore[union-attr]
+        assert isinstance(row, discord_scene.Row)
+        assert row.items == (discord_scene.RoutedButton("Edit", "edit:build:3"),)
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
@@ -1158,9 +1158,9 @@ class TestDrawing:
         )
 
         planned = sl.planning.plan(document, target=squid_ui.ext.discord.DISCORD_V2_DPY27).scene
-        assert planned.components_v2.children == (
-            scene.RoutedSelect(
-                (sl.scene.Option("One", "one", "First"), sl.scene.Option("Two", "two")),
+        assert planned.expect_body(discord_scene.ComponentsV2).children == (
+            discord_scene.RoutedSelect(
+                (discord_scene.Option("One", "one", "First"), discord_scene.Option("Two", "two")),
                 "pick:build:3",
                 "Choose",
             ),

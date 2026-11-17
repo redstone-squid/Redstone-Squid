@@ -14,12 +14,13 @@ from squid_reactivity import (
     transaction,
 )
 from squid_reactivity.operations import OperationDefinition, Pending, ProgressReporter, Succeeded
-from squid_ui.primitives import Text
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import History, PostCommitOperation, UIExecutionHost, history
 from squid_ui.runtime.owner import ComponentRuntime
 
 
-class Reader(sl.Component[sl.ComponentsV2Target]):
+class Reader(sl.Component[ComponentsV2Target]):
     def __init__(self, read: Callable[[], str]) -> None:
         self.read = read
 
@@ -28,7 +29,7 @@ class Reader(sl.Component[sl.ComponentsV2Target]):
         return Text(self.read())
 
 
-def mount(read: Callable[[], str]) -> ComponentRuntime[sl.ComponentsV2Target]:
+def mount(read: Callable[[], str]) -> ComponentRuntime[ComponentsV2Target]:
     runtime = ComponentRuntime(Reader(read))
     runtime.commit(runtime.render())
     return runtime

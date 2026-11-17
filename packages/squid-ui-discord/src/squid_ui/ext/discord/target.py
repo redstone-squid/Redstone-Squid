@@ -2,7 +2,7 @@
 
 from typing import cast, overload
 
-from squid_ui import scene
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.adapter import DISCORD_ITEM, DISCORD_PY_27_ADAPTER, ItemFactory
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import (
@@ -11,11 +11,11 @@ from squid_ui.ext.discord.planning.discord import (
     classic_target,
     components_v2_target,
 )
-from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui.ext.discord.primitives.nodes import Extension, Node
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.primitives.nodes import Extension, Node
-from squid_ui.target_types import ClassicTarget, ComponentsV2Target, Renderable
+from squid_ui.target_types import Renderable
 
 V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABILITIES)
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES

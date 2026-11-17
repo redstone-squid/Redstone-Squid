@@ -24,6 +24,7 @@ from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.observability import add_counter
 from squid_i18n import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ async def render_build_card(
     media_previews: MediaPreviewClient,
     *,
     schematic_summaries: BuildSchematicSummaryProvider | None = None,
-) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
     """Return a build card that callers can compose with other layout nodes."""
     metadata = build_metadata_fields(build)
     schematic_field = None

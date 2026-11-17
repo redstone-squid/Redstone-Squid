@@ -6,6 +6,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class Shared(sl.Reactive):
@@ -17,7 +18,7 @@ class Counter(sd.Screen[None]):
         self.shared = shared
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.stack(
             sl.paragraph(f"Count {self.shared.count}"),
             sl.action_controls(sl.action_control("Bump", self.bump, key="bump"), key="actions"),

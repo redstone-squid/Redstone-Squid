@@ -5,7 +5,7 @@ Stateful controls such as choices, toggles and pagers take an `Ownership` value.
 With `Controlled`, the application passes the value on every render and receives requested
 changes as events. This module sits below both `semantic` and `primitives`, so semantic nodes
 and primitive overflow policies such as `Paginate` share one definition. Page-specific values
-live beside `Paginate` in `squid_ui.primitives.constraints`.
+live beside `Paginate` in `squid_ui.overflow`.
 """
 
 from collections.abc import Awaitable, Callable

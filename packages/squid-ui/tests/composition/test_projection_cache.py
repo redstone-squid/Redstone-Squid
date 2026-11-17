@@ -10,7 +10,8 @@ from unittest.mock import patch
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene, testing
+from squid_ui import testing
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec, PressHandler
@@ -97,7 +98,7 @@ class Outputs:
     identity = "fixture"
     regions: Mapping[OccurrenceId, RegionPages] = {}
 
-    def __init__(self, result: PlanResult[scene.ComponentsV2]) -> None:
+    def __init__(self, result: PlanResult[discord_scene.ComponentsV2]) -> None:
         controls = {"open": sl.action_control("Open", ignored, key="open")}
         prepared = tuple(ActionPage.prepare(replace(result), controls, slot=index) for index in range(3))
         self.outputs = tuple(page for page, _ in prepared)
@@ -106,7 +107,7 @@ class Outputs:
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
         return {REGION: max(0, min(2, coordinates.get(REGION, 0)))}
 
-    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> ActionPage[scene.ComponentsV2]:
+    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> ActionPage[discord_scene.ComponentsV2]:
         return self.outputs[self.visible(coordinates or {})[REGION]]
 
 

@@ -8,7 +8,7 @@ from squid_reactivity import untracked
 from squid_reactivity.operations import Failed, Pending
 from squid_reactivity.resources import PendingMode, resource
 from squid_ui.authoring.document import DocumentLike
-from squid_ui.authoring.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
+from squid_ui.authoring.semantic import ActionControl, ActionControls, ChoiceEvent, ControlDisplay, Link
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import (
@@ -24,16 +24,15 @@ from squid_ui.factories import (
     stack,
 )
 from squid_ui.interactions import ActionEvent
+from squid_ui.overflow import FIRST_PAGE
 from squid_ui.pages import RevealPage
 from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
-    MountNavNode,
     NavigationContext,
+    NavNode,
     default_nav,
     page_size_button,
 )
-from squid_ui.primitives import Row
-from squid_ui.primitives.constraints import FIRST_PAGE
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
     Chronology,
@@ -42,7 +41,7 @@ from squid_ui.sources import (
     WindowSource,
     window_footer,
 )
-from squid_ui.target_types import DiscordTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
@@ -52,17 +51,15 @@ from squid_ui_widgets._window import (
 )
 from squid_ui_widgets.browsing import BrowseSession, Movement
 
-type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
+type BrowserDetail[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = Callable[
     [ItemT], ContentLike[RenderTargetT, ContextT]
 ]
-type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
+type BrowserOverview[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = Callable[
     [LoadedWindow[ItemT]], ContentLike[RenderTargetT, ContextT]
 ]
 
 
-class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
-    Component[RenderTargetT, ContextT]
-):
+class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
     """Browse a window source and open one item's detail content.
 
     The session owns source navigation and focus. Detail content is prepared through
@@ -259,7 +256,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
             note(footer) if (footer := window_footer(chrome, self.source, loaded, self.page_size)) else None,
         )
 
-    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[MountNavNode, ...]:
+    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[NavNode, ...]:
         """Bind shared source navigation facts to mounted handlers."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
@@ -273,7 +270,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         )
         size_controls = (
             (
-                Row(
+                ActionControls(
                     (
                         page_size_button(
                             self.key,
@@ -282,7 +279,8 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
                             maximum=25,
                             chrome=chrome,
                         ),
-                    )
+                    ),
+                    key=f"{self.key}.size-controls",
                 ),
             )
             if self.show_page_size

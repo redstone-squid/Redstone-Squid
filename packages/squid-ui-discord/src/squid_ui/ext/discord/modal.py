@@ -14,6 +14,7 @@ import discord
 from squid_ui.content.entity import EntityType
 from squid_ui.content.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.conformance import conform_modal
 from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.ext.discord.form_fields import CheckboxGroupField as CheckboxGroupField
@@ -34,7 +35,7 @@ from squid_ui.ext.discord.form_planning import _entity_defaults as _entity_defau
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.interactions.forms import FormSpec, FormText, UploadedFile
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ def build_modal(
     Strict mode rejects repairs instead. Use unique effective input keys: an omitted key
     uses the input label, and duplicate keys overwrite entries in the submission mapping.
     """
-    require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
+    require_discord_py_capability(adapter, DiscordAdapterCapability.MODAL_FORMS, "build a modal form")
     modal = _SpecModal(spec, on_submit, timeout)
     interventions = conform_modal(modal, strict=strict, limits=limits)
     if interventions:
@@ -266,7 +267,7 @@ def build_form_modal(
     The callback receives raw values from the field readers. Evaluate the FormSpec before
     using them as validated application values; mounted form dispatch does this for you.
     """
-    require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
+    require_discord_py_capability(adapter, DiscordAdapterCapability.MODAL_FORMS, "build a modal form")
     plan = plan_form(spec, localization=localization, limits=limits, strict=strict)
     return render_form_modal(plan, on_submit=on_submit, timeout=timeout)
 

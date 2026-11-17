@@ -13,6 +13,7 @@ from squid.bot.lookup import LookupScreen, SuggestionSource, pick
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage
 from tests.unit.suggestions.test_services import AllowingAuthorizer, RecordingProvider
 
@@ -68,7 +69,7 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(conf
         presented: sd.Presented[Any] | None = sl.state(None, opaque=True)
 
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
             return sl.action_controls(sl.action_control("Open", self.open, key="open"), key="actions")
 
         async def open(self, event: sd.PressEvent) -> None:

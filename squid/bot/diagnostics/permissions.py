@@ -12,6 +12,7 @@ import squid_ui_widgets as sp
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.starboard.models import StarboardConfig
 from squid_i18n import Text, tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +22,7 @@ class PermissionFinding:
     detail: Text
 
 
-class GuildPermissionDiagnostics(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class GuildPermissionDiagnostics(sl.Component[ComponentsV2Target, sd.Request]):
     """Show a snapshot of effective permissions, with bounded pages of findings."""
 
     def __init__(
@@ -50,7 +51,7 @@ class GuildPermissionDiagnostics(sl.Component[sl.ComponentsV2Target, sd.Request]
         if redstoner_role_id is not None:
             findings.append(self.role(redstoner_role_id))
         self.findings = tuple(findings)
-        self.browser = sp.Browser[PermissionFinding, sl.ComponentsV2Target, sd.Request](
+        self.browser = sp.Browser[PermissionFinding, ComponentsV2Target, sd.Request](
             sl.sources.list_source(self.findings),
             key="permission-findings",
             identity=lambda finding: finding.key,
@@ -112,7 +113,7 @@ class GuildPermissionDiagnostics(sl.Component[sl.ComponentsV2Target, sd.Request]
         return PermissionFinding("redstoner-role", title, detail)
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
         return (
             sl.note(
                 tr(

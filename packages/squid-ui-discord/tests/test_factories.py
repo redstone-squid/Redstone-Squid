@@ -6,8 +6,9 @@ from typing import cast, override
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 async def _noop(_event) -> None: ...
@@ -67,7 +68,7 @@ class TestNormalization:
 
         result = sl.planning.plan(sl.stack(None, shown and sl.paragraph("x")), target=DISCORD_V2_DPY27)
 
-        assert result.scene.components_v2.children == ()
+        assert result.scene.expect_body(discord_scene.ComponentsV2).children == ()
 
 
 class TestAdaptationMethods:
@@ -104,7 +105,7 @@ class TestRefusals:
             sl.section(sl.heading("H"), {"a": sl.paragraph("a")})  # type: ignore[arg-type]
 
     def test_a_component_is_accepted_as_content(self) -> None:
-        class Child(sl.Component[sl.ComponentsV2Target]):
+        class Child(sl.Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl.paragraph("child")
@@ -302,5 +303,5 @@ def test_literal_whitespace_and_mentions_survive_discord_planning() -> None:
     value = sl.plain("  a  b\n@everyone <#123>")
     result = sl.planning.plan(sl.paragraph(value), target=DISCORD_V2_DPY27)
     node = result.scene.body.children[0]
-    assert isinstance(node, scene.Text)
+    assert isinstance(node, discord_scene.Text)
     assert node.content == "  a  b\n@\u200beveryone <\u200b#123>"

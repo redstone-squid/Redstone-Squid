@@ -9,8 +9,12 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack import scene as slack_scene
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUnsupportedError, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -53,28 +57,28 @@ def test_thumbnail_repeats_with_its_heading_on_every_page(target: Target[Any, An
         assert IMAGE in wire and "Details" in wire and value in wire
         assert ("second body" if index == 0 else "first body") not in wire
         match page.body:
-            case scene.ComponentsV2(children=children):
+            case discord_scene.ComponentsV2(children=children):
                 panel = children[0]
-                assert isinstance(panel, scene.Panel)
+                assert isinstance(panel, discord_scene.Panel)
                 heading = panel.children[0]
-                assert isinstance(heading, scene.Section)
-                assert heading.accessory == scene.Thumbnail(IMAGE)
+                assert isinstance(heading, discord_scene.Section)
+                assert heading.accessory == discord_scene.Thumbnail(IMAGE)
                 assert "Details" in heading.texts[0].content
-            case scene.ClassicMessage(embeds=embeds):
+            case discord_scene.ClassicMessage(embeds=embeds):
                 assert len(embeds) == 1
-                assert embeds[0].thumbnail == scene.EmbedMedia(url=IMAGE)
-            case scene.HtmlBody(children=children):
+                assert embeds[0].thumbnail == discord_scene.EmbedMedia(url=IMAGE)
+            case html_scene.HtmlBody(children=children):
                 element = children[0]
-                assert isinstance(element, scene.HtmlElement)
-                assert element.tag == (scene.HtmlTag.ARTICLE if article else scene.HtmlTag.SECTION)
+                assert isinstance(element, html_scene.HtmlElement)
+                assert element.tag == (html_scene.HtmlTag.ARTICLE if article else html_scene.HtmlTag.SECTION)
                 thumbnail = element.children[1]
-                assert isinstance(thumbnail, scene.HtmlElement)
-                assert thumbnail.tag == scene.HtmlTag.IMG
-                assert thumbnail.url == scene.HtmlUrlRef(IMAGE)
-                assert scene.HtmlAttribute(scene.HtmlAttributeName.ALT, "Details") in thumbnail.attributes
-            case scene.SlackMessage(blocks=blocks) | scene.SlackHomeView(blocks=blocks):
-                assert isinstance(blocks[0], scene.SlackHeader)
-                assert blocks[1] == scene.SlackImage(IMAGE, "Details")
+                assert isinstance(thumbnail, html_scene.HtmlElement)
+                assert thumbnail.tag == html_scene.HtmlTag.IMG
+                assert thumbnail.url == html_scene.HtmlUrlRef(IMAGE)
+                assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ALT, "Details") in thumbnail.attributes
+            case slack_scene.SlackMessage(blocks=blocks) | slack_scene.SlackHomeView(blocks=blocks):
+                assert isinstance(blocks[0], slack_scene.SlackHeader)
+                assert blocks[1] == slack_scene.SlackImage(IMAGE, "Details")
             case _:
                 pytest.fail("unexpected document target")
 
@@ -86,7 +90,7 @@ def test_thumbnail_cost_respects_reserved_capacity(target: Target[Any, Any, Any,
     with_image = replace(node, children=(replace(section, thumbnail=IMAGE),))
     before = plan(node, target=target)
     after = plan(with_image, target=target)
-    axis = Axis.COMPONENTS if isinstance(after.scene.body, scene.ComponentsV2) else Axis.BLOCKS
+    axis = Axis.COMPONENTS if isinstance(after.scene.body, discord_scene.ComponentsV2) else SlackAxis.BLOCKS
     extra = 2 if axis == Axis.COMPONENTS else 1
     assert after.cost.get(axis) == before.cost.get(axis) + extra
     capacity = target.limits.total_components if axis == Axis.COMPONENTS else target.limits.blocks
@@ -102,9 +106,9 @@ def test_nested_v2_section_keeps_its_thumbnail_inside_the_enclosing_panel() -> N
     )
     result = plan(node, target=TARGETS[0])
     panel = result.scene.body.children[0]
-    assert isinstance(panel, scene.Panel)
-    assert isinstance(panel.children[0], scene.Section)
-    assert panel.children[0].accessory == scene.Thumbnail(IMAGE)
+    assert isinstance(panel, discord_scene.Panel)
+    assert isinstance(panel.children[0], discord_scene.Section)
+    assert panel.children[0].accessory == discord_scene.Thumbnail(IMAGE)
     assert result.cost.get(Axis.COMPONENTS) == 5
 
 

@@ -41,11 +41,12 @@ from squid.submissions.domain import ChoiceOption, FormField, FormManifest, Form
 from squid_i18n import Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
 """Fetch the current choices of one option source, such as `approved_restrictions`."""
 
-type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
+type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request]]]
 
 _MAX_SELECT_OPTIONS = 25
 
@@ -131,7 +132,7 @@ class BuildEditWorkspace(sl.Reactive):
     def editable(self) -> bool:
         return True
 
-    def history_controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def history_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return history_controls(self.history)
 
     async def load_options(self, fields: Iterable[FormField]) -> None:
@@ -230,7 +231,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         builds: BuildService,
         workspace: BuildEditWorkspace,
         *,
-        node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None,
+        node: sl.LayoutNode[ComponentsV2Target, sd.Request] | None = None,
         authorize: Callable[[], Awaitable[bool]],
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
@@ -243,7 +244,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             message = "only saved builds can be edited"
             raise ValueError(message)
-        self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None] | None = (build, node)
+        self._seed: tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request] | None] | None = (build, node)
         self._changes = changes
         self._build_id: int = build.id
         self._base_revision = build.revision
@@ -256,7 +257,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         self._recovered = recovered
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None]:
+    async def projection(self) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request] | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._changes is not None:
             self._changes.watch()
@@ -269,7 +270,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             raise LookupError(message)
         return latest, await self._render_build(latest)
 
-    def _current(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None]:
+    def _current(self) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request] | None]:
         if self._seed is not None:
             return self._seed
         state = self.projection.status
@@ -289,14 +290,14 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         return await self._authorize()
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
         if self.expired:
             return self._expired()
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-ui-views-loading-build = Loading build.")),)
         ws = self.workspace
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(
                 sl.status(
@@ -349,7 +350,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             nodes.extend(self.controller.controls())
         return nodes
 
-    def _expired(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _expired(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         # Route registration imports the editor through opening.py, so resolve the route here.
         from squid.bot.submission.ui import controls as build_controls
 
@@ -530,11 +531,11 @@ class BuildEditPreview(sd.Screen[None]):
 
     policy = sd.ResponseSpec(audience="personal", timeout=600, session=sd.SessionSpec("build-preview"))
 
-    def __init__(self, node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request]) -> None:
+    def __init__(self, node: sl.LayoutNode[ComponentsV2Target, sd.Request]) -> None:
         self.node = node
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             self.node,
             sl.action_controls(

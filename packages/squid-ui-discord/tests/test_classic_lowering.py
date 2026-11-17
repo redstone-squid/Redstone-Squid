@@ -1,6 +1,6 @@
 """Semantic nodes lowered to classic message content, embeds, and controls."""
 
-from squid_ui import Tone, scene
+from squid_ui import Tone
 from squid_ui.authoring.document import Asset, InlineAsset
 from squid_ui.authoring.semantic import (
     Article,
@@ -19,12 +19,13 @@ from squid_ui.authoring.semantic import (
     TableRow,
 )
 from squid_ui.ext.discord import DISCORD_V1_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.planning import plan
 
 
-def message(document, **kwargs) -> scene.ClassicMessage:
+def message(document, **kwargs) -> discord_scene.ClassicMessage:
     body = plan(document, target=DISCORD_V1_DPY27, **kwargs).scene.body
-    assert isinstance(body, scene.ClassicMessage)
+    assert isinstance(body, discord_scene.ClassicMessage)
     return body
 
 

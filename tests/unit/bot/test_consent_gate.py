@@ -33,8 +33,9 @@ from squid.bot.accounts.consent import (
 )
 from squid.core.sentinel import NOT_ASKED
 from squid_ui.content.text import NEUTRAL, resolve_text
-from squid_ui.ext.discord import Everyone, SessionKey
+from squid_ui.ext.discord import Everyone, SessionKey, primitives
 from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import (
     ContextHarness,
     InteractionHarness,
@@ -237,10 +238,10 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
     ctx.send.assert_not_awaited()
 
 
-class _Blank(sl.Component[sl.ComponentsV2Target]):
+class _Blank(sl.Component[ComponentsV2Target]):
     @override
     def render(self):
-        return [sl.primitives.Text("parent")]
+        return [primitives.Text("parent")]
 
 
 async def _collect(into: list[Any], awaitable: Any) -> None:
@@ -316,11 +317,11 @@ class _Gate(sd.Screen):
     @override
     def render(self) -> Any:
         return [
-            sl.primitives.Text(f"{self.presses}"),
-            sl.primitives.Row(
+            primitives.Text(f"{self.presses}"),
+            primitives.Row(
                 (
-                    sl.primitives.Button("ask", self._ask, "ask"),
-                    sl.primitives.Button("count", self._count, "count"),
+                    primitives.Button("ask", self._ask, "ask"),
+                    primitives.Button("count", self._count, "count"),
                 )
             ),
         ]

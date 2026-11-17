@@ -10,7 +10,6 @@ from enum import StrEnum
 from typing import Literal
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import (
     SemanticRef,
     Shortening,
@@ -18,17 +17,14 @@ from squid_ui.authoring.presentations import (
 from squid_ui.content.assets import Asset
 from squid_ui.content.emoji import Emoji
 from squid_ui.interactions import ActionMode
-from squid_ui.planning.composition import (
-    SharedUse,
-)
-from squid_ui.planning.native_extensions import NativeComposition
+from squid_ui.native import NativeRealization
+from squid_ui.planning import controls
 from squid_ui.planning.text_presentations import (
     ResolvedText,
-    _slice,
     join_text,
+    slice_text,
 )
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.styles import ActionStyle, Color
+from squid_ui.styles import ActionStyle, Color
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,11 +45,11 @@ class TextRealization:
         length = sum(len(tree.plain(node)) for node in self.nodes)
         marker = (tree.literal("…"),) if self.ellipsis else ()
         if operation.keep == "head":
-            return (*_slice(self.nodes, 0, operation.max_chars), *marker)
-        return (*marker, *_slice(self.nodes, length - operation.max_chars, length))
+            return (*slice_text(self.nodes, 0, operation.max_chars), *marker)
+        return (*marker, *slice_text(self.nodes, length - operation.max_chars, length))
 
     def fragment(self, start: int, end: int) -> Realization:
-        return replace(self, nodes=_slice(self.nodes, start, end))
+        return replace(self, nodes=slice_text(self.nodes, start, end))
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,21 +121,6 @@ class PanelRealization:
 
 
 @dataclass(frozen=True, slots=True)
-class NativeSectionRealization:
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class ThumbnailRealization:
-    node: scene.Thumbnail
-
-
-@dataclass(frozen=True, slots=True)
-class SeparatorRealization:
-    node: scene.Separator
-
-
-@dataclass(frozen=True, slots=True)
 class ReferencedText:
     reference: SemanticRef
     nodes: tuple[tree.Node, ...]
@@ -202,20 +183,6 @@ class ImageRealization:
 
 
 @dataclass(frozen=True, slots=True)
-class GalleryRealization:
-    items: tuple[scene.GalleryItem, ...]
-    collection: bool = False
-
-    def fragment(self, start: int, end: int) -> Realization:
-        return replace(self, items=self.items[start:end])
-
-
-@dataclass(frozen=True, slots=True)
-class FileRealization:
-    node: scene.File
-
-
-@dataclass(frozen=True, slots=True)
 class DownloadRealization:
     asset: Asset
     label: tuple[tree.Node, ...]
@@ -237,21 +204,6 @@ class ControlRealization:
 
 
 @dataclass(frozen=True, slots=True)
-class PremiumRealization:
-    sku_id: int
-
-
-@dataclass(frozen=True, slots=True)
-class ClassicContentRealization:
-    declarations: int
-
-
-@dataclass(frozen=True, slots=True)
-class CardRealization:
-    node: primitive.Card
-
-
-@dataclass(frozen=True, slots=True)
 class RowRealization:
     pass
 
@@ -267,7 +219,7 @@ class ActionsRealization:
 
 @dataclass(frozen=True, slots=True)
 class SelectRealization:
-    node: scene.Select | scene.RoutedSelect
+    node: controls.Select | controls.RoutedSelect
     navigation: bool = False
     summaries: tuple[ReferencedText, ...] | None = None
 
@@ -281,39 +233,24 @@ class SelectRealization:
 
 @dataclass(frozen=True, slots=True)
 class EntityRealization:
-    node: scene.EntitySelect
-    choices: tuple[scene.Option, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class OpaqueRealization:
-    node: scene.Extension
-    resource: SharedUse[object]
-    composition: NativeComposition
+    node: controls.EntitySelect
+    choices: tuple[controls.Option, ...] = ()
 
 
 type Realization = (
-    OpaqueRealization
+    NativeRealization
     | TextSequenceRealization
     | ActionsRealization
     | RowRealization
-    | ClassicContentRealization
-    | CardRealization
     | SelectRealization
     | EntityRealization
     | TextRealization
     | FlowRealization
     | PanelRealization
-    | NativeSectionRealization
-    | ThumbnailRealization
-    | SeparatorRealization
     | TableRealization
     | ImageRealization
-    | GalleryRealization
-    | FileRealization
     | DownloadRealization
     | ControlRealization
-    | PremiumRealization
 )
 
 

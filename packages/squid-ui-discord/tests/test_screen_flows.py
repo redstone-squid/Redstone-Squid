@@ -9,6 +9,7 @@ from anyio.abc import TaskStatus
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI
 from squid_ui.runtime import ManagedService, transaction
 
@@ -21,7 +22,7 @@ class Choice(sd.Screen[str]):
         self.closed: list[Completed[str] | Cancelled] = []
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.action_controls(
             sl.action_control("Choose", self.choose, key="choose"),
             sl.action_control("Cancel", self.cancel_choice, key="cancel"),
@@ -56,7 +57,7 @@ class Parent(sd.Screen[str]):
         self.events: list[ScreenResultEvent[str]] = []
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.stack(
             sl.paragraph(self.value or "Waiting"),
             sl.action_controls(sl.action_control("Open", self.open, key="open"), key="actions"),
@@ -342,7 +343,7 @@ async def test_rejected_opening_does_not_invoke_child_cancellation() -> None:
 async def test_parent_render_failure_after_commit_still_closes_completed_child() -> None:
     class BrokenDisplay(Parent):
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
             if self.value:
                 message = "cannot draw accepted value"
                 raise RuntimeError(message)
@@ -370,7 +371,7 @@ class ReopeningParent(sd.Screen[str]):
         self.fail_open = False
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.action_controls(sl.action_control("Open", self.open, key="open"), key="actions")
 
     async def open(self, event: sd.PressEvent) -> None:
@@ -425,7 +426,7 @@ async def test_screen_children_and_session_attachments_both_finish_before_parent
             if fail_child:
                 raise ValueError("screen cleanup failed")
 
-    class Attachment(sl.Component[sl.ComponentsV2Target]):
+    class Attachment(sl.Component[ComponentsV2Target]):
         @override
         def render(self) -> sl.LayoutNode:
             return sl.paragraph("Attached")

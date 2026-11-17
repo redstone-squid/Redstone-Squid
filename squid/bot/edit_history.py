@@ -10,6 +10,7 @@ from squid.bot.ui import tr
 from squid_i18n import md_tr
 from squid_reactivity import ReactiveConflictError
 from squid_reactivity.transactions import ConflictDetail
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import ReversibleOperation
 
 
@@ -83,7 +84,7 @@ def history_actions(stack: sl.runtime.History) -> tuple[sl.semantic.ActionContro
     return tuple(actions)
 
 
-def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
     """Render `history_actions` as their own row, or nothing when neither can run."""
     actions = history_actions(stack)
     return (sl.action_controls(*actions, key="edit-history"),) if actions else ()
@@ -91,7 +92,7 @@ def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.Compon
 
 def track_local_edits[StateT, ValueT](
     stack: sl.runtime.History,
-    driver: sp.ComponentDriver[StateT, sl.ComponentsV2Target, sd.Request],
+    driver: sp.ComponentDriver[StateT, ComponentsV2Target, sd.Request],
     label: sl.TextLike,
     *,
     select: Callable[[StateT], ValueT],

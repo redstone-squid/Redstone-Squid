@@ -21,10 +21,12 @@ import discord
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.primitives import ActionStyle, RoutedButton, Row
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render
-from squid_ui.primitives import ActionStyle, RoutedButton, Row
 from squid_ui.scene import Codec
 
 
@@ -122,20 +124,20 @@ def _decorated_instance(decorated: dict[bool, type[discord.ui.LayoutView]], alte
 
 def _render_scene(
     renderer: V2Renderer,
-    scenes: dict[bool, scene.Scene[scene.ComponentsV2]],
+    scenes: dict[bool, scene.Scene[discord_scene.ComponentsV2]],
     alternate: bool,
 ) -> discord.ui.LayoutView:
     return renderer.view(scenes[alternate])
 
 
-def _button_scene(controls: int, *, alternate: bool) -> scene.Scene[scene.ComponentsV2]:
+def _button_scene(controls: int, *, alternate: bool) -> scene.Scene[discord_scene.ComponentsV2]:
     offset = 0
-    rows: list[scene.Row] = []
+    rows: list[discord_scene.Row] = []
     for row_size in _rows(controls):
         rows.append(
-            scene.Row(
+            discord_scene.Row(
                 tuple(
-                    scene.RoutedButton(
+                    discord_scene.RoutedButton(
                         _label(offset + column, alternate),
                         f"button:{offset + column}",
                         ActionStyle.SECONDARY,
@@ -145,14 +147,14 @@ def _button_scene(controls: int, *, alternate: bool) -> scene.Scene[scene.Compon
             )
         )
         offset += row_size
-    return scene.Scene(Codec.protocol, DISCORD_V2_DPY27.id, 1, scene.ComponentsV2(tuple(rows)))
+    return scene.Scene(Codec.protocol, DISCORD_V2_DPY27.id, 1, discord_scene.ComponentsV2(tuple(rows)))
 
 
 def _normalized(view: discord.ui.LayoutView) -> list[dict[str, object]]:
     return view.to_components()
 
 
-class _ButtonRow(sl.Component[sl.ComponentsV2Target]):
+class _ButtonRow(sl.Component[ComponentsV2Target]):
     alternate: bool = sl.state(False)
 
     def __init__(self, offset: int, size: int) -> None:
@@ -174,7 +176,7 @@ class _ButtonRow(sl.Component[sl.ComponentsV2Target]):
         )
 
 
-class _ButtonRoot(sl.Component[sl.ComponentsV2Target]):
+class _ButtonRoot(sl.Component[ComponentsV2Target]):
     def __init__(self, controls: int) -> None:
         offset = 0
         rows: list[_ButtonRow] = []
@@ -235,14 +237,14 @@ def _rich_imperative_view() -> discord.ui.LayoutView:
     return view
 
 
-def _rich_scene() -> scene.Scene[scene.ComponentsV2]:
+def _rich_scene() -> scene.Scene[discord_scene.ComponentsV2]:
     panels = tuple(
-        scene.Panel(
+        discord_scene.Panel(
             (
-                scene.Text(f"Panel {panel_index + 1}"),
-                scene.Row(
+                discord_scene.Text(f"Panel {panel_index + 1}"),
+                discord_scene.Row(
                     tuple(
-                        scene.RoutedButton(
+                        discord_scene.RoutedButton(
                             f"Button {panel_index * 5 + column + 1}",
                             f"rich:{panel_index}:{column}",
                         )
@@ -253,7 +255,7 @@ def _rich_scene() -> scene.Scene[scene.ComponentsV2]:
         )
         for panel_index in range(5)
     )
-    return scene.Scene(Codec.protocol, DISCORD_V2_DPY27.id, 1, scene.ComponentsV2(panels))
+    return scene.Scene(Codec.protocol, DISCORD_V2_DPY27.id, 1, discord_scene.ComponentsV2(panels))
 
 
 def _append_results(

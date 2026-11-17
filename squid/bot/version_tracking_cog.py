@@ -19,6 +19,7 @@ from squid_i18n import md_tr
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -58,7 +59,7 @@ class VersionScreen(sd.Screen):
         self._versions = versions
         self._can_create = can_create
         self._authorize_create = authorize_create
-        self._browser: sp.Browser[VersionItem, sl.ComponentsV2Target, sd.Request] | None = None
+        self._browser: sp.Browser[VersionItem, ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -86,8 +87,8 @@ class VersionScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def render(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.status(tr(t"bot-version-tracking-loading-versions = Loading versions."))
             if self._browser is None
             else self._browser

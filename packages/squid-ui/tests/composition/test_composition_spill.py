@@ -12,9 +12,11 @@ from squid_ui import scene
 from squid_ui.authoring.semantic import Importance, ListItem
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -80,7 +82,7 @@ def test_spilled_list_keeps_original_ordered_number_and_source(target: Target[An
     assert "High" in wire and "Low" not in wire and "+1" in wire
     assert [event.path.split("/")[-1] for event in result.report.events] == ["low"]
     assert result.allocation is not None
-    if isinstance(result.scene.body, scene.HtmlBody):
+    if isinstance(result.scene.body, html_scene.HtmlBody):
         assert 'value="2"' in squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
     else:
         assert "2. High" in wire
@@ -186,7 +188,7 @@ def test_intermediate_shortening_probes_keep_useful_content_with_bounded_work(co
     document = sl.best_effort(sl.stack(*(sl.paragraph("x" * 100, key=str(index)) for index in range(count))))
     result = plan(document, target=components_v2_target(DISCORD, limits=V2Limits(total_text=100)))
     assert len(result.scene.body.children) == count
-    assert sum(len(node.content) for node in result.scene.body.children if isinstance(node, scene.Text)) == 100
+    assert sum(len(node.content) for node in result.scene.body.children if isinstance(node, discord_scene.Text)) == 100
     assert result.metrics.work_used <= max(50_000, count * 100 * 200)
 
 

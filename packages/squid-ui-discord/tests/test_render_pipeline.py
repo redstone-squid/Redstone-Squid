@@ -16,7 +16,7 @@ from squid_ui.ext.discord import (
 )
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.limits import Axis
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     Button,
     Code,
     Drop,

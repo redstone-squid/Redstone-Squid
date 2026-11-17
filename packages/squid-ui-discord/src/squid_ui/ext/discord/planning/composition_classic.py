@@ -3,15 +3,19 @@
 from dataclasses import asdict, dataclass
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
 from squid_ui.content.assets import Asset
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import resolve_text
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import ClassicLimits
-from squid_ui.ext.discord.planning.composition_discord import discord_text, select_violations
+from squid_ui.ext.discord.planning.composition_discord import discord_text, resolve_select, select_violations
+from squid_ui.ext.discord.planning.policy import DiscordOfferPolicy
+from squid_ui.ext.discord.planning.realizations import CardRealization, ClassicContentRealization, PremiumRealization
+from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -30,11 +34,9 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
-from squid_ui.planning.offers import OfferPolicy, semantic_offers
+from squid_ui.planning.offers import semantic_offers
 from squid_ui.planning.realizations import (
     ActionsRealization,
-    CardRealization,
-    ClassicContentRealization,
     ControlRealization,
     DownloadRealization,
     EntityRealization,
@@ -43,7 +45,6 @@ from squid_ui.planning.realizations import (
     FlowRealization,
     ImageRealization,
     PanelRealization,
-    PremiumRealization,
     Realization,
     RowRealization,
     SelectRealization,
@@ -80,7 +81,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            OfferPolicy(
+            DiscordOfferPolicy(
                 table_forms=(TableForm.RECORDS, TableForm.MATRIX),
                 panels=True,
                 nested_panels=False,
@@ -343,7 +344,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         )
 
                 case PremiumRealization(sku_id=sku_id):
-                    if Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                    if DiscordCapability.ACTIONS_PREMIUM not in context.capabilities:
                         violations.append(UnsupportedCapability(identity, "Discord premium buttons"))
                     limit("row.buttons", 1, self.limits.components.row_buttons)
                     premium = scene.PremiumButton(sku_id=sku_id)
@@ -381,23 +382,25 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     else:
                         row.append(button)
                 case EntityRealization(node=node):
+                    resolved = resolve_select(node)
                     if Capability.ACTIONS_ENTITY not in context.capabilities:
                         violations.append(
                             UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
                         )
                     violations.extend(
                         ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(node, self.limits.components)
+                        for detail in select_violations(resolved, self.limits.components)
                     )
-                    rows.append(scene.ClassicRow((node,)))
+                    rows.append(scene.ClassicRow((resolved,)))
                 case SelectRealization(node=node, summaries=summaries):
+                    resolved = resolve_select(node)
                     if summaries is not None:
                         text("\n".join(markdown(item.nodes) for item in summaries))
                     violations.extend(
                         ConstraintViolation(identity, detail)
-                        for detail in select_violations(node, self.limits.components)
+                        for detail in select_violations(resolved, self.limits.components)
                     )
-                    rows.append(scene.ClassicRow((node,)))
+                    rows.append(scene.ClassicRow((resolved,)))
                     for child in part.children:
                         visit(child, output, embedded=embedded)
                 case ActionsRealization(columns=columns):
@@ -476,11 +479,11 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             scopes[identity] = (
                 ResourceCost(
                     {
-                        Axis.CONTENT_TEXT: 0 if embedded else len("\n".join(output[start:])),
-                        Axis.EMBED_TEXT: (len("\n".join(output[start:])) if embedded else 0)
+                        DiscordAxis.CONTENT_TEXT: 0 if embedded else len("\n".join(output[start:])),
+                        DiscordAxis.EMBED_TEXT: (len("\n".join(output[start:])) if embedded else 0)
                         + sum(embed_text_size(item) for item in embeds[embed_start:])
                         + field_text(fields[field_start:]),
-                        Axis.EMBEDS: len(embeds) - embed_start,
+                        DiscordAxis.EMBEDS: len(embeds) - embed_start,
                         Axis.ROWS: len(rows) - row_start,
                         Axis.CONTROLS: sum(len(item.controls) for item in rows[row_start:])
                         + (len(row) - control_start if row is not None else 0),
@@ -513,9 +516,9 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
     def _cost(self, body: scene.ClassicMessage) -> ResourceCost:
         return ResourceCost(
             {
-                Axis.CONTENT_TEXT: len(body.content or ""),
-                Axis.EMBED_TEXT: sum(embed_text_size(embed) for embed in body.embeds),
-                Axis.EMBEDS: len(body.embeds),
+                DiscordAxis.CONTENT_TEXT: len(body.content or ""),
+                DiscordAxis.EMBED_TEXT: sum(embed_text_size(embed) for embed in body.embeds),
+                DiscordAxis.EMBEDS: len(body.embeds),
                 Axis.ROWS: len(body.rows),
                 Axis.CONTROLS: sum(len(row.controls) for row in body.rows),
             }

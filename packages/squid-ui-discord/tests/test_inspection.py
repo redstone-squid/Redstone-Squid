@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui.ext.discord.target
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
-from squid_ui.ext.discord import ExistingLayoutError, LimitViolationError, conform
+from squid_ui.ext.discord import ExistingLayoutError, LimitViolationError, conform, primitives
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.inspection import ViolationCode, audit, cost, measure
 from squid_ui.ext.discord.limits import Axis
@@ -253,7 +253,7 @@ class TestReservedPlanning:
     """The planner must honour every axis it is handed, not only display text."""
 
     def test_text_reservation_shrinks_the_composed_view(self):
-        body = sl.primitives.Text("x" * 5000)
+        body = primitives.Text("x" * 5000)
         reserved = squid_ui.ext.discord.render_message(
             [body], reservation=squid_ui.ext.discord.ResourceCost({Axis.DISPLAY_TEXT: 1500})
         ).view
@@ -262,7 +262,7 @@ class TestReservedPlanning:
     def test_component_reservation_is_enforced(self):
         # Twelve text components fit an unreserved message and cannot fit five, so the
         # reservation has to be the difference between composing and refusing.
-        document = [sl.primitives.Text(f"line {index}", overflow=sl.primitives.Never()) for index in range(12)]
+        document = [primitives.Text(f"line {index}", overflow=primitives.Never()) for index in range(12)]
         assert len(list(squid_ui.ext.discord.render_message(document).view.walk_children())) == 12
         with pytest.raises(sl.errors.UnsolvableLayoutError):
             squid_ui.ext.discord.render_message(
@@ -272,7 +272,7 @@ class TestReservedPlanning:
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
         host = sd.layout_view(discord.ui.TextDisplay("h" * 2000))
         fragment_view = squid_ui.ext.discord.render_message(
-            [sl.primitives.Text("f" * 5000)], reservation=measure(host).cost
+            [primitives.Text("f" * 5000)], reservation=measure(host).cost
         ).view
         combined = host.content_length() + fragment_view.content_length()
         assert combined <= LIMITS.total_text

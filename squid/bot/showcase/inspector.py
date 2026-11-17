@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class InspectablePanel(sd.Screen):
@@ -15,7 +16,7 @@ class InspectablePanel(sd.Screen):
         """Describe this panel's meaningful application state without mutating it."""
         return ""
 
-    def inspector(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def inspector(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         controls = sl.action_controls(
             sl.action_control(
                 tr(t"layout-inspector-refresh-inspector = Refresh inspector")

@@ -10,11 +10,13 @@ import squid_ui as sl
 import squid_ui.ext.discord
 from squid_ui import scene
 from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.discord.primitives import EntitySelect
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, query, without_capabilities
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
 
@@ -85,7 +87,7 @@ def test_entity_select_costs_an_action_row_and_control() -> None:
 
     assert solved.cost.get(Axis.COMPONENTS) == 2
     # V2 budgets the row and control together on its component axis.
-    assert isinstance(solved.scene.body.children[0], scene.EntitySelect)
+    assert isinstance(solved.scene.body.children[0], discord_scene.EntitySelect)
 
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
@@ -93,7 +95,7 @@ def test_native_semantic_picker_lowers_to_entity_scene() -> None:
         sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_ui.ext.discord.DISCORD_V2_DPY27
     )
 
-    assert isinstance(plan.scene.components_v2.children[0], scene.EntitySelect)
+    assert isinstance(plan.scene.expect_body(discord_scene.ComponentsV2).children[0], discord_scene.EntitySelect)
 
 
 async def test_managed_native_entity_selection_survives_a_second_render() -> None:
@@ -113,10 +115,9 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
 
     second = sl.planning.plan(node, target=squid_ui.ext.discord.DISCORD_V2_DPY27, session=session)
 
-    assert isinstance(second.scene.components_v2.children[0], scene.EntitySelect)
-    assert second.scene.components_v2.children[0].default_values == (
-        sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),
-    )
+    picker = second.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(picker, discord_scene.EntitySelect)
+    assert picker.default_values == (sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),)
 
 
 @pytest.mark.parametrize("channel_type", [discord.ChannelType.text, discord.ChannelType.public_thread])
@@ -167,7 +168,7 @@ async def test_channel_select_dispatches_resolved_channels_and_threads(channel_t
     async def pick(event: sl.EntitySelectionEvent) -> None:
         seen.append(event)
 
-    class Picker(sl.Component[sl.ComponentsV2Target]):
+    class Picker(sl.Component[ComponentsV2Target]):
         @override
         def render(self) -> EntitySelect:
             return EntitySelect(sl.entity.EntityType.CONVERSATION, pick, "channel")
@@ -195,7 +196,7 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
         target=target,
     )
 
-    assert isinstance(plan.scene.components_v2.children[0], scene.Select)
+    assert isinstance(plan.scene.expect_body(discord_scene.ComponentsV2).children[0], discord_scene.Select)
 
 
 def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
@@ -214,8 +215,9 @@ def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
 
     plan = sl.planning.plan(node, target=target, session=session)
 
-    assert isinstance(plan.scene.components_v2.children[0], scene.Select)
-    assert all(not option.default for option in plan.scene.components_v2.children[0].options)
+    picker = plan.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(picker, discord_scene.Select)
+    assert all(not option.default for option in picker.options)
 
 
 def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
@@ -226,7 +228,7 @@ def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None
 
 
 def test_entity_scene_round_trips_mixed_mentionable_defaults() -> None:
-    node = scene.EntitySelect(
+    node = discord_scene.EntitySelect(
         sl.entity.EntityType.MENTIONABLE,
         "mentions",
         default_values=(
@@ -253,9 +255,9 @@ def test_entity_scene_round_trips_string_ids_and_conversation_filters() -> None:
         scene.Codec.protocol,
         "discord.components-v2",
         1,
-        scene.ComponentsV2(
+        discord_scene.ComponentsV2(
             (
-                scene.EntitySelect(
+                discord_scene.EntitySelect(
                     sl.entity.EntityType.CONVERSATION,
                     "conversation",
                     default_values=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, "C012345"),),

@@ -15,9 +15,9 @@ import discord
 # `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
 # reachable by importing from it directly.
 from discord.ui.select import BaseSelect
-from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.emoji import discord_emoji
 
 if TYPE_CHECKING:

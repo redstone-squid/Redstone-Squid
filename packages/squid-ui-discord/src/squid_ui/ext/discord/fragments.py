@@ -25,13 +25,13 @@ from squid_ui.ext.discord.inspection import MessageReservation, audit, cost, mea
 from squid_ui.ext.discord.limits import LIMITS, Axis, V2Limits
 from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.rendering import render_message
+from squid_ui.ext.discord.scene import ComponentsV2
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanReport, PlanResult
 from squid_ui.planning.target import Target
-from squid_ui.scene.model import ComponentsV2
-from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

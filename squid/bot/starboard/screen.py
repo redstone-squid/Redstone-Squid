@@ -36,6 +36,7 @@ from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_i18n import Text, emoji_text, md_tr
 from squid_ui.ext.discord.form_fields import EntityField
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]
@@ -59,10 +60,10 @@ class StarboardScreen(sd.Screen):
     """
 
     _snapshots: Mapping[int, StarboardSnapshot] = sl.state({})
-    _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
+    _browser: sp.Browser[StarboardConfig, ComponentsV2Target, sd.Request] | None = sl.state(default=None)
+    _tabs: sp.ComponentDriver[sp.TabsState, ComponentsV2Target, sd.Request] | None = sl.state(default=None)
     _deleting: StarboardSnapshot | None = sl.state(default=None)
-    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(default=None)
+    _decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request] | None = sl.state(default=None)
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD))
 
@@ -128,7 +129,7 @@ class StarboardScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         if self._deleting is not None and self._decision is not None:
             board_name = self._deleting.config().name
             return (
@@ -146,7 +147,7 @@ class StarboardScreen(sd.Screen):
             return (sl.status(tr(t"bot-starboard-screen-loading-starboards = Loading starboards.")),)
         return (self._tabs, *self.edits.refresh_controls())
 
-    def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _create_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             sl.section(
                 sl.heading(tr(t"starboard-create-heading = Highlight community favourites")),
@@ -165,9 +166,9 @@ class StarboardScreen(sd.Screen):
             ),
         )
 
-    def _board_editor(self, board: StarboardConfig) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _board_editor(self, board: StarboardConfig) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         snapshot = self._snapshots[board.id]
-        sections: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
+        sections: list[sp.Tab[ComponentsV2Target, sd.Request]] = []
         if STARBOARD_BOARD_EDIT in self._capabilities:
             sections.append(
                 sp.Tab(
@@ -354,7 +355,7 @@ class StarboardScreen(sd.Screen):
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
         self._deleting = snapshot
-        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
+        self._decision = sp.Decision[ComponentsV2Target, sd.Request](
             tr(t"starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session."),
             (
                 sp.DecisionOption("confirm", tr(t"bot-starboard-screen-delete = Delete"), sl.Tone.DANGER),

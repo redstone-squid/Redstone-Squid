@@ -13,6 +13,7 @@ from squid_ui.authoring.grids import GridCell
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -59,10 +60,10 @@ def test_row_pages_keep_columns_and_publish_only_visible_cells(target: Target[An
             f"board.{index * 2}",
             f"board.{index * 2 + 1}",
         }
-        if isinstance(page.scene.body, scene.HtmlBody):
+        if isinstance(page.scene.body, html_scene.HtmlBody):
             table = page.scene.body.children[0]
-            assert isinstance(table, scene.HtmlElement) and table.tag == scene.HtmlTag.TABLE
-            assert scene.HtmlAttribute(scene.HtmlAttributeName.ROLE, "grid") in table.attributes
+            assert isinstance(table, html_scene.HtmlElement) and table.tag == html_scene.HtmlTag.TABLE
+            assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ROLE, "grid") in table.attributes
     session.apply_updates(result.session_updates)
     repeated = plan(grid(6), target=target, composition=options, session=session, strict=True)
     assert repeated.allocation is result.allocation

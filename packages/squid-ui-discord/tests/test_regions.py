@@ -12,15 +12,17 @@ import squid_ui.ext.discord as sd
 from squid_reactivity import state
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import DISCORD_V2_DPY27, primitives
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.navigation_controls import default_nav
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, http_error, interaction_harness
+from squid_ui.overflow import PageEvent, RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
-from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.constraints import PageEvent, RoutedPage
 
 
 def target(components: int) -> Target:
@@ -94,7 +96,9 @@ def test_persistent_controls_are_reserved_on_every_page() -> None:
     for index in range(result.report.regions[0].pages):
         page = plan(document, target=target(8), nav=default_nav, positions={"$/items": PagePosition(page=index)})
         texts = [
-            getattr(node, "content", None) for node in page.scene.components_v2.children if hasattr(node, "content")
+            getattr(node, "content", None)
+            for node in page.scene.expect_body(discord_scene.ComponentsV2).children
+            if hasattr(node, "content")
         ]
         assert texts[0] == "header"
         assert texts[-1] == "footer"
@@ -111,15 +115,15 @@ def test_authored_alternatives_participate_in_allocation() -> None:
     )
     document = sl.region(sl.unbreakable(content), key="reference", title="Reference")
     result = plan(document, target=target(5), nav=default_nav)
-    first = result.scene.components_v2.children[0]
-    assert isinstance(first, scene.Text)
+    first = result.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(first, discord_scene.Text)
     assert first.content == "compact"
     assert any(event.code == "composition.effect" for event in result.report.events)
     with pytest.raises(UnsolvableLayoutError):
         plan(document, target=target(5), nav=default_nav, strict=True)
     preferred = plan(document, target=target(10), nav=default_nav, strict=True)
     assert preferred.lossless
-    assert len(preferred.scene.components_v2.children) == 8
+    assert len(preferred.scene.expect_body(discord_scene.ComponentsV2).children) == 8
 
 
 def test_duplicate_identity_and_impossible_atoms_are_distinct_from_budget_exhaustion() -> None:
@@ -158,13 +162,13 @@ def test_small_allocations_match_exhaustive_page_capacity_oracle(left: int, righ
         assert result.cost.within(target(capacity).capacities)
 
 
-class RegionScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class RegionScreen(sl.Component[ComponentsV2Target, sd.Request]):
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return region("left", 6), region("right", 6)
 
 
-class RecoveringScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class RecoveringScreen(sl.Component[ComponentsV2Target, sd.Request]):
     keys: str = state("abcdef")
 
     @override
@@ -295,9 +299,9 @@ def test_controlled_and_routed_regions_keep_application_ownership() -> None:
 def test_sections_preserve_their_shell_around_nested_regions() -> None:
     document = sl.section(sl.heading("Details"), region("one", 7), key="details", accent=None)
     result = plan(document, target=target(8), nav=default_nav)
-    panel = result.scene.components_v2.children[0]
-    assert isinstance(panel, scene.Panel)
-    assert isinstance(panel.children[0], scene.Text)
+    panel = result.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(panel, discord_scene.Panel)
+    assert isinstance(panel.children[0], discord_scene.Text)
     assert panel.children[0].content == "## Details"
     assert result.report.regions[0].key == "$/details/one"
     assert result.cost.get(Axis.COMPONENTS) <= 8
@@ -325,8 +329,8 @@ def test_keep_with_next_and_unbreakable_constrain_legal_page_boundaries() -> Non
     result = plan(content, target=target(6), nav=default_nav)
     assert [
         getattr(node, "content", None)
-        for node in result.scene.components_v2.children[:2]
-        if isinstance(node, scene.Text)
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children[:2]
+        if isinstance(node, discord_scene.Text)
     ] == [
         "heading",
         "body",
@@ -347,9 +351,7 @@ def test_existing_local_pager_is_measured_across_all_pages(controlled: bool) -> 
         raise AssertionError("measurement is read-only")
 
     owner = sl.controlled(0, changed) if controlled else sl.uncontrolled(0)
-    lines = sl.primitives.Lines(
-        ("short", "longer text"), overflow=sl.primitives.Paginate(key="local", per=1, page=owner)
-    )
+    lines = primitives.Lines(("short", "longer text"), overflow=primitives.Paginate(key="local", per=1, page=owner))
     document = sl.region(lines, sl.paragraph("persistent"), key="outer", title="Outer")
     first = plan(document, target=target(10), nav=default_nav)
     assert [(pager.key, pager.pages) for pager in first.scene.pagers] == [("local", 2)]

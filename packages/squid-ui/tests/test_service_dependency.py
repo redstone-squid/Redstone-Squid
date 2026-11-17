@@ -7,8 +7,9 @@ import anyio
 import pytest
 from anyio.abc import TaskStatus
 
-from squid_ui import Component, ComponentsV2Target, DocumentLike
-from squid_ui.primitives import Text
+from squid_ui import Component, DocumentLike
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import ComponentRuntime, ManagedService, ServiceRun, ServiceRunStatus, UIExecutionHost
 
 

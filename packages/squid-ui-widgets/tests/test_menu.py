@@ -6,10 +6,11 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui_widgets import testing as wt
 
 
-class Screen(sl.Component[sl.ComponentsV2Target]):
+class Screen(sl.Component[ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -18,10 +19,10 @@ class Screen(sl.Component[sl.ComponentsV2Target]):
         return sl.paragraph(f"screen: {self.name}")
 
 
-def _settings(*, show_close: bool = False) -> sp.Menu[sl.ComponentsV2Target]:
+def _settings(*, show_close: bool = False) -> sp.Menu[ComponentsV2Target]:
     # V2 throughout because one entry embeds `Screen`, which is a V2 component. Naming the
     # element type lets the portable entries solve to the same dialect instead of defaulting.
-    entries: list[sp.MenuEntry[sl.ComponentsV2Target]] = [
+    entries: list[sp.MenuEntry[ComponentsV2Target]] = [
         sp.MenuEntry("appearance", "Appearance", sl.paragraph("appearance body")),
         sp.MenuEntry(
             "Administration",

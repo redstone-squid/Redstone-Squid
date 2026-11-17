@@ -7,17 +7,16 @@ from typing import Any
 import anyio
 
 import discord
-from squid_ui import scene
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.limits import LIMITS, MessageLimits, V2Limits
 from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
 from squid_ui.ext.discord.messages.wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.rendering import render_static
-from squid_ui.ext.discord.target_types import DiscordAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.target_types import ComponentsV2Target
 
 
 def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT, AdapterT](
@@ -31,7 +30,7 @@ def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTarget
     `Target.restrict_adapter_capabilities` for those.
     """
     reduced = copy(target.dialect)
-    reduced.capabilities = frozenset(target.dialect.capabilities) - {*capabilities}
+    object.__setattr__(reduced, "capabilities", frozenset(target.dialect.capabilities) - {*capabilities})
     return replace(target, dialect=reduced)
 
 
@@ -63,7 +62,7 @@ def _commit(message_root: MessageRoot, *, disabled: bool) -> AnyMountedView:
 
 
 def target_profile(
-    name: str = "test", *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS
+    name: str = "test", *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS
 ) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordAdapter]:
     """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
 

@@ -13,7 +13,9 @@ from squid_reactivity import LocalTopicBus
 from squid_reactivity.topics import TopicName
 from squid_ui.ext.discord import DiscordUIRuntime, install
 from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.primitives import Heading
 from squid_ui.ext.discord.runtime import DiscordUIRuntimeMissing
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -21,10 +23,9 @@ from squid_ui.ext.discord.testing import (
     interaction_harness,
     message_harness,
 )
-from squid_ui.primitives import Heading
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     @override
     def render(self):
         return [Heading("Panel")]

@@ -4,8 +4,9 @@ import pytest
 
 from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.primitives.nodes import LinkButton, PremiumButton, RoutedButton
 from squid_ui.planning import plan
-from squid_ui.primitives.nodes import LinkButton, PremiumButton, RoutedButton
 
 
 @pytest.mark.parametrize(
@@ -19,7 +20,7 @@ from squid_ui.primitives.nodes import LinkButton, PremiumButton, RoutedButton
 def test_a_bare_control_reaches_the_scene(control: LinkButton | RoutedButton | PremiumButton) -> None:
     result = plan(control, target=DISCORD_V2_DPY27)
     (row,) = result.scene.body.children
-    assert isinstance(row, scene.Row)
+    assert isinstance(row, discord_scene.Row)
     assert len(row.items) == 1
     wire = scene.Codec.dumps(result.scene)
     if isinstance(control, LinkButton):
@@ -27,5 +28,5 @@ def test_a_bare_control_reaches_the_scene(control: LinkButton | RoutedButton | P
     elif isinstance(control, RoutedButton):
         assert control.route_id in wire
     else:
-        assert isinstance(row.items[0], scene.PremiumButton)
+        assert isinstance(row.items[0], discord_scene.PremiumButton)
         assert row.items[0].sku_id == control.sku_id

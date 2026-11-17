@@ -82,12 +82,13 @@ from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.modal import FileField
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""
 
 
-type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
+type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request]]]
 """Draws a build card exactly as posted builds are drawn; it needs the bot, which screens do not hold."""
 
 
@@ -229,7 +230,7 @@ class DraftWorkspace(sl.Reactive):
     def editable(self) -> bool:
         return self.loaded and self.phase in EDITABLE_PHASES
 
-    def history_controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def history_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return self.edits.controls()
 
     @property
@@ -538,7 +539,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         return screen
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         ws = self.workspace
         if self.expired:
             # The message can no longer be edited, so replace progress that would go stale.
@@ -704,7 +705,7 @@ class FilesEditorScreen(sd.Screen[None]):
         self.workspace = workspace
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         ws = self.workspace
         if (closed := closed_detail(self, ws)) is not None:
             return closed
@@ -838,7 +839,7 @@ class BuildPreviewScreen(sd.Screen[None]):
         self.workspace = workspace
 
     @sl.resource
-    async def card(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
+    async def card(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
         """The rendered card, or None while the answers its title needs are missing."""
         ws = self.workspace
         answers = ws.manifest.visible_answers(ws.category, ws.draft.snapshot.answers, origin=ws.draft.origin)
@@ -849,7 +850,7 @@ class BuildPreviewScreen(sd.Screen[None]):
         return await ws.render_card(build)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         intro = sl.paragraph(
             md_tr(
                 t"draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. "

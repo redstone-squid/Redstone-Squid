@@ -23,7 +23,6 @@ ROOT_NAMESPACES = (
     "operations",
     "palette",
     "planning",
-    "primitives",
     "profiling",
     "routing",
     "resources",

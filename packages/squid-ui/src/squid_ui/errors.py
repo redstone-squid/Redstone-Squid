@@ -53,7 +53,7 @@ class ExistingLayoutError(LayoutError):
 
 
 class LimitViolationError(LayoutError):
-    """A built view exceeds a Discord limit and the caller forbade clamping."""
+    """A built display exceeds a target limit and the caller forbade clamping."""
 
     def __init__(self, interventions: list[str]) -> None:
         super().__init__("; ".join(interventions))

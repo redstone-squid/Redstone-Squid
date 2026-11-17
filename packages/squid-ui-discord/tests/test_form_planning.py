@@ -16,6 +16,7 @@ from squid_ui.ext.discord.form_planning import ChoiceControl, DiscordFormPlan, F
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS
 from squid_ui.ext.discord.modal import render_form_modal
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.interactions.forms import ChoiceField, ChoiceOption, FormSpec, ScaleField, TextField
 from squid_ui.planning.cache import PlanCache
@@ -111,7 +112,7 @@ def test_declared_forms_are_validated_during_message_planning(target: AnyTarget)
         plan(sl.form("Choose", spec, key="choose", on_submit=_submit), target=target)
 
 
-class _Panel(sl.Component[sl.ComponentsV2Target]):
+class _Panel(sl.Component[ComponentsV2Target]):
     def __init__(self, spec: FormSpec) -> None:
         self.spec = spec
 

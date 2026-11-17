@@ -11,6 +11,7 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionResponder, Actor, PressEvent
 from squid_ui.pages import PagePosition
@@ -55,11 +56,11 @@ async def test_disclosure_only_binds_visible_controls_and_rebuilds_on_open(targe
     opened = plan(node, target=target, session=session)
     assert opened.allocation is not closed.allocation
     assert set(opened.bindings) == {"details.toggle", "hidden"}
-    if isinstance(opened.scene.body, scene.HtmlBody):
+    if isinstance(opened.scene.body, html_scene.HtmlBody):
         details = opened.scene.body.children[0]
-        assert isinstance(details, scene.HtmlElement) and details.tag == scene.HtmlTag.DETAILS
-        assert details.action == scene.HtmlActionRef("details.toggle")
-        assert scene.HtmlAttribute(scene.HtmlAttributeName.OPEN, value=True) in details.attributes
+        assert isinstance(details, html_scene.HtmlElement) and details.tag == html_scene.HtmlTag.DETAILS
+        assert details.action == html_scene.HtmlActionRef("details.toggle")
+        assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.OPEN, value=True) in details.attributes
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)

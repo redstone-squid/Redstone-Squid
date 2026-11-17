@@ -22,6 +22,7 @@ from squid_i18n import md_tr
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.routing import Proceed, RouteMatch
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ class RedstonerScreen(sd.Screen):
         self._authorize_deploy = authorize_deploy
         self._publish_panel = publish_panel
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         role_mention = sl.mention(self._role_id, kind="role")
         source_channel_mention = sl.mention(self._source_channel_id, kind="channel")
         actions: list[sl.semantic.ActionControl] = []

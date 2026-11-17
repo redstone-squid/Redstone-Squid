@@ -11,9 +11,10 @@ from squid_ui.authoring.document import Asset, Document, InlineAsset, as_documen
 from squid_ui.content.emoji import Emoji
 from squid_ui.content.text import Markup
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.primitives.nodes import Text
 from squid_ui.interactions import ActionMode
-from squid_ui.primitives.nodes import Text
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.styles import ActionStyle
 
 
 def _scene() -> scene.Scene:
@@ -21,22 +22,24 @@ def _scene() -> scene.Scene:
         protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Panel(
+                discord_scene.Panel(
                     (
-                        scene.Text("hello", markup=Markup.DISCORD_MARKDOWN),
-                        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
-                        scene.ZonedTime(
+                        discord_scene.Text("hello", markup=Markup.DISCORD_MARKDOWN),
+                        discord_scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
+                        discord_scene.ZonedTime(
                             instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="Starts: "
                         ),
-                        scene.Row(
+                        discord_scene.Row(
                             (
-                                scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
-                                scene.Link("Docs", "https://example.invalid"),
+                                discord_scene.Button(
+                                    "Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE
+                                ),
+                                discord_scene.Link("Docs", "https://example.invalid"),
                             )
                         ),
-                        scene.Select((scene.Option("One", "1"),), "form.choice"),
+                        discord_scene.Select((discord_scene.Option("One", "1"),), "form.choice"),
                     ),
                     accent=0xFF0000,
                 ),
@@ -75,14 +78,14 @@ def test_new_component_metadata_round_trips_on_protocol_one() -> None:
         protocol=1,
         target="discord.components-v2",
         target_version=1,
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Panel(
+                discord_scene.Panel(
                     (
-                        scene.Row(
+                        discord_scene.Row(
                             (
-                                scene.PremiumButton(sku_id=42),
-                                scene.Link(
+                                discord_scene.PremiumButton(sku_id=42),
+                                discord_scene.Link(
                                     None,
                                     "https://example.invalid",
                                     Emoji("wave", 7, animated=True),
@@ -90,7 +93,7 @@ def test_new_component_metadata_round_trips_on_protocol_one() -> None:
                                 ),
                             )
                         ),
-                        scene.Select((scene.Option("One", "1", emoji=Emoji("1️⃣")),), "pick"),
+                        discord_scene.Select((discord_scene.Option("One", "1", emoji=Emoji("1️⃣")),), "pick"),
                     ),
                     spoiler=True,
                 ),
@@ -114,7 +117,7 @@ def test_protocol_one_decodes_payloads_without_new_optional_fields() -> None:
 
     decoded = scene.Codec.from_dict(raw)
 
-    assert decoded.components_v2.children[0].spoiler is False  # type: ignore[union-attr]
+    assert decoded.expect_body(discord_scene.ComponentsV2).children[0].spoiler is False  # type: ignore[union-attr]
 
 
 def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:
@@ -123,7 +126,7 @@ def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:
         scene.Codec.protocol,
         first.target,
         first.target_version,
-        scene.ComponentsV2((scene.Text("different", markup=Markup.DISCORD_MARKDOWN),)),
+        discord_scene.ComponentsV2((discord_scene.Text("different", markup=Markup.DISCORD_MARKDOWN),)),
     )
     assert scene.Codec.fingerprint(first) == scene.Codec.fingerprint(scene.Codec.loads(scene.Codec.dumps(first)))
     assert scene.Codec.fingerprint(first) != scene.Codec.fingerprint(second)
@@ -169,8 +172,8 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
         sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=DISCORD_V2_DPY27
     )
 
-    assert result.scene.components_v2.children == (
-        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="**Updated:** "),
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="**Updated:** "),
     )
 
 
@@ -182,8 +185,10 @@ def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
 
     result = sl.planning.plan(sl.zoned_timestamp(value, label="Starts"), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children == (
-        scene.ZonedTime(instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="**Starts:** "),
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.ZonedTime(
+            instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="**Starts:** "
+        ),
     )
 
 
@@ -192,33 +197,37 @@ def _classic_scene() -> scene.Scene:
         protocol=scene.Codec.protocol,
         target="discord.components-v1",
         target_version=1,
-        body=scene.ClassicMessage(
+        body=discord_scene.ClassicMessage(
             content="@here the build is ready",
             embeds=(
-                scene.Embed(
+                discord_scene.Embed(
                     title="Piston door",
                     url="https://example.invalid/door",
                     description="A 2x2 flush door.",
                     fields=(
-                        scene.EmbedField(name="Width", value="2", inline=True),
-                        scene.EmbedField(name="Notes", value="seamless"),
+                        discord_scene.EmbedField(name="Width", value="2", inline=True),
+                        discord_scene.EmbedField(name="Notes", value="seamless"),
                     ),
-                    footer=scene.EmbedFooter(text="Submitted by squid", icon_url="https://example.invalid/icon.png"),
-                    author=scene.EmbedAuthor(name="Redstone Squid", url="https://example.invalid", icon_url=None),
+                    footer=discord_scene.EmbedFooter(
+                        text="Submitted by squid", icon_url="https://example.invalid/icon.png"
+                    ),
+                    author=discord_scene.EmbedAuthor(
+                        name="Redstone Squid", url="https://example.invalid", icon_url=None
+                    ),
                     colour=0x00FF00,
-                    image=scene.EmbedMedia(url="https://example.invalid/i.png", description="the door"),
-                    thumbnail=scene.EmbedMedia(url="https://example.invalid/t.png"),
+                    image=discord_scene.EmbedMedia(url="https://example.invalid/i.png", description="the door"),
+                    thumbnail=discord_scene.EmbedMedia(url="https://example.invalid/t.png"),
                     timestamp="2026-08-22T14:30:00+00:00",
                 ),
             ),
             rows=(
-                scene.ClassicRow(
+                discord_scene.ClassicRow(
                     (
-                        scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
-                        scene.Link("Docs", "https://example.invalid"),
+                        discord_scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
+                        discord_scene.Link("Docs", "https://example.invalid"),
                     )
                 ),
-                scene.ClassicRow((scene.Select((scene.Option("One", "1"),), "form.choice"),)),
+                discord_scene.ClassicRow((discord_scene.Select((discord_scene.Option("One", "1"),), "form.choice"),)),
             ),
         ),
         assets=(scene.Asset(key="report", name="report.txt", media_type="text/plain"),),
@@ -272,8 +281,8 @@ class TestClassicBody:
             scene.Codec.from_dict(raw)
 
     def test_a_classic_body_has_no_components_v2_children_to_offer(self) -> None:
-        with pytest.raises(LayoutInvariantError, match="ClassicMessage body, not Components V2"):
-            _ = _classic_scene().components_v2
+        with pytest.raises(LayoutInvariantError, match="ClassicMessage body, not ComponentsV2"):
+            _ = _classic_scene().expect_body(discord_scene.ComponentsV2)
 
     def test_two_bodies_of_different_kinds_never_share_a_fingerprint(self) -> None:
         assert scene.Codec.fingerprint(_scene()) != scene.Codec.fingerprint(_classic_scene())

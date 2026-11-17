@@ -420,7 +420,7 @@ Constructing a portable event explicitly requires `context=`; pass `None` when t
 no frontend invocation context.
 
 A screen containing Discord callbacks returns
-`sl.LayoutNode[sl.ComponentsV2Target, sd.Request]` (or a sequence/document of that type).
+`sl.LayoutNode[sd.ComponentsV2Target, sd.Request]` (or a sequence/document of that type).
 The second parameter also carries through child components and widget content slots.
 Bare layout annotations describe portable invocation capabilities.
 

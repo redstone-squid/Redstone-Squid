@@ -17,6 +17,8 @@ from squid.runtime import BotServices
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid_i18n import md_tr
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -48,8 +50,8 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         return max(1, (len(self.candidates) + 24) // 25)
 
     @override
-    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+    def render(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.section(
                 sl.heading(tr(t"inference-candidates-heading = Inferred candidates")),
                 sl.paragraph(
@@ -125,13 +127,13 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
             )
         if self.opened:
             nodes.append(
-                sl.primitives.Section(
+                primitives.Section(
                     (
-                        sl.primitives.Text(
+                        primitives.Text(
                             tr(t"inference-candidates-saved = Draft saved. Open it to review facts and supplied files.")
                         ),
                     ),
-                    sl.primitives.RoutedButton(
+                    primitives.RoutedButton(
                         tr(t"inference-candidates-open-draft = Open draft"),
                         DraftEditorScreen.open_draft.custom_id(draft_id=UUID(self.opened)),
                     ),

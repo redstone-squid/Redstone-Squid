@@ -8,8 +8,10 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, plan
@@ -23,15 +25,15 @@ TARGETS = [components_v2_target(ADAPTER), classic_target(ADAPTER), squid_ui.ext.
 
 
 def colours(body: scene.Body) -> list[int | None]:
-    if isinstance(body, scene.ComponentsV2):
-        return [node.accent for node in body.children if isinstance(node, scene.Panel)]
-    if isinstance(body, scene.ClassicMessage):
+    if isinstance(body, discord_scene.ComponentsV2):
+        return [node.accent for node in body.children if isinstance(node, discord_scene.Panel)]
+    if isinstance(body, discord_scene.ClassicMessage):
         return [embed.colour for embed in body.embeds]
-    assert isinstance(body, scene.HtmlBody)
+    assert isinstance(body, html_scene.HtmlBody)
 
     return [
         match.node.colour.value
-        for match in query(body, select(scene.HtmlElement)).all()
+        for match in query(body, select(html_scene.HtmlElement)).all()
         if match.node.colour is not None
     ]
 
@@ -106,14 +108,14 @@ def test_status_and_progress_use_shared_pagination(target: Target[Any, Any, Any,
     assert "Ready" in wire
     assert "3/7" in wire
     assert "Work" in wire
-    if isinstance(result.scene.body, scene.HtmlBody):
+    if isinstance(result.scene.body, html_scene.HtmlBody):
         status, progress = result.scene.body.children
-        assert isinstance(status, scene.HtmlElement)
-        assert scene.HtmlAttribute(scene.HtmlAttributeName.ROLE, "status") in status.attributes
-        assert isinstance(progress, scene.HtmlElement)
-        assert progress.tag == scene.HtmlTag.PROGRESS
-        assert scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, 3) in progress.attributes
-        assert scene.HtmlAttribute(scene.HtmlAttributeName.MAX, 7) in progress.attributes
+        assert isinstance(status, html_scene.HtmlElement)
+        assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ROLE, "status") in status.attributes
+        assert isinstance(progress, html_scene.HtmlElement)
+        assert progress.tag == html_scene.HtmlTag.PROGRESS
+        assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.VALUE, 3) in progress.attributes
+        assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.MAX, 7) in progress.attributes
 
 
 def test_html_status_resolves_its_colour_from_the_nearest_palette() -> None:
@@ -123,5 +125,5 @@ def test_html_status_resolves_its_colour_from_the_nearest_palette() -> None:
         target=squid_ui.ext.html.target(),
     )
     status = result.scene.body.children[0]
-    assert isinstance(status, scene.HtmlElement)
-    assert status.colour == scene.HtmlColourRef(0x123456)
+    assert isinstance(status, html_scene.HtmlElement)
+    assert status.colour == html_scene.HtmlColourRef(0x123456)

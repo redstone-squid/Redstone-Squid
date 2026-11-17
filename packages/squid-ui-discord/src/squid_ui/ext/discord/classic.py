@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, Unpack, cast
 
 import discord
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
@@ -21,6 +20,7 @@ from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import NEUTRAL, Localization, TextLike
 from squid_ui.content.text import Text as TextExpression
 from squid_ui.errors import ExistingLayoutError
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord._factories import (
     button,
     check_content,
@@ -40,6 +40,7 @@ from squid_ui.ext.discord._factories import (
     text,
 )
 from squid_ui.ext.discord.adapter import require_discord_py_target
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.fragments import _reject_dispatchable
 from squid_ui.ext.discord.inspection import (
     CustomIdSite,
@@ -51,22 +52,7 @@ from squid_ui.ext.discord.inspection import (
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.messages.payload import MessageMode, MessageModeError, MessagePayload
-from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
-from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
-from squid_ui.ext.discord.rendering.result import RenderedMessage
-from squid_ui.ext.discord.target import DISCORD_V1_DPY27
-from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.pages import PagePosition
-from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.cache import PlanCache
-from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
-from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.result import PlanReport, PlanResult
-from squid_ui.planning.snapshot import PlanningSnapshot
-from squid_ui.planning.target import Target
-from squid_ui.primitives.constraints import Never, Overflow
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Card,
     CardAuthor,
     CardField,
@@ -77,10 +63,25 @@ from squid_ui.primitives.nodes import (
     Node,
     Text,
 )
-from squid_ui.primitives.styles import Color
+from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
+from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
+from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.resources import DiscordAxis
+from squid_ui.ext.discord.target import DISCORD_V1_DPY27
+from squid_ui.ext.discord.target_types import ClassicTarget, DiscordPyAdapter
+from squid_ui.overflow import Never, Overflow
+from squid_ui.pages import PagePosition
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.cache import PlanCache
+from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.result import PlanReport, PlanResult
+from squid_ui.planning.snapshot import PlanningSnapshot
+from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ClassicTarget, Renderable
+from squid_ui.styles import Color
+from squid_ui.target_types import Renderable
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request
@@ -159,7 +160,7 @@ def render_message(
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.View | None, scene.ClassicMessage]:
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    adapter = require_discord_py_target(target, AdapterCapability.RENDER_CLASSIC, "render a classic message")
+    adapter = require_discord_py_target(target, DiscordAdapterCapability.RENDER_CLASSIC, "render a classic message")
     payload, result = plan_and_draw(
         rendered,
         PlanRequest(target=target, **options),
@@ -325,8 +326,8 @@ def _trailing_cost(embeds: Sequence[discord.Embed], controls: Sequence[discord.u
     """Room the host will need for what it has not added yet."""
     return ResourceCost(
         {
-            Axis.EMBEDS: len(embeds),
-            Axis.EMBED_TEXT: sum(len(embed) for embed in embeds),
+            DiscordAxis.EMBEDS: len(embeds),
+            DiscordAxis.EMBED_TEXT: sum(len(embed) for embed in embeds),
             Axis.CONTROLS: len(controls),
         }
     )

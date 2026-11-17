@@ -1,13 +1,12 @@
 """Dependency-neutral Discord protocol target construction."""
 
-from squid_ui import scene
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.classic import CLASSIC_DIALECT
 from squid_ui.ext.discord.planning.v2 import V2_DIALECT
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.target_types import ClassicTarget, ComponentsV2Target
 
 V2_TARGET_ID = V2_DIALECT.id
 CLASSIC_TARGET_ID = CLASSIC_DIALECT.id

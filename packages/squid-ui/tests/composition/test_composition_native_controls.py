@@ -9,20 +9,21 @@ import squid_ui as sl
 import squid_ui.ext.html
 from squid_ui import scene
 from squid_ui.authoring.presentations import alternative, alternatives, equivalent
-from squid_ui.capabilities import Capability
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions.forms import FormBinding, FormSpec, SubmitEvent, TextField
+from squid_ui.overflow import Never
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Never
 from squid_ui.selectors import query, select
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-controls.discord", "1")
@@ -33,11 +34,11 @@ async def untouched(event: sl.PressEvent) -> None:
     pytest.fail("planning invoked a native callback")
 
 
-def rows(body: scene.Body) -> tuple[tuple[scene.Node, ...], ...]:
+def rows(body: scene.Body) -> tuple[tuple[discord_scene.Node, ...], ...]:
     match body:
-        case scene.ComponentsV2(children=children):
-            return tuple(child.items for child in children if isinstance(child, scene.Row))
-        case scene.ClassicMessage(rows=controls):
+        case discord_scene.ComponentsV2(children=children):
+            return tuple(child.items for child in children if isinstance(child, discord_scene.Row))
+        case discord_scene.ClassicMessage(rows=controls):
             return tuple(row.controls for row in controls)
         case _:
             pytest.fail("expected a Discord scene")
@@ -53,7 +54,7 @@ def test_premium_buttons_retain_skus_in_exact_and_automatic_rows(
     result = plan(sl.region(node, key="r", title="R"), target=target, strict=True)
     assert result.allocation is not None
     assert [
-        item.sku_id for row in rows(result.scene.body) for item in row if isinstance(item, scene.PremiumButton)
+        item.sku_id for row in rows(result.scene.body) for item in row if isinstance(item, discord_scene.PremiumButton)
     ] == [button.sku_id for button in buttons]
     assert [len(row) for row in rows(result.scene.body)] == ([5, 1] if grouped else [2])
     assert not result.bindings and not result.report.events
@@ -64,7 +65,7 @@ def test_premium_buttons_require_the_target_capability(
     target: Target[Any, Any, Any, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        target.dialect, "capabilities", target.protocol_capabilities - {Capability.ACTIONS_DISCORD_PREMIUM}
+        target.dialect, "capabilities", target.protocol_capabilities - {DiscordCapability.ACTIONS_PREMIUM}
     )
     with pytest.raises(JointUnsupportedError) as error:
         plan(sl.region(native.PremiumButton(123), key="r", title="R"), target=target)
@@ -94,9 +95,9 @@ def test_native_rows_preserve_keys_emoji_and_routed_controls(target: Target[Any,
     rendered = rows(result.scene.body)
     assert len(rendered) == 1 and len(rendered[0]) == 3
     button, route, link = rendered[0]
-    assert isinstance(button, scene.Button) and button.emoji is not None
-    assert isinstance(route, scene.RoutedButton) and route.route_id == "test.route" and route.disabled
-    assert isinstance(link, scene.Link) and link.url == "https://example.com" and link.disabled
+    assert isinstance(button, discord_scene.Button) and button.emoji is not None
+    assert isinstance(route, discord_scene.RoutedButton) and route.route_id == "test.route" and route.disabled
+    assert isinstance(link, discord_scene.Link) and link.url == "https://example.com" and link.disabled
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
@@ -172,8 +173,8 @@ def test_native_selectors_preserve_defaults_and_callbacks(target: Target[Any, An
     result = plan(sl.region(choices, people, key="r", title="R"), target=target)
     assert result.bindings["choices"].handler is choose
     assert result.bindings["people"].handler is entities
-    selected = query(result.scene, select(scene.Select)).one().node
-    entity = query(result.scene, select(scene.EntitySelect)).one().node
+    selected = query(result.scene, select(discord_scene.Select)).one().node
+    entity = query(result.scene, select(discord_scene.EntitySelect)).one().node
     assert selected.options[0].default and selected.min_values == 0
     assert entity.default_values == people.default_values and entity.disabled
 

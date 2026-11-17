@@ -9,14 +9,14 @@ from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.content.text import Localization, resolve_text
+from squid_ui.native import NativeNode, NativeTraits
 from squid_ui.planning.adapter import ExtensionAdapter
 from squid_ui.planning.dialect import InputPolicy, NativeInput
 from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
-from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph, variant_alternatives
-from squid_ui.primitives import nodes as primitive
+from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
 from squid_ui.target_types import Renderable
 
 
@@ -141,16 +141,14 @@ class InputPreparation:
                 return replace(
                     node, primary=self.visit(node.primary), alternates=tuple(map(self.visit, node.alternates))
                 )
-            case primitive.Extension() if self.native is None:
-                # Extensions retain their portable fallback on targets without native adapters.
-                self.visit(node.fallback)
+            case NativeNode() if self.native is None and (fallback := NativeTraits.of(node).fallback) is not None:
+                self.visit(fallback)
                 return node
-            case primitive.Variants():
+            case NativeNode() if (group := node.semantics.alternatives(node)) is not None:
                 self.variant_index += 1
                 # Conditional trees charge assignment copying and independent sibling probes.
                 self.combinations = max(self.combinations, 8 * self.variant_index * self.variant_index)
-                group = variant_alternatives(node)
-                return self.visit(replace(group, key=node.key or f"@variants-{self.variant_index}"))
+                return self.visit(replace(group, key=NativeTraits.of(node).key or f"@variants-{self.variant_index}"))
             case Alternatives():
                 # Canonical content describes identity; it need not render on this target.
                 semantic_graph(node.content)

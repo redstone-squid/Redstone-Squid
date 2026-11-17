@@ -15,6 +15,7 @@ import squid_ui as ui
 from squid_i18n import Localization, source_text, tr
 from squid_ui import scene, selectors
 from squid_ui.authoring import semantic as s
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.scene.codec import Codec
 from squid_ui.selectors import TreeIndex, index_tree, query, select, ui_children
@@ -71,14 +72,14 @@ def test_render_cache_never_reuses_predicate_or_localization_results() -> None:
 
 
 def test_scene_index_does_not_change_serialization_equality_or_generic_walks() -> None:
-    button = scene.Button("Save", "save")
-    planned = scene.Scene(1, "discord", 1, scene.ComponentsV2((scene.Row((button,)),)))
+    button = discord_scene.Button("Save", "save")
+    planned = scene.Scene(1, "discord", 1, discord_scene.ComponentsV2((discord_scene.Row((button,)),)))
     equal = replace(planned)
     encoded = Codec.dumps(planned)
     fingerprint = Codec.fingerprint(planned)
     walked = tuple(walk(planned))
     assert query(planned, 'scene.Button[label="Save"]').one().node is button
-    assert query(planned, select(scene.Row)).one().precedes(query(planned, select(scene.Button)).one())
+    assert query(planned, select(discord_scene.Row)).one().precedes(query(planned, select(discord_scene.Button)).one())
     assert tuple(walk(planned)) == walked
     assert Codec.dumps(planned) == encoded
     assert Codec.fingerprint(planned) == fingerprint

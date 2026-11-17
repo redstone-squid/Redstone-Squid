@@ -31,6 +31,7 @@ from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues, Revision, RevisionConflictError
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
@@ -52,7 +53,7 @@ class ConsentRequest(Protocol):
     ) -> Awaitable[bool]: ...
 
 
-class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
     """Edit one account's profile and choose which linked identities appear publicly.
 
     Used as the overview within AccountWorkspace. Identity visibility changes are
@@ -113,14 +114,14 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return self._profile.hidden
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
         if self._profile_editor is not None:
             return (self._profile_editor,)
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
         extra_media = media[1:]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(self._profile.display_name or tr(t"account-view-your-account = Your account")),
                 # Shorten the bio before reducing the identity fields or footer.

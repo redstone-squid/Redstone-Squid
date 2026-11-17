@@ -15,9 +15,9 @@ from enum import Enum
 from string.templatelib import Template
 
 from squid_ui.content.text import Text
+from squid_ui.native import NativeTraits
+from squid_ui.overflow import RoutedPage
 from squid_ui.planning.identity_cache import IdentityCache
-from squid_ui.primitives.constraints import RoutedPage
-from squid_ui.primitives.nodes import Extension, RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +115,7 @@ def _digest(value: object, consume: Callable[[], None] | None, cache: Fingerprin
 
 def requires_live_preparation(value: object) -> bool:
     """Whether routes or opaque factories can change output behind stable identity."""
-    return _contains(value, (RoutedPage, Extension, RawItem))
+    return _contains(value, (RoutedPage,), live=True)
 
 
 def has_routed_page(value: object) -> bool:
@@ -123,15 +123,15 @@ def has_routed_page(value: object) -> bool:
     return _contains(value, (RoutedPage,))
 
 
-def _contains(value: object, kinds: tuple[type, ...]) -> bool:
-    if isinstance(value, kinds):
+def _contains(value: object, kinds: tuple[type, ...], *, live: bool = False) -> bool:
+    if isinstance(value, kinds) or (live and NativeTraits.of(value).live):
         return True
     if callable(value) or isinstance(value, str | bytes):
         return False
     if is_dataclass(value) and not isinstance(value, type):
-        return any(_contains(getattr(value, item.name), kinds) for item in fields(value))
+        return any(_contains(getattr(value, item.name), kinds, live=live) for item in fields(value))
     if isinstance(value, Mapping):
-        return any(_contains(item, kinds) for item in value.values())
+        return any(_contains(item, kinds, live=live) for item in value.values())
     if isinstance(value, Sequence):
-        return any(_contains(item, kinds) for item in value)
+        return any(_contains(item, kinds, live=live) for item in value)
     return False

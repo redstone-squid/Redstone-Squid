@@ -4,11 +4,11 @@ These objects use the scene vocabulary, not Slack API request shapes. The Slack
 frontend performs that final conversion after resolving actions and assets.
 """
 
+from typing import Any
+
 from pydantic import TypeAdapter, ValidationError
 
-from squid_ui.errors import SquidUiError
-from squid_ui.scene._json import JsonObject, JsonReader
-from squid_ui.scene.slack import (
+from squid_ui.ext.slack.scene.model import (
     SlackActions,
     SlackAlert,
     SlackBlock,
@@ -36,9 +36,12 @@ from squid_ui.scene.slack import (
     SlackTextInput,
     SlackTimePicker,
 )
+from squid_ui.ext.slack.scene.schema import SCHEMA
+from squid_ui.scene._json import JsonObject, JsonReader
+from squid_ui.scene.codec import CodecError, SceneDialect
 
 
-class SlackSceneCodecError(SquidUiError, ValueError):
+class SlackSceneCodecError(CodecError):
     """A Slack scene body has an invalid shape."""
 
 
@@ -165,3 +168,8 @@ def slack_body_from_dict(raw: JsonObject) -> SlackBody:
 
 
 __all__ = ["SlackSceneCodecError", "slack_body_from_dict", "slack_body_to_dict"]
+
+
+DIALECT = SceneDialect[Any](
+    "slack", (SlackMessage, SlackModalView, SlackHomeView), slack_body_to_dict, slack_body_from_dict, SCHEMA.fragment
+)

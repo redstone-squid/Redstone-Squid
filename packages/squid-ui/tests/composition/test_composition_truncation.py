@@ -11,16 +11,18 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.authoring.presentations import budget
 from squid_ui.authoring.semantic import Importance
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
-from squid_ui.primitives import nodes as native
 from squid_ui.target_types import RenderTarget
 
 DISCORD = AdapterProfile(DiscordAdapter, "truncate.discord", "1")
@@ -52,7 +54,7 @@ def test_truncation_retains_the_requested_end_and_reports_loss(
     expected = "abcdefghi…" if keep == "head" else "…lmnopqrst"
     rendered = (
         squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
-        if isinstance(result.scene.body, scene.HtmlBody)
+        if isinstance(result.scene.body, html_scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
     assert expected in rendered
@@ -68,7 +70,7 @@ def test_styled_shortening_keeps_balanced_markup(target: Target[Any, Any, Any, A
     result = plan(constrained, target=target)
     wire = scene.Codec.dumps(result.scene)
     assert "abc" in wire and "abcdefghijklmnopqrst" not in wire
-    if isinstance(result.scene.body, scene.HtmlBody):
+    if isinstance(result.scene.body, html_scene.HtmlBody):
         assert "<strong>abcdefghi</strong>…" in squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
     else:
         assert "**abcde**…" in wire if target.id.startswith("discord") else "*abcdefg*…" in wire
@@ -104,7 +106,7 @@ def test_lossless_pagination_precedes_shortening() -> None:
         text.extend(
             node.content
             for node in page.scene.body.children
-            if isinstance(node, scene.Text) and set(node.content) == {"x"}
+            if isinstance(node, discord_scene.Text) and set(node.content) == {"x"}
         )
         assert not any(event.code == "composition.effect" for event in page.report.events)
     assert "".join(text) == "x" * 40
@@ -153,7 +155,7 @@ def test_zero_text_grant_can_remove_all_prose_with_an_explicit_effect(node: sl.R
 def test_shortening_never_changes_a_mention_identifier(keep: Literal["head", "tail"], expected: str) -> None:
     content = sl.mention(123456789)
     result = plan(sl.truncate(sl.paragraph(t"A{content}B"), keep=keep), target=TARGETS[0])
-    assert result.scene.body.children == (scene.Text(expected, sl.text.Markup.DISCORD_MARKDOWN),)
+    assert result.scene.body.children == (discord_scene.Text(expected, sl.text.Markup.DISCORD_MARKDOWN),)
     assert [event.message for event in result.report.events] == ["Shortening"]
 
 

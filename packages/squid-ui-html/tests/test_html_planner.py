@@ -12,7 +12,9 @@ from squid_ui.authoring import grids
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.html.target_types import HtmlTarget
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.interactions.forms import (
@@ -54,8 +56,8 @@ async def _submitted(_event: SubmitEvent) -> None:
     return None
 
 
-def _elements(result: PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ...]:
-    return testing.find_all(result.scene.body.children, scene.HtmlElement)
+def _elements(result: PlanResult[html_scene.HtmlBody]) -> tuple[html_scene.HtmlElement, ...]:
+    return testing.find_all(result.scene.body.children, html_scene.HtmlElement)
 
 
 def test_html_target_has_an_unbounded_semantic_identity() -> None:
@@ -63,16 +65,16 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
 
     assert target.triple == "html.semantic+squid-ui.html"
     assert target.capacities == {}
-    assert target.body_type is scene.HtmlBody
+    assert target.body_type is html_scene.HtmlBody
     assert sl.planning.plan(sl.paragraph("portable"), target=target).scene.target == "html.semantic"
 
     with pytest.raises(LayoutInvariantError, match="no reservable"):
         sl.planning.plan(sl.paragraph("x"), target=target, reservation=ResourceCost({Axis.COMPONENTS: 1}))
 
 
-def test_discord_primitives_are_rejected_by_html_planning() -> None:
+def test_primitives_are_rejected_by_html_planning() -> None:
     with pytest.raises(JointUnsupportedError):
-        sl.planning.plan(sl.primitives.Text("exact"), target=squid_ui.ext.html.target())  # type: ignore[arg-type]
+        sl.planning.plan(primitives.Text("exact"), target=squid_ui.ext.html.target())  # type: ignore[arg-type]
 
 
 def test_unknown_renderables_are_rejected_by_html_planning() -> None:
@@ -169,30 +171,31 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
     tags = {element.tag for element in elements}
 
     assert {
-        scene.HtmlTag.SECTION,
-        scene.HtmlTag.ASIDE,
-        scene.HtmlTag.TABLE,
-        scene.HtmlTag.BLOCKQUOTE,
-        scene.HtmlTag.CODE,
-        scene.HtmlTag.FIGURE,
-        scene.HtmlTag.FIGCAPTION,
-        scene.HtmlTag.DETAILS,
-        scene.HtmlTag.PROGRESS,
-        scene.HtmlTag.TIME,
-        scene.HtmlTag.NAV,
+        html_scene.HtmlTag.SECTION,
+        html_scene.HtmlTag.ASIDE,
+        html_scene.HtmlTag.TABLE,
+        html_scene.HtmlTag.BLOCKQUOTE,
+        html_scene.HtmlTag.CODE,
+        html_scene.HtmlTag.FIGURE,
+        html_scene.HtmlTag.FIGCAPTION,
+        html_scene.HtmlTag.DETAILS,
+        html_scene.HtmlTag.PROGRESS,
+        html_scene.HtmlTag.TIME,
+        html_scene.HtmlTag.NAV,
     } <= tags
     choice = next(
         element
         for element in elements
-        if element.tag is scene.HtmlTag.SELECT and any(attribute.value == "choice" for attribute in element.attributes)
+        if element.tag is html_scene.HtmlTag.SELECT
+        and any(attribute.value == "choice" for attribute in element.attributes)
     )
     assert len(choice.children) == 30
-    assert scene.HtmlAttribute(scene.HtmlAttributeName.MULTIPLE, value=True) in choice.attributes
-    assert choice.form == scene.HtmlFormRef("choice", "choice")
+    assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.MULTIPLE, value=True) in choice.attributes
+    assert choice.form == html_scene.HtmlFormRef("choice", "choice")
     assert result.scene.body.locale == "en-GB"
     assert {"save", "choice", "details.toggle", "grid.a"} <= set(result.bindings)
-    assert any(element.route == scene.HtmlRouteRef("build:1:open") for element in elements)
-    assert any(element.route == scene.HtmlRouteRef("build:1:choice") for element in elements)
+    assert any(element.route == html_scene.HtmlRouteRef("build:1:open") for element in elements)
+    assert any(element.route == html_scene.HtmlRouteRef("build:1:choice") for element in elements)
 
 
 class _PortableExtension(ExtensionField[str]):
@@ -246,13 +249,13 @@ def test_html_planner_renders_portable_forms_inline_with_prefill(shared: bool) -
     controls = [
         element
         for element in elements
-        if element.tag in {scene.HtmlTag.INPUT, scene.HtmlTag.TEXTAREA, scene.HtmlTag.SELECT}
+        if element.tag in {html_scene.HtmlTag.INPUT, html_scene.HtmlTag.TEXTAREA, html_scene.HtmlTag.SELECT}
     ]
     names = {
         attribute.value
         for element in controls
         for attribute in element.attributes
-        if attribute.name is scene.HtmlAttributeName.NAME
+        if attribute.name is html_scene.HtmlAttributeName.NAME
     }
 
     assert set(spec.field_keys) == names
@@ -264,7 +267,7 @@ def test_html_planner_renders_portable_forms_inline_with_prefill(shared: bool) -
     published = next(
         element for element in controls if any(attribute.value == "published" for attribute in element.attributes)
     )
-    assert any(attribute.name is scene.HtmlAttributeName.CHECKED for attribute in published.attributes)
+    assert any(attribute.name is html_scene.HtmlAttributeName.CHECKED for attribute in published.attributes)
 
 
 def test_html_only_applies_authored_budgets_and_paging() -> None:
@@ -273,7 +276,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
         sum(
             len(node.content)
             for node in testing.walk(unconstrained.scene.body.children)
-            if isinstance(node, scene.HtmlText)
+            if isinstance(node, html_scene.HtmlText)
         )
         == 8000
     )
@@ -285,7 +288,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     )
     assert any(event.code == "composition.effect" for event in constrained.report.events)
     assert "abc" in [
-        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, html_scene.HtmlText)
     ]
     with pytest.raises(JointInfeasibleError):
         sl.planning.plan(
@@ -302,10 +305,10 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     second = sl.planning.plan(paged, target=squid_ui.ext.html.target(), positions={"manual": PagePosition(page=1)})
     assert second.scene.pagers[0].page == 1
     assert "bbbb" in [
-        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, html_scene.HtmlText)
     ]
     assert "aaaa" not in [
-        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, html_scene.HtmlText)
     ]
 
 
@@ -316,10 +319,10 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
     constrained = sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=squid_ui.ext.html.target())
 
     assert "preferred is too long" in [
-        node.content for node in testing.walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(preferred.scene.body.children) if isinstance(node, html_scene.HtmlText)
     ]
     assert "short" in [
-        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, html_scene.HtmlText)
     ]
     assert constrained.report.search is not None
     assert any(
@@ -366,9 +369,9 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
     current = [
         attribute.value
         for element in _elements(result)
-        if element.tag is scene.HtmlTag.BUTTON
+        if element.tag is html_scene.HtmlTag.BUTTON
         for attribute in element.attributes
-        if attribute.name is scene.HtmlAttributeName.ARIA_CURRENT
+        if attribute.name is html_scene.HtmlAttributeName.ARIA_CURRENT
     ]
     assert current == ["page"], "navigation falls back to the first available destination"
 
@@ -388,9 +391,9 @@ def test_html_paging_honors_min_fill() -> None:
         return "".join(
             child.content
             for node in testing.walk(result.scene.body.children)
-            if isinstance(node, scene.HtmlElement) and node.tag is scene.HtmlTag.P
+            if isinstance(node, html_scene.HtmlElement) and node.tag is html_scene.HtmlTag.P
             for child in node.children
-            if isinstance(child, scene.HtmlText) and child.content in {"aaaa", "bbbb", "cccc", "dddd"}
+            if isinstance(child, html_scene.HtmlText) and child.content in {"aaaa", "bbbb", "cccc", "dddd"}
         )
 
     default = sl.planning.plan(build(0), target=squid_ui.ext.html.target())
@@ -415,9 +418,11 @@ def test_html_character_pages_reconstruct_styled_prose_without_counting_chrome()
         strong = [
             node
             for node in testing.walk(page.scene.body.children)
-            if isinstance(node, scene.HtmlElement) and node.tag is scene.HtmlTag.STRONG
+            if isinstance(node, html_scene.HtmlElement) and node.tag is html_scene.HtmlTag.STRONG
         ]
-        text = "".join(part.content for node in strong for part in node.children if isinstance(part, scene.HtmlText))
+        text = "".join(
+            part.content for node in strong for part in node.children if isinstance(part, html_scene.HtmlText)
+        )
         assert 0 < len(text) <= 30
         assert not page.report.events
         fragments.append(text)
@@ -440,10 +445,10 @@ async def test_html_list_page_ownership_drives_navigation_without_cursor_writes(
         sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=sl.controlled(1, changed)),
         target=squid_ui.ext.html.target(),
     )
-    entries = [item for item in _elements(result) if item.tag is scene.HtmlTag.LI]
+    entries = [item for item in _elements(result) if item.tag is html_scene.HtmlTag.LI]
     assert len(entries) == 1
     assert testing.texts(entries[0].children) == ["c"]
-    assert scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, 3) in entries[0].attributes
+    assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.VALUE, 3) in entries[0].attributes
     session = PresentationState()
     session.apply_updates(result.session_updates)
     assert not session.cursors

@@ -4,14 +4,11 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V1_DPY27
-from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis
-from squid_ui.ext.discord.target import classic
-from squid_ui.planning import plan
-from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.primitives import (
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.limits import CLASSIC_LIMITS
+from squid_ui.ext.discord.primitives import (
     Card,
     CardAuthor,
     CardField,
@@ -28,11 +25,15 @@ from squid_ui.primitives import (
     Thumbnail,
     Truncate,
 )
+from squid_ui.ext.discord.resources import DiscordAxis
+from squid_ui.ext.discord.target import classic
+from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 
 
-def body(document, target=DISCORD_V1_DPY27) -> scene.ClassicMessage:
+def body(document, target=DISCORD_V1_DPY27) -> discord_scene.ClassicMessage:
     resolved = plan(document, target=target).scene.body
-    assert isinstance(resolved, scene.ClassicMessage)
+    assert isinstance(resolved, discord_scene.ClassicMessage)
     return resolved
 
 
@@ -40,8 +41,8 @@ class TestTargets:
     def test_custom_limits_arrive_through_a_custom_target(self) -> None:
         target = classic(limits=CLASSIC_LIMITS.__class__(embed_count=2))
 
-        assert target.capacity(Axis.EMBEDS) == 2
-        assert target.capacity(Axis.EMBED_TEXT) == CLASSIC_LIMITS.embed_text
+        assert target.capacity(DiscordAxis.EMBEDS) == 2
+        assert target.capacity(DiscordAxis.EMBED_TEXT) == CLASSIC_LIMITS.embed_text
 
 
 class TestClassicShape:
@@ -63,7 +64,7 @@ class TestClassicShape:
 
         assert embed.title == "Piston door"
         assert embed.description == "first block\n\nsecond block"
-        assert embed.fields == (scene.EmbedField(name="Width", value="2", inline=True),)
+        assert embed.fields == (discord_scene.EmbedField(name="Width", value="2", inline=True),)
         assert embed.footer is not None and embed.footer.text == "by squid"
         assert embed.author is not None and embed.author.name == "Redstone Squid"
         assert embed.colour == 0x00FF00
@@ -178,7 +179,7 @@ class TestPagedRegions:
             title="Report",
         )
 
-        assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, scene.ClassicMessage)
+        assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, discord_scene.ClassicMessage)
 
 
 class TestDiscordPyCrossChecks:

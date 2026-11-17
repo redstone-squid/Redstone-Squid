@@ -55,6 +55,18 @@ from squid_ui.ext.discord.access import Allowed, Check, Denied
 from squid_ui.ext.discord.messages.candidates import _BusyPaint
 from squid_ui.ext.discord.messages.contracts import MessageRootStatus
 from squid_ui.ext.discord.messages.wiring import control_id
+from squid_ui.ext.discord.primitives import (
+    Button,
+    ControlGroup,
+    Heading,
+    Lines,
+    Option,
+    Paginate,
+    Row,
+    SelectMenu,
+    Text,
+)
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -66,17 +78,6 @@ from squid_ui.ext.discord.testing import (
 )
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest, InteractionKind
 from squid_ui.interactions.forms import FormField, FormSpec, TextField
-from squid_ui.primitives import (
-    Button,
-    ControlGroup,
-    Heading,
-    Lines,
-    Option,
-    Paginate,
-    Row,
-    SelectMenu,
-    Text,
-)
 from squid_ui.profiling import (
     ActionStatus,
     DispatchDisposition,
@@ -156,7 +157,7 @@ class _AcknowledgementRecorder:
         self.sources.append(source)
 
 
-class Counter(Component[sl.ComponentsV2Target]):
+class Counter(Component[ComponentsV2Target]):
     count: int = state(0)
 
     @override
@@ -175,7 +176,7 @@ async def test_dispatch_and_submit_bind_root_localization_inside_the_handler_tas
     interaction = interaction_harness()
     seen: list[str | None] = []
 
-    class Inspect(Component[sl.ComponentsV2Target]):
+    class Inspect(Component[ComponentsV2Target]):
         @override
         def render(self):
             return Row((Button(label="Inspect", on_click=self.inspect, key="inspect"),))
@@ -312,7 +313,7 @@ class TestEphemeralRenewal:
         assert subject.generation == 2
 
     async def test_refreshes_freeze_behind_the_renewal_screen_without_rendering(self) -> None:
-        class Counting(Component[sl.ComponentsV2Target]):
+        class Counting(Component[ComponentsV2Target]):
             def __init__(self) -> None:
                 self.renders = 0
 
@@ -407,7 +408,7 @@ class TestEphemeralRenewal:
         assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
 
     async def test_finishing_while_armed_does_not_reconstruct_the_hidden_tree(self) -> None:
-        class Counting(Component[sl.ComponentsV2Target]):
+        class Counting(Component[ComponentsV2Target]):
             def __init__(self) -> None:
                 self.renders = 0
 
@@ -457,10 +458,10 @@ class TestEphemeralRenewal:
         assert message_root.handle is None
 
 
-class RootToolbar(Component[sl.ComponentsV2Target]):
+class RootToolbar(Component[ComponentsV2Target]):
     @override
     def render(self):
-        return Document[sl.ComponentsV2Target](
+        return Document[ComponentsV2Target](
             (ControlGroup(tuple(Button(str(index), self.click, f"b{index}") for index in range(41))),),
             key="toolbar",
         )
@@ -468,7 +469,7 @@ class RootToolbar(Component[sl.ComponentsV2Target]):
     async def click(self, event: PressEvent) -> None: ...
 
 
-class Child(Component[sl.ComponentsV2Target]):
+class Child(Component[ComponentsV2Target]):
     def __init__(self, mounted: list[str]) -> None:
         self.mounted = mounted
 
@@ -481,7 +482,7 @@ class Child(Component[sl.ComponentsV2Target]):
         self.mounted.append("child")
 
 
-class Panel(Component[sl.ComponentsV2Target]):
+class Panel(Component[ComponentsV2Target]):
     """A pager, a button and an optional child — one of each thing a commit publishes."""
 
     entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
@@ -492,7 +493,7 @@ class Panel(Component[sl.ComponentsV2Target]):
 
     @override
     def render(self):
-        nodes: list[LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[LayoutNode[ComponentsV2Target]] = [
             Lines(self.entries, overflow=Paginate(key="entries", per=2)),
             Row((Button("add", self.add, "add"),)),
         ]
@@ -631,7 +632,7 @@ class TestDispatchProfiling:
         assert stale.disposition is DispatchDisposition.STALE
         assert not stale.generation.rebased
 
-        class Rebased(Component[sl.ComponentsV2Target]):
+        class Rebased(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button("run", self.run, "run", mode=ActionMode.REBASE),))
@@ -741,7 +742,7 @@ class TestDispatchProfiling:
         started = anyio.Event()
         release = anyio.Event()
 
-        class Slow(Component[sl.ComponentsV2Target]):
+        class Slow(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button("slow", self.slow, "slow"),))
@@ -828,7 +829,7 @@ class TestRenderAndWire:
     async def test_press_event_carries_portable_actor_and_frontend_context(self):
         seen: list[PressEvent] = []
 
-        class Inspect(Component[sl.ComponentsV2Target]):
+        class Inspect(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
@@ -848,7 +849,7 @@ class TestRenderAndWire:
     async def test_press_event_carries_the_mounts_negotiated_locale(self):
         seen: list[PressEvent] = []
 
-        class Inspect(Component[sl.ComponentsV2Target]):
+        class Inspect(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
@@ -864,7 +865,7 @@ class TestRenderAndWire:
         assert seen[0].locale == "zh-CN"
 
     def test_localize_retranslates_content_chrome_and_runtime_context(self):
-        class Localized(Component[sl.ComponentsV2Target]):
+        class Localized(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return [
@@ -890,7 +891,7 @@ class TestRenderAndWire:
         assert message_root.runtime.context[LOCALIZATION_CONTEXT] is localization
 
     async def test_notice_resolves_deferred_text_with_message_root_localization(self):
-        class Notify(Component[sl.ComponentsV2Target]):
+        class Notify(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button(label="notify", on_click=self.notify, key="notify"),))
@@ -937,7 +938,7 @@ class TestRenderAndWire:
         started = anyio.Event()
         release = anyio.Event()
 
-        class Slow(Component[sl.ComponentsV2Target]):
+        class Slow(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button("slow", self.slow, "slow"),))
@@ -1356,7 +1357,7 @@ class TestActionPolicy:
     async def test_rebase_action_uses_the_handler_from_the_current_generation(self):
         calls: list[str] = []
 
-        class Rebased(Component[sl.ComponentsV2Target]):
+        class Rebased(Component[ComponentsV2Target]):
             current = False
 
             @override
@@ -1385,7 +1386,7 @@ class TestActionPolicy:
         calls: list[str] = []
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
-        class Rebased(Component[sl.ComponentsV2Target]):
+        class Rebased(Component[ComponentsV2Target]):
             current = False
 
             @override
@@ -1421,7 +1422,7 @@ class TestActionPolicy:
     async def test_submit_declaratively_records_the_whole_action(self):
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
-        class Editor(Component[sl.ComponentsV2Target]):
+        class Editor(Component[ComponentsV2Target]):
             history: sl.runtime.History = sl.runtime.history()
             name: str = state("old")
 
@@ -1463,7 +1464,7 @@ class TestActionPolicy:
         submitted: list[str] = []
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
-        class Trigger(Component[sl.ComponentsV2Target]):
+        class Trigger(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl_form("Rename", spec, key="rename", on_submit=self.submit, mode=ActionMode.REBASE)
@@ -1495,7 +1496,7 @@ class TestActionPolicy:
         filled = FormSpec("Rename", (TextField(key="name", label="Name"),))
         reshaped = FormSpec("Rename", (TextField(key="title", label="Title"),))
 
-        class Reshaped(Component[sl.ComponentsV2Target]):
+        class Reshaped(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl_form("Rename", reshaped, key="rename", on_submit=self.new, mode=ActionMode.REBASE)
@@ -1545,7 +1546,7 @@ class TestActionPolicy:
         active = 0
         maximum = 0
 
-        class Serialized(Component[sl.ComponentsV2Target]):
+        class Serialized(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return Row((Button("run", self.run, "run"),))
@@ -1570,7 +1571,7 @@ class TestActionPolicy:
         assert maximum == 1
 
     async def test_parallel_read_rolls_back_and_reports_state_writes(self):
-        class Reader(Component[sl.ComponentsV2Target]):
+        class Reader(Component[ComponentsV2Target]):
             count: int = state(0)
 
             @override
@@ -1645,7 +1646,7 @@ class TestActionMiddleware:
         interaction.response.defer.assert_awaited_once_with()
 
     async def test_middleware_may_handle_a_rolled_back_handler_error(self) -> None:
-        class Broken(Component[sl.ComponentsV2Target]):
+        class Broken(Component[ComponentsV2Target]):
             count: int = state(0)
 
             @override
@@ -1728,7 +1729,7 @@ class TestActionMiddleware:
                 requests.append(request)
                 await proceed()
 
-        class Rebased(Component[sl.ComponentsV2Target]):
+        class Rebased(Component[ComponentsV2Target]):
             current = False
 
             @override
@@ -1791,7 +1792,7 @@ class TestActionMiddleware:
                 kinds.append(request.kind)
                 await proceed()
 
-        class Picker(Component[sl.ComponentsV2Target]):
+        class Picker(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return SelectMenu((Option("A", "a"),), self.pick, "pick")
@@ -1813,7 +1814,7 @@ class TestActionMiddleware:
 
 class TestErrors:
     async def test_handler_error_goes_to_hook(self):
-        class Boom(Component[sl.ComponentsV2Target]):
+        class Boom(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return [Row((Button(label="x", on_click=self.explode, key="x"),))]
@@ -1854,7 +1855,7 @@ class TestErrors:
         assert source == "form:f"
 
     async def test_failed_handler_rolls_back_all_state_changes(self):
-        class Boom(Component[sl.ComponentsV2Target]):
+        class Boom(Component[ComponentsV2Target]):
             count: int = state(0)
             entries: tuple[str, ...] = state(())
 
@@ -1884,7 +1885,7 @@ class TestSelect:
     async def test_select_handler_receives_values(self):
         picked: list[str] = []
 
-        class Picker(Component[sl.ComponentsV2Target]):
+        class Picker(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return [
@@ -1922,7 +1923,7 @@ class TestLifecycle:
         interaction.response.edit_message.assert_not_awaited()
 
     async def test_timeout_can_leave_only_stateless_recovery_routes_enabled(self) -> None:
-        class Recoverable(Component[sl.ComponentsV2Target]):
+        class Recoverable(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl.action_controls(
@@ -1951,7 +1952,7 @@ class TestLifecycle:
         assert buttons == {"Mounted action": True, "Recover": False}
 
     async def test_expired_handle_marks_dirty_without_loading_or_staging(self):
-        class Loaded(Component[sl.ComponentsV2Target]):
+        class Loaded(Component[ComponentsV2Target]):
             def __init__(self) -> None:
                 self.loads = 0
 
@@ -2095,7 +2096,7 @@ class TestDeliveryAtomicity:
         assert "Page 2 of 3" in written
 
     async def test_a_press_after_a_refused_disclosure_toggle_shows_it_open(self, monkeypatch):
-        class Report(Component[sl.ComponentsV2Target]):
+        class Report(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl.details(sl.summary("Debug details"), sl.paragraph("hidden body"), key="debug")
@@ -2115,7 +2116,7 @@ class TestDeliveryAtomicity:
         assert not message_root.pending
 
     async def test_a_two_press_confirmation_cannot_complete_on_a_refused_arm(self, monkeypatch):
-        class Danger(Component[sl.ComponentsV2Target]):
+        class Danger(Component[ComponentsV2Target]):
             armed: bool = state(False)
             deleted: bool = state(False)
 
@@ -2181,7 +2182,7 @@ class TestDeliveryAtomicity:
         assert panel.entries[-1] == "added"
 
     async def test_a_rebase_press_still_acts_on_a_message_left_behind(self, monkeypatch):
-        class Rebasing(Component[sl.ComponentsV2Target]):
+        class Rebasing(Component[ComponentsV2Target]):
             count: int = state(0)
 
             @override
@@ -2303,7 +2304,7 @@ class TestDeliveryAtomicity:
         maximum_active = 0
         entered = 0
 
-        class ImmediatePanel(Component[sl.ComponentsV2Target]):
+        class ImmediatePanel(Component[ComponentsV2Target]):
             count: int = state(0)
 
             @override
@@ -2412,24 +2413,24 @@ class _Destination:
         return delivery.DeliveryResult(self.message, self.handle)
 
 
-class Report(Component[sl.ComponentsV2Target]):
+class Report(Component[ComponentsV2Target]):
     """A component carrying one inline asset, so a send has files to hand over."""
 
     @override
     def render(self):
-        return Document[sl.ComponentsV2Target](
+        return Document[ComponentsV2Target](
             (Text("summary"),),
             (Asset("report", "report.txt", "text/plain", InlineAsset(b"full report")),),
         )
 
 
-class MutableReport(Component[sl.ComponentsV2Target]):
+class MutableReport(Component[ComponentsV2Target]):
     def __init__(self) -> None:
         self.contents = b"first"
 
     @override
     def render(self):
-        return Document[sl.ComponentsV2Target](
+        return Document[ComponentsV2Target](
             (Text("summary"),),
             (Asset("report", "report.txt", "text/plain", InlineAsset(self.contents)),),
         )
@@ -2599,7 +2600,7 @@ class TestSend:
         message.edit.assert_awaited_once()
 
     async def test_changed_handler_identity_is_published_without_repainting(self) -> None:
-        class FreshHandler(Component[sl.ComponentsV2Target]):
+        class FreshHandler(Component[ComponentsV2Target]):
             version = 0
             invoked: list[int] = []
 
@@ -2649,7 +2650,7 @@ class TestSend:
         assert message.edit.await_count == 0
 
     async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
-        class Guarded(Component[sl.ComponentsV2Target]):
+        class Guarded(Component[ComponentsV2Target]):
             allowed = True
             invoked = 0
 
@@ -2723,7 +2724,7 @@ class TestStateDescriptor:
         assert message_root.pending
 
     def test_a_factory_runs_once_per_instance(self):
-        class Collection(Component[sl.ComponentsV2Target]):
+        class Collection(Component[ComponentsV2Target]):
             entries: tuple[str, ...] = state(factory=tuple)
 
             @override
@@ -2740,7 +2741,7 @@ class TestStateDescriptor:
         assert second.entries == ()
 
     def test_computed_values_cache_until_state_changes(self):
-        class Derived(Component[sl.ComponentsV2Target]):
+        class Derived(Component[ComponentsV2Target]):
             count: int = state(1)
             unrelated: int = state(0)
 
@@ -2772,14 +2773,14 @@ class TestStateDescriptor:
     def test_a_computed_may_read_another_component_s_state(self):
         """Tracking has no same-component rule to enforce: a read is a read."""
 
-        class Source(Component[sl.ComponentsV2Target]):
+        class Source(Component[ComponentsV2Target]):
             count: int = state(1)
 
             @override
             def render(self):
                 return Text(str(self.count))
 
-        class Reader(Component[sl.ComponentsV2Target]):
+        class Reader(Component[ComponentsV2Target]):
             def __init__(self, source: Source) -> None:
                 self.source = source
 
@@ -2802,7 +2803,7 @@ class TestStateDescriptor:
     def test_a_computed_that_reads_itself_says_so(self):
         """A tracked cycle is only visible when it runs, so that is where it is reported."""
 
-        class Cyclic(Component[sl.ComponentsV2Target]):
+        class Cyclic(Component[ComponentsV2Target]):
             @computed
             def first(self) -> int:
                 return self.second
@@ -2821,7 +2822,7 @@ class TestStateDescriptor:
         assert raised.value.path == ("Cyclic.first", "Cyclic.second", "Cyclic.first")
 
     def test_batch_notifies_each_owner_once(self):
-        class Pair(Component[sl.ComponentsV2Target]):
+        class Pair(Component[ComponentsV2Target]):
             left: int = state(0)
             right: int = state(0)
 
@@ -2844,7 +2845,7 @@ class TestStateDescriptor:
         assert component.commits == 1
 
     def test_transaction_rolls_back_every_assignment_it_covered(self):
-        class Form(Component[sl.ComponentsV2Target]):
+        class Form(Component[ComponentsV2Target]):
             name: str = state("before")
             values: tuple[int, ...] = state(())
 
@@ -2862,7 +2863,7 @@ class TestStateDescriptor:
         assert component.values == ()
 
 
-class Notifier(Component[sl.ComponentsV2Target]):
+class Notifier(Component[ComponentsV2Target]):
     """Change state and send a separate notice before the original panel refreshes."""
 
     count: int = state(0)
@@ -3295,7 +3296,7 @@ class TestDestinations:
         click.response.edit_message.assert_awaited_once()
 
 
-class VisibleResourcePanel(Component[sl.ComponentsV2Target]):
+class VisibleResourcePanel(Component[ComponentsV2Target]):
     key: str = state("first")
 
     def __init__(self, load: Callable[[str], Awaitable[str]]) -> None:
@@ -3320,7 +3321,7 @@ class VisibleResourcePanel(Component[sl.ComponentsV2Target]):
         return [Text(label), Row((Button("change", self.change, "change"),))]
 
 
-class AtomicResourcePanel(Component[sl.ComponentsV2Target]):
+class AtomicResourcePanel(Component[ComponentsV2Target]):
     def __init__(self, load: Callable[[], Awaitable[str]]) -> None:
         self._load = load
 
@@ -3337,7 +3338,7 @@ class AtomicResourcePanel(Component[sl.ComponentsV2Target]):
                 return Text(f"ready:{value}")
 
 
-class CheckpointedResourcePanel(Component[sl.ComponentsV2Target]):
+class CheckpointedResourcePanel(Component[ComponentsV2Target]):
     """A panel whose first load parks at a checkpoint, so it can be superseded mid-settle."""
 
     def __init__(self) -> None:
@@ -3365,7 +3366,7 @@ class CheckpointedResourcePanel(Component[sl.ComponentsV2Target]):
                 return Text(f"ready:{value}")
 
 
-class OperationPanel(Component[sl.ComponentsV2Target]):
+class OperationPanel(Component[ComponentsV2Target]):
     def __init__(self) -> None:
         self.publication = self._publication.start()
 
@@ -3459,7 +3460,7 @@ class TestResourceLoading:
         assert "resource_settle.visible" in {span.name for span in trace.spans}
 
     async def test_visible_resource_suppresses_an_identical_settled_scene(self) -> None:
-        class UnprojectedResource(Component[sl.ComponentsV2Target]):
+        class UnprojectedResource(Component[ComponentsV2Target]):
             @resource
             async def value(self) -> str:
                 return "loaded"
@@ -3496,7 +3497,7 @@ class TestResourceLoading:
         assert "resource_settle.atomic" in {span.name for span in trace.spans}
 
     async def test_cached_atomic_dependency_settles_before_the_refresh_render(self) -> None:
-        class KeyedAtomic(Component[sl.ComponentsV2Target]):
+        class KeyedAtomic(Component[ComponentsV2Target]):
             key: int = state(0)
 
             def __init__(self) -> None:
@@ -3535,7 +3536,7 @@ class TestResourceLoading:
         assert ("source", "cached") in {(attribute.key, attribute.value) for attribute in settle.attributes}
 
     async def test_dirty_ancestor_does_not_settle_a_removed_atomic_resource(self) -> None:
-        class Child(Component[sl.ComponentsV2Target]):
+        class Child(Component[ComponentsV2Target]):
             key: int = state(0)
 
             def __init__(self) -> None:
@@ -3552,7 +3553,7 @@ class TestResourceLoading:
                 assert isinstance(status, Ready)
                 return Text(str(status.value))
 
-        class Parent(Component[sl.ComponentsV2Target]):
+        class Parent(Component[ComponentsV2Target]):
             visible: bool = state(True)
 
             def __init__(self) -> None:
@@ -3573,7 +3574,7 @@ class TestResourceLoading:
         assert panel.child.loads == 1
 
     async def test_cached_atomic_siblings_settle_in_one_task_group(self) -> None:
-        class Child(Component[sl.ComponentsV2Target]):
+        class Child(Component[ComponentsV2Target]):
             key: int = state(0)
 
             def __init__(self) -> None:
@@ -3590,7 +3591,7 @@ class TestResourceLoading:
                 assert isinstance(status, Ready)
                 return Text(str(status.value))
 
-        class Parent(Component[sl.ComponentsV2Target]):
+        class Parent(Component[ComponentsV2Target]):
             def __init__(self) -> None:
                 self.children = (Child(), Child())
 
@@ -3618,7 +3619,7 @@ class TestResourceLoading:
         assert ("strategy", "task_group") in attributes
 
     async def test_mixed_render_sources_use_atomic_discovery_fallback(self) -> None:
-        class Mixed(Component[sl.ComponentsV2Target]):
+        class Mixed(Component[ComponentsV2Target]):
             key: int = state(0)
             label: str = state("first")
 
@@ -3683,7 +3684,7 @@ class TestResourceLoading:
     async def test_visible_siblings_load_concurrently(self) -> None:
         started = anyio.Event()
 
-        class Pair(Component[sl.ComponentsV2Target]):
+        class Pair(Component[ComponentsV2Target]):
             @resource
             async def first(self) -> str:
                 started.set()
@@ -3710,7 +3711,7 @@ class TestResourceLoading:
     async def test_settlement_loads_a_newly_revealed_nested_resource(self) -> None:
         loads: list[str] = []
 
-        class Child(Component[sl.ComponentsV2Target]):
+        class Child(Component[ComponentsV2Target]):
             @resource
             async def value(self) -> str:
                 loads.append("child")
@@ -3720,7 +3721,7 @@ class TestResourceLoading:
             def render(self):
                 return Text(f"child:{type(self.value.status).__name__}")
 
-        class Parent(Component[sl.ComponentsV2Target]):
+        class Parent(Component[ComponentsV2Target]):
             def __init__(self) -> None:
                 self.child = Child()
 
@@ -3752,7 +3753,7 @@ class TestResourceLoading:
 
         loads: list[str] = []
 
-        class Conditional(Component[sl.ComponentsV2Target]):
+        class Conditional(Component[ComponentsV2Target]):
             shown: bool = state(False)
 
             @resource
@@ -3853,7 +3854,7 @@ class TestResourceLoading:
         assert not panel.released.is_set(), "nothing had to release it, which is the point"
 
 
-class Leaf(Component[sl.ComponentsV2Target]):
+class Leaf(Component[ComponentsV2Target]):
     """A component that only knows what it renders once its `on_load` has run."""
 
     label: str = state("")
@@ -3873,12 +3874,12 @@ class Leaf(Component[sl.ComponentsV2Target]):
         return Text(self.label)
 
 
-class Host(Component[sl.ComponentsV2Target]):
+class Host(Component[ComponentsV2Target]):
     """A loading parent whose child is only reachable through its loaded render."""
 
     ready: bool = state(False)
 
-    def __init__(self, log: list[str], child: Component[sl.ComponentsV2Target]) -> None:
+    def __init__(self, log: list[str], child: Component[ComponentsV2Target]) -> None:
         self.log = log
         self.child = child
 
@@ -3890,7 +3891,7 @@ class Host(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.log.append("render:host")
-        nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("host")]
+        nodes: list[LayoutNode[ComponentsV2Target]] = [Text("host")]
         if self.ready:
             nodes.append(self.child.keyed("child"))
         return nodes
@@ -3952,7 +3953,7 @@ class TestDeferredExpansion:
         assert "render:child" in log
 
 
-class Nested(Component[sl.ComponentsV2Target]):
+class Nested(Component[ComponentsV2Target]):
     """A parent whose on_load reveals a child that also needs to load before rendering."""
 
     ready: bool = state(False)
@@ -3969,21 +3970,21 @@ class Nested(Component[sl.ComponentsV2Target]):
     @override
     def render(self):
         self.log.append("render:parent")
-        nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("parent")]
+        nodes: list[LayoutNode[ComponentsV2Target]] = [Text("parent")]
         if self.ready:
             nodes.append(self.child.keyed("child"))
         return nodes
 
 
-class Siblings(Component[sl.ComponentsV2Target]):
+class Siblings(Component[ComponentsV2Target]):
     """Two children that enter the tree together, so their loads share one task group."""
 
     def __init__(
         self,
         log: list[str],
         *,
-        first: Component[sl.ComponentsV2Target],
-        second: Component[sl.ComponentsV2Target],
+        first: Component[ComponentsV2Target],
+        second: Component[ComponentsV2Target],
     ) -> None:
         self.log = log
         self.first = first
@@ -4053,7 +4054,7 @@ class TestLoading:
     async def test_a_component_embedded_mid_session_loads_before_the_edit(self):
         log: list[str] = []
 
-        class OpenContext(Component[sl.ComponentsV2Target]):
+        class OpenContext(Component[ComponentsV2Target]):
             open: bool = state(False)
 
             def __init__(self) -> None:
@@ -4061,7 +4062,7 @@ class TestLoading:
 
             @override
             def render(self):
-                nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Row((Button("open", self.reveal, "open"),))]
+                nodes: list[LayoutNode[ComponentsV2Target]] = [Row((Button("open", self.reveal, "open"),))]
                 if self.open:
                     nodes.append(self.child.keyed("child"))
                 return nodes
@@ -4082,7 +4083,7 @@ class TestLoading:
     async def test_a_failed_load_delivers_nothing_and_stays_retryable(self):
         attempts: list[int] = []
 
-        class Flaky(Component[sl.ComponentsV2Target]):
+        class Flaky(Component[ComponentsV2Target]):
             label: str = state("")
 
             @override
@@ -4184,7 +4185,7 @@ class TestLoading:
     async def test_a_tree_declaring_no_loads_takes_no_extra_render(self):
         renders: list[int] = []
 
-        class Plain(Component[sl.ComponentsV2Target]):
+        class Plain(Component[ComponentsV2Target]):
             count: int = state(0)
 
             @override
@@ -4202,7 +4203,7 @@ class TestLoading:
         """Initial on_load hooks run before delivery, outside handler transactions."""
         seen: list[bool] = []
 
-        class Reader(Component[sl.ComponentsV2Target]):
+        class Reader(Component[ComponentsV2Target]):
             label: str = state("")
 
             @override
@@ -4221,7 +4222,7 @@ class TestLoading:
         assert seen == [False]
 
     async def test_a_load_that_never_settles_is_reported(self):
-        class Endless(Component[sl.ComponentsV2Target]):
+        class Endless(Component[ComponentsV2Target]):
             depth: int = state(0)
 
             def __init__(self) -> None:
@@ -4234,7 +4235,7 @@ class TestLoading:
 
             @override
             def render(self):
-                nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text(f"depth {self.depth}")]
+                nodes: list[LayoutNode[ComponentsV2Target]] = [Text(f"depth {self.depth}")]
                 if self.child is not None:
                     nodes.append(self.child.keyed("child"))
                 return nodes
@@ -4245,7 +4246,7 @@ class TestLoading:
             await message_root.send(delivered_to(message_harness()))
 
 
-class _GuardedPanel(Component[sl.ComponentsV2Target]):
+class _GuardedPanel(Component[ComponentsV2Target]):
     """One semantic action whose admission and busy policy the test supplies."""
 
     count: int = state(0)
@@ -4364,7 +4365,7 @@ class TestGuards:
     async def test_admission_runs_under_every_concurrency_policy(self):
         # A list rather than component state: PARALLEL_READ handlers may not write, and the
         # question here is whether the guard was consulted at all under each policy.
-        class Reader(Component[sl.ComponentsV2Target]):
+        class Reader(Component[ComponentsV2Target]):
             def __init__(self, mode: ActionMode) -> None:
                 self.mode = mode
                 self.presses: list[str] = []
@@ -4401,7 +4402,7 @@ class TestGuards:
         assert panel.count == 1
 
     async def test_a_guard_survives_the_collapse_of_a_row_into_a_select(self):
-        class Crowd(Component[sl.ComponentsV2Target]):
+        class Crowd(Component[ComponentsV2Target]):
             pressed: int = state(0)
 
             @override
@@ -4433,7 +4434,7 @@ class TestGuards:
         submitted = AsyncCallRecorder()
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
-        class Panel(Component[sl.ComponentsV2Target]):
+        class Panel(Component[ComponentsV2Target]):
             seen: int = state(0)
 
             @override
@@ -4508,7 +4509,7 @@ class TestBusyFeedback:
         release_lock = asyncio.Event()
         release_handler = asyncio.Event()
 
-        class Idle(Component[sl.ComponentsV2Target]):
+        class Idle(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl.action_controls(
@@ -4627,7 +4628,7 @@ class TestBusyFeedback:
 
         ran: list[bool] = []
 
-        class Idle(Component[sl.ComponentsV2Target]):
+        class Idle(Component[ComponentsV2Target]):
             @override
             def render(self):
                 return sl.action_controls(
@@ -4665,7 +4666,7 @@ class TestBusyFeedback:
         assert interaction.response.edit_message.await_count == 0
 
 
-class _ActionsOnly(Component[sl.ComponentsV2Target]):
+class _ActionsOnly(Component[ComponentsV2Target]):
     @override
     def render(self):
         return sl.action_controls(sl.action_control("Go", self.go, key="go"), key="actions")
@@ -4673,7 +4674,7 @@ class _ActionsOnly(Component[sl.ComponentsV2Target]):
     async def go(self, event: PressEvent) -> None: ...
 
 
-class _OverlongText(Component[sl.ComponentsV2Target]):
+class _OverlongText(Component[ComponentsV2Target]):
     @override
     def render(self):
         return Text("x" * 5000)

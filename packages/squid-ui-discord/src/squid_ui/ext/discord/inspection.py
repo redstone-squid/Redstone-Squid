@@ -28,6 +28,7 @@ from squid_ui.ext.discord.limits import (
     V2Limits,
 )
 from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload
+from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning.resources import ResourceCost
 
 type Path = tuple[int, ...]
@@ -267,17 +268,17 @@ def measure_classic(
     embed_text = sum(len(embed) for embed in host.embeds)
     files = attachments + len(host.assets)
     common = {
-        Axis.EMBED_TEXT: embed_text,
-        Axis.EMBEDS: len(host.embeds),
+        DiscordAxis.EMBED_TEXT: embed_text,
+        DiscordAxis.EMBEDS: len(host.embeds),
         Axis.ROWS: len({*rows}),
         Axis.CONTROLS: controls,
         Axis.ATTACHMENTS: files,
     }
     content = host.content
-    usage = ResourceCost({**common, Axis.CONTENT_TEXT: len(content or "")})
+    usage = ResourceCost({**common, DiscordAxis.CONTENT_TEXT: len(content or "")})
     # All or nothing: a host that set `content` at all owns the whole slot, because a
     # message has one content field and Squid cannot append to someone else's.
-    reserved = ResourceCost({**common, Axis.CONTENT_TEXT: limits.content if content is not None else 0})
+    reserved = ResourceCost({**common, DiscordAxis.CONTENT_TEXT: limits.content if content is not None else 0})
 
     return MessageReservation(
         usage=usage,

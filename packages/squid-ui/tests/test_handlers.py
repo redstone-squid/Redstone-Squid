@@ -29,7 +29,7 @@ from squid_ui.planning.interaction_handlers import (
     SelectEntityFallback,
     ToggleDetails,
 )
-from squid_ui.planning.pagination.navigation import _SeekSelection
+from squid_ui.planning.pagination.navigation import SeekPageSelection
 from squid_ui.presentation import PresentationState
 
 
@@ -184,7 +184,7 @@ class SeekCallback:
 
 def test_component_seek_callback_is_opaque() -> None:
     callback = SeekCallback({"unrelated": registration("elsewhere")})
-    adapter = _SeekSelection(callback)
+    adapter = SeekPageSelection(callback)
     actions = {"seek": ActionBinding("seek", adapter)}
     selected, _ = bind_handlers(actions, {}, "html")
     assert selected is actions

@@ -14,8 +14,10 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.help_cog import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
 from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.navigation_controls import default_nav
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
-from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.testing import labels, texts, walk
 
 
@@ -255,19 +257,19 @@ def test_long_command_help_pages_without_truncating_its_description() -> None:
 
     rendered = HelpScreen(_client(), [verbose], "verbose").render()
     result = sl.planning.plan(
-        cast(sl.DocumentLike[sl.ComponentsV2Target], rendered), target=sd.DISCORD_V2_DPY27, nav=default_nav
+        cast(sl.DocumentLike[ComponentsV2Target], rendered), target=sd.DISCORD_V2_DPY27, nav=default_nav
     )
     assert result.allocation is not None
     region = next(iter(result.allocation.regions))
     content: list[str] = []
     for index in range(len(result.allocation.regions[region].cuts)):
         page = result.allocation.select({region: index})
-        panel = page.scene.components_v2.children[0]
-        assert isinstance(panel, sl.scene.Panel)
+        panel = page.scene.expect_body(discord_scene.ComponentsV2).children[0]
+        assert isinstance(panel, discord_scene.Panel)
         heading, paragraph = panel.children[:2]
-        assert isinstance(heading, sl.scene.Text)
+        assert isinstance(heading, discord_scene.Text)
         assert "/verbose" in heading.content
-        assert isinstance(paragraph, sl.scene.Text)
+        assert isinstance(paragraph, discord_scene.Text)
         content.append(paragraph.content)
     assert len(content) > 1
     assert "".join(content) == description

@@ -14,6 +14,7 @@ from squid_ui.authoring.semantic import NavigationDisplay
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionResponder, Actor, PressEvent, SelectionEvent
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
@@ -59,12 +60,12 @@ async def test_destination_callbacks_preserve_controlled_ownership(
         await result.bindings["destinations.b"].handler(
             PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None)
         )
-        if isinstance(result.scene.body, scene.HtmlBody):
+        if isinstance(result.scene.body, html_scene.HtmlBody):
             nav = result.scene.body.children[0]
-            assert isinstance(nav, scene.HtmlElement) and nav.tag == scene.HtmlTag.NAV
+            assert isinstance(nav, html_scene.HtmlElement) and nav.tag == html_scene.HtmlTag.NAV
             current = nav.children[0]
-            assert isinstance(current, scene.HtmlElement)
-            assert scene.HtmlAttribute(scene.HtmlAttributeName.ARIA_CURRENT, "page") in current.attributes
+            assert isinstance(current, html_scene.HtmlElement)
+            assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ARIA_CURRENT, "page") in current.attributes
     else:
         binding = next(iter(result.bindings.values()))
         await binding.handler(SelectionEvent(Actor("reader"), Mock(spec=ActionResponder), values=("b",), context=None))

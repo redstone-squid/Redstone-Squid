@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.scene import Codec
+
+# Importing these vocabularies registers the schemas included in this artifact.
+_SCENE_VOCABULARIES = (discord_scene, html_scene, slack_scene)
 
 
 def main() -> None:

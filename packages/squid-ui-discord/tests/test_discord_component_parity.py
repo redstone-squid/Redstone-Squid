@@ -8,11 +8,9 @@ from squid_ui.authoring.presentations import Replacement, corresponds, losses, r
 from squid_ui.content.emoji import Emoji
 from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V2_DPY27, classic, render_static
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
-from squid_ui.ext.discord.testing import without_capabilities
-from squid_ui.planning import plan
-from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     Gallery,
     GalleryItem,
     LinkButton,
@@ -24,6 +22,9 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
+from squid_ui.ext.discord.testing import without_capabilities
+from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointUnsupportedError
 
 
 def test_v2_draws_premium_links_select_emoji_and_media_metadata() -> None:
@@ -77,13 +78,13 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
         1,
         "discord.components-v2",
         1,
-        scene.ComponentsV2(
+        discord_scene.ComponentsV2(
             (
-                scene.Panel(
+                discord_scene.Panel(
                     (
-                        scene.PremiumButton(sku_id=42),
-                        scene.Gallery(
-                            (scene.GalleryItem("https://example.invalid/image.png", "preview", spoiler=True),)
+                        discord_scene.PremiumButton(sku_id=42),
+                        discord_scene.Gallery(
+                            (discord_scene.GalleryItem("https://example.invalid/image.png", "preview", spoiler=True),)
                         ),
                     ),
                     spoiler=True,
@@ -124,4 +125,6 @@ def test_non_discord_target_requires_explicit_premium_fallback() -> None:
         target=target,
     )
 
-    assert result.scene.components_v2.children == (scene.Text("Purchase unavailable", markup=Markup.DISCORD_MARKDOWN),)
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("Purchase unavailable", markup=Markup.DISCORD_MARKDOWN),
+    )

@@ -14,6 +14,8 @@ from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.native import NativeTraits, NativeValue
+from squid_ui.overflow import FIRST_PAGE, RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
@@ -34,8 +36,6 @@ from squid_ui.presentation import (
     RegionLayoutUpdate,
     RetainedCompositionUpdate,
 )
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import FIRST_PAGE, Paginate, RoutedPage
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,14 +172,11 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             )
             if (
                 authored is not None
-                and isinstance(
-                    authored.value,
-                    primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code,
-                )
-                and isinstance(authored.value.overflow, Paginate)
+                and isinstance(authored.value, NativeValue)
+                and (pagination := NativeTraits.of(authored.value).pagination) is not None
             ):
-                owner = authored.value.overflow.page
-                content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
+                owner = pagination.page
+                content = authored.value.semantics.with_pagination(authored.value, replace(pagination, page=FIRST_PAGE))
             if authored is not None and isinstance(authored.value, Grid):
                 content = authored.value
             cursor_fingerprint = self._cursor_fingerprints.get(identity)
@@ -243,10 +240,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 )
                 retained.update(key for key in keys if key in request.presentation.cursors)
             if not isinstance(unit.value, Region | Paged | List | Navigation | Grid) and not (
-                isinstance(
-                    unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
-                )
-                and isinstance(unit.value.overflow, Paginate)
+                NativeTraits.of(unit.value).pagination is not None
             ):
                 continue
             parent = unit.parent
@@ -261,11 +255,8 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 nested_region |= isinstance(ancestor.value, Region)
                 parent = ancestor.parent
             if hidden:
-                if isinstance(
-                    unit.value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
-                ):
-                    assert isinstance(unit.value.overflow, Paginate)
-                    key = unit.value.overflow.key or region_cursor_key(
+                if (pagination := NativeTraits.of(unit.value).pagination) is not None:
+                    key = pagination.key or region_cursor_key(
                         SemanticOccurrence(OccurrenceId(reference.keys), graph, reference)
                     )
                 else:
@@ -277,6 +268,8 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                         else f"{unit.value.key}.cells"
                         if isinstance(unit.value, Grid)
                         else unit.value.key
+                        if isinstance(unit.value, Paged | List)
+                        else ""
                     )
                 if key in request.presentation.cursors:
                     retained.add(key)

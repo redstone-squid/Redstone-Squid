@@ -23,7 +23,7 @@ from squid_i18n import (
     timestamp_text,
     tr,
 )
-from squid_ui import scene
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.html._text import html_text
 
 
@@ -126,5 +126,5 @@ def test_literal_code_and_link_destinations_cannot_inject_structure() -> None:
 
 def test_discord_only_content_lowers_to_literal_html_text() -> None:
     content = "**bold** <script>alert(1)</script> <@123>"
-    assert html_text(resolve_text(discord_markup(content), Localization()).nodes) == scene.HtmlText(content)
-    assert html_text(resolve_text(emoji_text("<a:squid:123>"), Localization()).nodes) == scene.HtmlText(":squid:")
+    assert html_text(resolve_text(discord_markup(content), Localization()).nodes) == html_scene.HtmlText(content)
+    assert html_text(resolve_text(emoji_text("<a:squid:123>"), Localization()).nodes) == html_scene.HtmlText(":squid:")

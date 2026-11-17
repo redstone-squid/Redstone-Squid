@@ -1,16 +1,17 @@
 """Discord Components V2 composition dialect."""
 
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.input import V2Input
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.planning.composition_planner import RuleComposition
 from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.pagination.navigation import PlannedNav
-from squid_ui.target_types import ComponentsV2Target
 
 
 class V2Dialect:
@@ -21,12 +22,12 @@ class V2Dialect:
     capabilities = frozenset(
         {
             Capability.ACTIONS_BUTTONS,
-            Capability.ACTIONS_DISCORD_PREMIUM,
+            DiscordCapability.ACTIONS_PREMIUM,
             Capability.ACTIONS_SELECT,
             Capability.ACTIONS_ENTITY,
-            Capability.FORMS_DISCORD_ENTITY,
-            Capability.FORMS_DISCORD_FILE,
-            Capability.FORMS_DISCORD_CHECKBOX_GROUP,
+            DiscordCapability.FORMS_ENTITY,
+            DiscordCapability.FORMS_FILE,
+            DiscordCapability.FORMS_CHECKBOX_GROUP,
             Capability.FORMS_MODAL,
             Capability.LAYOUT_CONTAINER,
             Capability.LAYOUT_GALLERY,

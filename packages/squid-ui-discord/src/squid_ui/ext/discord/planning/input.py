@@ -4,12 +4,12 @@ from dataclasses import replace
 from typing import Any, cast
 
 from squid_ui.content.text import resolve_text
+from squid_ui.ext.discord.planning.native_extensions import ComposableExtension
+from squid_ui.ext.discord.primitives import nodes as primitive
+from squid_ui.overflow import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
 from squid_ui.planning.composition_input import InputPreparation
 from squid_ui.planning.dialect import NativeInput
-from squid_ui.planning.native_extensions import ComposableExtension
 from squid_ui.planning.semantic_index import UnsupportedSemanticError
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Alts, Condense, Drop, Never, Paginate, Spill, Truncate
 from squid_ui.target_types import Renderable
 
 

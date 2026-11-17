@@ -6,10 +6,10 @@ import re
 from collections.abc import Iterable
 from html import escape
 
-from squid_ui import scene
 from squid_ui.content.assets import Asset, InlineAsset, LocalAsset, StoredAsset
 from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.html import scene
 from squid_ui.ext.html.markup import markdown
 from squid_ui.ext.html.safety import attribute as _attribute
 from squid_ui.ext.html.safety import safe_url as _safe_url

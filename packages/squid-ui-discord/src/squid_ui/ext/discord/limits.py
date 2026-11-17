@@ -16,7 +16,8 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Self, override
 
-from squid_ui.planning.resources import TEXT_AXES as TEXT_AXES
+from squid_ui.ext.discord.resources import TEXT_AXES as TEXT_AXES
+from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning.resources import Axis as Axis
 
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
@@ -216,9 +217,9 @@ class ClassicLimits(MessageLimits):
     @override
     def capacities(self) -> Mapping[Axis, int]:
         return {
-            Axis.CONTENT_TEXT: self.content,
-            Axis.EMBED_TEXT: self.embed_text,
-            Axis.EMBEDS: self.embed_count,
+            DiscordAxis.CONTENT_TEXT: self.content,
+            DiscordAxis.EMBED_TEXT: self.embed_text,
+            DiscordAxis.EMBEDS: self.embed_count,
             Axis.ROWS: self.rows,
             Axis.CONTROLS: self.controls,
             Axis.ATTACHMENTS: self.attachments,
@@ -228,9 +229,9 @@ class ClassicLimits(MessageLimits):
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
         return replace(
             self,
-            content=max(0, self.content - reductions.get(Axis.CONTENT_TEXT, 0)),
-            embed_text=max(0, self.embed_text - reductions.get(Axis.EMBED_TEXT, 0)),
-            embed_count=max(0, self.embed_count - reductions.get(Axis.EMBEDS, 0)),
+            content=max(0, self.content - reductions.get(DiscordAxis.CONTENT_TEXT, 0)),
+            embed_text=max(0, self.embed_text - reductions.get(DiscordAxis.EMBED_TEXT, 0)),
+            embed_count=max(0, self.embed_count - reductions.get(DiscordAxis.EMBEDS, 0)),
             rows=max(0, self.rows - reductions.get(Axis.ROWS, 0)),
             controls=max(0, self.controls - reductions.get(Axis.CONTROLS, 0)),
             attachments=max(0, self.attachments - reductions.get(Axis.ATTACHMENTS, 0)),
@@ -239,7 +240,7 @@ class ClassicLimits(MessageLimits):
     @property
     @override
     def text_axes(self) -> Mapping[Axis, int]:
-        return {Axis.CONTENT_TEXT: self.content, Axis.EMBED_TEXT: self.embed_text}
+        return {DiscordAxis.CONTENT_TEXT: self.content, DiscordAxis.EMBED_TEXT: self.embed_text}
 
     @override
     def fits_controls(self, controls: int, rows: int) -> bool:

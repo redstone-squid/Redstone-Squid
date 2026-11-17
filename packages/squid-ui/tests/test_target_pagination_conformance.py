@@ -9,13 +9,16 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits
+from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 
@@ -76,7 +79,7 @@ def test_classic_content_and_embed_pools_are_independent() -> None:
         composition=CompositionOptions(automatic=True),
     )
     body = result.scene.body
-    assert isinstance(body, scene.ClassicMessage)
+    assert isinstance(body, discord_scene.ClassicMessage)
     assert body.content == "outside"
     assert body.embeds[0].description == "inside"
 
@@ -103,10 +106,10 @@ def test_semantic_text_and_action_rows_share_the_production_route(target: Target
     for value in ("Heading", "Note", "print(1)", "Quote", "Label", "Value"):
         assert value in wire
     assert len(result.bindings) == 7
-    if isinstance(result.scene.body, scene.ClassicMessage):
+    if isinstance(result.scene.body, discord_scene.ClassicMessage):
         assert [len(row.controls) for row in result.scene.body.rows] == [5, 2]
-    if isinstance(result.scene.body, scene.ComponentsV2):
-        assert [len(row.items) for row in result.scene.body.children if isinstance(row, scene.Row)] == [5, 2]
+    if isinstance(result.scene.body, discord_scene.ComponentsV2):
+        assert [len(row.items) for row in result.scene.body.children if isinstance(row, discord_scene.Row)] == [5, 2]
 
 
 @pytest.mark.parametrize("target", TARGETS[:3], ids=lambda target: target.id)
@@ -191,9 +194,9 @@ def test_slack_list_continuations_do_not_insert_extra_separators() -> None:
     content: list[str] = []
     for index in range(2):
         body = result.allocation.select({identity: index}).scene.body
-        assert isinstance(body, scene.SlackMessage)
+        assert isinstance(body, slack_scene.SlackMessage)
         block = body.blocks[0]
-        assert isinstance(block, scene.SlackSection)
+        assert isinstance(block, slack_scene.SlackSection)
         assert block.text is not None
         content.append(block.text.content)
     assert "".join(content) == "• " + "x" * 200
@@ -214,11 +217,11 @@ def test_repeated_media_deduplicates_its_attachment(target: Target[Any, Any, Any
 
 
 def test_classic_count_based_primitive_pages_use_its_own_text_pool() -> None:
-    node = sl.primitives.Lines(("first", "second"), overflow=sl.primitives.Paginate(key="lines", per=1))
+    node = primitives.Lines(("first", "second"), overflow=primitives.Paginate(key="lines", per=1))
     result = plan(node, target=classic_target(DISCORD), nav=default_nav)
     assert result.allocation is not None
     assert result.scene.pagers[0].pages == 2
-    assert isinstance(result.scene.body, scene.ClassicMessage)
+    assert isinstance(result.scene.body, discord_scene.ClassicMessage)
     assert "first" in (result.scene.body.content or "")
 
 

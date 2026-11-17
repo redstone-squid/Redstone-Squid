@@ -2,19 +2,19 @@
 
 from typing import override
 
-import squid_ui as sl
 from squid_ui import Component
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.navigation import StackNavigator
+from squid_ui.ext.discord.primitives import Heading, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
-from squid_ui.primitives import Heading, Text
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.selectors import index_tree, query, select
 
 
-class Screen(Component[sl.ComponentsV2Target]):
+class Screen(Component[ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -55,7 +55,7 @@ async def test_home_appears_only_when_deep():
 async def test_child_state_changes_rerender_through_the_shared_root():
     from squid_ui import state
 
-    class Counting(Component[sl.ComponentsV2Target]):
+    class Counting(Component[ComponentsV2Target]):
         count: int = state(0)
 
         @override

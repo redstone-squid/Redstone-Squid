@@ -82,7 +82,7 @@ def text_fragments(nodes: tuple[tree.Node, ...], size: int) -> tuple[tuple[tree.
         end = ends[max(0, index)]
         if end <= start:
             end = ends[bisect_right(ends, start)]
-        fragments.append(_slice(nodes, start, end))
+        fragments.append(slice_text(nodes, start, end))
         start = end
     return tuple(fragments)
 
@@ -103,7 +103,7 @@ def join_text(left: tuple[tree.Node, ...], right: tuple[tree.Node, ...]) -> tupl
     return (*left, *right)
 
 
-def _slice(nodes: tuple[tree.Node, ...], start: int, end: int) -> tuple[tree.Node, ...]:
+def slice_text(nodes: tuple[tree.Node, ...], start: int, end: int) -> tuple[tree.Node, ...]:
     """Slice the visible code points of supported inline text without dropping its styling."""
     result: list[tree.Node] = []
     offset = 0
@@ -114,7 +114,7 @@ def _slice(nodes: tuple[tree.Node, ...], start: int, end: int) -> tuple[tree.Nod
             if left == 0 and right == length:
                 result.append(node)
             elif node.children:
-                result.append(replace(node, children=_slice(node.children, left, right)))
+                result.append(replace(node, children=slice_text(node.children, left, right)))
             else:
                 result.append(replace(node, content=node.content[left:right]))
         offset += length
@@ -156,6 +156,6 @@ def resolve_presentation_text[RenderTargetT, ContextT](
                 end = max(end for end in ends if end <= part.max_chars)
             else:
                 start = min(end for end in ends if end >= length - part.max_chars)
-            nodes = _slice(nodes, start, end)
+            nodes = slice_text(nodes, start, end)
         fragments.append(ResolvedFragment(reference, nodes, start, end, length))
     return ResolvedText(presentation, tuple(fragments))

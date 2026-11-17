@@ -9,10 +9,12 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
-from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionResponder, Actor, EntitySelectionEvent, SelectionEvent
 from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUnsupportedError, OccurrenceId, plan
@@ -51,21 +53,21 @@ async def test_native_entity_picker_keeps_controlled_defaults_and_dispatch(targe
     assert not changes and not session.selections
     assert set(result.bindings) == {"people"}
     match result.scene.body:
-        case scene.ComponentsV2(children=children):
-            assert isinstance(children[0], scene.EntitySelect)
+        case discord_scene.ComponentsV2(children=children):
+            assert isinstance(children[0], discord_scene.EntitySelect)
             assert children[0].default_values == (ADA,)
-        case scene.ClassicMessage(rows=rows):
-            assert isinstance(rows[0].controls[0], scene.EntitySelect)
+        case discord_scene.ClassicMessage(rows=rows):
+            assert isinstance(rows[0].controls[0], discord_scene.EntitySelect)
             assert rows[0].controls[0].default_values == (ADA,)
-        case scene.HtmlBody(children=children):
+        case html_scene.HtmlBody(children=children):
             control = children[0]
-            assert isinstance(control, scene.HtmlElement)
-            assert scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, ADA.encode()) in control.attributes
-        case scene.SlackMessage(blocks=blocks) | scene.SlackHomeView(blocks=blocks):
-            assert isinstance(blocks[0], scene.SlackActions)
+            assert isinstance(control, html_scene.HtmlElement)
+            assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.VALUE, ADA.encode()) in control.attributes
+        case slack_scene.SlackMessage(blocks=blocks) | slack_scene.SlackHomeView(blocks=blocks):
+            assert isinstance(blocks[0], slack_scene.SlackActions)
             control = blocks[0].elements[0]
-            assert isinstance(control, scene.SlackSelect)
-            assert control.kind == scene.SlackSelectKind.USERS
+            assert isinstance(control, slack_scene.SlackSelect)
+            assert control.kind == slack_scene.SlackSelectKind.USERS
             assert control.initial_values == ("1",)
     await result.bindings["people"].handler(
         EntitySelectionEvent(Actor("reader"), Mock(spec=ActionResponder), values=(GRACE,), context=None)
@@ -115,10 +117,10 @@ async def test_slack_role_fallback_dispatches_typed_entities(target: Target[Any,
     )
     result = plan(node, target=target)
     block = result.scene.body.blocks[0]
-    assert isinstance(block, scene.SlackActions)
+    assert isinstance(block, slack_scene.SlackActions)
     control = block.elements[0]
-    assert isinstance(control, scene.SlackSelect)
-    assert control.kind == scene.SlackSelectKind.STATIC
+    assert isinstance(control, slack_scene.SlackSelect)
+    assert control.kind == slack_scene.SlackSelectKind.STATIC
     await result.bindings["roles"].handler(
         SelectionEvent(Actor("reader"), Mock(spec=ActionResponder), values=(role.encode(),), context=None)
     )
@@ -150,10 +152,10 @@ def test_slack_conversation_filters_survive_shared_composition(target: Target[An
         sl.entities(key="rooms", entity_type=EntityType.CONVERSATION, conversation_types=filters), key="r", title="R"
     )
     result = plan(node, target=target)
-    assert isinstance(result.scene.body.blocks[0], scene.SlackActions)
+    assert isinstance(result.scene.body.blocks[0], slack_scene.SlackActions)
     selector = result.scene.body.blocks[0].elements[0]
-    assert isinstance(selector, scene.SlackSelect)
-    assert selector.kind == scene.SlackSelectKind.CONVERSATIONS
+    assert isinstance(selector, slack_scene.SlackSelect)
+    assert selector.kind == slack_scene.SlackSelectKind.CONVERSATIONS
     assert selector.conversation_types == filters
 
 

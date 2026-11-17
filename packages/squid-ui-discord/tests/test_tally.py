@@ -7,7 +7,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.selectors import query, select
 
 OPTIONS = (
@@ -18,7 +18,7 @@ OPTIONS = (
 
 def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    text = [match.node.content for match in query(result.scene, select(scene.Text)).all()]
+    text = [match.node.content for match in query(result.scene, select(discord_scene.Text)).all()]
 
     assert any(value.startswith("Yes:") and value.endswith("75%") for value in text)
     assert any(value.startswith("No:") and value.endswith("25%") for value in text)
@@ -33,7 +33,7 @@ async def test_mounted_tally_dispatches_the_selected_value() -> None:
         seen.append(event)
 
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    picker = query(result.scene, select(scene.Select)).all()[0].node
+    picker = query(result.scene, select(discord_scene.Select)).all()[0].node
     await result.bindings[picker.action].handler(
         sl.SelectionEvent(
             sl.interactions.Actor("7"),
@@ -60,7 +60,7 @@ def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
         sl.tally(OPTIONS, key="vote", route_id="poll:vote"),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    picker = query(result.scene, select(scene.RoutedSelect)).all()[0].node
+    picker = query(result.scene, select(discord_scene.RoutedSelect)).all()[0].node
 
     assert picker.route_id == "poll:vote"
     assert [option.value for option in picker.options] == ["yes", "no"]
@@ -82,5 +82,5 @@ def test_tally_uses_host_wording() -> None:
     result = sl.planning.plan(
         sl.tally(OPTIONS, key="vote", chrome=chrome), target=squid_ui.ext.discord.DISCORD_V2_DPY27
     )
-    text = [match.node.content for match in query(result.scene, select(scene.Text)).all()]
+    text = [match.node.content for match in query(result.scene, select(discord_scene.Text)).all()]
     assert any("✅ **Yes**: 3 votes" in value for value in text)

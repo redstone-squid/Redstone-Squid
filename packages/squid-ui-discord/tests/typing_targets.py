@@ -8,24 +8,23 @@ compatibility is checked separately in typing_renderers.py.
 from typing import Any, assert_type
 
 import squid_ui.ext.html as html
-from squid_ui import RenderTarget, fallback, scene
+from squid_ui import RenderTarget, fallback
 from squid_ui.authoring.semantic import FallbackContent, Paragraph
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import Card, Panel, Text, Variants
 from squid_ui.ext.discord.target import classic, v2
-from squid_ui.ext.discord.target_types import DiscordAdapter, DiscordPy27Adapter, DiscordPyAdapter
-from squid_ui.planning import (
-    AdapterProfile,
+from squid_ui.ext.discord.target_types import (
     ClassicTarget,
     ComponentsV2Target,
-    PlanCache,
-    PlanningSnapshot,
-    Renderable,
-    Target,
-    plan,
+    DiscordAdapter,
+    DiscordPy27Adapter,
+    DiscordPyAdapter,
 )
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.planning import AdapterProfile, PlanCache, PlanningSnapshot, Renderable, Target, plan
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import Card, Panel, Text, Variants
 
 
 class Portable(Renderable[RenderTarget]):
@@ -52,28 +51,28 @@ assert_type(discord_py_27, AdapterProfile[DiscordPy27Adapter])
 assert_type(dynamic, AdapterProfile[DiscordAdapter])
 assert_type(
     components_v2_target(discord_py),
-    Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter],
+    Target[V2Limits, discord_scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter],
 )
 assert_type(
     classic_target(discord_py_27),
-    Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPy27Adapter],
+    Target[ClassicLimits, discord_scene.ClassicMessage, ClassicTarget, DiscordPy27Adapter],
 )
 assert_type(
     v2(),
-    Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPy27Adapter],
+    Target[V2Limits, discord_scene.ComponentsV2, ComponentsV2Target, DiscordPy27Adapter],
 )
 assert_type(
     classic(adapter=discord_py),
-    Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter],
+    Target[ClassicLimits, discord_scene.ClassicMessage, ClassicTarget, DiscordPyAdapter],
 )
-assert_type(plan(Text("v2"), target=v2()), PlanResult[scene.ComponentsV2])
-assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMessage])
-assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.ComponentsV2])
-assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
+assert_type(plan(Text("v2"), target=v2()), PlanResult[discord_scene.ComponentsV2])
+assert_type(plan(Text("classic"), target=classic()), PlanResult[discord_scene.ClassicMessage])
+assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[discord_scene.ComponentsV2])
+assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[html_scene.HtmlBody])
 plan(Text("primitive"), target=html.target())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 shared_cache = PlanCache()
-html_memo = PlanningSnapshot[scene.HtmlBody]()
+html_memo = PlanningSnapshot[html_scene.HtmlBody]()
 plan(Paragraph("html"), target=html.target(), cache=shared_cache, snapshot=html_memo)
 plan(Paragraph("discord"), target=v2(), cache=shared_cache)
 plan(Paragraph("discord"), target=v2(), snapshot=html_memo)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]

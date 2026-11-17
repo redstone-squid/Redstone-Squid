@@ -13,8 +13,8 @@ from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import PageOwnership, Paginate
+from squid_ui.native import NativeNode
+from squid_ui.overflow import PageOwnership
 from squid_ui.target_types import Renderable
 
 type AllocationNode = (
@@ -195,72 +195,7 @@ class _AllocationComparison:
                 _,
             ):
                 return left == right
-            case (
-                primitive.Row()
-                | primitive.ControlGroup()
-                | primitive.Button()
-                | primitive.RoutedButton()
-                | primitive.LinkButton()
-                | primitive.PremiumButton()
-                | primitive.SelectMenu()
-                | primitive.RoutedSelect()
-                | primitive.EntitySelect(),
-                _,
-            ):
-                return left == right
-            case (
-                (primitive.Panel() | primitive.Budget() | primitive.Break()),
-                (primitive.Panel() | primitive.Budget() | primitive.Break()),
-            ):
-                return replace(left, children=()) == replace(right, children=()) and self.same_children(
-                    left.children, right.children
-                )
-            case primitive.Section(), primitive.Section():
-                return self.same_children(left.texts, right.texts) and self.same_node(left.accessory, right.accessory)
-            case (
-                (
-                    primitive.Thumbnail()
-                    | primitive.Sep()
-                    | primitive.Time()
-                    | primitive.ZonedTime()
-                    | primitive.Gallery()
-                    | primitive.Card()
-                    | primitive.MediaCollection()
-                    | primitive.File()
-                ),
-                _,
-            ):
-                return left == right
-            case (
-                (
-                    primitive.Lines(overflow=Paginate() as a)
-                    | primitive.Content(overflow=Paginate() as a)
-                    | primitive.Text(overflow=Paginate() as a)
-                    | primitive.Heading(overflow=Paginate() as a)
-                    | primitive.Footer(overflow=Paginate() as a)
-                    | primitive.Code(overflow=Paginate() as a)
-                ),
-                (
-                    primitive.Lines(overflow=Paginate() as b)
-                    | primitive.Content(overflow=Paginate() as b)
-                    | primitive.Text(overflow=Paginate() as b)
-                    | primitive.Heading(overflow=Paginate() as b)
-                    | primitive.Footer(overflow=Paginate() as b)
-                    | primitive.Code(overflow=Paginate() as b)
-                ),
-            ):
-                return replace(left, overflow=replace(a, page=self._page_configuration(a.page))) == replace(
-                    right, overflow=replace(b, page=self._page_configuration(b.page))
-                )
-            case (
-                primitive.Content()
-                | primitive.Text()
-                | primitive.Heading()
-                | primitive.Footer()
-                | primitive.Code()
-                | primitive.Lines(),
-                _,
-            ):
-                return left == right
+            case NativeNode(), NativeNode():
+                return left.semantics.same_allocation(left, right, self)
             case _:
                 return False

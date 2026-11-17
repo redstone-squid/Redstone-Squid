@@ -12,6 +12,8 @@ from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid_i18n import discord_markup
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
@@ -21,7 +23,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.LayoutNode[sl.ComponentsV2Target, sd.Request],
+    card: sl.LayoutNode[ComponentsV2Target, sd.Request],
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> sd.messages.payload.MessagePayload:
@@ -55,15 +57,15 @@ def render_build_review(
         )
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
-    state = (sd.v2.separator(), sd.v2.text(vote_text, overflow=sl.primitives.Never()))
+    state = (sd.v2.separator(), sd.v2.text(vote_text, overflow=primitives.Never()))
     # Add vote state to the card's children to keep one container and one shared
     # display budget for build fields and voting instructions.
     if isinstance(card, sl.semantic.Section):
-        post: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = dataclasses.replace(
+        post: sl.LayoutNode[ComponentsV2Target, sd.Request] = dataclasses.replace(
             card, children=(*card.children, *state)
         )
-    elif isinstance(card, sl.primitives.Panel):
-        children = cast(tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...], card.children)
+    elif isinstance(card, primitives.Panel):
+        children = cast(tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...], card.children)
         post = sd.v2.panel(*children, *state, accent=card.accent)
     else:
         # Other node types have no container children to extend.
@@ -132,14 +134,14 @@ def render_generic_poll(
 def _generic_poll_nodes(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int],
-) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
     """Build the semantic content for a generic poll without its controls."""
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
     options = snapshot.options_for_guild(poll.guild_id or 0)
-    nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [sl.heading(sl.plain(poll.question))]
+    nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [sl.heading(sl.plain(poll.question))]
 
     if show_totals:
         raw = snapshot.raw_tallies()

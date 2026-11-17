@@ -13,6 +13,7 @@ import squid_ui as sl
 from squid_reactivity import CellAddress
 from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, message_harness
 
 
@@ -40,7 +41,7 @@ class Catalog(sl.Reactive):
         return f"{self.key}#{self._loads}"
 
 
-class Reader(sl.Component[sl.ComponentsV2Target]):
+class Reader(sl.Component[ComponentsV2Target]):
     def __init__(self, catalog: Catalog) -> None:
         self.catalog = catalog
 
@@ -97,7 +98,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
     scheduler = MessageRootScheduler(bus)
     prefs = Prefs()
 
-    class Panel(sl.Component[sl.ComponentsV2Target]):
+    class Panel(sl.Component[ComponentsV2Target]):
         @override
         def render(self):
             return sl.paragraph(prefs.full)
@@ -215,7 +216,7 @@ def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -
 
 def test_a_component_resource_has_an_identity_address() -> None:
 
-    class Panel(sl.Component[sl.ComponentsV2Target]):
+    class Panel(sl.Component[ComponentsV2Target]):
         @sl.resource
         async def value(self) -> str:
             return "loaded"
@@ -249,7 +250,7 @@ async def test_models_can_use_scope_and_bus_as_domain_names() -> None:
 async def test_failed_discovery_releases_new_model_reads() -> None:
     old, new = Prefs(), Prefs()
 
-    class BrokenChild(sl.Component[sl.ComponentsV2Target]):
+    class BrokenChild(sl.Component[ComponentsV2Target]):
         @override
         async def on_load(self) -> None:
             raise ValueError("load failed")
@@ -258,7 +259,7 @@ async def test_failed_discovery_releases_new_model_reads() -> None:
         def render(self):
             return sl.paragraph("unreachable")
 
-    class Switch(sl.Component[sl.ComponentsV2Target]):
+    class Switch(sl.Component[ComponentsV2Target]):
         changed: bool = sl.state(False)
 
         def __init__(self) -> None:

@@ -10,6 +10,7 @@ from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.recalculation_values import RecalculationProposal
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -41,7 +42,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         return cls(services, proposal, targets)
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         proposal = self.proposal
         if proposal.applied_revision is not None:
             build_id, revision = proposal.build_id, proposal.applied_revision
@@ -51,7 +52,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
             for name, value in proposal.after.items()
             if proposal.before.get(name) != value
         ]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.section(
                 sl.heading(tr(t"recalculation-heading = Review recalculation")),
                 sl.paragraph(

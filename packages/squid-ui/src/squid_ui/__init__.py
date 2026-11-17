@@ -28,7 +28,6 @@ from squid_ui import (
     pages,
     palette,
     planning,
-    primitives,
     profiling,
     resources,
     routing,
@@ -196,21 +195,10 @@ from squid_ui.interactions import forms as forms
 from squid_ui.interactions import guards as guards
 from squid_ui.interactions import ownership as ownership
 from squid_ui.interactions.handlers import handlers
+from squid_ui.overflow import PageEvent, RoutedPage
 from squid_ui.palette import INHERIT, Accent, AccentRole, Palette, PaletteRegistry, Role
-from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import (
-    ClassicTarget,
-    ComponentsV2Target,
-    DiscordTarget,
-    HtmlTarget,
-    Renderable,
-    RenderTarget,
-    SlackHomeTarget,
-    SlackMessageTarget,
-    SlackModalTarget,
-    SlackTarget,
-)
+from squid_ui.target_types import Renderable, RenderTarget
 
 __all__ = [
     "INHERIT",
@@ -222,13 +210,10 @@ __all__ = [
     "AtomicNode",
     "ChildLike",
     "ChoiceEvent",
-    "ClassicTarget",
     "Component",
-    "ComponentsV2Target",
     "Conditional",
     "ContextKey",
     "Correspondence",
-    "DiscordTarget",
     "Document",
     "DocumentLike",
     "DrawInvariantError",
@@ -238,7 +223,6 @@ __all__ = [
     "Fidelity",
     "FileInput",
     "Focusable",
-    "HtmlTarget",
     "InvalidSubmitEvent",
     "LayoutDegradedError",
     "LayoutError",
@@ -260,10 +244,6 @@ __all__ = [
     "ScaleEvent",
     "SelectionEvent",
     "SemanticRef",
-    "SlackHomeTarget",
-    "SlackMessageTarget",
-    "SlackModalTarget",
-    "SlackTarget",
     "SquidUiError",
     "SubmitEvent",
     "TextLike",
@@ -346,7 +326,6 @@ __all__ = [
     "plain",
     "planning",
     "present_text",
-    "primitives",
     "profiling",
     "progress",
     "quote",

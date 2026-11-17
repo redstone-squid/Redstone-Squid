@@ -13,12 +13,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import discord
-from squid_ui import scene
 from squid_ui.content.assets import Asset, StoredAsset
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import discord_text
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.conformance import LimitViolationError, conform
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
 from squid_ui.ext.discord.messages.attachments import attachment_assets
@@ -36,7 +38,7 @@ from squid_ui.ext.discord.rendering.controls import (
 )
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.result import PlanResult
 
 type Accessory = (
@@ -155,7 +157,7 @@ class _V2Program:
 
     @classmethod
     def from_scene(cls, document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
-        children = tuple(_compile_item(child) for child in document.components_v2.children)
+        children = tuple(_compile_item(child) for child in document.expect_body(discord_scene.ComponentsV2).children)
         return cls(children, any(map(_opaque, children)))
 
 
@@ -252,7 +254,7 @@ class V2Renderer:
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
         cache: RenderProgramCache | None = None,
     ) -> None:
-        require_discord_py_capability(adapter, AdapterCapability.RENDER_V2, "render Components V2")
+        require_discord_py_capability(adapter, DiscordAdapterCapability.RENDER_V2, "render Components V2")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory

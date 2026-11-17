@@ -16,6 +16,7 @@ from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.overflow import FIRST_PAGE, PageOwnership, RoutedPage, resolve_page
 from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.presentation import (
@@ -25,8 +26,6 @@ from squid_ui.presentation import (
     PresentationState,
     SessionUpdate,
 )
-from squid_ui.primitives.constraints import FIRST_PAGE, Never, PageOwnership, RoutedPage, resolve_page
-from squid_ui.primitives.nodes import Footer, Node
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,15 +148,6 @@ class CursorCoordinator:
                     requested=self.session.pending_positions.get(request.key),
                 )
             )
-
-    def controls(self, key: str, position: PagePosition, extent: int, owner: PageOwnership = FIRST_PAGE) -> list[Node]:
-        """Build mandatory numeric chrome and optional navigation for a cursor."""
-        if extent <= 1:
-            return []
-        result: list[Node] = [Footer(self.chrome.page_footer(position.page + 1, extent), overflow=Never())]
-        if self.nav is not None:
-            result.extend(self.nav(key, position.page, extent, self.chrome, owner))
-        return result
 
     @property
     def pagers(self) -> tuple[scene.Pager, ...]:

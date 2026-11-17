@@ -8,8 +8,8 @@ from collections.abc import Callable
 from typing import Any, override
 
 import discord
-from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.result import PlanResult

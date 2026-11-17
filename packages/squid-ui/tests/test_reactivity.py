@@ -7,8 +7,9 @@ from typing import Any, override
 import pytest
 
 from squid_reactivity.inspection import CellReport, inspect_cells
-from squid_ui import Component, DiscordTarget, state
-from squid_ui.primitives import Text
+from squid_ui import Component, state
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import DiscordTarget
 
 
 @dataclass(frozen=True, slots=True)

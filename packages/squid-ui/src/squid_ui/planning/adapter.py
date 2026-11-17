@@ -2,7 +2,6 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -47,25 +46,6 @@ def extension_capability(kind: str) -> str:
     return f"extension.{kind}"
 
 
-class AdapterCapability(StrEnum):
-    """Behavior supported by a renderer library.
-
-    Protocol capabilities describe what the target format can express. Adapter
-    capabilities describe the library behavior available to realize that format;
-    `Target.capabilities` combines both sets as strings.
-    """
-
-    RENDER_V2 = "adapter.discord.render.components-v2"
-    RENDER_CLASSIC = "adapter.discord.render.classic"
-    RENDER_HTML = "adapter.html.render"
-    RENDER_SLACK_HOME = "adapter.slack.render.home"
-    RENDER_SLACK_MESSAGE = "adapter.slack.render.message"
-    RENDER_SLACK_MODAL = "adapter.slack.render.modal"
-    DISPATCH = "adapter.discord.dispatch"
-    INTERACTION_DELIVERY = "adapter.discord.interaction-delivery"
-    MODAL_FORMS = "adapter.discord.modal-forms"
-
-
 @dataclass(frozen=True, slots=True)
 class AdapterProfile[AdapterT]:
     """Verified behavior supplied by one library family and version range."""
@@ -81,7 +61,7 @@ class AdapterProfile[AdapterT]:
     family: type[AdapterT]
     name: str
     version_expression: str
-    capabilities: frozenset[AdapterCapability] = frozenset()
+    capabilities: frozenset[str] = frozenset()
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
     """Extension adapters keyed by wire name. Each kind has its own payload and resource types."""
 

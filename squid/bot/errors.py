@@ -36,12 +36,13 @@ from squid.observability import (
 from squid_i18n import NUMBER, Markup, Text, current_localization, md, md_tr, resolve_text
 from squid_ui.content.text import NEUTRAL, TextLike, localization_scope
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
 _CORRELATION_ATTRIBUTE = "_squid_error_correlation_id"
-type ErrorResponder = Callable[[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]], Awaitable[None]]
+type ErrorResponder = Callable[[sl.LayoutNode[ComponentsV2Target, sd.Request]], Awaitable[None]]
 
 
 def _reports_from(client: object) -> ErrorReportService | None:
@@ -63,7 +64,7 @@ class ErrorNotice:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def to_node(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         """Build the composable Components V2 node for this error."""
         return error_node(self.title, self.detail)
 
@@ -346,7 +347,7 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
     would leave it spinning forever.
     """
 
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request]) -> None:
+    async def respond(node: sl.LayoutNode[ComponentsV2Target, sd.Request]) -> None:
         if request.deferred is None:
             await request.respond(node, audience="personal")
         else:
@@ -355,9 +356,7 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
     return respond
 
 
-def render_request_error(
-    request: sd.Request[Any], error: Exception
-) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
     """Render a failed command or component's notice in the request's locale."""
     return build_error_notice(error, request.localization.locale).to_node()
 

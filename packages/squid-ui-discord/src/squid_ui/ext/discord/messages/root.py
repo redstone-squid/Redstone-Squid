@@ -41,18 +41,18 @@ from squid_reactivity.transactions import (
     readonly_transaction,
     transaction,
 )
-from squid_ui import scene
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.semantic import Status
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.content.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.ext.discord import delivery as deliver
-from squid_ui.ext.discord import live
+from squid_ui.ext.discord import live, scene
 from squid_ui.ext.discord._shutdown import Shutdown
 from squid_ui.ext.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.adapter import require_discord_py_target
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.classic import render_message as render_classic_message
 from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.lifetime import DiscordUIRuntimeMissing, Lifetime
@@ -102,7 +102,9 @@ from squid_ui.ext.discord.messages.wiring import (
     _WiredButton,
     _WiredSelect,
 )
+from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
+from squid_ui.ext.discord.primitives.nodes import Button, Row
 from squid_ui.ext.discord.rendering.api import render_message
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
@@ -111,7 +113,7 @@ from squid_ui.ext.discord.rendering.controls import RoutedItem, RoutedSelectItem
 from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.discord.request import _resolve_request
-from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
@@ -130,20 +132,13 @@ from squid_ui.interactions import (
 from squid_ui.interactions.forms import FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.interactions.guards import Challenge, GuardLedger, approvals
 from squid_ui.palette import Palette
-from squid_ui.planning.adapter import (
-    AdapterCapability,
-)
-from squid_ui.planning.pagination.navigation import (
-    NAV_FACTORY_CONTEXT,
-    default_nav,
-)
+from squid_ui.planning.pagination.navigation import NAV_FACTORY_CONTEXT
 from squid_ui.planning.planner import plan as plan_document
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.planning.spread import plan_spread
 from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
     DispatchDisposition,
@@ -162,7 +157,6 @@ from squid_ui.runtime.definition import Component
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.tree import ComponentTree
-from squid_ui.target_types import ComponentsV2Target, DiscordTarget
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request
@@ -176,7 +170,7 @@ class _DiscordBinding:
 
     render_message: Callable[..., Any]
     mode: MessageMode
-    render_capability: AdapterCapability
+    render_capability: DiscordAdapterCapability
     renderer: Callable[[MessageRoot[Any, Any], float | None], MountedRenderer[Any]]
 
 
@@ -184,7 +178,7 @@ _BINDINGS: dict[str, _DiscordBinding] = {
     V2_TARGET_ID: _DiscordBinding(
         render_message=render_message,
         mode=MessageMode.COMPONENTS_V2,
-        render_capability=AdapterCapability.RENDER_V2,
+        render_capability=DiscordAdapterCapability.RENDER_V2,
         renderer=lambda message_root, timeout: V2Renderer(
             limits=message_root.limits,
             view_factory=lambda: MountedView(message_root, timeout),
@@ -194,7 +188,7 @@ _BINDINGS: dict[str, _DiscordBinding] = {
     CLASSIC_TARGET_ID: _DiscordBinding(
         render_message=render_classic_message,
         mode=MessageMode.CLASSIC,
-        render_capability=AdapterCapability.RENDER_CLASSIC,
+        render_capability=DiscordAdapterCapability.RENDER_CLASSIC,
         renderer=lambda message_root, timeout: ClassicRenderer(
             limits=message_root.limits,
             view_factory=lambda: ClassicMountedView(message_root, timeout),
@@ -473,8 +467,8 @@ class MessageRoot[
         self._binding = _binding_for(target)
         self.mode = self._binding.mode
         require_discord_py_target(target, self._binding.render_capability, "mount this message mode")
-        require_discord_py_target(target, AdapterCapability.DISPATCH, "dispatch mounted interactions")
-        require_discord_py_target(target, AdapterCapability.INTERACTION_DELIVERY, "deliver mounted interactions")
+        require_discord_py_target(target, DiscordAdapterCapability.DISPATCH, "dispatch mounted interactions")
+        require_discord_py_target(target, DiscordAdapterCapability.INTERACTION_DELIVERY, "deliver mounted interactions")
         """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = config.strict
         self.timeout = config.timeout

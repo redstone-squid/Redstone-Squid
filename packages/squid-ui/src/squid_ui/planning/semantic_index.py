@@ -3,21 +3,20 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal, cast
+from typing import Any, Literal, Protocol
 
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
-    Alternative,
     Alternatives,
     AtomicNode,
     Budget,
-    Fidelity,
     SemanticRef,
     TextPresentation,
 )
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot
 from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.native import NativeValue
 from squid_ui.planning.interaction_handlers import ForwardSelection
 from squid_ui.planning.interaction_semantics import (
     DisclosureToggle,
@@ -27,8 +26,6 @@ from squid_ui.planning.interaction_semantics import (
     NavigationChoice,
 )
 from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Alts, Paginate
 from squid_ui.target_types import Renderable
 
 
@@ -51,14 +48,6 @@ class TableCell:
 class FieldPart:
     part: Literal["label", "value"]
     content: TextLike
-
-
-@dataclass(frozen=True, slots=True)
-class CardSlot:
-    """Text in one named classic embed slot, which has its own character limit."""
-
-    kind: Literal["title", "field_name", "field_value", "footer", "author"]
-    text: primitive.Text
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,13 +82,13 @@ class ItemBranch[RenderTargetT, ContextT]:
 
 
 type EmbeddedValue[ContextT] = (
-    sem.Column
+    NativeValue
+    | sem.Column
     | sem.TableRow
     | sem.Field
     | sem.ListItem
     | sem.MediaItem
     | RosterMembers
-    | primitive.GalleryItem
     | sem.ControlGroup[ContextT]
     | Interaction[ContextT]
 )
@@ -113,34 +102,11 @@ type SemanticValue[RenderTargetT, ContextT] = (
     | AtomicNode[RenderTargetT, ContextT]
     | RosterSection
     | RosterLabel
-    | CardSlot
-    | primitive.Extension[Any, RenderTargetT]
-    | primitive.RawItem
-    | primitive.Card
-    | primitive.Content
     | TableCell
     | FieldPart
     | TextPresentation
     | StructuralGroup
     | ItemBranch[RenderTargetT, ContextT]
-    | primitive.Row[ContextT]
-    | primitive.ControlGroup[ContextT]
-    | primitive.Text
-    | primitive.Heading
-    | primitive.Footer
-    | primitive.Code
-    | primitive.Lines
-    | primitive.Section[ContextT]
-    | primitive.Budget[RenderTargetT, ContextT]
-    | primitive.Break[RenderTargetT, ContextT]
-    | primitive.Panel[ContextT]
-    | primitive.Gallery
-    | primitive.MediaCollection
-    | primitive.File
-    | primitive.Thumbnail
-    | primitive.Sep
-    | primitive.Time
-    | primitive.ZonedTime
 )
 
 
@@ -178,6 +144,8 @@ class SemanticGraph[RenderTargetT, ContextT]:
 
 
 def _key(value: object) -> str | None:
+    if isinstance(value, NativeValue):
+        return value.semantics.traits(value).key
     match value:
         case (
             sem.Group()
@@ -213,56 +181,51 @@ def _key(value: object) -> str | None:
             | sem.MediaItem()
             | TextPresentation()
             | Alternatives()
-            | primitive.Variants()
             | AtomicNode()
-            | primitive.Button()
-            | primitive.SelectMenu()
-            | primitive.EntitySelect()
         ):
             return value.key
-        case (
-            primitive.Lines(overflow=Paginate(key=key))
-            | primitive.Text(overflow=Paginate(key=key))
-            | primitive.Heading(overflow=Paginate(key=key))
-            | primitive.Footer(overflow=Paginate(key=key))
-            | primitive.Code(overflow=Paginate(key=key))
-        ):
-            return key
         case _:
             return None
 
 
-def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any, Any]:
-    """Expose native ladders through checked coverage and interaction declarations."""
-    choices: list[Alternative[Any, Any]] = []
-    for index, variant in enumerate(value.variants):
-        if variant.fidelity is primitive.Fidelity.LOSSY and variant.contract is None:
-            message = "lossy native Variants require an explicit Variant.contract"
-            raise UnsupportedSemanticError(message)
-        choices.append(
-            Alternative(
-                sem.Group[Any, Any](variant.nodes, key="@content"),
-                key=f"rung-{index}",
-                fidelity=variant.contract or Fidelity(),
-                preference=index
-                + len(value.variants)
-                * (
-                    2
-                    if variant.contract is not None and not variant.contract.lossless
-                    else 1
-                    if variant.fidelity is primitive.Fidelity.REFORMATTED
-                    else 0
-                ),
-                correspondence=variant.correspondence,
-                requires=variant.requires,
-            )
-        )
-    return Alternatives(
-        value.content or sem.Group[Any, Any](value.variants[0].nodes, key="@content"),
-        tuple(choices),
-        key=value.key or "@variants",
-        priority=value.priority,
-    )
+class GraphVisitor[RenderTargetT, ContextT](Protocol):
+    def __call__(
+        self,
+        value: Renderable[Any, ContextT] | EmbeddedValue[ContextT],
+        parent: SemanticRef | None,
+        index: int,
+        *,
+        name: str | None = None,
+    ) -> None: ...
+
+
+class SemanticIndexer[RenderTargetT, ContextT]:
+    """Build source identities while a target supplies native structural edges."""
+
+    visit: GraphVisitor[RenderTargetT, ContextT]
+
+    def __init__(
+        self, units: dict[SemanticRef, SemanticUnit[RenderTargetT, ContextT]], consume: Callable[[], None] | None
+    ) -> None:
+        self.units = units
+        self.consume = consume
+
+    def add(
+        self,
+        value: SemanticValue[RenderTargetT, ContextT],
+        path: tuple[str, ...],
+        parent: SemanticRef | None,
+        *,
+        atomic: bool,
+    ) -> SemanticRef:
+        if self.consume is not None:
+            self.consume()
+        reference = SemanticRef(path)
+        if reference in self.units:
+            message = f"duplicate semantic identity {path!r}"
+            raise LayoutInvariantError(message)
+        self.units[reference] = SemanticUnit(reference, value, parent, atomic)
+        return reference
 
 
 def semantic_graph[RenderTargetT, ContextT](
@@ -278,21 +241,8 @@ def semantic_graph[RenderTargetT, ContextT](
     """
     units: dict[SemanticRef, SemanticUnit[RenderTargetT, ContextT]] = {}
 
-    def add(
-        value: SemanticValue[RenderTargetT, ContextT],
-        path: tuple[str, ...],
-        parent: SemanticRef | None,
-        *,
-        atomic: bool,
-    ) -> SemanticRef:
-        if consume is not None:
-            consume()
-        reference = SemanticRef(path)
-        if reference in units:
-            message = f"duplicate semantic identity {path!r}"
-            raise LayoutInvariantError(message)
-        units[reference] = SemanticUnit(reference, value, parent, atomic)
-        return reference
+    indexer = SemanticIndexer[RenderTargetT, ContextT](units, consume)
+    add = indexer.add
 
     def visit(
         value: Renderable[Any, ContextT] | EmbeddedValue[ContextT],
@@ -303,15 +253,17 @@ def semantic_graph[RenderTargetT, ContextT](
     ) -> None:
         key = name or _key(value) or f"@{index}"
         path = (*(() if parent is None else parent.keys), key)
-        if isinstance(value, primitive.Variants):
-            value = variant_alternatives(value)
+        if isinstance(value, NativeValue):
+            alternate = value.semantics.alternatives(value)
+            if alternate is not None:
+                value = alternate
+            else:
+                value.semantics.index(value, indexer, path, parent)
+                return
         match value:
             case Alternatives():
                 root = add(value, path, parent, atomic=False)
                 visit(value.content, root, 0)
-            case primitive.Extension():
-                root = add(value, path, parent, atomic=False)
-                visit(cast(Renderable[RenderTargetT, ContextT], value.fallback), root, 0, name="@fallback")
             case sem.FallbackContent():
                 root = add(value, path, parent, atomic=False)
                 for i, branch in enumerate((value.primary, *value.alternates)):
@@ -447,89 +399,6 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, control in enumerate(value.items):
                     visit(control, root, i)
-            case primitive.Row() | primitive.ControlGroup():
-                root = add(value, path, parent, atomic=False)
-                for i, control in enumerate(value.items):
-                    visit(control, root, i)
-            case primitive.Content():
-                root = add(value, path, parent, atomic=False)
-                add(
-                    primitive.Text(value.content, overflow=value.overflow, priority=value.priority),
-                    (*path, "@text"),
-                    root,
-                    atomic=True,
-                )
-            case primitive.Card():
-                root = add(value, path, parent, atomic=False)
-                description = add(
-                    sem.Group[RenderTargetT, ContextT]((), key="@description"),
-                    (*path, "@description"),
-                    root,
-                    atomic=False,
-                )
-                for i, child in enumerate(value.children):
-                    visit(child, description, i)
-                if value.title is not None:
-                    add(CardSlot("title", primitive.card_text(value.title)), (*path, "@title"), root, atomic=True)
-                if value.footer is not None:
-                    add(
-                        CardSlot("footer", primitive.card_text(value.footer.text)),
-                        (*path, "@footer"),
-                        root,
-                        atomic=True,
-                    )
-                if value.author is not None:
-                    add(
-                        CardSlot("author", primitive.card_text(value.author.name)),
-                        (*path, "@author"),
-                        root,
-                        atomic=True,
-                    )
-                for i, entry in enumerate(value.fields):
-                    add(
-                        CardSlot("field_name", primitive.card_text(entry.name)),
-                        (*path, f"@field-{i}-name"),
-                        root,
-                        atomic=True,
-                    )
-                    add(
-                        CardSlot("field_value", primitive.card_text(entry.value)),
-                        (*path, f"@field-{i}-value"),
-                        root,
-                        atomic=True,
-                    )
-            case primitive.Gallery() | primitive.MediaCollection():
-                root = add(value, path, parent, atomic=False)
-                for i, item in enumerate(value.items):
-                    visit(primitive.normalize_gallery_item(item), root, i)
-            case primitive.Lines(overflow=Alts()):
-                # A whole-collection replacement supplies no per-line correspondence.
-                root = add(value, path, parent, atomic=True)
-            case primitive.Lines():
-                root = add(value, path, parent, atomic=False)
-                for i, line in enumerate(value.lines):
-                    visit(
-                        sem.ListItem(
-                            value.keys[i] if value.keys else f"@{i}", line.primary if isinstance(line, Alt) else line
-                        ),
-                        root,
-                        i,
-                    )
-            case primitive.Section():
-                root = add(value, path, parent, atomic=False)
-                for i, child in enumerate(value.texts):
-                    visit(child, root, i)
-                visit(value.accessory, root, len(value.texts), name="@accessory")
-            case primitive.Budget() | primitive.Break():
-                root = add(value, path, parent, atomic=False)
-                for i, child in enumerate(value.children):
-                    # Native policy wrappers carry Discord nodes; their generic marker
-                    # cannot express that child-target restriction to the type checker.
-                    visit(cast(Renderable[RenderTargetT, ContextT], child), root, i)
-            case primitive.Panel():
-                root = add(value, path, parent, atomic=False)
-                for i, child in enumerate(value.children):
-                    visit(child, root, i)
             case sem.ControlGroup():
                 root = add(value, path, parent, atomic=False)
                 if value.label is not None:
@@ -553,8 +422,6 @@ def semantic_graph[RenderTargetT, ContextT](
                             visit(child, slot, i)
             case (
                 sem.MediaItem()
-                | primitive.GalleryItem()
-                | primitive.File()
                 | sem.Paragraph()
                 | sem.Heading()
                 | sem.Note()
@@ -568,7 +435,6 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Download()
                 | TextPresentation()
                 | AtomicNode()
-                | primitive.RawItem()
                 | sem.Column()
                 | sem.ListItem()
                 | sem.ActionControl()
@@ -579,26 +445,12 @@ def semantic_graph[RenderTargetT, ContextT](
                 | sem.Choices()
                 | sem.Entities()
                 | sem.RoutedChoices()
-                | primitive.Button()
-                | primitive.RoutedButton()
-                | primitive.LinkButton()
-                | primitive.PremiumButton()
-                | primitive.SelectMenu()
-                | primitive.RoutedSelect()
-                | primitive.EntitySelect()
-                | primitive.Text()
-                | primitive.Heading()
-                | primitive.Footer()
-                | primitive.Code()
-                | primitive.Thumbnail()
-                | primitive.Sep()
-                | primitive.Time()
-                | primitive.ZonedTime()
             ):
                 add(value, path, parent, atomic=True)
             case _:
                 raise UnsupportedSemanticError(type(value).__name__)
 
+    indexer.visit = visit
     visit(node, None, 0)
     children: dict[SemanticRef, list[SemanticRef]] = {}
     for reference, unit in units.items():

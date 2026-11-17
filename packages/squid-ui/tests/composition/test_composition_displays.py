@@ -13,9 +13,12 @@ from squid_i18n import Localization, tr
 from squid_ui import scene
 from squid_ui.authoring.semantic import TimeStyle
 from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.protocol import SlackHomeLimits, SlackMessageLimits
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.palette import Palette
@@ -25,7 +28,6 @@ from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
 
 DISCORD = AdapterProfile(DiscordAdapter, "displays", "1")
 SLACK = AdapterProfile(SlackAdapter, "displays", "1")
@@ -59,20 +61,20 @@ def test_displays_have_shared_pages_and_exact_target_metadata(target: Target[Any
     pages = [result.allocation.select({identity: index}) for index in range(3)]
     assert all(page.cost.values for page in pages)
     assert "12.5 ticks" in scene.Codec.dumps(pages[0].scene)
-    if isinstance(pages[0].scene.body, scene.HtmlBody):
+    if isinstance(pages[0].scene.body, html_scene.HtmlBody):
         metric = pages[0].scene.body.children[0]
-        assert isinstance(metric, scene.HtmlElement) and metric.tag == scene.HtmlTag.DL
+        assert isinstance(metric, html_scene.HtmlElement) and metric.tag == html_scene.HtmlTag.DL
         for page, style, zone in ((pages[1], "R", None), (pages[2], None, ZONED.timezone)):
             paragraph = page.scene.body.children[0]
-            assert isinstance(paragraph, scene.HtmlElement)
+            assert isinstance(paragraph, html_scene.HtmlElement)
             time = paragraph.children[-1]
-            assert isinstance(time, scene.HtmlElement)
-            assert time.time == scene.HtmlTimeRef(INSTANT.isoformat(), timezone=zone, style=style)
-    elif isinstance(pages[1].scene.body, scene.ComponentsV2):
-        assert pages[1].scene.body.children[0] == scene.Time(
+            assert isinstance(time, html_scene.HtmlElement)
+            assert time.time == html_scene.HtmlTimeRef(INSTANT.isoformat(), timezone=zone, style=style)
+    elif isinstance(pages[1].scene.body, discord_scene.ComponentsV2):
+        assert pages[1].scene.body.children[0] == discord_scene.Time(
             instant=INSTANT.isoformat(), style="R", prefix="**Updated:** "
         )
-        assert pages[2].scene.body.children[0] == scene.ZonedTime(
+        assert pages[2].scene.body.children[0] == discord_scene.ZonedTime(
             instant=INSTANT.isoformat(), timezone=ZONED.timezone, prefix="**Local:** "
         )
     else:
@@ -117,16 +119,16 @@ def test_aside_continuations_preserve_palette_and_reuse(target: Target[Any, Any,
     assert first.allocation is not None
     for page in (first, first.allocation.select({identity: 1})):
         body = page.scene.body
-        if isinstance(body, scene.ComponentsV2):
-            assert isinstance(body.children[0], scene.Panel) and body.children[0].accent == 0x123456
-        elif isinstance(body, scene.ClassicMessage):
+        if isinstance(body, discord_scene.ComponentsV2):
+            assert isinstance(body.children[0], discord_scene.Panel) and body.children[0].accent == 0x123456
+        elif isinstance(body, discord_scene.ClassicMessage):
             assert body.embeds[0].colour == 0x123456
         else:
-            assert isinstance(body, scene.HtmlBody)
+            assert isinstance(body, html_scene.HtmlBody)
             aside = body.children[0]
-            assert isinstance(aside, scene.HtmlElement) and aside.tag == scene.HtmlTag.ASIDE
-            assert aside.colour == scene.HtmlColourRef(0x123456)
-            assert scene.HtmlAttribute(scene.HtmlAttributeName.TONE, "warning") in aside.attributes
+            assert isinstance(aside, html_scene.HtmlElement) and aside.tag == html_scene.HtmlTag.ASIDE
+            assert aside.colour == html_scene.HtmlColourRef(0x123456)
+            assert html_scene.HtmlAttribute(html_scene.HtmlAttributeName.TONE, "warning") in aside.attributes
     session.apply_updates(first.session_updates)
     assert (
         plan(document(sl.Tone.WARNING), target=target, session=session, palette=palette, composition=options).allocation
@@ -150,11 +152,11 @@ def test_native_time_prefixes_remain_authored_markdown(target: Target[Any, Any, 
     )
     assert result.allocation is not None
     assert "**Starts:** " in scene.Codec.dumps(result.scene)
-    if isinstance(result.scene.body, scene.ComponentsV2):
-        assert result.scene.body.children[0] == scene.Time(
+    if isinstance(result.scene.body, discord_scene.ComponentsV2):
+        assert result.scene.body.children[0] == discord_scene.Time(
             instant=INSTANT.isoformat(), style="F", prefix="**Starts:** "
         )
-        assert result.scene.body.children[1] == scene.ZonedTime(
+        assert result.scene.body.children[1] == discord_scene.ZonedTime(
             instant=INSTANT.isoformat(), timezone=ZONED.timezone, prefix="Local: "
         )
         assert result.cost.get(Axis.DISPLAY_TEXT) == len(f"**Starts:** <t:{int(INSTANT.timestamp())}:F>") + len(

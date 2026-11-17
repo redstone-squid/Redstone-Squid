@@ -10,9 +10,10 @@ from typing import assert_type
 
 import squid_ui as sl
 from squid_ui.authoring.semantic import Stack
+from squid_ui.ext.discord.primitives import Boundary, Card, Panel, Text
 from squid_ui.ext.discord.target import classic, v2
-from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
-from squid_ui.primitives import Boundary, Card, Panel, Text
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target
+from squid_ui.planning import plan
 
 # --- a container takes the meet of its children's modes ----------------------------------
 

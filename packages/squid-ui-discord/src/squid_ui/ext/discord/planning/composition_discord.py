@@ -4,9 +4,10 @@ from collections.abc import Callable
 from datetime import datetime
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.content.entity import ConversationType
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.limits import ComponentLimits
+from squid_ui.planning import controls
 from squid_ui.planning.realizations import TextRealization, TimeRealization
 
 
@@ -82,3 +83,31 @@ def discord_time_prefix(payload: TimeRealization, escape: Callable[[str], str] |
         return payload.native_prefix
     # Serialize the label separately so a trailing space cannot become an HTML entity.
     return tree.markdown(payload.prefix[:-1], discord=True, escape=escape) + " " if payload.prefix else ""
+
+
+def resolve_select(
+    node: controls.Select | controls.RoutedSelect | controls.EntitySelect,
+) -> scene.Select | scene.RoutedSelect | scene.EntitySelect:
+    """Draw a portable resolved choice using Discord's scene vocabulary."""
+    if isinstance(node, controls.EntitySelect):
+        return scene.EntitySelect(
+            node.entity_type,
+            node.action,
+            node.placeholder,
+            node.default_values,
+            node.conversation_types,
+            node.min_values,
+            node.max_values,
+            node.disabled,
+            node.mode,
+        )
+    options = tuple(
+        scene.Option(item.label, item.value, item.description, item.default, item.emoji) for item in node.options
+    )
+    if isinstance(node, controls.RoutedSelect):
+        return scene.RoutedSelect(
+            options, node.route_id, node.placeholder, node.min_values, node.max_values, node.disabled
+        )
+    return scene.Select(
+        options, node.action, node.placeholder, node.min_values, node.max_values, node.disabled, node.mode
+    )

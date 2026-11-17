@@ -6,11 +6,13 @@ from typing import Any
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.overflow import Never, Paginate
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
@@ -18,8 +20,6 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Never, Paginate
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-layout.discord", "1")
 TARGET = components_v2_target(ADAPTER)
@@ -46,12 +46,12 @@ def test_native_section_preserves_accessory_and_measures_its_cost(
     result = plan(sl.region(node, key="r", title="R"), target=TARGET, strict=True)
     assert result.allocation is not None
     (section,) = result.scene.body.children
-    assert isinstance(section, scene.Section)
+    assert isinstance(section, discord_scene.Section)
     assert section.texts[0].content == "Body"
     assert result.cost.get(Axis.COMPONENTS) == 3
     assert set(result.bindings) == ({"open"} if isinstance(accessory, native.Button) else set())
     if isinstance(accessory, native.Thumbnail):
-        assert section.accessory == scene.Thumbnail(accessory.url, "Preview", spoiler=True)
+        assert section.accessory == discord_scene.Thumbnail(accessory.url, "Preview", spoiler=True)
 
 
 @pytest.mark.parametrize("count", [0, 4])
@@ -79,15 +79,15 @@ def test_panel_continuations_preserve_metadata_and_only_bind_visible_accessories
     assert result.allocation is not None
     for index in range(2):
         page = result.allocation.select({identity: index})
-        rendered = next(node for node in page.scene.body.children if isinstance(node, scene.Panel))
+        rendered = next(node for node in page.scene.body.children if isinstance(node, discord_scene.Panel))
         assert rendered.accent == panel.accent and rendered.spoiler
-        assert len(rendered.children) == 1 and isinstance(rendered.children[0], scene.Section)
+        assert len(rendered.children) == 1 and isinstance(rendered.children[0], discord_scene.Section)
         assert set(page.bindings) == {str(index)}
 
 
 def test_separators_preserve_spacing_and_visibility() -> None:
     result = plan(sl.region(native.Sep(large=True, visible=False), key="r", title="R"), target=TARGET)
-    assert result.scene.body.children == (scene.Separator(large=True, visible=False),)
+    assert result.scene.body.children == (discord_scene.Separator(large=True, visible=False),)
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ from squid.bot.ui import render_payload
 from squid.core.i18n import tr
 from squid.starboard.application import EntryState
 from squid_i18n import Text, discord_markup, emoji_text, md, md_tr, mention
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 def starboard_layout(
@@ -24,7 +25,7 @@ def starboard_layout(
         heading = md(t"{mention(message.author.id)} · **{author_name}**")
     # The source message is already Discord markup, so it is copied as written.
     content = discord_markup(message.content) or tr(t"bot-starboard-render-no-text-content = -# (no text content)")
-    children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    children: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
             sd.v2.text(t"{heading}\n{content}"),
             accessory=sd.v2.thumbnail(avatar_url),

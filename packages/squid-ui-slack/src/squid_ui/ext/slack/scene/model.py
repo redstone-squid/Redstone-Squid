@@ -14,6 +14,7 @@ from pydantic import Field
 
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.entity import ConversationType
+from squid_ui.scene.base import Body, SceneNode
 
 
 class SlackTextKind(StrEnum):
@@ -24,7 +25,7 @@ class SlackTextKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SlackText:
+class SlackText(SceneNode):
     """Text resolved for one Slack text object."""
 
     content: str
@@ -34,7 +35,7 @@ class SlackText:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackOption:
+class SlackOption(SceneNode):
     """One static-select, radio, or checkbox option."""
 
     label: SlackText
@@ -51,7 +52,7 @@ class SlackButtonStyle(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SlackActionRef:
+class SlackActionRef(SceneNode):
     """Reference to one planned action binding."""
 
     action: Annotated[str, Field(max_length=255)]
@@ -59,14 +60,14 @@ class SlackActionRef:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackRouteRef:
+class SlackRouteRef(SceneNode):
     """Reference to one host-owned stateless route."""
 
     route_id: Annotated[str, Field(max_length=255)]
 
 
 @dataclass(frozen=True, slots=True)
-class SlackAssetRef:
+class SlackAssetRef(SceneNode):
     """Reference to one delivery asset requiring a public URL at draw time."""
 
     key: str
@@ -75,7 +76,7 @@ class SlackAssetRef:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackButton:
+class SlackButton(SceneNode):
     """A button with exactly one destination: action, route, URL, or delivery asset."""
 
     label: SlackText
@@ -102,7 +103,7 @@ class SlackSelectKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SlackSelect:
+class SlackSelect(SceneNode):
     """Let a reader choose declared options, Slack users, or Slack conversations.
 
     Exactly one action binding, route, or form action ID identifies where the selection
@@ -136,7 +137,7 @@ class SlackSelect:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackTextInput:
+class SlackTextInput(SceneNode):
     """A plain-text input used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -148,7 +149,7 @@ class SlackTextInput:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackNumberInput:
+class SlackNumberInput(SceneNode):
     """A numeric input used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -159,7 +160,7 @@ class SlackNumberInput:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackDatePicker:
+class SlackDatePicker(SceneNode):
     """A calendar-date input used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -168,7 +169,7 @@ class SlackDatePicker:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackTimePicker:
+class SlackTimePicker(SceneNode):
     """A local-time input used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -177,7 +178,7 @@ class SlackTimePicker:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackCheckboxes:
+class SlackCheckboxes(SceneNode):
     """A checkbox group used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -186,7 +187,7 @@ class SlackCheckboxes:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackRadioButtons:
+class SlackRadioButtons(SceneNode):
     """A radio group used inside a Slack modal."""
 
     action_id: Annotated[str, Field(max_length=255)]
@@ -216,7 +217,7 @@ type SlackInputElement = (
 
 
 @dataclass(frozen=True, slots=True)
-class SlackSection:
+class SlackSection(SceneNode):
     """A section block with optional fields and accessory."""
 
     text: SlackText | None = None
@@ -225,26 +226,26 @@ class SlackSection:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackHeader:
+class SlackHeader(SceneNode):
     """A plain-text header block."""
 
     text: SlackText
 
 
 @dataclass(frozen=True, slots=True)
-class SlackContext:
+class SlackContext(SceneNode):
     """A context block containing text snippets."""
 
     elements: Annotated[tuple[SlackText, ...], Field(max_length=10)]
 
 
 @dataclass(frozen=True, slots=True)
-class SlackDivider:
+class SlackDivider(SceneNode):
     """A visual divider block."""
 
 
 @dataclass(frozen=True, slots=True)
-class SlackImage:
+class SlackImage(SceneNode):
     """An image block with alternative text."""
 
     image_url: Annotated[str, Field(max_length=3000)]
@@ -253,7 +254,7 @@ class SlackImage:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackActions:
+class SlackActions(SceneNode):
     """One row of Slack interactive elements."""
 
     elements: Annotated[tuple[SlackButton | SlackSelect, ...], Field(max_length=25)]
@@ -261,7 +262,7 @@ class SlackActions:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackInput:
+class SlackInput(SceneNode):
     """One labelled modal field with stable block and action identifiers."""
 
     block_id: Annotated[str, Field(max_length=255)]
@@ -272,14 +273,14 @@ class SlackInput:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackTable:
+class SlackTable(SceneNode):
     """A table block whose cells are already allocated Slack text objects."""
 
     rows: Annotated[tuple[Annotated[tuple[SlackText, ...], Field(max_length=20)], ...], Field(max_length=100)]
 
 
 @dataclass(frozen=True, slots=True)
-class SlackCard:
+class SlackCard(SceneNode):
     """A Slack card with optional title, description, image, and button actions."""
 
     title: SlackText | None = None
@@ -289,7 +290,7 @@ class SlackCard:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackCarousel:
+class SlackCarousel(SceneNode):
     """A carousel block containing up to ten cards."""
 
     cards: Annotated[tuple[SlackCard, ...], Field(max_length=10)]
@@ -305,7 +306,7 @@ class SlackAlertStyle(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SlackAlert:
+class SlackAlert(SceneNode):
     """A modal alert block."""
 
     title: SlackText
@@ -329,7 +330,7 @@ type SlackBlock = (
 
 
 @dataclass(frozen=True, slots=True)
-class SlackMessage:
+class SlackMessage(Body):
     """A Block Kit message plus its screen-reader fallback text."""
 
     KIND = "slack_message"
@@ -339,7 +340,7 @@ class SlackMessage:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackModalView:
+class SlackModalView(Body):
     """A complete Slack modal view."""
 
     KIND = "slack_modal"
@@ -353,7 +354,7 @@ class SlackModalView:
 
 
 @dataclass(frozen=True, slots=True)
-class SlackHomeView:
+class SlackHomeView(Body):
     """A complete Slack App Home view."""
 
     KIND = "slack_home"
@@ -403,3 +404,31 @@ __all__ = [
     "SlackTextKind",
     "SlackTimePicker",
 ]
+
+
+SlackMessage.DISPLAY_FIELDS = ("blocks",)
+SlackModalView.DISPLAY_FIELDS = ("title", "blocks", "close", "submit")
+SlackHomeView.DISPLAY_FIELDS = ("blocks",)
+SlackSection.DISPLAY_FIELDS = ("text", "fields", "accessory")
+SlackHeader.DISPLAY_FIELDS = ("text",)
+SlackContext.DISPLAY_FIELDS = ("elements",)
+SlackDivider.DISPLAY_FIELDS = ()
+SlackImage.DISPLAY_FIELDS = ("title",)
+SlackActions.DISPLAY_FIELDS = ("elements",)
+SlackInput.DISPLAY_FIELDS = ("label", "element", "hint")
+SlackTable.DISPLAY_FIELDS = ("rows",)
+SlackCard.DISPLAY_FIELDS = ("title", "description", "actions")
+SlackCarousel.DISPLAY_FIELDS = ("cards",)
+SlackAlert.DISPLAY_FIELDS = ("title", "text")
+SlackText.DISPLAY_FIELDS = ()
+SlackOption.DISPLAY_FIELDS = ("label", "description")
+SlackButton.DISPLAY_FIELDS = ("label",)
+SlackSelect.DISPLAY_FIELDS = ("placeholder", "options")
+SlackTextInput.DISPLAY_FIELDS = ("placeholder",)
+SlackNumberInput.DISPLAY_FIELDS = ()
+SlackDatePicker.DISPLAY_FIELDS = ("placeholder",)
+SlackTimePicker.DISPLAY_FIELDS = ("placeholder",)
+SlackCheckboxes.DISPLAY_FIELDS = ("options",)
+SlackRadioButtons.DISPLAY_FIELDS = ("options",)
+
+SlackRouteRef.ROUTE_FIELDS = ("route_id",)

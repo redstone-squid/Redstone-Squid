@@ -18,8 +18,9 @@ import squid_ui as sl
 from squid_ui import Component, PressEvent, Reactive, state
 from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.primitives import Button, Row, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
-from squid_ui.primitives import Button, Row, Text
 from squid_ui.profiling import PresentationStatus
 from squid_ui.runtime import CellAddress, LocalTopicBus, transaction
 
@@ -34,7 +35,7 @@ class Workspace(Reactive):
     detail: str = state("")
 
 
-class Panel(Component[sl.ComponentsV2Target]):
+class Panel(Component[ComponentsV2Target]):
     show_detail: bool = state(False)
 
     def __init__(self, workspace: Workspace) -> None:
@@ -51,7 +52,7 @@ class Panel(Component[sl.ComponentsV2Target]):
         self.workspace.selected = 7
 
 
-class Writer(Component[sl.ComponentsV2Target]):
+class Writer(Component[ComponentsV2Target]):
     """Write a rendered shared cell so tests can check repainting within the same interaction."""
 
     def __init__(self, workspace: Workspace, *, busy: sl.interactions.BusySpec | None = None, run=None) -> None:
@@ -86,7 +87,7 @@ class Writer(Component[sl.ComponentsV2Target]):
         raise RuntimeError(message)
 
 
-class Swapper(Component[sl.ComponentsV2Target]):
+class Swapper(Component[ComponentsV2Target]):
     """Read either selected or detail, so a staged render can replace its dependency entirely.
 
     Panel only adds or removes the detail read while always keeping selected. This fixture checks
@@ -158,7 +159,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
     scheduler = MessageRootScheduler(bus)
     workspace = Workspace()
 
-    class Parity(Component[sl.ComponentsV2Target]):
+    class Parity(Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.renders = 0
 
@@ -204,7 +205,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
     scheduler = MessageRootScheduler(bus)
     values = Values()
 
-    class Panel(Component[sl.ComponentsV2Target]):
+    class Panel(Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.renders = 0
 
@@ -248,7 +249,7 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
 
-    class Opaque(Component[sl.ComponentsV2Target]):
+    class Opaque(Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.value = "first"
             self.renders = 0

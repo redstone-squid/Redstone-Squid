@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_ui.planning.pagination.navigation import SEEK_OPTION_LIMIT, _seek_pages
+from squid_ui.ext.discord.navigation_controls import SEEK_OPTION_LIMIT, _seek_pages
 
 
 @pytest.mark.parametrize(

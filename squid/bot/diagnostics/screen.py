@@ -18,6 +18,8 @@ from squid.bot.diagnostics.refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.diagnostics.models import ErrorReport
 from squid_i18n import md_tr
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 SESSION_SECONDS = 300
 RECENT_LIMIT = 100
@@ -51,7 +53,7 @@ ERROR_CHROME = dataclasses.replace(
 )
 
 
-class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class _ReportUpdates(sl.Component[ComponentsV2Target, sd.Request]):
     """Check for report changes without replacing the browser the reader is using."""
 
     def __init__(
@@ -79,7 +81,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return tuple(report.id for report in reports) != self._shown
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         self.provide(_REPORT_MONITOR, self.monitor)
         return self._notice, self._controls
 
@@ -87,18 +89,18 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
 _REPORT_MONITOR = sl.runtime.ContextKey[ErrorReportRefresh]("report-monitor")
 
 
-class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class _ReportUpdateNotice(sl.Component[ComponentsV2Target, sd.Request]):
     """Display the shared monitor's latest comparison without changing the open report."""
 
     @override
-    def render(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    def render(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
         status = self.inject(_REPORT_MONITOR).changes.status
         changed = (
             status.value
             if isinstance(status, sl.resources.Ready)
             else (status.previous.value if status.previous is not None else False)
         )
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         if isinstance(status, sl.resources.Failed):
             nodes.append(
                 sl.note(
@@ -115,7 +117,7 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
 type _ListAction = sl.semantic.ActionControl | sl.semantic.Toggle
 
 
-class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class _ReportUpdateControls(sl.Component[ComponentsV2Target, sd.Request]):
     """Keep manual refresh available while automatic checks load or fail.
 
     The screen's other list controls join Refresh here, so the list ends with one row of controls.
@@ -130,7 +132,7 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._list_actions = list_actions
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         status = self.inject(_REPORT_MONITOR).changes.status
         changed = isinstance(status, sl.resources.Ready) and status.value
         return sl.action_controls(
@@ -168,7 +170,7 @@ class ErrorReportScreen(sd.Screen[int]):
     cleared_count: int | None = sl.state(None)
     _reports: tuple[ErrorReport, ...] = sl.state((), opaque=True)
     _updates: _ReportUpdates | None = sl.state(None, opaque=True)
-    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+    _browser: sp.Browser[ErrorReport, ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -233,7 +235,7 @@ class ErrorReportScreen(sd.Screen[int]):
         return self._reports
 
     @override
-    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.Document[ComponentsV2Target, sd.Request]:
         if self.cleared_count is not None:
             count = self.cleared_count
             return sl.Document(
@@ -272,19 +274,17 @@ class ErrorReportScreen(sd.Screen[int]):
             ),
         )
 
-    def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         reference = report.reference
         traceback_text: sl.TextLike = report.traceback.strip() or tr(
             t"diagnostics-view-no-traceback-was-recorded = No traceback was recorded."
         )
-        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        children: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sd.v2.heading(md_tr(t"diagnostics-view-error = Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(
                 traceback_text,
-                overflow=sl.primitives.Paginate(
-                    key="traceback", page=sl.primitives.LAST_PAGE, footer=_traceback_footer
-                ),
+                overflow=primitives.Paginate(key="traceback", page=primitives.LAST_PAGE, footer=_traceback_footer),
             ),
         ]
         if report.log_tail:
@@ -292,7 +292,7 @@ class ErrorReportScreen(sd.Screen[int]):
             # front; the attachment carries all of it.
             children.append(sd.v2.heading(tr(t"diagnostics-view-log-tail = Log tail"), level=3, priority=2))
             children.append(
-                sd.v2.code("\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8)
+                sd.v2.code("\n".join(report.log_tail), overflow=primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(

@@ -7,7 +7,7 @@ from squid_ui.planning.allocation import PageFamily
 from squid_ui.planning.allocation_policy import AllocationQuality, PreferenceTree, RegionPolicy
 from squid_ui.planning.certification import FamilyCertificate
 from squid_ui.planning.composition import CandidateComposition, OccurrenceId, PlanningContext, RealizationOffer
-from squid_ui.planning.resources import EMPTY_COST, Axis
+from squid_ui.planning.resources import EMPTY_COST
 
 
 def preference_tree[RenderTargetT, ContextT, PayloadT](
@@ -47,7 +47,8 @@ def score_family[RenderTargetT, ContextT, PayloadT, OutputT](
     ranks = {offer.occurrence.identity: rank for offer, rank in choices}
     preferences = preference_tree(family.root, ranks, policies, context)
     minimums: list[int] = []
-    for axis in Axis:
+    axes = sorted({goal.axis for policy in policies.values() for goal in policy.goals if not goal.hard})
+    for axis in axes:
         context.work.consume(1 + sum(len(value.goals) for value in policies.values()))
         deficits = [
             max(0, goal.minimum - certificate.peaks.get(identity, EMPTY_COST).get(axis)) if identity in regions else 0

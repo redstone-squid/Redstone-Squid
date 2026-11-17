@@ -20,12 +20,13 @@ from squid_ui.ext.discord.durability import (
     migrate_component_state,
 )
 from squid_ui.ext.discord.durability.session_records import decode_session_key
+from squid_ui.ext.discord.primitives import Lines, Paginate, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render
 from squid_ui.pages import PagePosition
-from squid_ui.primitives import Lines, Paginate, Text
 
 
-class DurableChild(Component[sl.ComponentsV2Target]):
+class DurableChild(Component[ComponentsV2Target]):
     entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)), persist=True)
 
     @override
@@ -33,7 +34,7 @@ class DurableChild(Component[sl.ComponentsV2Target]):
         return Lines(self.entries, overflow=Paginate(key="items", per=2))
 
 
-class DurableRoot(Component[sl.ComponentsV2Target]):
+class DurableRoot(Component[ComponentsV2Target]):
     count: int = state(0, persist=True)
     transient: object = state(factory=object)
 
@@ -110,7 +111,7 @@ def test_old_strategy_memory_is_ignored_when_restoring_a_snapshot() -> None:
 
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
-    class Invalid(Component[sl.ComponentsV2Target]):
+    class Invalid(Component[ComponentsV2Target]):
         value: object = state(factory=object, persist=True)
 
         @override
@@ -244,13 +245,13 @@ def test_failed_transform_cannot_mutate_the_input_snapshot() -> None:
     assert root.state == {"nested": {"value": 1}}
 
 
-class SharedDurableRoot(Component[sl.ComponentsV2Target]):
+class SharedDurableRoot(Component[ComponentsV2Target]):
     def __init__(self, *, shared: bool = True) -> None:
         self.left = DurableChild()
         self.right = self.left if shared else DurableChild()
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target]:
         return self.left.keyed("left"), self.right.keyed("right")
 
 

@@ -11,8 +11,9 @@ from anyio.abc import TaskGroup, TaskStatus
 
 from squid_reactivity.operations import ProgressReporter, operation
 from squid_reactivity.resources import resource
-from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
-from squid_ui.primitives import Text
+from squid_ui import Component, DocumentLike, Reactive, state
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import (
     ComponentRuntime,
     ContextKey,

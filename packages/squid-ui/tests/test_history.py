@@ -14,9 +14,10 @@ from squid_reactivity import EventLedger, observe_events
 from squid_reactivity.diagnostics import OperationEventSnapshot
 from squid_reactivity.operations import OperationContext
 from squid_reactivity.transactions import ChangeToken, TransactionContribution, enlist, readonly_transaction
-from squid_ui import Component, DiscordTarget, Reactive, state
+from squid_ui import Component, Reactive, state
 from squid_ui.authoring.semantic import ActionControl
-from squid_ui.primitives import Text
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.runtime import (
     CompensationClaim,
     CompensationIntent,

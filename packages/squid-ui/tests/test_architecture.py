@@ -9,6 +9,7 @@ import squid_ui as sl
 from squid_ui import testing
 from squid_ui.action_mode import ActionMode
 from squid_ui.context import ContextKey
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState, SessionUpdate
 
@@ -121,7 +122,7 @@ def test_planning_owns_live_results_and_scene_preserves_action_modes() -> None:
     assert sl.planning.PlanResult is PlanResult
     assert not hasattr(sl.scene, "PlanResult")
     assert sl.interactions.ActionMode is ActionMode
-    assert sl.scene.Button("Save", "save").mode is ActionMode.EXCLUSIVE
+    assert discord_scene.Button("Save", "save").mode is ActionMode.EXCLUSIVE
 
 
 @pytest.mark.parametrize(
@@ -161,4 +162,24 @@ def test_core_does_not_import_target_implementations() -> None:
         for path in SOURCE.rglob("*.py")
         if any(name.startswith(adapters) for name in runtime_imports(path))
     }
+    assert not violations
+
+
+def test_core_has_no_target_package_imports() -> None:
+    violations = {}
+    for path in SOURCE.rglob("*.py"):
+        imports = {
+            node.module
+            for node in ast.walk(ast.parse(path.read_text()))
+            if isinstance(node, ast.ImportFrom) and node.module
+        }
+        imports.update(
+            alias.name
+            for node in ast.walk(ast.parse(path.read_text()))
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        )
+        forbidden = sorted(name for name in imports if name.startswith("squid_ui.ext."))
+        if forbidden:
+            violations[str(path.relative_to(SOURCE))] = forbidden
     assert not violations

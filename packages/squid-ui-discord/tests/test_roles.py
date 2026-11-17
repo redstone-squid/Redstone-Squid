@@ -10,6 +10,7 @@ import discord
 import pytest
 
 import squid_ui.ext.discord
+from squid_ui.ext.discord.primitives.nodes import ControlGroup, RoutedButton, RoutedSelect, Variants
 from squid_ui.ext.discord.roles import (
     RoleMutationForbidden,
     RolesUnchanged,
@@ -17,7 +18,6 @@ from squid_ui.ext.discord.roles import (
 )
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
-from squid_ui.primitives.nodes import ControlGroup, RoutedButton, RoutedSelect, Variants
 
 
 class FakeRole:

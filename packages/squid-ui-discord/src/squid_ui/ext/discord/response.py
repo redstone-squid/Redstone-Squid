@@ -21,9 +21,9 @@ from squid_ui.ext.discord.contracts import FacadeContent
 from squid_ui.ext.discord.delivery import DeliveryResult
 from squid_ui.ext.discord.messages.contracts import ExpiryPolicy
 from squid_ui.ext.discord.messages.payload import MessagePayload
-from squid_ui.planning.pagination.navigation import NavFactory
+from squid_ui.ext.discord.navigation_controls import NavFactory
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.messages.root import MessageRoot

@@ -13,17 +13,7 @@ from squid_ui.content.emoji import EmojiLike
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.text import Text as TextExpression
 from squid_ui.content.text import TextLike
-from squid_ui.interactions import (
-    ActionBinding,
-    ActionMode,
-    BusySpec,
-    EntitySelectionHandler,
-    PressHandler,
-    SelectionHandler,
-)
-from squid_ui.interactions.guards import Guard
-from squid_ui.primitives.constraints import Alt, Overflow, Spill, Truncate
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Button,
     Code,
     ControlGroup,
@@ -41,7 +31,17 @@ from squid_ui.primitives.nodes import (
     SelectMenu,
     Text,
 )
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.interactions import (
+    ActionBinding,
+    ActionMode,
+    BusySpec,
+    EntitySelectionHandler,
+    PressHandler,
+    SelectionHandler,
+)
+from squid_ui.interactions.guards import Guard
+from squid_ui.overflow import Alt, Overflow, Spill, Truncate
+from squid_ui.styles import ActionStyle
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History

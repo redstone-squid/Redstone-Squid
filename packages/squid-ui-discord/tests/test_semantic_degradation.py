@@ -5,6 +5,7 @@ import pytest
 from squid_ui import best_effort, optional, truncate
 from squid_ui.authoring.semantic import Importance, Paragraph
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError
 
@@ -17,14 +18,14 @@ def test_semantic_prose_is_lossless_by_default() -> None:
 def test_truncate_explicitly_grants_prose_loss() -> None:
     result = plan(truncate(Paragraph("x" * 5000)), target=DISCORD_V2_DPY27)
 
-    assert len(result.scene.components_v2.children[0].content) == 4000  # type: ignore[union-attr]
+    assert len(result.scene.expect_body(discord_scene.ComponentsV2).children[0].content) == 4000  # type: ignore[union-attr]
     assert result.report.events[0].severity.value == "degradation"
 
 
 def test_optional_explicitly_grants_whole_node_loss() -> None:
     result = plan((Paragraph("x" * 4000), optional(Paragraph("footnote"))), target=DISCORD_V2_DPY27)
 
-    assert len(result.scene.components_v2.children) == 1
+    assert len(result.scene.expect_body(discord_scene.ComponentsV2).children) == 1
     assert any(event.code == "composition.effect" and event.message == "Omission" for event in result.report.events)
 
 
@@ -38,11 +39,11 @@ def test_optional_importance_orders_whole_region_loss() -> None:
         target=DISCORD_V2_DPY27,
     )
 
-    contents = [child.content for child in result.scene.components_v2.children]  # type: ignore[union-attr]
+    contents = [child.content for child in result.scene.expect_body(discord_scene.ComponentsV2).children]  # type: ignore[union-attr]
     assert contents == ["x" * 3980, "high priority"]
 
 
 def test_best_effort_only_relaxes_prose() -> None:
     result = plan(best_effort(Paragraph("x" * 5000)), target=DISCORD_V2_DPY27)
 
-    assert len(result.scene.components_v2.children[0].content) == 4000  # type: ignore[union-attr]
+    assert len(result.scene.expect_body(discord_scene.ComponentsV2).children[0].content) == 4000  # type: ignore[union-attr]

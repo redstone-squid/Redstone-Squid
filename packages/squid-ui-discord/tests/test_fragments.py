@@ -5,14 +5,13 @@ from typing import override
 import discord
 import pytest
 
-import squid_ui as sl
 import squid_ui.ext.discord
 from squid_ui.authoring.document import Document
 from squid_ui.content.assets import Asset, InlineAsset
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui.ext.discord import ExistingLayoutError, ResourceCost, contribute
+from squid_ui.ext.discord import ExistingLayoutError, ResourceCost, contribute, primitives
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
 from squid_ui.ext.discord.inspection import audit
@@ -21,7 +20,7 @@ from squid_ui.ext.discord.rendering.controls import RoutedItem
 
 
 def _text(content: str) -> list:
-    return [sl.primitives.Text(content)]
+    return [primitives.Text(content)]
 
 
 class TestContribute:
@@ -137,7 +136,7 @@ class TestInteractionBoundary:
     def test_a_dispatchable_native_item_is_refused(self):
         native = squid_ui.ext.discord.target.NativeItem(
             lambda: sd.action_row(discord.ui.Button(label="local", custom_id="local")),
-            fallback=sl.primitives.Text("fallback"),
+            fallback=primitives.Text("fallback"),
         )
         with pytest.raises(FragmentOwnershipError, match="does not own"):
             fragment([native], alongside=sd.layout_view())
@@ -145,7 +144,7 @@ class TestInteractionBoundary:
     def test_a_native_display_item_is_fine(self):
         native = squid_ui.ext.discord.target.NativeItem(
             lambda: discord.ui.TextDisplay("native"),
-            fallback=sl.primitives.Text("fallback"),
+            fallback=primitives.Text("fallback"),
         )
         planned = fragment([native], alongside=sd.layout_view())
         assert planned.items
@@ -166,7 +165,7 @@ class TestAttachedFragment:
     def test_files_are_repeatable_and_fresh(self):
         host = sd.layout_view()
         asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"report bytes"))
-        document = Document((sl.primitives.File("report", "report.txt", "text/plain"),), assets=(asset,))
+        document = Document((primitives.File("report", "report.txt", "text/plain"),), assets=(asset,))
         attached = contribute(document, to=host)
         first, second = attached.build_files(), attached.attachments()
         assert [file.filename for file in first] == ["report.txt"]
@@ -208,10 +207,10 @@ class TestRelease:
 def test_a_fragment_never_exceeds_whole_document_planning():
     """The combined result must obey the same limits as composing everything at once."""
     body = "x" * 6000
-    whole = squid_ui.ext.discord.render_message([sl.primitives.Text("header"), sl.primitives.Text(body)]).view
+    whole = squid_ui.ext.discord.render_message([primitives.Text("header"), primitives.Text(body)]).view
 
     host = sd.layout_view(discord.ui.TextDisplay("header"))
-    contribute([sl.primitives.Text(body)], to=host)
+    contribute([primitives.Text(body)], to=host)
 
     assert host.content_length() <= whole.content_length()
     assert len(list(host.walk_children())) <= LIMITS.total_components

@@ -13,14 +13,9 @@ from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import Localization, Markup
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
-from squid_ui.ext.discord.rendering.v2 import V2Renderer
-from squid_ui.ext.discord.target import NativeItem
-from squid_ui.pages import PagePosition
-from squid_ui.planning import plan
-from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     Button,
     Code,
     ControlGroup,
@@ -35,6 +30,12 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
+from squid_ui.ext.discord.rendering.v2 import V2Renderer
+from squid_ui.ext.discord.target import NativeItem
+from squid_ui.ext.html.capabilities import HtmlAdapterCapability
+from squid_ui.pages import PagePosition
+from squid_ui.planning import plan
+from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 
 
 async def _click(event) -> None: ...
@@ -68,7 +69,9 @@ def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
 
     result = plan(Text(tr(t"test-hello = Hello")), target=DISCORD_V2_DPY27, localization=localization)
 
-    assert result.scene.components_v2.children == (scene.Text("Bonjour", markup=Markup.DISCORD_MARKDOWN),)
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("Bonjour", markup=Markup.DISCORD_MARKDOWN),
+    )
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:
@@ -106,7 +109,9 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
     asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
     result = plan(Document((Text("summary"),), (asset,)), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children == (scene.Text("summary", markup=Markup.DISCORD_MARKDOWN),)
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("summary", markup=Markup.DISCORD_MARKDOWN),
+    )
     assert result.scene.assets[0].key == "report"
     assert result.resources["asset:report"] is asset
 
@@ -115,7 +120,11 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
     result = plan(ControlGroup(buttons), target=DISCORD_V2_DPY27)
 
-    rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
+    rows = [
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Row)
+    ]
     assert [len(row.items) for row in rows] == [5, 1]
     assert set(result.bindings) == {f"b{index}" for index in range(6)}
 
@@ -183,8 +192,8 @@ def test_local_pagination_and_root_pagination_share_allocation() -> None:
             visible.update(key for key in page.bindings if key.startswith("b"))
             code.extend(
                 node.content[4:-4]
-                for node in page.scene.components_v2.children
-                if isinstance(node, scene.Text) and node.content.startswith("```\n")
+                for node in page.scene.expect_body(discord_scene.ComponentsV2).children
+                if isinstance(node, discord_scene.Text) and node.content.startswith("```\n")
             )
     assert visible == {f"b{index}" for index in range(41)}
     assert "".join(code) == "x" * 9000
@@ -240,18 +249,22 @@ def test_scene_reports_every_independent_pager() -> None:
 def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     ladder = Variants(
         (
-            Variant((Text("rich"),), requires=frozenset({AdapterCapability.RENDER_HTML})),
+            Variant((Text("rich"),), requires=frozenset({HtmlAdapterCapability.RENDER_HTML})),
             Variant((Text("plain"),)),
         )
     )
     basic = sd.target_profile("test")
-    rich = sd.target_profile("rich", capabilities=frozenset({AdapterCapability.RENDER_HTML}))
+    rich = sd.target_profile("rich", capabilities=frozenset({HtmlAdapterCapability.RENDER_HTML}))
 
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene
 
-    assert basic_scene.components_v2.children == (scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),)
-    assert rich_scene.components_v2.children == (scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),)
+    assert basic_scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),
+    )
+    assert rich_scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),
+    )
 
 
 def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
@@ -278,7 +291,7 @@ def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
         for index in range(9)
     ]
     document = plan(ladders, target=sd.target_profile("test")).scene
-    rendered = repr(document.components_v2.children)
+    rendered = repr(document.expect_body(discord_scene.ComponentsV2).children)
 
     assert "n0.5" not in rendered  # the gated rung never reaches the solver
     assert "line 0" in rendered  # the ladder still had its last rung to step to
@@ -322,5 +335,7 @@ def test_unsupported_native_extension_uses_its_portable_fallback_without_buildin
     target = sd.target_profile("portable.test")
     result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
 
-    assert result.scene.components_v2.children == (scene.Text("portable", markup=Markup.DISCORD_MARKDOWN),)
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("portable", markup=Markup.DISCORD_MARKDOWN),
+    )
     assert not called

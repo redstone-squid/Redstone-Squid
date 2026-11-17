@@ -69,25 +69,7 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.authoring.semantic import Toggle as SemanticToggle
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives.constraints import Paginate
-from squid_ui.primitives.nodes import (
-    Break,
-    Budget,
-    Button,
-    Card,
-    Code,
-    ControlGroup,
-    Extension,
-    Footer,
-    Heading,
-    Lines,
-    Panel,
-    Row,
-    SelectMenu,
-    Text,
-    Variants,
-)
-from squid_ui.primitives.nodes import Section as PrimitiveSection
+from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.target_types import RenderTarget
 
 type LayoutTransform[RenderTargetT: RenderTarget, ContextT = object] = Callable[
@@ -158,9 +140,34 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
             raise LayoutInvariantError(message)
         return transformed[0]
 
-    # Authored children use the open LayoutNode type, but primitive containers declare the
-    # closed Node union for planner matching. The suppressions preserve the caller's generic
-    # child type while rebuilding those same runtime containers.
+    if isinstance(node, NativeValue):
+        traits = NativeTraits.of(node)
+        updates = {}
+        for field in traits.layout_fields:
+            children = getattr(node, field)
+            updates[field] = (
+                many(children, path, field)
+                if isinstance(children, tuple)
+                else one(children, f"{path}.{field}", (*route, _FieldStep(field)))
+            )
+        for field, child_field in traits.nested_layout_fields:
+            updates[field] = tuple(
+                replace(
+                    group,
+                    **{
+                        child_field: _map_many_at(
+                            getattr(group, child_field),
+                            f"{path}.{field}.{index}",
+                            (*route, _IndexStep(field, index)),
+                            child_field,
+                            transform,
+                        )
+                    },
+                )
+                for index, group in enumerate(getattr(node, field))
+            )
+        return cast(LayoutNode[RenderTargetT, ContextT], replace(node, **updates)) if updates else node
+
     match node:
         case Region(children=children, header=header, footer=footer):
             return replace(
@@ -179,10 +186,6 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
             | Article(children=children)
             | Aside(children=children)
             | Details(children=children)
-            | Panel(children=children)
-            | Budget(children=children)
-            | Break(children=children)
-            | Card(children=children)
         ):
             return replace(node, children=many(children, path, "children"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
         case Items(items=items):
@@ -224,32 +227,6 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
                         (*route, _IndexStep("alternates", index)),
                     )
                     for index, alternate in enumerate(alternates)
-                ),
-            )
-        case Extension(fallback=fallback):
-            return replace(
-                node,
-                fallback=one(  # pyrefly: ignore[bad-argument-type]
-                    fallback,  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-                    f"{path}.fallback",
-                    (*route, _FieldStep("fallback")),
-                ),
-            )
-        case Variants(variants=variants):
-            return replace(
-                node,
-                variants=tuple(
-                    replace(
-                        variant,
-                        nodes=_map_many_at(  # pyrefly: ignore[bad-argument-type]
-                            variant.nodes,  # pyright: ignore[reportArgumentType]
-                            f"{path}.variant.{index}",
-                            (*route, _IndexStep("variants", index)),
-                            "nodes",
-                            transform,  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-                        ),
-                    )
-                    for index, variant in enumerate(variants)
                 ),
             )
         case _:
@@ -297,18 +274,6 @@ def _namespace[RenderTargetT: RenderTarget, ContextT = object](
     change the identity of any existing action.
     """
 
-    def key_for(node: Button | SelectMenu) -> str:
-        return f"{prefix}.{node.key}"
-
-    def rewrite_text[T: Text | Heading | Footer | Code | Lines](node: T) -> T:
-        overflow = node.overflow
-        if isinstance(overflow, Paginate) and overflow.key is not None:
-            return replace(node, overflow=replace(overflow, key=f"{prefix}.{overflow.key}"))
-        return node
-
-    def rewrite_item[T](item: T) -> T:
-        return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
-
     def rewrite_semantic_control(
         item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl,
     ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl:
@@ -324,6 +289,8 @@ def _namespace[RenderTargetT: RenderTarget, ContextT = object](
         return replace(item, key=f"{prefix}.{item.key}")
 
     def rewrite(node: AnyLayoutNode) -> AnyLayoutNode:
+        if isinstance(node, NativeValue):
+            node = cast(AnyLayoutNode, node.semantics.namespace(node, prefix))
         match node:
             case SemanticActionControls(items=items, key=key):
                 return replace(
@@ -350,18 +317,6 @@ def _namespace[RenderTargetT: RenderTarget, ContextT = object](
             case SemanticPaged(key=key):
                 keyed = replace(node, key=f"{prefix}.{key}")
                 return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
-            case Text() | Heading() | Footer() | Code() | Lines():
-                return rewrite_text(node)
-            case Row(items=items):
-                return Row(items=tuple(rewrite_item(item) for item in items))
-            case ControlGroup(items=items):
-                return ControlGroup(items=tuple(rewrite_item(item) for item in items))
-            case PrimitiveSection(texts=texts, accessory=accessory):
-                return PrimitiveSection(
-                    texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory)
-                )
-            case SelectMenu():
-                return replace(node, key=key_for(node))
             case _:
                 return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
 

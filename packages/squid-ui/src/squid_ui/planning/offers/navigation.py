@@ -4,20 +4,23 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from hashlib import sha256
-from typing import cast
 from urllib.parse import quote
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
     Budget,
     SemanticRef,
 )
-from squid_ui.content.emoji import normalize_emoji
 from squid_ui.content.text import TextLike, resolve_text
-from squid_ui.interactions import ActionBinding
-from squid_ui.interactions.forms import FormBinding
+from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.interactions.ownership import Controlled
+from squid_ui.native import NativeTraits, NativeValue
+from squid_ui.overflow import (
+    FIRST_PAGE,
+    PageOwnership,
+)
+from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     CandidateComposition,
     FragmentCoverage,
@@ -28,24 +31,19 @@ from squid_ui.planning.composition import (
     RealizationOffer,
     SemanticOccurrence,
 )
+from squid_ui.planning.control_style import button_style
+from squid_ui.planning.interaction_handlers import ChoiceCommit, SelectChoices
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, NavigationChoice
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.pagination.navigation import PagerNav, default_nav
 from squid_ui.planning.realizations import (
+    ActionsRealization,
     ControlRealization,
-    EntityRealization,
-    PremiumRealization,
     Realization,
-    RowRealization,
     SelectRealization,
     TextRealization,
 )
 from squid_ui.planning.semantic_index import UnsupportedSemanticError
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import (
-    FIRST_PAGE,
-    PageOwnership,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,22 +79,17 @@ class RegionNavigation[RenderTargetT, ContextT]:
             navigation = context.navigation
             if navigation is None and self.default_controls:
                 navigation = PagerNav(default_nav, context.presentation, staged=True)
-            controls = cast(
-                tuple[primitive.Node[ContextT], ...],
-                (() if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)),
+            controls = (
+                () if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)
             )
-            if not self.disabled_controls:
-                controls = tuple(
-                    replace(node, items=tuple(item for item in node.items if not getattr(item, "disabled", False)))
-                    if isinstance(node, primitive.Row)
-                    else node
-                    for node in controls
-                )
             return (
                 footer,
                 *(
                     navigation_candidate(
-                        node, replace(placed, identity=OccurrenceId((*placed.identity.path, str(index)))), context
+                        node,
+                        replace(placed, identity=OccurrenceId((*placed.identity.path, str(index)))),
+                        context,
+                        disabled_controls=self.disabled_controls,
                     )
                     for index, node in enumerate(controls)
                 ),
@@ -140,122 +133,87 @@ class RegionNavigation[RenderTargetT, ContextT]:
         return tuple(result)
 
 
-def navigation_candidate[RenderTargetT, ContextT](
-    node: primitive.Node[ContextT],
-    occurrence: SemanticOccurrence[RenderTargetT, ContextT],
-    context: PlanningContext,
-) -> CandidateComposition[RenderTargetT, ContextT, Realization]:
-    """Expose navigation structure and bindings before its resource certification."""
+def navigation_candidate[R, C](
+    node: object, occurrence: SemanticOccurrence[R, C], context: PlanningContext, *, disabled_controls: bool = True
+) -> CandidateComposition[R, C, Realization]:
+    """Expose target-independent navigation actions before resource certification."""
+    if isinstance(node, NativeValue):
+        return node.semantics.navigation_candidate(node, occurrence, context, disabled_controls=disabled_controls)
     context.work.consume()
-
-    def label(value: TextLike | None) -> str | None:
-        return (
-            None if value is None else "".join(tree.plain(n) for n in resolve_text(value, context.localization).nodes)
-        )
-
+    children = ()
     binding = None
-    form: FormBinding[ContextT] | None = None
-    children: tuple[CandidateComposition[RenderTargetT, ContextT, Realization], ...] = ()
-    payload: Realization
-    match node:
-        case primitive.Row(items=items):
-            payload = RowRealization()
-            children = tuple(
-                navigation_candidate(
-                    child, replace(occurrence, identity=OccurrenceId((*occurrence.identity.path, str(index)))), context
-                )
-                for index, child in enumerate(items)
+    if isinstance(node, sem.ActionControls):
+        payload = ActionsRealization(navigation=True)
+        children = tuple(
+            navigation_candidate(
+                child, replace(occurrence, identity=OccurrenceId((*occurrence.identity.path, str(index)))), context
             )
-        case primitive.Button():
-            payload = ControlRealization(
-                label(node.label) or "",
-                action=node.key,
-                style=node.style,
-                disabled=node.disabled,
-                mode=node.mode,
-                emoji=normalize_emoji(node.emoji),
-            )
+            for index, child in enumerate(node.items)
+            if disabled_controls
+            or not isinstance(child, sem.ActionControl | sem.RoutedActionControl)
+            or child.available
+        )
+    elif isinstance(node, sem.ActionControl | sem.RoutedActionControl):
+        label = "".join(tree.plain(part) for part in resolve_text(node.label, context.localization).nodes)
+        payload = ControlRealization(
+            label,
+            action=node.key if isinstance(node, sem.ActionControl) else None,
+            route=node.route_id if isinstance(node, sem.RoutedActionControl) else None,
+            style=button_style(node.tone, node.emphasis),
+            disabled=not node.available,
+            mode=node.mode if isinstance(node, sem.ActionControl) else ActionMode.EXCLUSIVE,
+        )
+        if isinstance(node, sem.ActionControl):
             binding = ActionBinding(
                 node.key,
-                node.on_click,
+                node.on_trigger,
                 node.mode,
                 guard=node.guard,
                 busy=node.busy,
-                label=node.label or "",
+                label=node.label,
                 record=node.record,
             )
-            if isinstance(node, primitive.FormButton):
-                form = node.form
-        case primitive.RoutedButton():
-            payload = ControlRealization(
-                label(node.label) or "",
-                route=node.route_id,
-                style=node.style,
-                disabled=node.disabled,
-                emoji=normalize_emoji(node.emoji),
+    elif isinstance(node, sem.Choices | sem.RoutedChoices):
+        selected = (
+            node.selected
+            if isinstance(node, sem.RoutedChoices)
+            else node.selection.value
+            if isinstance(node.selection, Controlled)
+            else ()
+        )
+        options = tuple(
+            controls.Option(
+                "".join(tree.plain(part) for part in resolve_text(item.label, context.localization).nodes),
+                item.key,
+                default=item.key in selected,
             )
-        case primitive.PremiumButton():
-            payload = PremiumRealization(node.sku_id)
-        case primitive.LinkButton():
-            payload = ControlRealization(
-                label(node.label) or "", url=node.url, disabled=node.disabled, emoji=normalize_emoji(node.emoji)
+            for item in node.choices
+        )
+        payload = SelectRealization(
+            controls.RoutedSelect(
+                options,
+                node.route_id,
+                "".join(tree.plain(part) for part in resolve_text(node.placeholder, context.localization).nodes)
+                if node.placeholder is not None
+                else None,
+                node.minimum,
+                node.maximum,
+                not node.available,
             )
-        case primitive.SelectMenu() | primitive.RoutedSelect():
-            options = tuple(
-                scene.Option(
-                    label(option.label) or "",
-                    option.value,
-                    label(option.description),
-                    option.default,
-                    normalize_emoji(option.emoji),
-                )
-                for option in node.options
+            if isinstance(node, sem.RoutedChoices)
+            else controls.Select(options, node.key, min_values=node.minimum, max_values=node.maximum),
+            navigation=True,
+        )
+        if isinstance(node, sem.Choices):
+            binding = ActionBinding(
+                node.key, SelectChoices(ChoiceCommit(node.selection, node.key, selected, context.presentation))
             )
-            if isinstance(node, primitive.SelectMenu):
-                payload = SelectRealization(
-                    scene.Select(
-                        options,
-                        node.key,
-                        label(node.placeholder),
-                        node.min_values,
-                        node.max_values,
-                        node.disabled,
-                        node.mode,
-                    )
-                )
-                binding = ActionBinding(node.key, node.on_select, node.mode, routes=node.routes)
-            else:
-                payload = SelectRealization(
-                    scene.RoutedSelect(
-                        options, node.route_id, label(node.placeholder), node.min_values, node.max_values, node.disabled
-                    )
-                )
-        case primitive.EntitySelect():
-            payload = EntityRealization(
-                scene.EntitySelect(
-                    node.entity_type,
-                    node.key,
-                    label(node.placeholder),
-                    node.default_values,
-                    node.conversation_types,
-                    node.min_values,
-                    node.max_values,
-                    node.disabled,
-                    node.mode,
-                )
-            )
-            binding = ActionBinding(node.key, node.on_select, node.mode)
-        case _:
-            msg = f"navigation {type(node).__name__}"
-            raise UnsupportedSemanticError(msg)
+    else:
+        message = f"navigation {type(node).__name__}"
+        raise UnsupportedSemanticError(message)
     return CandidateComposition(
-        RealizationOffer[RenderTargetT, ContextT, Realization](
-            occurrence,
-            "navigation",
-            payload,
-            tuple(child.offer.occurrence for child in children),
-            binding=binding,
-            form=form,
+        RealizationOffer[R, C, Realization](
+            occurrence, "navigation", payload, tuple(child.offer.occurrence for child in children), binding=binding
         ),
         children,
     )
@@ -269,28 +227,24 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
     ref: SemanticRef | None = occurrence.reference
     while ref is not None:
         unit = occurrence.graph.units[ref]
-        if unit.parent is not None and not isinstance(
-            unit.value,
-            sem.Budgeted
-            | primitive.Budget
-            | primitive.Break
-            | sem.KeepWithNext
-            | sem.Unbreakable
-            | sem.Truncated
-            | sem.Spilled
-            | sem.BestEffort
-            | Budget
-            | RootRegion,
+        if (
+            unit.parent is not None
+            and not NativeTraits.of(unit.value).transparent
+            and not isinstance(
+                unit.value,
+                sem.Budgeted
+                | sem.KeepWithNext
+                | sem.Unbreakable
+                | sem.Truncated
+                | sem.Spilled
+                | sem.BestEffort
+                | Budget
+                | RootRegion,
+            )
         ):
             parts.append(quote(ref.keys[-1], safe=""))
         ref = unit.parent
     return "$/" + "/".join(reversed(parts))
-
-
-def _control_key[RenderTargetT, ContextT](
-    occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
-) -> str:
-    return control_key(occurrence, consume=context.work.consume)
 
 
 def control_key[RenderTargetT, ContextT](

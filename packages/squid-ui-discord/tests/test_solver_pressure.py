@@ -3,13 +3,13 @@
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.primitives import Paginate
 from squid_ui.ext.discord.target import v2
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import Paginate
 
 
 class TestBudgetContract:
@@ -44,7 +44,7 @@ class TestBudgetContract:
 
         assert result.allocation is not None
         assert any(event.message == "Shortening" for event in result.report.events)
-        text = [node.content for node in result.scene.body.children if isinstance(node, scene.Text)]
+        text = [node.content for node in result.scene.body.children if isinstance(node, discord_scene.Text)]
         assert len(text) == 2
         assert 90 <= sum(map(len, text)) <= 100
 
@@ -59,10 +59,10 @@ class TestPaginateBreakPreferences:
 
 class TestRegionPagination:
     @staticmethod
-    def _texts(result: PlanResult[scene.ComponentsV2]) -> list[str]:
-        panel = result.scene.components_v2.children[0]
-        assert isinstance(panel, scene.Panel)
-        return [child.content for child in panel.children if isinstance(child, scene.Text)]
+    def _texts(result: PlanResult[discord_scene.ComponentsV2]) -> list[str]:
+        panel = result.scene.expect_body(discord_scene.ComponentsV2).children[0]
+        assert isinstance(panel, discord_scene.Panel)
+        return [child.content for child in panel.children if isinstance(child, discord_scene.Text)]
 
     def test_sugar_validates_its_region_contract(self) -> None:
         with pytest.raises(ValueError, match="key must not be empty"):
@@ -78,7 +78,11 @@ class TestRegionPagination:
             target=DISCORD_V2_DPY27,
         )
 
-        assert [child.content for child in result.scene.components_v2.children if isinstance(child, scene.Text)] == [
+        assert [
+            child.content
+            for child in result.scene.expect_body(discord_scene.ComponentsV2).children
+            if isinstance(child, discord_scene.Text)
+        ] == [
             "first",
             "second",
         ]

@@ -9,10 +9,11 @@ import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.chrome import Chrome
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions.handlers import FrontendHandler, handlers
 from squid_ui.planning import (
@@ -26,7 +27,6 @@ from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import ComponentsV2Target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "joint.discord", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "joint.slack", ">=1"))
@@ -203,7 +203,7 @@ def test_shared_downloads_retain_the_delivery_asset(target: Any) -> None:
 def test_explicit_options_do_not_replay_an_implicit_plan() -> None:
     document = sl.region(sl.paragraph("Body"), key="r", title="R")
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2]()
     implicit = sl.planning.plan(document, target=V2, session=session, snapshot=snapshot)
     with pytest.raises(JointExhaustedError):
         sl.planning.plan(

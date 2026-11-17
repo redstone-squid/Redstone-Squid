@@ -2,7 +2,7 @@
 
 from typing import Protocol, override
 
-from squid_ui import scene
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.rendering.controls import Wire
 from squid_ui.planning.result import PlanResult

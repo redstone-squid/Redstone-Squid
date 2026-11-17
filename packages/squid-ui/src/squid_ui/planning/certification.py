@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from squid_ui.authoring.presentations import Budget
 from squid_ui.authoring.semantic import Budgeted
+from squid_ui.native import NativeTraits
 from squid_ui.planning.allocation import CertifiedPage, PageFamily
 from squid_ui.planning.allocation_policy import RegionPolicy
 from squid_ui.planning.composition import (
@@ -31,7 +32,6 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.fragments import FragmentTree
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantic_correspondence import budget_floor
-from squid_ui.primitives.nodes import Budget as NativeBudget
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +124,8 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     )
             costs[identity] = body_cost + extra
         semantic = occurrence.graph.units[occurrence.reference].value
-        if isinstance(semantic, Budgeted | NativeBudget):
+        character_budget = semantic if isinstance(semantic, Budgeted) else NativeTraits.of(semantic).budget
+        if character_budget is not None:
             actual = cost.get(Axis.DISPLAY_TEXT) - navigation_chars[occurrence.identity]
             extra += ResourceCost(
                 {
@@ -136,7 +137,7 @@ def _allocation_checks[RenderTargetT, ContextT, PayloadT, ResourceT, Preparation
                     )
                 }
             )
-            ceiling = semantic.preferred + semantic.stretch
+            ceiling = character_budget.preferred + character_budget.stretch
             if actual + extra.get(Axis.DISPLAY_TEXT) > ceiling:
                 violations.append(
                     CapacityExceeded(

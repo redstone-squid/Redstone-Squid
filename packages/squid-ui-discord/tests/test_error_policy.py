@@ -7,6 +7,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.ext.discord.delivery import DeliveryResult
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class FailingPanel(sd.Screen):
@@ -36,7 +37,7 @@ async def test_component_failure_rolls_back_then_renders_and_observes(defer: sd.
     panel = FailingPanel(defer)
     owner = object()
 
-    def render(request: sd.Request[Any], error: Exception) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+    def render(request: sd.Request[Any], error: Exception) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
         assert panel.count == 0
         assert request.owner is owner
         assert request.localization.locale == "fr"

@@ -18,6 +18,7 @@ from squid_ui.ext.discord.modal import (
     _entity_defaults,
     build_form_modal,
 )
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, query
 from squid_ui.interactions.forms import FormText
 from squid_ui.selectors import select as select_node
@@ -288,7 +289,7 @@ def test_file_field_rejects_more_than_ten_uploads() -> None:
         )
 
 
-class DurationPanel(sl.Component[sl.ComponentsV2Target]):
+class DurationPanel(sl.Component[ComponentsV2Target]):
     seconds: int = sl.state(0)
 
     def __init__(self, *, validation: sl.forms.FormValidationMode = sl.forms.FormValidationMode.RETRY) -> None:
@@ -516,7 +517,7 @@ async def test_descriptor_form_hooks_keep_invalid_attempts_out_of_on_submit(cust
 
     form = CustomForm(duration="initial") if custom_invalid else DurationForm(duration="initial")
 
-    class Panel(sl.Component[sl.ComponentsV2Target]):
+    class Panel(sl.Component[ComponentsV2Target]):
         @override
         def render(self) -> sl.LayoutNode:
             return sl.form("Duration", form, key="duration")

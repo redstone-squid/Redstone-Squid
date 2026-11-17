@@ -23,6 +23,7 @@ from squid.edits.domain import (
 from squid_i18n import md_tr
 from squid_reactivity import Signal, current_transaction
 from squid_ui.content.text import TextLike
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +210,9 @@ class EditController:
             self._refresh_failed = False
         self._signal.notify()
 
-    def controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         """Render Undo and Redo for editors, followed by `refresh_controls`."""
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         can_undo, can_redo = bool(self.undoable), bool(self.redoable)
         if can_undo or can_redo:
 
@@ -230,7 +231,7 @@ class EditController:
             )
         return (*nodes, *self.refresh_controls())
 
-    def refresh_controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def refresh_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         """Render a refresh button if reloading saved values after a save failed.
 
         Settings screens use this without Undo and Redo, because using a toggle or form again

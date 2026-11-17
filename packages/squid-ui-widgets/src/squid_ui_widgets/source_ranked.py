@@ -6,7 +6,7 @@ from typing import override
 
 from squid_reactivity.operations import Failed, Pending
 from squid_ui.authoring.document import DocumentLike
-from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.authoring.semantic import ActionControls, LayoutNode, List, ListItem
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
@@ -17,7 +17,6 @@ from squid_ui.planning.pagination.navigation import (
     default_nav,
     page_size_button,
 )
-from squid_ui.primitives import Lines, Row
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
     ORIGIN,
@@ -27,7 +26,7 @@ from squid_ui.sources import (
     WindowSource,
     window_footer,
 )
-from squid_ui.target_types import DiscordTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (
@@ -37,12 +36,12 @@ from squid_ui_widgets._window import (
 )
 from squid_ui_widgets.browsing import BrowseSession, Movement
 
-type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
+type SourceContentHook[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     ContentLike[RenderTargetT, ContextT] | Callable[[int | None], ContentLike[RenderTargetT, ContextT]]
 )
 
 
-class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
+class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
     """Render source-ordered ranking windows, retaining the last page during reloads.
@@ -161,7 +160,16 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
         )
         total = window.total if capabilities.count is not CountPrecision.NONE else None
         body = (
-            (Lines(self.rows.lines(window.items, window.position.offset)),)
+            (
+                List(
+                    tuple(
+                        ListItem(str(index), line)
+                        for index, line in enumerate(self.rows.lines(window.items, window.position.offset))
+                    ),
+                    key=f"{self.key}.rows",
+                    markers=False,
+                ),
+            )
             if window.items
             else self._hook(self.empty, total, name="empty")
         )
@@ -185,12 +193,13 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
             *body,
             note(numeric_footer) if navigation_state is not None and numeric_footer is not None else None,
             *navigation,
-            Row(
+            ActionControls(
                 (
                     page_size_button(
                         self.key, self.page_size, partial(self._resize, self.session.revision), chrome=chrome
                     ),
-                )
+                ),
+                key=f"{self.key}.size-controls",
             )
             if self.show_page_size
             else None,

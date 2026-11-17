@@ -15,12 +15,13 @@ from typing import Any, cast, override
 import squid_ui as sl
 from squid_ui import Component, computed, state
 from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.primitives import Panel, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, delivered_to, message_harness
-from squid_ui.primitives import Panel, Text
 from squid_ui.profiling import MemoryProfiler, OperationKind, PresentationStatus
 
 
-class _Leaf(Component[sl.ComponentsV2Target]):
+class _Leaf(Component[ComponentsV2Target]):
     source: int = state(0)
 
     def __init__(self, *, observed: bool) -> None:
@@ -37,9 +38,9 @@ class _Leaf(Component[sl.ComponentsV2Target]):
         return Text(str(self.even)) if self.observed else ()
 
 
-class _Root(Component[sl.ComponentsV2Target]):
+class _Root(Component[ComponentsV2Target]):
     def __init__(self, components: int) -> None:
-        self.leaves: tuple[Component[sl.ComponentsV2Target], ...] = tuple(
+        self.leaves: tuple[Component[ComponentsV2Target], ...] = tuple(
             _Leaf(observed=index == 0) for index in range(components)
         )
         self.renders = 0
@@ -219,7 +220,7 @@ def measure_case(
     )
 
 
-class _ValueLeaf(Component[sl.ComponentsV2Target]):
+class _ValueLeaf(Component[ComponentsV2Target]):
     value: int = state(0)
 
     def __init__(self, *, visible: bool) -> None:
@@ -232,7 +233,7 @@ class _ValueLeaf(Component[sl.ComponentsV2Target]):
         return Text(str(self.value)) if self.visible else ()
 
 
-class _ValueRoot(Component[sl.ComponentsV2Target]):
+class _ValueRoot(Component[ComponentsV2Target]):
     def __init__(self, components: int, visible: int) -> None:
         self.leaves = tuple(_ValueLeaf(visible=index < visible) for index in range(components))
         self.renders = 0
@@ -243,7 +244,7 @@ class _ValueRoot(Component[sl.ComponentsV2Target]):
         return tuple(leaf.keyed(str(index)) for index, leaf in enumerate(self.leaves))
 
 
-class _BranchLeaf(Component[sl.ComponentsV2Target]):
+class _BranchLeaf(Component[ComponentsV2Target]):
     alternate: bool = state(False)
 
     def __init__(self) -> None:
@@ -257,7 +258,7 @@ class _BranchLeaf(Component[sl.ComponentsV2Target]):
         return Text("primary")
 
 
-class _TextLeaf(Component[sl.ComponentsV2Target]):
+class _TextLeaf(Component[ComponentsV2Target]):
     long: bool = state(False)
 
     def __init__(self) -> None:
@@ -269,7 +270,7 @@ class _TextLeaf(Component[sl.ComponentsV2Target]):
         return Text("x" * (4_500 if self.long else 2_000))
 
 
-class _MountedChild(Component[sl.ComponentsV2Target]):
+class _MountedChild(Component[ComponentsV2Target]):
     def __init__(self) -> None:
         self.mounts = 0
         self.unmounts = 0
@@ -287,7 +288,7 @@ class _MountedChild(Component[sl.ComponentsV2Target]):
         self.unmounts += 1
 
 
-class _MountingLeaf(Component[sl.ComponentsV2Target]):
+class _MountingLeaf(Component[ComponentsV2Target]):
     mounted: bool = state(False)
 
     def __init__(self) -> None:
@@ -300,7 +301,7 @@ class _MountingLeaf(Component[sl.ComponentsV2Target]):
         return self.child.keyed("child") if self.mounted else Text("unmounted")
 
 
-class _ResourceLeaf(Component[sl.ComponentsV2Target]):
+class _ResourceLeaf(Component[ComponentsV2Target]):
     key: int = state(0)
 
     def __init__(self) -> None:
@@ -320,7 +321,7 @@ class _ResourceLeaf(Component[sl.ComponentsV2Target]):
         return Text(status.value)
 
 
-def _root_with_special(components: int, special: Component[sl.ComponentsV2Target]) -> _Root:
+def _root_with_special(components: int, special: Component[ComponentsV2Target]) -> _Root:
     root = _Root(components)
     root.leaves = (special, *root.leaves[1:])
     return root

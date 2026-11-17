@@ -8,6 +8,7 @@ import squid_ui as sl
 from squid_ui import testing
 from squid_ui.action_mode import ActionMode
 from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions.handlers import FrontendHandler, HandlerSet
@@ -15,7 +16,7 @@ from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.identity import stable_fingerprint
-from squid_ui.planning.pagination.navigation import TurnPage, default_nav
+from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.result import PlanReuse
 from squid_ui.presentation import PresentationState
 

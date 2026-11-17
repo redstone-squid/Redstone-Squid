@@ -14,8 +14,10 @@ from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import query
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime.definition import Component
@@ -33,9 +35,9 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
     result = sl.planning.plan(node, target=DISCORD_V2_DPY27)
 
     assert isinstance(node, sl.semantic.Download)
-    assert result.scene.components_v2.children == (
-        scene.Text("Report\nGenerated now", Markup.DISCORD_MARKDOWN),
-        scene.File(asset_key="report", name="report.txt", media_type="text/plain"),
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("Report\nGenerated now", Markup.DISCORD_MARKDOWN),
+        discord_scene.File(asset_key="report", name="report.txt", media_type="text/plain"),
     )
     assert result.scene.assets == (sl.scene.Asset(key="report", name="report.txt", media_type="text/plain"),)
     assert result.resources["asset:report"] is asset
@@ -44,7 +46,9 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 def test_download_uses_localized_chrome_when_the_explicit_label_is_none() -> None:
     result = sl.planning.plan(sl.download(_inline(), label=None, key="report-download"), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children[0] == scene.Text("Download", Markup.DISCORD_MARKDOWN)
+    assert result.scene.expect_body(discord_scene.ComponentsV2).children[0] == discord_scene.Text(
+        "Download", Markup.DISCORD_MARKDOWN
+    )
 
 
 def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
@@ -88,12 +92,12 @@ def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     assert link.url == "https://example.com/report.txt"
 
 
-class _DownloadComponent(Component[sl.ComponentsV2Target]):
+class _DownloadComponent(Component[ComponentsV2Target]):
     def __init__(self, asset: sl.document.Asset) -> None:
         self.asset = asset
 
     @override
-    def render(self) -> DocumentLike[sl.ComponentsV2Target]:
+    def render(self) -> DocumentLike[ComponentsV2Target]:
         return sl.download(self.asset, label="Report", key="report-download")
 
 

@@ -8,15 +8,15 @@ import squid_ui as sl
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.primitives import nodes as native
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
+from squid_ui.overflow import Never, Paginate, Truncate
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Never, Paginate, Truncate
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-policies", "1")
 TARGET = components_v2_target(ADAPTER)
@@ -73,8 +73,8 @@ def test_native_break_annotations_forbid_partial_groups(unbreakable: bool) -> No
     ],
 )
 def test_checked_alternatives_cannot_weaken_native_policies(
-    source: native.Break[sl.ComponentsV2Target] | native.Budget[sl.ComponentsV2Target],
-    changed: native.Break[sl.ComponentsV2Target] | native.Budget[sl.ComponentsV2Target],
+    source: native.Break[ComponentsV2Target] | native.Budget[ComponentsV2Target],
+    changed: native.Break[ComponentsV2Target] | native.Budget[ComponentsV2Target],
 ) -> None:
     choice = sl.alternative(changed, key="weakened", fidelity=sl.equivalent())
     with pytest.raises(LayoutInvariantError, match=r"preserve the .* boundary"):

@@ -7,6 +7,7 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.authoring.semantic import Controlled
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.html.target import target as html_target
 from squid_ui.interactions.handlers import FrontendHandler, HandlerSet
 from squid_ui.planning import plan
@@ -20,7 +21,7 @@ class ContextScreen(sd.Screen):
         self.seen = []
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.stack(
             sl.action_controls(sl.action_control("Press", self.press, key="press"), key="actions"),
             sl.choices(
@@ -121,7 +122,7 @@ def test_missing_handler_set_branch_and_wrong_component_frontend_fail_at_mount()
     with pytest.raises(TypeError, match="no handler implementation"):
         plan(node, target=html_target())
 
-    class Foreign(sl.Component[sl.ComponentsV2Target]):
+    class Foreign(sl.Component[ComponentsV2Target]):
         event_frontend = "html"
 
         @override
@@ -146,7 +147,7 @@ async def test_invalid_form_keeps_context_and_retry_authority() -> None:
 
     class FormPanel(sd.Screen):
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
             return sl.form(
                 "Submit",
                 sl.forms.FormSpec[sd.Request](

@@ -16,12 +16,14 @@ from squid.submissions.domain import (
 )
 from squid_i18n import Text, md_tr
 from squid_ui.content.text import md
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class SavedDraftsScreen(sd.Screen):
     """Keep saved drafts and inference runs reachable across Discord message pages."""
 
-    def __init__(self, nodes: Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]) -> None:
+    def __init__(self, nodes: Sequence[sl.LayoutNode[ComponentsV2Target, sd.Request]]) -> None:
         self.nodes = tuple(nodes)
 
     @router.route("/drafts")
@@ -38,10 +40,10 @@ class SavedDraftsScreen(sd.Screen):
             else await request.client.services.submission_drafts.list_active(account_id)
         )
         runs = await request.client.services.submission_inference.list_active(actor, inbox=inbox)
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.primitives.Section(
-                (sl.primitives.Text(_draft_line(draft)),),
-                sl.primitives.RoutedButton(
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
+            primitives.Section(
+                (primitives.Text(_draft_line(draft)),),
+                primitives.RoutedButton(
                     tr(t"build-drafts-open = Open"),
                     DraftEditorScreen.open_draft.custom_id(draft_id=draft.snapshot.id),
                 ),
@@ -49,11 +51,9 @@ class SavedDraftsScreen(sd.Screen):
             for draft in drafts
         ]
         nodes.extend(
-            sl.primitives.Section(
-                (sl.primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
-                sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), reopen_inference.custom_id(run_id=run_id)
-                ),
+            primitives.Section(
+                (primitives.Text(md_tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
+                primitives.RoutedButton(tr(t"build-drafts-review = Review"), reopen_inference.custom_id(run_id=run_id)),
             )
             for run_id in runs
         )
@@ -66,7 +66,7 @@ class SavedDraftsScreen(sd.Screen):
         )
 
     @override
-    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.Document[ComponentsV2Target, sd.Request]:
         return sl.Document(self.nodes, key="saved-drafts")
 
 

@@ -7,8 +7,10 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui import scene
 from squid_ui.errors import UnsolvableLayoutError
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.planning.allocation import AllocationSnapshot
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import PresentationState
@@ -33,7 +35,7 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
     )
 
     result = sl.planning.plan(table, target=squid_ui.ext.discord.DISCORD_V2_DPY27)
-    text = query(result.scene, select(scene.Text)).all()[0].node.content
+    text = query(result.scene, select(discord_scene.Text)).all()[0].node.content
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
     assert "-+-" not in text
@@ -52,8 +54,8 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
         squid_ui.ext.discord.button_grid(*cells, key="board", columns=5, on_pick=pick),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    rows = [match.node for match in query(result.scene, select(scene.Row)).all()]
-    buttons = [match.node for match in query(result.scene, select(scene.Button)).all()]
+    rows = [match.node for match in query(result.scene, select(discord_scene.Row)).all()]
+    buttons = [match.node for match in query(result.scene, select(discord_scene.Button)).all()]
 
     assert [len(row.items) for row in rows] == [5, 1]
     assert buttons[-1].disabled
@@ -79,9 +81,9 @@ def test_exact_button_grid_refuses_illegal_discord_shapes_in_planning() -> None:
 @pytest.mark.parametrize(
     ("count", "columns", "scene_type", "strategy"),
     [
-        (5, 5, scene.Button, "buttons"),
-        (6, 6, scene.Select, "coordinate"),
-        (30, 6, scene.Select, "paged_select"),
+        (5, 5, discord_scene.Button, "buttons"),
+        (6, 6, discord_scene.Select, "coordinate"),
+        (30, 6, discord_scene.Select, "paged_select"),
     ],
 )
 def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_type: type, strategy: str) -> None:
@@ -93,7 +95,7 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
     assert query(result.scene, select(scene_type)).exists()
     assert result.allocation is not None
     if strategy == "paged_select":
-        picker = query(result.scene, select(scene.Select)).all()[0].node
+        picker = query(result.scene, select(discord_scene.Select)).all()[0].node
         assert 1 <= len(picker.options) <= 25
         assert result.scene.pagers[0].pages == 2
 
@@ -133,7 +135,7 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
         ),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    picker = query(result.scene, select(scene.Select)).all()[0].node
+    picker = query(result.scene, select(discord_scene.Select)).all()[0].node
 
     assert [(option.label, option.value) for option in picker.options] == [("A1 — Open", "open")]
     await result.bindings[picker.action].handler(
@@ -156,12 +158,12 @@ def test_grid_authoring_rejects_empty_duplicate_and_nonpositive_shapes() -> None
 
 
 def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
-    class Child(sl.Component[sl.ComponentsV2Target]):
+    class Child(sl.Component[ComponentsV2Target]):
         @override
         def render(self):
             return sl.grid(*_cells(2), key="board", columns=2, on_pick=_pick)
 
-    class Parent(sl.Component[sl.ComponentsV2Target]):
+    class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 
@@ -177,7 +179,7 @@ def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
 
 @pytest.mark.parametrize("base", list(sl.Tone))
 def test_exact_grid_custom_roles_use_the_base_button_style(base: sl.Tone) -> None:
-    def document(tone: sl.Tone | sl.Role) -> tuple[sl.primitives.Row, ...]:
+    def document(tone: sl.Tone | sl.Role) -> tuple[primitives.Row, ...]:
         return squid_ui.ext.discord.button_grid(
             sp.GridCell("pick", "Pick", tone=tone), key="grid", columns=1, on_pick=_pick
         )

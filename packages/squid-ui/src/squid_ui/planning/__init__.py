@@ -24,7 +24,6 @@ from squid_ui.planning.composition_planner import AutomaticComposition, Composit
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
 from squid_ui.planning.planner import plan
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.resources import ResourceCost
@@ -32,25 +31,7 @@ from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanRes
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.spread import MessageSpread, plan_spread
 from squid_ui.planning.target import PreparedExtension, Target
-from squid_ui.target_types import (
-    ClassicTarget,
-    ComponentsV2Target,
-    DiscordAdapter,
-    DiscordPy27Adapter,
-    DiscordPyAdapter,
-    DiscordTarget,
-    HtmlAdapter,
-    HtmlTarget,
-    Renderable,
-    RenderTarget,
-    SlackAdapter,
-    SlackHomeTarget,
-    SlackMessageTarget,
-    SlackModalTarget,
-    SlackSdk343Adapter,
-    SlackSdkAdapter,
-    SlackTarget,
-)
+from squid_ui.target_types import Renderable, RenderTarget
 
 __all__ = [
     "DEFAULT_SEARCH_BUDGET",
@@ -58,23 +39,13 @@ __all__ = [
     "AllocationGoal",
     "AtomicContract",
     "AutomaticComposition",
-    "ClassicTarget",
-    "ComponentsV2Target",
-    "ComposableExtension",
     "CompositionOptions",
     "CompositionRejectedError",
-    "DiscordAdapter",
-    "DiscordPy27Adapter",
-    "DiscordPyAdapter",
-    "DiscordTarget",
     "FixedComposition",
-    "HtmlAdapter",
-    "HtmlTarget",
     "JointExhaustedError",
     "JointInfeasibleError",
     "JointUnsupportedError",
     "MessageSpread",
-    "NativeComposition",
     "OccurrenceId",
     "PagePosition",
     "PagePositionPolicy",
@@ -93,13 +64,6 @@ __all__ = [
     "ResourceCost",
     "SearchCompletion",
     "SearchDiagnostics",
-    "SlackAdapter",
-    "SlackHomeTarget",
-    "SlackMessageTarget",
-    "SlackModalTarget",
-    "SlackSdk343Adapter",
-    "SlackSdkAdapter",
-    "SlackTarget",
     "Target",
     "TargetDialect",
     "plan",

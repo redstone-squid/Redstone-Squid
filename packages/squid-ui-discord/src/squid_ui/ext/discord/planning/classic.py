@@ -1,16 +1,17 @@
 """Discord classic-message composition dialect."""
 
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui.ext.discord.planning.composition_classic import ClassicCompositionRules
 from squid_ui.ext.discord.planning.input import ClassicInput
+from squid_ui.ext.discord.target_types import ClassicTarget
 from squid_ui.planning.composition_planner import RuleComposition
 from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.pagination.navigation import PlannedNav
-from squid_ui.target_types import ClassicTarget
 
 
 class ClassicDialect:
@@ -21,14 +22,14 @@ class ClassicDialect:
     capabilities = frozenset(
         {
             Capability.ACTIONS_BUTTONS,
-            Capability.ACTIONS_DISCORD_PREMIUM,
+            DiscordCapability.ACTIONS_PREMIUM,
             Capability.ACTIONS_SELECT,
             Capability.ACTIONS_ENTITY,
             Capability.FORMS_MODAL,
-            Capability.FORMS_DISCORD_CHECKBOX_GROUP,
-            Capability.LAYOUT_EMBED,
-            Capability.LAYOUT_EMBED_FIELDS,
-            Capability.MESSAGE_CONTENT,
+            DiscordCapability.FORMS_CHECKBOX_GROUP,
+            DiscordCapability.LAYOUT_EMBED,
+            DiscordCapability.LAYOUT_EMBED_FIELDS,
+            DiscordCapability.MESSAGE_CONTENT,
         }
     )
     render_target = ClassicTarget

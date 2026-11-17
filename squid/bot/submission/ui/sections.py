@@ -42,6 +42,7 @@ from squid.submissions.domain.finalization import (
 )
 from squid_i18n import Text, md_tr
 from squid_ui.content.text import TextLike, md
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import PressHandler
 
 MAX_MODAL_FIELDS = 5
@@ -146,7 +147,7 @@ class AnswerWorkspace(Protocol):
 
     def section(self, section_id: str) -> FormSection | None: ...
 
-    def history_controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def history_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         """Undo and Redo for the changes made in this editor."""
         ...
 
@@ -182,7 +183,7 @@ class SectionEditorScreen(sd.Screen[None]):
         }
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         ws = self.workspace
         section = ws.section(self.section_id)
         if (closed := closed_detail(self, ws)) is not None:
@@ -345,7 +346,7 @@ class SectionEditorScreen(sd.Screen[None]):
 
 def closed_detail(
     screen: sd.Screen[None], ws: AnswerWorkspace
-) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...] | None:
+) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...] | None:
     """The final view of an editor message once it is closed, or once its answers can no longer change."""
     if screen.outcome is not None:
         return (sl.status(tr(t"editor-detail-closed = Done. You can dismiss this message.")),)

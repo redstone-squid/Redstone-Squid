@@ -16,6 +16,7 @@ from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, M
 from squid_ui.ext.discord.messages.payload import MessageMode
 from squid_ui.ext.discord.messages.root import AnyMessageRoot
 from squid_ui.ext.discord.messages.wiring import ClassicMountedView
+from squid_ui.ext.discord.target_types import ClassicTarget
 from squid_ui.ext.discord.testing import (
     commit_classic_render,
     commit_render,
@@ -28,7 +29,7 @@ from squid_ui.interactions import ActionEvent
 TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
 
 
-class Screen(Component[sl.ClassicTarget]):
+class Screen(Component[ClassicTarget]):
     presses: int = sl.state(0)
 
     @override

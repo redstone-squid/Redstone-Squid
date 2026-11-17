@@ -43,7 +43,7 @@ from squid_ui.factories.containers import stack
 from squid_ui.factories.content import media_item, progress
 from squid_ui.factories.controls import choice, choices, controlled, routed_choices
 from squid_ui.interactions import SelectionEvent
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
+from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.target_types import RenderTarget
 
 

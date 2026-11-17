@@ -14,13 +14,15 @@ from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_i18n import md_tr
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
     """Review selected creator-credit claims with authorization checks before decisions.
 
     An approval that conflicts with an existing owner arms a second approval for
@@ -61,18 +63,18 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         entries = tuple(_claim_entry(claim) for claim in self._claims)
-        body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = (
+        body: sl.LayoutNode[ComponentsV2Target, sd.Request] = (
             sd.v2.lines(
                 *entries,
                 join="\n\n",
-                overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
+                overflow=primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
             else sd.v2.text(tr(t"claims-review-empty = No creator credit claims are awaiting review."))
         )
-        choices: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None
+        choices: sl.LayoutNode[ComponentsV2Target, sd.Request] | None = None
         if self._claims:
             choices = sl.choices(
                 *(

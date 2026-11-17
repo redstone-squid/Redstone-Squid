@@ -10,17 +10,18 @@ from squid_ui.authoring.semantic import ActionControls, Link, Note, Paragraph
 from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import DISCORD_V1_DPY27, classic
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
 
 
-def _document(body: scene.ClassicMessage) -> scene.Scene[scene.ClassicMessage]:
+def _document(body: discord_scene.ClassicMessage) -> scene.Scene[discord_scene.ClassicMessage]:
     return scene.Scene(scene.Codec.protocol, "discord.components-v1", 1, body)
 
 
-def link(label: str = "Docs") -> scene.Link:
-    return scene.Link(label, "https://example.invalid")
+def link(label: str = "Docs") -> discord_scene.Link:
+    return discord_scene.Link(label, "https://example.invalid")
 
 
 class TestDrawing:
@@ -46,10 +47,10 @@ class TestDrawing:
         assert classic.render_static(Paragraph("hi")).view is None
 
     def test_each_planned_row_becomes_its_own_row_index(self) -> None:
-        body = scene.ClassicMessage(
+        body = discord_scene.ClassicMessage(
             rows=(
-                scene.ClassicRow((link("a"), link("b"))),
-                scene.ClassicRow((link("c"),)),
+                discord_scene.ClassicRow((link("a"), link("b"))),
+                discord_scene.ClassicRow((link("c"),)),
             )
         )
 
@@ -61,40 +62,44 @@ class TestDrawing:
 
 class TestMalformedScenes:
     def test_a_row_mixing_a_select_with_buttons_is_refused(self) -> None:
-        body = scene.ClassicMessage(rows=(scene.ClassicRow((scene.Select((scene.Option("a", "a"),), "act"), link())),))
+        body = discord_scene.ClassicMessage(
+            rows=(discord_scene.ClassicRow((discord_scene.Select((discord_scene.Option("a", "a"),), "act"), link())),)
+        )
 
         with pytest.raises(DrawInvariantError, match="mixes a select with other controls"):
             ClassicRenderer().draw(_document(body))
 
     def test_more_than_five_buttons_in_a_row_is_refused(self) -> None:
-        body = scene.ClassicMessage(rows=(scene.ClassicRow(tuple(link(f"b{index}") for index in range(6))),))
+        body = discord_scene.ClassicMessage(
+            rows=(discord_scene.ClassicRow(tuple(link(f"b{index}") for index in range(6))),)
+        )
 
         with pytest.raises(DrawInvariantError, match="holds 6 buttons"):
             ClassicRenderer().draw(_document(body))
 
     def test_an_empty_row_is_refused_because_planning_should_not_emit_one(self) -> None:
         with pytest.raises(DrawInvariantError, match="is empty"):
-            ClassicRenderer().draw(_document(scene.ClassicMessage(rows=(scene.ClassicRow(()),))))
+            ClassicRenderer().draw(_document(discord_scene.ClassicMessage(rows=(discord_scene.ClassicRow(()),))))
 
     def test_a_components_v2_body_is_refused_by_name(self) -> None:
         wrong = scene.Scene(
             scene.Codec.protocol,
             "discord.components-v1",
             1,
-            scene.ComponentsV2((scene.Text("x", markup=Markup.DISCORD_MARKDOWN),)),
+            discord_scene.ComponentsV2((discord_scene.Text("x", markup=Markup.DISCORD_MARKDOWN),)),
         )
 
         with pytest.raises(DrawInvariantError, match="cannot draw a ComponentsV2 body"):
             ClassicRenderer().draw(wrong)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
-        wrong = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())
+        wrong = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, discord_scene.ClassicMessage())
 
         with pytest.raises(DrawInvariantError, match=re.escape("cannot draw target 'discord.components-v2'")):
             ClassicRenderer().draw(wrong)
 
     def test_an_interactive_control_needs_a_mounted_frontend(self) -> None:
-        body = scene.ClassicMessage(rows=(scene.ClassicRow((scene.Button("Save", "save"),)),))
+        body = discord_scene.ClassicMessage(rows=(discord_scene.ClassicRow((discord_scene.Button("Save", "save"),)),))
 
         with pytest.raises(TypeError, match="mounted Discord frontend"):
             ClassicRenderer().draw(_document(body))
@@ -206,21 +211,21 @@ class TestPayloadAudit:
 
 class TestRendererAudit:
     def test_the_renderer_refuses_to_return_an_illegal_payload(self) -> None:
-        body = scene.ClassicMessage(embeds=tuple(scene.Embed(description="x" * 1500) for _ in range(5)))
+        body = discord_scene.ClassicMessage(embeds=tuple(discord_scene.Embed(description="x" * 1500) for _ in range(5)))
 
         with pytest.raises(DrawInvariantError, match="embed text totals 7500"):
             ClassicRenderer().draw(_document(body))
 
     def test_the_audit_can_be_turned_off_for_a_caller_that_owns_the_check(self) -> None:
-        body = scene.ClassicMessage(embeds=tuple(scene.Embed(description="x" * 1500) for _ in range(5)))
+        body = discord_scene.ClassicMessage(embeds=tuple(discord_scene.Embed(description="x" * 1500) for _ in range(5)))
 
         presentation = ClassicRenderer(audit=False).draw(_document(body))
 
         assert len(presentation.embeds) == 5
 
     def test_a_field_survives_the_trip_through_discord_py(self) -> None:
-        body = scene.ClassicMessage(
-            embeds=(scene.Embed(fields=(scene.EmbedField(name="Width", value="2", inline=True),)),)
+        body = discord_scene.ClassicMessage(
+            embeds=(discord_scene.Embed(fields=(discord_scene.EmbedField(name="Width", value="2", inline=True),)),)
         )
 
         embed = ClassicRenderer().draw(_document(body)).embeds[0]

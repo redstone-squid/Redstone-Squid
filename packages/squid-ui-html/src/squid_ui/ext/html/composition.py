@@ -3,12 +3,13 @@
 from dataclasses import dataclass, replace
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.html import scene
 from squid_ui.ext.html._forms import HtmlFormRenderer
 from squid_ui.ext.html._text import html_text
+from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -272,7 +273,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                             attributes=(
                                 scene.HtmlAttribute(
                                     scene.HtmlAttributeName.NAME,
-                                    control.action if isinstance(control, scene.Select) else control.route_id,
+                                    control.action if isinstance(control, controls.Select) else control.route_id,
                                 ),
                                 *(
                                     (scene.HtmlAttribute(scene.HtmlAttributeName.MULTIPLE, value=True),)
@@ -289,17 +290,17 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
                                 scene.HtmlAttribute(
                                     scene.HtmlAttributeName.ARIA_LABEL,
                                     control.placeholder
-                                    or (control.action if isinstance(control, scene.Select) else control.route_id),
+                                    or (control.action if isinstance(control, controls.Select) else control.route_id),
                                 ),
                             ),
                             action=scene.HtmlActionRef(control.action, control.mode)
-                            if isinstance(control, scene.Select)
+                            if isinstance(control, controls.Select)
                             else None,
                             route=scene.HtmlRouteRef(control.route_id)
-                            if isinstance(control, scene.RoutedSelect)
+                            if isinstance(control, controls.RoutedSelect)
                             else None,
                             form=scene.HtmlFormRef(control.action, control.action)
-                            if isinstance(control, scene.Select)
+                            if isinstance(control, controls.Select)
                             else None,
                         ),
                     )

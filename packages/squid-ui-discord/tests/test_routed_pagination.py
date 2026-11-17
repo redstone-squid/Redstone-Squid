@@ -9,16 +9,18 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.modal import build_form_modal
+from squid_ui.ext.discord.navigation_controls import default_nav, page_jump_nav, page_select_nav
+from squid_ui.ext.discord.primitives import Lines, Paginate
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.interactions.ownership import Controlled, Uncontrolled
+from squid_ui.overflow import RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanningSnapshot, Target, plan
-from squid_ui.planning.pagination.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import page_jump_form
 from squid_ui.presentation import CursorUpdate, PresentationState
-from squid_ui.primitives import Lines, Paginate
-from squid_ui.primitives.constraints import RoutedPage
 from squid_ui.selectors import select as select_node
 from squid_ui_widgets import testing as wt
 
@@ -41,7 +43,7 @@ async def test_routed_jump_button_opens_form_after_router_recreation(target: Tar
         nav=page_jump_nav,
     )
     restored = scene.Codec.loads(scene.Codec.dumps(result.scene))
-    button = testing.find_all(restored, scene.RoutedButton)[-1]
+    button = testing.find_all(restored, discord_scene.RoutedButton)[-1]
     assert button.route_id == jump.id(page=2, pages=100)
     assert not result.bindings and not result.form_bindings
 
@@ -84,7 +86,10 @@ def test_dropdown_route_is_not_reused_for_a_form_button() -> None:
         target=DISCORD_V2_DPY27,
         nav=page_jump_nav,
     )
-    assert [button.route_id for button in testing.find_all(result.scene, scene.RoutedButton)] == ["page:0", "page:1"]
+    assert [button.route_id for button in testing.find_all(result.scene, discord_scene.RoutedButton)] == [
+        "page:0",
+        "page:1",
+    ]
 
 
 async def test_routed_widget_encodes_resolved_form_range_and_uses_existing_transition() -> None:
@@ -97,18 +102,18 @@ async def test_routed_widget_encodes_resolved_form_range_and_uses_existing_trans
         encoded[key] = route, page, pages
         return key
 
-    driver = sp.RouteDriver[sp.RankedListState, sl.DiscordTarget](
+    driver = sp.RouteDriver[sp.RankedListState](
         lambda route: f"ranking:{route.phase}:{route.state.page}",
         jump_route=jump,
     )
     result = plan(driver.render(machine, machine.initial_state), target=DISCORD_V2_DPY27, nav=page_jump_nav)
-    button = testing.find_all(result.scene, scene.RoutedButton)[-1]
+    button = testing.find_all(result.scene, discord_scene.RoutedButton)[-1]
     route, page, pages = encoded[button.route_id]
     assert pages == result.scene.pagers[0].pages and pages > 2
     form = page_jump_form(page, pages)
     submitted = await form.evaluate({"page": str(pages)})
     assert not submitted.errors
-    restored = sp.RouteDriver[sp.RankedListState, sl.DiscordTarget](lambda _route: "unused")
+    restored = sp.RouteDriver[sp.RankedListState](lambda _route: "unused")
     state = restored.transition(
         machine, route.state, route.action, values=(str(cast(int, submitted.values["page"]) - 1),)
     )
@@ -136,11 +141,11 @@ def test_routed_pages_ignore_session_positions_and_round_trip(target: Target, pa
     assert result.scene.pagers[0].page == expected
     assert not result.bindings
     assert not any(isinstance(update, CursorUpdate) for update in result.session_updates)
-    buttons = testing.find_all(result.scene, scene.RoutedButton)
+    buttons = testing.find_all(result.scene, discord_scene.RoutedButton)
     assert buttons[0].route_id == f"page:{max(0, expected - 1)}"
     assert buttons[0].disabled == (expected == 0)
     assert buttons[1].disabled == (expected == 2)
-    seek = testing.find(result.scene, scene.RoutedSelect)
+    seek = testing.find(result.scene, discord_scene.RoutedSelect)
     assert seek.route_id == "page:seek"
     assert [option.value for option in seek.options if option.default] == [str(expected)]
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
@@ -158,7 +163,9 @@ def test_route_factories_are_re_evaluated_with_a_shared_cache() -> None:
 
     for prefix in ("old", "new", "new"):
         result = plan(document(prefix), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache, snapshot=snapshot)
-        assert all(button.route_id.startswith(prefix) for button in testing.find_all(result.scene, scene.RoutedButton))
+        assert all(
+            button.route_id.startswith(prefix) for button in testing.find_all(result.scene, discord_scene.RoutedButton)
+        )
         assert not result.metrics.cache_hit
 
 
@@ -172,13 +179,13 @@ async def test_routed_and_mounted_rankings_share_budget_splits_and_jump_dispatch
     assert routed.planned is not None
     assert routed.planned.scene.pagers[0].pages > 2
     assert routed.planned.scene.pagers == local.scene.pagers
-    menu = testing.find(routed.planned.scene, scene.RoutedSelect)
+    menu = testing.find(routed.planned.scene, discord_scene.RoutedSelect)
     route = next(route for route in routed.routes if route.phase == "input")
     target = menu.options[-1].value
     await local.bindings["__cursor_seek.ranked"].handler(testing.selection_event(target))
 
     # A new driver and machine can interpret the input route without mounted callbacks.
-    restored = sp.RouteDriver[sp.RankedListState, sl.DiscordTarget](lambda _request: "unused")
+    restored = sp.RouteDriver[sp.RankedListState](lambda _request: "unused")
     state = restored.transition(ranking(), route.state, route.action, values=(target,))
     assert state == mounted.state
     next_page = wt.routed(ranking(), state, target=DISCORD_V2_DPY27)
@@ -266,7 +273,7 @@ def test_routed_multi_choice_draws_selected_defaults_and_clears_only_its_window(
     state = machine.transition(machine.initial_state, "page:roles:next")
     rendered = wt.routed(machine, state, target=DISCORD_V2_DPY27)
     assert rendered.planned is not None
-    picker = testing.find(rendered.planned.scene, scene.RoutedSelect)
+    picker = testing.find(rendered.planned.scene, discord_scene.RoutedSelect)
     assert [option.value for option in picker.options if option.default] == ["25"]
     route = next(route for route in rendered.routes if route.phase == "input")
     cleared = machine.transition(route.state, route.action, values=())
@@ -286,8 +293,8 @@ def test_routed_region_uses_route_navigation_without_live_bindings() -> None:
         nav=page_select_nav,
     )
     assert not result.bindings
-    assert testing.find_all(result.scene, scene.RoutedButton)
-    assert not testing.find_all(result.scene, scene.RoutedSelect), "jump is optional for a routed page"
+    assert testing.find_all(result.scene, discord_scene.RoutedButton)
+    assert not testing.find_all(result.scene, discord_scene.RoutedSelect), "jump is optional for a routed page"
 
 
 def test_two_pagers_in_one_classic_embed_keep_their_navigation() -> None:
@@ -296,7 +303,7 @@ def test_two_pagers_in_one_classic_embed_keep_their_navigation() -> None:
         sl.bullets("d", "e", "f", key="right", page_size=1, page=RoutedPage(2, lambda page: f"right:{page}")),
     )
     result = plan(document, target=DISCORD_V1_DPY27, nav=default_nav)
-    assert [button.route_id for button in testing.find_all(result.scene, scene.RoutedButton)] == [
+    assert [button.route_id for button in testing.find_all(result.scene, discord_scene.RoutedButton)] == [
         "left:0",
         "left:2",
         "right:1",

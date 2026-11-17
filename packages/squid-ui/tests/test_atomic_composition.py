@@ -7,13 +7,13 @@ import pytest
 
 import squid_ui as sl
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import AtomicNode, budget
 from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import components_v2_target
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui.planning import CompositionRejectedError, FixedComposition
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import (
@@ -28,7 +28,6 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.realizations import DownloadRealization, Realization, TextRealization
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.target_types import ComponentsV2Target
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "composition.atoms", ">=1"))
 
@@ -96,18 +95,21 @@ class BadgeRules(V2CompositionRules[ComponentsV2Target, object]):
     @override
     def evaluate(
         self, candidate: CandidateComposition[ComponentsV2Target, object, Realization], context: PlanningContext
-    ) -> Evaluation[object, scene.ComponentsV2]:
+    ) -> Evaluation[object, discord_scene.ComponentsV2]:
         self.calls.append("prepare")
         return super().evaluate(candidate, context)
 
     @override
-    def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
+    def build(self, preparation: discord_scene.ComponentsV2, context: PlanningContext) -> discord_scene.ComponentsV2:
         self.calls.append("build")
         return super().build(preparation, context)
 
     @override
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
+        self,
+        body: discord_scene.ComponentsV2,
+        expected: Evaluation[object, discord_scene.ComponentsV2],
+        context: PlanningContext,
     ) -> None:
         self.calls.append("validate")
         super().validate(body, expected, context)
@@ -116,7 +118,7 @@ class BadgeRules(V2CompositionRules[ComponentsV2Target, object]):
 def test_custom_atomic_rules_use_the_public_composition_boundary() -> None:
     rules = BadgeRules()
     result = sl.planning.plan(Badge("badge", "Ready"), target=TARGET, composition=FixedComposition(rules))
-    assert result.scene.body.children == (scene.Text("Ready", sl.text.Markup.DISCORD_MARKDOWN),)
+    assert result.scene.body.children == (discord_scene.Text("Ready", sl.text.Markup.DISCORD_MARKDOWN),)
     assert rules.calls == ["prepare", "build", "validate"]
 
 

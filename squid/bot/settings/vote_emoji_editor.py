@@ -11,6 +11,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.voting.domain import VoteChoice, VoteKind, VoteOption, normalize_vote_options
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
@@ -55,7 +56,7 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
         return sl.forms.FormSpec[sd.Request[Any, Any]](tr(t"vote-row-title = Vote emoji"), tuple(fields))
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             sl.heading(tr(t"vote-rows-title = Vote emojis")),
             *(

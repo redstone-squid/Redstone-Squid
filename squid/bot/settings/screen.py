@@ -31,6 +31,7 @@ from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, V
 from squid.voting.domain.models import DEFAULT_VOTE_OPTIONS, VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import NUMBER, Text, emoji_text, md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -152,7 +153,7 @@ class SettingsPanel(sd.Screen):
         self.page = "voting"
 
     @override
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    def render(self) -> Sequence[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
         navigation = sl.action_controls(
             self.shows_server
             and sl.action_control(
@@ -251,7 +252,7 @@ class SettingsEditor(sl.Reactive):
         return False
 
 
-class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
     """Edit publication channels and language from the shared guild snapshot."""
 
     def __init__(self, settings: SettingsEditor, guild: discord.Guild, *, editable: bool) -> None:
@@ -268,7 +269,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return None if snapshot is None else getattr(snapshot, CHANNEL_FIELDS[setting])
 
     @override
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    def render(self) -> Sequence[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
         description = (
             tr(
                 t"bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied "
@@ -277,7 +278,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
             if self._editable
             else None
         )
-        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        children: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"bot-settings-view-server-settings = Server settings")),
                 description and sl.paragraph(description).truncate(),
@@ -380,7 +381,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return sl.mention(channel_id, kind="channel")
 
 
-class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
     """Own voting kind selection, configuration forms, and reset confirmation."""
 
     kind: VoteKind = sl.state(VoteKind.BUILD)
@@ -405,10 +406,10 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         return VoteConfiguration(None, ()) if snapshot is None else snapshot.voting[self.kind]
 
     @override
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    def render(self) -> Sequence[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
         scope_note = self._scope_note()
         kind_label = KIND_LABELS[self.kind]
-        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+        children: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(md_tr(t"bot-settings-view-voting-2 = Voting — {kind_label}")),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),

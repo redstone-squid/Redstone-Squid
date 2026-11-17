@@ -12,6 +12,7 @@ from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid_i18n import md_tr
 from squid_ui.authoring.semantic import Fields, Paragraph
 from squid_ui.content.text import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 # Examples are also parsed in tests so the reference cannot drift from the query language.
 BUILD_EXAMPLES = (
@@ -36,7 +37,7 @@ def search_help(
     *,
     records: bool,
     apply_example: Callable[[str, sl.PressEvent], Awaitable[None]],
-) -> sp.Tabs[sl.ComponentsV2Target, sd.Request]:
+) -> sp.Tabs[ComponentsV2Target, sd.Request]:
     """Build the tabbed search reference shown above the catalogue's active view."""
     if records:
         base_titles = ", ".join(title.value for title in BaseTitle)
@@ -189,7 +190,7 @@ def _entry(label: sl.TextLike, value: sl.TextLike) -> Fields:
     return sl.fields(sl.field(label, value))
 
 
-def _reference(entries: tuple[Fields | Paragraph, ...]) -> sl.LayoutNode[sl.ComponentsV2Target]:
+def _reference(entries: tuple[Fields | Paragraph, ...]) -> sl.LayoutNode[ComponentsV2Target]:
     lines: list[sl.TextLike] = []
     for entry in entries:
         if isinstance(entry, Paragraph):

@@ -39,6 +39,7 @@ from squid_ui.ext.discord.durability import (
     Unreachable,
 )
 from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.primitives import Text
 from squid_ui.ext.discord.sessions import (
     AdmissionSpec,
     MembershipStatus,
@@ -49,12 +50,12 @@ from squid_ui.ext.discord.sessions import (
     Session,
     Unprotected,
 )
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, message_harness
-from squid_ui.primitives import Text
 from squid_ui.profiling import PresentationStatus
 
 
-class Counter(sl.Component[sl.ComponentsV2Target]):
+class Counter(sl.Component[ComponentsV2Target]):
     count: int = sl.state(0, persist=True)
 
     @override
@@ -62,7 +63,7 @@ class Counter(sl.Component[sl.ComponentsV2Target]):
         return Text(f"count {self.count}")
 
 
-class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
+class HiddenDraft(sl.Component[ComponentsV2Target]):
     advanced: bool = sl.state(False, persist=True)
 
     @override

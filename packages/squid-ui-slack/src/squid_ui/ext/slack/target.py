@@ -2,7 +2,7 @@
 
 from typing import overload
 
-from squid_ui import scene
+from squid_ui.ext.slack import scene
 from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER
 from squid_ui.ext.slack.protocol import (
     SLACK_HOME_LIMITS,

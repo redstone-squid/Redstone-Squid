@@ -44,6 +44,7 @@ from squid.search.domain.query import (
     TextExpression,
 )
 from squid.suggestions.domain import Suggestion, SuggestionRequest
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 # Suggestion sources for fields whose values are names from a catalogue.
 VALUE_SOURCES = {
@@ -57,7 +58,7 @@ VALUE_SOURCES = {
 # Filter rows shown per page; long queries page through them.
 _CLAUSES_PER_PAGE = 2
 
-type GuidedNode = sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]
+type GuidedNode = sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +76,7 @@ OPERATORS = {
 }
 
 
-class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
+class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     query: str = sl.state("")
     sort: str = sl.state("")
     clause_page: int = sl.state(0)

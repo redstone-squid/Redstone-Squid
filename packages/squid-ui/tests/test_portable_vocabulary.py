@@ -2,8 +2,8 @@
 
 import squid_ui as sl
 from squid_i18n import tr
+from squid_ui.ext.discord.primitives import Option, Text
 from squid_ui.factories import is_builtin_layout_node, is_layout_node, is_portable_node
-from squid_ui.primitives import Text
 from squid_ui.target_types import Renderable, RenderTarget
 
 
@@ -41,6 +41,12 @@ def test_a_message_child_is_promoted_rather_than_rejected():
     """`ChildLike` admits every `TextLike`, and `Message` is one."""
     stack = sl.stack(tr(t"test-hello = hello"))
     assert stack.children == (sl.paragraph(tr(t"test-hello = hello")),)
+
+
+def test_native_metadata_is_not_a_layout_node():
+    option = Option("Choice", "choice")
+    assert not is_builtin_layout_node(option)
+    assert not is_layout_node(option)
 
 
 def test_non_nodes_are_neither():

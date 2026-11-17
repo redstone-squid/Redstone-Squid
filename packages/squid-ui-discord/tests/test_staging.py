@@ -8,6 +8,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness
 
 
@@ -115,7 +116,7 @@ async def test_local_control_lookup_requires_a_unique_suffix() -> None:
             self.second = Editor()
 
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
             return sl.stack(self.first, self.second)
 
     async with sd.testing.stage(Editor(), owner=object()) as ui:

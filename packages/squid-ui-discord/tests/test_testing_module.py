@@ -10,7 +10,8 @@ import squid_ui.ext.discord as squid_discord
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.delivery import DeliveryResult
-from squid_ui.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
+from squid_ui.ext.discord.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class TestPayloadQueries:
@@ -80,7 +81,7 @@ class OverflowingScreen(squid_discord.Screen):
     expanded: bool = sl.state(False)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, squid_discord.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, squid_discord.Request], ...]:
         if self.expanded:
             return tuple(sl.paragraph(f"private content {index}") for index in range(41))
         return (sl.action_controls(sl.action_control("Expand", self.expand, key="expand"), key="actions"),)

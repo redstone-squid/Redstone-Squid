@@ -7,9 +7,10 @@ import pytest
 
 from squid_reactivity import Subscriptions
 from squid_reactivity.topics import LocalTopicBus, TopicName
-from squid_ui import Component, DiscordTarget, Reactive, computed, state
+from squid_ui import Component, Reactive, computed, state
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives import Boundary, Text
+from squid_ui.ext.discord.primitives import Boundary, Text
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.runtime import CellAddress, ReactiveWriteError, addresses, transaction
 from squid_ui.runtime.expansion import render_component_tree
 

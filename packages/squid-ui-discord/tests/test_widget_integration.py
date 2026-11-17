@@ -12,16 +12,17 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
-from squid_ui.authoring.semantic import ActionControl, Choices, FormTrigger
+from squid_ui.authoring.semantic import ActionControl, Choices, FormTrigger, List
 from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.navigation_controls import page_select_nav
+from squid_ui.ext.discord.primitives import Paginate
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.planning.pagination.navigation import (
     MATERIALIZED_NEXT_KEY,
     MATERIALIZED_PREVIOUS_KEY,
     MATERIALIZED_SEEK_KEY,
-    page_select_nav,
 )
-from squid_ui.primitives import Paginate
 from squid_ui.profiling import ActionStatus, MemoryProfiler, OperationKind
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger)
@@ -31,46 +32,46 @@ def _form() -> sl.forms.FormSpec:
     return sl.forms.FormSpec("Value", (sl.forms.TextField(key="value", label="Value"),))
 
 
-def _decision() -> sl.Component[sl.DiscordTarget]:
+def _decision() -> sl.Component[DiscordTarget]:
     return sp.Decision("Choose", (sp.DecisionOption("one", "One"), sp.DecisionOption("two", "Two"))).build_component()
 
 
-def _collection() -> sl.Component[sl.DiscordTarget]:
+def _collection() -> sl.Component[DiscordTarget]:
     return sp.CollectionEditor("Items", create=_form(), label=lambda value: str(value["value"])).build_component()
 
 
-def _editor() -> sl.Component[sl.DiscordTarget]:
+def _editor() -> sl.Component[DiscordTarget]:
     return sp.Editor("Edit", (sp.EditorSection.from_form("value", "Value", _form()),)).build_component()
 
 
-def _menu() -> sl.Component[sl.DiscordTarget]:
+def _menu() -> sl.Component[DiscordTarget]:
     return sp.Menu("Menu", (sp.MenuEntry("entry", "Entry", "Body"),)).build_component()
 
 
-def _tabs() -> sl.Component[sl.DiscordTarget]:
+def _tabs() -> sl.Component[DiscordTarget]:
     return sp.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs")
 
 
-def _multi_choice() -> sl.Component[sl.DiscordTarget]:
+def _multi_choice() -> sl.Component[DiscordTarget]:
     return sp.MultiChoice(
         "Choices",
         (sp.MultiChoiceGroup("group", "Group", (sl.semantic.Choice("one", "One"), sl.semantic.Choice("two", "Two"))),),
     ).build_component()
 
 
-def _ranked() -> sl.Component[sl.DiscordTarget]:
+def _ranked() -> sl.Component[DiscordTarget]:
     return sp.RankedList(("A", "B", "C"), key="ranked", label=str, value=len, page_size=2).build_component()
 
 
-def _wizard() -> sl.Component[sl.DiscordTarget]:
+def _wizard() -> sl.Component[DiscordTarget]:
     return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
 
 
-def _agreement() -> sl.Component[sl.DiscordTarget]:
+def _agreement() -> sl.Component[DiscordTarget]:
     return sp.Agreement("Approve?", (sp.AgreementParticipant("1", "One"),))
 
 
-WIDGETS: tuple[tuple[str, Callable[[], sl.Component[sl.DiscordTarget]]], ...] = (
+WIDGETS: tuple[tuple[str, Callable[[], sl.Component[DiscordTarget]]], ...] = (
     ("decision", _decision),
     ("collection", _collection),
     ("editor", _editor),
@@ -83,8 +84,12 @@ WIDGETS: tuple[tuple[str, Callable[[], sl.Component[sl.DiscordTarget]]], ...] = 
 )
 
 
-def _pagers(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> list[Paginate]:
-    return [node for node in engine.walk(tree) if isinstance(node, Paginate) and node.key is not None]
+def _pagers(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> list[Paginate | List]:
+    return [
+        node
+        for node in engine.walk(tree)
+        if (isinstance(node, Paginate) and node.key is not None) or isinstance(node, List)
+    ]
 
 
 def _authored_keys(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> set[str]:
@@ -103,7 +108,7 @@ widget = pytest.mark.parametrize("build", [build for _name, build in WIDGETS], i
 
 @widget
 def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
-    build: Callable[[], sl.Component[sl.DiscordTarget]],
+    build: Callable[[], sl.Component[DiscordTarget]],
 ) -> None:
     """Every registered handler key must come from the authored widget tree.
 
@@ -123,7 +128,7 @@ def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
 
 @widget
 async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
-    build: Callable[[], sl.Component[sl.DiscordTarget]],
+    build: Callable[[], sl.Component[DiscordTarget]],
 ) -> None:
     """Dispatch a usable authored key and require successful handler execution.
 

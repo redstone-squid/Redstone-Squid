@@ -8,7 +8,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.response import UNSET
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import InteractionHarness, stage
 
 
@@ -20,7 +22,7 @@ class Owner:
     pass
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     @override
     def render(self):
         return sl.heading("Panel")
@@ -116,9 +118,9 @@ async def test_navigation_policy_reaches_the_presented_pager(screen_nav, call_na
 
         @override
         def render(self):
-            return sl.primitives.Lines(
+            return primitives.Lines(
                 tuple(str(index) for index in range(40)),
-                overflow=sl.primitives.Paginate(key="rows", per=1),
+                overflow=primitives.Paginate(key="rows", per=1),
             )
 
     config = sd.Config(responses=sd.ResponseSpec(nav=sd.navigation_controls.page_select_nav))

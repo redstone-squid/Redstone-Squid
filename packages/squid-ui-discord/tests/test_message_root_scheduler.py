@@ -9,16 +9,16 @@ from typing import Any, override
 import anyio
 import pytest
 
-import squid_ui as sl
 from squid_ui import Component
 from squid_ui.ext.discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, TopicName
 
 
-class Empty(Component[sl.ComponentsV2Target]):
+class Empty(Component[ComponentsV2Target]):
     @override
     def render(self):
         return []

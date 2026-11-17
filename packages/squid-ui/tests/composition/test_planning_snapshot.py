@@ -7,8 +7,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, PlanningSnapshot, plan
 from squid_ui.planning.result import PlanReuse
@@ -22,7 +22,7 @@ async def ignored(event: sl.PressEvent) -> None:
 def test_exact_replay_skips_preparation_and_only_delivery_commits() -> None:
     document = sl.Document((sl.paragraph("Hello"),))
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2]()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot)
     assert snapshot.committed is None
     with patch("squid_ui.planning.composition_planner.prepare_composition", side_effect=AssertionError):
@@ -45,7 +45,7 @@ def test_mutated_position_mapping_invalidates_exact_replay() -> None:
     document = sl.Document((sl.region(sl.paragraph("First"), sl.paragraph("Second"), key="r", title="Region"),))
     options = CompositionOptions(automatic=True, partitions={OccurrenceId(("root", "r")): (1, 2)})
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2]()
     positions = {"$/r": PagePosition(page=0)}
     first = plan(
         document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot, positions=positions, composition=options
@@ -64,7 +64,7 @@ def test_mutated_position_mapping_invalidates_exact_replay() -> None:
 def test_cold_reference_preserves_presentation_history(enabled: bool) -> None:
     document = sl.Document((sl.paragraph("Hello"),))
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2](enabled=enabled)
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2](enabled=enabled)
     first = plan(document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot)
     session.apply_updates(first.session_updates)
     snapshot.commit(first, session)
@@ -80,7 +80,10 @@ def test_cold_reference_preserves_presentation_history(enabled: bool) -> None:
 @given(st.lists(st.tuples(st.integers(0, 4), st.booleans(), st.integers(0, 1), st.booleans()), min_size=1, max_size=12))
 def test_generated_edits_match_cold_planning(edits: list[tuple[int, bool, int, bool]]) -> None:
     sessions = (PresentationState(), PresentationState())
-    snapshots = (PlanningSnapshot[scene.ComponentsV2](), PlanningSnapshot[scene.ComponentsV2](enabled=False))
+    snapshots = (
+        PlanningSnapshot[discord_scene.ComponentsV2](),
+        PlanningSnapshot[discord_scene.ComponentsV2](enabled=False),
+    )
     for version, reverse, page, delivered in edits:
         children = tuple(sl.paragraph(f"Item {key}: {version}", key=str(key)) for key in range(2))
         if reverse:
@@ -114,7 +117,7 @@ def test_generated_edits_match_cold_planning(edits: list[tuple[int, bool, int, b
 def test_environment_changes_invalidate_exact_and_allocation_reuse(strict: bool, budget: int) -> None:
     document = sl.Document((sl.paragraph("Hello"),))
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2]()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot)
     session.apply_updates(first.session_updates)
     snapshot.commit(first, session)

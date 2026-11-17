@@ -13,10 +13,12 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
 from squid_ui._dataclass import immutable
+from squid_ui.boundary import Boundary
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import TextLike
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget
 from squid_ui.extensions import ExtensionKind
 from squid_ui.interactions import (
     ActionBinding,
@@ -28,27 +30,31 @@ from squid_ui.interactions import (
 )
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.guards import Guard
-from squid_ui.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
-from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable, RenderTarget
+from squid_ui.native import NativeNode, NativeValue
+from squid_ui.overflow import Alt, Never, Overflow, Spill, Truncate
+from squid_ui.styles import ActionStyle, Color
+from squid_ui.target_types import Renderable
 
 if TYPE_CHECKING:
     from squid_ui.authoring.presentations import Correspondence
     from squid_ui.authoring.presentations import Fidelity as PresentationFidelity
-    from squid_ui.planning.native_extensions import NativeComposition
-    from squid_ui.runtime.definition import Component
+    from squid_ui.ext.discord.planning.native_extensions import NativeComposition
     from squid_ui.runtime.histories import History
 
 
+class DiscordValue(NativeValue):
+    __slots__ = ()
+
+
 @immutable
-class Text(Renderable[DiscordTarget]):
+class Text(DiscordValue, NativeNode[DiscordTarget]):
     content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
 
 
 @immutable
-class Heading(Renderable[DiscordTarget]):
+class Heading(DiscordValue, NativeNode[DiscordTarget]):
     content: TextLike
     level: int = 2
     overflow: Overflow = field(default_factory=Truncate)
@@ -56,7 +62,7 @@ class Heading(Renderable[DiscordTarget]):
 
 
 @immutable
-class Footer(Renderable[DiscordTarget]):
+class Footer(DiscordValue, NativeNode[DiscordTarget]):
     """Small (`-#`) text at the card's foot; first to shrink by default."""
 
     content: TextLike
@@ -65,7 +71,7 @@ class Footer(Renderable[DiscordTarget]):
 
 
 @immutable
-class Code(Renderable[DiscordTarget]):
+class Code(DiscordValue, NativeNode[DiscordTarget]):
     """Fenced code block; embedded fences are escaped so content cannot break out."""
 
     content: TextLike
@@ -75,13 +81,13 @@ class Code(Renderable[DiscordTarget]):
 
 
 @immutable
-class Lines(Renderable[DiscordTarget]):
+class Lines(DiscordValue, NativeNode[DiscordTarget]):
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
     Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
-    may also be an :class:`~squid_ui.primitives.constraints.Alt` carrying a degradation ladder:
+    may also be an :class:`~squid_ui.overflow.Alt` carrying a degradation ladder:
     under pressure the solver steps the largest entries down their fallbacks before it spills
-    any entry. Each :class:`~squid_ui.primitives.constraints.Alt` may carry a drop priority; lower
+    any entry. Each :class:`~squid_ui.overflow.Alt` may carry a drop priority; lower
     priorities disappear first, while surviving entries keep document order.
     """
 
@@ -99,7 +105,7 @@ class Lines(Renderable[DiscordTarget]):
 
 
 @immutable
-class Time(Renderable[DiscordTarget]):
+class Time(DiscordValue, NativeNode[DiscordTarget]):
     """A typed instant retained through scene conversion."""
 
     instant: datetime
@@ -108,7 +114,7 @@ class Time(Renderable[DiscordTarget]):
 
 
 @immutable
-class ZonedTime(Renderable[DiscordTarget]):
+class ZonedTime(DiscordValue, NativeNode[DiscordTarget]):
     """An exact instant visibly retained with its named timezone."""
 
     value: ZonedDateTime
@@ -116,7 +122,7 @@ class ZonedTime(Renderable[DiscordTarget]):
 
 
 @immutable
-class File(Renderable[ComponentsV2Target]):
+class File(DiscordValue, NativeNode[ComponentsV2Target]):
     """A visible file component backed by a separately carried asset resource."""
 
     asset_key: str
@@ -126,13 +132,13 @@ class File(Renderable[ComponentsV2Target]):
 
 
 @immutable
-class Sep(Renderable[ComponentsV2Target]):
+class Sep(DiscordValue, NativeNode[ComponentsV2Target]):
     large: bool = False
     visible: bool = True
 
 
 @immutable
-class LinkButton(Renderable[DiscordTarget]):
+class LinkButton(DiscordValue, NativeNode[DiscordTarget]):
     label: TextLike | None
     url: str
     emoji: EmojiLike | None = None
@@ -143,7 +149,7 @@ class LinkButton(Renderable[DiscordTarget]):
 
 
 @immutable
-class PremiumButton(Renderable[DiscordTarget]):
+class PremiumButton(DiscordValue, NativeNode[DiscordTarget]):
     """A Discord premium button identified solely by its application SKU."""
 
     sku_id: int
@@ -155,7 +161,7 @@ class PremiumButton(Renderable[DiscordTarget]):
 
 
 @immutable
-class Button[ContextT = object](Renderable[DiscordTarget, ContextT]):
+class Button[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
     label: TextLike | None
@@ -186,7 +192,7 @@ class FormButton[ContextT = object](Button[ContextT]):
 
 
 @immutable
-class RoutedButton(Renderable[DiscordTarget]):
+class RoutedButton(DiscordValue, NativeNode[DiscordTarget]):
     """A button dispatched by a stable route ID instead of a mounted Python callback.
 
     The host can register the route after a restart and recover application state from
@@ -206,7 +212,7 @@ class RoutedButton(Renderable[DiscordTarget]):
 
 
 @immutable
-class Option:
+class Option(DiscordValue):
     label: TextLike
     value: str
     description: TextLike | None = None
@@ -218,7 +224,7 @@ class Option:
 
 
 @immutable
-class SelectMenu[ContextT = object](Renderable[DiscordTarget, ContextT]):
+class SelectMenu[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """A string select; occupies its own row when materialized."""
 
     options: tuple[Option, ...]
@@ -233,7 +239,7 @@ class SelectMenu[ContextT = object](Renderable[DiscordTarget, ContextT]):
 
 
 @immutable
-class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
+class EntitySelect[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """A frontend-resolved entity picker; occupies its own row."""
 
     entity_type: EntityType
@@ -257,7 +263,7 @@ class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
 
 
 @immutable
-class RoutedSelect(Renderable[DiscordTarget]):
+class RoutedSelect(DiscordValue, NativeNode[DiscordTarget]):
     """A string select dispatched by its stable route id rather than a mount binding."""
 
     options: tuple[Option, ...]
@@ -269,7 +275,7 @@ class RoutedSelect(Renderable[DiscordTarget]):
 
 
 @immutable
-class RawItem(Renderable[DiscordTarget]):
+class RawItem(DiscordValue, NativeNode[DiscordTarget]):
     """Internal prepared target item retained until scene drawing."""
 
     factory: Callable[[], object]
@@ -281,26 +287,6 @@ class RawItem(Renderable[DiscordTarget]):
     composition: NativeComposition | None = field(default=None, kw_only=True)
 
 
-@immutable
-class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
-    """Place a child component in the layout under its own control and presentation keys.
-
-    The runtime replaces this node with the child's rendered layout before planning.
-    Component.keyed constructs it while preserving the child's target and context requirements.
-    """
-
-    component: Component[RenderTargetT, ContextT]
-    key: str
-
-    def __post_init__(self) -> None:
-        if not self.key:
-            message = "Boundary key must not be empty"
-            raise ValueError(message)
-        if "." in self.key:
-            message = "Boundary key must not contain '.'"
-            raise ValueError(message)
-
-
 # --- Classic message structure --------------------------------------------------------------
 #
 # These are as exact as `Row` and `Section` are, and gated the same way: a target that lacks
@@ -310,7 +296,7 @@ class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
 
 
 @immutable
-class Content(Renderable[ClassicTarget]):
+class Content(DiscordValue, NativeNode[ClassicTarget]):
     """The classic message's content field, also used in reply previews and notifications.
 
     At most one may appear in a document, and Components V2 targets reject it.
@@ -337,7 +323,7 @@ def card_text(value: CardText) -> Text:
 
 
 @immutable
-class CardField:
+class CardField(DiscordValue):
     """One embed field. A nested value, never a legal root node."""
 
     name: CardText
@@ -346,20 +332,20 @@ class CardField:
 
 
 @immutable
-class CardAuthor:
+class CardAuthor(DiscordValue):
     name: CardText
     url: str | None = None
     icon_url: str | None = None
 
 
 @immutable
-class CardFooter:
+class CardFooter(DiscordValue):
     text: CardText
     icon_url: str | None = None
 
 
 @immutable
-class CardMedia:
+class CardMedia(DiscordValue):
     """An embed image or thumbnail. The description is kept even where Discord drops it."""
 
     url: str
@@ -368,7 +354,7 @@ class CardMedia:
 
 
 @immutable
-class Card(Renderable[ClassicTarget]):
+class Card(DiscordValue, NativeNode[ClassicTarget]):
     """One embed: a titled, coloured, field-structured block beside the message text.
 
     ``children`` are description blocks, joined with blank lines in document order — one
@@ -393,7 +379,7 @@ class Card(Renderable[ClassicTarget]):
 
 
 @immutable
-class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Extension[PayloadT = object, RenderTargetT = DiscordTarget](DiscordValue, NativeNode[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
     kind: ExtensionKind[PayloadT, Any]
@@ -403,28 +389,28 @@ class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[Ren
 
 
 @immutable
-class Row[ContextT = object](Renderable[DiscordTarget, ContextT]):
+class Row[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """An exact target row; invalid local structure is a planning error."""
 
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
 @immutable
-class ControlGroup[ContextT = object](Renderable[DiscordTarget, ContextT]):
+class ControlGroup[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """Buttons automatically arranged into as many valid target rows as needed."""
 
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
 @immutable
-class Thumbnail(Renderable[ComponentsV2Target]):
+class Thumbnail(DiscordValue, NativeNode[ComponentsV2Target]):
     url: str
     description: TextLike | None = None
     spoiler: bool = False
 
 
 @immutable
-class GalleryItem:
+class GalleryItem(DiscordValue):
     """One gallery image with its accessible description and spoiler state."""
 
     url: str
@@ -439,7 +425,7 @@ def normalize_gallery_item(value: str | GalleryItem) -> GalleryItem:
 
 
 @immutable
-class Gallery(Renderable[ComponentsV2Target]):
+class Gallery(DiscordValue, NativeNode[ComponentsV2Target]):
     """One exact target gallery."""
 
     items: tuple[str | GalleryItem, ...]
@@ -449,7 +435,7 @@ class Gallery(Renderable[ComponentsV2Target]):
 
 
 @immutable
-class MediaCollection(Renderable[ComponentsV2Target]):
+class MediaCollection(DiscordValue, NativeNode[ComponentsV2Target]):
     """Media automatically arranged into valid target galleries."""
 
     items: tuple[str | GalleryItem, ...]
@@ -459,7 +445,7 @@ class MediaCollection(Renderable[ComponentsV2Target]):
 
 
 @immutable
-class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
+class Section[ContextT = object](DiscordValue, NativeNode[ComponentsV2Target, ContextT]):
     """An exact Components V2 section with up to three texts beside an accessory.
 
     Planning rejects excess text slots.
@@ -470,7 +456,7 @@ class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
 
 
 @immutable
-class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
+class Panel[ContextT = object](DiscordValue, NativeNode[ComponentsV2Target, ContextT]):
     """A Container: children grouped under an optional accent colour."""
 
     children: tuple[Node[ContextT], ...]
@@ -479,7 +465,7 @@ class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
 
 
 @immutable
-class Budget[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Budget[RenderTargetT = DiscordTarget, ContextT = object](DiscordValue, NativeNode[RenderTargetT, ContextT]):
     """Group text under an explicit character reservation and preferred size.
 
     `minimum` reserves space before discretionary allocation. `preferred` is the
@@ -496,7 +482,7 @@ class Budget[RenderTargetT = DiscordTarget, ContextT = object](Renderable[Render
 
 
 @immutable
-class Break[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Break[RenderTargetT = DiscordTarget, ContextT = object](DiscordValue, NativeNode[RenderTargetT, ContextT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
     children: tuple[Node[ContextT], ...]
@@ -523,7 +509,7 @@ class Fidelity(StrEnum):
 
 
 @immutable
-class Variant[RenderTargetT = DiscordTarget]:
+class Variant[RenderTargetT = DiscordTarget](DiscordValue):
     """One nonempty representation of a region and the capabilities it requires.
 
     `nodes` are spliced into the parent, so a variant can produce several rows
@@ -546,7 +532,7 @@ class Variant[RenderTargetT = DiscordTarget]:
 
 
 @immutable
-class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Variants[RenderTargetT = DiscordTarget](DiscordValue, NativeNode[RenderTargetT]):
     """Ordered representations the planner can choose to fit one region.
 
     Text overflow policies shorten text; variants can also change component

@@ -19,8 +19,7 @@ from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, Ent
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.adoption import AdoptionError, adopt
 from squid_ui.ext.discord.messages.wiring import _EntityValues
-from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     ActionStyle,
     Button,
     EntitySelect,
@@ -36,6 +35,8 @@ from squid_ui.primitives import (
     Text,
     Thumbnail,
 )
+from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.ext.discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Paginator(discord.ui.View):
@@ -789,7 +790,7 @@ async def test_the_adopted_scene_conforms_strictly() -> None:
 
 
 async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
-    class Screen(sl.Component[sl.ComponentsV2Target]):
+    class Screen(sl.Component[ComponentsV2Target]):
         def __init__(self, child: sl.Component) -> None:
             self.child = child
 

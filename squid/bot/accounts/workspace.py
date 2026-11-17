@@ -36,6 +36,7 @@ from squid.permissions.domain.catalogue import (
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -86,9 +87,9 @@ class AccountWorkspace(sd.Screen):
         self._can_refresh_identity = can_refresh_identity
         self._overview: AccountOverview | None = None
         self._claims: ClaimReviewComponent | None = None
-        self._tabs: sp.Tabs[sl.ComponentsV2Target, sd.Request] | None = None
+        self._tabs: sp.Tabs[ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
-        self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
+        self._merge_decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request] | None = None
 
     @classmethod
     async def create(cls, request: AppRequest) -> Self:
@@ -218,7 +219,7 @@ class AccountWorkspace(sd.Screen):
                 can_reject=self._can_reject_claims,
                 authorize=self._authorize_claim,
             )
-        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
+        tabs: list[sp.Tab[ComponentsV2Target, sd.Request]] = []
         if self._overview is not None:
             tabs.append(sp.Tab("overview", tr(t"account-workspace-overview = Overview"), self._overview))
         tabs.append(
@@ -239,14 +240,14 @@ class AccountWorkspace(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self._merge_decision,)
         if self._tabs is None:
             return (sl.status(tr(t"account-workspace-loading-account = Loading account.")),)
         return (self._tabs,)
 
-    def _identity_nodes(self) -> list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
+    def _identity_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
         account = self._account
         header = sl.section(
             sl.heading(tr(t"account-link-heading = Connect Minecraft")),
@@ -299,7 +300,7 @@ class AccountWorkspace(sd.Screen):
             )
         return [header, sl.action_controls(*controls, key="identity-tools")]
 
-    def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _claim_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             sl.section(
                 sl.heading(tr(t"account-claim-heading = Claim your earlier builds")),
@@ -327,7 +328,7 @@ class AccountWorkspace(sd.Screen):
             ),
         )
 
-    def _merge_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def _merge_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             sl.section(
                 sl.heading(tr(t"account-merge-heading = Bring your accounts together")),
@@ -545,7 +546,7 @@ class AccountWorkspace(sd.Screen):
         identities = preview.identity_count
         builds = preview.build_count
         self._merge_code = code
-        self._merge_decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
+        self._merge_decision = sp.Decision[ComponentsV2Target, sd.Request](
             md_tr(
                 t"account-merge-transfer-preview = Move {aliases} creator "
                 t"names, {identities} identities, and {builds} build credits here? This cannot be undone.",

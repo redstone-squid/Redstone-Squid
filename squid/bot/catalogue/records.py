@@ -23,6 +23,7 @@ from squid.records.application import RebuildSummary, RecordGap, RecordLookupReq
 from squid.records.domain import BuildKind
 from squid.suggestions.domain import Suggestion
 from squid_i18n import Text, md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 class RecordOperations(Protocol):
@@ -82,13 +83,13 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     _version: Suggestion | None = sl.state(None)
     _restrictions: tuple[Suggestion, ...] = sl.state(())
-    _gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _gaps: sp.Browser[RecordGap, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
-    _titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _titles: sp.Browser[TitleDiagnosticGap, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _tabs: sp.ComponentDriver[sp.TabsState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
 
@@ -153,7 +154,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"records-no-titles-need-review = Every active record title uses known terms."),
         )
 
-    def _gap_detail(self, gap: RecordGap) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def _gap_detail(self, gap: RecordGap) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         needs = ", ".join(field.replace("_", " ") for field in gap.fields)
         return sl.section(
             sl.heading(_gap_title(gap)),
@@ -196,7 +197,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     def _build_tabs(self) -> None:
-        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
+        tabs: list[sp.Tab[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
@@ -243,12 +244,12 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"records-diagnostics-loading = Loading record diagnostics.")),)
         return (self._tabs,)
 
-    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._can_inspect or self._can_rebuild):
             return (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
         version = self._version.label if self._version else tr(t"records-active-version = the active version")

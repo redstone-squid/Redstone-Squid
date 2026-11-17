@@ -7,7 +7,8 @@ import pytest
 import squid_ui as sl
 from squid_reactivity import CellAddress
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives import Text
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime.owner import ComponentRuntime
 
 
@@ -15,7 +16,7 @@ class Model(sl.Reactive):
     value: int = sl.state(0)
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     model: Model = sl.state(opaque=True)
 
     def __init__(self, model: Model) -> None:
@@ -96,12 +97,12 @@ def test_mount_failure_leaves_the_delivered_candidate_committed() -> None:
 
 
 def test_discovery_candidate_must_be_discarded_instead_of_committed() -> None:
-    class Parent(sl.Component[sl.ComponentsV2Target]):
+    class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Panel(Model())
 
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target]:
             return self.child.keyed("child")
 
     runtime = ComponentRuntime(Parent())

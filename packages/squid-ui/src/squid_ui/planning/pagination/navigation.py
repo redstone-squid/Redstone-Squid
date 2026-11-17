@@ -14,8 +14,9 @@ presentation session, or the application through `Controlled.on_change`.
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
-from typing import Self, cast, override
+from typing import Any, Self, cast, override
 
+from squid_ui.authoring import semantic as sem
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.context import ContextKey
@@ -23,30 +24,15 @@ from squid_ui.interactions import ActionEvent, ActionMode, PressEvent, Selection
 from squid_ui.interactions.forms import FormBinding, FormSpec, IntField
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
+from squid_ui.overflow import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.constraints import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
-from squid_ui.primitives.nodes import (
-    Button,
-    FormButton,
-    Gallery,
-    Option,
-    RawItem,
-    RoutedButton,
-    RoutedSelect,
-    Row,
-    SelectMenu,
-    Sep,
-    Thumbnail,
-)
 from squid_ui.sources import CountPrecision
+from squid_ui.target_types import Renderable
 
 MATERIALIZED_PREVIOUS_KEY = "__cursor_previous"
 MATERIALIZED_NEXT_KEY = "__cursor_next"
 MATERIALIZED_SEEK_KEY = "__cursor_seek"
-
-SEEK_OPTION_LIMIT = 25
-"""Options one jump select may carry -- Discord's per-menu maximum."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +93,7 @@ class TurnPage(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class _SeekSelection(_HandlerComposition):
+class SeekPageSelection(_HandlerComposition):
     seek: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -125,7 +111,7 @@ class _SeekSelection(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class _JumpSubmit(_HandlerComposition):
+class SubmitPageJump(_HandlerComposition):
     seek: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -140,7 +126,7 @@ class _JumpSubmit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class _PresentJump(_HandlerComposition):
+class PresentPageForm(_HandlerComposition):
     form: FormBinding
 
     @override
@@ -223,84 +209,13 @@ class NavigationContext:
         return self.state.extent
 
 
-type NavNode = Row | SelectMenu | RoutedSelect | Sep | Thumbnail | Gallery | RawItem
-type MountNavNode = Row | SelectMenu | RoutedSelect | RawItem
-"""Navigation a mount may author before its Discord message mode is selected.
-
-`NavNode` also permits V2 structures for planner factories that already know the mode.
-"""
-type NavFactory = Callable[[NavigationContext], Sequence[MountNavNode]]
+type NavNode = Renderable[Any]
+"""Portable or target-owned navigation supplied by a host."""
+type NavFactory = Callable[[NavigationContext], Sequence[NavNode]]
 type PlannedNav = Callable[[NavigationContext], Sequence[NavNode]]
 """A navigation factory used during planning, which may also return V2 structures."""
 
 NAV_FACTORY_CONTEXT = ContextKey[NavFactory]("nav_factory")
-
-
-def navigation_controls(context: NavigationContext) -> Row:
-    """Build stable boundary-aware controls from the facts in ``context``."""
-    state = context.state
-
-    def button(
-        label: TextLike, binding: Callable[..., Awaitable[None]] | str, key: str, available: bool
-    ) -> Button | RoutedButton:
-        if isinstance(binding, str):
-            return RoutedButton(label, binding, disabled=not available)
-        return Button(label=label, on_click=binding, key=key, disabled=not available)
-
-    previous = (
-        (button(state.previous_label, context.on_previous, state.previous_key, state.has_previous),)
-        if state.backward
-        else ()
-    )
-    return Row((*previous, button(state.next_label, context.on_next, state.next_key, state.has_next)))
-
-
-def default_nav(context: NavigationContext) -> Sequence[MountNavNode]:
-    """The stock factory shared by materialized pages and source windows."""
-    return (navigation_controls(context),)
-
-
-def _seek_pages(page: int, extent: int) -> list[int]:
-    """Which zero-based pages a jump select should offer, always including ``page``."""
-    if extent <= SEEK_OPTION_LIMIT:
-        return list(range(extent))
-    # Spread jump choices across the whole range so distant pages remain accessible.
-    step = (extent - 1) / (SEEK_OPTION_LIMIT - 1)
-    ladder = {round(index * step) for index in range(SEEK_OPTION_LIMIT)}
-    if page not in ladder:
-        # Trade the nearest rung for the visible page, so the select can show it as selected
-        # without growing past the option limit. The ends stay: they are the whole range.
-        ladder.discard(min(ladder - {0, extent - 1}, key=lambda rung: abs(rung - page)))
-        ladder.add(page)
-    return sorted(ladder)
-
-
-def seek_control(context: NavigationContext) -> SelectMenu | RoutedSelect | None:
-    """A jump select for a cursor that can address a page, or `None` when it cannot."""
-    state = context.state
-    seek = context.on_seek
-    extent, page = state.extent, state.page
-    if seek is None or extent is None or page is None or extent < 2 or state.page_option is None:
-        return None
-    label = state.page_option
-
-    options = tuple(
-        Option(label(number + 1), str(number), default=number == page) for number in _seek_pages(page, extent)
-    )
-    if isinstance(seek, str):
-        return RoutedSelect(options, seek, placeholder=state.seek_label or None)
-    return SelectMenu(options, on_select=_SeekSelection(seek), key=state.seek_key, placeholder=state.seek_label or None)
-
-
-def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
-    """`default_nav` plus a jump select wherever the cursor can address a page.
-
-    Opt in per mount (`MessageRoot(..., nav=sl.page_select_nav)`): a select is a whole component
-    row, and spending one on every paginator in the process is the host's call, not the
-    framework's.
-    """
-    control = seek_control(context)
-    return (navigation_controls(context),) if control is None else (navigation_controls(context), control)
 
 
 def page_jump_form(
@@ -331,7 +246,7 @@ def page_jump_form(
 
 
 @dataclass(frozen=True, slots=True)
-class _PageSizeSubmit(_HandlerComposition):
+class SubmitPageSize(_HandlerComposition):
     change: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -363,58 +278,6 @@ def page_size_form(page_size: int, *, maximum: int | None = None, chrome: Chrome
             ),
         ),
     )
-
-
-def page_size_button(
-    key: str,
-    page_size: int,
-    on_change: Callable[[ActionEvent, int], Awaitable[None]],
-    *,
-    maximum: int | None = None,
-    chrome: Chrome = DEFAULT_CHROME,
-) -> FormButton:
-    """Build an optional size button; the owner applies the count and resets its page.
-
-    Keep this control visible even when all items fit on one page, so readers can
-    choose a smaller size again. The form rebases against the latest rendered control.
-    """
-    form = FormBinding(
-        f"{key}.page-size",
-        page_size_form(page_size, maximum=maximum, chrome=chrome),
-        _PageSizeSubmit(on_change),
-        ActionMode.REBASE,
-        chrome.items_per_page,
-        unavailable=chrome.page_jump_unavailable,
-    )
-    return FormButton(chrome.items_per_page, _PresentJump(form), form.key, mode=form.mode, form=form)
-
-
-def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
-    """Previous/Next plus a form-opening button for an addressable pager.
-
-    Opt in with ``MessageRoot(..., nav=page_jump_nav)``. The form accepts every
-    page, including pages beyond a select menu's option limit.
-    """
-    row = navigation_controls(context)
-    state = context.state
-    seek = context.on_seek
-    if state.page is None or state.extent is None or state.extent < 2:
-        return (row,)
-    label = state.seek_label or context.chrome.jump_to_page
-    if context.jump_route is not None:
-        return (Row((*row.items, RoutedButton(label, context.jump_route))),)
-    if not callable(seek):
-        return (row,)
-    form = FormBinding(
-        f"{state.seek_key}.jump",
-        page_jump_form(state.page, state.extent, title=label, chrome=context.chrome),
-        _JumpSubmit(seek),
-        ActionMode.REBASE,
-        label,
-        unavailable=context.chrome.page_jump_unavailable,
-    )
-    button = FormButton(label, _PresentJump(form), form.key, mode=form.mode, form=form)
-    return (Row((*row.items, button)),)
 
 
 def materialized_navigation_state(key: str, position: PagePosition, extent: int, chrome: Chrome) -> NavigationState:
@@ -471,8 +334,6 @@ __all__ = [
     "MATERIALIZED_PREVIOUS_KEY",
     "MATERIALIZED_SEEK_KEY",
     "NAV_FACTORY_CONTEXT",
-    "SEEK_OPTION_LIMIT",
-    "MountNavNode",
     "NavFactory",
     "NavNode",
     "NavigationContext",
@@ -483,11 +344,84 @@ __all__ = [
     "TurnPage",
     "default_nav",
     "materialized_navigation_state",
-    "navigation_controls",
     "page_jump_form",
-    "page_jump_nav",
     "page_select_nav",
     "page_size_button",
     "page_size_form",
-    "seek_control",
 ]
+
+
+def default_nav(context: NavigationContext) -> Sequence[NavNode]:
+    """Build portable Previous and Next actions from navigation state."""
+    state = context.state
+
+    def control(
+        label: TextLike, binding: Callable[..., Awaitable[None]] | str, key: str, available: bool
+    ) -> sem.ActionControl | sem.RoutedActionControl:
+        return (
+            sem.RoutedActionControl(key, label, binding, available=available)
+            if isinstance(binding, str)
+            else sem.ActionControl(key, label, binding, available=available)
+        )
+
+    previous = (
+        (control(state.previous_label, context.on_previous, state.previous_key, state.has_previous),)
+        if state.backward
+        else ()
+    )
+    return (
+        sem.ActionControls(
+            (*previous, control(state.next_label, context.on_next, state.next_key, state.has_next)),
+            key=f"{state.next_key}.navigation",
+        ),
+    )
+
+
+def page_size_button(
+    key: str,
+    page_size: int,
+    on_change: Callable[[ActionEvent, int], Awaitable[None]],
+    *,
+    maximum: int | None = None,
+    chrome: Chrome = DEFAULT_CHROME,
+) -> sem.FormTrigger:
+    """Offer a portable form that changes an application's items-per-page value."""
+    return sem.FormTrigger(
+        f"{key}.page-size",
+        chrome.items_per_page,
+        page_size_form(page_size, maximum=maximum, chrome=chrome),
+        SubmitPageSize(on_change),
+        mode=ActionMode.REBASE,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _SeekChoice(_HandlerComposition):
+    seek: Callable[[ActionEvent, int], Awaitable[None]]
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        if isinstance(self.seek, _HandlerComposition):
+            seek = binder.composition(self.seek)
+            return replace(self, seek=seek) if seek is not self.seek else self
+        return self
+
+    async def __call__(self, event: sem.ChoiceEvent) -> None:
+        if event.selected:
+            await self.seek(event, int(event.selected[0]))
+
+
+def page_select_nav(context: NavigationContext) -> Sequence[NavNode]:
+    """Previous/Next plus portable page choices when random access is available."""
+    state, seek = context.state, context.on_seek
+    if seek is None or state.page is None or state.extent is None or state.extent < 2 or state.page_option is None:
+        return default_nav(context)
+    choices = tuple(sem.Choice(str(page), state.page_option(page + 1)) for page in range(state.extent))
+    picker = (
+        sem.RoutedChoices(
+            state.seek_key, choices, seek, placeholder=state.seek_label or None, selected=(str(state.page),)
+        )
+        if isinstance(seek, str)
+        else sem.Choices(state.seek_key, choices, selection=Controlled((str(state.page),), _SeekChoice(seek)))
+    )
+    return (*default_nav(context), picker)

@@ -7,14 +7,15 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.slack.capabilities import SlackAdapterCapability
 from squid_ui.ext.slack.target_types import SlackSdk343Adapter, SlackSdkAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 
 SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
     {
-        AdapterCapability.RENDER_SLACK_MESSAGE,
-        AdapterCapability.RENDER_SLACK_MODAL,
-        AdapterCapability.RENDER_SLACK_HOME,
+        SlackAdapterCapability.RENDER_SLACK_MESSAGE,
+        SlackAdapterCapability.RENDER_SLACK_MODAL,
+        SlackAdapterCapability.RENDER_SLACK_HOME,
     }
 )
 
@@ -40,7 +41,7 @@ def slack_sdk_adapter_profile(
     name: str,
     version_expression: str,
     *,
-    capabilities: frozenset[AdapterCapability] = SLACK_SDK_BEHAVIOR_CAPABILITIES,
+    capabilities: frozenset[str] = SLACK_SDK_BEHAVIOR_CAPABILITIES,
 ) -> AdapterProfile[SlackSdkAdapter]:
     """Declare the SDK versions and capabilities verified by the application.
 
@@ -51,7 +52,7 @@ def slack_sdk_adapter_profile(
 
 
 def require_slack_sdk_capability(
-    profile: AdapterProfile[SlackSdkAdapter], capability: AdapterCapability, operation: str
+    profile: AdapterProfile[SlackSdkAdapter], capability: SlackAdapterCapability, operation: str
 ) -> None:
     """Verify the selected profile and installed Slack SDK at a drawing boundary."""
     if capability not in profile.capabilities:

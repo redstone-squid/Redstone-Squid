@@ -297,16 +297,16 @@ rungs deliberately change layout, supply semantic `content` and map each rung to
 that source. This example declares two equivalent presentations of one paragraph:
 
 ```python
-from squid_ui.primitives import Never, Panel, Text, Variant, Variants
+from squid_ui.ext.discord import primitives
 
-summary = Variants(
+summary = primitives.Variants(
     (
-        Variant(
-            (Panel((Text("Build summary", overflow=Never()),)),),
+        primitives.Variant(
+            (primitives.Panel((primitives.Text("Build summary", overflow=primitives.Never()),)),),
             correspondence=(sl.corresponds("@content", "summary"),),
         ),
-        Variant(
-            (Text("Build summary", overflow=Never()),),
+        primitives.Variant(
+            (primitives.Text("Build summary", overflow=primitives.Never()),),
             correspondence=(sl.corresponds("@content", "summary"),),
         ),
     ),

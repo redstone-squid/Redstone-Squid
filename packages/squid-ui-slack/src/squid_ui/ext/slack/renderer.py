@@ -51,15 +51,16 @@ from slack_sdk.models.blocks import (
 )
 from slack_sdk.models.views import View
 
-from squid_ui import scene
 from squid_ui.content.assets import Asset, StoredAsset
 from squid_ui.content.entity import ConversationType
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.slack import scene
 from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER, require_slack_sdk_capability
+from squid_ui.ext.slack.capabilities import SlackAdapterCapability
 from squid_ui.ext.slack.message_payload import MessagePayload
 from squid_ui.ext.slack.protocol import SLACK_HOME_LIMITS, SLACK_MESSAGE_LIMITS, SLACK_MODAL_LIMITS, SlackLimits
 from squid_ui.ext.slack.target_types import SlackSdkAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver, Renderer
 
@@ -435,7 +436,7 @@ def _validate_scene[BodyT: scene.SlackBody](
     *,
     target: str,
     body_type: type[BodyT],
-    capability: AdapterCapability,
+    capability: SlackAdapterCapability,
     profile: AdapterProfile[SlackSdkAdapter],
 ) -> BodyT:
     """Validate scene/profile identity and return the narrowed body."""
@@ -639,7 +640,7 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
             document,
             target="slack.block-kit.message",
             body_type=scene.SlackMessage,
-            capability=AdapterCapability.RENDER_SLACK_MESSAGE,
+            capability=SlackAdapterCapability.RENDER_SLACK_MESSAGE,
             profile=self.adapter,
         )
         _audit_surface(body.blocks, surface="message", limits=SLACK_MESSAGE_LIMITS)
@@ -674,7 +675,7 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
             document,
             target="slack.block-kit.modal",
             body_type=scene.SlackModalView,
-            capability=AdapterCapability.RENDER_SLACK_MODAL,
+            capability=SlackAdapterCapability.RENDER_SLACK_MODAL,
             profile=self.adapter,
         )
         _audit_surface(body.blocks, surface="modal", limits=SLACK_MODAL_LIMITS)
@@ -710,7 +711,7 @@ class HomeRenderer(Renderer[scene.SlackHomeView, View]):
             document,
             target="slack.block-kit.home",
             body_type=scene.SlackHomeView,
-            capability=AdapterCapability.RENDER_SLACK_HOME,
+            capability=SlackAdapterCapability.RENDER_SLACK_HOME,
             profile=self.adapter,
         )
         _audit_surface(body.blocks, surface="home", limits=SLACK_HOME_LIMITS)

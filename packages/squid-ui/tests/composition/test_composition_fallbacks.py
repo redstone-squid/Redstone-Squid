@@ -12,6 +12,7 @@ from squid_ui import scene
 from squid_ui.authoring.presentations import alternative, alternatives, budget, corresponds, equivalent
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
@@ -172,15 +173,15 @@ def test_classic_field_replacements_obey_native_value_limits() -> None:
     node = sl.fields(sl.field("Name", "Too long", key="name", fallbacks=("OK",)))
     result = plan(node, target=target)
     assert result.scene.body.embeds[0].fields[0].value == "OK"
-    assert result.cost.get(Axis.EMBED_TEXT) == 6
+    assert result.cost.get(DiscordAxis.EMBED_TEXT) == 6
     with pytest.raises(JointInfeasibleError):
         plan(node, target=target, strict=True)
 
 
 def test_classic_field_text_counts_against_the_authored_embed_budget() -> None:
     fields = sl.fields(sl.field("A", "Long", key="a"))
-    result = plan(sl.region(budget(fields, limits={Axis.EMBED_TEXT: 5}), key="r", title="R"), target=TARGETS[1])
-    assert result.cost.get(Axis.EMBED_TEXT) == 5
+    result = plan(sl.region(budget(fields, limits={DiscordAxis.EMBED_TEXT: 5}), key="r", title="R"), target=TARGETS[1])
+    assert result.cost.get(DiscordAxis.EMBED_TEXT) == 5
     assert not result.scene.body.content
     with pytest.raises(JointInfeasibleError):
-        plan(sl.region(budget(fields, limits={Axis.EMBED_TEXT: 4}), key="r", title="R"), target=TARGETS[1])
+        plan(sl.region(budget(fields, limits={DiscordAxis.EMBED_TEXT: 4}), key="r", title="R"), target=TARGETS[1])

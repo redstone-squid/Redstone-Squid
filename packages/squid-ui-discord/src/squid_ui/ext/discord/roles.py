@@ -17,9 +17,7 @@ from squid_ui.authoring.presentations import change_interaction, corresponds, lo
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.text import TextLike
-from squid_ui.ext.discord.routing import RouteComponent, RouteGroup
-from squid_ui.interactions.routing import Route
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     ControlGroup,
     Heading,
     Option,
@@ -29,8 +27,10 @@ from squid_ui.primitives.nodes import (
     Variant,
     Variants,
 )
+from squid_ui.ext.discord.routing import RouteComponent, RouteGroup
+from squid_ui.ext.discord.target_types import DiscordTarget
+from squid_ui.interactions.routing import Route
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import DiscordTarget
 
 
 @dataclass(frozen=True, slots=True)

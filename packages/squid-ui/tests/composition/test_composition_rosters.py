@@ -14,6 +14,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -56,7 +57,7 @@ def test_roster_pages_repeat_localized_slot_context_and_join_controls(target: Ta
         page = result.for_page({identity: index})
         wire = (
             squid_ui.ext.html.Renderer().draw(page.scene, plan=page)
-            if isinstance(page.scene.body, scene.HtmlBody)
+            if isinstance(page.scene.body, html_scene.HtmlBody)
             else scene.Codec.dumps(page.scene)
         )
         assert "Tank — Seats 4/8" in wire
@@ -77,7 +78,7 @@ def test_roster_waitlist_is_visible_without_changing_join_availability(target: T
     assert result.allocation is not None
     wire = (
         squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
-        if isinstance(result.scene.body, scene.HtmlBody)
+        if isinstance(result.scene.body, html_scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
     assert "Tank — Seats 1/1" in wire and "Queue" in wire and "Alice" in wire and "Bob" in wire
@@ -95,11 +96,11 @@ def test_full_rejecting_slots_disable_join_without_discarding_slot_counts(target
     result = plan(sl.roster(placement, key="raid", on_join=join), target=target, chrome=CHROME)
     wire = (
         squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
-        if isinstance(result.scene.body, scene.HtmlBody)
+        if isinstance(result.scene.body, html_scene.HtmlBody)
         else scene.Codec.dumps(result.scene)
     )
     assert "No seats" in wire and "Seats 1/1" in wire
-    if isinstance(result.scene.body, scene.HtmlBody):
+    if isinstance(result.scene.body, html_scene.HtmlBody):
         assert "disabled" in squid_ui.ext.html.Renderer().draw(result.scene, plan=result)
     else:
         assert '"disabled":true' in wire.replace(" ", "")

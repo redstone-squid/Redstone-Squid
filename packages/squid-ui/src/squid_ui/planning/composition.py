@@ -19,6 +19,8 @@ from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
+from squid_ui.native import NativeTraits
+from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
@@ -26,8 +28,6 @@ from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantic_correspondence import SourceScope, budget_floor
 from squid_ui.planning.semantic_index import SemanticGraph, SemanticValue
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
-from squid_ui.primitives.nodes import Budget as NativeBudget
 
 if TYPE_CHECKING:
     from squid_ui.planning.adapter import ExtensionAdapter
@@ -523,11 +523,12 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 preflight.append(ConstraintViolation(identity, "atomic placement"))
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
-        if isinstance(semantic, Budgeted | NativeBudget):
+        character_budget = semantic if isinstance(semantic, Budgeted) else NativeTraits.of(semantic).budget
+        if character_budget is not None:
             floors[identity] = budget_floor(
                 part.offer.occurrence.graph, part.offer.occurrence.reference, part.offer.occurrence.ancestors()
             )
-            budgets[identity] = {Axis.DISPLAY_TEXT: semantic.preferred + semantic.stretch}
+            budgets[identity] = {Axis.DISPLAY_TEXT: character_budget.preferred + character_budget.stretch}
         pending.extend(part.children)
     if preflight:
         return Evaluation(violations=tuple(preflight))

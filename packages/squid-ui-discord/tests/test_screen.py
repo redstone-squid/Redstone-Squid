@@ -12,6 +12,7 @@ from squid_reactivity import LocalTopicBus
 from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.response import UNSET
 from squid_ui.ext.discord.sessions import AdmissionSpec, Reject
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import ContextHarness, interaction_harness, message_harness
 
 CHROME = Chrome()
@@ -83,7 +84,7 @@ async def test_expired_is_available_during_final_render(timeout: bool) -> None:
 
     class ExpiryScreen(sd.Screen):
         @override
-        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
             rendered.append(self.expired)
             reasons.append(self.close_reason)
             return sl.heading("Expired" if self.expired else "Active")

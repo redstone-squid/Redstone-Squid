@@ -28,8 +28,9 @@ import squid_ui as sl
 import squid_ui.ext.slack as ss
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.ext.slack import scene as slack_scene
+from squid_ui.ext.slack.capabilities import SlackAdapterCapability
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
-from squid_ui.planning.adapter import AdapterCapability
 
 
 async def _pressed(_event: ActionEvent) -> None: ...
@@ -157,14 +158,14 @@ def test_native_entity_selectors_draw_to_sdk_models() -> None:
 
 
 def test_home_renderer_draws_current_table_card_and_carousel_models() -> None:
-    body = scene.SlackHomeView(
+    body = slack_scene.SlackHomeView(
         (
-            scene.SlackTable(((scene.SlackText("Build"), scene.SlackText("Status")),)),
-            scene.SlackCard(title=scene.SlackText("Solo"), description=scene.SlackText("One card")),
-            scene.SlackCarousel(
+            slack_scene.SlackTable(((slack_scene.SlackText("Build"), slack_scene.SlackText("Status")),)),
+            slack_scene.SlackCard(title=slack_scene.SlackText("Solo"), description=slack_scene.SlackText("One card")),
+            slack_scene.SlackCarousel(
                 (
-                    scene.SlackCard(title=scene.SlackText("One")),
-                    scene.SlackCard(title=scene.SlackText("Two")),
+                    slack_scene.SlackCard(title=slack_scene.SlackText("One")),
+                    slack_scene.SlackCard(title=slack_scene.SlackText("Two")),
                 )
             ),
         )
@@ -177,10 +178,10 @@ def test_home_renderer_draws_current_table_card_and_carousel_models() -> None:
     assert view.to_dict()["blocks"][0]["rows"][0][0] == {"type": "raw_text", "text": "Build"}
 
 
-@pytest.mark.parametrize("title", [scene.SlackText("Piston door"), None])
-def test_card_images_serialize_as_image_elements(title: scene.SlackText | None) -> None:
-    card = scene.SlackCard(title=title, image_url="https://example.com/door.png")
-    body = scene.SlackHomeView((card, scene.SlackCarousel((card,))))
+@pytest.mark.parametrize("title", [slack_scene.SlackText("Piston door"), None])
+def test_card_images_serialize_as_image_elements(title: slack_scene.SlackText | None) -> None:
+    card = slack_scene.SlackCard(title=title, image_url="https://example.com/door.png")
+    body = slack_scene.SlackHomeView((card, slack_scene.SlackCarousel((card,))))
     document = scene.Scene(scene.Codec.protocol, "slack.block-kit.home", 1, body)
 
     blocks = ss.HomeRenderer().draw(document).to_dict()["blocks"]
@@ -203,7 +204,7 @@ def test_card_images_serialize_as_image_elements(title: scene.SlackText | None) 
     ],
 )
 def test_renderer_rejects_the_wrong_scene_contract(changed: dict[str, Any], match: str) -> None:
-    document = scene.Scene(scene.Codec.protocol, "slack.block-kit.message", 1, scene.SlackMessage("Hello"))
+    document = scene.Scene(scene.Codec.protocol, "slack.block-kit.message", 1, slack_scene.SlackMessage("Hello"))
 
     with pytest.raises(sl.DrawInvariantError, match=match):
         ss.MessageRenderer().draw(replace(document, **changed))
@@ -213,14 +214,16 @@ def test_renderer_rejects_missing_capability_and_surface_violations() -> None:
     profile = ss.slack_sdk_adapter_profile(
         "limited-sdk",
         ">=3.43,<3.44",
-        capabilities=frozenset({AdapterCapability.RENDER_SLACK_HOME}),
+        capabilities=frozenset({SlackAdapterCapability.RENDER_SLACK_HOME}),
     )
-    message = scene.Scene(scene.Codec.protocol, "slack.block-kit.message", 1, scene.SlackMessage("Hello"))
+    message = scene.Scene(scene.Codec.protocol, "slack.block-kit.message", 1, slack_scene.SlackMessage("Hello"))
     invalid_home = scene.Scene(
         scene.Codec.protocol,
         "slack.block-kit.home",
         1,
-        scene.SlackHomeView((scene.SlackInput("field", scene.SlackText("Field"), scene.SlackTextInput("field")),)),
+        slack_scene.SlackHomeView(
+            (slack_scene.SlackInput("field", slack_scene.SlackText("Field"), slack_scene.SlackTextInput("field")),)
+        ),
     )
 
     with pytest.raises(sl.DrawInvariantError, match="lacks"):
@@ -231,15 +234,15 @@ def test_renderer_rejects_missing_capability_and_surface_violations() -> None:
 
 def test_message_renderer_refuses_unresolved_or_insecure_assets() -> None:
     metadata = scene.Asset(key="report", name="report.txt", media_type="text/plain")
-    button = scene.SlackButton(
-        scene.SlackText("Report", scene.SlackTextKind.PLAIN),
-        asset=scene.SlackAssetRef("report", "report.txt", "text/plain"),
+    button = slack_scene.SlackButton(
+        slack_scene.SlackText("Report", slack_scene.SlackTextKind.PLAIN),
+        asset=slack_scene.SlackAssetRef("report", "report.txt", "text/plain"),
     )
     document = scene.Scene(
         scene.Codec.protocol,
         "slack.block-kit.message",
         1,
-        scene.SlackMessage("Report", (scene.SlackActions((button,)),)),
+        slack_scene.SlackMessage("Report", (slack_scene.SlackActions((button,)),)),
         (metadata,),
     )
 
@@ -254,7 +257,9 @@ def test_sdk_validation_is_reported_as_a_draw_invariant() -> None:
         scene.Codec.protocol,
         "slack.block-kit.message",
         1,
-        scene.SlackMessage("Hello", (scene.SlackHeader(scene.SlackText("x" * 151, scene.SlackTextKind.PLAIN)),)),
+        slack_scene.SlackMessage(
+            "Hello", (slack_scene.SlackHeader(slack_scene.SlackText("x" * 151, slack_scene.SlackTextKind.PLAIN)),)
+        ),
     )
 
     with pytest.raises(sl.DrawInvariantError, match="header text"):

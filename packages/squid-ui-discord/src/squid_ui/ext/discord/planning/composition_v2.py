@@ -2,18 +2,37 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import assert_never
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
 from squid_ui.content.assets import Asset
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import V2Limits
-from squid_ui.ext.discord.planning.composition_discord import discord_text, discord_time_prefix, select_violations
+from squid_ui.ext.discord.planning.composition_discord import (
+    discord_text,
+    discord_time_prefix,
+    resolve_select,
+    select_violations,
+)
+from squid_ui.ext.discord.planning.native_extensions import NativeComposition, NativePlacement
+from squid_ui.ext.discord.planning.policy import DiscordOfferPolicy
+from squid_ui.ext.discord.planning.realizations import (
+    CardRealization,
+    ClassicContentRealization,
+    FileRealization,
+    GalleryRealization,
+    NativeSectionRealization,
+    OpaqueRealization,
+    PremiumRealization,
+    SeparatorRealization,
+    ThumbnailRealization,
+)
+from squid_ui.ext.discord.primitives import nodes as primitive
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -31,39 +50,28 @@ from squid_ui.planning.composition import (
     SharedUse,
     UnsupportedCapability,
 )
-from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
-from squid_ui.planning.offers import OfferPolicy, semantic_offers
+from squid_ui.planning.offers import semantic_offers
 from squid_ui.planning.realizations import (
     ActionsRealization,
-    CardRealization,
-    ClassicContentRealization,
     ControlRealization,
     DownloadRealization,
     EntityRealization,
     FieldsRealization,
-    FileRealization,
     FlowRealization,
-    GalleryRealization,
     ImageRealization,
-    NativeSectionRealization,
-    OpaqueRealization,
     PanelRealization,
-    PremiumRealization,
     Realization,
     RowRealization,
     SelectRealization,
-    SeparatorRealization,
     TableForm,
     TableRealization,
     TextRealization,
     TextSequenceRealization,
-    ThumbnailRealization,
     TimeRealization,
     matrix_text,
     record_text,
 )
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.primitives import nodes as primitive
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +91,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         return semantic_offers(
             occurrence,
             context,
-            OfferPolicy(
+            DiscordOfferPolicy(
                 table_forms=(TableForm.RECORDS, TableForm.MATRIX),
                 panels=True,
                 nested_panels=False,
@@ -201,7 +209,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return (node,)
                 case PremiumRealization(sku_id=sku_id):
                     identity = part.offer.occurrence.identity
-                    if Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                    if DiscordCapability.ACTIONS_PREMIUM not in context.capabilities:
                         violations.append(UnsupportedCapability(identity, "Discord premium buttons"))
                     if self.limits.components.row_buttons < 1:
                         violations.append(LocalCapacityExceeded(identity, "row.buttons", 1, 0))
@@ -305,17 +313,19 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             items.append(item)
                     return (scene.Row(tuple(items)),)
                 case EntityRealization(node=node):
+                    resolved = resolve_select(node)
                     if Capability.ACTIONS_ENTITY not in context.capabilities:
                         violations.append(
                             UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
                         )
                     violations.extend(
                         ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(node, self.limits.components)
+                        for detail in select_violations(resolved, self.limits.components)
                     )
                     components += 2
-                    return (node,)
+                    return (resolved,)
                 case SelectRealization(node=node, summaries=summaries):
+                    resolved = resolve_select(node)
                     overview = (
                         rendered_text(
                             "\n".join(
@@ -329,12 +339,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     components += 2
                     violations.extend(
                         ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(node, self.limits.components)
+                        for detail in select_violations(resolved, self.limits.components)
                     )
                     return (
                         *overview,
-                        node,
-                        *(node for child in part.children for node in visit(child, in_panel=in_panel)),
+                        resolved,
+                        *(resolved for child in part.children for resolved in visit(child, in_panel=in_panel)),
                     )
                 case TextSequenceRealization() as sequence:
                     rendered = (
@@ -529,7 +539,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     )
                     return ()
                 case unknown:  # pyright: ignore[reportUnnecessaryComparison]  # Exhaustiveness check.
-                    assert_never(unknown)
+                    violations.append(
+                        UnsupportedCapability(
+                            part.offer.occurrence.identity, f"native realization {type(unknown).__name__}"
+                        )
+                    )
+                    return ()
 
         def visit(
             part: CandidateComposition[RenderTargetT, ContextT, Realization],
@@ -687,7 +702,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         message = "built thumbnail description exceeds its limit"
                         raise DrawInvariantError(message)
                 case scene.PremiumButton():
-                    if node.sku_id <= 0 or Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
+                    if node.sku_id <= 0 or DiscordCapability.ACTIONS_PREMIUM not in context.capabilities:
                         message = "built premium button lacks a valid SKU or capability"
                         raise DrawInvariantError(message)
                 case scene.Separator():

@@ -24,13 +24,13 @@ from squid_ui.ext.discord.messages.candidates import (
 )
 from squid_ui.ext.discord.messages.contracts import MessageRootStatus
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.result import PlanResult
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.tree import ComponentTree
-from squid_ui.target_types import DiscordTarget
 
 logger = logging.getLogger(__name__)
 

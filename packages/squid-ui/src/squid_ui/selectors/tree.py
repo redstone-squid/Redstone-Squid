@@ -7,10 +7,10 @@ from threading import RLock
 from types import MappingProxyType
 from typing import Any
 
-from squid_ui import primitives as p
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring import semantic as s
-from squid_ui.primitives.nodes import Boundary
+from squid_ui.boundary import Boundary
+from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tree import ComponentTree
 from squid_ui.selectors._scene import is_scene_node, scene_children
@@ -35,13 +35,6 @@ _UI_FIELDS: tuple[tuple[type, tuple[str, ...]], ...] = (
     (s.KeepWithNext, ("node",)),
     (s.Paged, ("node",)),
     (s.FallbackContent, ("primary", "alternates")),
-    (p.Panel, ("children",)),
-    (p.Budget, ("children",)),
-    (p.Break, ("children",)),
-    (p.Card, ("children",)),
-    (p.Extension, ("fallback",)),
-    (p.Variants, ("variants",)),
-    (p.Variant, ("nodes",)),
     (s.ActionControls, ("items",)),
     (s.ControlGroup, ("controls",)),
     (s.Items, ("items",)),
@@ -59,13 +52,6 @@ _UI_FIELDS: tuple[tuple[type, tuple[str, ...]], ...] = (
     (s.Grid, ("cells",)),
     (s.Figure, ("media",)),
     (s.Details, ("summary", "children")),
-    (p.Row, ("items",)),
-    (p.ControlGroup, ("items",)),
-    (p.Section, ("texts", "accessory")),
-    (p.SelectMenu, ("options",)),
-    (p.RoutedSelect, ("options",)),
-    (p.Gallery, ("items",)),
-    (p.MediaCollection, ("items",)),
 )
 
 type Children = Callable[[object], Iterable[tuple[str, object]]]
@@ -81,7 +67,10 @@ def ui_children(node: object) -> Iterable[tuple[str, object]]:
     if is_scene_node(node):
         yield from scene_children(node)
         return
-    for kind, names in _UI_FIELDS:
+    fields_to_visit = (
+        ((type(node), NativeTraits.of(node).query_fields),) if isinstance(node, NativeValue) else _UI_FIELDS
+    )
+    for kind, names in fields_to_visit:
         if isinstance(node, kind):
             for name in names:
                 value = getattr(node, name)

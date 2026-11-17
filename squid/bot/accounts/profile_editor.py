@@ -23,13 +23,14 @@ from squid.bot.edit_history import history_controls, track_local_edits
 from squid.bot.ui import tr
 from squid.core.errors import ValidationError
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 def _link_count(count: int) -> sl.text.Text:
     return md_tr(t"account-view-links = {count} links")
 
 
-class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class ProfileEditor(sl.Component[ComponentsV2Target, sd.Request]):
     """Own a profile draft and its local history until save or cancel."""
 
     _active: bool = sl.state(True)
@@ -48,7 +49,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.editor = self._build_profile_editor()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             self.editor,
             *history_controls(self.history),
@@ -66,7 +67,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._active = False
         self._close()
 
-    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request]:
+    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, ComponentsV2Target, sd.Request]:
         profile_section = sp.EditorSection.from_form(
             "profile",
             tr(t"account-view-profile = Profile"),
@@ -125,7 +126,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             summary=lambda value: _link_count(len(value)),
             issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
-        editor = sp.Editor[sl.ComponentsV2Target, sd.Request](
+        editor = sp.Editor[ComponentsV2Target, sd.Request](
             tr(t"account-view-edit-your-creator-page = Edit your creator page"),
             (profile_section, links_section),
             preview=self._profile_preview,
@@ -185,7 +186,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return (sl.forms.FormError(error.public_text()),)
         return ()
 
-    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft))
         return sl.section(

@@ -15,15 +15,17 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
-from squid_ui import scene
 from squid_ui.authoring import semantic
 from squid_ui.authoring.grids import GridCell
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.authoring.semantic import PortableNode
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.interactions.forms import FormSpec, TextField
@@ -171,13 +173,13 @@ def test_the_minimal_table_covers_the_portable_union_exactly() -> None:
 
 def _non_trivial(body: object) -> bool:
     match body:
-        case scene.HtmlBody(children=children) | scene.ComponentsV2(children=children):
+        case html_scene.HtmlBody(children=children) | discord_scene.ComponentsV2(children=children):
             return bool(children)
-        case scene.ClassicMessage(content=content, embeds=embeds, rows=rows):
+        case discord_scene.ClassicMessage(content=content, embeds=embeds, rows=rows):
             return bool(content or embeds or rows)
-        case scene.SlackMessage(text=text, blocks=blocks):
+        case slack_scene.SlackMessage(text=text, blocks=blocks):
             return bool(text or blocks)
-        case scene.SlackHomeView(blocks=blocks):
+        case slack_scene.SlackHomeView(blocks=blocks):
             return bool(blocks)
         case _:
             message = f"unknown scene body {type(body).__name__}"

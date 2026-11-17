@@ -22,7 +22,7 @@ from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.interactions.forms import Form, FormField, FormIssue, FormLike, FormSpec
 from squid_ui.palette import Role
-from squid_ui.target_types import DiscordTarget, RenderTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._actions import MachineKeySegment, NestedAction, keyed_action, match_keyed_action
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
@@ -589,7 +589,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
 
     def paged_lines(
         self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
-    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+    ) -> tuple[LayoutNode[RenderTarget, ContextT], ...]:
         """Delegate child paging through namespaced action and control keys."""
         return self.parent.paged_lines(lines, self._action(action_name), key=self._key(key), page=page, per=per)
 

@@ -16,7 +16,7 @@ from squid_ui.ext.discord.emoji import discord_emoji
 from squid_ui.ext.discord.limits import LIMITS, Axis
 from squid_ui.ext.discord.messages.root import AnyMessageRoot
 from squid_ui.ext.discord.target import classic, v2
-from squid_ui.planning import ClassicTarget, ComponentsV2Target
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target
 from squid_ui.planning.adapter import ResourceCost
 from squid_ui.runtime.definition import AnyComponent
 

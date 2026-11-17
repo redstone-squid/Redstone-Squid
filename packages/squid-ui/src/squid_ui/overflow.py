@@ -1,10 +1,7 @@
-"""Overflow policies: what a node gives up when the message budget runs out.
+"""Overflow policies and ownership of materialized page positions.
 
-Nodes declare intent, not sizes — the solver measures chrome, allocates Discord's shared
-budgets by priority, and applies the node's policy only when its content does not fit.
-
-`Paginate` also needs to know who keeps its visible page, so the page values it shares with
-semantic `Paged` and `List` live here: `PageOwnership`, its defaults, `PageEvent` and `RoutedPage`.
+Nodes declare how text may shorten or continue when a target's limits bind.
+Pagination and semantic lists share PageOwnership, PageEvent, and RoutedPage.
 """
 
 from collections.abc import Callable

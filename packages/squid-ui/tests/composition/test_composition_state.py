@@ -8,7 +8,10 @@ import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.navigation_controls import default_nav, page_select_nav
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.slack.target_types import SlackAdapter
@@ -16,7 +19,7 @@ from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.pagination.navigation import TurnPage, default_nav, page_select_nav
+from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.resources import Axis, TargetLimits
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
@@ -35,7 +38,9 @@ def test_navigation_is_certified_and_cursor_only_selection_reuses_allocation(mon
     document = content()
     result = plan(document, target=V2, session=session, nav=page_select_nav, composition=OPTIONS)
     assert len(result.bindings) == 3
-    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert any(
+        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+    )
     session.apply_updates(result.session_updates)
     allocation = result.allocation
     committed = session.cursor("$/r")
@@ -173,7 +178,7 @@ def test_root_and_local_pages_use_shared_allocation() -> None:
     assert root.allocation is not None
     assert root.scene.pagers[0].key == "document"
     local = plan(
-        sl.primitives.Lines(tuple("abcd"), overflow=sl.primitives.Paginate(key="lines", per=2)),
+        primitives.Lines(tuple("abcd"), overflow=primitives.Paginate(key="lines", per=2)),
         target=target,
         nav=default_nav,
     )

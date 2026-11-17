@@ -10,6 +10,7 @@ from squid_ui import scene
 from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.content.text import Markup
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.interactions import ActionMode
 
@@ -30,23 +31,25 @@ class HtmlProbe(HTMLParser):
         self.text.append(data)
 
 
-def _scene() -> scene.Scene[scene.ComponentsV2]:
+def _scene() -> scene.Scene[discord_scene.ComponentsV2]:
     return scene.Scene(
         protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Panel(
+                discord_scene.Panel(
                     (
-                        scene.Text("<script>alert(1)</script>"),
-                        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
-                        scene.ZonedTime(
+                        discord_scene.Text("<script>alert(1)</script>"),
+                        discord_scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
+                        discord_scene.ZonedTime(
                             instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="Starts: "
                         ),
-                        scene.Row((scene.Button("Save", "form.save", mode=ActionMode.EXCLUSIVE),)),
-                        scene.Select((scene.Option("One", "1"),), "form.choice"),
-                        scene.Gallery((scene.GalleryItem("https://example.invalid/image.png", "preview"),)),
+                        discord_scene.Row((discord_scene.Button("Save", "form.save", mode=ActionMode.EXCLUSIVE),)),
+                        discord_scene.Select((discord_scene.Option("One", "1"),), "form.choice"),
+                        discord_scene.Gallery(
+                            (discord_scene.GalleryItem("https://example.invalid/image.png", "preview"),)
+                        ),
                     ),
                     accent=0x5865F2,
                 ),
@@ -77,7 +80,7 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
 def test_scene_json_can_be_drawn_by_a_separate_frontend_process() -> None:
     document = _scene()
     restored = scene.Codec.loads(scene.Codec.dumps(document))
-    restored_v2 = cast(scene.Scene[scene.ComponentsV2], restored)
+    restored_v2 = cast(scene.Scene[discord_scene.ComponentsV2], restored)
 
     assert DiscordPreviewRenderer().draw(restored_v2) == DiscordPreviewRenderer().draw(document)
 
@@ -96,14 +99,14 @@ def test_html_preview_rejects_an_unknown_target_version() -> None:
 
 
 def test_entity_select_shows_its_current_values_as_mentions() -> None:
-    from_guild = scene.EntitySelect(
+    from_guild = discord_scene.EntitySelect(
         EntityType.CONVERSATION,
         "settings.channel",
         placeholder="Choose a channel",
         default_values=(EntityRef(EntityKind.CONVERSATION, 42),),
     )
-    empty = scene.EntitySelect(EntityType.ROLE, "settings.role", placeholder="Choose a role")
-    document = replace(_scene(), body=scene.ComponentsV2((from_guild, empty)))
+    empty = discord_scene.EntitySelect(EntityType.ROLE, "settings.role", placeholder="Choose a role")
+    document = replace(_scene(), body=discord_scene.ComponentsV2((from_guild, empty)))
 
     rendered = DiscordPreviewRenderer().draw(document)
 
@@ -116,10 +119,12 @@ def test_entity_select_shows_its_current_values_as_mentions() -> None:
 def test_preview_renders_markdown_blocks_and_preserves_literal_text() -> None:
     document = replace(
         _scene(),
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Text("# Title\n\n**Ready**\n\n- first\n- second\n\n```\nx < y\n```", Markup.DISCORD_MARKDOWN),
-                scene.Text("**literal** <script>", Markup.PLAIN),
+                discord_scene.Text(
+                    "# Title\n\n**Ready**\n\n- first\n- second\n\n```\nx < y\n```", Markup.DISCORD_MARKDOWN
+                ),
+                discord_scene.Text("**literal** <script>", Markup.PLAIN),
             )
         ),
     )
@@ -136,10 +141,10 @@ def test_preview_renders_markdown_blocks_and_preserves_literal_text() -> None:
 def test_preview_styles_discord_subtext_and_revealable_spoilers() -> None:
     document = replace(
         _scene(),
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Text("-# Small ||secret||", Markup.DISCORD_MARKDOWN),
-                scene.Text("-# ||literal||", Markup.PLAIN),
+                discord_scene.Text("-# Small ||secret||", Markup.DISCORD_MARKDOWN),
+                discord_scene.Text("-# ||literal||", Markup.PLAIN),
             )
         ),
     )
@@ -156,18 +161,22 @@ def test_preview_styles_discord_subtext_and_revealable_spoilers() -> None:
 @pytest.mark.parametrize("routed", [False, True])
 def test_preview_controls_preserve_escaped_binding_and_option_metadata(routed: bool) -> None:
     identifier = 'choose"<&'
-    options = (scene.Option("<One>", 'one"&', default=True),)
+    options = (discord_scene.Option("<One>", 'one"&', default=True),)
     button = (
-        scene.RoutedButton("<Save>", identifier, disabled=True)
+        discord_scene.RoutedButton("<Save>", identifier, disabled=True)
         if routed
-        else scene.Button("<Save>", identifier, disabled=True)
+        else discord_scene.Button("<Save>", identifier, disabled=True)
     )
     select = (
-        scene.RoutedSelect(options, identifier, placeholder="<Choose>", min_values=0, max_values=2, disabled=True)
+        discord_scene.RoutedSelect(
+            options, identifier, placeholder="<Choose>", min_values=0, max_values=2, disabled=True
+        )
         if routed
-        else scene.Select(options, identifier, placeholder="<Choose>", min_values=0, max_values=2, disabled=True)
+        else discord_scene.Select(
+            options, identifier, placeholder="<Choose>", min_values=0, max_values=2, disabled=True
+        )
     )
-    document = replace(_scene(), body=scene.ComponentsV2((scene.Row((button,)), select)))
+    document = replace(_scene(), body=discord_scene.ComponentsV2((discord_scene.Row((button,)), select)))
 
     rendered = DiscordPreviewRenderer().draw(document)
 
@@ -184,7 +193,10 @@ def test_preview_controls_preserve_escaped_binding_and_option_metadata(routed: b
 
 @pytest.mark.parametrize("url, disabled", [("javascript:alert(1)", False), ("https://example.com", True)])
 def test_unavailable_preview_links_have_no_navigation(url: str, disabled: bool) -> None:
-    document = replace(_scene(), body=scene.ComponentsV2((scene.Row((scene.Link("<Link>", url, disabled=disabled),)),)))
+    document = replace(
+        _scene(),
+        body=discord_scene.ComponentsV2((discord_scene.Row((discord_scene.Link("<Link>", url, disabled=disabled),)),)),
+    )
 
     rendered = DiscordPreviewRenderer().draw(document)
 
@@ -195,7 +207,9 @@ def test_unavailable_preview_links_have_no_navigation(url: str, disabled: bool) 
 def test_spoiler_panel_keeps_focus_and_accent_attributes_separate() -> None:
     document = replace(
         _scene(),
-        body=scene.ComponentsV2((scene.Panel((scene.Text("Hidden"),), spoiler=True, accent=0x123456),)),
+        body=discord_scene.ComponentsV2(
+            (discord_scene.Panel((discord_scene.Text("Hidden"),), spoiler=True, accent=0x123456),)
+        ),
     )
 
     rendered = DiscordPreviewRenderer().draw(document)
@@ -207,11 +221,11 @@ def test_preview_builder_escapes_text_and_attributes_without_injecting_elements(
     hostile = '"><script>alert(1)</script>&'
     document = replace(
         _scene(),
-        body=scene.ComponentsV2(
+        body=discord_scene.ComponentsV2(
             (
-                scene.Text(hostile),
-                scene.Row((scene.Button(hostile, hostile),)),
-                scene.Thumbnail("https://example.invalid/image.png", hostile),
+                discord_scene.Text(hostile),
+                discord_scene.Row((discord_scene.Button(hostile, hostile),)),
+                discord_scene.Thumbnail("https://example.invalid/image.png", hostile),
             )
         ),
     )

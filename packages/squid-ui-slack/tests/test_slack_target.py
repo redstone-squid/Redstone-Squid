@@ -5,10 +5,12 @@ from dataclasses import replace
 import pytest
 
 import squid_ui.ext.slack as slack
-from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.slack import scene as slack_scene
+from squid_ui.ext.slack.capabilities import SlackAdapterCapability
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost
 
 SLACK_TEST_ADAPTER = AdapterProfile(
@@ -17,9 +19,9 @@ SLACK_TEST_ADAPTER = AdapterProfile(
     ">=3.43,<4",
     capabilities=frozenset(
         {
-            AdapterCapability.RENDER_SLACK_MESSAGE,
-            AdapterCapability.RENDER_SLACK_MODAL,
-            AdapterCapability.RENDER_SLACK_HOME,
+            SlackAdapterCapability.RENDER_SLACK_MESSAGE,
+            SlackAdapterCapability.RENDER_SLACK_MODAL,
+            SlackAdapterCapability.RENDER_SLACK_HOME,
         }
     ),
 )
@@ -28,23 +30,23 @@ SLACK_TEST_ADAPTER = AdapterProfile(
 @pytest.mark.parametrize(
     ("target", "target_id", "body_type", "blocks"),
     [
-        (slack.message_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.message", scene.SlackMessage, 50),
-        (slack.modal_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.modal", scene.SlackModalView, 100),
-        (slack.home_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.home", scene.SlackHomeView, 100),
+        (slack.message_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.message", slack_scene.SlackMessage, 50),
+        (slack.modal_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.modal", slack_scene.SlackModalView, 100),
+        (slack.home_target(adapter=SLACK_TEST_ADAPTER), "slack.block-kit.home", slack_scene.SlackHomeView, 100),
     ],
 )
 def test_slack_target_identity(target, target_id: str, body_type: type, blocks: int) -> None:
     assert target.id == target_id
     assert target.version == 1
     assert target.body_type is body_type
-    assert target.capacity(Axis.BLOCKS) == blocks
+    assert target.capacity(SlackAxis.BLOCKS) == blocks
 
 
 def test_slack_target_reservation_changes_capacity_and_fingerprint() -> None:
     target = slack.message_target(adapter=SLACK_TEST_ADAPTER)
-    reserved = target.reserve(ResourceCost({Axis.BLOCKS: 7}))
+    reserved = target.reserve(ResourceCost({SlackAxis.BLOCKS: 7}))
 
-    assert reserved.capacity(Axis.BLOCKS) == 43
+    assert reserved.capacity(SlackAxis.BLOCKS) == 43
     assert reserved.fingerprint != target.fingerprint
 
 

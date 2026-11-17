@@ -7,7 +7,6 @@ from typing import override
 import discord
 import pytest
 
-import squid_ui as sl
 import squid_ui.ext.discord.rendering.classic as classic_renderer_module
 import squid_ui.ext.discord.rendering.v2 as renderer_module
 from squid_ui import Component, state
@@ -15,14 +14,16 @@ from squid_ui.authoring.document import Document
 from squid_ui.authoring.semantic import ActionControl, ActionControls
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
+from squid_ui.ext.discord.primitives import Text
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
 from squid_ui.ext.discord.rendering.v2 import StaticView, V2Renderer
+from squid_ui.ext.discord.scene import ClassicMessage, Embed
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, message_harness
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.planner import plan
-from squid_ui.primitives import Text
-from squid_ui.scene import ClassicMessage, Codec, Embed
+from squid_ui.scene import Codec
 from squid_ui.scene import Scene as RenderedScene
 
 
@@ -202,7 +203,7 @@ def test_classic_program_hits_return_fresh_objects_and_skip_certified_audit(monk
 
 
 async def test_message_root_reuses_a_revisited_scene_program() -> None:
-    class Switching(Component[sl.ComponentsV2Target]):
+    class Switching(Component[ComponentsV2Target]):
         value: str = state("first")
 
         @override
@@ -225,7 +226,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
 
 
 async def test_explicit_render_cache_shares_programs_without_sharing_frontend_objects() -> None:
-    class Static(Component[sl.ComponentsV2Target]):
+    class Static(Component[ComponentsV2Target]):
         @override
         def render(self) -> Text:
             return Text("shared")

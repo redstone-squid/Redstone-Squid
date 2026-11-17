@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui import scene
-from squid_ui.capabilities import Capability
 from squid_ui.planning.resources import TargetLimits
 
 if TYPE_CHECKING:
@@ -38,7 +37,10 @@ class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT](Pro
 
     id: str
     version: int
-    capabilities: frozenset[Capability]
+
+    @property
+    def capabilities(self) -> frozenset[str]: ...
+
     render_target: type[RenderTargetT]
     body_type: type[BodyT]
     default_limits: LimitsT

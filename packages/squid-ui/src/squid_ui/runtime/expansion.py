@@ -16,9 +16,9 @@ from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import read_only
 from squid_ui.authoring.document import Asset, Document, DocumentLike
 from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.boundary import Boundary
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime._tree import (
     _IndexStep,
     _LayoutRoute,

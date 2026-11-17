@@ -12,19 +12,21 @@ from squid_ui import scene
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternative
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits
+from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
+from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.overflow import Paginate, Truncate
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
-from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Paginate, Truncate
 from squid_ui.target_types import Renderable
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-classic", "1")
@@ -49,22 +51,24 @@ def test_card_metadata_and_attachment_cost_survive_shared_composition() -> None:
     result = plan(Document((card,), assets=(asset,)), target=TARGET, strict=True)
     assert result.allocation is not None
     (embed,) = result.scene.body.embeds
-    assert embed == scene.Embed(
+    assert embed == discord_scene.Embed(
         title="Title",
         url=card.url,
         description="First\n\nSecond",
-        fields=(scene.EmbedField(name="Name", value="Value", inline=True),),
-        footer=scene.EmbedFooter(text="Footer", icon_url="https://example.com/footer.png"),
-        author=scene.EmbedAuthor(
+        fields=(discord_scene.EmbedField(name="Name", value="Value", inline=True),),
+        footer=discord_scene.EmbedFooter(text="Footer", icon_url="https://example.com/footer.png"),
+        author=discord_scene.EmbedAuthor(
             name="Author", url="https://example.com/author", icon_url="https://example.com/icon.png"
         ),
         colour=0x123456,
-        image=scene.EmbedMedia(url=f"attachment://{asset.name}", description="Image", asset_name=asset.name),
-        thumbnail=scene.EmbedMedia(url=f"attachment://{asset.name}", description="Thumb", asset_name=asset.name),
+        image=discord_scene.EmbedMedia(url=f"attachment://{asset.name}", description="Image", asset_name=asset.name),
+        thumbnail=discord_scene.EmbedMedia(
+            url=f"attachment://{asset.name}", description="Thumb", asset_name=asset.name
+        ),
         timestamp=instant.isoformat(),
     )
     assert result.cost.get(Axis.ATTACHMENTS) == 1
-    assert result.cost.get(Axis.EMBED_TEXT) == sum(
+    assert result.cost.get(DiscordAxis.EMBED_TEXT) == sum(
         map(len, ("Title", "First\n\nSecond", "Name", "Value", "Footer", "Author"))
     )
 
@@ -73,7 +77,7 @@ def test_embed_aggregate_counts_titles_authors_and_footers() -> None:
     card = native.Card(title="Title", author=native.CardAuthor("Author"), footer=native.CardFooter("Footer"))
     with pytest.raises(JointInfeasibleError):
         plan(card, target=classic_target(ADAPTER, limits=ClassicLimits(embed_text=16)))
-    assert plan(card, target=TARGET).cost.get(Axis.EMBED_TEXT) == 17
+    assert plan(card, target=TARGET).cost.get(DiscordAxis.EMBED_TEXT) == 17
 
 
 def test_each_card_slot_obeys_its_own_shortening_policy_and_limit() -> None:
@@ -173,10 +177,10 @@ def test_checked_alternatives_select_a_supported_native_layout(target: Target[An
     result = plan(document, target=target, strict=True)
     assert result.allocation is not None
     assert "Body" in scene.Codec.dumps(result.scene)
-    if isinstance(result.scene.body, scene.ClassicMessage):
+    if isinstance(result.scene.body, discord_scene.ClassicMessage):
         assert result.scene.body.embeds[0].description == "Body"
-    elif isinstance(result.scene.body, scene.ComponentsV2):
-        assert isinstance(result.scene.body.children[0], scene.Panel)
+    elif isinstance(result.scene.body, discord_scene.ComponentsV2):
+        assert isinstance(result.scene.body.children[0], discord_scene.Panel)
 
 
 def test_canonical_content_does_not_need_a_realization_on_the_selected_target() -> None:

@@ -410,7 +410,7 @@ Built-in targets use shared composition for ordinary layouts and explicit region
 Unsupported vocabulary produces capability diagnostics; a failed search does not
 retry through a separate target fitter.
 
-Target-shaped nodes live under `squid_ui.primitives`. Their policies are explicit:
+Discord-shaped nodes live under `squid_ui.ext.discord.primitives`. Their policies are explicit:
 
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority. On `Lines`, per-entry
@@ -462,7 +462,7 @@ Raw HTML is disabled, and HTML links and images accept only safe URL schemes.
 
 A node's type says which targets can plan it. Semantic factories such as `sl.heading` and
 `sl.paragraph` produce `RenderTarget` nodes that can be planned for Discord or HTML. Exact
-`sl.primitives.Text` and `sl.primitives.Heading` nodes are Discord-shaped, as are all other
+`primitives.Text` and `primitives.Heading` nodes are Discord-shaped, as are all other
 primitive nodes: `Panel`, `Section`, `Gallery`, `File`, `Sep` and `Thumbnail` are Components V2
 only, while `Card` and `Content` are classic only. The mode is a *type parameter*, and it
 propagates: a primitive container factory takes the meet of its children's modes, so one `Panel`
@@ -473,15 +473,19 @@ That reaches `Component` through `render`, so a component that uses a dialect-sp
 primitive declares which dialect it is for:
 
 ```python
-class BuildPanel(sl.Component[sl.ComponentsV2Target]):
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
-        return sl.stack(sl.heading("Build"), sl.primitives.Panel(...))
+from squid_ui.ext.discord import ComponentsV2Target, primitives
+
+
+class BuildPanel(sl.Component[ComponentsV2Target]):
+    def render(self) -> sl.LayoutNode[ComponentsV2Target]:
+        return sl.stack(sl.heading("Build"), primitives.Panel(...))
 ```
 
 An unannotated `sl.Component` is portable: it may render semantic nodes and can be planned for
-either frontend. `Component` is contravariant in its mode. Core exports `sl.RenderTarget`
-and currently the Discord dialect markers. HTML and Slack target markers, along with
-each platform's adapter markers, belong to their extension package's `target_types` module.
+either frontend. `Component` is contravariant in its mode. Core owns `RenderTarget` and
+`Renderable`; each extension owns its target and adapter markers in `target_types`.
+Native nodes declare their structure and preservation rules through `NativeSemantics`,
+so the shared planner and runtime do not import target packages.
 
 Two cases this does not catch, both deliberate. A container mixing a V2-only and a
 classic-only child works in neither, but contravariance makes the union the solver's natural
@@ -998,7 +1002,7 @@ support portable event operations.
 
 Context constraints are independent of render-target constraints. Controls, containers,
 documents, components, and widget content slots preserve both; for example,
-`sl.LayoutNode[sl.ComponentsV2Target, sd.Request]` requires a Discord invocation context.
+`sl.LayoutNode[sd.ComponentsV2Target, sd.Request]` requires a Discord invocation context.
 `sd.Screen` fixes that context and declares its `event_frontend` as `discord`. The message
 root validates declarations throughout the component tree before exposing controls.
 Every public Discord mount and render entry point requires a context compatible with
@@ -1233,6 +1237,11 @@ unchanged content. Only publication commits presentation state. See the
 
 ## Scenes and renderers
 
+Core owns `Scene`, asset declarations, and pager coordinates. Each extension's `scene`
+module owns its concrete bodies, codec, schema declarations, and display edges. Import
+that module before decoding its bodies or exporting their schema; registering a target
+never imports another target. `Scene.expect_body(BodyType)` provides typed access.
+
 `sl.scene.Scene` is immutable and contains no callbacks or native frontend objects.
 PlanResult.bindings and PlanResult.resources are ephemeral side tables for a live frontend.
 
@@ -1240,7 +1249,7 @@ PlanResult.bindings and PlanResult.resources are ephemeral side tables for a liv
 and `schema_json`. Protocol 1 is current and additively includes `HtmlBody`; incompatible changes
 increment the protocol.
 
-`squid_ui.ext.html.Renderer` accepts only `Scene[HtmlBody]`. It mechanically emits escaped, accessible
+`squid_ui.ext.html.Renderer` accepts only `Scene[HtmlBody]`, with `HtmlBody` defined in `squid_ui.ext.html.scene`. It mechanically emits escaped, accessible
 semantic markup with native forms and controls plus action, route, selection, and pager metadata.
 Fragment output is the default; standalone mode adds a document shell, escaped title, locale,
 viewport metadata, and neutral colour-scheme-aware responsive CSS. Caller-supplied CSS is trusted
@@ -1461,8 +1470,8 @@ Fetching the updated preview can remain a resource; the service only owns the su
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
-from squid_ui.primitives import Text
+from squid_ui import Component, DocumentLike, Reactive, state
+from squid_ui.ext.discord import ComponentsV2Target, primitives
 from squid_ui.runtime import ContextKey, ManagedService, TopicName, TopicBus
 
 
@@ -1489,9 +1498,9 @@ UPDATES = ContextKey[BuildUpdates]("build-updates")
 
 
 class ChangeNotice(Component[ComponentsV2Target]):
-    def render(self) -> Text:
+    def render(self) -> primitives.Text:
         updates = self.inject(UPDATES)
-        return Text("Build changed; refresh the preview." if updates.changed else "Build is up to date.")
+        return primitives.Text("Build changed; refresh the preview." if updates.changed else "Build is up to date.")
 
 
 class BuildEditor(Component[ComponentsV2Target]):

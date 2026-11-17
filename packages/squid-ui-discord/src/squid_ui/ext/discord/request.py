@@ -38,10 +38,10 @@ from squid_ui.ext.discord.lifetime import Lifetime
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui.ext.discord.response import Response, ResponseOverrides, ResponseResult
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionEvent
 from squid_ui.interactions.forms import Form, FormResult, FormSpec
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope

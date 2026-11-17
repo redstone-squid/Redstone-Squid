@@ -5,6 +5,7 @@ from typing import assert_type, override
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.authoring.semantic import ActionControl
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 async def discord(event: sd.PressEvent) -> None:
@@ -18,11 +19,11 @@ async def portable(event: sl.PressEvent) -> None:
 control = sl.action_control("Discord", discord, key="discord")
 assert_type(control, ActionControl[sd.Request])
 node = sl.stack(sl.action_controls(control, key="actions"))
-compatible: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = node
+compatible: sl.LayoutNode[ComponentsV2Target, sd.Request] = node
 # A portable document must accept every invocation context.
 incompatible: sl.LayoutNode = node  # type: ignore
 portable_node = sl.action_controls(sl.action_control("Portable", portable, key="portable"), key="actions")
-portable_on_discord: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = portable_node
+portable_on_discord: sl.LayoutNode[ComponentsV2Target, sd.Request] = portable_node
 
 
 class OtherContext:
@@ -30,17 +31,17 @@ class OtherContext:
 
 
 # Matching render targets do not make unrelated invocation contexts compatible.
-other: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = node  # type: ignore
+other: sl.LayoutNode[ComponentsV2Target, OtherContext] = node  # type: ignore
 
 
 class DiscordPanel(sd.Screen):
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return node
 
 
 # The context constraint survives a component boundary, too.
-other_component: sl.Component[sl.ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore
+other_component: sl.Component[ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore
 
 
 async def other_press(event: sl.PressEvent[OtherContext]) -> None:
@@ -51,15 +52,13 @@ async def other_press(event: sl.PressEvent[OtherContext]) -> None:
 wrong_registration = sd.on_press(other_press)  # type: ignore
 
 
-async def incompatible_response(
-    request: sd.Request, component: sl.Component[sl.ComponentsV2Target, OtherContext]
-) -> None:
+async def incompatible_response(request: sd.Request, component: sl.Component[ComponentsV2Target, OtherContext]) -> None:
     # The public response boundary must not erase an incompatible context.
     await request.respond(component)  # type: ignore
 
 
 # Direct and keyed placement preserve the child's required event context.
-direct_child: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = DiscordPanel()
-keyed_child: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = DiscordPanel().keyed("discord")
-wrong_direct: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore  # Deliberately incompatible target or context.
-wrong_keyed: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = DiscordPanel().keyed("discord")  # type: ignore  # Deliberately incompatible target or context.
+direct_child: sl.LayoutNode[ComponentsV2Target, sd.Request] = DiscordPanel()
+keyed_child: sl.LayoutNode[ComponentsV2Target, sd.Request] = DiscordPanel().keyed("discord")
+wrong_direct: sl.LayoutNode[ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore  # Deliberately incompatible target or context.
+wrong_keyed: sl.LayoutNode[ComponentsV2Target, OtherContext] = DiscordPanel().keyed("discord")  # type: ignore  # Deliberately incompatible target or context.

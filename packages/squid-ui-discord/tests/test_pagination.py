@@ -14,24 +14,17 @@ from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.authoring.semantic import Item, Items, Paragraph
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_ui.ext.discord.navigation_controls import default_nav, page_select_nav
 from squid_ui.ext.discord.planning import components_v2_target
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.primitives import LAST_PAGE, Button, Code, Heading, Lines, Paginate, Row
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.pagination.navigation import default_nav, page_select_nav
 from squid_ui.planning.resources import Axis
-from squid_ui.primitives import (
-    LAST_PAGE,
-    Button,
-    Code,
-    Heading,
-    Lines,
-    Paginate,
-    Row,
-)
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
 
@@ -76,7 +69,7 @@ class TestPositionPolicy:
         assert policy(override=PagePosition("item", 20), upper_bound=8) == PagePosition("item", 8)
 
 
-class Browser(Component[sl.ComponentsV2Target]):
+class Browser(Component[ComponentsV2Target]):
     @override
     def render(self):
         # Navigation needs several budget-driven pages, not thousands of split points.
@@ -84,7 +77,7 @@ class Browser(Component[sl.ComponentsV2Target]):
         return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
 
 
-class TwoBrowsers(Component[sl.ComponentsV2Target]):
+class TwoBrowsers(Component[ComponentsV2Target]):
     def __init__(self) -> None:
         self.left_version = "old"
 
@@ -98,7 +91,7 @@ class TwoBrowsers(Component[sl.ComponentsV2Target]):
         ]
 
 
-class Catalog(Component[sl.ComponentsV2Target]):
+class Catalog(Component[ComponentsV2Target]):
     """A semantic picker whose list can shift under the reader."""
 
     def __init__(self) -> None:
@@ -115,7 +108,7 @@ class Catalog(Component[sl.ComponentsV2Target]):
         ]
 
 
-class ControlledLog(Component[sl.ComponentsV2Target]):
+class ControlledLog(Component[ComponentsV2Target]):
     """Keeps its own page, as a filtered list does so a new filter can return to page one."""
 
     page: int = sl.state(0)
@@ -412,7 +405,7 @@ def test_count_pages_hold_every_entry_exactly_once(count, per):
         collected.extend(
             line
             for node in selected.scene.body.children
-            if isinstance(node, sl.scene.Text)
+            if isinstance(node, discord_scene.Text)
             for line in node.content.splitlines()
             if line.startswith("entry ")
         )

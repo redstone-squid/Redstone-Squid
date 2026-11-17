@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from squid_ui import fallback, scene, truncate
+from squid_ui import fallback, truncate
 from squid_ui.authoring.document import Asset, InlineAsset
 from squid_ui.authoring.presentations import corresponds
 from squid_ui.authoring.semantic import (
@@ -24,6 +24,9 @@ from squid_ui.authoring.semantic import (
     Stack,
 )
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
+from squid_ui.ext.discord.primitives.nodes import Node
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
@@ -32,8 +35,6 @@ from squid_ui.planning.allocation import AllocationSnapshot
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
-from squid_ui.primitives.nodes import Node
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import query, select
 
@@ -60,12 +61,12 @@ def _visible_action_keys(result: Any) -> set[str]:
     keys: set[str] = set()
     for page in source.pages:
         output = allocation.select(dict(page.coordinates))
-        for match in query(output.scene, select(scene.Button).union(select(scene.Select))).all():
+        for match in query(output.scene, select(discord_scene.Button).union(select(discord_scene.Select))).all():
             node = match.node
-            if isinstance(node, scene.Button) and node.action.startswith("action."):
+            if isinstance(node, discord_scene.Button) and node.action.startswith("action."):
                 keys.add(node.action)
                 assert node.action in output.bindings
-            elif isinstance(node, scene.Select):
+            elif isinstance(node, discord_scene.Select):
                 keys.update(option.value for option in node.options if option.value.startswith("action."))
                 assert node.action in output.bindings
     return keys
@@ -91,9 +92,13 @@ def test_explicit_action_groups_never_merge() -> None:
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
-    rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
+    rows = [
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Row)
+    ]
     for row in rows:
-        labels = [button.label or "" for button in row.items if isinstance(button, scene.Button)]
+        labels = [button.label or "" for button in row.items if isinstance(button, discord_scene.Button)]
         assert all(label.startswith("Action") for label in labels) or all(label.startswith("Admin") for label in labels)
     assert sum(len(row.items) for row in rows) == 20
 
@@ -108,17 +113,29 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
         target=DISCORD_V2_DPY27,
     )
 
-    picker = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
-    rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
+    picker = next(
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
+    rows = [
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Row)
+    ]
     assert [option.value for option in picker.options] == ["archive"]
-    assert any(isinstance(item, scene.Button) and item.action == "delete" for row in rows for item in row.items)
+    assert any(isinstance(item, discord_scene.Button) and item.action == "delete" for row in rows for item in row.items)
     assert sum(len(row.items) for row in rows) == 2
 
 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     action = ActionControl("read", "Read", _act, mode=ActionMode.PARALLEL_READ)
     result = plan(ActionControls((action,), key="demo", display=ControlDisplay.GROUPED), target=DISCORD_V2_DPY27)
-    picker = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
+    picker = next(
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
 
     routed = result.bindings[picker.action].routed(("read",))
 
@@ -138,8 +155,21 @@ def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
     roomy = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27)
 
     assert not dense.scene.pagers
-    assert sum(isinstance(node, scene.Select) for node in dense.scene.components_v2.children) == 1
-    assert sum(len(node.items) for node in roomy.scene.components_v2.children if isinstance(node, scene.Row)) == 5
+    assert (
+        sum(
+            isinstance(node, discord_scene.Select)
+            for node in dense.scene.expect_body(discord_scene.ComponentsV2).children
+        )
+        == 1
+    )
+    assert (
+        sum(
+            len(node.items)
+            for node in roomy.scene.expect_body(discord_scene.ComponentsV2).children
+            if isinstance(node, discord_scene.Row)
+        )
+        == 5
+    )
 
 
 def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
@@ -152,7 +182,9 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
     result = plan(document, target=DISCORD_V2_DPY27)
 
     assert result.allocation is not None
-    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert any(
+        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+    )
     assert result.metrics.target_evaluations > 0
     assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
 
@@ -168,7 +200,9 @@ def test_inactive_fallbacks_do_not_replace_the_primary_or_publish_effects() -> N
 
     result = plan(document, target=DISCORD_V2_DPY27, session=session)
 
-    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert any(
+        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+    )
     assert "primary" in _texts(result)
     assert not any(event.code == "composition.effect" for event in result.report.events)
 
@@ -185,7 +219,13 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
     result = plan(document, target=DISCORD_V2_DPY27)
 
     assert any(event.code == "composition.effect" and event.message == "Replacement" for event in result.report.events)
-    assert sum(isinstance(node, scene.Select) for node in result.scene.components_v2.children) == 1
+    assert (
+        sum(
+            isinstance(node, discord_scene.Select)
+            for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        )
+        == 1
+    )
 
 
 def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> None:
@@ -202,9 +242,13 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
     result = plan(document, target=DISCORD_V2_DPY27)
 
-    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert any(
+        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+    )
     assert "compact details" not in {
-        node.content for node in result.scene.components_v2.children if isinstance(node, scene.Text)
+        node.content
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Text)
     }
     assert result.allocation is not None
 
@@ -261,13 +305,13 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
     assert result.metrics.work_used <= 100_000
     assert any(event.message == "Shortening" for event in result.report.events)
     labels: set[str] = set()
-    for node in result.scene.components_v2.children:
-        if isinstance(node, scene.Select):
+    for node in result.scene.expect_body(discord_scene.ComponentsV2).children:
+        if isinstance(node, discord_scene.Select):
             labels.update(option.label for option in node.options)
             assert node.action in result.bindings
-        elif isinstance(node, scene.Row):
+        elif isinstance(node, discord_scene.Row):
             for button in node.items:
-                assert isinstance(button, scene.Button)
+                assert isinstance(button, discord_scene.Button)
                 labels.add(button.label or "")
                 assert button.action in result.bindings
     assert labels == {f"Action {index + 1}" for index in range(5)}
@@ -281,8 +325,8 @@ def test_a_complete_search_reports_its_shared_work_budget() -> None:
     assert result.metrics.work_used <= 50_000
 
 
-def _texts(result: PlanResult[scene.ComponentsV2]) -> set[str]:
-    return {match.node.content for match in query(result.scene, select(scene.Text)).all()}
+def _texts(result: PlanResult[discord_scene.ComponentsV2]) -> set[str]:
+    return {match.node.content for match in query(result.scene, select(discord_scene.Text)).all()}
 
 
 def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
@@ -354,7 +398,9 @@ def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
     rendered = _texts(result)
 
     assert "compact" not in rendered  # the ladder kept its preferred rung
-    assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
+    assert any(
+        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+    )
     assert not result.report.events
 
 
@@ -368,7 +414,11 @@ def test_capability_filtering_keeps_rung_selection_stable() -> None:
 
     result = plan(document, target=DISCORD_V2_DPY27)
     rendered = _texts(result)
-    panels = [node for node in result.scene.components_v2.children if isinstance(node, scene.Panel)]
+    panels = [
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Panel)
+    ]
 
     assert {"rich", "detail"} <= rendered
     assert "compact" not in rendered

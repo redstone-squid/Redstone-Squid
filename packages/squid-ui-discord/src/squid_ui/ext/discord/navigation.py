@@ -10,11 +10,11 @@ from typing import override
 
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.chrome import CHROME_CONTEXT
+from squid_ui.ext.discord.primitives.nodes import Button, Row
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import PressEvent
-from squid_ui.primitives.nodes import Button, Row
-from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
+from squid_ui.styles import ActionStyle
 
 
 class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target, ContextT = object](

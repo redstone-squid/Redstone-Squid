@@ -4,11 +4,12 @@ from typing import override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid_ui.ext.discord.primitives import Lines, Paginate
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import stage
-from squid_ui.primitives import Lines, Paginate
 
 
-class Counter(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class Counter(sl.Component[ComponentsV2Target, sd.Request]):
     value: int = sl.state(0)
 
     def __init__(self) -> None:
@@ -20,7 +21,7 @@ class Counter(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.value = 10
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.block(
             sl.paragraph(str(self.value)),
             sl.action_controls(sl.action_control("Increment", self.increment, key="increment"), key="actions"),
@@ -39,7 +40,7 @@ class Parent(sd.Screen):
         self.second = Counter()
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         children = (self.first, self.second.keyed("named")) if self.shown else ()
         return sl.block(
             *(tuple(reversed(children)) if self.reversed else children),
@@ -87,7 +88,7 @@ async def test_shared_child_loads_once_and_both_placements_dispatch_to_its_state
 
     class Shared(sd.Screen):
         @override
-        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
             return child.keyed("left"), child.keyed("right")
 
     async with stage(Shared(), owner=object()) as ui:
@@ -101,16 +102,16 @@ async def test_shared_child_loads_once_and_both_placements_dispatch_to_its_state
 
 
 async def test_shared_child_has_independent_page_cursors() -> None:
-    class Pages(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    class Pages(sl.Component[ComponentsV2Target, sd.Request]):
         @override
-        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
             return Lines(tuple(f"entry {index}" for index in range(6)), overflow=Paginate(key="items", per=2))
 
     child = Pages()
 
     class Shared(sd.Screen):
         @override
-        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+        def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
             return child.keyed("left"), child.keyed("right")
 
     async with stage(Shared(), owner=object()) as ui:

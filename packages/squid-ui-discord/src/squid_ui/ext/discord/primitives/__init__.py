@@ -2,25 +2,11 @@
 
 Most applications should use the semantic nodes exported by :mod:`squid_ui`. These
 primitives are the escape hatch for target-specific structure and are intentionally grouped
-behind ``squid_ui.primitives``.
+behind ``squid_ui.ext.discord.primitives``.
 """
 
 from squid_ui.content.emoji import Emoji, EmojiLike, normalize_emoji
-from squid_ui.primitives.constraints import (
-    FIRST_PAGE,
-    LAST_PAGE,
-    Alt,
-    Alts,
-    Condense,
-    Drop,
-    Never,
-    Overflow,
-    Paginate,
-    Spill,
-    Truncate,
-    alts,
-)
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Boundary,
     Break,
     Budget,
@@ -65,7 +51,21 @@ from squid_ui.primitives.nodes import (
     as_nodes,
     card_text,
 )
-from squid_ui.primitives.styles import ActionStyle, Color
+from squid_ui.overflow import (
+    FIRST_PAGE,
+    LAST_PAGE,
+    Alt,
+    Alts,
+    Condense,
+    Drop,
+    Never,
+    Overflow,
+    Paginate,
+    Spill,
+    Truncate,
+    alts,
+)
+from squid_ui.styles import ActionStyle, Color
 
 __all__ = [
     "FIRST_PAGE",

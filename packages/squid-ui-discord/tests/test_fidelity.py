@@ -4,14 +4,15 @@ from dataclasses import replace
 
 import pytest
 
-from squid_ui import paragraph, scene
+from squid_ui import paragraph
 from squid_ui.authoring.presentations import Replacement, corresponds, losses, ref
 from squid_ui.content.text import Markup
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.primitives import Fidelity, Panel, Text, Variant, Variants
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 
 TARGET = sd.target_profile("test")
 
@@ -45,7 +46,9 @@ class TestStrictMode:
         """Stepping is not loss. A smaller faithful shape must not fail `strict=True`."""
         document = plan(ladder(Variant((Text("compact"),))), target=TARGET, strict=True).scene
 
-        assert document.components_v2.children == (scene.Text("compact", markup=Markup.DISCORD_MARKDOWN),)
+        assert document.expect_body(discord_scene.ComponentsV2).children == (
+            discord_scene.Text("compact", markup=Markup.DISCORD_MARKDOWN),
+        )
 
     def test_a_reformatted_rung_preserves_content_in_strict_planning(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.REFORMATTED))
@@ -85,8 +88,8 @@ class TestOrdering:
             Variant((Text("exact"),)),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (
-            scene.Text("exact", markup=Markup.DISCORD_MARKDOWN),
+        assert plan(document, target=TARGET).scene.expect_body(discord_scene.ComponentsV2).children == (
+            discord_scene.Text("exact", markup=Markup.DISCORD_MARKDOWN),
         )
 
     def test_a_reformatted_rung_beats_a_lossy_earlier_one(self) -> None:
@@ -95,14 +98,14 @@ class TestOrdering:
             Variant((Text("reformatted"),), fidelity=Fidelity.REFORMATTED),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (
-            scene.Text("reformatted", markup=Markup.DISCORD_MARKDOWN),
+        assert plan(document, target=TARGET).scene.expect_body(discord_scene.ComponentsV2).children == (
+            discord_scene.Text("reformatted", markup=Markup.DISCORD_MARKDOWN),
         )
 
     def test_the_first_exact_rung_still_wins_among_equals(self) -> None:
         """With fidelity tied, rung distance decides — that is what preference means."""
         document = ladder(Variant((Text("first"),)), Variant((Text("second"),)))
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (
-            scene.Text("first", markup=Markup.DISCORD_MARKDOWN),
+        assert plan(document, target=TARGET).scene.expect_body(discord_scene.ComponentsV2).children == (
+            discord_scene.Text("first", markup=Markup.DISCORD_MARKDOWN),
         )

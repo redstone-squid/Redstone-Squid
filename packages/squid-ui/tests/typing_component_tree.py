@@ -2,8 +2,8 @@
 
 from typing import assert_type, override
 
-from squid_ui.planning import ComponentsV2Target
-from squid_ui.primitives import Panel
+from squid_ui.ext.discord.primitives import Panel
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime

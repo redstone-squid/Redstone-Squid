@@ -5,6 +5,7 @@ import pytest
 import squid_ui as ui
 from squid_ui import scene
 from squid_ui.authoring import semantic as s
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import index_tree, query, select
 from squid_ui.testing import text_component
@@ -49,7 +50,7 @@ def test_query_accepts_an_explicit_adapter_without_mutating_nodes() -> None:
 
 
 def test_query_adapts_planned_scenes_without_an_explicit_index() -> None:
-    button = scene.Button("Save", "save")
-    planned = scene.Scene(1, "discord", 1, scene.ComponentsV2((scene.Row((button,)),)))
-    assert query(planned, select(scene.Row).children(select(scene.Button))).one().node is button
+    button = discord_scene.Button("Save", "save")
+    planned = scene.Scene(1, "discord", 1, discord_scene.ComponentsV2((discord_scene.Row((button,)),)))
+    assert query(planned, select(discord_scene.Row).children(select(discord_scene.Button))).one().node is button
     assert query(planned, 'scene.Button[label="Save"]').one().node is button

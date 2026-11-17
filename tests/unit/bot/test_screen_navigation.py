@@ -6,7 +6,6 @@ from uuid import UUID
 
 import pytest
 
-import squid_ui as sl
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.navigation.cog import NavigationCommands
@@ -17,6 +16,7 @@ from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.builds.domain import Status
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import primitives
 
 
 @pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#claims"])
@@ -37,7 +37,7 @@ def test_every_screen_endpoint_belongs_to_the_application_router() -> None:
 
 
 def test_persistent_button_addresses_the_screen_directly() -> None:
-    button = sl.primitives.RoutedButton("Open", DraftEditorScreen.open_draft.custom_id(draft_id=UUID(int=1)))
+    button = primitives.RoutedButton("Open", DraftEditorScreen.open_draft.custom_id(draft_id=UUID(int=1)))
     assert button.route_id == "ui:/drafts/00000000-0000-0000-0000-000000000001"
     assert router.resolve(button.route_id[3:]).endpoint is DraftEditorScreen.open_draft
     with pytest.raises(LayoutInvariantError, match="100"):

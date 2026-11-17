@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any, cast
 
-from squid_ui import scene
 from squid_ui.content.text import Localization, TextLike, resolve_text
+from squid_ui.ext.html import scene
 from squid_ui.ext.html._text import html_text
 from squid_ui.interactions import forms as form_types
 

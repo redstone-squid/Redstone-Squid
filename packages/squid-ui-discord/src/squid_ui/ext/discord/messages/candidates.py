@@ -11,19 +11,20 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import discord
-from squid_ui import scene
 from squid_ui.authoring.document import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import Localization, TextLike
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
+from squid_ui.ext.discord.navigation_controls import NavFactory
 from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.interactions.forms import FormBinding, FormSpec
 from squid_ui.palette import Palette
-from squid_ui.planning.pagination.navigation import NavFactory
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import AnyTarget
 from squid_ui.presentation import SessionUpdate
@@ -40,7 +41,6 @@ from squid_ui.profiling import (
 )
 from squid_ui.runtime.owner import RenderCandidate
 from squid_ui.runtime.tree import ComponentTree
-from squid_ui.target_types import DiscordTarget
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.messages.root import AnyMessageRoot

@@ -9,6 +9,8 @@ import squid_ui as sl
 import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.ext.slack import scene as slack_scene
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter, SlackMessageTarget
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
@@ -16,7 +18,6 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
-from squid_ui.planning.resources import Axis
 from squid_ui.planning.result import PlanReuse, PlanSeverity
 from squid_ui.runtime import PresentationState
 
@@ -51,17 +52,17 @@ def test_message_compiles_text_actions_dates_and_accessible_fallback() -> None:
         target=MESSAGE,
     )
 
-    assert isinstance(result.scene.body, scene.SlackMessage)
+    assert isinstance(result.scene.body, slack_scene.SlackMessage)
     assert "Build **review**" in result.scene.body.text
-    assert any(isinstance(block, scene.SlackHeader) for block in result.scene.body.blocks)
+    assert any(isinstance(block, slack_scene.SlackHeader) for block in result.scene.body.blocks)
     assert any(
-        isinstance(block, scene.SlackSection) and block.text is not None and "<!date^" in block.text.content
+        isinstance(block, slack_scene.SlackSection) and block.text is not None and "<!date^" in block.text.content
         for block in result.scene.body.blocks
     )
-    actions = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackActions))
-    assert [button.style for button in actions.elements if isinstance(button, scene.SlackButton)] == [
-        scene.SlackButtonStyle.PRIMARY,
-        scene.SlackButtonStyle.DEFAULT,
+    actions = next(block for block in result.scene.body.blocks if isinstance(block, slack_scene.SlackActions))
+    assert [button.style for button in actions.elements if isinstance(button, slack_scene.SlackButton)] == [
+        slack_scene.SlackButtonStyle.PRIMARY,
+        slack_scene.SlackButtonStyle.DEFAULT,
     ]
     assert set(result.bindings) == {"approve"}
 
@@ -72,10 +73,10 @@ def test_cards_are_planned_to_the_sdk_card_text_limits() -> None:
         target=HOME,
     )
 
-    header = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackHeader))
+    header = next(block for block in result.scene.body.blocks if isinstance(block, slack_scene.SlackHeader))
     assert len(header.text.content) == 150
     assert any(
-        isinstance(block, scene.SlackSection) and block.text is not None and block.text.content == "B" * 300
+        isinstance(block, slack_scene.SlackSection) and block.text is not None and block.text.content == "B" * 300
         for block in result.scene.body.blocks
     )
 
@@ -97,14 +98,14 @@ def test_message_and_home_use_native_slack_entity_selectors() -> None:
         selects = tuple(
             element
             for block in result.scene.body.blocks
-            if isinstance(block, scene.SlackActions)
+            if isinstance(block, slack_scene.SlackActions)
             for element in block.elements
-            if isinstance(element, scene.SlackSelect)
+            if isinstance(element, slack_scene.SlackSelect)
         )
 
         assert [select.kind for select in selects] == [
-            scene.SlackSelectKind.USERS,
-            scene.SlackSelectKind.CONVERSATIONS,
+            slack_scene.SlackSelectKind.USERS,
+            slack_scene.SlackSelectKind.CONVERSATIONS,
         ]
         assert selects[0].initial_values == ("U123",)
         assert selects[1].conversation_types == (
@@ -126,9 +127,9 @@ def test_unsupported_native_entity_family_requires_an_enumerated_fallback() -> N
         target=MESSAGE,
     )
 
-    actions = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackActions))
-    assert isinstance(actions.elements[0], scene.SlackSelect)
-    assert actions.elements[0].kind is scene.SlackSelectKind.STATIC
+    actions = next(block for block in result.scene.body.blocks if isinstance(block, slack_scene.SlackActions))
+    assert isinstance(actions.elements[0], slack_scene.SlackSelect)
+    assert actions.elements[0].kind is slack_scene.SlackSelectKind.STATIC
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -141,7 +142,7 @@ def test_message_form_is_a_modal_trigger_button_with_form_binding(shared: bool) 
     )
 
     assert len(result.scene.body.blocks) == 1
-    assert isinstance(result.scene.body.blocks[0], scene.SlackActions)
+    assert isinstance(result.scene.body.blocks[0], slack_scene.SlackActions)
     assert set(result.bindings) == {"edit"}
     assert set(result.form_bindings) == {"edit"}
 
@@ -179,19 +180,19 @@ def test_modal_requires_one_top_level_form_and_maps_portable_fields(shared: bool
     )
 
     body = result.scene.body
-    assert isinstance(body, scene.SlackModalView)
+    assert isinstance(body, slack_scene.SlackModalView)
     assert body.callback_id == "edit-build"
     assert body.title.content == "Edit build"
     assert body.submit.content == "Save"
     assert body.close.content == "Cancel"
-    inputs = tuple(block for block in body.blocks if isinstance(block, scene.SlackInput))
+    inputs = tuple(block for block in body.blocks if isinstance(block, slack_scene.SlackInput))
     assert [type(block.element) for block in inputs] == [
-        scene.SlackTextInput,
-        scene.SlackTextInput,
-        scene.SlackNumberInput,
-        scene.SlackDatePicker,
-        scene.SlackCheckboxes,
-        scene.SlackRadioButtons,
+        slack_scene.SlackTextInput,
+        slack_scene.SlackTextInput,
+        slack_scene.SlackNumberInput,
+        slack_scene.SlackDatePicker,
+        slack_scene.SlackCheckboxes,
+        slack_scene.SlackRadioButtons,
     ]
     assert set(result.form_bindings) == {"edit-build"}
     assert not result.bindings
@@ -234,7 +235,7 @@ def test_modal_rejects_missing_nested_and_multiple_forms(document) -> None:
 
 def test_block_reservation_and_strict_degradation() -> None:
     document = sl.stack(*(sl.optional(sl.paragraph(f"Block {index}")) for index in range(3)))
-    result = sl.planning.plan(document, target=MESSAGE, reservation=ResourceCost({Axis.BLOCKS: 49}))
+    result = sl.planning.plan(document, target=MESSAGE, reservation=ResourceCost({SlackAxis.BLOCKS: 49}))
 
     assert len(result.scene.body.blocks) == 1
     assert any(event.severity is PlanSeverity.DEGRADATION for event in result.report.events)
@@ -242,7 +243,7 @@ def test_block_reservation_and_strict_degradation() -> None:
         sl.planning.plan(
             document,
             target=MESSAGE,
-            reservation=ResourceCost({Axis.BLOCKS: 49}),
+            reservation=ResourceCost({SlackAxis.BLOCKS: 49}),
             strict=True,
         )
 
@@ -251,7 +252,7 @@ def test_slack_planner_reuses_exact_and_structural_caches() -> None:
     document = sl.paragraph("Cached")
     session = PresentationState()
     cache: PlanCache = PlanCache()
-    snapshot: PlanningSnapshot[scene.SlackMessage] = PlanningSnapshot()
+    snapshot: PlanningSnapshot[slack_scene.SlackMessage] = PlanningSnapshot()
 
     first = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, snapshot=snapshot)
     exact = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, snapshot=snapshot)
@@ -266,9 +267,9 @@ def test_literal_paragraph_does_not_become_slack_mrkdwn() -> None:
     result = sl.planning.plan(sl.paragraph("*literal* <@123>"), target=MESSAGE)
     section = result.scene.body.blocks[0]
 
-    assert isinstance(section, scene.SlackSection)
+    assert isinstance(section, slack_scene.SlackSection)
     assert section.text is not None
-    assert section.text.kind is scene.SlackTextKind.PLAIN
+    assert section.text.kind is slack_scene.SlackTextKind.PLAIN
     assert section.text.content == "*literal* <@123>"
 
 
@@ -277,7 +278,7 @@ def test_slack_lowers_translated_styles_from_structure() -> None:
     value = sl.md_tr(t"**Hello** {name}", key="hello")
     result = sl.planning.plan(sl.paragraph(value), target=MESSAGE)
     section = result.scene.body.blocks[0]
-    assert isinstance(section, scene.SlackSection)
+    assert isinstance(section, slack_scene.SlackSection)
     assert section.text is not None
     assert section.text.content == "*Hello* Ada &lt;@123&gt;"
 
@@ -287,9 +288,9 @@ def test_slack_keeps_literal_markdown_punctuation_literal() -> None:
     value = sl.md_tr(t"Hello **{name}**", key="hello")
     result = sl.planning.plan(sl.fallback(sl.paragraph(value), sl.paragraph("Hello *Ada*")), target=MESSAGE)
     section = result.scene.body.blocks[0]
-    assert isinstance(section, scene.SlackSection)
+    assert isinstance(section, slack_scene.SlackSection)
     assert section.text is not None
-    assert section.text.kind is scene.SlackTextKind.PLAIN
+    assert section.text.kind is slack_scene.SlackTextKind.PLAIN
     assert section.text.content == "Hello *Ada*"
     assert any(event.code == "composition.effect" for event in result.report.events)
 
@@ -342,7 +343,7 @@ def test_shared_slack_cache_rebuilds_handlers_and_preserves_document_assets() ->
 def test_shared_slack_preserves_authored_budget_diagnostics_and_strict_failure() -> None:
     document = sl.presentations.budget(
         sl.stack(sl.paragraph("keep"), sl.optional(sl.paragraph("omit"))),
-        limits={Axis.BLOCKS: 1},
+        limits={SlackAxis.BLOCKS: 1},
     )
     result = plan_request(document, PlanRequest(target=MESSAGE))
     assert result.scene.body.text == "keep"

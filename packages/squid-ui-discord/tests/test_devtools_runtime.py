@@ -18,12 +18,13 @@ from squid_ui.ext.discord.devtools.runtime import (
 from squid_ui.ext.discord.durability import DurableSessionRuntime, PurgeResult
 from squid_ui.ext.discord.messages.scheduler import MessageRootSchedulerSnapshot
 from squid_ui.ext.discord.sessions import Opened
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, delivered_to, message_harness
 from squid_ui.profiling import MemoryProfiler, OperationKind
 from squid_ui.runtime import TopicBusStats
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     history: sl.runtime.History = sl.runtime.history(limit=4)
     count: int = sl.state(0)
 

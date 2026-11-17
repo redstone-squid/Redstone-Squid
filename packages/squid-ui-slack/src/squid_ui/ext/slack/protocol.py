@@ -1,8 +1,8 @@
 """Slack Block Kit target identities and hard limits."""
 
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
+from squid_ui.ext.slack import scene
 from squid_ui.ext.slack._forms import modal_form
 from squid_ui.ext.slack.composition import SlackCompositionRules
 from squid_ui.ext.slack.limits import (

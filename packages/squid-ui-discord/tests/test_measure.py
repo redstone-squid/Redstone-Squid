@@ -11,9 +11,7 @@ from squid_ui.ext.discord import (
 from squid_ui.ext.discord import conform, render_static
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.conformance import ELLIPSIS
-from squid_ui.ext.discord.testing import assert_within_limits
-from squid_ui.planning.joint_search import JointInfeasibleError
-from squid_ui.primitives import (
+from squid_ui.ext.discord.primitives import (
     Code,
     Drop,
     Footer,
@@ -31,6 +29,8 @@ from squid_ui.primitives import (
     Thumbnail,
     Truncate,
 )
+from squid_ui.ext.discord.testing import assert_within_limits
+from squid_ui.planning.joint_search import JointInfeasibleError
 
 
 def _text_of(view: discord.ui.LayoutView) -> str:

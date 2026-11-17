@@ -27,6 +27,7 @@ from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 type SchematicRequest = sd.Request[Any, RedstoneSquid]
 
 
-class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
+class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
     """Own schematic actions, permission checks, and the latest generated result."""
 
     _conversion_version: Suggestion | None = sl.state(None)
@@ -62,7 +63,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         self._video_recipes: dict[int, VideoRenderRequest] = {}
 
     @override
-    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, SchematicRequest]:
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, SchematicRequest]:
         if self._show_details is not None and not self._show_details():
             return ()
         nodes = list(self._schematic_nodes())
@@ -83,7 +84,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             nodes.append(sl.note(tr(t"schematic-convert-selected = Conversion release: {label}")))
         return nodes
 
-    def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, SchematicRequest], ...]:
+    def _schematic_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, SchematicRequest], ...]:
         if not self._schematics.available:
             return ()
         videos_enabled = self._schematics.videos is not None and self._schematics.videos.enabled

@@ -11,6 +11,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.schematics.application.video import VideoInteraction, VideoPosition, VideoRenderRequest
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type VideoSubmit = Callable[[sd.ActionEvent, VideoRenderRequest], Awaitable[None]]
 
@@ -51,8 +52,8 @@ class VideoEditor(sd.Screen[VideoRenderRequest]):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.heading(tr(t"video-editor-title = Video recipe")),
             sl.note(f"{self.seconds}s · {self.orbit:g}°"),
             sl.form(
@@ -142,7 +143,7 @@ class VideoEditor(sd.Screen[VideoRenderRequest]):
         )
         return tuple(nodes)
 
-    def _input_detail(self, position: VideoPosition) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def _input_detail(self, position: VideoPosition) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.action_controls(
             sl.action_control(
                 tr(t"video-use-input = Use this input"), partial(self._use_input, position), key="use-input"

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.planning.composition import (
     CandidateComposition,
     NavigationInput,
@@ -23,7 +24,6 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 
 
 @dataclass(frozen=True, slots=True)

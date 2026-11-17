@@ -9,6 +9,7 @@ from squid_ui.ext.discord import ExistingLayoutError, classic
 from squid_ui.ext.discord.inspection import measure
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis
 from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
+from squid_ui.ext.discord.resources import DiscordAxis
 
 
 def host(*, content=None, embeds=(), controls=()) -> MessagePayload:
@@ -40,17 +41,17 @@ class TestMeasurement:
         """A message has one content field, and Squid cannot append to someone else's."""
         reservation = measure(host(content="hi"))
 
-        assert reservation.usage.get(Axis.CONTENT_TEXT) == 2
-        assert reservation.reserved.get(Axis.CONTENT_TEXT) == CLASSIC_LIMITS.content
+        assert reservation.usage.get(DiscordAxis.CONTENT_TEXT) == 2
+        assert reservation.reserved.get(DiscordAxis.CONTENT_TEXT) == CLASSIC_LIMITS.content
 
     def test_absent_content_reserves_nothing(self) -> None:
-        assert measure(host()).reserved.get(Axis.CONTENT_TEXT) == 0
+        assert measure(host()).reserved.get(DiscordAxis.CONTENT_TEXT) == 0
 
     def test_embeds_rows_and_controls_are_all_accounted(self) -> None:
         reservation = measure(host(embeds=[discord.Embed(description="abc")], controls=[button("a"), button("b")]))
 
-        assert reservation.reserved.get(Axis.EMBEDS) == 1
-        assert reservation.reserved.get(Axis.EMBED_TEXT) == 3
+        assert reservation.reserved.get(DiscordAxis.EMBEDS) == 1
+        assert reservation.reserved.get(DiscordAxis.EMBED_TEXT) == 3
         assert reservation.reserved.get(Axis.ROWS) == 1
         assert reservation.reserved.get(Axis.CONTROLS) == 2
 

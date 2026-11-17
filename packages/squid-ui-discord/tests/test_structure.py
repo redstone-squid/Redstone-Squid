@@ -8,18 +8,15 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_ui import ComponentsV2Target, Renderable, paragraph, scene
+from squid_ui import Renderable, paragraph
 from squid_ui.authoring.presentations import Replacement, corresponds, losses, ref
 from squid_ui.ext.discord import DISCORD_V2_DPY27, render_message
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui.planning import plan
-from squid_ui.planning.allocation import AllocationSnapshot
-from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
-from squid_ui.planning.pagination.navigation import default_nav
-from squid_ui.planning.result import PlanResult
-from squid_ui.primitives import (
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.navigation_controls import default_nav
+from squid_ui.ext.discord.primitives import (
     Alt,
     ControlGroup,
     Fidelity,
@@ -33,42 +30,47 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.primitives.nodes import Node
+from squid_ui.ext.discord.primitives.nodes import Node
+from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.planning import plan
+from squid_ui.planning.allocation import AllocationSnapshot
+from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
+from squid_ui.planning.result import PlanResult
 from squid_ui.selectors import query, select
 
 
-def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult[scene.ComponentsV2]:
+def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult[discord_scene.ComponentsV2]:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
     return plan(nodes, target=DISCORD_V2_DPY27, **options)
 
 
-def _text(result: PlanResult[scene.ComponentsV2]) -> str:
-    return "\n".join(match.node.content for match in query(result.scene, select(scene.Text)).all())
+def _text(result: PlanResult[discord_scene.ComponentsV2]) -> str:
+    return "\n".join(match.node.content for match in query(result.scene, select(discord_scene.Text)).all())
 
 
-def _components(result: PlanResult[scene.ComponentsV2]) -> int:
+def _components(result: PlanResult[discord_scene.ComponentsV2]) -> int:
     """What the drawn view will hold, counted the same way the planner budgets it."""
 
-    def count(children: Sequence[scene.Node]) -> int:
+    def count(children: Sequence[discord_scene.Node]) -> int:
         total = 0
         for child in children:
             match child:
-                case scene.Panel(children=inner):
+                case discord_scene.Panel(children=inner):
                     total += 1 + count(inner)
-                case scene.Section(texts=texts):
+                case discord_scene.Section(texts=texts):
                     total += 2 + len(texts)
-                case scene.Row(items=items):
+                case discord_scene.Row(items=items):
                     total += 1 + len(items)
-                case scene.Select():
+                case discord_scene.Select():
                     total += 2
                 case _:
                     total += 1
         return total
 
-    return count(result.scene.components_v2.children)
+    return count(result.scene.expect_body(discord_scene.ComponentsV2).children)
 
 
-def _selected_rungs(result: PlanResult[scene.ComponentsV2]) -> list[int]:
+def _selected_rungs(result: PlanResult[discord_scene.ComponentsV2]) -> list[int]:
     assert isinstance(result.allocation, AllocationSnapshot)
     return [int(key.removeprefix("rung-")) for _, key in result.allocation.selection if key.startswith("rung-")]
 
@@ -314,8 +316,12 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
     document = plan([ladder], target=DISCORD_V2_DPY27).scene
     # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
     # the very container component the ladder exists to save.
-    assert [len(child.items) for child in document.components_v2.children if isinstance(child, scene.Row)] == [5, 3]
-    assert len(document.components_v2.children) == 2
+    assert [
+        len(child.items)
+        for child in document.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(child, discord_scene.Row)
+    ] == [5, 3]
+    assert len(document.expect_body(discord_scene.ComponentsV2).children) == 2
 
 
 @settings(deadline=None)

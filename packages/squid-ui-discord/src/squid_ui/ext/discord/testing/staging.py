@@ -18,12 +18,12 @@ from squid_ui.ext.discord.messages.wiring import control_id
 from squid_ui.ext.discord.request import Request
 from squid_ui.ext.discord.response import Presented, ResponseOverrides
 from squid_ui.ext.discord.runtime import DiscordUIRuntime, install
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing.harness import InteractionHarness
 from squid_ui.ext.discord.testing.payloads import assert_within_limits, iter_component_payloads, payload_texts
 from squid_ui.ext.discord.testing.queries import index_tree, query
 from squid_ui.runtime.definition import Component
 from squid_ui.selectors import Match, Query, Selector, TreeIndex, select
-from squid_ui.target_types import ComponentsV2Target
 
 
 @dataclass(frozen=True, slots=True)

@@ -13,12 +13,13 @@ import squid_ui as sl
 import squid_ui.ext.discord
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, message_harness
 
 TOPIC = sl.runtime.TopicName("build", "1")
 
 
-class Chain(sl.Component[sl.ComponentsV2Target]):
+class Chain(sl.Component[ComponentsV2Target]):
     """`node` derives from `build`, which watches a topic."""
 
     def __init__(self, source: str = "v1", *, changes: sl.runtime.Topic | None = None) -> None:
@@ -84,7 +85,7 @@ async def test_a_publish_two_links_up_repends_the_dependent() -> None:
 
 
 async def test_a_computed_reading_a_resource_rederives_when_it_reloads() -> None:
-    class Derived(sl.Component[sl.ComponentsV2Target]):
+    class Derived(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.source = "v1"
 
@@ -132,7 +133,7 @@ async def test_every_transition_moves_the_version() -> None:
 
 
 async def test_a_failed_load_moves_the_version_too() -> None:
-    class Breaks(sl.Component[sl.ComponentsV2Target]):
+    class Breaks(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.fail = False
 
@@ -205,7 +206,7 @@ async def test_two_independent_resources_still_settle_together() -> None:
     """Both resources settle before one complete atomic presentation is delivered."""
     loads = {"left": 0, "right": 0}
 
-    class Pair(sl.Component[sl.ComponentsV2Target]):
+    class Pair(sl.Component[ComponentsV2Target]):
         @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
         async def left(self) -> str:
             loads["left"] += 1
@@ -243,7 +244,7 @@ async def test_two_independent_resources_still_settle_together() -> None:
 
 
 async def test_a_resource_that_awaits_itself_names_itself() -> None:
-    class Ouroboros(sl.Component[sl.ComponentsV2Target]):
+    class Ouroboros(sl.Component[ComponentsV2Target]):
         @sl.resource
         async def value(self) -> int:
             return await self.value + 1
@@ -264,7 +265,7 @@ async def test_a_resource_that_awaits_itself_names_itself() -> None:
 async def test_a_mutual_cycle_names_the_whole_path_not_the_link_that_closed_it() -> None:
     """`left` awaiting `right` is fine and `right` awaiting `left` is fine; the pair is not."""
 
-    class Pair(sl.Component[sl.ComponentsV2Target]):
+    class Pair(sl.Component[ComponentsV2Target]):
         @sl.resource
         async def left(self) -> int:
             return await self.right + 1
@@ -289,7 +290,7 @@ async def test_a_mutual_cycle_names_the_whole_path_not_the_link_that_closed_it()
 async def test_a_cycle_reports_the_ring_without_the_run_up_to_it() -> None:
     """`entry` is not part of the cycle, so naming it would send the reader to the wrong line."""
 
-    class Three(sl.Component[sl.ComponentsV2Target]):
+    class Three(sl.Component[ComponentsV2Target]):
         @sl.resource
         async def entry(self) -> int:
             return await self.a
@@ -319,7 +320,7 @@ async def test_a_cycle_reports_the_ring_without_the_run_up_to_it() -> None:
 async def test_two_resources_awaiting_one_shared_input_is_not_a_cycle() -> None:
     """A diamond is not a ring: the guard must be a path check, not a visited set."""
 
-    class Diamond(sl.Component[sl.ComponentsV2Target]):
+    class Diamond(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.base_loads = 0
 
@@ -354,7 +355,7 @@ async def test_two_resources_awaiting_one_shared_input_is_not_a_cycle() -> None:
 async def test_a_cycle_through_a_computed_is_named_across_both_kinds() -> None:
     """The stack is shared for this: neither guard alone could see the whole ring."""
 
-    class Mixed(sl.Component[sl.ComponentsV2Target]):
+    class Mixed(sl.Component[ComponentsV2Target]):
         @sl.resource
         async def loaded(self) -> int:
             return self.doubled + 1

@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 
 import squid_ui as sl
-from squid_ui import TextLike, scene
+from squid_ui import TextLike
 from squid_ui.authoring.semantic import (
     Choice,
     ChoiceEvent,
@@ -18,6 +18,7 @@ from squid_ui.authoring.semantic import (
     Uncontrolled,
 )
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.interactions import ActionMode, Actor, SelectionEvent, Visibility
 from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning import plan
@@ -81,7 +82,8 @@ ENTRIES = (
 
 def _opened(result) -> bool:
     return any(
-        isinstance(node, scene.Text) and "second detail" in node.content for node in result.scene.components_v2.children
+        isinstance(node, discord_scene.Text) and "second detail" in node.content
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
     )
 
 
@@ -130,7 +132,8 @@ async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None
 
 def _disclosed(result) -> bool:
     return any(
-        isinstance(node, scene.Text) and "hidden body" in node.content for node in result.scene.components_v2.children
+        isinstance(node, discord_scene.Text) and "hidden body" in node.content
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
     )
 
 
@@ -169,7 +172,11 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
 
 
 def _chosen(result) -> tuple[str, ...]:
-    select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
+    select = next(
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
     return tuple(option.value for option in select.options if option.default)
 
 

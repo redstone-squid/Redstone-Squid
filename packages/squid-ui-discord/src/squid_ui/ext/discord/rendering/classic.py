@@ -11,9 +11,10 @@ from datetime import datetime
 from typing import Any
 
 import discord
-from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.inspection import audit_classic_payload
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_ui.ext.discord.messages.attachments import attachment_assets
@@ -29,7 +30,7 @@ from squid_ui.ext.discord.rendering.controls import (
 )
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.result import PlanResult
 
 type ClassicViewFactory = Callable[[], discord.ui.View]
@@ -165,7 +166,7 @@ class ClassicRenderer:
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
         cache: RenderProgramCache | None = None,
     ) -> None:
-        require_discord_py_capability(adapter, AdapterCapability.RENDER_CLASSIC, "render a classic message")
+        require_discord_py_capability(adapter, DiscordAdapterCapability.RENDER_CLASSIC, "render a classic message")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory

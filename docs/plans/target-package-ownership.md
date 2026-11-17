@@ -1,20 +1,20 @@
 # Target package ownership
 
-Platform definitions belong to `squid-ui-discord`, `squid-ui-html`, and
-`squid-ui-slack`. Core owns portable authoring, planning, and runtime contracts.
-A new target must not need a change to core or a core dependency on its package.
+`squid-ui` owns portable authoring, shared planning and runtime contracts, overflow
+policies, styles, and scene envelopes. Resource names and adapter tags are open to
+extensions. Discord, HTML, and Slack own their target
+and adapter markers, native vocabularies, scene bodies, codecs, schema declarations,
+display edges, native resource axes, and SDK capability tags. Core imports no target
+package, including during type checking.
 
-Extract target markers together with the native definitions that use them. Keep
-`RenderTarget`, `Renderable`, pagination ownership, and overflow policies shared.
-Move native scene bodies and their codecs, schema declarations, and query edges
-to the owning targets. Replace closed target unions and native planning branches
-with explicit extension contracts. Preserve static rejection of incompatible
-native nodes and validate package import isolation as well as rendering behavior.
+Import Discord authoring with `from squid_ui.ext.discord import primitives`.
+Native values expose explicit `NativeSemantics` for shared indexing, preservation,
+allocation, and traversal. Resolved selection choices remain portable until a target
+draws them into its own scene records.
 
-Update callers directly; core must not re-export target definitions. Existing
-unrelated working-tree changes are outside this refactor.
+Import a target's `scene` module before decoding its bodies or exporting its schema.
+`SceneDialect` registration and target-declared display edges replace core's closed
+body union, codecs, and selector tables. New targets require no core edits.
 
-Adapter markers and HTML/Slack target markers now live in their target packages.
-Discord dialect markers still require extracting native primitive planning. Core
-scene bodies, codecs, and selectors also retain platform definitions; the boundary
-described above is not yet complete.
+Architecture checks enforce import isolation. Rendering and static target rejection
+remain covered by the existing target, composition, and runtime checks.

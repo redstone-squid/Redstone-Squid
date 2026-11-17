@@ -7,15 +7,18 @@ from typing import Literal, override
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.authoring.presentations import budget, ref
 from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
+from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.html.composition import HtmlCompositionRules
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.composition import SlackCompositionRules
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -54,7 +57,7 @@ def evaluate[BodyT, PreparationT, ResourceT](
 
 def on_target(
     node: Renderable[RenderTarget, object], target: Literal["v2", "html", "slack"], *, strict: bool = True
-) -> Evaluation[object, scene.ComponentsV2] | Evaluation[Asset, scene.HtmlBody | scene.SlackMessage]:
+) -> Evaluation[object, discord_scene.ComponentsV2] | Evaluation[Asset, html_scene.HtmlBody | slack_scene.SlackMessage]:
     match target:
         case "v2":
             return evaluate(node, V2CompositionRules[RenderTarget, object](), strict=strict)
@@ -117,13 +120,13 @@ def test_slack_representation_changes_block_usage() -> None:
             sl.table_row("b", key="b"),
             key="table",
         ),
-        limits={Axis.BLOCKS: 1},
+        limits={SlackAxis.BLOCKS: 1},
     )
     rules = SlackCompositionRules[RenderTarget, object]()
     native = evaluate(node, rules, selections={OccurrenceId(("root", "table")): "table"})
     records = evaluate(node, rules, selections={OccurrenceId(("root", "table")): "records"})
-    assert native.feasible and native.cost.get(Axis.BLOCKS) == 1
-    assert records.violations == (CapacityExceeded(OccurrenceId(("root",)), Axis.BLOCKS, 2, 1),)
+    assert native.feasible and native.cost.get(SlackAxis.BLOCKS) == 1
+    assert records.violations == (CapacityExceeded(OccurrenceId(("root",)), SlackAxis.BLOCKS, 2, 1),)
 
 
 def test_shared_attachments_count_once_per_scope_even_after_a_sibling_uses_them() -> None:
@@ -181,7 +184,7 @@ def test_target_cannot_certify_a_supported_budget_without_measuring_its_scope() 
         @override
         def evaluate(
             self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-        ) -> Evaluation[object, scene.ComponentsV2]:
+        ) -> Evaluation[object, discord_scene.ComponentsV2]:
             return replace(super().evaluate(candidate, context), scoped_costs={})
 
     with pytest.raises(DrawInvariantError, match="did not measure resources"):
@@ -191,8 +194,17 @@ def test_target_cannot_certify_a_supported_budget_without_measuring_its_scope() 
 def test_rejected_budget_never_constructs_the_candidate() -> None:
     class BuildMustNotRun(V2CompositionRules[RenderTarget, object]):
         @override
-        def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
+        def build(
+            self, preparation: discord_scene.ComponentsV2, context: PlanningContext
+        ) -> discord_scene.ComponentsV2:
             pytest.fail("a rejected composition must not construct a body")
 
     result = evaluate(budget(sl.paragraph("abc"), limits={Axis.COMPONENTS: 0}), BuildMustNotRun())
     assert not result.feasible
+
+
+def test_targets_can_introduce_resource_axes_without_core_registration() -> None:
+    axis = Axis("third-party.items")
+    cost = ResourceCost({axis: 3})
+    assert cost.within({axis: 3})
+    assert tuple(cost.over({axis: 2})) == ((axis, 3, 2),)

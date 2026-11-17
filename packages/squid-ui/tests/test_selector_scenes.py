@@ -5,19 +5,22 @@ from dataclasses import dataclass
 import pytest
 
 from squid_ui import scene as s
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.html import scene as html_scene
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.selectors import index_tree, query, select
 from squid_ui.selectors._scene import is_scene_node, scene_children
 
 
 def test_discord_scene_queries_reach_nested_controls_and_options() -> None:
-    save = s.Button("Save", "save")
-    body = s.ComponentsV2(
+    save = discord_scene.Button("Save", "save")
+    body = discord_scene.ComponentsV2(
         (
-            s.Panel(
+            discord_scene.Panel(
                 (
-                    s.Section((s.Text("Summary"),), save),
-                    s.Select((s.Option("Ada", "ada"),), "pick"),
-                    s.Gallery((s.GalleryItem("https://example.test/image.png"),)),
+                    discord_scene.Section((discord_scene.Text("Summary"),), save),
+                    discord_scene.Select((discord_scene.Option("Ada", "ada"),), "pick"),
+                    discord_scene.Gallery((discord_scene.GalleryItem("https://example.test/image.png"),)),
                 )
             ),
         )
@@ -27,92 +30,129 @@ def test_discord_scene_queries_reach_nested_controls_and_options() -> None:
     )
     tree = index_tree(scene, children=scene_children)
 
-    assert query(tree, select(s.Section).children(select(s.Button))).one().node is save
-    assert query(tree, select(s.Select).children(select(s.Option).label("Ada"))).one().node.value == "ada"
-    assert query(tree, select(s.GalleryItem)).count() == 1
+    assert query(tree, select(discord_scene.Section).children(select(discord_scene.Button))).one().node is save
+    assert (
+        query(tree, select(discord_scene.Select).children(select(discord_scene.Option).label("Ada"))).one().node.value
+        == "ada"
+    )
+    assert query(tree, select(discord_scene.GalleryItem)).count() == 1
     assert not query(tree, select(s.Pager)).exists()
 
 
 def test_classic_scene_queries_preserve_embed_and_row_structure() -> None:
-    field = s.EmbedField(name="Name", value="Ada")
-    body = s.ClassicMessage(
+    field = discord_scene.EmbedField(name="Name", value="Ada")
+    body = discord_scene.ClassicMessage(
         "Message",
-        embeds=(s.Embed(fields=(field,), author=s.EmbedAuthor(name="Author"), footer=s.EmbedFooter(text="Footer")),),
-        rows=(s.ClassicRow((s.Button("Save", "save"),)),),
+        embeds=(
+            discord_scene.Embed(
+                fields=(field,),
+                author=discord_scene.EmbedAuthor(name="Author"),
+                footer=discord_scene.EmbedFooter(text="Footer"),
+            ),
+        ),
+        rows=(discord_scene.ClassicRow((discord_scene.Button("Save", "save"),)),),
     )
     tree = index_tree(body, children=scene_children)
 
-    assert query(tree, select(s.Embed).children(select(s.EmbedField))).one().node is field
-    assert query(tree, select(s.ClassicRow).children(select(s.Button))).one().node.action == "save"
-    assert query(tree, select(s.EmbedAuthor)).count() == 1
-    assert query(tree, select(s.EmbedFooter)).count() == 1
+    assert query(tree, select(discord_scene.Embed).children(select(discord_scene.EmbedField))).one().node is field
+    assert (
+        query(tree, select(discord_scene.ClassicRow).children(select(discord_scene.Button))).one().node.action == "save"
+    )
+    assert query(tree, select(discord_scene.EmbedAuthor)).count() == 1
+    assert query(tree, select(discord_scene.EmbedFooter)).count() == 1
 
 
 def test_html_scene_queries_visit_elements_and_text_but_not_references() -> None:
-    text = s.HtmlText("Save")
-    button = s.HtmlElement(
-        s.HtmlTag.BUTTON,
+    text = html_scene.HtmlText("Save")
+    button = html_scene.HtmlElement(
+        html_scene.HtmlTag.BUTTON,
         (text,),
-        attributes=(s.HtmlAttribute(s.HtmlAttributeName.ID, "save"),),
-        action=s.HtmlActionRef("save"),
-        colour=s.HtmlColourRef(0x123456),
+        attributes=(html_scene.HtmlAttribute(html_scene.HtmlAttributeName.ID, "save"),),
+        action=html_scene.HtmlActionRef("save"),
+        colour=html_scene.HtmlColourRef(0x123456),
     )
-    body = s.HtmlBody((s.HtmlElement(s.HtmlTag.MAIN, (button,)),))
+    body = html_scene.HtmlBody((html_scene.HtmlElement(html_scene.HtmlTag.MAIN, (button,)),))
     tree = index_tree(body, children=scene_children)
 
     assert (
-        query(tree, select(s.HtmlElement).attr("tag", s.HtmlTag.BUTTON).has(select(s.HtmlText).text("Save"))).one().node
+        query(
+            tree,
+            select(html_scene.HtmlElement)
+            .attr("tag", html_scene.HtmlTag.BUTTON)
+            .has(select(html_scene.HtmlText).text("Save")),
+        )
+        .one()
+        .node
         is button
     )
-    assert query(tree, select(s.HtmlText)).one().node is text
+    assert query(tree, select(html_scene.HtmlText)).one().node is text
     assert not query(
-        tree, select(s.HtmlAttribute).union(select(s.HtmlActionRef)).union(select(s.HtmlColourRef))
+        tree,
+        select(html_scene.HtmlAttribute)
+        .union(select(html_scene.HtmlActionRef))
+        .union(select(html_scene.HtmlColourRef)),
     ).exists()
 
 
 def test_slack_queries_reach_blocks_accessories_options_and_table_cells() -> None:
-    option = s.SlackOption(s.SlackText("Ada"), "ada", s.SlackText("Engineer"))
-    picker = s.SlackSelect(action=s.SlackActionRef("pick"), options=(option,))
-    table = s.SlackTable(((s.SlackText("Name"), s.SlackText("Role")), (s.SlackText("Ada"), s.SlackText("Engineer"))))
-    body = s.SlackMessage("Fallback", (s.SlackSection(s.SlackText("Choose"), accessory=picker), table))
+    option = slack_scene.SlackOption(slack_scene.SlackText("Ada"), "ada", slack_scene.SlackText("Engineer"))
+    picker = slack_scene.SlackSelect(action=slack_scene.SlackActionRef("pick"), options=(option,))
+    table = slack_scene.SlackTable(
+        (
+            (slack_scene.SlackText("Name"), slack_scene.SlackText("Role")),
+            (slack_scene.SlackText("Ada"), slack_scene.SlackText("Engineer")),
+        )
+    )
+    body = slack_scene.SlackMessage(
+        "Fallback", (slack_scene.SlackSection(slack_scene.SlackText("Choose"), accessory=picker), table)
+    )
     tree = index_tree(body, children=scene_children)
 
-    assert query(tree, select(s.SlackSection).children(select(s.SlackSelect))).one().node is picker
-    assert query(tree, select(s.SlackSelect).children(select(s.SlackOption))).one().node is option
-    cells = query(tree, select(s.SlackTable).children(select(s.SlackText))).all()
+    assert query(tree, select(slack_scene.SlackSection).children(select(slack_scene.SlackSelect))).one().node is picker
+    assert query(tree, select(slack_scene.SlackSelect).children(select(slack_scene.SlackOption))).one().node is option
+    cells = query(tree, select(slack_scene.SlackTable).children(select(slack_scene.SlackText))).all()
     assert [match.node.content for match in cells] == ["Name", "Role", "Ada", "Engineer"]
     assert cells[0].path.endswith("rows.0.0")
     assert cells[-1].path.endswith("rows.1.1")
-    assert not query(tree, select(s.SlackActionRef)).exists()
+    assert not query(tree, select(slack_scene.SlackActionRef)).exists()
 
 
 @pytest.mark.parametrize("modal", [False, True])
 def test_slack_view_inputs_and_card_actions_are_queryable(modal: bool) -> None:
-    field = s.SlackInput("name", s.SlackText("Name"), s.SlackTextInput("value"))
-    button = s.SlackButton(s.SlackText("Open"), url="https://example.test")
-    cards = s.SlackCarousel((s.SlackCard(s.SlackText("Card"), actions=(button,)),))
+    field = slack_scene.SlackInput("name", slack_scene.SlackText("Name"), slack_scene.SlackTextInput("value"))
+    button = slack_scene.SlackButton(slack_scene.SlackText("Open"), url="https://example.test")
+    cards = slack_scene.SlackCarousel((slack_scene.SlackCard(slack_scene.SlackText("Card"), actions=(button,)),))
     blocks = (field, cards)
     body = (
-        s.SlackModalView("form", s.SlackText("Title"), s.SlackText("Save"), s.SlackText("Close"), blocks)
+        slack_scene.SlackModalView(
+            "form",
+            slack_scene.SlackText("Title"),
+            slack_scene.SlackText("Save"),
+            slack_scene.SlackText("Close"),
+            blocks,
+        )
         if modal
-        else s.SlackHomeView(blocks)
+        else slack_scene.SlackHomeView(blocks)
     )
     tree = index_tree(body, children=scene_children)
 
-    assert query(tree, select(s.SlackInput).children(select(s.SlackTextInput))).one().node.action_id == "value"
-    assert query(tree, select(s.SlackCard).children(select(s.SlackButton))).one().node is button
+    assert (
+        query(tree, select(slack_scene.SlackInput).children(select(slack_scene.SlackTextInput))).one().node.action_id
+        == "value"
+    )
+    assert query(tree, select(slack_scene.SlackCard).children(select(slack_scene.SlackButton))).one().node is button
 
 
 def test_scene_adapter_keeps_extension_payload_and_unrelated_records_opaque() -> None:
     @dataclass
     class Record:
-        children: tuple[s.Text, ...]
+        children: tuple[discord_scene.Text, ...]
 
-    hidden = s.Text("Hidden")
-    extension = s.Extension("opaque", 1, {"content": "not a text node"})
+    hidden = discord_scene.Text("Hidden")
+    extension = discord_scene.Extension("opaque", 1, {"content": "not a text node"})
     tree = index_tree((Record((hidden,)), extension), children=scene_children)
 
-    assert not query(tree, select(s.Text)).exists()
+    assert not query(tree, select(discord_scene.Text)).exists()
     assert is_scene_node(extension)
     assert not is_scene_node(Record((hidden,)))
 
@@ -121,15 +161,15 @@ def test_scene_adapter_does_not_reconstruct_nodes_and_preserves_occurrences() ->
     constructions: list[None] = []
 
     @dataclass(frozen=True)
-    class Panel(s.Panel):
+    class Panel(discord_scene.Panel):
         def __post_init__(self) -> None:
             constructions.append(None)
 
-    text = s.Text("Repeated")
+    text = discord_scene.Text("Repeated")
     panel = Panel((text, text))
     tree = index_tree(panel, children=scene_children)
 
-    found = query(tree, select(s.Text)).all()
+    found = query(tree, select(discord_scene.Text)).all()
     assert len(found) == 2
     assert found[0].node is found[1].node
     assert found[0].path != found[1].path

@@ -21,6 +21,7 @@ from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
 from squid.submissions.errors import DraftCapacityExceededError
 from squid_i18n import md_tr
+from squid_ui.ext.discord import primitives
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -163,9 +164,9 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         if not proposals:
             return text_node("No build candidates were inferred. Existing builds were preserved.")
         return tuple(
-            sl.primitives.Section(
-                (sl.primitives.Text(f"Recalculation candidate {index + 1}: review and choose its target build."),),
-                sl.primitives.RoutedButton(
+            primitives.Section(
+                (primitives.Text(f"Recalculation candidate {index + 1}: review and choose its target build."),),
+                primitives.RoutedButton(
                     "Review changes", build_controls.reopen_revision.custom_id(proposal_id=proposal.id)
                 ),
             )

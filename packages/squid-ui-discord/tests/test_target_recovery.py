@@ -12,15 +12,13 @@ import squid_ui.ext.discord.durability
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui.ext.discord.adapter import discord_py_adapter_profile
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.durability import DEFAULT_TARGETS, ComponentRegistry, MessageRootStateCodec
 from squid_ui.ext.discord.limits import ClassicLimits
 from squid_ui.ext.discord.target import classic
 from squid_ui.ext.discord.targets import TargetRegistry
 from squid_ui.ext.discord.testing import commit_classic_render, commit_render
 from squid_ui.planning import Target
-from squid_ui.planning.adapter import (
-    AdapterCapability,
-)
 
 
 class Screen(sl.Component[sl.RenderTarget]):
@@ -141,13 +139,17 @@ class TestRecovery:
 
     def test_a_superset_adapter_recovers_with_the_recorded_planning_capabilities(self) -> None:
         message_root_capabilities = frozenset(
-            {AdapterCapability.RENDER_CLASSIC, AdapterCapability.DISPATCH, AdapterCapability.INTERACTION_DELIVERY}
+            {
+                DiscordAdapterCapability.RENDER_CLASSIC,
+                DiscordAdapterCapability.DISPATCH,
+                DiscordAdapterCapability.INTERACTION_DELIVERY,
+            }
         )
         old_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=message_root_capabilities)
         current_profile = discord_py_adapter_profile(
             "discord.py",
             ">=2.7,<3",
-            capabilities=message_root_capabilities | {AdapterCapability.MODAL_FORMS},
+            capabilities=message_root_capabilities | {DiscordAdapterCapability.MODAL_FORMS},
         )
         old_target = classic(adapter=old_profile)
         components, snapshot = captured(old_target)
@@ -156,22 +158,26 @@ class TestRecovery:
         restored = components.restore(snapshot, targets=targets, access=Everyone())
 
         assert restored.target.adapter_capabilities == message_root_capabilities
-        assert AdapterCapability.MODAL_FORMS not in restored.target.capabilities
+        assert DiscordAdapterCapability.MODAL_FORMS not in restored.target.capabilities
 
     def test_recovery_rejects_a_missing_recorded_adapter_capability(self) -> None:
         message_root_capabilities = frozenset(
-            {AdapterCapability.RENDER_CLASSIC, AdapterCapability.DISPATCH, AdapterCapability.INTERACTION_DELIVERY}
+            {
+                DiscordAdapterCapability.RENDER_CLASSIC,
+                DiscordAdapterCapability.DISPATCH,
+                DiscordAdapterCapability.INTERACTION_DELIVERY,
+            }
         )
         old_profile = discord_py_adapter_profile(
             "discord.py",
             ">=2.7,<3",
-            capabilities=message_root_capabilities | {AdapterCapability.MODAL_FORMS},
+            capabilities=message_root_capabilities | {DiscordAdapterCapability.MODAL_FORMS},
         )
         current_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=message_root_capabilities)
         components, snapshot = captured(classic(adapter=old_profile))
         targets = TargetRegistry(classic(adapter=current_profile), builtins=False)
 
-        with pytest.raises(LayoutInvariantError, match=AdapterCapability.MODAL_FORMS):
+        with pytest.raises(LayoutInvariantError, match=DiscordAdapterCapability.MODAL_FORMS):
             components.restore(snapshot, targets=targets, access=Everyone())
 
     def test_the_built_in_targets_need_no_registration(self) -> None:

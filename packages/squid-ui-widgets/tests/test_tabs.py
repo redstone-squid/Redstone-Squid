@@ -9,12 +9,13 @@ import squid_ui_widgets as sp
 from squid_reactivity.transactions import transaction
 from squid_ui import testing as engine
 from squid_ui.authoring.semantic import Choices
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.selectors import index_tree, query, select
 from squid_ui_widgets import testing as wt
 
 
-class Screen(sl.Component[sl.ComponentsV2Target]):
+class Screen(sl.Component[ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 

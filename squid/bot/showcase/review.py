@@ -8,6 +8,8 @@ import squid_ui.ext.discord as sd
 from squid.bot.showcase.inspector import InspectablePanel
 from squid.bot.showcase.workbench import history_outcome
 from squid.bot.ui import tr
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 @dataclass(frozen=True)
@@ -95,10 +97,10 @@ class ReviewerPanel(InspectablePanel):
         self.simulated = simulated
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         review = self.seat.review
         heading = sl.heading(f"{self.seat.name} · {'simulated reviewer' if self.simulated else 'reviewer'}")
-        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
+        children: tuple[sl.ChildLike[ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(self.room.totals()),
             sl.fields(
                 sl.field(tr(t"layout-review-your-decision = Your decision"), review.decision),
@@ -178,9 +180,9 @@ class ReviewSummary(InspectablePanel):
         self.panels: dict[int, sd.MessageRoot] = {}
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         heading = sl.heading(tr(t"layout-review-review-room-flush-piston-door = Review room · Flush piston door"))
-        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
+        children: tuple[sl.ChildLike[ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(
                 tr(
                     t"layout-review-demo-description = Disposable reviews of a 4x4x3 "
@@ -198,7 +200,7 @@ class ReviewSummary(InspectablePanel):
             sl.paragraph(self.room.totals()),
             sd.v2.lines(
                 *(f"{seat.name}: {seat.review.decision}" for seat in self.room.seats),
-                overflow=sl.primitives.Paginate(key="reviewers", per=5),
+                overflow=primitives.Paginate(key="reviewers", per=5),
             )
             if self.room.seats
             else sl.note(tr(t"layout-review-waiting-for-reviewers = Waiting for reviewers.")),

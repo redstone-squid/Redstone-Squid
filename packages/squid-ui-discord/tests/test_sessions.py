@@ -16,6 +16,7 @@ import squid_ui.ext.discord.messages.contracts
 from squid_i18n import tr
 from squid_ui.ext.discord import CloseReason, Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui.ext.discord.delivery import Abandoned
+from squid_ui.ext.discord.primitives import Button, Heading, Row
 from squid_ui.ext.discord.sessions import (
     AdmissionRequest,
     AdmissionSpec,
@@ -30,11 +31,11 @@ from squid_ui.ext.discord.sessions import (
     Session,
     Unprotected,
 )
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, message_harness
-from squid_ui.primitives import Button, Heading, Row
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     @override
     def render(self):
         return [Heading("Panel"), Row((Button(label="Go", on_click=self._noop, key="go"),))]
@@ -451,7 +452,7 @@ class TestMembership:
         manager = SessionManager()
         seen: list[frozenset[int] | None] = []
 
-        class Roster(sl.Component[sl.ComponentsV2Target]):
+        class Roster(sl.Component[ComponentsV2Target]):
             @override
             def render(self):
                 session = manager.session_for(message_root)

@@ -9,8 +9,8 @@ from typing import NoReturn, override
 
 from squid_ui.authoring import semantic
 from squid_ui.errors import SquidUiError
+from squid_ui.scene import Codec
 from squid_ui.scene import model as scene_model
-from squid_ui.scene import slack as scene_slack
 from squid_ui.selectors.core import Selector, scope, select
 
 _TOKEN = re.compile(r'\s+|"(?:[^"\\]|\\.)*"|[A-Za-z_][\w.-]*|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[\^$*]=|[*>+~\[\](),:=]')
@@ -23,7 +23,7 @@ _TYPES = {
 _TYPES.update(
     {
         f"scene.{name}": value
-        for module in (scene_model, scene_slack)
+        for module in (scene_model,)
         for name, value in vars(module).items()
         if isinstance(value, type) and value.__module__ == module.__name__
     }
@@ -237,5 +237,7 @@ def parse(source: str, *, types: Mapping[str, type] | None = None) -> Selector[o
     and syntax failures are not cached.
     """
     # Type identity matters even when a metaclass overloads equality or disables hashing.
-    registered = tuple(_RegisteredType(name, kind) for name, kind in sorted(dict(types or {}).items()))
+    registered = tuple(
+        _RegisteredType(name, kind) for name, kind in sorted((Codec.query_types() | dict(types or {})).items())
+    )
     return _parse_cached(source, registered)

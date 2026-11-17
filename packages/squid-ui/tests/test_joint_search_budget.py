@@ -5,9 +5,9 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.authoring.semantic import Paragraph
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.composition import (
@@ -68,12 +68,12 @@ class FaultRules(V2CompositionRules[RenderTarget, object]):
     @override
     def evaluate(
         self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-    ) -> Evaluation[object, scene.ComponentsV2]:
+    ) -> Evaluation[object, discord_scene.ComponentsV2]:
         self.checkpoint("evaluate", context)
         return super().evaluate(candidate, context)
 
     @override
-    def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
+    def build(self, preparation: discord_scene.ComponentsV2, context: PlanningContext) -> discord_scene.ComponentsV2:
         self.checkpoint("build", context)
         if self.stage == "mismatch" and self.calls["build"] == self.fail_at:
             return replace(preparation, children=())
@@ -81,14 +81,19 @@ class FaultRules(V2CompositionRules[RenderTarget, object]):
 
     @override
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
+        self,
+        body: discord_scene.ComponentsV2,
+        expected: Evaluation[object, discord_scene.ComponentsV2],
+        context: PlanningContext,
     ) -> None:
         self.checkpoint("validate", context)
         super().validate(body, expected, context)
 
     def finalize(
-        self, built: BuiltComposition[object, scene.ComponentsV2, scene.ComponentsV2, object], context: PlanningContext
-    ) -> BuiltComposition[object, scene.ComponentsV2, scene.ComponentsV2, object]:
+        self,
+        built: BuiltComposition[object, discord_scene.ComponentsV2, discord_scene.ComponentsV2, object],
+        context: PlanningContext,
+    ) -> BuiltComposition[object, discord_scene.ComponentsV2, discord_scene.ComponentsV2, object]:
         self.checkpoint("finalize", context)
         return finish(built, context)
 
@@ -151,14 +156,17 @@ class DiscoveryRules:
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTarget, object, Realization], context: PlanningContext
-    ) -> Evaluation[object, scene.ComponentsV2]:
+    ) -> Evaluation[object, discord_scene.ComponentsV2]:
         return self.target.evaluate(candidate, context)
 
-    def build(self, preparation: scene.ComponentsV2, context: PlanningContext) -> scene.ComponentsV2:
+    def build(self, preparation: discord_scene.ComponentsV2, context: PlanningContext) -> discord_scene.ComponentsV2:
         return self.target.build(preparation, context)
 
     def validate(
-        self, body: scene.ComponentsV2, expected: Evaluation[object, scene.ComponentsV2], context: PlanningContext
+        self,
+        body: discord_scene.ComponentsV2,
+        expected: Evaluation[object, discord_scene.ComponentsV2],
+        context: PlanningContext,
     ) -> None:
         self.target.validate(body, expected, context)
 

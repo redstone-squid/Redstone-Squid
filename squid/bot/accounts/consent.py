@@ -24,6 +24,7 @@ from squid.accounts.domain import (
 from squid.bot.ui import CardField, text_node, tr
 from squid.core.sentinel import NOT_ASKED
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type ConsentContinuation = Callable[[sd.ActionEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader accepts, run with fresh parent action authority.
@@ -151,7 +152,7 @@ class ConsentPrompt(sd.Screen[AccountConsent]):
         return CURRENT_CONSENT_VERSION
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(

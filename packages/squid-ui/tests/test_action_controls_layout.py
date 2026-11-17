@@ -11,10 +11,11 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.html
 import squid_ui.ext.slack
-from squid_ui import scene
 from squid_ui.authoring.semantic import ControlDisplay
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning.adapter import AdapterProfile
@@ -46,8 +47,8 @@ def _mixed(**options: Any) -> sl.LayoutNode:
 
 def _v2_rows(node: sl.LayoutNode) -> list[list[str | None]]:
     body = sl.planning.plan(node, target=V2).scene.body
-    assert isinstance(body, scene.ComponentsV2)
-    return [_labels(child.items) for child in body.children if isinstance(child, scene.Row)]
+    assert isinstance(body, discord_scene.ComponentsV2)
+    return [_labels(child.items) for child in body.children if isinstance(child, discord_scene.Row)]
 
 
 def _labels(items: tuple[object, ...]) -> list[str | None]:
@@ -60,7 +61,7 @@ def test_mixed_controls_share_one_row_in_author_order() -> None:
 
 def test_classic_messages_share_the_row_too() -> None:
     body = sl.planning.plan(_mixed(), target=CLASSIC).scene.body
-    assert isinstance(body, scene.ClassicMessage)
+    assert isinstance(body, discord_scene.ClassicMessage)
     assert [_labels(row.controls) for row in body.rows] == [["Save", "Alerts: Off", "Edit", "Docs"]]
 
 
@@ -103,10 +104,10 @@ def test_more_than_five_buttons_wrap_onto_a_second_row() -> None:
 
 def test_folding_into_a_menu_keeps_toggles_and_forms_as_buttons() -> None:
     body = sl.planning.plan(_mixed(display=ControlDisplay.GROUPED), target=V2).scene.body
-    assert isinstance(body, scene.ComponentsV2)
+    assert isinstance(body, discord_scene.ComponentsV2)
 
-    menus = [child for child in body.children if isinstance(child, scene.Select)]
-    rows = [_labels(child.items) for child in body.children if isinstance(child, scene.Row)]
+    menus = [child for child in body.children if isinstance(child, discord_scene.Select)]
+    rows = [_labels(child.items) for child in body.children if isinstance(child, discord_scene.Row)]
     assert [[option.label for option in menu.options] for menu in menus] == [["Save"]]
     assert rows == [["Alerts: Off"], ["Edit"], ["Docs"]]
 
@@ -125,9 +126,9 @@ def test_html_places_the_toggle_and_form_inside_the_actions() -> None:
 def test_slack_shows_one_button_per_control_and_no_form_fields() -> None:
     result = sl.planning.plan(_mixed(), target=SLACK)
 
-    actions = [block for block in result.scene.body.blocks if isinstance(block, scene.SlackActions)]
+    actions = [block for block in result.scene.body.blocks if isinstance(block, slack_scene.SlackActions)]
     assert len(actions) == 1
-    buttons = [element for element in actions[0].elements if isinstance(element, scene.SlackButton)]
+    buttons = [element for element in actions[0].elements if isinstance(element, slack_scene.SlackButton)]
     assert len(buttons) == len(actions[0].elements)
     assert [button.label.content for button in buttons] == ["Save", "Alerts: Off", "Edit", "Docs"]
 

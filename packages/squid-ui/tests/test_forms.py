@@ -8,15 +8,15 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import LIMITS, V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions import ActionMode
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 
 
-def _target(name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS):
+def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
     """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
 
     Capabilities that are not Discord protocol facts belong to the adapter axis, which is
@@ -410,9 +410,9 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
 
     result = sl.planning.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=target)
 
-    row = result.scene.components_v2.children[0]
-    assert isinstance(row, scene.Row)
-    assert isinstance(row.items[0], scene.Button)
+    row = result.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(row, discord_scene.Row)
+    assert isinstance(row.items[0], discord_scene.Button)
     assert row.items[0].action == "edit"
     assert result.bindings["edit"].mode is sl.interactions.ActionMode.EXCLUSIVE
 
@@ -449,7 +449,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 
     result = sl.planning.plan(sl.form("Open form", spec, key="native", on_submit=_submitted), target=target)
 
-    assert isinstance(result.scene.components_v2.children[0], scene.Row)
+    assert isinstance(result.scene.expect_body(discord_scene.ComponentsV2).children[0], discord_scene.Row)
 
 
 @dataclass(frozen=True, slots=True)

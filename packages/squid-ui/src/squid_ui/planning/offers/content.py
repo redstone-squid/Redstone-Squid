@@ -4,7 +4,6 @@ from dataclasses import replace
 from datetime import UTC
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
     Alternatives,
@@ -17,6 +16,8 @@ from squid_ui.authoring.presentations import (
 from squid_ui.content.text import resolve_text, timestamp_text
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.native import NativeTraits, NativeValue
+from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     FragmentContract,
     OccurrenceId,
@@ -29,7 +30,7 @@ from squid_ui.planning.interaction_handlers import (
     RouteSelection,
 )
 from squid_ui.planning.offers.navigation import RegionNavigation, grouped_control_key, region_cursor_key
-from squid_ui.planning.offers.policy import Offers, _OfferScope
+from squid_ui.planning.offers.policy import Offers, OfferScope
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.realizations import (
     ActionsRealization,
@@ -62,11 +63,10 @@ from squid_ui.planning.text_presentations import (
     text_ends,
     text_fragments,
 )
-from squid_ui.primitives import nodes as primitive
 
 
 def _fallback_content_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.FallbackContent[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.FallbackContent[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -102,7 +102,7 @@ def _fallback_content_offers[RenderTargetT, ContextT](
 
 
 def _optional_content_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.OptionalContent[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.OptionalContent[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -135,7 +135,7 @@ def _optional_content_offers[RenderTargetT, ContextT](
 
 
 def _alternatives_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: Alternatives[RenderTargetT, ContextT]
+    scope: OfferScope[RenderTargetT, ContextT], value: Alternatives[RenderTargetT, ContextT]
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -179,7 +179,7 @@ def _alternatives_offers[RenderTargetT, ContextT](
 
 
 def _roster_label_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: RosterLabel
+    scope: OfferScope[RenderTargetT, ContextT], value: RosterLabel
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -205,7 +205,7 @@ def _roster_label_offers[RenderTargetT, ContextT](
 
 
 def _list_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.List
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.List
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -213,7 +213,7 @@ def _list_offers[RenderTargetT, ContextT](
         ReferencedText(
             ref,
             resolve_text(item.content, context.localization).nodes,
-            f"{index + 1}. " if value.ordered else "• ",
+            (f"{index + 1}. " if value.ordered else "• ") if value.markers else "",
             ordinal=index + 1,
         )
         for index, (ref, item) in enumerate(
@@ -243,7 +243,7 @@ def _list_offers[RenderTargetT, ContextT](
         if per is not None and (index + 1) % per == 0:
             required.append(len(expanded))
     items = tuple(expanded)
-    payload = TextSequenceRealization(items, list_ordered=value.ordered)
+    payload = TextSequenceRealization(items, list_ordered=value.ordered if value.markers else None)
     units = tuple(frozenset({item.reference}) for item in items)
     fragments = (
         FragmentContract(units, tuple(range(1, len(items) + 1)), payload.fragment, continuations=True)
@@ -276,7 +276,7 @@ def _list_offers[RenderTargetT, ContextT](
         ReferencedText(
             ref,
             resolve_text(item.content, context.localization).nodes,
-            f"{index + 1}. " if value.ordered else "• ",
+            (f"{index + 1}. " if value.ordered else "• ") if value.markers else "",
             ordinal=index + 1,
         )
         for index, (ref, item) in enumerate(
@@ -329,7 +329,7 @@ def _list_offers[RenderTargetT, ContextT](
 
 
 def _text_presentation_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: TextPresentation
+    scope: OfferScope[RenderTargetT, ContextT], value: TextPresentation
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -349,7 +349,7 @@ def _text_presentation_offers[RenderTargetT, ContextT](
 
 
 def _metric_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Metric
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Metric
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -367,19 +367,17 @@ def _metric_offers[RenderTargetT, ContextT](
 
 
 def _timestamp_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
-    value: sem.Timestamp | sem.ZonedTimestamp | primitive.Time | primitive.ZonedTime,
+    scope: OfferScope[RenderTargetT, ContextT],
+    value: sem.Timestamp | sem.ZonedTimestamp,
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    if isinstance(value, primitive.Time | primitive.ZonedTime) and not scope.policy.native_controls:
-        return ()
     label = (
         resolve_text(value.label, context.localization).nodes
         if isinstance(value, sem.Timestamp | sem.ZonedTimestamp) and value.label is not None
         else ()
     )
-    if isinstance(value, sem.Timestamp | primitive.Time):
+    if isinstance(value, sem.Timestamp):
         instant = value.instant
         style = sem.TimeStyle(value.style).value
         timestamp = timestamp_text(instant, style=style)
@@ -397,9 +395,6 @@ def _timestamp_offers[RenderTargetT, ContextT](
         if label
         else ()
     )
-    if isinstance(value, primitive.Time | primitive.ZonedTime) and value.prefix is not None:
-        prefix = resolve_text(value.prefix, context.localization).nodes
-        label = prefix
     return (
         RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
@@ -412,14 +407,14 @@ def _timestamp_offers[RenderTargetT, ContextT](
                 timezone=timezone,
                 label=label,
                 prefix=prefix,
-                native_prefix=value.prefix if isinstance(value, primitive.Time | primitive.ZonedTime) else None,
+                native_prefix=None,
             ),
         ),
     )
 
 
 def _status_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Status
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Status
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -439,7 +434,7 @@ def _status_offers[RenderTargetT, ContextT](
 
 
 def _progress_bar_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.ProgressBar
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.ProgressBar
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -463,7 +458,7 @@ def _progress_bar_offers[RenderTargetT, ContextT](
 
 
 def _text_block_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Heading | sem.Note | sem.Code | sem.Quote
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Heading | sem.Note | sem.Code | sem.Quote
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -501,7 +496,7 @@ def _text_block_offers[RenderTargetT, ContextT](
 
 
 def _field_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Field
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Field
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -523,7 +518,7 @@ def _field_offers[RenderTargetT, ContextT](
 
 
 def _paragraph_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Paragraph
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Paragraph
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -547,8 +542,8 @@ def _paragraph_offers[RenderTargetT, ContextT](
     )
 
 
-def _container_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT],
+def container_offers[RenderTargetT, ContextT](
+    scope: OfferScope[RenderTargetT, ContextT],
     value: sem.Group[RenderTargetT, ContextT]
     | sem.Roster[ContextT]
     | RosterSection
@@ -569,8 +564,7 @@ def _container_offers[RenderTargetT, ContextT](
     | sem.Region[RenderTargetT, ContextT]
     | sem.Paged[RenderTargetT, ContextT]
     | sem.Budgeted[RenderTargetT, ContextT]
-    | primitive.Budget[RenderTargetT, ContextT]
-    | primitive.Break[RenderTargetT, ContextT]
+    | NativeValue
     | StructuralGroup
     | sem.Block[RenderTargetT, ContextT]
     | Budget[RenderTargetT, ContextT]
@@ -595,7 +589,7 @@ def _container_offers[RenderTargetT, ContextT](
             occurrence.graph,
             ref,
             Placement.HEADER
-            if (isinstance(value, RootRegion) and isinstance(occurrence.graph.units[ref].value, primitive.Content))
+            if (isinstance(value, RootRegion) and NativeTraits.of(occurrence.graph.units[ref].value).content_axis)
             or (isinstance(value, sem.Region) and ref.keys[-1] == "@header")
             or (isinstance(value, sem.Section | sem.Article | RosterSection) and ref.keys[-1] == "@heading")
             else Placement.FOOTER
@@ -672,10 +666,9 @@ def _container_offers[RenderTargetT, ContextT](
         flow=not (
             isinstance(value, sem.Unbreakable | sem.Figure)
             or (isinstance(value, RosterSection) and value.count == 0)
-            or (isinstance(value, primitive.Break) and value.unbreakable)
+            or NativeTraits.of(value).unbreakable
         ),
-        keep_with_next=isinstance(value, sem.KeepWithNext)
-        or (isinstance(value, primitive.Break) and value.keep_with_next),
+        keep_with_next=isinstance(value, sem.KeepWithNext) or NativeTraits.of(value).keep_with_next,
         region=region,
         preference_priority=int(value.flexibility) if isinstance(value, sem.ActionControls) else None,
     )
@@ -730,7 +723,7 @@ def _container_offers[RenderTargetT, ContextT](
                 for item in eligible
             }
             options = tuple(
-                scene.Option(
+                controls.Option(
                     "".join(tree.plain(node) for node in resolve_text(item.label, context.localization).nodes),
                     item.key,
                 )
@@ -739,7 +732,7 @@ def _container_offers[RenderTargetT, ContextT](
             grouped = RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "actions.grouped",
-                SelectRealization(scene.Select(options, key)),
+                SelectRealization(controls.Select(options, key)),
                 children=tuple(child for child in children if child.graph.units[child.reference].value not in eligible),
                 interaction=True,
                 binding=ActionBinding(key, RouteSelection(routes), ActionMode.EXCLUSIVE, routes=routes),
@@ -759,7 +752,7 @@ def _container_offers[RenderTargetT, ContextT](
                 if len(eligible) > 25 and len(eligible) != len(value.items):
                     return (container,)
                 if len(eligible) == len(value.items):
-                    payload = SelectRealization(scene.Select(options, key))
+                    payload = SelectRealization(controls.Select(options, key))
                     grouped = replace(
                         grouped,
                         fragments=FragmentContract(
@@ -778,7 +771,7 @@ def _container_offers[RenderTargetT, ContextT](
 
 
 def _table_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Table
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Table
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -833,7 +826,7 @@ def _table_offers[RenderTargetT, ContextT](
 
 
 def _media_item_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.MediaItem
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.MediaItem
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
@@ -850,7 +843,7 @@ def _media_item_offers[RenderTargetT, ContextT](
 
 
 def _download_offers[RenderTargetT, ContextT](
-    scope: _OfferScope[RenderTargetT, ContextT], value: sem.Download
+    scope: OfferScope[RenderTargetT, ContextT], value: sem.Download
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context

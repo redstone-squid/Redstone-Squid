@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import cast
 
 import discord
-from squid_ui import scene
 from squid_ui.content.assets import Asset
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.planning.result import PlanResult
 

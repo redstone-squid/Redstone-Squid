@@ -4,12 +4,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Self, overload
 
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
+from squid_ui.ext.html import scene
+from squid_ui.ext.html.capabilities import HtmlAdapterCapability
 from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.ext.html.target_types import HtmlAdapter, HtmlTarget
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition_planner import RuleComposition
 from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
@@ -76,7 +77,7 @@ HTML_ADAPTER = AdapterProfile(
     HtmlAdapter,
     "squid-ui.html",
     ">=0.1.0a1,<0.2",
-    capabilities=frozenset({AdapterCapability.RENDER_HTML}),
+    capabilities=frozenset({HtmlAdapterCapability.RENDER_HTML}),
     frontend="html",
 )
 

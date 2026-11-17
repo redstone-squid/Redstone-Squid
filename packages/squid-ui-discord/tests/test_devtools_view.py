@@ -20,11 +20,12 @@ from squid_ui.ext.discord.devtools.views import (
     OperationalInspector,
 )
 from squid_ui.ext.discord.durability import ComponentRegistry, DiscordFrontend, DurableSessionRuntime
+from squid_ui.ext.discord.primitives import Button, Heading, Row, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness
-from squid_ui.primitives import Button, Heading, Row, Text
 
 
-class Subject(sl.Component[sl.ComponentsV2Target]):
+class Subject(sl.Component[ComponentsV2Target]):
     """A stand-in for whatever panel the owner is actually debugging."""
 
     opened: bool = sl.state(False)

@@ -26,9 +26,7 @@ from squid_ui.content.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutError
 from squid_ui.ext.discord.actions import ActionResponder, _responder
 from squid_ui.ext.discord.messages.wiring import _CONVERSATION_TYPES
-from squid_ui.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
-from squid_ui.primitives.constraints import Never
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Button,
     EntitySelect,
     File,
@@ -46,9 +44,11 @@ from squid_ui.primitives.nodes import (
     Text,
     Thumbnail,
 )
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
+from squid_ui.overflow import Never
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
+from squid_ui.styles import ActionStyle
 
 type Item = discord.ui.Item[Any]
 type KeyFactory = Callable[[Item], str]

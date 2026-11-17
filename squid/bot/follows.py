@@ -11,6 +11,7 @@ from squid.bot.ui import tr
 from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.notifications.domain import SubscriptionKind
 from squid.notifications.edits import SUBSCRIPTIONS_EDIT, notification_target
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -20,14 +21,14 @@ class FollowCard(sd.Screen):
     policy = sd.ResponseSpec(audience="public", access=sd.Everyone(), timeout=300)
 
     def __init__(
-        self, content: sl.LayoutNode[sl.ComponentsV2Target, sd.Request], kind: SubscriptionKind, subject_id: UUID
+        self, content: sl.LayoutNode[ComponentsV2Target, sd.Request], kind: SubscriptionKind, subject_id: UUID
     ) -> None:
         self.content = content
         self.kind = kind
         self.subject_id = subject_id
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return self.content, sl.action_controls(follow_control(self.kind, self.subject_id), key="follow-actions")
 
 

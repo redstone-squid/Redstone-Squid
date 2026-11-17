@@ -9,12 +9,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
-from squid_ui import scene
 from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.primitives.nodes import RawItem
 from squid_ui.planning.composition import AtomicContract, PlanningContext, SharedUse
 from squid_ui.planning.resources import Axis, ResourceCost, ResourceIdentity
-from squid_ui.primitives.nodes import RawItem
 
 type NativePlacement = Literal["root", "panel", "row", "accessory"]
 

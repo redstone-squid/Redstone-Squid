@@ -9,10 +9,11 @@ from typing import Any, Concatenate
 
 import discord
 from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.messages.contracts import ErrorHook
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.interactions.routing import Route
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.profiling import NoOpProfiler, Profiler
 from squid_ui.routing import RouteTable
 
@@ -49,7 +50,7 @@ class Router[BotT: discord.Client]:
         profiler: Profiler = _NOOP_PROFILER,
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
-        require_discord_py_capability(adapter, AdapterCapability.DISPATCH, "dispatch routed interactions")
+        require_discord_py_capability(adapter, DiscordAdapterCapability.DISPATCH, "dispatch routed interactions")
         namespace_group = namespace if isinstance(namespace, RouteGroup) else None
         namespace_value = namespace if isinstance(namespace, str) else None
         if namespace_group is not None:

@@ -29,6 +29,7 @@ from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, Sea
 from squid.sponsors import PublicSponsor
 from squid_i18n import source_text
 from squid_ui.ext.discord import SessionSpec
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     assert_within_limits,
@@ -510,7 +511,7 @@ async def test_build_history_survives_a_failed_card_refresh(display_build: Build
     workspace = edit_workspace(display_build)
     assert workspace.prefill({"version_compatibility": "1.21+"}) is None
 
-    async def unavailable_card(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    async def unavailable_card(build: Build) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         raise RuntimeError("card service unavailable")
 
     component = BuildEditScreen(

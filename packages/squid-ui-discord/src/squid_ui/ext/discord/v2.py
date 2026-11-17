@@ -23,7 +23,7 @@ from squid_ui.ext.discord._factories import (
     select,
     text,
 )
-from squid_ui.primitives.nodes import (
+from squid_ui.ext.discord.primitives.nodes import (
     Button,
     File,
     Footer,
@@ -42,8 +42,9 @@ from squid_ui.primitives.nodes import (
     Text,
     Thumbnail,
 )
-from squid_ui.primitives.styles import Color
-from squid_ui.target_types import ComponentsV2Target, Renderable
+from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.styles import Color
+from squid_ui.target_types import Renderable
 
 type Child[ContextT = object] = Renderable[ComponentsV2Target, ContextT] | TextLike | Literal[False] | None
 type SectionText = Text | Heading | Footer | TextLike | Literal[False] | None

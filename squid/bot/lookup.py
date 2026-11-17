@@ -12,6 +12,7 @@ from squid.bot.utils.permissions import allows
 from squid.suggestions.application import Candidate, SuggestionService, rank
 from squid.suggestions.application.ports import SuggestionAuthorizer
 from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -101,7 +102,7 @@ class LookupScreen(sd.Screen[Suggestion]):
         self.cancel(event)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         return (
             sl.heading(self.title),
             sl.note(tr(t"lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results."))

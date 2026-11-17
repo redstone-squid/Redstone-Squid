@@ -17,8 +17,9 @@ from squid_ui.authoring.presentations import (
     Shortening,
     TextPresentation,
 )
-from squid_ui.content.text import Text, TextLike
+from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.planning.interaction_semantics import (
     DisclosureToggle,
     Interaction,
@@ -36,11 +37,11 @@ from squid_ui.planning.semantic_index import (
     _key,
     semantic_graph,
 )
-from squid_ui.primitives import nodes as primitive
-from squid_ui.primitives.constraints import Alt, Alts, Paginate
 
 
 def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> Interaction[ContextT] | None:
+    if isinstance(value, NativeValue):
+        return value if NativeTraits.of(value).interaction is not None else None
     match value:
         case (
             sem.ActionControl()
@@ -55,13 +56,6 @@ def interaction[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, Con
             | ItemSummary()
             | ItemBack()
             | sem.RoutedChoices()
-            | primitive.Button()
-            | primitive.RoutedButton()
-            | primitive.LinkButton()
-            | primitive.PremiumButton()
-            | primitive.SelectMenu()
-            | primitive.RoutedSelect()
-            | primitive.EntitySelect()
         ):
             return value
         case _:
@@ -195,25 +189,13 @@ def check_alternative[RenderTargetT, ContextT](
     return checked
 
 
-def source_text[RenderTargetT, ContextT](value: SemanticValue[RenderTargetT, ContextT]) -> TextLike:
-    """Return one source text unit; containers need references to their individual parts."""
+def source_text[R, C](value: SemanticValue[R, C]) -> TextLike:
+    """Return one source text unit; containers require references to their parts."""
+    if isinstance(value, NativeValue) and (text := NativeTraits.of(value).text) is not None:
+        return text
     match value:
-        case (
-            sem.Paragraph()
-            | sem.Heading()
-            | sem.Note()
-            | sem.Code()
-            | sem.ListItem()
-            | TableCell()
-            | FieldPart()
-            | primitive.Text()
-            | primitive.Heading()
-            | primitive.Footer()
-            | primitive.Code()
-        ):
+        case sem.Paragraph() | sem.Heading() | sem.Note() | sem.Code() | sem.ListItem() | TableCell() | FieldPart():
             return value.content
-        case primitive.Lines(overflow=Alts()):
-            return Text.join(value.join, (line.primary if isinstance(line, Alt) else line for line in value.lines))
         case sem.Column():
             return value.heading
         case _:
@@ -246,8 +228,7 @@ class SourceScope[RenderTargetT, ContextT]:
         """Locate a preserved pager in the authored graph, across nested alternatives."""
         value = self.checked.presentation.units[presentation].value
         if not isinstance(value, sem.Region | sem.Paged | sem.List | sem.Navigation | sem.Items | sem.Grid) and not (
-            isinstance(value, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code)
-            and isinstance(value.overflow, Paginate)
+            NativeTraits.of(value).pagination is not None
         ):
             message = "page boundary resolution needs a pagination scope"
             raise LayoutInvariantError(message)
@@ -278,8 +259,9 @@ def budget_floor[RenderTargetT, ContextT](
 ) -> int:
     """Return the hard character reservation after explicit best-effort permission."""
     unit = graph.units[reference]
-    if isinstance(unit.value, primitive.Budget):
-        if unit.value.best_effort:
+    native_budget = NativeTraits.of(unit.value).budget
+    if native_budget is not None:
+        if native_budget.best_effort:
             return 0
     elif not isinstance(unit.value, sem.Budgeted) or isinstance(unit.value.node, sem.BestEffort):
         return 0
@@ -291,39 +273,35 @@ def budget_floor[RenderTargetT, ContextT](
         if isinstance(ancestor.value, sem.BestEffort):
             return 0
         parent = ancestor.parent
-    return unit.value.minimum
+    return (
+        native_budget.minimum
+        if native_budget is not None
+        else unit.value.minimum
+        if isinstance(unit.value, sem.Budgeted)
+        else 0
+    )
 
 
 def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[RenderTargetT, ContextT]) -> None:
     """Preserve hard layout scopes even when presentations rearrange their contents."""
     for reference, unit in checked.source.units.items():
         constraint = unit.value
-        if not isinstance(
-            constraint,
-            Budget
-            | sem.Budgeted
-            | sem.Unbreakable
-            | sem.KeepWithNext
-            | sem.Paged
-            | sem.Region
-            | sem.List
-            | sem.Navigation
-            | sem.Items
-            | sem.Grid
-            | primitive.Row
-            | primitive.Section
-            | primitive.Panel
-            | primitive.Gallery
-            | primitive.Card
-            | primitive.Content
-            | RosterSection
-            | primitive.Budget
-            | primitive.Break,
-        ) and not (
-            isinstance(
-                constraint, primitive.Lines | primitive.Text | primitive.Heading | primitive.Footer | primitive.Code
+        if (
+            not isinstance(
+                constraint,
+                Budget
+                | sem.Budgeted
+                | sem.Unbreakable
+                | sem.KeepWithNext
+                | sem.Paged
+                | sem.Region
+                | sem.List
+                | sem.Navigation
+                | sem.Items
+                | sem.Grid
+                | RosterSection,
             )
-            and isinstance(constraint.overflow, Paginate)
+            and NativeTraits.of(constraint).boundary is None
         ):
             continue
         inside = checked.source.atoms(reference)
@@ -346,19 +324,12 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     preserved = all(
                         axis in other.limits and other.limits[axis] <= cap for axis, cap in constraint.limits.items()
                     )
-                case (sem.Budgeted() as constraint, sem.Budgeted() as other) | (
-                    primitive.Budget() as constraint,
-                    primitive.Budget() as other,
-                ):
+                case sem.Budgeted() as constraint, sem.Budgeted() as other:
                     preserved = (constraint.minimum, constraint.preferred, constraint.stretch) == (
                         other.minimum,
                         other.preferred,
                         other.stretch,
                     ) and budget_floor(checked.presentation, target) >= budget_floor(checked.source, reference)
-                case primitive.Break() as constraint, primitive.Break() as other:
-                    preserved = (not constraint.unbreakable or other.unbreakable) and (
-                        not constraint.keep_with_next or other.keep_with_next
-                    )
                 case sem.Paged() as constraint, sem.Paged() as other:
                     preserved = (
                         constraint.key,
@@ -391,64 +362,22 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.page,
                         other.page_size,
                     )
-                case (
-                    (
-                        (
-                            primitive.Lines()
-                            | primitive.Text()
-                            | primitive.Heading()
-                            | primitive.Footer()
-                            | primitive.Code()
-                        ) as constraint
-                    ),
-                    (
-                        (
-                            primitive.Lines()
-                            | primitive.Text()
-                            | primitive.Heading()
-                            | primitive.Footer()
-                            | primitive.Code()
-                        ) as other
-                    ),
-                ):
-                    preserved = constraint.overflow == other.overflow
                 case (sem.Unbreakable() as constraint, sem.Unbreakable() as other) | (
                     sem.KeepWithNext() as constraint,
                     sem.KeepWithNext() as other,
                 ):
                     preserved = True
-                case primitive.Row() as constraint, primitive.Row() as other:
-                    preserved = True
-                case primitive.Section() as constraint, primitive.Section() as other:
-                    preserved = len(constraint.texts) == len(other.texts)
                 case RosterSection() as constraint, RosterSection() as other:
                     preserved = constraint == other
-                case primitive.Card() as constraint, primitive.Card() as other:
-                    preserved = (
-                        constraint.url,
-                        constraint.accent,
-                        constraint.image,
-                        constraint.thumbnail,
-                        constraint.timestamp,
-                        tuple(entry.inline for entry in constraint.fields),
-                        constraint.footer.icon_url if constraint.footer else None,
-                        (constraint.author.url, constraint.author.icon_url) if constraint.author else None,
-                    ) == (
-                        other.url,
-                        other.accent,
-                        other.image,
-                        other.thumbnail,
-                        other.timestamp,
-                        tuple(entry.inline for entry in other.fields),
-                        other.footer.icon_url if other.footer else None,
-                        (other.author.url, other.author.icon_url) if other.author else None,
-                    )
-                case primitive.Content() as constraint, primitive.Content() as other:
-                    preserved = True
-                case primitive.Gallery() as constraint, primitive.Gallery() as other:
-                    preserved = len(constraint.items) == len(other.items)
-                case primitive.Panel() as constraint, primitive.Panel() as other:
-                    preserved = (constraint.accent, constraint.spoiler) == (other.accent, other.spoiler)
+            if isinstance(constraint, NativeValue) and isinstance(other, NativeValue):
+                before, after = NativeTraits.of(constraint), NativeTraits.of(other)
+                preserved = (
+                    before.boundary == after.boundary
+                    and (not before.unbreakable or after.unbreakable)
+                    and (not before.keep_with_next or after.keep_with_next)
+                )
+                if before.budget is not None:
+                    preserved &= budget_floor(checked.presentation, target) >= budget_floor(checked.source, reference)
             if preserved:
                 break
         if not preserved:

@@ -48,6 +48,7 @@ from squid.permissions.domain.models import PatternMode
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -65,11 +66,11 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     _selected_pattern: tuple[str, int] | None = sl.state(None)
     _selected_role: tuple[PermissionRole, int] | None = sl.state(None)
     _revision: int = sl.state(default=0)
-    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _tabs: sp.ComponentDriver[sp.TabsState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         default=None
     )
     _pending_delete: tuple[str, int, int] | None = sl.state(default=None)
-    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
+    _decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
         sl.state(default=None)
     )
 
@@ -101,7 +102,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _refresh(self) -> None:
         self._revision = await self._admin.revision()
-        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
+        tabs: list[sp.Tab[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         if PERM_SUBJECT_INSPECT in self._capabilities:
             rules = await self._admin.rules_for(
                 account_id=self._account_id,
@@ -151,7 +152,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         return ROLE_DEFINITION_MANAGE_GUILD in self._capabilities or ROLE_DEFINITION_MANAGE in self._capabilities
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if self._pending_delete is not None and self._decision is not None:
             slug = self._pending_delete[0]
             return (
@@ -171,7 +172,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
-    ) -> sp.Browser[PermissionGrant | PermissionRoleAssignment, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    ) -> sp.Browser[PermissionGrant | PermissionRoleAssignment, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sp.Browser(
             sl.sources.list_source((*rules, *assignments)),
             key="subject-access",
@@ -184,10 +185,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"access-subject-rules-empty = This subject has no explicit access rules or internal roles."),
         )
 
-    def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def _subject_forms(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._may_grant or self._may_manage_roles):
             return ()
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
                 self._may_grant
                 and sl.action_control(
@@ -272,7 +273,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _role_browser(
         self,
         roles: tuple[PermissionRole, ...],
-    ) -> sp.Browser[PermissionRole, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    ) -> sp.Browser[PermissionRole, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sp.Browser(
             sl.sources.list_source(roles),
             key="roles",
@@ -285,7 +286,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"access-role-list-empty = No internal roles are visible in this server."),
         )
 
-    def _role_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    def _role_forms(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         return (
             sl.action_controls(
                 sl.form(
@@ -300,7 +301,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _role_editor(
         self, role: PermissionRole, roles: tuple[PermissionRole, ...]
-    ) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+    ) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         revision = self._revision
         return (
             _role_detail(role, roles),
@@ -416,7 +417,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _request_delete(self, role: PermissionRole, revision: int) -> None:
         self._pending_delete = (role.slug, role.id, revision)
-        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]](
+        self._decision = sp.Decision[ComponentsV2Target, sd.Request[Any, RedstoneSquid]](
             tr(t"access-role-delete-warning = Deleting an internal role removes every assignment of it."),
             (
                 sp.DecisionOption("confirm", tr(t"access-view-delete-role = Delete role"), sl.Tone.DANGER),
@@ -430,7 +431,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         return _CreateRoleForm().spec()
 
     @staticmethod
-    def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    def _catalogue() -> sp.Browser[Any, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         nodes = tuple(CATALOGUE.values())
         return sp.Browser(
             sl.sources.list_source(nodes),
@@ -451,7 +452,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     @staticmethod
     def _audit(
         rows: tuple[PermissionAuditEntry, ...],
-    ) -> sp.Browser[PermissionAuditEntry, sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+    ) -> sp.Browser[PermissionAuditEntry, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sp.Browser(
             sl.sources.list_source(rows),
             key="permission-audit",

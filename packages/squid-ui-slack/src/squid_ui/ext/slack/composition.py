@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import cast
 
 from squid_i18n import tree
-from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
@@ -13,8 +12,11 @@ from squid_ui.content.assets import Asset
 from squid_ui.content.entity import ConversationType, EntityType
 from squid_ui.content.text import resolve_text
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.slack import scene
 from squid_ui.ext.slack._forms import SlackFormRenderer, form_texts
 from squid_ui.ext.slack.limits import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
+from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
@@ -51,8 +53,8 @@ from squid_ui.planning.realizations import (
     TimeRealization,
     record_text,
 )
-from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
-from squid_ui.primitives.styles import ActionStyle
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost, ResourceIdentity
+from squid_ui.styles import ActionStyle
 
 
 def _plain(nodes: tuple[tree.Node, ...]) -> str | None:
@@ -283,7 +285,7 @@ class SlackCompositionRules[
                         violations.append(ConstraintViolation(identity, "select cardinality"))
                     limit("select.options", len(control.options), self.limits.components.select_options)
                     limit("select.placeholder", len(control.placeholder or ""), self.limits.components.placeholder)
-                    identifier = control.action if isinstance(control, scene.Select) else control.route_id
+                    identifier = control.action if isinstance(control, controls.Select) else control.route_id
                     limit("select.id", len(identifier), self.limits.components.action_id)
                     for option in control.options:
                         limit("option.label", len(option.label), self.limits.components.option_label)
@@ -307,10 +309,10 @@ class SlackCompositionRules[
                     )
                     selector = scene.SlackSelect(
                         action=scene.SlackActionRef(control.action, control.mode)
-                        if isinstance(control, scene.Select)
+                        if isinstance(control, controls.Select)
                         else None,
                         route=scene.SlackRouteRef(control.route_id)
-                        if isinstance(control, scene.RoutedSelect)
+                        if isinstance(control, controls.RoutedSelect)
                         else None,
                         placeholder=scene.SlackText(control.placeholder, scene.SlackTextKind.PLAIN, emoji=False)
                         if control.placeholder
@@ -594,10 +596,10 @@ class SlackCompositionRules[
         def visit(part: CandidateComposition[RenderTargetT, ContextT, Realization]) -> None:
             before = blocks
             realize(part)
-            scopes[part.offer.occurrence.identity] = ResourceCost({Axis.BLOCKS: blocks - before})
+            scopes[part.offer.occurrence.identity] = ResourceCost({SlackAxis.BLOCKS: blocks - before})
 
         visit(candidate)
-        cost = ResourceCost({Axis.BLOCKS: blocks})
+        cost = ResourceCost({SlackAxis.BLOCKS: blocks})
         violations.extend(
             CapacityExceeded(candidate.offer.occurrence.identity, axis, used, capacity)
             for axis, used, capacity in cost.over(self.limits.capacities)
@@ -652,7 +654,7 @@ class SlackCompositionRules[
             interactions=frozenset(interactions),
             preparation=cast(BodyT, body),
             text=tuple(texts),
-            resource_axes=frozenset({Axis.BLOCKS}),
+            resource_axes=frozenset({SlackAxis.BLOCKS}),
             scoped_costs=scopes,
         )
 
@@ -752,7 +754,7 @@ class SlackCompositionRules[
         ):
             message = "built Slack modal exceeds its header limits"
             raise DrawInvariantError(message)
-        cost = ResourceCost({Axis.BLOCKS: len(body.blocks)})
+        cost = ResourceCost({SlackAxis.BLOCKS: len(body.blocks)})
         if (
             cost != expected.cost
             or body != expected.preparation

@@ -17,6 +17,7 @@ from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
 from squid.records.domain.models import BaseTitle
 from squid_i18n import md_tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint
 
 CATALOGUE_PAGE_SIZE = 15
@@ -77,10 +78,10 @@ def _comparison_rule(base_title: BaseTitle) -> sl.TextLike:
 def record_browser(
     records: RecordService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
-) -> sp.Browser[PublishedTitle, sl.ComponentsV2Target, sd.Request]:
+) -> sp.Browser[PublishedTitle, ComponentsV2Target, sd.Request]:
     """Keep the selected record available while its holder is opened in the catalogue."""
 
-    def detail(record: PublishedTitle) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def detail(record: PublishedTitle) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         computed_at = format_dt(record.computed_at, style="R")
         checked_at = format_dt(record.last_checked_at, style="R") if record.last_checked_at is not None else None
         return sl.section(

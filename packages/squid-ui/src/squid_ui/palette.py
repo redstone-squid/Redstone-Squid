@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
-from squid_ui.primitives.styles import Color
+from squid_ui.styles import Color
 
 
 class Tone(StrEnum):

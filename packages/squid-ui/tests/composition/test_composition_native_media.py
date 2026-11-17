@@ -6,11 +6,12 @@ from typing import Any
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.authoring.document import Document
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -19,7 +20,6 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives import nodes as native
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-media", "1")
 TARGET = components_v2_target(ADAPTER)
@@ -39,10 +39,10 @@ def test_native_gallery_and_file_share_one_attachment_without_losing_metadata(ex
     assert result.cost.get(Axis.ATTACHMENTS) == 1
     assert result.cost.get(Axis.COMPONENTS) == 2
     assert result.scene.body.children == (
-        scene.Gallery(
-            (scene.GalleryItem(f"attachment://{asset.name}", "Preview", spoiler=True, asset_name=asset.name),)
+        discord_scene.Gallery(
+            (discord_scene.GalleryItem(f"attachment://{asset.name}", "Preview", spoiler=True, asset_name=asset.name),)
         ),
-        scene.File(asset_key=asset.key, name=asset.name, media_type=asset.media_type, spoiler=True),
+        discord_scene.File(asset_key=asset.key, name=asset.name, media_type=asset.media_type, spoiler=True),
     )
     assert not result.report.events
 
@@ -53,7 +53,9 @@ def test_collection_packs_target_galleries_and_can_page_at_image_boundaries() ->
     identity = OccurrenceId(("root", "r"))
     document = sl.region(node, key="r", title="R")
     complete = plan(document, target=target)
-    assert [len(gallery.items) for gallery in complete.scene.body.children if isinstance(gallery, scene.Gallery)] == [
+    assert [
+        len(gallery.items) for gallery in complete.scene.body.children if isinstance(gallery, discord_scene.Gallery)
+    ] == [
         2,
         2,
         1,
@@ -68,7 +70,7 @@ def test_collection_packs_target_galleries_and_can_page_at_image_boundaries() ->
         descriptions.extend(
             item.description
             for gallery in page.scene.body.children
-            if isinstance(gallery, scene.Gallery)
+            if isinstance(gallery, discord_scene.Gallery)
             for item in gallery.items
         )
     assert descriptions == [str(index) for index in range(5)]
@@ -121,7 +123,9 @@ def test_changed_gallery_metadata_invalidates_retained_allocation() -> None:
         session=session,
     )
     assert second.allocation is not first.allocation
-    assert second.scene.body.children == (scene.Gallery((scene.GalleryItem(original.url, "After", spoiler=True),)),)
+    assert second.scene.body.children == (
+        discord_scene.Gallery((discord_scene.GalleryItem(original.url, "After", spoiler=True),)),
+    )
 
 
 def test_native_gallery_reports_its_classic_capability_boundary() -> None:

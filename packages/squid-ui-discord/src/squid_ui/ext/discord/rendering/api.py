@@ -9,21 +9,21 @@ delivery. These helpers construct messages without sending them or mounting comp
 from typing import TYPE_CHECKING, Any, Unpack
 
 import discord
-from squid_ui import scene
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
+from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.adapter import require_discord_py_target
+from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
 from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
 from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
-from squid_ui.ext.discord.target_types import DiscordPyAdapter
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
@@ -31,7 +31,6 @@ from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request
@@ -49,7 +48,7 @@ def render_message(
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.LayoutView, scene.ComponentsV2]:
     """Plan a logical document, then draw its resolved Components V2 scene."""
-    adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "render a Components V2 message")
+    adapter = require_discord_py_target(target, DiscordAdapterCapability.RENDER_V2, "render a Components V2 message")
     payload, result = plan_and_draw(
         rendered,
         PlanRequest(target=target, **options),

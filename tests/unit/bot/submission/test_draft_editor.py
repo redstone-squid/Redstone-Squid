@@ -66,9 +66,9 @@ from squid.tags.models import TagDefinition
 from squid_reactivity import LocalTopicBus
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.modal import build_form_modal
+from squid_ui.ext.discord.primitives import SelectMenu
 from squid_ui.ext.discord.testing import commit_render, payload_problems, stage
 from squid_ui.interactions.forms import FormValueError
-from squid_ui.primitives import SelectMenu
 from squid_ui.runtime import transaction
 from squid_ui.testing import find, find_all, labels, texts
 from tests.support.draft_edits import DraftEditRecorder

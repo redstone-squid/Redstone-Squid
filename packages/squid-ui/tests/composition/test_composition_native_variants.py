@@ -8,15 +8,16 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.authoring.presentations import Replacement
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.primitives import nodes as native
 from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.overflow import Never, Paginate
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.target import Target
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Never, Paginate
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-variants", "1")
 
@@ -119,5 +120,9 @@ def test_component_pressure_steps_only_the_needed_ladders_before_shortening_text
     assert result.allocation is not None
     assert not result.report.events
     body = result.scene.body
-    assert sum(isinstance(node, scene.Panel) for node in body.children) == 9
-    assert [node.content for node in body.children if isinstance(node, scene.Text)] == ["line 0", "line 1", "line 2"]
+    assert sum(isinstance(node, discord_scene.Panel) for node in body.children) == 9
+    assert [node.content for node in body.children if isinstance(node, discord_scene.Text)] == [
+        "line 0",
+        "line 1",
+        "line 2",
+    ]

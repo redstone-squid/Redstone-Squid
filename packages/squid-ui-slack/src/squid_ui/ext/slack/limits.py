@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Any, Self
 
+from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.planning.resources import Axis
 
 
@@ -61,10 +62,10 @@ class SlackLimits:
 
     @property
     def capacities(self) -> Mapping[Axis, int]:
-        return {Axis.BLOCKS: self.blocks}
+        return {SlackAxis.BLOCKS: self.blocks}
 
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
-        return replace(self, blocks=max(0, self.blocks - reductions.get(Axis.BLOCKS, 0)))
+        return replace(self, blocks=max(0, self.blocks - reductions.get(SlackAxis.BLOCKS, 0)))
 
     def digest(self) -> tuple[tuple[str, object], ...]:
         return tuple(sorted(_limit_values(self)))

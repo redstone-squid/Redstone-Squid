@@ -4,11 +4,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from squid_ui.authoring.document import DocumentLike
-from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.authoring.semantic import LayoutNode, List, ListItem
 from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import heading, stack
-from squid_ui.primitives import Lines
-from squid_ui.target_types import DiscordTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
@@ -26,12 +25,12 @@ class RankedListState:
             raise ValueError(message)
 
 
-type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
+type ContentHook[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     ContentLike[RenderTargetT, ContextT] | Callable[[int], ContentLike[RenderTargetT, ContextT]]
 )
 
 
-class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object]:
+class RankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """Page a snapshot of entries in their supplied ranking order.
 
     Entries are not sorted. top_n caps the snapshot before paging, and page_size=None
@@ -123,7 +122,13 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
         if not displayed:
             body = controls.content(self.empty)
         elif self.page_size is None:
-            body = (Lines(lines),)
+            body = (
+                List(
+                    tuple(ListItem(str(index), line) for index, line in enumerate(lines)),
+                    key=f"{self.key}.rows",
+                    markers=False,
+                ),
+            )
         else:
             body = controls.paged_lines(lines, "page", key=self.key, page=state.page, per=self.page_size)
         return stack(

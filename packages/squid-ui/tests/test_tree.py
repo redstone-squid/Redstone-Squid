@@ -6,9 +6,9 @@ import pytest
 
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives import Text
+from squid_ui.ext.discord.primitives import Text
+from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.runtime._tree import map_layout_children
-from squid_ui.target_types import DiscordTarget
 
 
 @dataclass(frozen=True, slots=True)

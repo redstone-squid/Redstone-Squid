@@ -26,7 +26,7 @@ from squid_ui.interactions import (
     Visibility,
 )
 from squid_ui.interactions.forms import FormIssue, FormLike, SubmitHandler
-from squid_ui.primitives.constraints import PageEvent
+from squid_ui.overflow import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree

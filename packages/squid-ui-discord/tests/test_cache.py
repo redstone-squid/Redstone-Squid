@@ -11,7 +11,7 @@ import pytest
 
 from squid_i18n import Text as DeferredText
 from squid_i18n import md, tr
-from squid_ui import Palette, Role, Tone, fallback, form, scene
+from squid_ui import Palette, Role, Tone, fallback, form
 from squid_ui.authoring.presentations import corresponds, losses, omit, ref
 from squid_ui.authoring.semantic import (
     ActionControl,
@@ -29,25 +29,18 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.content.text import Localization, Markup
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
+from squid_ui.ext.discord.navigation_controls import default_nav
+from squid_ui.ext.discord.primitives import Button, Code, Paginate, Panel, Row, Text, Variant, Variants
+from squid_ui.ext.html.capabilities import HtmlAdapterCapability
 from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.overflow import PageEvent
 from squid_ui.planning import PlanCache, PlanningSnapshot, plan
-from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.interaction_handlers import SelectChoices
-from squid_ui.planning.pagination.navigation import TurnPage, default_nav
+from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.result import PlanReuse
-from squid_ui.primitives import (
-    Button,
-    Code,
-    Paginate,
-    Panel,
-    Row,
-    Text,
-    Variant,
-    Variants,
-)
-from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime import PresentationState
 
 
@@ -77,9 +70,14 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
     second = plan(document, target=DISCORD_V2_DPY27, palette=Palette(brand=0x222222), cache=cache)
 
     assert not second.metrics.cache_hit
-    assert isinstance(first.scene.components_v2.children[0], scene.Panel)
-    assert isinstance(second.scene.components_v2.children[0], scene.Panel)
-    assert (first.scene.components_v2.children[0].accent, second.scene.components_v2.children[0].accent) == (
+    first_panel = first.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    second_panel = second.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(first_panel, discord_scene.Panel)
+    assert isinstance(second_panel, discord_scene.Panel)
+    assert (
+        first_panel.accent,
+        second_panel.accent,
+    ) == (
         0x111111,
         0x222222,
     )
@@ -89,19 +87,23 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
     cache = PlanCache()
     document = Variants(
         (
-            Variant((Text("rich"),), requires=frozenset({AdapterCapability.RENDER_HTML})),
+            Variant((Text("rich"),), requires=frozenset({HtmlAdapterCapability.RENDER_HTML})),
             Variant((Text("plain"),)),
         )
     )
     basic = sd.target_profile("test")
-    rich = sd.target_profile("rich", capabilities=frozenset({AdapterCapability.RENDER_HTML}))
+    rich = sd.target_profile("rich", capabilities=frozenset({HtmlAdapterCapability.RENDER_HTML}))
 
     first = plan(document, target=basic, cache=cache)
     second = plan(document, target=rich, cache=cache)
 
     assert not second.metrics.cache_hit
-    assert first.scene.components_v2.children == (scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),)
-    assert second.scene.components_v2.children == (scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),)
+    assert first.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("plain", markup=Markup.DISCORD_MARKDOWN),
+    )
+    assert second.scene.expect_body(discord_scene.ComponentsV2).children == (
+        discord_scene.Text("rich", markup=Markup.DISCORD_MARKDOWN),
+    )
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
@@ -144,7 +146,11 @@ def test_partition_hint_recertifies_the_selected_controls(monkeypatch) -> None:
     assert hit.metrics.partition_hint
     assert hit.metrics.target_evaluations > 0
     assert hit.scene == miss.scene
-    menu = next(node for node in hit.scene.components_v2.children if isinstance(node, scene.Select))
+    menu = next(
+        node
+        for node in hit.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
     assert all(route.handler is _second for route in hit.bindings[menu.action].routes.values())
 
 

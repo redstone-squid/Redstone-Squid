@@ -31,6 +31,7 @@ from typing import Any, cast
 import pytest
 
 from squid_ui import scene
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.messages.root import MessageRoot
 from squid_ui.ext.discord.preview import PREVIEW_CSS, DiscordPreviewRenderer
 from squid_ui.planning.result import PlanResult
@@ -83,7 +84,7 @@ class GalleryRecorder:
 
     def record(self, component: type, plan: PlanResult) -> None:
         """Keep one render, unless the same screen already produced an identical scene."""
-        if not isinstance(plan.scene.body, scene.ComponentsV2) or not component.__module__.startswith(
+        if not isinstance(plan.scene.body, discord_scene.ComponentsV2) or not component.__module__.startswith(
             self.module_prefix
         ):
             return
@@ -95,7 +96,7 @@ class GalleryRecorder:
             return
 
         # The body check above does not narrow the plan's type parameter.
-        v2_plan = cast(PlanResult[scene.ComponentsV2], plan)
+        v2_plan = cast(PlanResult[discord_scene.ComponentsV2], plan)
         try:
             preview, error = self._renderer.draw(v2_plan.scene, plan=v2_plan), None
         except Exception as caught:

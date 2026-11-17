@@ -18,11 +18,12 @@ from squid_reactivity.diagnostics import (
     observe_events,
 )
 from squid_reactivity.operations import Failed, Pending, Succeeded
-from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
+from squid_ui import ActionEvent, Component, DocumentLike, Reactive, state
 from squid_ui.ext.discord import Everyone, MessageRoot
+from squid_ui.ext.discord.primitives import Button, Row, Text
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest
-from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import (
     ActionDiscardedError,
     Discarded,

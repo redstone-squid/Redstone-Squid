@@ -4,9 +4,10 @@ from typing import override
 
 import squid_ui as sl
 from squid_ui.ext.discord import MessageRoot, Owner
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
-class Panel(sl.Component[sl.ComponentsV2Target]):
+class Panel(sl.Component[ComponentsV2Target]):
     @override
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (sl.section(sl.heading("Panel")),)

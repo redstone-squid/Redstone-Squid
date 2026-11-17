@@ -22,6 +22,7 @@ from squid_ui.authoring.semantic import (
     RoutedActionControl,
     RoutedChoices,
 )
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui_widgets import testing as wt
 from squid_ui_widgets.drivers import FormPresentingMachine
 
@@ -30,7 +31,7 @@ def _form() -> sl.forms.FormSpec:
     return sl.forms.FormSpec("Value", (sl.forms.TextField(key="value", label="Value"),))
 
 
-class Echo(sl.Component[sl.ComponentsV2Target]):
+class Echo(sl.Component[ComponentsV2Target]):
     """A component a machine may embed in its content."""
 
     @override
@@ -51,8 +52,8 @@ class Probe:
     def render(
         self,
         state: sp.TabsState,
-        controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
-    ) -> sl.DocumentLike[sl.ComponentsV2Target]:
+        controls: sp.MachineControls[sp.TabsState, ComponentsV2Target],
+    ) -> sl.DocumentLike[ComponentsV2Target]:
         content = controls.content([self.child] if self.child is not None else [sl.paragraph(state.selected)])
         # Mounted forms are layout nodes; routed forms belong inside action controls.
         trigger = controls.form(_form(), "edit", key="probe.edit", label="Edit")
@@ -99,8 +100,8 @@ class OptionalProbe:
     def render(
         self,
         state: str | None,
-        controls: sp.MachineControls[str | None, sl.ComponentsV2Target],
-    ) -> sl.DocumentLike[sl.ComponentsV2Target]:
+        controls: sp.MachineControls[str | None, ComponentsV2Target],
+    ) -> sl.DocumentLike[ComponentsV2Target]:
         del controls
         return sl.paragraph(repr(state))
 
@@ -274,7 +275,7 @@ class TestRouteDriverTransition:
     def test_it_applies_input_the_routed_shell_could_not_apply_at_render_time(self) -> None:
         """The host's half of the `input` phase: decode the state from the id, then apply the
         values that arrived with the interaction."""
-        driver: sp.RouteDriver[sp.TabsState, sl.ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
+        driver: sp.RouteDriver[sp.TabsState, ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
         machine = Probe()
 
         settled = driver.transition(machine, machine.initial_state, "pick", values=("two",))
@@ -282,7 +283,7 @@ class TestRouteDriverTransition:
         assert settled == sp.TabsState("two")
 
     def test_it_applies_a_submission_the_same_way(self) -> None:
-        driver: sp.RouteDriver[sp.TabsState, sl.ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
+        driver: sp.RouteDriver[sp.TabsState, ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
         machine = Probe()
 
         settled = driver.transition(machine, machine.initial_state, "edit", submitted={"value": "typed"})

@@ -13,8 +13,8 @@ from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.content.text import Localization
 from squid_ui.ext.discord.delivery import Messageable, Replyable
 from squid_ui.ext.discord.messages.payload import MessagePayload
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target
 
 type RequestSource = discord.Interaction[Any] | commands.Context[Any] | discord.Message | Replyable
 

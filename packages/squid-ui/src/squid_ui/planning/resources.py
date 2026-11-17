@@ -8,34 +8,31 @@ from making a layout appear to fit when it still contains too many components.
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from types import MappingProxyType
-from typing import Protocol, Self
+from typing import ClassVar, Protocol, Self
 
 from squid_ui.errors import LayoutInvariantError
 
 
-class Axis(StrEnum):
-    """One protocol resource measured using the target's counting rules.
+class Axis(str):
+    """An open resource name measured using a target's counting rules."""
 
-    DISPLAY_TEXT counts serialized component text in V2, including Markdown and
-    link destinations. It does not measure visual width or client-expanded text.
-    Only axes explicitly supported by a target can constrain a composition.
-    """
+    DISPLAY_TEXT: ClassVar[Axis]
+    COMPONENTS: ClassVar[Axis]
+    ATTACHMENTS: ClassVar[Axis]
+    ROWS: ClassVar[Axis]
+    CONTROLS: ClassVar[Axis]
 
-    DISPLAY_TEXT = "display_text"
-    CONTENT_TEXT = "content_text"
-    EMBED_TEXT = "embed_text"
-    COMPONENTS = "components"
-    ATTACHMENTS = "attachments"
-    EMBEDS = "embeds"
-    ROWS = "rows"
-    CONTROLS = "controls"
-    BLOCKS = "blocks"
+    @property
+    def value(self) -> str:
+        return str(self)
 
 
-TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
-"""Every built-in text axis, whichever target declares it."""
+Axis.DISPLAY_TEXT = Axis("display_text")
+Axis.COMPONENTS = Axis("components")
+Axis.ATTACHMENTS = Axis("attachments")
+Axis.ROWS = Axis("rows")
+Axis.CONTROLS = Axis("controls")
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +95,7 @@ class TargetLimits(Protocol):
     def digest(self) -> tuple[tuple[str, object], ...]: ...
 
 
-__all__ = ["EMPTY_COST", "TEXT_AXES", "Axis", "ResourceCost", "TargetLimits"]
+__all__ = ["EMPTY_COST", "Axis", "ResourceCost", "TargetLimits"]
 
 
 @dataclass(frozen=True, slots=True)

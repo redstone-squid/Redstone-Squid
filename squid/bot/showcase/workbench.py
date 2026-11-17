@@ -16,6 +16,8 @@ from squid.bot.ui import tr
 from squid_i18n import md_tr
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
+from squid_ui.ext.discord import primitives
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 _TAGS = (
     "Flush",
@@ -189,10 +191,10 @@ class Workbench(InspectablePanel):
         self.draft.close()
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         draft = self.draft
         heading = sl.heading(tr(t"layout-workbench-build-workbench = Build workbench"))
-        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
+        children: tuple[sl.ChildLike[ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(
                 tr(
                     t"layout-workbench-demo-description = A form, an undo stack, and a live "
@@ -312,12 +314,12 @@ class BuildPreview(InspectablePanel):
         self.history.clear()
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         build = self.draft.build
         tags = self.draft.tags.value
         count = 36 if build.oversized else 3
         heading = sl.heading(build.title)
-        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
+        children: tuple[sl.ChildLike[ComponentsV2Target, sd.Request], ...] = (
             sl.fields(
                 sl.field(tr(t"layout-workbench-dimensions = Dimensions"), build.dimensions),
                 sl.field(tr(t"layout-workbench-opening-time = Opening time"), f"{build.ticks} ticks"),
@@ -331,7 +333,7 @@ class BuildPreview(InspectablePanel):
                     f"#{i + 1:03} · {_BUILD_KINDS[i % len(_BUILD_KINDS)]} · {2 + i // 6}x{2 + i // 6} · {8 + i} ticks"
                     for i in range(count)
                 ),
-                overflow=sl.primitives.Paginate(key="records", per=4),
+                overflow=primitives.Paginate(key="records", per=4),
             ),
             sl.heading(tr(t"layout-workbench-toggle-tags = Add or remove tags")),
             sl.action_controls(

@@ -8,8 +8,9 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord
 import squid_ui_widgets as sp
-from squid_ui import scene
 from squid_ui.chrome import Chrome
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.selectors import query, select
 
@@ -84,8 +85,8 @@ def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
             waitlist="Queue", full="No seats", slot_count=lambda count, capacity: f"Seats {count}/{capacity}"
         ),
     )
-    text = [match.node.content for match in query(result.scene, select(scene.Text)).all()]
-    buttons = [match.node for match in query(result.scene, select(scene.RoutedButton)).all()]
+    text = [match.node.content for match in query(result.scene, select(discord_scene.Text)).all()]
+    buttons = [match.node for match in query(result.scene, select(discord_scene.RoutedButton)).all()]
 
     assert "### Tank — Seats 1/1" in text
     assert "No seats" in text
@@ -102,7 +103,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
         sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
         target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
-    button = query(result.scene, select(scene.Button)).all()[0].node
+    button = query(result.scene, select(discord_scene.Button)).all()[0].node
     await result.bindings[button.action].handler(
         sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
     )
@@ -120,12 +121,12 @@ def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
     with pytest.raises(ValueError, match="exactly one route"):
         sl.roster(placement, key="raid", routes={"tank": "raid:tank"})
 
-    class Child(sl.Component[sl.ComponentsV2Target]):
+    class Child(sl.Component[ComponentsV2Target]):
         @override
         def render(self):
             return sl.roster(placement, key="raid", on_join=join)
 
-    class Parent(sl.Component[sl.ComponentsV2Target]):
+    class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 

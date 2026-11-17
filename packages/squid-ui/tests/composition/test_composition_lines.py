@@ -9,16 +9,17 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.discord.primitives import nodes as native
+from squid_ui.ext.discord.target_types import DiscordAdapter, DiscordTarget
+from squid_ui.overflow import Alt, Condense, Drop, Never, Paginate, Truncate, alts
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
-from squid_ui.primitives import nodes as native
-from squid_ui.primitives.constraints import Alt, Condense, Drop, Never, Paginate, Truncate, alts
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-lines.discord", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
@@ -77,7 +78,7 @@ def test_region_pagination_precedes_static_spill_and_preserves_entry_order() -> 
         reconstructed.extend(
             line
             for node in page.scene.body.children
-            if isinstance(node, scene.Text)
+            if isinstance(node, discord_scene.Text)
             for line in node.content.splitlines()
             if line.startswith("entry-")
         )
@@ -227,7 +228,7 @@ def test_collection_replacement_has_one_source_without_inventing_line_correspond
 
 def test_collection_replacement_source_can_be_referenced_as_one_text_unit() -> None:
     source = native.Lines(("one", "two"), overflow=alts("short"))
-    choice = sl.Alternative[sl.DiscordTarget](
+    choice = sl.Alternative[DiscordTarget](
         sl.present_text(sl.ref("@0"), key="copy"), key="copy", fidelity=sl.equivalent()
     )
     node = sl.alternatives(

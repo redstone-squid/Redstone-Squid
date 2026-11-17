@@ -5,8 +5,8 @@ from statistics import median
 from time import perf_counter
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, PlanningSnapshot, plan
 from squid_ui.presentation import PresentationState
@@ -22,7 +22,7 @@ class Receiver:
 
 def run(scenario: str, enabled: bool, count: int = 60) -> tuple[float, int, int, int]:
     session = PresentationState()
-    snapshot = PlanningSnapshot[scene.ComponentsV2](enabled=enabled)
+    snapshot = PlanningSnapshot[discord_scene.ComponentsV2](enabled=enabled)
     paragraphs = tuple(sl.paragraph(f"Item {index}", key=str(index)) for index in range(12))
     handler = Receiver(0).handle
     samples: list[float] = []
@@ -37,7 +37,7 @@ def run(scenario: str, enabled: bool, count: int = 60) -> tuple[float, int, int,
     for index in range(count + 1):
         if scenario == "cold-start":
             session = PresentationState()
-            snapshot = PlanningSnapshot[scene.ComponentsV2](enabled=enabled)
+            snapshot = PlanningSnapshot[discord_scene.ComponentsV2](enabled=enabled)
         if scenario in ("callbacks", "leaf-edit"):
             children = paragraphs
             if scenario == "leaf-edit":

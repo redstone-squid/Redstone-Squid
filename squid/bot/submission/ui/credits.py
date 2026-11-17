@@ -11,6 +11,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.builds.domain.credits import Credit, CreditKind, CreditRole, read_credits
 from squid_ui.ext.discord.form_fields import EntityField
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.submission.ui.sections import AnswerWorkspace
@@ -29,7 +30,7 @@ def edit_credit(credit: Credit, name: str, role: CreditRole) -> Credit:
     return replace(credit, name=name, role=role)
 
 
-class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
     page: int = sl.state(0)
 
     def __init__(self, workspace: AnswerWorkspace, field_id: str) -> None:
@@ -37,11 +38,11 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.field_id = field_id
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         credits = tuple(read_credits(self.workspace.answers.get(self.field_id, [])))
         revision = self.workspace.revision
         page = min(self.page, max(0, (len(credits) - 1) // 5))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [sl.heading(tr(t"credits-title = Credits"))]
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [sl.heading(tr(t"credits-title = Credits"))]
         for index in range(page * 5, min(len(credits), (page + 1) * 5)):
             credit = credits[index]
             nodes.append(

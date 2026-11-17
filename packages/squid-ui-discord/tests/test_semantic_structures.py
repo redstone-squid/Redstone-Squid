@@ -26,6 +26,7 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
+from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -37,8 +38,14 @@ def test_single_choices_use_a_picker_at_both_sizes() -> None:
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
 
-    assert isinstance(plan(small, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
-    assert isinstance(plan(large, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
+    assert isinstance(
+        plan(small, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children[0],
+        discord_scene.Select,
+    )
+    assert isinstance(
+        plan(large, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children[0],
+        discord_scene.Select,
+    )
 
 
 def test_items_switch_from_overview_to_focused_content_through_session_state() -> None:
@@ -54,10 +61,13 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
     session.select("catalog", ("two",))
     focused = plan(document, target=DISCORD_V2_DPY27, session=session)
 
-    assert any(isinstance(node, scene.Select) for node in overview.scene.components_v2.children)
     assert any(
-        isinstance(node, scene.Text) and "second detail" in node.content
-        for node in focused.scene.components_v2.children
+        isinstance(node, discord_scene.Select)
+        for node in overview.scene.expect_body(discord_scene.ComponentsV2).children
+    )
+    assert any(
+        isinstance(node, discord_scene.Text) and "second detail" in node.content
+        for node in focused.scene.expect_body(discord_scene.ComponentsV2).children
     )
 
 
@@ -70,10 +80,12 @@ def test_details_disclosure_is_presentation_state() -> None:
     opened = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     assert not any(
-        isinstance(node, scene.Text) and "hidden body" in node.content for node in closed.scene.components_v2.children
+        isinstance(node, discord_scene.Text) and "hidden body" in node.content
+        for node in closed.scene.expect_body(discord_scene.ComponentsV2).children
     )
     assert any(
-        isinstance(node, scene.Text) and "hidden body" in node.content for node in opened.scene.components_v2.children
+        isinstance(node, discord_scene.Text) and "hidden body" in node.content
+        for node in opened.scene.expect_body(discord_scene.ComponentsV2).children
     )
 
 
@@ -88,7 +100,10 @@ def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
 def test_navigation_groups_six_destinations() -> None:
     document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6)))
 
-    assert isinstance(plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
+    assert isinstance(
+        plan(document, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children[0],
+        discord_scene.Select,
+    )
 
 
 def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
@@ -106,16 +121,28 @@ def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
     item_plan = plan(items, target=DISCORD_V2_DPY27, positions={"catalog.items": PagePosition(page=1)})
     navigation_plan = plan(navigation, target=DISCORD_V2_DPY27, positions={"tabs.destinations": PagePosition(page=1)})
 
-    choice_select = next(node for node in choice_plan.scene.components_v2.children if isinstance(node, scene.Select))
-    item_select = next(node for node in item_plan.scene.components_v2.children if isinstance(node, scene.Select))
+    choice_select = next(
+        node
+        for node in choice_plan.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
+    item_select = next(
+        node
+        for node in item_plan.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
+    )
     navigation_select = next(
-        node for node in navigation_plan.scene.components_v2.children if isinstance(node, scene.Select)
+        node
+        for node in navigation_plan.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
     )
     assert 1 <= len(choice_select.options) <= 25
     assert 1 <= len(item_select.options) <= 25
     first_items = plan(items, target=DISCORD_V2_DPY27)
     first_item_select = next(
-        node for node in first_items.scene.components_v2.children if isinstance(node, scene.Select)
+        node
+        for node in first_items.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
     )
     assert [option.value for option in (*first_item_select.options, *item_select.options)] == [
         str(i) for i in range(36)
@@ -123,7 +150,9 @@ def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
     assert 1 <= len(navigation_select.options) <= 25
     first_navigation = plan(navigation, target=DISCORD_V2_DPY27)
     first_select = next(
-        node for node in first_navigation.scene.components_v2.children if isinstance(node, scene.Select)
+        node
+        for node in first_navigation.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
     )
     assert [option.value for option in (*first_select.options, *navigation_select.options)] == [
         str(i) for i in range(36)
@@ -146,7 +175,11 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     second_page = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(second_page.session_updates)
     anchor = (
-        next(node for node in second_page.scene.components_v2.children if isinstance(node, scene.Select))
+        next(
+            node
+            for node in second_page.scene.expect_body(discord_scene.ComponentsV2).children
+            if isinstance(node, discord_scene.Select)
+        )
         .options[0]
         .value
     )
@@ -156,8 +189,8 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     replanned = plan(Items("catalog", inserted), target=DISCORD_V2_DPY27, session=session)
     values = {
         option.value
-        for node in replanned.scene.components_v2.children
-        if isinstance(node, scene.Select)
+        for node in replanned.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
         for option in node.options
     }
     assert anchor in values
@@ -168,8 +201,8 @@ def test_choices_minimum_zero_allows_deselecting_all() -> None:
 
     select = next(
         node
-        for node in plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children
-        if isinstance(node, scene.Select)
+        for node in plan(document, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Select)
     )
     assert select.min_values == 0
 
@@ -192,9 +225,14 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     table_scene = plan(table, target=DISCORD_V2_DPY27).scene
     media_scene = plan(media, target=DISCORD_V2_DPY27).scene
 
-    assert isinstance(table_scene.components_v2.children[0], scene.Text)
-    assert table_scene.components_v2.children[0].content == "Name: Alpha\nValue: 1"
-    galleries = [node for node in media_scene.components_v2.children if isinstance(node, scene.Gallery)]
+    table_text = table_scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(table_text, discord_scene.Text)
+    assert table_text.content == "Name: Alpha\nValue: 1"
+    galleries = [
+        node
+        for node in media_scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Gallery)
+    ]
     assert sum(len(gallery.items) for gallery in galleries) == 12
 
 
@@ -207,16 +245,16 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     )
 
     planned = plan(document, target=DISCORD_V2_DPY27).scene
-    panel = planned.components_v2.children[0]
+    panel = planned.expect_body(discord_scene.ComponentsV2).children[0]
 
-    assert isinstance(panel, scene.Panel)
+    assert isinstance(panel, discord_scene.Panel)
     assert panel.accent == 0x43B581
     lead = panel.children[0]
-    assert isinstance(lead, scene.Section)
+    assert isinstance(lead, discord_scene.Section)
     assert lead.texts[0].content == "## Title"
-    assert lead.accessory == scene.Thumbnail("https://example.invalid/lead.png")
-    assert panel.children[1] == scene.Text("body", markup=Markup.DISCORD_MARKDOWN)
-    assert panel.children[-1] == scene.Text("-# Submission ID: 5", markup=Markup.DISCORD_MARKDOWN)
+    assert lead.accessory == discord_scene.Thumbnail("https://example.invalid/lead.png")
+    assert panel.children[1] == discord_scene.Text("body", markup=Markup.DISCORD_MARKDOWN)
+    assert panel.children[-1] == discord_scene.Text("-# Submission ID: 5", markup=Markup.DISCORD_MARKDOWN)
 
 
 def test_nested_sections_flatten_inside_the_outer_discord_container() -> None:
@@ -264,13 +302,17 @@ def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> Non
         sl.aside("semantic", tone=sl.Tone.WARNING),
     )
 
-    panels = plan(
-        document,
-        target=DISCORD_V2_DPY27,
-        palette=sl.Palette(brand=0xABCDEF, warning=0x654321),
-    ).scene.components_v2.children
+    panels = (
+        plan(
+            document,
+            target=DISCORD_V2_DPY27,
+            palette=sl.Palette(brand=0xABCDEF, warning=0x654321),
+        )
+        .scene.expect_body(discord_scene.ComponentsV2)
+        .children
+    )
 
-    assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [
+    assert [panel.accent for panel in panels if isinstance(panel, discord_scene.Panel)] == [
         0xABCDEF,
         None,
         0x123456,
@@ -287,9 +329,17 @@ def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
         sl.block("outer after", accent=sl.Tone.INFO),
     )
 
-    panels = plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(info=0x111111)).scene.components_v2.children
+    panels = (
+        plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(info=0x111111))
+        .scene.expect_body(discord_scene.ComponentsV2)
+        .children
+    )
 
-    assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [0x111111, 0x222222, 0x111111]
+    assert [panel.accent for panel in panels if isinstance(panel, discord_scene.Panel)] == [
+        0x111111,
+        0x222222,
+        0x111111,
+    ]
 
 
 def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
@@ -298,10 +348,10 @@ def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
         (Fields(tuple(Field(str(index), f"Field {index}", "v" * 400, fallbacks=("short",)) for index in range(20))),),
     )
 
-    panel = plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0]
+    panel = plan(document, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children[0]
 
-    assert isinstance(panel, scene.Panel)
-    body = "\n".join(child.content for child in panel.children if isinstance(child, scene.Text))
+    assert isinstance(panel, discord_scene.Panel)
+    body = "\n".join(child.content for child in panel.children if isinstance(child, discord_scene.Text))
     assert all(f"Field {index}:" in body for index in range(20))
     assert "short" in body
 
@@ -317,12 +367,16 @@ def test_media_collects_assets_and_renders_attachment_previews(media_type: str) 
     assert len(result.scene.assets) == 1
     assert result.resources["asset:preview"] == asset
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene
-    gallery = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Gallery))
+    gallery = next(
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Gallery)
+    )
     assert gallery.items[0].asset_name == "preview.bin"
     assert any(
         item.url == "https://example.invalid/image.png"
-        for node in result.scene.components_v2.children
-        if isinstance(node, scene.Gallery)
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Gallery)
         for item in node.items
     )
     presentation = render_static(document)
@@ -370,8 +424,8 @@ def test_custom_role_marker_and_scoped_colour_are_resolved_before_scene_encoding
         sl.block(sl.status("Pending", tone=pending), accent=pending),
     )
     result = plan(document, target=DISCORD_V2_DPY27)
-    panel = result.scene.components_v2.children[0]
-    assert isinstance(panel, scene.Panel)
+    panel = result.scene.expect_body(discord_scene.ComponentsV2).children[0]
+    assert isinstance(panel, discord_scene.Panel)
     assert panel.accent == 0x123456
-    assert panel.children == (scene.Text("⏳ Pending", markup=Markup.DISCORD_MARKDOWN),)
+    assert panel.children == (discord_scene.Text("⏳ Pending", markup=Markup.DISCORD_MARKDOWN),)
     assert scene.Codec.loads(scene.Codec.dumps(result.scene)) == result.scene

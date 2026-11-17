@@ -18,6 +18,8 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.handlers import _HandlerBinder
+from squid_ui.native import NativeTraits
+from squid_ui.overflow import FIRST_PAGE
 from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.identity_cache import CacheStats, IdentityCache
@@ -26,8 +28,6 @@ from squid_ui.planning.offers.navigation import control_key, grouped_control_key
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import PlanMetrics, PlanReport, PlanResult
 from squid_ui.planning.semantic_index import SemanticGraph
-from squid_ui.primitives.constraints import FIRST_PAGE
-from squid_ui.primitives.nodes import Extension
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +228,10 @@ def prepare_action_allocation[BodyT: scene.Body](
         parent = unit.parent
         while parent is not None:
             ancestor = graph.units[parent]
-            if isinstance(ancestor.value, Alternatives | FallbackContent | Extension):
+            if (
+                isinstance(ancestor.value, Alternatives | FallbackContent)
+                or NativeTraits.of(ancestor.value).fallback is not None
+            ):
                 break
             parent = ancestor.parent
         else:

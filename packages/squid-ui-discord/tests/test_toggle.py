@@ -4,14 +4,15 @@ from collections.abc import Awaitable, Callable
 from typing import override
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.ext.discord import DISCORD_V2_DPY27
+from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
 from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning.result import PlanResult
-from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.expansion import render_component_tree
+from squid_ui.styles import ActionStyle
 
 
 class _Responder:
@@ -52,10 +53,14 @@ def _event(responder: _Responder | None = None) -> PressEvent:
     return PressEvent(Actor("7"), responder or _Responder(), context=None)
 
 
-def _button(result: PlanResult[scene.ComponentsV2]) -> scene.Button:
-    row = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Row))
+def _button(result: PlanResult[discord_scene.ComponentsV2]) -> discord_scene.Button:
+    row = next(
+        node
+        for node in result.scene.expect_body(discord_scene.ComponentsV2).children
+        if isinstance(node, discord_scene.Row)
+    )
     button = row.items[0]
-    assert isinstance(button, scene.Button)
+    assert isinstance(button, discord_scene.Button)
     return button
 
 
@@ -120,12 +125,12 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
 
 
 def test_toggle_key_is_prefixed_through_embed() -> None:
-    class Child(sl.Component[sl.ComponentsV2Target]):
+    class Child(sl.Component[ComponentsV2Target]):
         @override
         def render(self):
             return sl.toggle("Web", key="web")
 
-    class Parent(sl.Component[sl.ComponentsV2Target]):
+    class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 

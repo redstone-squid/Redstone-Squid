@@ -17,10 +17,10 @@ from squid_ui.ext.discord.request import Request
 from squid_ui.ext.discord.response import Abandoned, Presented, Rejected, ResponseOverrides, ResponseSpec, invoker_only
 from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
 from squid_ui.ext.discord.session_specs import SessionSpec
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tasks import anyio, task_is_within
-from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
