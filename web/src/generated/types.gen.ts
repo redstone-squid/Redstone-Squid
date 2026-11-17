@@ -524,7 +524,7 @@ export type DoorRangeResult = {
  */
 export type DoorRecordEvidence = {
     schema_version?: 1;
-    calculator_version?: 'door-point-1';
+    calculator_version?: 'door-point-1' | 'door-point-2';
     evaluation: LiveDoorRecord;
     sources: Array<DoorExpansionSource>;
 };
@@ -1391,9 +1391,8 @@ export type PaperChallengeExchangeRequest = {
  * UNRESOLVED means the source makes a claim that does not settle this size:
  * the size lies beyond an unknown bound, or the opening expressions use syntax
  * the normalizer cannot invert. UNMAPPED means the opening width or height is absent,
- * so the source never says which sizes the configuration has. An unresolved
- * configuration might hold a record and blocks an official result; an unmapped
- * one makes no claim and cannot compete anywhere.
+ * so the source never says which sizes the configuration has. Only SUPPORTED
+ * proves membership at this opening; callers decide how to handle uncertainty.
  *
  */
 export type PointStatus = 'supported' | 'outside_domain' | 'unresolved' | 'unmapped';
