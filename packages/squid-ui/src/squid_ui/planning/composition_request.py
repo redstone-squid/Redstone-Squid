@@ -11,6 +11,7 @@ from squid_ui.planning.composition import OccurrenceId
 
 if TYPE_CHECKING:
     from squid_ui.authoring.document import DocumentLike
+    from squid_ui.planning.cache import PlanCache
     from squid_ui.planning.request import PlanRequest
     from squid_ui.planning.result import PlanResult
 
@@ -49,4 +50,16 @@ class CompositionPlanner[RenderTargetT, BodyT: scene.Body](Protocol):
 
     def plan[AdapterT](
         self, rendered: DocumentLike[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]
+    ) -> PlanResult[BodyT]: ...
+
+
+class TargetComposition[RenderTargetT, BodyT: scene.Body](Protocol):
+    """Bound target rules whose internal payload types stay within their implementation."""
+
+    def plan[AdapterT](
+        self,
+        rendered: DocumentLike[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions,
+        cache: PlanCache[BodyT] | None = None,
     ) -> PlanResult[BodyT]: ...

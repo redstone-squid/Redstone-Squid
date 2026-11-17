@@ -21,6 +21,7 @@ from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.ext.discord.planning.composition_classic import ClassicCompositionRules
 from squid_ui.ext.discord.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.ext.discord.planning.discord_dialect import SceneBindings
+from squid_ui.ext.discord.planning.input import ClassicInput
 from squid_ui.ext.discord.planning.measurement.model import (
     MeasuredCard,
     MeasuredContent,
@@ -32,6 +33,8 @@ from squid_ui.ext.discord.planning.measurement.solver import (
     MeasuredLayout,
     measure,
 )
+from squid_ui.planning.composition_planner import RuleComposition
+from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -40,7 +43,6 @@ from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
-from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Never
 from squid_ui.primitives.nodes import (
     Break,
@@ -407,9 +409,12 @@ class ClassicDialect:
         return None
 
     def input_policy(self, limits: ClassicLimits) -> InputPolicy:
-        return InputPolicy(
-            max(limits.content, limits.embeds.description), native_types=frozenset({primitive.Text, primitive.Card})
-        )
+        return InputPolicy(max(limits.content, limits.embeds.description), native=ClassicInput)
+
+    def composer[R](
+        self, document: DocumentLike[R], limits: ClassicLimits
+    ) -> TargetComposition[R, scene.ClassicMessage]:
+        return RuleComposition(self.rules(document, limits))
 
     def rules[R](self, document: DocumentLike[R], limits: ClassicLimits) -> ClassicCompositionRules[R, object]:
         return ClassicCompositionRules[R, object](limits)

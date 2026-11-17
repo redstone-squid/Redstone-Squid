@@ -25,7 +25,7 @@ from squid_ui.planning.composition import (
     WorkBudget,
     build_composition,
 )
-from squid_ui.planning.composition_request import CompositionOptions
+from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
@@ -279,6 +279,24 @@ class AutomaticComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT
         return _plan(rendered, request, self.rules, self.options.selections, self.options)
 
 
+@dataclass(frozen=True, slots=True)
+class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, PreparationT](
+    TargetComposition[RenderTargetT, BodyT]
+):
+    """Keep a dialect's payload, resource, and preparation types bound through planning."""
+
+    rules: TargetRules[RenderTargetT, object, PayloadT, ResourceT, BodyT, PreparationT]
+
+    def plan[AdapterT](
+        self,
+        rendered: DocumentLike[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions,
+        cache: PlanCache[BodyT] | None = None,
+    ) -> PlanResult[BodyT]:
+        return _plan(rendered, request, self.rules, options.selections, options, cache)
+
+
 def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
@@ -294,6 +312,4 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     if not options.automatic or has_routed_page(rendered):
         cache = None
     effective = request.target.reserve(request.reservation)
-    return _plan(
-        rendered, request, effective.dialect.rules(rendered, effective.limits), options.selections, options, cache
-    )
+    return effective.dialect.composer(rendered, effective.limits).plan(rendered, request, options, cache)

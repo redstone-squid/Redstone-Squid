@@ -15,6 +15,7 @@ from squid_ui.ext.discord.limits import LIMITS, Axis, V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.ext.discord.planning.discord_dialect import SceneBindings, require_gallery_item
+from squid_ui.ext.discord.planning.input import V2Input
 from squid_ui.ext.discord.planning.measurement.model import (
     MeasuredPanel,
     MeasuredSection,
@@ -27,6 +28,8 @@ from squid_ui.ext.discord.planning.measurement.solver import (
     MeasuredLayout,
     measure,
 )
+from squid_ui.planning.composition_planner import RuleComposition
+from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -35,7 +38,6 @@ from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
-from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -395,9 +397,10 @@ class V2Dialect:
         return None
 
     def input_policy(self, limits: V2Limits) -> InputPolicy:
-        return InputPolicy(
-            limits.total_text, character_axis=True, native_types=frozenset({primitive.Text, primitive.Panel})
-        )
+        return InputPolicy(limits.total_text, character_axis=True, native=V2Input)
+
+    def composer[R](self, document: DocumentLike[R], limits: V2Limits) -> TargetComposition[R, scene.ComponentsV2]:
+        return RuleComposition(self.rules(document, limits))
 
     def rules[R](self, document: DocumentLike[R], limits: V2Limits) -> V2CompositionRules[R, object]:
         return V2CompositionRules[R, object](limits)

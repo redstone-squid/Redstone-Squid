@@ -9,6 +9,8 @@ from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
 from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.composition_planner import RuleComposition
+from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.pagination.navigation import PlannedNav, page_select_nav
 from squid_ui.planning.resources import Axis
@@ -64,6 +66,9 @@ class HtmlDialect:
 
     def input_policy(self, limits: HtmlLimits) -> InputPolicy:
         return InputPolicy(character_axis=True, budget_ladder=True)
+
+    def composer[R](self, document: DocumentLike[R], limits: HtmlLimits) -> TargetComposition[R, scene.HtmlBody]:
+        return RuleComposition(self.rules(document, limits))
 
     def rules[R](self, document: DocumentLike[R], limits: HtmlLimits) -> HtmlCompositionRules[R, object]:
         return HtmlCompositionRules[R, object]()

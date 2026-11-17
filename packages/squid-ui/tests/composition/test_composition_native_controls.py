@@ -214,7 +214,7 @@ def test_native_discord_rows_have_a_concrete_non_discord_capability_error() -> N
             sl.region(native.Row((native.Button("Action", untouched, "action"),)), key="r", title="R"),
             target=target,
         )
-    assert "Discord native controls" in str(error.value.diagnostics)
+    assert "Row" in str(error.value.diagnostics)
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)

@@ -33,6 +33,8 @@ from squid_ui.ext.slack.limits import (
     SlackModalLimits as SlackModalLimits,
 )
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.composition_planner import RuleComposition
+from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.planning.target import Target
@@ -72,6 +74,11 @@ class SlackMessageDialect:
     def input_policy(self, limits: SlackMessageLimits) -> InputPolicy:
         return InputPolicy(limits.components.section_text)
 
+    def composer[R](
+        self, document: DocumentLike[R], limits: SlackMessageLimits
+    ) -> TargetComposition[R, scene.SlackMessage]:
+        return RuleComposition(self.rules(document, limits))
+
     def rules[R](
         self, document: DocumentLike[R], limits: SlackMessageLimits
     ) -> SlackCompositionRules[R, object, scene.SlackMessage]:
@@ -95,6 +102,11 @@ class SlackModalDialect:
 
     def input_policy(self, limits: SlackModalLimits) -> InputPolicy:
         return InputPolicy(inspect=False)
+
+    def composer[R](
+        self, document: DocumentLike[R], limits: SlackModalLimits
+    ) -> TargetComposition[R, scene.SlackModalView]:
+        return RuleComposition(self.rules(document, limits))
 
     def rules[R](
         self, document: DocumentLike[R], limits: SlackModalLimits
@@ -121,6 +133,11 @@ class SlackHomeDialect:
 
     def input_policy(self, limits: SlackHomeLimits) -> InputPolicy:
         return InputPolicy(limits.components.section_text)
+
+    def composer[R](
+        self, document: DocumentLike[R], limits: SlackHomeLimits
+    ) -> TargetComposition[R, scene.SlackHomeView]:
+        return RuleComposition(self.rules(document, limits))
 
     def rules[R](
         self, document: DocumentLike[R], limits: SlackHomeLimits
