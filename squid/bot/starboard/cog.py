@@ -27,7 +27,7 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.posts.domain import starboard_entry_key
+from squid.posts.domain import StarboardEntryKey
 from squid.starboard.models import OriginMessage
 from squid_ui.ext.discord.i18n import to_locale_str
 
@@ -200,7 +200,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """
         del force
         starboard_id, origin_message_id = key
-        await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
+        await self.bot.refresh_posts("starboard_entry", str(StarboardEntryKey(starboard_id, origin_message_id)))
 
     @sd.command(
         name=to_locale_str(tr(t"command-starboard-name = starboard")),

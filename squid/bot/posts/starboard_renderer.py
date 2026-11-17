@@ -11,7 +11,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.starboard.render import starboard_layout
-from squid.posts.domain import ResourceKind
+from squid.posts.domain import ResourceKind, StarboardEntryKey
 from squid.starboard.domain import entry_should_be_posted
 
 if TYPE_CHECKING:
@@ -33,8 +33,8 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
     @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
-        starboard_id, _, origin_message_id = resource_key.partition(":")
-        state = await self.bot.services.starboards.entry_state(int(starboard_id), int(origin_message_id))
+        key = StarboardEntryKey.parse(resource_key)
+        state = await self.bot.services.starboards.entry_state(key.starboard_id, key.origin_message_id)
         if state is None:
             return None
 
@@ -77,8 +77,8 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     @override
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         """Add the board's enabled baseline reactions to a newly sent mirror."""
-        starboard_id, _, origin_message_id = resource_key.partition(":")
-        state = await self.bot.services.starboards.entry_state(int(starboard_id), int(origin_message_id))
+        key = StarboardEntryKey.parse(resource_key)
+        state = await self.bot.services.starboards.entry_state(key.starboard_id, key.origin_message_id)
         if state is None:
             return
         for item in state.config.emojis:
@@ -98,6 +98,6 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
 def _unsafe_nsfw(source: discord.abc.Messageable, message_destination: GuildMessageable) -> bool:
     """Whether mirroring would move NSFW content into a channel that is not marked so."""
-    source_nsfw = bool(getattr(source, "is_nsfw", lambda: False)())
-    destination_nsfw = bool(getattr(message_destination, "is_nsfw", lambda: False)())
+    source_nsfw = isinstance(source, GuildMessageable) and source.is_nsfw()
+    destination_nsfw = message_destination.is_nsfw()
     return source_nsfw and not destination_nsfw

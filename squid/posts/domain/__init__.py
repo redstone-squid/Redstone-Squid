@@ -4,14 +4,14 @@ from squid.posts.domain.models import (
     PostReference,
     PostTarget,
     ResourceKind,
+    StarboardEntryKey,
     Surface,
-    starboard_entry_key,
 )
 
 __all__ = [
     "PostReference",
     "PostTarget",
     "ResourceKind",
+    "StarboardEntryKey",
     "Surface",
-    "starboard_entry_key",
 ]
