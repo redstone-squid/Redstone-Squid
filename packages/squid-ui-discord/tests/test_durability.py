@@ -1,12 +1,10 @@
-"""Versioned snapshots and fenced durable-session store contracts."""
+"""Versioned Discord component snapshots and migrations."""
 
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import replace
-from pathlib import Path
 from typing import cast, override
 
-import anyio
 import pytest
 
 import squid_ui as sl
@@ -15,12 +13,9 @@ from squid_ui.ext.discord import Everyone, MessageRoot, SessionKey
 from squid_ui.ext.discord.durability import (
     ComponentRegistry,
     ComponentState,
-    DurableSessionStore,
-    MemorySessionStore,
     MessageRootState,
     MessageRootStateCodec,
     MessageRootStateError,
-    SQLiteSessionStore,
     encode_session_scope,
     migrate_component_state,
 )
@@ -66,120 +61,6 @@ def test_custom_session_scope_encoding_is_canonical_and_finite() -> None:
         encode_session_scope(SessionKey.custom("panel", float("nan")))
     with pytest.raises(MessageRootStateError, match="value is malformed"):
         decode_session_key({"name": "panel", "scope": {"type": "custom", "value": float("inf")}})
-
-
-def _session_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
-    if kind == "memory":
-        return MemorySessionStore(clock=clock)
-    return SQLiteSessionStore(path, table_name="durable_sessions", clock=clock)
-
-
-async def _publish(
-    store: DurableSessionStore,
-    *,
-    key: str,
-    scope: str = "scope",
-    owner: str = "writer",
-    victims: tuple[str, ...] = (),
-):
-    reservation = await store.reserve(scope, owner, 10.0)
-    assert reservation is not None
-    token = await store.commit(
-        reservation,
-        key=key,
-        snapshot_payload=f"snapshot:{key}",
-        record_payload=f"record:{key}",
-        victims=victims,
-        lease_seconds=10.0,
-    )
-    assert token is not None
-    return token
-
-
-@pytest.mark.parametrize("kind", ["memory", "sqlite"])
-async def test_fenced_session_store_contract(kind: str, tmp_path: Path) -> None:
-    now = [100.0]
-    store = _session_store(kind, tmp_path / "sessions.sqlite3", lambda: now[0])
-
-    assert await store.load("missing") is None
-    first = await _publish(store, key="first", owner="alpha")
-    second = await _publish(store, key="second", owner="alpha")
-    assert tuple(record.key for record in await store.list()) == ("first", "second")
-    assert await store.release(first)
-    assert await store.release(second)
-
-    alpha = await store.claim("first", "alpha", 10.0)
-    assert alpha is not None
-    assert await store.claim("first", "beta", 10.0) is None
-    now[0] = 110.1
-    beta = await store.claim("first", "beta", 10.0)
-    assert beta is not None
-    assert not await store.renew(alpha, 10.0)
-    assert not await store.save(alpha, "stale", "stale")
-    assert not await store.delete(alpha)
-    assert await store.save(beta, "replacement snapshot", "replacement record")
-    loaded = await store.load("first")
-    assert loaded is not None and loaded.record_payload == "replacement record"
-    assert await store.delete(beta)
-    assert await store.load("first") is None
-
-
-@pytest.mark.parametrize("kind", ["memory", "sqlite"])
-async def test_admission_atomically_retires_victims_and_fences_their_writers(kind: str, tmp_path: Path) -> None:
-    store = _session_store(kind, tmp_path / "sessions.sqlite3", lambda: 100.0)
-    victim = await _publish(store, key="victim")
-    newcomer = await _publish(store, key="newcomer", victims=("victim",))
-
-    assert await store.load("victim") is None
-    assert not await store.save(victim, "stale", "stale")
-    assert await store.load("newcomer") is not None
-    assert await store.renew(newcomer, 10.0)
-
-
-async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
-    now = [100.0]
-    store = SQLiteSessionStore(tmp_path / "sessions.sqlite3", clock=lambda: now[0])
-    stale = await store.reserve("scope", "first", 10.0)
-    assert stale is not None
-    now[0] = 110.1
-    current = await store.reserve("scope", "second", 10.0)
-    assert current is not None
-
-    assert (
-        await store.commit(
-            stale,
-            key="stale",
-            snapshot_payload="snapshot",
-            record_payload="record",
-            victims=(),
-            lease_seconds=10.0,
-        )
-        is None
-    )
-    assert await store.inspect(current) == ()
-
-
-async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
-    path = tmp_path / "sessions.sqlite3"
-    writer = SQLiteSessionStore(path)
-    token = await _publish(writer, key="session")
-    assert await writer.release(token)
-    contenders = [SQLiteSessionStore(path), SQLiteSessionStore(path)]
-    results: list[bool] = []
-
-    async def claim(store: SQLiteSessionStore, owner: str) -> None:
-        results.append(await store.claim("session", owner, 30.0) is not None)
-
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(claim, contenders[0], "first")
-        tasks.start_soon(claim, contenders[1], "second")
-
-    assert sorted(results) == [False, True]
-
-
-def test_session_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="SQL identifier"):
-        SQLiteSessionStore(tmp_path / "sessions.sqlite3", table_name="snapshots; DROP TABLE users")
 
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:

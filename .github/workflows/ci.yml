@@ -567,6 +567,9 @@ jobs:
       - name: Run integration tests
         run: uv run --locked pytest tests/integration --no-cov
 
+      - name: Run storage backend contracts
+        run: uv run --locked pytest packages/squid-storage/tests --storage-postgres --no-cov
+
       - name: Minimize uv cache
         if: always()
         run: uv cache prune --ci
