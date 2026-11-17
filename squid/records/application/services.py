@@ -114,7 +114,7 @@ class RecordComputationService:
         kinds: Sequence[BuildKind],
         lease: RecomputeLease | None = None,
     ) -> RebuildSummary:
-        snapshots: list[tuple[int, RecordSnapshot]] = []
+        snapshots: list[RecordSnapshot] = []
         async with self._uow_factory() as uow:
             await uow.record_candidates.begin_computation()
             revision = await uow.records.active_rules_revision_id()
@@ -133,15 +133,12 @@ class RecordComputationService:
                         captured_at=datetime.now(UTC),
                         input_generation=generation,
                     )
-                    snapshot_id = await uow.records.save_snapshot(snapshot)
-                    # Match the persisted JSON representation before arithmetic.
-                    replay = RecordSnapshot.model_validate_json(snapshot.model_dump_json())
-                    snapshots.append((snapshot_id, replay))
+                    snapshots.append(snapshot)
             await uow.commit()
 
-        batches = [(snapshot_id, await self._compute_snapshot(snapshot)) for snapshot_id, snapshot in snapshots]
+        batches = [(snapshot, await self._compute_snapshot(snapshot)) for snapshot in snapshots]
         async with self._uow_factory() as uow:
-            run_ids = tuple([await uow.records.activate_snapshot(snapshot_id, batch) for snapshot_id, batch in batches])
+            run_ids = tuple([await uow.records.activate_snapshot(snapshot, batch) for snapshot, batch in batches])
             if lease is not None:
                 await uow.records.complete_recompute(lease)
             await uow.commit()
@@ -159,7 +156,7 @@ class RecordComputationService:
         return await anyio.to_thread.run_sync(self.compute_snapshot, snapshot, limiter=self._compute_limiter)
 
     def compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
-        """Calculate one scope using only detached, replayable inputs."""
+        """Calculate one scope using only detached in-memory inputs."""
         rules_revision_id = snapshot.rules_revision_id
         kind = snapshot.kind
         source = snapshot.sources

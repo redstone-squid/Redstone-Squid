@@ -53,7 +53,6 @@ from squid.records.models import (
     FacetKind,
     MaterializationSource,
     RecordInputGeneration,
-    RecordInputSnapshot,
     RecordRecomputeQueueItem,
     RecordSettings,
     RecordTitle,
@@ -276,13 +275,7 @@ class PostgresRecordRepository:
             )
         ).scalar_one()
 
-    async def save_snapshot(self, snapshot: RecordSnapshot) -> int:
-        stored = RecordInputSnapshot(document=snapshot.model_dump(mode="json"))
-        self._session().add(stored)
-        await self._session().flush()
-        return stored.id
-
-    async def activate_snapshot(self, snapshot_id: int, batch: ComputationBatch) -> int:
+    async def activate_snapshot(self, snapshot: RecordSnapshot, batch: ComputationBatch) -> int:
         """Publish only if no newer input generation has already been checked.
 
         Source edits during arithmetic are allowed. Their queue token remains
@@ -294,11 +287,6 @@ class PostgresRecordRepository:
         await session.execute(
             select(func.pg_advisory_xact_lock_shared(func.hashtextextended("record-rules-revision-activation", 0)))
         )
-        stored = await session.get(RecordInputSnapshot, snapshot_id)
-        if stored is None:
-            msg = "Missing record input snapshot."
-            raise DataIntegrityError(msg)
-        snapshot = RecordSnapshot.model_validate(stored.document)
         if (snapshot.kind, snapshot.version_id, snapshot.rules_revision_id) != (
             batch.kind,
             batch.version_id,
@@ -330,9 +318,6 @@ class PostgresRecordRepository:
         run_id = await self.activate(batch)
         run = await session.get(ComputationRun, run_id)
         assert run is not None
-        if run.input_snapshot_id is None:
-            run.input_snapshot_id = snapshot_id
-        run.checked_snapshot_id = snapshot_id
         run.checked_generation = snapshot.input_generation
         await session.flush()
         return run_id

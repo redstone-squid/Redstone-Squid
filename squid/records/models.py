@@ -235,21 +235,6 @@ class RecordInputGeneration(Base, kw_only=True):
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, server_default=text("1"))
 
 
-class RecordInputSnapshot(Base, kw_only=True):
-    """Immutable concrete inputs saved before arithmetic starts."""
-
-    __tablename__ = "record_input_snapshots"
-    __table_args__ = (
-        CheckConstraint(
-            "(jsonb_typeof(document) = 'object' AND document->'schema_version' = '1'::jsonb) IS TRUE",
-            name="record_input_snapshots_version_check",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
-
-
 class ComputationRun(Base, kw_only=True):
     """A computation attempt for one build kind and version, including its publication state."""
 
@@ -295,12 +280,6 @@ class ComputationRun(Base, kw_only=True):
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     error: Mapped[str | None] = mapped_column(Text, default=None)
-    input_snapshot_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("record_input_snapshots.id", ondelete="RESTRICT"), default=None
-    )
-    checked_snapshot_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("record_input_snapshots.id", ondelete="RESTRICT"), default=None
-    )
     checked_generation: Mapped[int | None] = mapped_column(BigInteger, default=None)
     publication_fingerprint: Mapped[str | None] = mapped_column(Text, default=None)
     last_checked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

@@ -9,7 +9,7 @@ from squid.records.domain import BuildKind, Candidate, DoorCategory
 from squid.records.domain.models import FacetKind
 
 
-def test_snapshot_json_preserves_numeric_and_text_facets_and_results() -> None:
+def test_captured_inputs_preserve_facet_types_and_compute_deterministically() -> None:
     numeric = CandidateFacet(
         1,
         FacetKind.RESTRICTION,
@@ -38,10 +38,7 @@ def test_snapshot_json_preserves_numeric_and_text_facets_and_results() -> None:
         ),
     )
 
-    replay = RecordSnapshot.model_validate_json(snapshot.model_dump_json())
-
-    assert replay == snapshot
-    assert isinstance(replay.sources[0].restrictions[0].assigned_value, Decimal)
-    assert isinstance(replay.sources[0].restrictions[1].assigned_value, str)
+    assert isinstance(snapshot.sources[0].restrictions[0].assigned_value, Decimal)
+    assert isinstance(snapshot.sources[0].restrictions[1].assigned_value, str)
     service = RecordComputationService(uow_factory=Mock())
-    assert service.compute_snapshot(replay) == service.compute_snapshot(snapshot)
+    assert service.compute_snapshot(snapshot) == service.compute_snapshot(snapshot)

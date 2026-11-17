@@ -251,6 +251,7 @@ def test_migrations_create_schema_without_drift(
     assert retirement_rebuild_queued is True
     assert set(queue_health_before) == {
         "discord_sync",
+        "door_range_recomputation",
         "domain_events.core",
         "domain_events.discord",
         "record_recomputation",

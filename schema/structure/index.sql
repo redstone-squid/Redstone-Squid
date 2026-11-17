@@ -34,7 +34,6 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/FUNCTIONS/publish_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_door_range_snapshot_mutation.sql
-\ir public/TRIGGER_FUNCTIONS/reject_record_input_snapshot_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
 \ir public/FUNCTIONS/upsert_discord_sync_request.sql
 \ir public/FUNCTIONS/upsert_search_projection_request.sql
@@ -134,8 +133,6 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/record_computation_runs.sql
 \ir public/SEQUENCES/record_computation_runs_id_seq.sql
 \ir public/TABLES/record_input_generations.sql
-\ir public/TABLES/record_input_snapshots.sql
-\ir public/SEQUENCES/record_input_snapshots_id_seq.sql
 \ir public/TABLES/record_recompute_queue.sql
 \ir public/SEQUENCES/record_recompute_queue_id_seq.sql
 \ir public/TABLES/record_settings.sql

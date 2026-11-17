@@ -101,13 +101,12 @@ class FakeRuns:
     """Capture computed batches and supply the configured record queries.
 
     RecordScope copies this state and publishes it on commit. Failed publication
-    leaves batches unchanged but retains captured snapshots. Queue methods record
+    leaves batches unchanged. Queue methods record
     calls without enforcing claim-token ownership.
     """
 
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
-        self.snapshots: dict[int, RecordSnapshot] = {}
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
         self.requested_titles: dict[str, dict[BaseTitle, FormattedTitle]] = {}
         self.definition_identities: dict[int, CategoryIdentity] = {}
@@ -131,13 +130,7 @@ class FakeRuns:
     async def input_generation(self, kind: BuildKind) -> int:
         return 1
 
-    async def save_snapshot(self, snapshot: RecordSnapshot) -> int:
-        snapshot_id = len(self.snapshots) + 1
-        self.snapshots[snapshot_id] = snapshot
-        return snapshot_id
-
-    async def activate_snapshot(self, snapshot_id: int, batch: ComputationBatch) -> int:
-        assert snapshot_id in self.snapshots
+    async def activate_snapshot(self, snapshot: RecordSnapshot, batch: ComputationBatch) -> int:
         return await self.activate(batch)
 
     async def activate(self, batch: ComputationBatch) -> int:

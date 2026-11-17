@@ -1,7 +1,7 @@
 # Record recomputation
 
 Status: implemented with the simpler design below. Database concurrency tests cover
-snapshot publication ordering and changes arriving during computation.
+publication ordering for captured inputs and changes arriving during computation.
 
 ## Behavior
 
@@ -16,7 +16,7 @@ fixed height and depth. They use the same candidate rules, but publish independe
 - Keep unchanged publications, track successful check time separately, and expose
   pending refreshes. Meaningful evidence changes count even when holders stay the same.
 - Concrete kinds and individual registered ranges retry independently.
-- Keep superseded runs and immutable snapshots. Notifications still read previous runs.
+- Keep superseded runs and published range evidence. Notifications still read previous runs.
 
 ## Simplifications made during implementation
 
@@ -47,12 +47,11 @@ remain automatically refreshed.
 `RecordComputationService` performs three phases:
 
 1. In a repeatable-read transaction, read the rules revision, kind generation,
-   confirmed candidates, and requested categories. Save a versioned input snapshot
-   and commit. Numeric taxonomy values survive JSON round trips as decimals; text
-   that happens to look numeric stays text.
-2. Compute from the saved representation in a bounded worker thread with no database
-   transaction or connection held. Capture time supplies evaluation time, so replay
-   does not read the clock. Cancellation retains the thread's capacity token until
+   confirmed candidates, and requested categories. Capture detached inputs in a
+   frozen in-memory dataclass and close the transaction.
+2. Compute from those inputs in a bounded worker thread with no database
+   transaction or connection held. Capture time supplies evaluation time, so
+   computation does not read the clock. Cancellation retains the thread's capacity token until
    arithmetic finishes.
 3. In a short read-committed transaction, verify the rules revision remains active,
    lock the kind/version publication, and compare input generations. If a newer
@@ -66,9 +65,11 @@ remove the newer request. A late computation cannot replace a publication checke
 against a higher input generation. A crash commits publication and acknowledgement
 together or neither.
 
-The original publication snapshot remains attached to its run. A separate pointer
-records the inputs of the latest successful check, including checks that changed
-nothing. Snapshot rows reject updates and deletes.
+Concrete inputs live only for the duration of the attempt. Successful publication
+records the checked generation and time, including checks that changed nothing.
+A crash discards the inputs and retries from fresh data. Exact replay of historical
+concrete calculations is not supported; previous published results remain available.
+Range snapshots remain persisted because published range results use their evidence.
 
 Worker claims contain one kind, so failure of doors does not roll back extender
 publication. Staff rebuilding both kinds still publishes their concrete scopes in
@@ -94,7 +95,7 @@ Do not mix old record writers with the new publication path during rollout. Olde
 code does not write input generations on publications and cannot enforce the new
 ordering guarantee. Stop old worker, bot, and API record writes, migrate, and enable
 the new writers. The migration queues both kinds so existing publications receive
-snapshot provenance on their next check.
+generation metadata on their next check.
 
 ## Version selection and ranges
 
@@ -144,7 +145,7 @@ also retain the latest attempt and its diagnostics independently of the active r
 
 ## Validation and operational limits
 
-Focused tests cover immutable snapshots, decimal/text round trips, out-of-order
+Focused tests cover immutable range snapshots, captured input types, out-of-order
 concrete completion, edits during arithmetic, independent failures, unchanged
 publication IDs, source-evidence changes, current-pin races, unset pins, queue token
 replacement, and taxonomy invalidation. PostgreSQL tests exercise the real migration

@@ -10,8 +10,6 @@ CREATE TABLE public.record_computation_runs (
     error text,
     publication_fingerprint text,
     last_checked_at timestamp with time zone,
-    input_snapshot_id bigint,
-    checked_snapshot_id bigint,
     checked_generation bigint,
     CONSTRAINT record_computation_runs_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_computation_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
@@ -27,12 +25,6 @@ CREATE UNIQUE INDEX record_computation_runs_one_active_idx ON public.record_comp
 CREATE INDEX record_computation_runs_started_idx ON public.record_computation_runs USING btree (started_at);
 
 CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
-
-ALTER TABLE ONLY public.record_computation_runs
-    ADD CONSTRAINT record_computation_runs_checked_snapshot_id_fkey FOREIGN KEY (checked_snapshot_id) REFERENCES public.record_input_snapshots(id) ON DELETE RESTRICT;
-
-ALTER TABLE ONLY public.record_computation_runs
-    ADD CONSTRAINT record_computation_runs_input_snapshot_id_fkey FOREIGN KEY (input_snapshot_id) REFERENCES public.record_input_snapshots(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.record_computation_runs
     ADD CONSTRAINT record_computation_runs_rules_revision_id_fkey FOREIGN KEY (rules_revision_id) REFERENCES public.rules_revisions(id) ON DELETE RESTRICT;

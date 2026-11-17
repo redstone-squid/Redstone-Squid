@@ -1,4 +1,4 @@
-"""Publication ordering and catch-up use saved inputs, not worker completion order."""
+"""Publication ordering and catch-up use captured inputs, not worker completion order."""
 
 from decimal import Decimal
 from functools import partial
@@ -16,7 +16,7 @@ from squid.records.application.models import ComputationBatch, RebuildSummary
 from squid.records.application.services import RecordComputationService
 from squid.records.application.snapshots import RecordSnapshot
 from squid.records.domain import BuildKind
-from squid.records.models import ComputationRun, RecordInputGeneration, RecordInputSnapshot, RecordRecomputeQueueItem
+from squid.records.models import ComputationRun, RecordInputGeneration, RecordRecomputeQueueItem, TitleHolder
 from squid.tags.models import UnitDefinition
 from tests.support.build_edits import build_edit_session
 
@@ -50,10 +50,12 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
     captured = anyio.Event()
     release = anyio.Event()
     old_results: list[RebuildSummary] = []
+    inputs: list[RecordSnapshot] = []
 
     class BlockedComputation(RecordComputationService):
         @override
         async def _compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
+            inputs.append(snapshot)
             captured.set()
             await release.wait()
             return await super()._compute_snapshot(snapshot)
@@ -68,12 +70,8 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
         async with anyio.create_task_group() as group:
             group.start_soon(rebuild_old)
             await captured.wait()
-            # The snapshot is durable and the capture transaction is closed even
-            # though the arithmetic has not run.
-            async with sessions() as session:
-                stored = (await session.scalars(select(RecordInputSnapshot))).one()
-                original = RecordSnapshot.model_validate(stored.document)
-                assert original.sources[0].candidate.fixed_volume == 100
+            original = inputs[0]
+            assert original.sources[0].candidate.fixed_volume == 100
             async with build_edit_session(sessions) as session:
                 door = await session.get(DoorBuild, build_id)
                 assert door is not None
@@ -86,10 +84,9 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
         active = (await session.scalars(select(ComputationRun).where(ComputationRun.is_active))).one()
         assert active.checked_generation is not None
         assert active.checked_generation > original.input_generation
-        assert active.input_snapshot_id is not None
-        stored = await session.get(RecordInputSnapshot, active.input_snapshot_id)
-        assert stored is not None
-        assert RecordSnapshot.model_validate(stored.document).sources[0].candidate.fixed_volume == 50
+        holders = (await session.scalars(select(TitleHolder))).all()
+        assert holders
+        assert all(holder.metric_snapshot.get("volume") == 50 for holder in holders)
 
 
 async def test_source_edit_during_computation_survives_atomic_acknowledgement(
@@ -135,10 +132,10 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
                 select(ComputationRun).where(ComputationRun.is_active, ComputationRun.build_kind == BuildKind.DOOR)
             )
         ).one()
-        assert active.input_snapshot_id is not None
-        stored = await session.get(RecordInputSnapshot, active.input_snapshot_id)
-        assert stored is not None
-        assert RecordSnapshot.model_validate(stored.document).sources[0].candidate.fixed_volume == 100
+        initial_generation = active.checked_generation
+        holders = (await session.scalars(select(TitleHolder))).all()
+        assert holders
+        assert all(holder.metric_snapshot.get("volume") == 100 for holder in holders)
 
     async with factory() as uow:
         records = await uow.records.list_published_records(
@@ -161,10 +158,12 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
                 select(ComputationRun).where(ComputationRun.is_active, ComputationRun.build_kind == BuildKind.DOOR)
             )
         ).one()
-        assert active.input_snapshot_id is not None
-        stored = await session.get(RecordInputSnapshot, active.input_snapshot_id)
-        assert stored is not None
-        assert RecordSnapshot.model_validate(stored.document).sources[0].candidate.fixed_volume == 50
+        assert active.checked_generation is not None
+        assert initial_generation is not None
+        assert active.checked_generation > initial_generation
+        # Previous publication evidence remains available after catch-up.
+        volumes = {holder.metric_snapshot.get("volume") for holder in await session.scalars(select(TitleHolder))}
+        assert volumes == {50, 100}
 
 
 async def test_taxonomy_changes_advance_both_input_generations(
