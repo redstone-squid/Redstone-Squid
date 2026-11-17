@@ -84,7 +84,8 @@ def _run_queue() -> None:
         if runs[run] == _MAX_RUNS + 1:
             # Queued listeners are bound methods of effects and on_change() registrations.
             owner = getattr(run, "__self__", None)
-            name = owner.describe() if hasattr(owner, "describe") else repr(run)
+            describe = getattr(owner, "describe", None)
+            name = describe() if callable(describe) else repr(run)
             _log.error(
                 "%s ran %d times in response to one change and its remaining runs were skipped; "
                 "it, or another listener, keeps changing what it reads. It stays subscribed.",

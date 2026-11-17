@@ -5,6 +5,8 @@ import json
 import tomllib
 from pathlib import Path
 
+from fluent.syntax import ast
+
 from squid_i18n.catalogs import artifacts, collect, validate
 from squid_i18n.compiler import parse_resource
 from squid_i18n.errors import CatalogError
@@ -78,7 +80,7 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
                 entry.id.name
                 for resource in resources
                 for entry in parse_resource(resource).body
-                if hasattr(entry, "id")
+                if isinstance(entry, (ast.Message, ast.Term))
             }
             revision_path = directory / "source-revisions.json"
             previous = json.loads(revision_path.read_text()) if revision_path.exists() else {}

@@ -239,7 +239,7 @@ def _markdown(nodes: tuple[Node, ...], escape: Callable[[str], str] | None = Non
                 protect_raw(token.children)
 
     protect_raw(stream)
-    plugins = [PARSER_EXTENSIONS["gfm"], PARSER_EXTENSIONS["tables"]]
+    plugins: list[object] = [PARSER_EXTENSIONS["gfm"], PARSER_EXTENSIONS["tables"]]
     if escape is not None:
 
         def render_literal(node: RenderTreeNode, context: RenderContext) -> str:

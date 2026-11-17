@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from functools import lru_cache
-from typing import Final
 from zoneinfo import ZoneInfo
 
 from babel import UnknownLocaleError
@@ -37,9 +36,9 @@ class _SafeText(str):
 
 
 class _Escaper:
-    output_type: Final = _SafeText
-    use_isolating: Final = False
-    name: Final = "squid-text"
+    output_type: type[_SafeText] = _SafeText
+    use_isolating: bool = False
+    name: str = "squid-text"
 
     def select(self, message_id: str, **kwargs: object) -> bool:
         return True
