@@ -71,7 +71,7 @@ class FeedbackCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return
 
         channel = request.channel
-        if channel is None:
+        if channel is None or isinstance(channel, discord.CategoryChannel | discord.ForumChannel):
             await request.respond("Feedback is unavailable: this channel is inaccessible.", audience="personal")
             return
 

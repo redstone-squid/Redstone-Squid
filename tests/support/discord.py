@@ -364,7 +364,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
 
-    async def resolve(source: sd.contracts.LocalizationSource) -> Localization:
+    async def resolve(source: sd.contracts.RequestSource) -> Localization:
         if services is None or not is_configured(services.settings):
             return NEUTRAL
         return await localization_resolver(source)

@@ -37,7 +37,7 @@ def installed() -> tuple[sd.Scope[Any], InteractionHarness]:
 async def test_static_response_returns_sent_and_resolves_localization_once() -> None:
     calls = 0
 
-    async def localize(source: sd.contracts.LocalizationSource) -> sl.text.Localization:
+    async def localize(source: sd.contracts.RequestSource) -> sl.text.Localization:
         nonlocal calls
         del source
         calls += 1

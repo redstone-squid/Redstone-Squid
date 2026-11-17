@@ -10,7 +10,7 @@ from squid.bot.chrome import CHROME
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
 from squid_i18n import Localization, Text, localization_scope
-from squid_ui.ext.discord.contracts import LocalizationSource
+from squid_ui.ext.discord.contracts import RequestSource
 from squid_ui.ext.discord.i18n import to_locale_str as to_locale_str
 from squid_ui.ext.discord.runtime import DiscordUIRuntime
 
@@ -46,7 +46,7 @@ async def resolve_locale(
     return DEFAULT_LOCALE
 
 
-async def localization_resolver(source: LocalizationSource) -> Localization:
+async def localization_resolver(source: RequestSource) -> Localization:
     """Resolve one installed bot invocation into its render-time localization."""
     client = cast(Any, DiscordUIRuntime.of(source).client)
     target = cast(discord.Interaction[Any] | commands.Context[Any] | discord.Message, source)
