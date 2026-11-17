@@ -42,7 +42,7 @@ def test_native_gallery_and_file_share_one_attachment_without_losing_metadata(ex
         scene.Gallery(
             (scene.GalleryItem(f"attachment://{asset.name}", "Preview", spoiler=True, asset_name=asset.name),)
         ),
-        scene.File(asset.key, asset.name, asset.media_type, spoiler=True),
+        scene.File(asset_key=asset.key, name=asset.name, media_type=asset.media_type, spoiler=True),
     )
     assert not result.report.events
 

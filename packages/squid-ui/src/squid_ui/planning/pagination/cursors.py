@@ -132,7 +132,9 @@ class CursorCoordinator:
             return
         resolved = PagePosition(anchor, position.page)
         if extent > 1:
-            self._pagers.append(scene.Pager(request.key, resolved.page, extent, request.fingerprint))
+            self._pagers.append(
+                scene.Pager(key=request.key, page=resolved.page, pages=extent, content_fingerprint=request.fingerprint)
+            )
         if not isinstance(request.owner, Controlled | RoutedPage):
             self._updates.append(
                 CursorUpdate(

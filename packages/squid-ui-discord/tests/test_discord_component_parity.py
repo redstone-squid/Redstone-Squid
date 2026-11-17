@@ -81,7 +81,7 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
             (
                 scene.Panel(
                     (
-                        scene.PremiumButton(42),
+                        scene.PremiumButton(sku_id=42),
                         scene.Gallery(
                             (scene.GalleryItem("https://example.invalid/image.png", "preview", spoiler=True),)
                         ),

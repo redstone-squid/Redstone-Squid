@@ -250,7 +250,9 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
         message = "composition resources have colliding delivery keys"
         raise LayoutInvariantError(message)
     assets = tuple(
-        scene.Asset(value.key, value.name, value.media_type) for value in resources.values() if isinstance(value, Asset)
+        scene.Asset(key=value.key, name=value.name, media_type=value.media_type)
+        for value in resources.values()
+        if isinstance(value, Asset)
     )
     output = scene.Scene(scene.Codec.protocol, request.target.id, request.target.version, built.body, assets)
     effects = built.evaluation.effects

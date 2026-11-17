@@ -48,7 +48,7 @@ def _html_scene() -> scene.Scene[scene.HtmlBody]:
             ),
             locale="en-GB",
         ),
-        assets=(scene.Asset("report", "report.txt", "text/plain"),),
+        assets=(scene.Asset(key="report", name="report.txt", media_type="text/plain"),),
     )
 
 
@@ -82,3 +82,13 @@ def test_html_codec_rejects_tags_and_attributes_outside_the_allowlist() -> None:
     body["children"][0]["attributes"] = [{"name": "style", "value": "background:url(javascript:x)"}]
     with pytest.raises(ValueError, match="style"):
         scene.Codec.from_dict(raw)
+
+    raw = scene.Codec.to_dict(_html_scene())
+    raw["body"]["children"][0]["children"][0]["kind"] = "unknown"
+    with pytest.raises(scene.CodecError, match="unknown HTML scene node kind"):
+        scene.Codec.from_dict(raw)
+
+
+def test_html_attribute_requires_finite_number() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        scene.HtmlAttribute(scene.HtmlAttributeName.VALUE, float("nan"))

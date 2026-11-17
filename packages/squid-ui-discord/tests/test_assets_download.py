@@ -35,9 +35,9 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
     assert isinstance(node, sl.semantic.Download)
     assert result.scene.components_v2.children == (
         scene.Text("Report\nGenerated now", Markup.DISCORD_MARKDOWN),
-        scene.File("report", "report.txt", "text/plain"),
+        scene.File(asset_key="report", name="report.txt", media_type="text/plain"),
     )
-    assert result.scene.assets == (sl.scene.Asset("report", "report.txt", "text/plain"),)
+    assert result.scene.assets == (sl.scene.Asset(key="report", name="report.txt", media_type="text/plain"),)
     assert result.resources["asset:report"] is asset
 
 
@@ -52,7 +52,7 @@ def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
     node = sl.download(asset, label="Report", key="report-download")
 
     result = sl.planning.plan(sl.Document((node,), (asset,)), target=DISCORD_V2_DPY27)
-    assert result.scene.assets == (sl.scene.Asset("report", "report.txt", "text/plain"),)
+    assert result.scene.assets == (sl.scene.Asset(key="report", name="report.txt", media_type="text/plain"),)
 
     conflicting = sl.document.Asset("report", "other.txt", "text/plain", sl.document.InlineAsset(b"other"))
     with pytest.raises(JointInfeasibleError):

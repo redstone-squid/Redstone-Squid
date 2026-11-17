@@ -1,9 +1,340 @@
 {
   "$defs": {
+    "ActionMode": {
+      "description": "The dispatch policy requested by an interactive control.\n\nMounted frontends track a render generation so a press can be recognized as coming\nfrom an older display. EXCLUSIVE serializes actions and rejects stale presses;\nREBASE serializes them but resolves the current binding before invoking it.\nIMMEDIATE skips that lock and generation check. PARALLEL_READ also skips them,\nbut runs the handler in a read-only state transaction.",
+      "enum": [
+        "exclusive",
+        "rebase",
+        "parallel_read",
+        "immediate"
+      ],
+      "title": "ActionMode",
+      "type": "string"
+    },
+    "ActionStyle": {
+      "enum": [
+        "primary",
+        "secondary",
+        "success",
+        "danger"
+      ],
+      "title": "ActionStyle",
+      "type": "string"
+    },
+    "Button": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "button"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "mode": {
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
+        },
+        "style": {
+          "$ref": "#/$defs/ActionStyle",
+          "default": "secondary"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "action",
+        "style",
+        "emoji",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "ClassicMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content"
+        },
+        "embeds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Embed"
+          },
+          "title": "Embeds",
+          "type": "array"
+        },
+        "kind": {
+          "const": "classic_message"
+        },
+        "rows": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ClassicRow"
+          },
+          "maxItems": 5,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "embeds",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "ClassicRow": {
+      "additionalProperties": false,
+      "description": "One classic action row. Row assignment is a planning decision, not a drawing one.",
+      "properties": {
+        "controls": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Control"
+          },
+          "maxItems": 5,
+          "title": "Controls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "controls"
+      ],
+      "title": "ClassicRow",
+      "type": "object"
+    },
     "Color": {
       "maximum": 16777215,
       "minimum": 0,
       "type": "integer"
+    },
+    "ComponentsV2": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Node"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "kind": {
+          "const": "components_v2"
+        }
+      },
+      "required": [
+        "kind",
+        "children"
+      ],
+      "type": "object"
+    },
+    "Control": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Link"
+        },
+        {
+          "$ref": "#/$defs/PremiumButton"
+        },
+        {
+          "$ref": "#/$defs/Button"
+        },
+        {
+          "$ref": "#/$defs/RoutedButton"
+        },
+        {
+          "$ref": "#/$defs/Select"
+        },
+        {
+          "$ref": "#/$defs/RoutedSelect"
+        },
+        {
+          "$ref": "#/$defs/EntitySelect"
+        },
+        {
+          "$ref": "#/$defs/Extension"
+        }
+      ]
+    },
+    "ConversationType": {
+      "description": "Exact frontend conversation families accepted by a conversation picker.",
+      "enum": [
+        "guild_text",
+        "guild_voice",
+        "guild_category",
+        "guild_announcement",
+        "guild_announcement_thread",
+        "guild_public_thread",
+        "guild_private_thread",
+        "guild_stage_voice",
+        "guild_forum",
+        "guild_media",
+        "workspace_public",
+        "workspace_private",
+        "direct",
+        "group_direct"
+      ],
+      "title": "ConversationType",
+      "type": "string"
+    },
+    "Embed": {
+      "additionalProperties": false,
+      "description": "One resolved embed after grouping and overflow decisions.\n\nOnly authored properties are represented. Provider details, video metadata,\nand other values Discord derives when unfurling a URL are outside the scene.",
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedAuthor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "colour": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EmbedField"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "footer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedFooter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedMedia"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "thumbnail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedMedia"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "Embed",
+      "type": "object"
     },
     "EmbedAuthor": {
       "additionalProperties": false,
@@ -132,25 +463,2740 @@
       "title": "EmbedMedia",
       "type": "object"
     },
+    "Emoji": {
+      "additionalProperties": false,
+      "description": "A Unicode or Discord custom emoji.",
+      "properties": {
+        "animated": {
+          "default": false,
+          "title": "Animated",
+          "type": "boolean"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "id",
+        "animated"
+      ],
+      "title": "Emoji",
+      "type": "object"
+    },
+    "EntityKind": {
+      "description": "Concrete entity kinds carried by selections and defaults.",
+      "enum": [
+        "user",
+        "role",
+        "conversation"
+      ],
+      "title": "EntityKind",
+      "type": "string"
+    },
+    "EntityRef": {
+      "additionalProperties": false,
+      "description": "A portable reference to one concrete entity.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntityKind"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EntityRef",
+      "type": "object"
+    },
+    "EntitySelect": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "conversation_types": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConversationType"
+          },
+          "title": "Conversation Types",
+          "type": "array"
+        },
+        "default_values": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EntityRef"
+          },
+          "maxItems": 25,
+          "title": "Default Values",
+          "type": "array"
+        },
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "entity_type": {
+          "$ref": "#/$defs/EntityType"
+        },
+        "kind": {
+          "const": "entity_select"
+        },
+        "max_values": {
+          "default": 1,
+          "maximum": 25,
+          "minimum": 0,
+          "title": "Max Values",
+          "type": "integer"
+        },
+        "min_values": {
+          "default": 1,
+          "maximum": 25,
+          "minimum": 0,
+          "title": "Min Values",
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "maxLength": 150,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        }
+      },
+      "required": [
+        "kind",
+        "entity_type",
+        "action",
+        "placeholder",
+        "default_values",
+        "conversation_types",
+        "min_values",
+        "max_values",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "EntityType": {
+      "description": "Families of entity picker exposed by a frontend.",
+      "enum": [
+        "user",
+        "role",
+        "conversation",
+        "mentionable"
+      ],
+      "title": "EntityType",
+      "type": "string"
+    },
+    "Extension": {
+      "additionalProperties": false,
+      "properties": {
+        "extension": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "kind": {
+          "const": "extension"
+        },
+        "payload": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Payload",
+          "type": "object"
+        },
+        "version": {
+          "minimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "version",
+        "payload",
+        "extension"
+      ],
+      "type": "object"
+    },
+    "File": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_key": {
+          "title": "Asset Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "file"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "spoiler": {
+          "default": false,
+          "title": "Spoiler",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "asset_key",
+        "name",
+        "media_type",
+        "spoiler"
+      ],
+      "type": "object"
+    },
+    "Gallery": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/GalleryItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "kind": {
+          "const": "gallery"
+        }
+      },
+      "required": [
+        "kind",
+        "items"
+      ],
+      "type": "object"
+    },
+    "GalleryItem": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "spoiler": {
+          "default": false,
+          "title": "Spoiler",
+          "type": "boolean"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "description"
+      ],
+      "title": "GalleryItem",
+      "type": "object"
+    },
+    "HtmlActionRef": {
+      "additionalProperties": false,
+      "description": "A host-dispatched action reference; no transport behavior crosses the scene.",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
+        }
+      },
+      "required": [
+        "action",
+        "mode"
+      ],
+      "title": "HtmlActionRef",
+      "type": "object"
+    },
+    "HtmlAssetRef": {
+      "additionalProperties": false,
+      "description": "A declared scene asset referenced without embedding its source or transport URL.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "media_type"
+      ],
+      "title": "HtmlAssetRef",
+      "type": "object"
+    },
+    "HtmlAttribute": {
+      "additionalProperties": false,
+      "description": "One allowlisted ordinary HTML attribute with an escapable scalar value.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/HtmlAttributeName"
+        },
+        "value": {
+          "$ref": "#/$defs/HtmlAttributeValue"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "HtmlAttribute",
+      "type": "object"
+    },
+    "HtmlAttributeName": {
+      "description": "Safe ordinary attributes; URLs, actions, colours, and assets use typed references.",
+      "enum": [
+        "class",
+        "id",
+        "role",
+        "aria-label",
+        "aria-describedby",
+        "aria-current",
+        "aria-disabled",
+        "alt",
+        "title",
+        "for",
+        "type",
+        "name",
+        "value",
+        "placeholder",
+        "min",
+        "max",
+        "minlength",
+        "maxlength",
+        "step",
+        "scope",
+        "lang",
+        "open",
+        "disabled",
+        "required",
+        "multiple",
+        "selected",
+        "checked",
+        "download",
+        "rel",
+        "tone",
+        "emphasis",
+        "display",
+        "selection-min",
+        "selection-max",
+        "timezone",
+        "time-style",
+        "entity-type",
+        "conversation-types"
+      ],
+      "title": "HtmlAttributeName",
+      "type": "string"
+    },
+    "HtmlAttributeValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "HtmlBody": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HtmlNode"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "kind": {
+          "const": "html"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        }
+      },
+      "required": [
+        "kind",
+        "children",
+        "locale"
+      ],
+      "type": "object"
+    },
+    "HtmlColourRef": {
+      "additionalProperties": false,
+      "description": "An sRGB colour validated as an integer from 0x000000 through 0xFFFFFF.",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/Color"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "HtmlColourRef",
+      "type": "object"
+    },
+    "HtmlElement": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlActionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlAssetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "attributes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HtmlAttribute"
+          },
+          "title": "Attributes",
+          "type": "array"
+        },
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HtmlNode"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "colour": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlColourRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlFormRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "html_element"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlRouteRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tag": {
+          "$ref": "#/$defs/HtmlTag"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlTimeRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "url": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlUrlRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "tag",
+        "children",
+        "attributes",
+        "action",
+        "route",
+        "form",
+        "url",
+        "time",
+        "colour",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "HtmlFormRef": {
+      "additionalProperties": false,
+      "description": "A stable form binding and optional submitted field name.",
+      "properties": {
+        "field_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Name"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "field_name"
+      ],
+      "title": "HtmlFormRef",
+      "type": "object"
+    },
+    "HtmlNode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HtmlText"
+        },
+        {
+          "$ref": "#/$defs/HtmlElement"
+        }
+      ]
+    },
+    "HtmlRouteRef": {
+      "additionalProperties": false,
+      "description": "A durable route identifier dispatched by the browser host.",
+      "properties": {
+        "route_id": {
+          "title": "Route Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route_id"
+      ],
+      "title": "HtmlRouteRef",
+      "type": "object"
+    },
+    "HtmlTag": {
+      "description": "The complete element allowlist accepted by the semantic HTML scene.",
+      "enum": [
+        "main",
+        "section",
+        "article",
+        "aside",
+        "header",
+        "footer",
+        "nav",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "small",
+        "strong",
+        "em",
+        "s",
+        "span",
+        "div",
+        "ul",
+        "ol",
+        "li",
+        "dl",
+        "dt",
+        "dd",
+        "table",
+        "caption",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "blockquote",
+        "pre",
+        "code",
+        "figure",
+        "figcaption",
+        "details",
+        "summary",
+        "progress",
+        "a",
+        "img",
+        "form",
+        "fieldset",
+        "legend",
+        "label",
+        "input",
+        "textarea",
+        "select",
+        "option",
+        "button",
+        "time",
+        "br",
+        "hr"
+      ],
+      "title": "HtmlTag",
+      "type": "string"
+    },
+    "HtmlText": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "kind": {
+          "const": "html_text"
+        },
+        "markup": {
+          "$ref": "#/$defs/Markup",
+          "default": "plain"
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "markup"
+      ],
+      "type": "object"
+    },
+    "HtmlTimeRef": {
+      "additionalProperties": false,
+      "description": "An ISO-8601 instant with optional portable display metadata.",
+      "properties": {
+        "instant": {
+          "title": "Instant",
+          "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        }
+      },
+      "required": [
+        "instant",
+        "timezone",
+        "style"
+      ],
+      "title": "HtmlTimeRef",
+      "type": "object"
+    },
+    "HtmlUrlRef": {
+      "additionalProperties": false,
+      "description": "A URL whose scheme the HTML renderer validates before emitting it.",
+      "properties": {
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "HtmlUrlRef",
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Link": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "link"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "url": {
+          "maxLength": 512,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "url",
+        "emoji",
+        "disabled"
+      ],
+      "type": "object"
+    },
+    "Markup": {
+      "description": "Encoding of serialized scene content, never an authored text dialect.",
+      "enum": [
+        "plain",
+        "markdown",
+        "discord-markdown"
+      ],
+      "title": "Markup",
+      "type": "string"
+    },
+    "Node": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "$ref": "#/$defs/Time"
+        },
+        {
+          "$ref": "#/$defs/ZonedTime"
+        },
+        {
+          "$ref": "#/$defs/File"
+        },
+        {
+          "$ref": "#/$defs/Separator"
+        },
+        {
+          "$ref": "#/$defs/Link"
+        },
+        {
+          "$ref": "#/$defs/Button"
+        },
+        {
+          "$ref": "#/$defs/Row"
+        },
+        {
+          "$ref": "#/$defs/Select"
+        },
+        {
+          "$ref": "#/$defs/RoutedSelect"
+        },
+        {
+          "$ref": "#/$defs/EntitySelect"
+        },
+        {
+          "$ref": "#/$defs/RoutedButton"
+        },
+        {
+          "$ref": "#/$defs/PremiumButton"
+        },
+        {
+          "$ref": "#/$defs/Thumbnail"
+        },
+        {
+          "$ref": "#/$defs/Gallery"
+        },
+        {
+          "$ref": "#/$defs/Section"
+        },
+        {
+          "$ref": "#/$defs/Panel"
+        },
+        {
+          "$ref": "#/$defs/Extension"
+        }
+      ]
+    },
+    "Option": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "description",
+        "default"
+      ],
+      "title": "Option",
+      "type": "object"
+    },
+    "Panel": {
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Node"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "kind": {
+          "const": "panel"
+        },
+        "spoiler": {
+          "default": false,
+          "title": "Spoiler",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "children",
+        "accent",
+        "spoiler"
+      ],
+      "type": "object"
+    },
+    "PremiumButton": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "premium_button"
+        },
+        "sku_id": {
+          "minimum": 1,
+          "title": "Sku Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "sku_id"
+      ],
+      "type": "object"
+    },
+    "RoutedButton": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "routed_button"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "route_id": {
+          "maxLength": 100,
+          "title": "Route Id",
+          "type": "string"
+        },
+        "style": {
+          "$ref": "#/$defs/ActionStyle",
+          "default": "secondary"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "route_id",
+        "style",
+        "emoji",
+        "disabled"
+      ],
+      "type": "object"
+    },
+    "RoutedSelect": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "routed_select"
+        },
+        "max_values": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Max Values",
+          "type": "integer"
+        },
+        "min_values": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Min Values",
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/Option"
+          },
+          "maxItems": 25,
+          "title": "Options",
+          "type": "array"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "route_id": {
+          "maxLength": 100,
+          "title": "Route Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "options",
+        "route_id",
+        "placeholder",
+        "min_values",
+        "max_values",
+        "disabled"
+      ],
+      "type": "object"
+    },
+    "Row": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Link"
+              },
+              {
+                "$ref": "#/$defs/PremiumButton"
+              },
+              {
+                "$ref": "#/$defs/Button"
+              },
+              {
+                "$ref": "#/$defs/RoutedButton"
+              },
+              {
+                "$ref": "#/$defs/Extension"
+              }
+            ]
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "kind": {
+          "const": "row"
+        }
+      },
+      "required": [
+        "kind",
+        "items"
+      ],
+      "type": "object"
+    },
+    "Section": {
+      "additionalProperties": false,
+      "properties": {
+        "accessory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Thumbnail"
+            },
+            {
+              "$ref": "#/$defs/Link"
+            },
+            {
+              "$ref": "#/$defs/PremiumButton"
+            },
+            {
+              "$ref": "#/$defs/Button"
+            },
+            {
+              "$ref": "#/$defs/RoutedButton"
+            },
+            {
+              "$ref": "#/$defs/Extension"
+            }
+          ],
+          "title": "Accessory"
+        },
+        "kind": {
+          "const": "section"
+        },
+        "texts": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "title": "Texts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "texts",
+        "accessory"
+      ],
+      "type": "object"
+    },
+    "Select": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "disabled": {
+          "default": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "select"
+        },
+        "max_values": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Max Values",
+          "type": "integer"
+        },
+        "min_values": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Min Values",
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/Option"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        }
+      },
+      "required": [
+        "kind",
+        "options",
+        "action",
+        "placeholder",
+        "min_values",
+        "max_values",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "Separator": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "separator"
+        },
+        "large": {
+          "default": false,
+          "title": "Large",
+          "type": "boolean"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "large",
+        "visible"
+      ],
+      "type": "object"
+    },
+    "SlackActionRef": {
+      "additionalProperties": false,
+      "description": "Reference to one planned action binding.",
+      "properties": {
+        "action": {
+          "maxLength": 255,
+          "title": "Action",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
+        }
+      },
+      "required": [
+        "action",
+        "mode"
+      ],
+      "title": "SlackActionRef",
+      "type": "object"
+    },
+    "SlackActions": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "elements": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SlackButton"
+              },
+              {
+                "$ref": "#/$defs/SlackSelect"
+              }
+            ]
+          },
+          "maxItems": 25,
+          "title": "Elements",
+          "type": "array"
+        },
+        "kind": {
+          "const": "actions"
+        }
+      },
+      "required": [
+        "kind",
+        "elements",
+        "block_id"
+      ],
+      "type": "object"
+    },
+    "SlackAlert": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "alert"
+        },
+        "style": {
+          "$ref": "#/$defs/SlackAlertStyle",
+          "default": "info"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "$ref": "#/$defs/SlackText"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "text",
+        "style"
+      ],
+      "type": "object"
+    },
+    "SlackAlertStyle": {
+      "description": "Visual tones supported by Slack alert blocks.",
+      "enum": [
+        "info",
+        "success",
+        "warning",
+        "error"
+      ],
+      "title": "SlackAlertStyle",
+      "type": "string"
+    },
+    "SlackAssetRef": {
+      "additionalProperties": false,
+      "description": "Reference to one delivery asset requiring a public URL at draw time.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "media_type"
+      ],
+      "title": "SlackAssetRef",
+      "type": "object"
+    },
+    "SlackBlock": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlackSection"
+        },
+        {
+          "$ref": "#/$defs/SlackHeader"
+        },
+        {
+          "$ref": "#/$defs/SlackContext"
+        },
+        {
+          "$ref": "#/$defs/SlackDivider"
+        },
+        {
+          "$ref": "#/$defs/SlackImage"
+        },
+        {
+          "$ref": "#/$defs/SlackActions"
+        },
+        {
+          "$ref": "#/$defs/SlackInput"
+        },
+        {
+          "$ref": "#/$defs/SlackTable"
+        },
+        {
+          "$ref": "#/$defs/SlackCard"
+        },
+        {
+          "$ref": "#/$defs/SlackCarousel"
+        },
+        {
+          "$ref": "#/$defs/SlackAlert"
+        }
+      ]
+    },
+    "SlackButton": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackActionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackAssetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "button"
+        },
+        "label": {
+          "$ref": "#/$defs/SlackText"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackRouteRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "style": {
+          "$ref": "#/$defs/SlackButtonStyle",
+          "default": "default"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "action",
+        "route",
+        "url",
+        "asset",
+        "value",
+        "style"
+      ],
+      "type": "object"
+    },
+    "SlackButtonStyle": {
+      "description": "Styles Slack accepts on button elements.",
+      "enum": [
+        "default",
+        "primary",
+        "danger"
+      ],
+      "title": "SlackButtonStyle",
+      "type": "string"
+    },
+    "SlackCard": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackButton"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "image_url": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Url"
+        },
+        "kind": {
+          "const": "card"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "description",
+        "image_url",
+        "actions"
+      ],
+      "type": "object"
+    },
+    "SlackCarousel": {
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/SlackCard"
+          },
+          "maxItems": 10,
+          "title": "Cards",
+          "type": "array"
+        },
+        "kind": {
+          "const": "carousel"
+        }
+      },
+      "required": [
+        "kind",
+        "cards"
+      ],
+      "type": "object"
+    },
+    "SlackCheckboxes": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "initial_values": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Initial Values",
+          "type": "array"
+        },
+        "kind": {
+          "const": "checkboxes"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/SlackOption"
+          },
+          "maxItems": 10,
+          "title": "Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "options",
+        "initial_values"
+      ],
+      "type": "object"
+    },
+    "SlackContext": {
+      "additionalProperties": false,
+      "properties": {
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/SlackText"
+          },
+          "maxItems": 10,
+          "title": "Elements",
+          "type": "array"
+        },
+        "kind": {
+          "const": "context"
+        }
+      },
+      "required": [
+        "kind",
+        "elements"
+      ],
+      "type": "object"
+    },
+    "SlackDatePicker": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "initial_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Date"
+        },
+        "kind": {
+          "const": "date_picker"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_date",
+        "placeholder"
+      ],
+      "type": "object"
+    },
+    "SlackDivider": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "divider"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SlackElement": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlackButton"
+        },
+        {
+          "$ref": "#/$defs/SlackSelect"
+        },
+        {
+          "$ref": "#/$defs/SlackTextInput"
+        },
+        {
+          "$ref": "#/$defs/SlackNumberInput"
+        },
+        {
+          "$ref": "#/$defs/SlackDatePicker"
+        },
+        {
+          "$ref": "#/$defs/SlackTimePicker"
+        },
+        {
+          "$ref": "#/$defs/SlackCheckboxes"
+        },
+        {
+          "$ref": "#/$defs/SlackRadioButtons"
+        }
+      ]
+    },
+    "SlackHeader": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "header"
+        },
+        "text": {
+          "$ref": "#/$defs/SlackText"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SlackHomeView": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackBlock"
+          },
+          "maxItems": 100,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "callback_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Callback Id"
+        },
+        "kind": {
+          "const": "slack_home"
+        },
+        "private_metadata": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Metadata"
+        }
+      },
+      "required": [
+        "kind",
+        "blocks",
+        "callback_id",
+        "private_metadata"
+      ],
+      "type": "object"
+    },
+    "SlackImage": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 2000,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "image_url": {
+          "maxLength": 3000,
+          "title": "Image Url",
+          "type": "string"
+        },
+        "kind": {
+          "const": "image"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "image_url",
+        "alt_text",
+        "title"
+      ],
+      "type": "object"
+    },
+    "SlackInput": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "maxLength": 255,
+          "title": "Block Id",
+          "type": "string"
+        },
+        "element": {
+          "$ref": "#/$defs/SlackInputElement"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "const": "input"
+        },
+        "label": {
+          "$ref": "#/$defs/SlackText"
+        },
+        "optional": {
+          "default": false,
+          "title": "Optional",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "block_id",
+        "label",
+        "element",
+        "optional",
+        "hint"
+      ],
+      "type": "object"
+    },
+    "SlackInputElement": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlackSelect"
+        },
+        {
+          "$ref": "#/$defs/SlackTextInput"
+        },
+        {
+          "$ref": "#/$defs/SlackNumberInput"
+        },
+        {
+          "$ref": "#/$defs/SlackDatePicker"
+        },
+        {
+          "$ref": "#/$defs/SlackTimePicker"
+        },
+        {
+          "$ref": "#/$defs/SlackCheckboxes"
+        },
+        {
+          "$ref": "#/$defs/SlackRadioButtons"
+        }
+      ]
+    },
+    "SlackMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackBlock"
+          },
+          "maxItems": 50,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "kind": {
+          "const": "slack_message"
+        },
+        "text": {
+          "maxLength": 40000,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "blocks"
+      ],
+      "type": "object"
+    },
+    "SlackModalView": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackBlock"
+          },
+          "maxItems": 100,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "callback_id": {
+          "maxLength": 255,
+          "title": "Callback Id",
+          "type": "string"
+        },
+        "close": {
+          "$ref": "#/$defs/SlackText"
+        },
+        "kind": {
+          "const": "slack_modal"
+        },
+        "private_metadata": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Metadata"
+        },
+        "submit": {
+          "$ref": "#/$defs/SlackText"
+        },
+        "title": {
+          "$ref": "#/$defs/SlackText"
+        }
+      },
+      "required": [
+        "kind",
+        "callback_id",
+        "title",
+        "submit",
+        "close",
+        "blocks",
+        "private_metadata"
+      ],
+      "type": "object"
+    },
+    "SlackNumberInput": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "decimal_allowed": {
+          "default": false,
+          "title": "Decimal Allowed",
+          "type": "boolean"
+        },
+        "initial_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
+        },
+        "kind": {
+          "const": "number_input"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_value",
+        "decimal_allowed",
+        "minimum",
+        "maximum"
+      ],
+      "type": "object"
+    },
+    "SlackOption": {
+      "additionalProperties": false,
+      "description": "One static-select, radio, or checkbox option.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label": {
+          "$ref": "#/$defs/SlackText"
+        },
+        "value": {
+          "maxLength": 150,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "description"
+      ],
+      "title": "SlackOption",
+      "type": "object"
+    },
+    "SlackRadioButtons": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "initial_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
+        },
+        "kind": {
+          "const": "radio_buttons"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/SlackOption"
+          },
+          "maxItems": 10,
+          "title": "Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "options",
+        "initial_value"
+      ],
+      "type": "object"
+    },
+    "SlackRouteRef": {
+      "additionalProperties": false,
+      "description": "Reference to one host-owned stateless route.",
+      "properties": {
+        "route_id": {
+          "maxLength": 255,
+          "title": "Route Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route_id"
+      ],
+      "title": "SlackRouteRef",
+      "type": "object"
+    },
+    "SlackSection": {
+      "additionalProperties": false,
+      "properties": {
+        "accessory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackElement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fields": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackText"
+          },
+          "maxItems": 10,
+          "title": "Fields",
+          "type": "array"
+        },
+        "kind": {
+          "const": "section"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "fields",
+        "accessory"
+      ],
+      "type": "object"
+    },
+    "SlackSelect": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackActionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "action_id": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
+        "conversation_types": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConversationType"
+          },
+          "title": "Conversation Types",
+          "type": "array"
+        },
+        "initial_values": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Initial Values",
+          "type": "array"
+        },
+        "kind": {
+          "const": "select"
+        },
+        "maximum": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Maximum",
+          "type": "integer"
+        },
+        "minimum": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Minimum",
+          "type": "integer"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SlackOption"
+          },
+          "maxItems": 100,
+          "title": "Options",
+          "type": "array"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackRouteRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "select_kind": {
+          "$ref": "#/$defs/SlackSelectKind",
+          "default": "static"
+        }
+      },
+      "required": [
+        "kind",
+        "action",
+        "route",
+        "action_id",
+        "placeholder",
+        "options",
+        "initial_values",
+        "conversation_types",
+        "minimum",
+        "maximum",
+        "select_kind"
+      ],
+      "type": "object"
+    },
+    "SlackSelectKind": {
+      "description": "Native selector families exposed by Block Kit.",
+      "enum": [
+        "static",
+        "users",
+        "conversations"
+      ],
+      "title": "SlackSelectKind",
+      "type": "string"
+    },
+    "SlackTable": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "table"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/SlackText"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          "maxItems": 100,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "SlackText": {
+      "additionalProperties": false,
+      "description": "Text resolved for one Slack text object.",
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emoji"
+        },
+        "kind": {
+          "$ref": "#/$defs/SlackTextKind",
+          "default": "mrkdwn"
+        },
+        "verbatim": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Verbatim"
+        }
+      },
+      "required": [
+        "content",
+        "kind",
+        "emoji",
+        "verbatim"
+      ],
+      "title": "SlackText",
+      "type": "object"
+    },
+    "SlackTextInput": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "initial_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
+        },
+        "kind": {
+          "const": "text_input"
+        },
+        "maximum_length": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Length"
+        },
+        "minimum_length": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Length"
+        },
+        "multiline": {
+          "default": false,
+          "title": "Multiline",
+          "type": "boolean"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_value",
+        "placeholder",
+        "multiline",
+        "minimum_length",
+        "maximum_length"
+      ],
+      "type": "object"
+    },
+    "SlackTextKind": {
+      "description": "One Slack text-object representation.",
+      "enum": [
+        "plain_text",
+        "mrkdwn"
+      ],
+      "title": "SlackTextKind",
+      "type": "string"
+    },
+    "SlackTimePicker": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "title": "Action Id",
+          "type": "string"
+        },
+        "initial_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Time"
+        },
+        "kind": {
+          "const": "time_picker"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_time",
+        "placeholder"
+      ],
+      "type": "object"
+    },
+    "Text": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "kind": {
+          "const": "text"
+        },
+        "markup": {
+          "$ref": "#/$defs/Markup",
+          "default": "plain"
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "markup"
+      ],
+      "type": "object"
+    },
+    "Thumbnail": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "kind": {
+          "const": "thumbnail"
+        },
+        "spoiler": {
+          "default": false,
+          "title": "Spoiler",
+          "type": "boolean"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "url",
+        "description",
+        "spoiler"
+      ],
+      "type": "object"
+    },
+    "Time": {
+      "additionalProperties": false,
+      "properties": {
+        "instant": {
+          "format": "date-time",
+          "title": "Instant",
+          "type": "string"
+        },
+        "kind": {
+          "const": "time"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "style": {
+          "pattern": "^(?:t|T|d|D|f|F|R)$",
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "instant",
+        "style",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "ZonedTime": {
+      "additionalProperties": false,
+      "properties": {
+        "instant": {
+          "format": "date-time",
+          "title": "Instant",
+          "type": "string"
+        },
+        "kind": {
+          "const": "zoned_time"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "timezone": {
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "instant",
+        "timezone",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "asset": {
+      "additionalProperties": false,
+      "description": "An asset declaration keyed to a separately supplied delivery resource.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "media_type"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
     "body": {
       "oneOf": [
         {
-          "$ref": "#/$defs/components_v2"
+          "$ref": "#/$defs/ComponentsV2"
         },
         {
-          "$ref": "#/$defs/classic_message"
+          "$ref": "#/$defs/ClassicMessage"
         },
         {
-          "$ref": "#/$defs/html"
+          "$ref": "#/$defs/HtmlBody"
         },
         {
-          "$ref": "#/$defs/slack_message"
+          "$ref": "#/$defs/SlackMessage"
         },
         {
-          "$ref": "#/$defs/slack_modal"
+          "$ref": "#/$defs/SlackModalView"
         },
         {
-          "$ref": "#/$defs/slack_home"
+          "$ref": "#/$defs/SlackHomeView"
         }
       ]
     },
@@ -158,38 +3204,46 @@
       "additionalProperties": false,
       "properties": {
         "action": {
+          "title": "Action",
           "type": "string"
         },
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "emoji": {
-          "$ref": "#/$defs/emoji"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kind": {
           "const": "button"
         },
         "label": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
         },
         "mode": {
-          "enum": [
-            "exclusive",
-            "rebase",
-            "parallel_read",
-            "immediate"
-          ]
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
         },
         "style": {
-          "enum": [
-            "primary",
-            "secondary",
-            "success",
-            "danger"
-          ]
+          "$ref": "#/$defs/ActionStyle",
+          "default": "secondary"
         }
       },
       "required": [
@@ -207,25 +3261,35 @@
       "additionalProperties": false,
       "properties": {
         "content": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content"
         },
         "embeds": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/embed"
+            "$ref": "#/$defs/Embed"
           },
+          "title": "Embeds",
           "type": "array"
         },
         "kind": {
           "const": "classic_message"
         },
         "rows": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/classic_row"
+            "$ref": "#/$defs/ClassicRow"
           },
           "maxItems": 5,
+          "title": "Rows",
           "type": "array"
         }
       },
@@ -239,52 +3303,33 @@
     },
     "classic_row": {
       "additionalProperties": false,
+      "description": "One classic action row. Row assignment is a planning decision, not a drawing one.",
       "properties": {
         "controls": {
+          "default": [],
           "items": {
-            "oneOf": [
-              {
-                "$ref": "#/$defs/link"
-              },
-              {
-                "$ref": "#/$defs/premium_button"
-              },
-              {
-                "$ref": "#/$defs/button"
-              },
-              {
-                "$ref": "#/$defs/routed_button"
-              },
-              {
-                "$ref": "#/$defs/select"
-              },
-              {
-                "$ref": "#/$defs/routed_select"
-              },
-              {
-                "$ref": "#/$defs/entity_select"
-              },
-              {
-                "$ref": "#/$defs/extension"
-              }
-            ]
+            "$ref": "#/$defs/Control"
           },
           "maxItems": 5,
+          "title": "Controls",
           "type": "array"
         }
       },
       "required": [
         "controls"
       ],
+      "title": "ClassicRow",
       "type": "object"
     },
     "components_v2": {
       "additionalProperties": false,
       "properties": {
         "children": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/node"
+            "$ref": "#/$defs/Node"
           },
+          "title": "Children",
           "type": "array"
         },
         "kind": {
@@ -416,139 +3461,71 @@
       "title": "Embed",
       "type": "object"
     },
-    "emoji": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "string"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "animated": {
-              "type": "boolean"
-            },
-            "id": {
-              "minimum": 1,
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "name": {
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "required": [
-            "name",
-            "id",
-            "animated"
-          ],
-          "type": "object"
-        }
-      ]
-    },
     "entity_select": {
       "additionalProperties": false,
       "properties": {
         "action": {
+          "title": "Action",
           "type": "string"
         },
         "conversation_types": {
+          "default": [],
           "items": {
-            "enum": [
-              "guild_text",
-              "guild_voice",
-              "guild_category",
-              "guild_announcement",
-              "guild_announcement_thread",
-              "guild_public_thread",
-              "guild_private_thread",
-              "guild_stage_voice",
-              "guild_forum",
-              "guild_media",
-              "workspace_public",
-              "workspace_private",
-              "direct",
-              "group_direct"
-            ]
+            "$ref": "#/$defs/ConversationType"
           },
+          "title": "Conversation Types",
           "type": "array"
         },
         "default_values": {
+          "default": [],
           "items": {
-            "additionalProperties": false,
-            "properties": {
-              "id": {
-                "oneOf": [
-                  {
-                    "minimum": 1,
-                    "type": "integer"
-                  },
-                  {
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                ]
-              },
-              "kind": {
-                "enum": [
-                  "user",
-                  "role",
-                  "conversation"
-                ]
-              }
-            },
-            "required": [
-              "kind",
-              "id"
-            ],
-            "type": "object"
+            "$ref": "#/$defs/EntityRef"
           },
           "maxItems": 25,
+          "title": "Default Values",
           "type": "array"
         },
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "entity_type": {
-          "enum": [
-            "user",
-            "role",
-            "conversation",
-            "mentionable"
-          ]
+          "$ref": "#/$defs/EntityType"
         },
         "kind": {
           "const": "entity_select"
         },
         "max_values": {
+          "default": 1,
           "maximum": 25,
           "minimum": 0,
+          "title": "Max Values",
           "type": "integer"
         },
         "min_values": {
+          "default": 1,
           "maximum": 25,
           "minimum": 0,
+          "title": "Min Values",
           "type": "integer"
         },
         "mode": {
-          "enum": [
-            "exclusive",
-            "rebase",
-            "parallel_read",
-            "immediate"
-          ]
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
         },
         "placeholder": {
-          "maxLength": 150,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 150,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
         }
       },
       "required": [
@@ -569,22 +3546,30 @@
       "additionalProperties": false,
       "properties": {
         "extension": {
+          "title": "Kind",
           "type": "string"
         },
         "kind": {
           "const": "extension"
         },
-        "payload": {},
+        "payload": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Payload",
+          "type": "object"
+        },
         "version": {
           "minimum": 0,
+          "title": "Version",
           "type": "integer"
         }
       },
       "required": [
         "kind",
-        "extension",
         "version",
-        "payload"
+        "payload",
+        "extension"
       ],
       "type": "object"
     },
@@ -592,18 +3577,23 @@
       "additionalProperties": false,
       "properties": {
         "asset_key": {
+          "title": "Asset Key",
           "type": "string"
         },
         "kind": {
           "const": "file"
         },
         "media_type": {
+          "title": "Media Type",
           "type": "string"
         },
         "name": {
+          "title": "Name",
           "type": "string"
         },
         "spoiler": {
+          "default": false,
+          "title": "Spoiler",
           "type": "boolean"
         }
       },
@@ -611,7 +3601,8 @@
         "kind",
         "asset_key",
         "name",
-        "media_type"
+        "media_type",
+        "spoiler"
       ],
       "type": "object"
     },
@@ -620,8 +3611,9 @@
       "properties": {
         "items": {
           "items": {
-            "$ref": "#/$defs/gallery_item"
+            "$ref": "#/$defs/GalleryItem"
           },
+          "title": "Items",
           "type": "array"
         },
         "kind": {
@@ -634,51 +3626,31 @@
       ],
       "type": "object"
     },
-    "gallery_item": {
-      "additionalProperties": false,
-      "properties": {
-        "asset_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "spoiler": {
-          "type": "boolean"
-        },
-        "url": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "url",
-        "description"
-      ],
-      "type": "object"
-    },
     "html": {
       "additionalProperties": false,
       "properties": {
         "children": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/html_node"
+            "$ref": "#/$defs/HtmlNode"
           },
+          "title": "Children",
           "type": "array"
         },
         "kind": {
           "const": "html"
         },
         "locale": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
         }
       },
       "required": [
@@ -688,315 +3660,107 @@
       ],
       "type": "object"
     },
-    "html_attribute": {
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "enum": [
-            "class",
-            "id",
-            "role",
-            "aria-label",
-            "aria-describedby",
-            "aria-current",
-            "aria-disabled",
-            "alt",
-            "title",
-            "for",
-            "type",
-            "name",
-            "value",
-            "placeholder",
-            "min",
-            "max",
-            "minlength",
-            "maxlength",
-            "step",
-            "scope",
-            "lang",
-            "open",
-            "disabled",
-            "required",
-            "multiple",
-            "selected",
-            "checked",
-            "download",
-            "rel",
-            "tone",
-            "emphasis",
-            "display",
-            "selection-min",
-            "selection-max",
-            "timezone",
-            "time-style",
-            "entity-type",
-            "conversation-types"
-          ]
-        },
-        "value": {
-          "type": [
-            "string",
-            "integer",
-            "number",
-            "boolean"
-          ]
-        }
-      },
-      "required": [
-        "name",
-        "value"
-      ],
-      "type": "object"
-    },
     "html_element": {
       "additionalProperties": false,
       "properties": {
         "action": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlActionRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "action": {
-                  "type": "string"
-                },
-                "mode": {
-                  "enum": [
-                    "exclusive",
-                    "rebase",
-                    "parallel_read",
-                    "immediate"
-                  ]
-                }
-              },
-              "required": [
-                "action",
-                "mode"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "asset": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlAssetRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "key": {
-                  "type": "string"
-                },
-                "media_type": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "key",
-                "name",
-                "media_type"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "attributes": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/html_attribute"
+            "$ref": "#/$defs/HtmlAttribute"
           },
+          "title": "Attributes",
           "type": "array"
         },
         "children": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/html_node"
+            "$ref": "#/$defs/HtmlNode"
           },
+          "title": "Children",
           "type": "array"
         },
         "colour": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlColourRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "value": {
-                  "maximum": 16777215,
-                  "minimum": 0,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "value"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "form": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlFormRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "field_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "key": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "key",
-                "field_name"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "kind": {
           "const": "html_element"
         },
         "route": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlRouteRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "route_id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "route_id"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "tag": {
-          "enum": [
-            "main",
-            "section",
-            "article",
-            "aside",
-            "header",
-            "footer",
-            "nav",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-            "p",
-            "small",
-            "strong",
-            "em",
-            "s",
-            "span",
-            "div",
-            "ul",
-            "ol",
-            "li",
-            "dl",
-            "dt",
-            "dd",
-            "table",
-            "caption",
-            "thead",
-            "tbody",
-            "tr",
-            "th",
-            "td",
-            "blockquote",
-            "pre",
-            "code",
-            "figure",
-            "figcaption",
-            "details",
-            "summary",
-            "progress",
-            "a",
-            "img",
-            "form",
-            "fieldset",
-            "legend",
-            "label",
-            "input",
-            "textarea",
-            "select",
-            "option",
-            "button",
-            "time",
-            "br",
-            "hr"
-          ]
+          "$ref": "#/$defs/HtmlTag"
         },
         "time": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlTimeRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "instant": {
-                  "type": "string"
-                },
-                "style": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "timezone": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "instant",
-                "timezone",
-                "style"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "url": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/HtmlUrlRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "url"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1017,10 +3781,10 @@
     "html_node": {
       "oneOf": [
         {
-          "$ref": "#/$defs/html_text"
+          "$ref": "#/$defs/HtmlText"
         },
         {
-          "$ref": "#/$defs/html_element"
+          "$ref": "#/$defs/HtmlElement"
         }
       ]
     },
@@ -1028,16 +3792,15 @@
       "additionalProperties": false,
       "properties": {
         "content": {
+          "title": "Content",
           "type": "string"
         },
         "kind": {
           "const": "html_text"
         },
         "markup": {
-          "enum": [
-            "plain",
-            "discord-markdown"
-          ]
+          "$ref": "#/$defs/Markup",
+          "default": "plain"
         }
       },
       "required": [
@@ -1051,148 +3814,175 @@
       "additionalProperties": false,
       "properties": {
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "emoji": {
-          "$ref": "#/$defs/emoji"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kind": {
           "const": "link"
         },
         "label": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
         },
         "url": {
           "maxLength": 512,
+          "title": "Url",
           "type": "string"
         }
       },
       "required": [
         "kind",
         "label",
-        "url"
+        "url",
+        "emoji",
+        "disabled"
       ],
       "type": "object"
     },
     "node": {
       "oneOf": [
         {
-          "$ref": "#/$defs/text"
+          "$ref": "#/$defs/Text"
         },
         {
-          "$ref": "#/$defs/time"
+          "$ref": "#/$defs/Time"
         },
         {
-          "$ref": "#/$defs/zoned_time"
+          "$ref": "#/$defs/ZonedTime"
         },
         {
-          "$ref": "#/$defs/file"
+          "$ref": "#/$defs/File"
         },
         {
-          "$ref": "#/$defs/separator"
+          "$ref": "#/$defs/Separator"
         },
         {
-          "$ref": "#/$defs/link"
+          "$ref": "#/$defs/Link"
         },
         {
-          "$ref": "#/$defs/button"
+          "$ref": "#/$defs/Button"
         },
         {
-          "$ref": "#/$defs/routed_button"
+          "$ref": "#/$defs/Row"
         },
         {
-          "$ref": "#/$defs/premium_button"
+          "$ref": "#/$defs/Select"
         },
         {
-          "$ref": "#/$defs/select"
+          "$ref": "#/$defs/RoutedSelect"
         },
         {
-          "$ref": "#/$defs/routed_select"
+          "$ref": "#/$defs/EntitySelect"
         },
         {
-          "$ref": "#/$defs/entity_select"
+          "$ref": "#/$defs/RoutedButton"
         },
         {
-          "$ref": "#/$defs/row"
+          "$ref": "#/$defs/PremiumButton"
         },
         {
-          "$ref": "#/$defs/thumbnail"
+          "$ref": "#/$defs/Thumbnail"
         },
         {
-          "$ref": "#/$defs/gallery"
+          "$ref": "#/$defs/Gallery"
         },
         {
-          "$ref": "#/$defs/section"
+          "$ref": "#/$defs/Section"
         },
         {
-          "$ref": "#/$defs/panel"
+          "$ref": "#/$defs/Panel"
         },
         {
-          "$ref": "#/$defs/extension"
+          "$ref": "#/$defs/Extension"
         }
       ]
     },
-    "option": {
+    "pager": {
       "additionalProperties": false,
+      "description": "A paginator's zero-based selected page, total page count, and content identity.",
       "properties": {
-        "default": {
-          "type": "boolean"
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "emoji": {
-          "$ref": "#/$defs/emoji"
-        },
-        "label": {
+        "content_fingerprint": {
+          "title": "Content Fingerprint",
           "type": "string"
         },
-        "value": {
+        "key": {
+          "title": "Key",
           "type": "string"
+        },
+        "page": {
+          "minimum": 0,
+          "title": "Page",
+          "type": "integer"
+        },
+        "pages": {
+          "minimum": 1,
+          "title": "Pages",
+          "type": "integer"
         }
       },
       "required": [
-        "label",
-        "value",
-        "description",
-        "default"
+        "key",
+        "page",
+        "pages",
+        "content_fingerprint"
       ],
+      "title": "Pager",
       "type": "object"
     },
     "panel": {
       "additionalProperties": false,
       "properties": {
         "accent": {
-          "maximum": 16777215,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "children": {
           "items": {
-            "$ref": "#/$defs/node"
+            "$ref": "#/$defs/Node"
           },
+          "title": "Children",
           "type": "array"
         },
         "kind": {
           "const": "panel"
         },
         "spoiler": {
+          "default": false,
+          "title": "Spoiler",
           "type": "boolean"
         }
       },
       "required": [
         "kind",
         "children",
-        "accent"
+        "accent",
+        "spoiler"
       ],
       "type": "object"
     },
@@ -1204,6 +3994,7 @@
         },
         "sku_id": {
           "minimum": 1,
+          "title": "Sku Id",
           "type": "integer"
         }
       },
@@ -1217,31 +4008,43 @@
       "additionalProperties": false,
       "properties": {
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "emoji": {
-          "$ref": "#/$defs/emoji"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Emoji"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kind": {
           "const": "routed_button"
         },
         "label": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
         },
         "route_id": {
           "maxLength": 100,
+          "title": "Route Id",
           "type": "string"
         },
         "style": {
-          "enum": [
-            "primary",
-            "secondary",
-            "success",
-            "danger"
-          ]
+          "$ref": "#/$defs/ActionStyle",
+          "default": "secondary"
         }
       },
       "required": [
@@ -1258,34 +4061,48 @@
       "additionalProperties": false,
       "properties": {
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "kind": {
           "const": "routed_select"
         },
         "max_values": {
+          "default": 1,
           "minimum": 0,
+          "title": "Max Values",
           "type": "integer"
         },
         "min_values": {
+          "default": 1,
           "minimum": 0,
+          "title": "Min Values",
           "type": "integer"
         },
         "options": {
           "items": {
-            "$ref": "#/$defs/option"
+            "$ref": "#/$defs/Option"
           },
           "maxItems": 25,
+          "title": "Options",
           "type": "array"
         },
         "placeholder": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
         },
         "route_id": {
           "maxLength": 100,
+          "title": "Route Id",
           "type": "string"
         }
       },
@@ -1305,24 +4122,25 @@
       "properties": {
         "items": {
           "items": {
-            "oneOf": [
+            "anyOf": [
               {
-                "$ref": "#/$defs/link"
+                "$ref": "#/$defs/Link"
               },
               {
-                "$ref": "#/$defs/premium_button"
+                "$ref": "#/$defs/PremiumButton"
               },
               {
-                "$ref": "#/$defs/button"
+                "$ref": "#/$defs/Button"
               },
               {
-                "$ref": "#/$defs/routed_button"
+                "$ref": "#/$defs/RoutedButton"
               },
               {
-                "$ref": "#/$defs/extension"
+                "$ref": "#/$defs/Extension"
               }
             ]
           },
+          "title": "Items",
           "type": "array"
         },
         "kind": {
@@ -1339,34 +4157,36 @@
       "additionalProperties": false,
       "properties": {
         "accessory": {
-          "oneOf": [
+          "anyOf": [
             {
-              "$ref": "#/$defs/thumbnail"
+              "$ref": "#/$defs/Thumbnail"
             },
             {
-              "$ref": "#/$defs/link"
+              "$ref": "#/$defs/Link"
             },
             {
-              "$ref": "#/$defs/premium_button"
+              "$ref": "#/$defs/PremiumButton"
             },
             {
-              "$ref": "#/$defs/button"
+              "$ref": "#/$defs/Button"
             },
             {
-              "$ref": "#/$defs/routed_button"
+              "$ref": "#/$defs/RoutedButton"
             },
             {
-              "$ref": "#/$defs/extension"
+              "$ref": "#/$defs/Extension"
             }
-          ]
+          ],
+          "title": "Accessory"
         },
         "kind": {
           "const": "section"
         },
         "texts": {
           "items": {
-            "$ref": "#/$defs/text"
+            "$ref": "#/$defs/Text"
           },
+          "title": "Texts",
           "type": "array"
         }
       },
@@ -1381,41 +4201,51 @@
       "additionalProperties": false,
       "properties": {
         "action": {
+          "title": "Action",
           "type": "string"
         },
         "disabled": {
+          "default": false,
+          "title": "Disabled",
           "type": "boolean"
         },
         "kind": {
           "const": "select"
         },
         "max_values": {
+          "default": 1,
           "minimum": 0,
+          "title": "Max Values",
           "type": "integer"
         },
         "min_values": {
+          "default": 1,
           "minimum": 0,
+          "title": "Min Values",
           "type": "integer"
         },
         "mode": {
-          "enum": [
-            "exclusive",
-            "rebase",
-            "parallel_read",
-            "immediate"
-          ]
+          "$ref": "#/$defs/ActionMode",
+          "default": "exclusive"
         },
         "options": {
           "items": {
-            "$ref": "#/$defs/option"
+            "$ref": "#/$defs/Option"
           },
+          "title": "Options",
           "type": "array"
         },
         "placeholder": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
         }
       },
       "required": [
@@ -1437,9 +4267,13 @@
           "const": "separator"
         },
         "large": {
+          "default": false,
+          "title": "Large",
           "type": "boolean"
         },
         "visible": {
+          "default": true,
+          "title": "Visible",
           "type": "boolean"
         }
       },
@@ -1451,31 +4285,12 @@
       "type": "object"
     },
     "slack_action": {
-      "oneOf": [
+      "anyOf": [
         {
-          "type": "null"
+          "$ref": "#/$defs/SlackActionRef"
         },
         {
-          "additionalProperties": false,
-          "properties": {
-            "action": {
-              "maxLength": 255,
-              "type": "string"
-            },
-            "mode": {
-              "enum": [
-                "exclusive",
-                "rebase",
-                "parallel_read",
-                "immediate"
-              ]
-            }
-          },
-          "required": [
-            "action",
-            "mode"
-          ],
-          "type": "object"
+          "type": "null"
         }
       ]
     },
@@ -1483,17 +4298,31 @@
       "additionalProperties": false,
       "properties": {
         "block_id": {
-          "maxLength": 255,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
         },
         "elements": {
           "items": {
-            "$ref": "#/$defs/slack_element"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SlackButton"
+              },
+              {
+                "$ref": "#/$defs/SlackSelect"
+              }
+            ]
           },
           "maxItems": 25,
+          "title": "Elements",
           "type": "array"
         },
         "kind": {
@@ -1514,25 +4343,22 @@
           "const": "alert"
         },
         "style": {
-          "enum": [
-            "info",
-            "success",
-            "warning",
-            "error"
-          ]
+          "$ref": "#/$defs/SlackAlertStyle",
+          "default": "info"
         },
         "text": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "title": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         }
       },
       "required": [
@@ -1543,40 +4369,50 @@
       ],
       "type": "object"
     },
+    "slack_asset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlackAssetRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "slack_block": {
       "oneOf": [
         {
-          "$ref": "#/$defs/slack_section"
+          "$ref": "#/$defs/SlackSection"
         },
         {
-          "$ref": "#/$defs/slack_header"
+          "$ref": "#/$defs/SlackHeader"
         },
         {
-          "$ref": "#/$defs/slack_context"
+          "$ref": "#/$defs/SlackContext"
         },
         {
-          "$ref": "#/$defs/slack_divider"
+          "$ref": "#/$defs/SlackDivider"
         },
         {
-          "$ref": "#/$defs/slack_image"
+          "$ref": "#/$defs/SlackImage"
         },
         {
-          "$ref": "#/$defs/slack_actions"
+          "$ref": "#/$defs/SlackActions"
         },
         {
-          "$ref": "#/$defs/slack_input"
+          "$ref": "#/$defs/SlackInput"
         },
         {
-          "$ref": "#/$defs/slack_table"
+          "$ref": "#/$defs/SlackTable"
         },
         {
-          "$ref": "#/$defs/slack_card"
+          "$ref": "#/$defs/SlackCard"
         },
         {
-          "$ref": "#/$defs/slack_carousel"
+          "$ref": "#/$defs/SlackCarousel"
         },
         {
-          "$ref": "#/$defs/slack_alert"
+          "$ref": "#/$defs/SlackAlert"
         }
       ]
     },
@@ -1584,64 +4420,73 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "$ref": "#/$defs/slack_action"
-        },
-        "asset": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackActionRef"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "key": {
-                  "type": "string"
-                },
-                "media_type": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "key",
-                "name",
-                "media_type"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackAssetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kind": {
           "const": "button"
         },
         "label": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         },
         "route": {
-          "$ref": "#/$defs/slack_route"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackRouteRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "style": {
-          "enum": [
-            "default",
-            "primary",
-            "danger"
-          ]
+          "$ref": "#/$defs/SlackButtonStyle",
+          "default": "default"
         },
         "url": {
-          "maxLength": 3000,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
         },
         "value": {
-          "maxLength": 2000,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
         }
       },
       "required": [
@@ -1660,40 +4505,50 @@
       "additionalProperties": false,
       "properties": {
         "actions": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_button"
+            "$ref": "#/$defs/SlackButton"
           },
+          "title": "Actions",
           "type": "array"
         },
         "description": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "image_url": {
-          "maxLength": 3000,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image Url"
         },
         "kind": {
           "const": "card"
         },
         "title": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1710,9 +4565,10 @@
       "properties": {
         "cards": {
           "items": {
-            "$ref": "#/$defs/slack_card"
+            "$ref": "#/$defs/SlackCard"
           },
           "maxItems": 10,
+          "title": "Cards",
           "type": "array"
         },
         "kind": {
@@ -1730,12 +4586,15 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "initial_values": {
+          "default": [],
           "items": {
             "type": "string"
           },
+          "title": "Initial Values",
           "type": "array"
         },
         "kind": {
@@ -1743,9 +4602,10 @@
         },
         "options": {
           "items": {
-            "$ref": "#/$defs/slack_option"
+            "$ref": "#/$defs/SlackOption"
           },
           "maxItems": 10,
+          "title": "Options",
           "type": "array"
         }
       },
@@ -1762,9 +4622,10 @@
       "properties": {
         "elements": {
           "items": {
-            "$ref": "#/$defs/slack_text"
+            "$ref": "#/$defs/SlackText"
           },
           "maxItems": 10,
+          "title": "Elements",
           "type": "array"
         },
         "kind": {
@@ -1782,26 +4643,34 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "initial_date": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Date"
         },
         "kind": {
           "const": "date_picker"
         },
         "placeholder": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1827,28 +4696,28 @@
     "slack_element": {
       "oneOf": [
         {
-          "$ref": "#/$defs/slack_button"
+          "$ref": "#/$defs/SlackButton"
         },
         {
-          "$ref": "#/$defs/slack_select"
+          "$ref": "#/$defs/SlackSelect"
         },
         {
-          "$ref": "#/$defs/slack_text_input"
+          "$ref": "#/$defs/SlackTextInput"
         },
         {
-          "$ref": "#/$defs/slack_number_input"
+          "$ref": "#/$defs/SlackNumberInput"
         },
         {
-          "$ref": "#/$defs/slack_date_picker"
+          "$ref": "#/$defs/SlackDatePicker"
         },
         {
-          "$ref": "#/$defs/slack_time_picker"
+          "$ref": "#/$defs/SlackTimePicker"
         },
         {
-          "$ref": "#/$defs/slack_checkboxes"
+          "$ref": "#/$defs/SlackCheckboxes"
         },
         {
-          "$ref": "#/$defs/slack_radio_buttons"
+          "$ref": "#/$defs/SlackRadioButtons"
         }
       ]
     },
@@ -1859,7 +4728,7 @@
           "const": "header"
         },
         "text": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         }
       },
       "required": [
@@ -1872,28 +4741,42 @@
       "additionalProperties": false,
       "properties": {
         "blocks": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_block"
+            "$ref": "#/$defs/SlackBlock"
           },
           "maxItems": 100,
+          "title": "Blocks",
           "type": "array"
         },
         "callback_id": {
-          "maxLength": 255,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Callback Id"
         },
         "kind": {
           "const": "slack_home"
         },
         "private_metadata": {
-          "maxLength": 3000,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Metadata"
         }
       },
       "required": [
@@ -1909,24 +4792,27 @@
       "properties": {
         "alt_text": {
           "maxLength": 2000,
+          "title": "Alt Text",
           "type": "string"
         },
         "image_url": {
           "maxLength": 3000,
+          "title": "Image Url",
           "type": "string"
         },
         "kind": {
           "const": "image"
         },
         "title": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1942,28 +4828,32 @@
       "properties": {
         "block_id": {
           "maxLength": 255,
+          "title": "Block Id",
           "type": "string"
         },
         "element": {
-          "$ref": "#/$defs/slack_input_element"
+          "$ref": "#/$defs/SlackInputElement"
         },
         "hint": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "kind": {
           "const": "input"
         },
         "label": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         },
         "optional": {
+          "default": false,
+          "title": "Optional",
           "type": "boolean"
         }
       },
@@ -1980,25 +4870,25 @@
     "slack_input_element": {
       "oneOf": [
         {
-          "$ref": "#/$defs/slack_select"
+          "$ref": "#/$defs/SlackSelect"
         },
         {
-          "$ref": "#/$defs/slack_text_input"
+          "$ref": "#/$defs/SlackTextInput"
         },
         {
-          "$ref": "#/$defs/slack_number_input"
+          "$ref": "#/$defs/SlackNumberInput"
         },
         {
-          "$ref": "#/$defs/slack_date_picker"
+          "$ref": "#/$defs/SlackDatePicker"
         },
         {
-          "$ref": "#/$defs/slack_time_picker"
+          "$ref": "#/$defs/SlackTimePicker"
         },
         {
-          "$ref": "#/$defs/slack_checkboxes"
+          "$ref": "#/$defs/SlackCheckboxes"
         },
         {
-          "$ref": "#/$defs/slack_radio_buttons"
+          "$ref": "#/$defs/SlackRadioButtons"
         }
       ]
     },
@@ -2006,10 +4896,12 @@
       "additionalProperties": false,
       "properties": {
         "blocks": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_block"
+            "$ref": "#/$defs/SlackBlock"
           },
           "maxItems": 50,
+          "title": "Blocks",
           "type": "array"
         },
         "kind": {
@@ -2017,6 +4909,7 @@
         },
         "text": {
           "maxLength": 40000,
+          "title": "Text",
           "type": "string"
         }
       },
@@ -2031,34 +4924,43 @@
       "additionalProperties": false,
       "properties": {
         "blocks": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_block"
+            "$ref": "#/$defs/SlackBlock"
           },
           "maxItems": 100,
+          "title": "Blocks",
           "type": "array"
         },
         "callback_id": {
           "maxLength": 255,
+          "title": "Callback Id",
           "type": "string"
         },
         "close": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         },
         "kind": {
           "const": "slack_modal"
         },
         "private_metadata": {
-          "maxLength": 3000,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Private Metadata"
         },
         "submit": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         },
         "title": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         }
       },
       "required": [
@@ -2077,31 +4979,52 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "decimal_allowed": {
+          "default": false,
+          "title": "Decimal Allowed",
           "type": "boolean"
         },
         "initial_value": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
         },
         "kind": {
           "const": "number_input"
         },
         "maximum": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
         },
         "minimum": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
         }
       },
       "required": [
@@ -2116,22 +5039,25 @@
     },
     "slack_option": {
       "additionalProperties": false,
+      "description": "One static-select, radio, or checkbox option.",
       "properties": {
         "description": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "label": {
-          "$ref": "#/$defs/slack_text"
+          "$ref": "#/$defs/SlackText"
         },
         "value": {
           "maxLength": 150,
+          "title": "Value",
           "type": "string"
         }
       },
@@ -2140,6 +5066,7 @@
         "value",
         "description"
       ],
+      "title": "SlackOption",
       "type": "object"
     },
     "slack_radio_buttons": {
@@ -2147,22 +5074,30 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "initial_value": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
         },
         "kind": {
           "const": "radio_buttons"
         },
         "options": {
           "items": {
-            "$ref": "#/$defs/slack_option"
+            "$ref": "#/$defs/SlackOption"
           },
           "maxItems": 10,
+          "title": "Options",
           "type": "array"
         }
       },
@@ -2175,22 +5110,12 @@
       "type": "object"
     },
     "slack_route": {
-      "oneOf": [
+      "anyOf": [
         {
-          "type": "null"
+          "$ref": "#/$defs/SlackRouteRef"
         },
         {
-          "additionalProperties": false,
-          "properties": {
-            "route_id": {
-              "maxLength": 255,
-              "type": "string"
-            }
-          },
-          "required": [
-            "route_id"
-          ],
-          "type": "object"
+          "type": "null"
         }
       ]
     },
@@ -2198,34 +5123,38 @@
       "additionalProperties": false,
       "properties": {
         "accessory": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackElement"
             },
             {
-              "$ref": "#/$defs/slack_element"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "fields": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_text"
+            "$ref": "#/$defs/SlackText"
           },
           "maxItems": 10,
+          "title": "Fields",
           "type": "array"
         },
         "kind": {
           "const": "section"
         },
         "text": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2240,79 +5169,94 @@
       "additionalProperties": false,
       "properties": {
         "action": {
-          "$ref": "#/$defs/slack_action"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackActionRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "action_id": {
-          "maxLength": 255,
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
         },
         "conversation_types": {
+          "default": [],
           "items": {
-            "enum": [
-              "guild_text",
-              "guild_voice",
-              "guild_category",
-              "guild_announcement",
-              "guild_announcement_thread",
-              "guild_public_thread",
-              "guild_private_thread",
-              "guild_stage_voice",
-              "guild_forum",
-              "guild_media",
-              "workspace_public",
-              "workspace_private",
-              "direct",
-              "group_direct"
-            ]
+            "$ref": "#/$defs/ConversationType"
           },
+          "title": "Conversation Types",
           "type": "array"
         },
         "initial_values": {
+          "default": [],
           "items": {
             "type": "string"
           },
+          "title": "Initial Values",
           "type": "array"
         },
         "kind": {
           "const": "select"
         },
         "maximum": {
+          "default": 1,
           "minimum": 1,
+          "title": "Maximum",
           "type": "integer"
         },
         "minimum": {
+          "default": 1,
           "minimum": 0,
+          "title": "Minimum",
           "type": "integer"
         },
         "options": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/slack_option"
+            "$ref": "#/$defs/SlackOption"
           },
           "maxItems": 100,
+          "title": "Options",
           "type": "array"
         },
         "placeholder": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "route": {
-          "$ref": "#/$defs/slack_route"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlackRouteRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "select_kind": {
-          "enum": [
-            "static",
-            "users",
-            "conversations"
-          ]
+          "$ref": "#/$defs/SlackSelectKind",
+          "default": "static"
         }
       },
       "required": [
@@ -2320,13 +5264,13 @@
         "action",
         "route",
         "action_id",
-        "select_kind",
         "placeholder",
         "options",
         "initial_values",
         "conversation_types",
         "minimum",
-        "maximum"
+        "maximum",
+        "select_kind"
       ],
       "type": "object"
     },
@@ -2339,12 +5283,13 @@
         "rows": {
           "items": {
             "items": {
-              "$ref": "#/$defs/slack_text"
+              "$ref": "#/$defs/SlackText"
             },
             "maxItems": 20,
             "type": "array"
           },
           "maxItems": 100,
+          "title": "Rows",
           "type": "array"
         }
       },
@@ -2356,27 +5301,39 @@
     },
     "slack_text": {
       "additionalProperties": false,
+      "description": "Text resolved for one Slack text object.",
       "properties": {
         "content": {
+          "title": "Content",
           "type": "string"
         },
         "emoji": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emoji"
         },
         "kind": {
-          "enum": [
-            "plain_text",
-            "mrkdwn"
-          ]
+          "$ref": "#/$defs/SlackTextKind",
+          "default": "mrkdwn"
         },
         "verbatim": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Verbatim"
         }
       },
       "required": [
@@ -2385,6 +5342,7 @@
         "emoji",
         "verbatim"
       ],
+      "title": "SlackText",
       "type": "object"
     },
     "slack_text_input": {
@@ -2392,43 +5350,65 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "initial_value": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Value"
         },
         "kind": {
           "const": "text_input"
         },
         "maximum_length": {
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Length"
         },
         "minimum_length": {
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Length"
         },
         "multiline": {
+          "default": false,
+          "title": "Multiline",
           "type": "boolean"
         },
         "placeholder": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2447,26 +5427,34 @@
       "properties": {
         "action_id": {
           "maxLength": 255,
+          "title": "Action Id",
           "type": "string"
         },
         "initial_time": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Time"
         },
         "kind": {
           "const": "time_picker"
         },
         "placeholder": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/SlackText"
             },
             {
-              "$ref": "#/$defs/slack_text"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2481,16 +5469,15 @@
       "additionalProperties": false,
       "properties": {
         "content": {
+          "title": "Content",
           "type": "string"
         },
         "kind": {
           "const": "text"
         },
         "markup": {
-          "enum": [
-            "plain",
-            "discord-markdown"
-          ]
+          "$ref": "#/$defs/Markup",
+          "default": "plain"
         }
       },
       "required": [
@@ -2504,25 +5491,35 @@
       "additionalProperties": false,
       "properties": {
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "kind": {
           "const": "thumbnail"
         },
         "spoiler": {
+          "default": false,
+          "title": "Spoiler",
           "type": "boolean"
         },
         "url": {
+          "title": "Url",
           "type": "string"
         }
       },
       "required": [
         "kind",
         "url",
-        "description"
+        "description",
+        "spoiler"
       ],
       "type": "object"
     },
@@ -2531,27 +5528,28 @@
       "properties": {
         "instant": {
           "format": "date-time",
+          "title": "Instant",
           "type": "string"
         },
         "kind": {
           "const": "time"
         },
         "prefix": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
         },
         "style": {
-          "enum": [
-            "t",
-            "T",
-            "d",
-            "D",
-            "f",
-            "F",
-            "R"
-          ]
+          "pattern": "^(?:t|T|d|D|f|F|R)$",
+          "title": "Style",
+          "type": "string"
         }
       },
       "required": [
@@ -2567,19 +5565,27 @@
       "properties": {
         "instant": {
           "format": "date-time",
+          "title": "Instant",
           "type": "string"
         },
         "kind": {
           "const": "zoned_time"
         },
         "prefix": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
         },
         "timezone": {
           "minLength": 1,
+          "title": "Timezone",
           "type": "string"
         }
       },
@@ -2598,24 +5604,7 @@
   "properties": {
     "assets": {
       "items": {
-        "additionalProperties": false,
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "media_type": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "key",
-          "name",
-          "media_type"
-        ],
-        "type": "object"
+        "$ref": "#/$defs/asset"
       },
       "type": "array"
     },
@@ -2624,30 +5613,7 @@
     },
     "pagers": {
       "items": {
-        "additionalProperties": false,
-        "properties": {
-          "content_fingerprint": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "page": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "pages": {
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "key",
-          "page",
-          "pages",
-          "content_fingerprint"
-        ],
-        "type": "object"
+        "$ref": "#/$defs/pager"
       },
       "type": "array"
     },

@@ -98,7 +98,7 @@ class Renderer:
 
         assets = {asset.key: asset for asset in document.assets}
         pager_data = json.dumps(
-            [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in document.pagers],
+            [pager.browser_state() for pager in document.pagers],
             separators=(",", ":"),
         )
         body = "".join(self._node(child, assets, plan) for child in document.body.children)

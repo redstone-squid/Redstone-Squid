@@ -451,7 +451,14 @@ def _file_offers[RenderTargetT, ContextT](
             RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "native-file",
-                FileRealization(scene.File(value.asset_key, value.name, value.media_type, value.spoiler)),
+                FileRealization(
+                    scene.File(
+                        asset_key=value.asset_key,
+                        name=value.name,
+                        media_type=value.media_type,
+                        spoiler=value.spoiler,
+                    )
+                ),
             ),
         )
         if scope.policy.native_v2
@@ -481,7 +488,9 @@ def _separator_offers[RenderTargetT, ContextT](
     return (
         (
             RealizationOffer[RenderTargetT, ContextT, Realization](
-                occurrence, "separator", SeparatorRealization(scene.Separator(value.large, value.visible))
+                occurrence,
+                "separator",
+                SeparatorRealization(scene.Separator(large=value.large, visible=value.visible)),
             ),
         )
         if scope.policy.native_v2

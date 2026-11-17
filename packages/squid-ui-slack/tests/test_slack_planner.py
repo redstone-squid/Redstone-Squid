@@ -335,7 +335,7 @@ def test_shared_slack_cache_rebuilds_handlers_and_preserves_document_assets() ->
     assert second.bindings["run"].handler is replacement
     assert first.bindings["run"].handler is _pressed
     assert second.resources == {"asset:report": asset}
-    assert second.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
+    assert second.scene.assets == (scene.Asset(key="report", name="report.txt", media_type="text/plain"),)
     assert second.allocation is not first.allocation
 
 

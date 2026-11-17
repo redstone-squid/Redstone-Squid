@@ -206,7 +206,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     if self.limits.components.row_buttons < 1:
                         violations.append(LocalCapacityExceeded(identity, "row.buttons", 1, 0))
                     components += 1 if in_row else 2
-                    premium = scene.PremiumButton(sku_id)
+                    premium = scene.PremiumButton(sku_id=sku_id)
                     return (premium,) if in_row else (scene.Row((premium,)),)
                 case ControlRealization() as control:
                     identity = part.offer.occurrence.identity
@@ -363,9 +363,9 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     rendered_text(discord_text(time, context.escape_text))
                     prefix = discord_time_prefix(time, context.escape_text) or None
                     return (
-                        scene.Time(time.instant, time.style or "f", prefix)
+                        scene.Time(instant=time.instant, style=time.style or "f", prefix=prefix)
                         if time.timezone is None
-                        else scene.ZonedTime(time.instant, time.timezone, prefix),
+                        else scene.ZonedTime(instant=time.instant, timezone=time.timezone, prefix=prefix),
                     )
                 case TextRealization() as payload:
                     return rendered_text(discord_text(payload, context.escape_text))
@@ -488,7 +488,10 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return (
                         *text(caption),
                         scene.File(
-                            download.asset.key, download.asset.name, download.asset.media_type, download.spoiler
+                            asset_key=download.asset.key,
+                            name=download.asset.name,
+                            media_type=download.asset.media_type,
+                            spoiler=download.spoiler,
                         ),
                     )
                 case PanelRealization() as panel:

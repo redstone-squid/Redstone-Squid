@@ -230,7 +230,7 @@ def test_renderer_rejects_missing_capability_and_surface_violations() -> None:
 
 
 def test_message_renderer_refuses_unresolved_or_insecure_assets() -> None:
-    metadata = scene.Asset("report", "report.txt", "text/plain")
+    metadata = scene.Asset(key="report", name="report.txt", media_type="text/plain")
     button = scene.SlackButton(
         scene.SlackText("Report", scene.SlackTextKind.PLAIN),
         asset=scene.SlackAssetRef("report", "report.txt", "text/plain"),

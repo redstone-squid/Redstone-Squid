@@ -346,7 +346,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     if Capability.ACTIONS_DISCORD_PREMIUM not in context.capabilities:
                         violations.append(UnsupportedCapability(identity, "Discord premium buttons"))
                     limit("row.buttons", 1, self.limits.components.row_buttons)
-                    premium = scene.PremiumButton(sku_id)
+                    premium = scene.PremiumButton(sku_id=sku_id)
                     if row is None:
                         rows.append(scene.ClassicRow((premium,)))
                     else:

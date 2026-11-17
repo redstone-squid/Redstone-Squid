@@ -60,7 +60,7 @@ class DiscordPreviewRenderer:
             message = f"HTML preview cannot draw a {type(document.body).__name__} body"
             raise DrawInvariantError(message)
         pager_data = json.dumps(
-            [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in document.pagers],
+            [pager.browser_state() for pager in document.pagers],
             separators=(",", ":"),
         )
         assets = {asset.key: asset for asset in document.assets}

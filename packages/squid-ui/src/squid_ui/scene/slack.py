@@ -8,6 +8,9 @@ Planning and schema validation check most target limits, rather than these const
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Annotated
+
+from pydantic import Field
 
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.entity import ConversationType
@@ -26,8 +29,8 @@ class SlackText:
 
     content: str
     kind: SlackTextKind = SlackTextKind.MARKDOWN
-    emoji: bool | None = None
-    verbatim: bool | None = True
+    emoji: Annotated[bool, Field(strict=True)] | None = None
+    verbatim: Annotated[bool, Field(strict=True)] | None = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +38,7 @@ class SlackOption:
     """One static-select, radio, or checkbox option."""
 
     label: SlackText
-    value: str
+    value: Annotated[str, Field(max_length=150)]
     description: SlackText | None = None
 
 
@@ -51,7 +54,7 @@ class SlackButtonStyle(StrEnum):
 class SlackActionRef:
     """Reference to one planned action binding."""
 
-    action: str
+    action: Annotated[str, Field(max_length=255)]
     mode: ActionMode = ActionMode.EXCLUSIVE
 
 
@@ -59,7 +62,7 @@ class SlackActionRef:
 class SlackRouteRef:
     """Reference to one host-owned stateless route."""
 
-    route_id: str
+    route_id: Annotated[str, Field(max_length=255)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,9 +81,9 @@ class SlackButton:
     label: SlackText
     action: SlackActionRef | None = None
     route: SlackRouteRef | None = None
-    url: str | None = None
+    url: Annotated[str, Field(max_length=3000)] | None = None
     asset: SlackAssetRef | None = None
-    value: str | None = None
+    value: Annotated[str, Field(max_length=2000)] | None = None
     style: SlackButtonStyle = SlackButtonStyle.DEFAULT
 
     def __post_init__(self) -> None:
@@ -110,14 +113,14 @@ class SlackSelect:
 
     action: SlackActionRef | None = None
     route: SlackRouteRef | None = None
-    action_id: str | None = None
+    action_id: Annotated[str, Field(max_length=255)] | None = None
     kind: SlackSelectKind = SlackSelectKind.STATIC
     placeholder: SlackText | None = None
-    options: tuple[SlackOption, ...] = ()
+    options: Annotated[tuple[SlackOption, ...], Field(max_length=100)] = ()
     initial_values: tuple[str, ...] = ()
     conversation_types: tuple[ConversationType, ...] = ()
-    minimum: int = 1
-    maximum: int = 1
+    minimum: Annotated[int, Field(ge=0, strict=True)] = 1
+    maximum: Annotated[int, Field(ge=1, strict=True)] = 1
 
     def __post_init__(self) -> None:
         sources = sum(value is not None for value in (self.action, self.route, self.action_id))
@@ -136,21 +139,21 @@ class SlackSelect:
 class SlackTextInput:
     """A plain-text input used inside a Slack modal."""
 
-    action_id: str
+    action_id: Annotated[str, Field(max_length=255)]
     initial_value: str | None = None
     placeholder: SlackText | None = None
-    multiline: bool = False
-    minimum_length: int | None = None
-    maximum_length: int | None = None
+    multiline: Annotated[bool, Field(strict=True)] = False
+    minimum_length: Annotated[int, Field(ge=0, strict=True)] | None = None
+    maximum_length: Annotated[int, Field(ge=0, strict=True)] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class SlackNumberInput:
     """A numeric input used inside a Slack modal."""
 
-    action_id: str
+    action_id: Annotated[str, Field(max_length=255)]
     initial_value: str | None = None
-    decimal_allowed: bool = False
+    decimal_allowed: Annotated[bool, Field(strict=True)] = False
     minimum: str | None = None
     maximum: str | None = None
 
@@ -159,7 +162,7 @@ class SlackNumberInput:
 class SlackDatePicker:
     """A calendar-date input used inside a Slack modal."""
 
-    action_id: str
+    action_id: Annotated[str, Field(max_length=255)]
     initial_date: str | None = None
     placeholder: SlackText | None = None
 
@@ -168,7 +171,7 @@ class SlackDatePicker:
 class SlackTimePicker:
     """A local-time input used inside a Slack modal."""
 
-    action_id: str
+    action_id: Annotated[str, Field(max_length=255)]
     initial_time: str | None = None
     placeholder: SlackText | None = None
 
@@ -177,8 +180,8 @@ class SlackTimePicker:
 class SlackCheckboxes:
     """A checkbox group used inside a Slack modal."""
 
-    action_id: str
-    options: tuple[SlackOption, ...]
+    action_id: Annotated[str, Field(max_length=255)]
+    options: Annotated[tuple[SlackOption, ...], Field(max_length=10)]
     initial_values: tuple[str, ...] = ()
 
 
@@ -186,8 +189,8 @@ class SlackCheckboxes:
 class SlackRadioButtons:
     """A radio group used inside a Slack modal."""
 
-    action_id: str
-    options: tuple[SlackOption, ...]
+    action_id: Annotated[str, Field(max_length=255)]
+    options: Annotated[tuple[SlackOption, ...], Field(max_length=10)]
     initial_value: str | None = None
 
 
@@ -217,7 +220,7 @@ class SlackSection:
     """A section block with optional fields and accessory."""
 
     text: SlackText | None = None
-    fields: tuple[SlackText, ...] = ()
+    fields: Annotated[tuple[SlackText, ...], Field(max_length=10)] = ()
     accessory: SlackElement | None = None
 
 
@@ -232,7 +235,7 @@ class SlackHeader:
 class SlackContext:
     """A context block containing text snippets."""
 
-    elements: tuple[SlackText, ...]
+    elements: Annotated[tuple[SlackText, ...], Field(max_length=10)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,8 +247,8 @@ class SlackDivider:
 class SlackImage:
     """An image block with alternative text."""
 
-    image_url: str
-    alt_text: str
+    image_url: Annotated[str, Field(max_length=3000)]
+    alt_text: Annotated[str, Field(max_length=2000)]
     title: SlackText | None = None
 
 
@@ -253,18 +256,18 @@ class SlackImage:
 class SlackActions:
     """One row of Slack interactive elements."""
 
-    elements: tuple[SlackButton | SlackSelect, ...]
-    block_id: str | None = None
+    elements: Annotated[tuple[SlackButton | SlackSelect, ...], Field(max_length=25)]
+    block_id: Annotated[str, Field(max_length=255)] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class SlackInput:
     """One labelled modal field with stable block and action identifiers."""
 
-    block_id: str
+    block_id: Annotated[str, Field(max_length=255)]
     label: SlackText
     element: SlackInputElement
-    optional: bool = False
+    optional: Annotated[bool, Field(strict=True)] = False
     hint: SlackText | None = None
 
 
@@ -272,7 +275,7 @@ class SlackInput:
 class SlackTable:
     """A table block whose cells are already allocated Slack text objects."""
 
-    rows: tuple[tuple[SlackText, ...], ...]
+    rows: Annotated[tuple[Annotated[tuple[SlackText, ...], Field(max_length=20)], ...], Field(max_length=100)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,7 +284,7 @@ class SlackCard:
 
     title: SlackText | None = None
     description: SlackText | None = None
-    image_url: str | None = None
+    image_url: Annotated[str, Field(max_length=3000)] | None = None
     actions: tuple[SlackButton, ...] = ()
 
 
@@ -289,7 +292,7 @@ class SlackCard:
 class SlackCarousel:
     """A carousel block containing up to ten cards."""
 
-    cards: tuple[SlackCard, ...]
+    cards: Annotated[tuple[SlackCard, ...], Field(max_length=10)]
 
 
 class SlackAlertStyle(StrEnum):
@@ -331,8 +334,8 @@ class SlackMessage:
 
     KIND = "slack_message"
 
-    text: str
-    blocks: tuple[SlackBlock, ...] = ()
+    text: Annotated[str, Field(max_length=40000)]
+    blocks: Annotated[tuple[SlackBlock, ...], Field(max_length=50)] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,12 +344,12 @@ class SlackModalView:
 
     KIND = "slack_modal"
 
-    callback_id: str
+    callback_id: Annotated[str, Field(max_length=255)]
     title: SlackText
     submit: SlackText
     close: SlackText
-    blocks: tuple[SlackBlock, ...] = ()
-    private_metadata: str | None = None
+    blocks: Annotated[tuple[SlackBlock, ...], Field(max_length=100)] = ()
+    private_metadata: Annotated[str, Field(max_length=3000)] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,9 +358,9 @@ class SlackHomeView:
 
     KIND = "slack_home"
 
-    blocks: tuple[SlackBlock, ...] = ()
-    callback_id: str | None = None
-    private_metadata: str | None = None
+    blocks: Annotated[tuple[SlackBlock, ...], Field(max_length=100)] = ()
+    callback_id: Annotated[str, Field(max_length=255)] | None = None
+    private_metadata: Annotated[str, Field(max_length=3000)] | None = None
 
 
 type SlackBody = SlackMessage | SlackModalView | SlackHomeView

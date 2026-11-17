@@ -194,7 +194,7 @@ def test_shared_downloads_retain_the_delivery_asset(target: Any) -> None:
     )
 
     assert result.resources[f"asset:{asset.key}"] is asset
-    assert result.scene.assets == (scene.Asset(asset.key, asset.name, asset.media_type),)
+    assert result.scene.assets == (scene.Asset(key=asset.key, name=asset.name, media_type=asset.media_type),)
     assert "Report" in scene.Codec.dumps(result.scene)
 
 

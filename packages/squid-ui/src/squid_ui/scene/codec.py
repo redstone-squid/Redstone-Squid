@@ -2,18 +2,12 @@
 
 import hashlib
 import json
-import math
 from copy import deepcopy
-from typing import Any, cast
+from typing import Any, Never
 
-from pydantic import ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from squid_ui.action_mode import ActionMode
-from squid_ui.content.emoji import Emoji
-from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
-from squid_ui.content.text import Markup
 from squid_ui.errors import SquidUiError
-from squid_ui.primitives.styles import ActionStyle
 from squid_ui.scene._json import JsonObject, JsonReader
 from squid_ui.scene.model import (
     Asset,
@@ -22,30 +16,16 @@ from squid_ui.scene.model import (
     ClassicMessage,
     ClassicRow,
     ComponentsV2,
-    Control,
-    Embed,
     EntitySelect,
     Extension,
     File,
     Gallery,
-    GalleryItem,
-    HtmlActionRef,
-    HtmlAssetRef,
-    HtmlAttribute,
-    HtmlAttributeName,
     HtmlBody,
-    HtmlColourRef,
     HtmlElement,
-    HtmlFormRef,
     HtmlNode,
-    HtmlRouteRef,
-    HtmlTag,
     HtmlText,
-    HtmlTimeRef,
-    HtmlUrlRef,
     Link,
     Node,
-    Option,
     Pager,
     Panel,
     PremiumButton,
@@ -71,6 +51,26 @@ class CodecError(SquidUiError, ValueError):
 
 
 _json = JsonReader(CodecError)
+_text_adapter = TypeAdapter(Text)
+_html_text_adapter = TypeAdapter(HtmlText)
+_html_element_adapter = TypeAdapter(HtmlElement)
+_components_adapter = TypeAdapter(ComponentsV2)
+_classic_adapter = TypeAdapter(ClassicMessage)
+_classic_row_adapter = TypeAdapter(ClassicRow)
+_html_body_adapter = TypeAdapter(HtmlBody)
+_row_adapter = TypeAdapter(Row)
+_section_adapter = TypeAdapter(Section)
+_panel_adapter = TypeAdapter(Panel)
+_extension_adapter = TypeAdapter(Extension)
+_leaf_adapters = {
+    model.KIND: TypeAdapter(model)
+    for model in (Link, Button, RoutedButton, Select, RoutedSelect, EntitySelect, Thumbnail, Gallery)
+}
+
+
+def _reject_json_constant(value: str) -> Never:
+    message = f"non-finite JSON number {value}"
+    raise ValueError(message)
 
 
 class Codec:
@@ -82,12 +82,10 @@ class Codec:
     a stable input for comparing planned displays.
 
     Decoding checks supported node shapes and selected model invariants, but does
-    not run the published JSON Schema or enforce every target limit. Embeds
-    reject unknown fields; other node decoders ignore them. Use `schema()` with
-    a JSON Schema validator to check the full structural contract.
+    not run the published JSON Schema or enforce every target limit. Pydantic
+    values reject unknown fields; dataclass adapters ignore them.
+    Use `schema()` with a JSON Schema validator for the full structural contract.
 
-    Classic rows containing `EntitySelect` can be encoded but are currently
-    rejected during decoding, so those scenes cannot round-trip through this codec.
     """
 
     protocol = 1
@@ -117,8 +115,8 @@ class Codec:
         invariants can also raise their constructors' `ValueError` or `TypeError`.
         """
         try:
-            raw = json.loads(payload)
-        except json.JSONDecodeError as error:
+            raw = json.loads(payload, parse_constant=_reject_json_constant)
+        except (json.JSONDecodeError, ValueError) as error:
             raise CodecError(str(error)) from error
         if not isinstance(raw, dict):
             msg = "scene must be a JSON object"
@@ -145,18 +143,8 @@ class Codec:
             "target": scene.target,
             "target_version": scene.target_version,
             "body": _body_to_dict(scene.body),
-            "assets": [
-                {"key": asset.key, "name": asset.name, "media_type": asset.media_type} for asset in scene.assets
-            ],
-            "pagers": [
-                {
-                    "key": pager.key,
-                    "page": pager.page,
-                    "pages": pager.pages,
-                    "content_fingerprint": pager.content_fingerprint,
-                }
-                for pager in scene.pagers
-            ],
+            "assets": [asset.model_dump(mode="json") for asset in scene.assets],
+            "pagers": [pager.model_dump(mode="json") for pager in scene.pagers],
         }
 
     @classmethod
@@ -175,48 +163,35 @@ class Codec:
         if not isinstance(assets, list) or not isinstance(pagers, list):
             msg = "scene assets and pagers must be arrays"
             raise CodecError(msg)
+        try:
+            declared_assets = tuple(Asset.model_validate(_json.require_object(asset)) for asset in assets)
+            declared_pagers = tuple(Pager.model_validate(_json.require_object(pager)) for pager in pagers)
+        except ValidationError as error:
+            raise CodecError(str(error)) from error
         return Scene(
             protocol=protocol,
             target=_json.string(raw, "target"),
             target_version=_json.integer(raw, "target_version"),
             body=_body_from_dict(_json.require_object(raw.get("body"))),
-            assets=tuple(
-                Asset(
-                    key=_json.string(_json.require_object(asset), "key"),
-                    name=_json.string(_json.require_object(asset), "name"),
-                    media_type=_json.string(_json.require_object(asset), "media_type"),
-                )
-                for asset in assets
-            ),
-            pagers=tuple(
-                Pager(
-                    key=_json.string(_json.require_object(pager), "key"),
-                    page=_json.integer(_json.require_object(pager), "page"),
-                    pages=_json.integer(_json.require_object(pager), "pages"),
-                    content_fingerprint=_json.string(_json.require_object(pager), "content_fingerprint"),
-                )
-                for pager in pagers
-            ),
+            assets=declared_assets,
+            pagers=declared_pagers,
         )
 
 
 def _body_to_dict(body: Body) -> dict[str, Any]:
     match body:
         case ComponentsV2(children=children):
-            return {"kind": ComponentsV2.KIND, "children": [_node_to_dict(child) for child in children]}
-        case ClassicMessage(content=content, embeds=embeds, rows=rows):
-            return {
-                "kind": ClassicMessage.KIND,
-                "content": content,
-                "embeds": [_embed_to_dict(embed) for embed in embeds],
-                "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
-            }
-        case HtmlBody(children=children, locale=locale):
-            return {
-                "kind": HtmlBody.KIND,
-                "children": [_html_node_to_dict(child) for child in children],
-                "locale": locale,
-            }
+            payload = _components_adapter.dump_python(body, mode="json")
+            payload["children"] = [_node_to_dict(child) for child in children]
+            return {"kind": ComponentsV2.KIND, **payload}
+        case ClassicMessage(rows=rows):
+            payload = _classic_adapter.dump_python(body, mode="json")
+            payload["rows"] = [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows]
+            return {"kind": ClassicMessage.KIND, **payload}
+        case HtmlBody(children=children):
+            payload = _html_body_adapter.dump_python(body, mode="json")
+            payload["children"] = [_html_node_to_dict(child) for child in children]
+            return {"kind": HtmlBody.KIND, **payload}
         case SlackMessage() | SlackModalView() | SlackHomeView():
             return slack_body_to_dict(body)
 
@@ -225,31 +200,21 @@ def _body_from_dict(raw: JsonObject) -> Body:
     kind = _json.string(raw, "kind")
     match kind:
         case ComponentsV2.KIND:
-            children = raw.get("children")
-            if not isinstance(children, list):
-                msg = "components_v2 children must be an array"
-                raise CodecError(msg)
-            return ComponentsV2(tuple(_node_from_dict(_json.require_object(child)) for child in children))
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["children"] = tuple(
+                _node_from_dict(_json.require_object(child)) for child in _json.array(raw, "children")
+            )
+            return _validate_dataclass(_components_adapter, payload)
         case ClassicMessage.KIND:
-            embeds = raw.get("embeds")
-            rows = raw.get("rows")
-            if not isinstance(embeds, list) or not isinstance(rows, list):
-                msg = "classic_message embeds and rows must be arrays"
-                raise CodecError(msg)
-            return ClassicMessage(
-                content=_json.optional_string(raw, "content"),
-                embeds=tuple(_embed_from_dict(_json.require_object(embed)) for embed in embeds),
-                rows=tuple(_row_from_dict(_json.require_object(row)) for row in rows),
-            )
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["rows"] = tuple(_row_from_dict(_json.require_object(row)) for row in _json.array(raw, "rows"))
+            return _validate_dataclass(_classic_adapter, payload)
         case HtmlBody.KIND:
-            children = raw.get("children")
-            if not isinstance(children, list):
-                msg = "HTML body children must be an array"
-                raise CodecError(msg)
-            return HtmlBody(
-                tuple(_html_node_from_dict(_json.require_object(child)) for child in children),
-                locale=_json.optional_string(raw, "locale"),
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["children"] = tuple(
+                _html_node_from_dict(_json.require_object(child)) for child in _json.array(raw, "children")
             )
+            return _validate_dataclass(_html_body_adapter, payload)
         case SlackMessage.KIND | SlackModalView.KIND | SlackHomeView.KIND:
             try:
                 return slack_body_from_dict(raw)
@@ -261,302 +226,87 @@ def _body_from_dict(raw: JsonObject) -> Body:
 
 
 def _html_node_to_dict(node: HtmlNode) -> dict[str, Any]:
-    match node:
-        case HtmlText(content=content, markup=markup):
-            return {"kind": HtmlText.KIND, "content": content, "markup": markup.value}
-        case HtmlElement(
-            tag=tag,
-            children=children,
-            attributes=attributes,
-            action=action,
-            route=route,
-            form=form,
-            url=url,
-            time=time,
-            colour=colour,
-            asset=asset,
-        ):
-            return {
-                "kind": HtmlElement.KIND,
-                "tag": tag.value,
-                "children": [_html_node_to_dict(child) for child in children],
-                "attributes": [{"name": attribute.name.value, "value": attribute.value} for attribute in attributes],
-                "action": None if action is None else {"action": action.action, "mode": action.mode.value},
-                "route": None if route is None else {"route_id": route.route_id},
-                "form": None if form is None else {"key": form.key, "field_name": form.field_name},
-                "url": None if url is None else {"url": url.url},
-                "time": (
-                    None if time is None else {"instant": time.instant, "timezone": time.timezone, "style": time.style}
-                ),
-                "colour": None if colour is None else {"value": colour.value},
-                "asset": (
-                    None if asset is None else {"key": asset.key, "name": asset.name, "media_type": asset.media_type}
-                ),
-            }
+    if isinstance(node, HtmlText):
+        return {"kind": HtmlText.KIND, **_html_text_adapter.dump_python(node, mode="json")}
+    payload = _html_element_adapter.dump_python(node, mode="json")
+    payload["children"] = [_html_node_to_dict(child) for child in node.children]
+    return {"kind": HtmlElement.KIND, **payload}
 
 
 def _html_node_from_dict(raw: JsonObject) -> HtmlNode:
     kind = _json.string(raw, "kind")
     if kind == HtmlText.KIND:
-        return HtmlText(_json.string(raw, "content"), Markup(_json.string(raw, "markup")))
-    if kind != HtmlElement.KIND:
+        adapter = _html_text_adapter
+    elif kind == HtmlElement.KIND:
+        adapter = _html_element_adapter
+    else:
         msg = f"unknown HTML scene node kind {kind!r}"
         raise CodecError(msg)
-    children = raw.get("children")
-    attributes = raw.get("attributes")
-    if not isinstance(children, list) or not isinstance(attributes, list):
-        msg = "HTML element children and attributes must be arrays"
-        raise CodecError(msg)
-
-    def optional_ref(key: str) -> JsonObject | None:
-        value = raw.get(key)
-        return None if value is None else _json.require_object(value)
-
-    action = optional_ref("action")
-    route = optional_ref("route")
-    form = optional_ref("form")
-    url = optional_ref("url")
-    time = optional_ref("time")
-    colour = optional_ref("colour")
-    asset = optional_ref("asset")
-    return HtmlElement(
-        tag=HtmlTag(_json.string(raw, "tag")),
-        children=tuple(_html_node_from_dict(_json.require_object(child)) for child in children),
-        attributes=tuple(
-            HtmlAttribute(
-                HtmlAttributeName(_json.string(_json.require_object(attribute), "name")),
-                _html_attribute_value(_json.require_object(attribute).get("value")),
-            )
-            for attribute in attributes
-        ),
-        action=(
-            None
-            if action is None
-            else HtmlActionRef(_json.string(action, "action"), ActionMode(_json.string(action, "mode")))
-        ),
-        route=None if route is None else HtmlRouteRef(_json.string(route, "route_id")),
-        form=None
-        if form is None
-        else HtmlFormRef(_json.string(form, "key"), _json.optional_string(form, "field_name")),
-        url=None if url is None else HtmlUrlRef(_json.string(url, "url")),
-        time=(
-            None
-            if time is None
-            else HtmlTimeRef(
-                _json.string(time, "instant"),
-                timezone=_json.optional_string(time, "timezone"),
-                style=_json.optional_string(time, "style"),
-            )
-        ),
-        colour=None if colour is None else HtmlColourRef(_json.integer(colour, "value")),
-        asset=(
-            None
-            if asset is None
-            else HtmlAssetRef(
-                _json.string(asset, "key"), _json.string(asset, "name"), _json.string(asset, "media_type")
-            )
-        ),
-    )
-
-
-def _html_attribute_value(value: object) -> str | int | float | bool:
-    if not isinstance(value, str | int | float | bool) or (isinstance(value, float) and not math.isfinite(value)):
-        msg = "HTML attribute value must be a finite string, number, or boolean"
-        raise CodecError(msg)
-    return value
+    payload = {key: value for key, value in raw.items() if key != "kind"}
+    if kind == HtmlElement.KIND:
+        payload["children"] = tuple(
+            _html_node_from_dict(_json.require_object(child)) for child in _json.array(raw, "children")
+        )
+    try:
+        return adapter.validate_python(payload)
+    except ValidationError as error:
+        raise CodecError(str(error)) from error
 
 
 def _row_from_dict(raw: JsonObject) -> ClassicRow:
-    controls = raw.get("controls")
-    if not isinstance(controls, list):
-        msg = "classic row controls must be an array"
-        raise CodecError(msg)
-    decoded = tuple(_node_from_dict(_json.require_object(control)) for control in controls)
-    if not all(
-        isinstance(
-            control,
-            Link | PremiumButton | Button | RoutedButton | Select | RoutedSelect | Extension,
-        )
-        for control in decoded
-    ):
-        msg = "classic row contains an unsupported control"
-        raise CodecError(msg)
-    return ClassicRow(cast(tuple[Control, ...], decoded))
+    payload = dict(raw)
+    payload["controls"] = tuple(
+        _node_from_dict(_json.require_object(control)) for control in _json.array(raw, "controls")
+    )
+    return _validate_dataclass(_classic_row_adapter, payload)
 
 
-def _embed_to_dict(embed: Embed) -> dict[str, Any]:
-    return embed.model_dump(mode="json")
-
-
-def _embed_from_dict(raw: JsonObject) -> Embed:
+def _validate_dataclass[ValueT](adapter: TypeAdapter[ValueT], payload: JsonObject) -> ValueT:
     try:
-        return Embed.model_validate(raw)
+        return adapter.validate_python(payload)
     except ValidationError as error:
         raise CodecError(str(error)) from error
 
 
 def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> dict[str, Any]:
     match node:
-        case Text(content=content, markup=markup):
-            return {"kind": Text.KIND, "content": content, "markup": markup.value}
-        case Time(instant=instant, style=style, prefix=prefix):
-            return {"kind": Time.KIND, "instant": instant, "style": style, "prefix": prefix}
-        case ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
-            return {"kind": ZonedTime.KIND, "instant": instant, "timezone": timezone, "prefix": prefix}
-        case File(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
-            return {
-                "kind": File.KIND,
-                "asset_key": asset_key,
-                "name": name,
-                "media_type": media_type,
-                "spoiler": spoiler,
-            }
-        case Separator(large=large, visible=visible):
-            return {"kind": Separator.KIND, "large": large, "visible": visible}
-        case Link(label=label, url=url, emoji=emoji, disabled=disabled):
-            return {
-                "kind": Link.KIND,
-                "label": label,
-                "url": url,
-                "emoji": _emoji_to_dict(emoji),
-                "disabled": disabled,
-            }
-        case PremiumButton(sku_id=sku_id):
-            return {"kind": PremiumButton.KIND, "sku_id": sku_id}
-        case Button(label=label, action=action, style=style, emoji=emoji, disabled=disabled, mode=mode):
-            return {
-                "kind": Button.KIND,
-                "label": label,
-                "action": action,
-                "style": style.value,
-                "emoji": _emoji_to_dict(emoji),
-                "disabled": disabled,
-                "mode": mode.value,
-            }
-        case RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
-            return {
-                "kind": RoutedButton.KIND,
-                "label": label,
-                "route_id": route_id,
-                "style": style.value,
-                "emoji": _emoji_to_dict(emoji),
-                "disabled": disabled,
-            }
-        case Select(
-            options=options,
-            action=action,
-            placeholder=placeholder,
-            min_values=min_values,
-            max_values=max_values,
-            disabled=disabled,
-            mode=mode,
-        ):
-            return {
-                "kind": Select.KIND,
-                "options": [
-                    {
-                        "label": option.label,
-                        "value": option.value,
-                        "description": option.description,
-                        "default": option.default,
-                        "emoji": _emoji_to_dict(option.emoji),
-                    }
-                    for option in options
-                ],
-                "action": action,
-                "placeholder": placeholder,
-                "min_values": min_values,
-                "max_values": max_values,
-                "disabled": disabled,
-                "mode": mode.value,
-            }
-        case RoutedSelect(
-            options=options,
-            route_id=route_id,
-            placeholder=placeholder,
-            min_values=min_values,
-            max_values=max_values,
-            disabled=disabled,
-        ):
-            return {
-                "kind": RoutedSelect.KIND,
-                "options": [
-                    {
-                        "label": option.label,
-                        "value": option.value,
-                        "description": option.description,
-                        "default": option.default,
-                        "emoji": _emoji_to_dict(option.emoji),
-                    }
-                    for option in options
-                ],
-                "route_id": route_id,
-                "placeholder": placeholder,
-                "min_values": min_values,
-                "max_values": max_values,
-                "disabled": disabled,
-            }
-        case EntitySelect(
-            entity_type=entity_type,
-            action=action,
-            placeholder=placeholder,
-            default_values=default_values,
-            conversation_types=conversation_types,
-            min_values=min_values,
-            max_values=max_values,
-            disabled=disabled,
-            mode=mode,
-        ):
-            return {
-                "kind": EntitySelect.KIND,
-                "entity_type": entity_type.value,
-                "action": action,
-                "placeholder": placeholder,
-                "default_values": [{"kind": value.kind.value, "id": value.id} for value in default_values],
-                "conversation_types": [value.value for value in conversation_types],
-                "min_values": min_values,
-                "max_values": max_values,
-                "disabled": disabled,
-                "mode": mode.value,
-            }
+        case Text():
+            return {"kind": Text.KIND, **_text_adapter.dump_python(node, mode="json")}
+        case Time() | ZonedTime() | File() | Separator() | PremiumButton():
+            return {"kind": node.KIND, **node.model_dump(mode="json")}
+        case Link() | Button() | RoutedButton() | Select() | RoutedSelect() | EntitySelect() | Thumbnail() | Gallery():
+            return {"kind": node.KIND, **_leaf_adapters[node.KIND].dump_python(node, mode="json")}
         case Row(items=items):
-            return {"kind": Row.KIND, "items": [_node_to_dict(item) for item in items]}
-        case Thumbnail(url=url, description=description, spoiler=spoiler):
-            return {"kind": Thumbnail.KIND, "url": url, "description": description, "spoiler": spoiler}
-        case Gallery(items=items):
-            return {
-                "kind": Gallery.KIND,
-                "items": [
-                    {
-                        "url": item.url,
-                        "description": item.description,
-                        "spoiler": item.spoiler,
-                        "asset_name": item.asset_name,
-                    }
-                    for item in items
-                ],
-            }
+            payload = _row_adapter.dump_python(node, mode="json")
+            payload["items"] = [_node_to_dict(item) for item in items]
+            return {"kind": Row.KIND, **payload}
         case Section(texts=texts, accessory=accessory):
-            return {
-                "kind": Section.KIND,
-                "texts": [_node_to_dict(text) for text in texts],
-                "accessory": _node_to_dict(accessory),
-            }
-        case Panel(children=children, accent=accent, spoiler=spoiler):
-            return {
-                "kind": Panel.KIND,
-                "children": [_node_to_dict(child) for child in children],
-                "accent": accent,
-                "spoiler": spoiler,
-            }
-        case Extension(kind=kind, version=version, payload=payload):
+            payload = _section_adapter.dump_python(node, mode="json")
+            payload["texts"] = [_node_to_dict(text) for text in texts]
+            payload["accessory"] = _node_to_dict(accessory)
+            return {"kind": Section.KIND, **payload}
+        case Panel(children=children):
+            payload = _panel_adapter.dump_python(node, mode="json")
+            payload["children"] = [_node_to_dict(child) for child in children]
+            return {"kind": Panel.KIND, **payload}
+        case Extension(kind=kind, payload=payload):
             # Round-trip through json now so errors point at planning rather than a remote renderer.
             try:
-                normalized = json.loads(json.dumps(payload, ensure_ascii=False))
+                normalized = json.loads(json.dumps(payload, ensure_ascii=False, allow_nan=False))
             except (TypeError, ValueError) as error:
                 msg = f"extension {kind!r} payload is not JSON serializable"
                 raise CodecError(msg) from error
-            return {"kind": Extension.KIND, "extension": kind, "version": version, "payload": normalized}
+            data = _extension_adapter.dump_python(node, mode="json")
+            data["payload"] = normalized
+            data["extension"] = data.pop("kind")
+            return {"kind": Extension.KIND, **data}
+
+
+def _model_node_from_dict[NodeT: BaseModel](model: type[NodeT], raw: JsonObject) -> NodeT:
+    try:
+        return model.model_validate({key: value for key, value in raw.items() if key != "kind"})
+    except ValidationError as error:
+        raise CodecError(str(error)) from error
 
 
 def _node_from_dict(
@@ -565,222 +315,50 @@ def _node_from_dict(
     kind = _json.string(raw, "kind")
     match kind:
         case Text.KIND:
-            return Text(_json.string(raw, "content"), Markup(_json.string(raw, "markup")))
+            try:
+                return _text_adapter.validate_python({key: value for key, value in raw.items() if key != "kind"})
+            except ValidationError as error:
+                raise CodecError(str(error)) from error
         case Time.KIND:
-            return Time(
-                _json.string(raw, "instant"),
-                _json.string(raw, "style"),
-                _json.optional_string(raw, "prefix"),
-            )
+            return _model_node_from_dict(Time, raw)
         case ZonedTime.KIND:
-            return ZonedTime(
-                _json.string(raw, "instant"),
-                _json.string(raw, "timezone"),
-                _json.optional_string(raw, "prefix"),
-            )
+            return _model_node_from_dict(ZonedTime, raw)
         case File.KIND:
-            return File(
-                _json.string(raw, "asset_key"),
-                _json.string(raw, "name"),
-                _json.string(raw, "media_type"),
-                _json.boolean(raw, "spoiler", default=False),
-            )
+            return _model_node_from_dict(File, raw)
         case Separator.KIND:
-            return Separator(large=_json.boolean(raw, "large"), visible=_json.boolean(raw, "visible"))
-        case Link.KIND:
-            return Link(
-                label=_json.optional_string(raw, "label"),
-                url=_json.string(raw, "url"),
-                emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_json.boolean(raw, "disabled", default=False),
-            )
+            return _model_node_from_dict(Separator, raw)
+        case Link.KIND | Button.KIND | RoutedButton.KIND | Select.KIND | RoutedSelect.KIND | EntitySelect.KIND:
+            return _leaf_node_from_dict(kind, raw)
         case PremiumButton.KIND:
-            return PremiumButton(_json.integer(raw, "sku_id"))
-        case Button.KIND:
-            return Button(
-                label=_json.optional_string(raw, "label"),
-                action=_json.string(raw, "action"),
-                style=ActionStyle(_json.string(raw, "style")),
-                emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_json.boolean(raw, "disabled"),
-                mode=ActionMode(_json.string(raw, "mode")),
-            )
-        case RoutedButton.KIND:
-            return RoutedButton(
-                label=_json.optional_string(raw, "label"),
-                route_id=_json.string(raw, "route_id"),
-                style=ActionStyle(_json.string(raw, "style")),
-                emoji=_emoji_from_value(raw.get("emoji")),
-                disabled=_json.boolean(raw, "disabled"),
-            )
-        case Select.KIND:
-            options = raw.get("options")
-            if not isinstance(options, list):
-                msg = "select options must be an array"
-                raise CodecError(msg)
-            return Select(
-                options=tuple(
-                    Option(
-                        label=_json.string(_json.require_object(option), "label"),
-                        value=_json.string(_json.require_object(option), "value"),
-                        description=_json.optional_string(_json.require_object(option), "description"),
-                        default=_json.boolean(_json.require_object(option), "default"),
-                        emoji=_emoji_from_value(_json.require_object(option).get("emoji")),
-                    )
-                    for option in options
-                ),
-                action=_json.string(raw, "action"),
-                placeholder=_json.optional_string(raw, "placeholder"),
-                min_values=_json.integer(raw, "min_values"),
-                max_values=_json.integer(raw, "max_values"),
-                disabled=_json.boolean(raw, "disabled"),
-                mode=ActionMode(_json.string(raw, "mode")),
-            )
-        case RoutedSelect.KIND:
-            options = raw.get("options")
-            if not isinstance(options, list):
-                msg = "routed select options must be an array"
-                raise CodecError(msg)
-            return RoutedSelect(
-                options=tuple(
-                    Option(
-                        label=_json.string(_json.require_object(option), "label"),
-                        value=_json.string(_json.require_object(option), "value"),
-                        description=_json.optional_string(_json.require_object(option), "description"),
-                        default=_json.boolean(_json.require_object(option), "default"),
-                        emoji=_emoji_from_value(_json.require_object(option).get("emoji")),
-                    )
-                    for option in options
-                ),
-                route_id=_json.string(raw, "route_id"),
-                placeholder=_json.optional_string(raw, "placeholder"),
-                min_values=_json.integer(raw, "min_values"),
-                max_values=_json.integer(raw, "max_values"),
-                disabled=_json.boolean(raw, "disabled"),
-            )
-        case EntitySelect.KIND:
-            defaults = raw.get("default_values")
-            if not isinstance(defaults, list):
-                msg = "entity select default_values must be an array"
-                raise CodecError(msg)
-            return EntitySelect(
-                entity_type=EntityType(_json.string(raw, "entity_type")),
-                action=_json.string(raw, "action"),
-                placeholder=_json.optional_string(raw, "placeholder"),
-                default_values=tuple(
-                    EntityRef(
-                        EntityKind(_json.string(_json.require_object(value), "kind")),
-                        _entity_id(_json.require_object(value)),
-                    )
-                    for value in defaults
-                ),
-                conversation_types=tuple(
-                    ConversationType(value) for value in _json.string_array(raw, "conversation_types")
-                ),
-                min_values=_json.integer(raw, "min_values"),
-                max_values=_json.integer(raw, "max_values"),
-                disabled=_json.boolean(raw, "disabled"),
-                mode=ActionMode(_json.string(raw, "mode")),
-            )
+            return _model_node_from_dict(PremiumButton, raw)
         case Row.KIND:
-            items = raw.get("items")
-            if not isinstance(items, list):
-                msg = "row items must be an array"
-                raise CodecError(msg)
-            decoded = tuple(_node_from_dict(_json.require_object(item)) for item in items)
-            if not all(isinstance(item, Link | PremiumButton | Button | RoutedButton | Extension) for item in decoded):
-                msg = "row contains an unsupported child"
-                raise CodecError(msg)
-            return Row(cast(tuple[Link | PremiumButton | Button | RoutedButton | Extension, ...], decoded))
-        case Thumbnail.KIND:
-            return Thumbnail(
-                url=_json.string(raw, "url"),
-                description=_json.optional_string(raw, "description"),
-                spoiler=_json.boolean(raw, "spoiler", default=False),
-            )
-        case Gallery.KIND:
-            items = raw.get("items")
-            if not isinstance(items, list):
-                msg = "gallery items must be an array"
-                raise CodecError(msg)
-            return Gallery(
-                tuple(
-                    GalleryItem(
-                        url=_json.string(_json.require_object(item), "url"),
-                        description=_json.optional_string(_json.require_object(item), "description"),
-                        spoiler=_json.boolean(_json.require_object(item), "spoiler", default=False),
-                        asset_name=_json.optional_string(_json.require_object(item), "asset_name"),
-                    )
-                    for item in items
-                )
-            )
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["items"] = tuple(_node_from_dict(_json.require_object(item)) for item in _json.array(raw, "items"))
+            return _validate_dataclass(_row_adapter, payload)
+        case Thumbnail.KIND | Gallery.KIND:
+            return _leaf_node_from_dict(kind, raw)
         case Section.KIND:
-            texts = raw.get("texts")
-            if not isinstance(texts, list):
-                msg = "section texts must be an array"
-                raise CodecError(msg)
-            decoded_texts = tuple(_node_from_dict(_json.require_object(text)) for text in texts)
-            accessory = _node_from_dict(_json.require_object(raw.get("accessory")))
-            if not all(isinstance(text, Text) for text in decoded_texts):
-                msg = "section contains a non-text slot"
-                raise CodecError(msg)
-            if not isinstance(
-                accessory,
-                Thumbnail | Link | PremiumButton | Button | RoutedButton | Extension,
-            ):
-                msg = "section has an unsupported accessory"
-                raise CodecError(msg)
-            return Section(cast(tuple[Text, ...], decoded_texts), accessory)
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["texts"] = tuple(_node_from_dict(_json.require_object(text)) for text in _json.array(raw, "texts"))
+            payload["accessory"] = _node_from_dict(_json.require_object(raw.get("accessory")))
+            return _validate_dataclass(_section_adapter, payload)
         case Panel.KIND:
-            children = raw.get("children")
-            accent = raw.get("accent")
-            if not isinstance(children, list) or not (accent is None or isinstance(accent, int)):
-                msg = "panel children or accent is malformed"
-                raise CodecError(msg)
-            return Panel(
-                tuple(_node_from_dict(_json.require_object(child)) for child in children),
-                accent=accent,
-                spoiler=_json.boolean(raw, "spoiler", default=False),
+            payload = {key: value for key, value in raw.items() if key != "kind"}
+            payload["children"] = tuple(
+                _node_from_dict(_json.require_object(child)) for child in _json.array(raw, "children")
             )
+            return _validate_dataclass(_panel_adapter, payload)
         case Extension.KIND:
-            payload = raw.get("payload")
-            if not isinstance(payload, dict):
-                msg = "extension payload must be an object"
-                raise CodecError(msg)
-            return Extension(
-                kind=_json.string(raw, "extension"), version=_json.integer(raw, "version"), payload=payload
-            )
+            payload = {key: value for key, value in raw.items() if key not in {"kind", "extension"}}
+            payload["kind"] = _json.string(raw, "extension")
+            return _validate_dataclass(_extension_adapter, payload)
         case _:
             msg = f"unknown scene node kind {kind!r}"
             raise CodecError(msg)
 
 
-def _entity_id(raw: JsonObject) -> int | str:
-    value = raw.get("id")
-    if isinstance(value, bool) or not isinstance(value, int | str):
-        message = "id must be an integer or string"
-        raise CodecError(message)
-    return value
-
-
-def _emoji_to_dict(emoji: Emoji | None) -> dict[str, object] | None:
-    if emoji is None:
-        return None
-    return {"name": emoji.name, "id": emoji.id, "animated": emoji.animated}
-
-
-def _emoji_from_value(value: object) -> Emoji | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return Emoji(value)
-    raw = _json.require_object(value)
-    emoji_id = raw.get("id")
-    if emoji_id is not None and (not isinstance(emoji_id, int) or isinstance(emoji_id, bool)):
-        message = "emoji id must be an integer or null"
-        raise CodecError(message)
-    return Emoji(
-        name=_json.string(raw, "name"),
-        id=emoji_id,
-        animated=_json.boolean(raw, "animated", default=False),
-    )
+def _leaf_node_from_dict(kind: str, raw: JsonObject) -> Node:
+    try:
+        return _leaf_adapters[kind].validate_python({key: value for key, value in raw.items() if key != "kind"})
+    except ValidationError as error:
+        raise CodecError(str(error)) from error

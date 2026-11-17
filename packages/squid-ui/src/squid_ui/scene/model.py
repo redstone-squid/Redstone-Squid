@@ -12,12 +12,14 @@ putting the handler itself in the scene. Most limits are checked during planning
 or schema validation, rather than by these dataclass constructors.
 """
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import ClassVar
+from typing import Annotated, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from squid_ui._dataclass import immutable
 from squid_ui._query_index import QueryIndexOwner
@@ -30,6 +32,24 @@ from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
 
 
+class _SceneValue(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    @field_validator("instant", check_fields=False)
+    @classmethod
+    def _aware_instant(cls, value: str) -> str:
+        # Keep the instant's source text for renderers while checking the wire format.
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as error:
+            message = "instant must be an ISO-8601 date-time"
+            raise ValueError(message) from error
+        if parsed.utcoffset() is None:
+            message = "instant must include a UTC offset"
+            raise ValueError(message)
+        return value
+
+
 @dataclass(frozen=True, slots=True)
 class Text:
     KIND: ClassVar[str] = "text"
@@ -38,28 +58,25 @@ class Text:
     markup: Markup = Markup.PLAIN
 
 
-@dataclass(frozen=True, slots=True)
-class Time:
+class Time(_SceneValue):
     """An ISO-8601 instant and a target timestamp style, with an optional text prefix."""
 
     KIND: ClassVar[str] = "time"
 
-    instant: str
-    style: str
+    instant: str = Field(json_schema_extra={"format": "date-time"})
+    style: str = Field(pattern=r"^(?:t|T|d|D|f|F|R)$")
     prefix: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ZonedTime:
+class ZonedTime(_SceneValue):
     KIND: ClassVar[str] = "zoned_time"
 
-    instant: str
-    timezone: str
+    instant: str = Field(json_schema_extra={"format": "date-time"})
+    timezone: str = Field(min_length=1)
     prefix: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class File:
+class File(_SceneValue):
     """A visible file reference; bytes are supplied separately under `asset_key`."""
 
     KIND: ClassVar[str] = "file"
@@ -67,15 +84,14 @@ class File:
     asset_key: str
     name: str
     media_type: str
-    spoiler: bool = False
+    spoiler: bool = Field(default=False, strict=True)
 
 
-@dataclass(frozen=True, slots=True)
-class Separator:
+class Separator(_SceneValue):
     KIND: ClassVar[str] = "separator"
 
-    large: bool = False
-    visible: bool = True
+    large: bool = Field(default=False, strict=True)
+    visible: bool = Field(default=True, strict=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,16 +99,15 @@ class Link:
     KIND: ClassVar[str] = "link"
 
     label: str | None
-    url: str
+    url: Annotated[str, Field(max_length=512)]
     emoji: Emoji | None = None
-    disabled: bool = False
+    disabled: Annotated[bool, Field(strict=True)] = False
 
 
-@dataclass(frozen=True, slots=True)
-class PremiumButton:
+class PremiumButton(_SceneValue):
     KIND: ClassVar[str] = "premium_button"
 
-    sku_id: int
+    sku_id: int = Field(ge=1, strict=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +120,7 @@ class Button:
     action: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: Emoji | None = None
-    disabled: bool = False
+    disabled: Annotated[bool, Field(strict=True)] = False
     mode: ActionMode = ActionMode.EXCLUSIVE
 
 
@@ -120,10 +135,10 @@ class RoutedButton:
     KIND: ClassVar[str] = "routed_button"
 
     label: str | None
-    route_id: str
+    route_id: Annotated[str, Field(max_length=100)]
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: Emoji | None = None
-    disabled: bool = False
+    disabled: Annotated[bool, Field(strict=True)] = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +146,7 @@ class Option:
     label: str
     value: str
     description: str | None = None
-    default: bool = False
+    default: Annotated[bool, Field(strict=True)] = False
     emoji: Emoji | None = None
 
 
@@ -142,9 +157,9 @@ class Select:
     options: tuple[Option, ...]
     action: str
     placeholder: str | None = None
-    min_values: int = 1
-    max_values: int = 1
-    disabled: bool = False
+    min_values: Annotated[int, Field(ge=0, strict=True)] = 1
+    max_values: Annotated[int, Field(ge=0, strict=True)] = 1
+    disabled: Annotated[bool, Field(strict=True)] = False
     mode: ActionMode = ActionMode.EXCLUSIVE
 
 
@@ -152,12 +167,12 @@ class Select:
 class RoutedSelect:
     KIND: ClassVar[str] = "routed_select"
 
-    options: tuple[Option, ...]
-    route_id: str
+    options: Annotated[tuple[Option, ...], Field(max_length=25)]
+    route_id: Annotated[str, Field(max_length=100)]
     placeholder: str | None = None
-    min_values: int = 1
-    max_values: int = 1
-    disabled: bool = False
+    min_values: Annotated[int, Field(ge=0, strict=True)] = 1
+    max_values: Annotated[int, Field(ge=0, strict=True)] = 1
+    disabled: Annotated[bool, Field(strict=True)] = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,12 +181,12 @@ class EntitySelect:
 
     entity_type: EntityType
     action: str
-    placeholder: str | None = None
-    default_values: tuple[EntityRef, ...] = ()
+    placeholder: Annotated[str, Field(max_length=150)] | None = None
+    default_values: Annotated[tuple[EntityRef, ...], Field(max_length=25)] = ()
     conversation_types: tuple[ConversationType, ...] = ()
-    min_values: int = 1
-    max_values: int = 1
-    disabled: bool = False
+    min_values: Annotated[int, Field(ge=0, le=25, strict=True)] = 1
+    max_values: Annotated[int, Field(ge=0, le=25, strict=True)] = 1
+    disabled: Annotated[bool, Field(strict=True)] = False
     mode: ActionMode = ActionMode.EXCLUSIVE
 
 
@@ -188,14 +203,14 @@ class Thumbnail:
 
     url: str
     description: str | None = None
-    spoiler: bool = False
+    spoiler: Annotated[bool, Field(strict=True)] = False
 
 
 @dataclass(frozen=True, slots=True)
 class GalleryItem:
     url: str
     description: str | None = None
-    spoiler: bool = False
+    spoiler: Annotated[bool, Field(strict=True)] = False
     asset_name: str | None = None
 
 
@@ -219,8 +234,8 @@ class Panel:
     KIND: ClassVar[str] = "panel"
 
     children: tuple[Node, ...]
-    accent: Color | None = None
-    spoiler: bool = False
+    accent: Annotated[Color, Field(ge=0, le=0xFFFFFF, strict=True)] | None = None
+    spoiler: Annotated[bool, Field(strict=True)] = False
 
 
 type JsonValue = str | int | float | bool | Sequence[JsonValue] | Mapping[str, JsonValue] | None
@@ -234,7 +249,7 @@ class Extension:
     KIND: ClassVar[str] = "extension"
 
     kind: str
-    version: int
+    version: Annotated[int, Field(ge=0, strict=True)]
     payload: Mapping[str, JsonValue]
 
 
@@ -380,6 +395,9 @@ class HtmlAttribute:
         if not isinstance(self.name, HtmlAttributeName):
             message = f"unsupported HTML scene attribute {self.name!r}"
             raise TypeError(message)
+        if isinstance(self.value, float) and not math.isfinite(self.value):
+            message = "HTML attribute value must be finite"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -514,28 +532,24 @@ class ComponentsV2:
     children: tuple[Node, ...] = ()
 
 
-class _EmbedModel(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-
-class EmbedField(_EmbedModel):
+class EmbedField(_SceneValue):
     name: str
     value: str
     inline: bool = Field(default=False, strict=True)
 
 
-class EmbedAuthor(_EmbedModel):
+class EmbedAuthor(_SceneValue):
     name: str
     url: str | None = None
     icon_url: str | None = None
 
 
-class EmbedFooter(_EmbedModel):
+class EmbedFooter(_SceneValue):
     text: str
     icon_url: str | None = None
 
 
-class EmbedMedia(_EmbedModel):
+class EmbedMedia(_SceneValue):
     """One embed image or thumbnail. The description is kept even where Discord drops it."""
 
     url: str
@@ -543,7 +557,7 @@ class EmbedMedia(_EmbedModel):
     asset_name: str | None = None
 
 
-class Embed(_EmbedModel):
+class Embed(_SceneValue):
     """One resolved embed after grouping and overflow decisions.
 
     Only authored properties are represented. Provider details, video metadata,
@@ -572,7 +586,7 @@ type Control = Link | PremiumButton | Button | RoutedButton | Select | RoutedSel
 class ClassicRow:
     """One classic action row. Row assignment is a planning decision, not a drawing one."""
 
-    controls: tuple[Control, ...] = ()
+    controls: Annotated[tuple[Control, ...], Field(max_length=5)] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,7 +597,7 @@ class ClassicMessage:
 
     content: str | None = None
     embeds: tuple[Embed, ...] = ()
-    rows: tuple[ClassicRow, ...] = ()
+    rows: Annotated[tuple[ClassicRow, ...], Field(max_length=5)] = ()
 
 
 type Body = ComponentsV2 | ClassicMessage | HtmlBody | SlackMessage | SlackModalView | SlackHomeView
@@ -626,8 +640,7 @@ for _kind_cls in (
 del _kind_cls
 
 
-@dataclass(frozen=True, slots=True)
-class Asset:
+class Asset(_SceneValue):
     """An asset declaration keyed to a separately supplied delivery resource."""
 
     key: str
@@ -635,14 +648,18 @@ class Asset:
     media_type: str
 
 
-@dataclass(frozen=True, slots=True)
-class Pager:
+class Pager(_SceneValue):
     """A paginator's zero-based selected page, total page count, and content identity."""
 
     key: str
-    page: int
-    pages: int
+    page: int = Field(ge=0, strict=True)
+    pages: int = Field(ge=1, strict=True)
     content_fingerprint: str
+
+    def browser_state(self) -> dict[str, Any]:
+        """Return the page coordinates exposed to preview and HTML hosts."""
+        # Content identity stays server-side; browser controls only need coordinates.
+        return self.model_dump(mode="json", include={"key", "page", "pages"})
 
 
 @immutable

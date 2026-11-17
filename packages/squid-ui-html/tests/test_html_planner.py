@@ -344,7 +344,7 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
         cache=cache,
     )
 
-    assert first.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
+    assert first.scene.assets == (scene.Asset(key="report", name="report.txt", media_type="text/plain"),)
     assert first.resources["asset:report"] == asset
     assert exact.metrics.partition_hint
 

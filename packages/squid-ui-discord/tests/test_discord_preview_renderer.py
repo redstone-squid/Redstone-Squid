@@ -40,8 +40,10 @@ def _scene() -> scene.Scene[scene.ComponentsV2]:
                 scene.Panel(
                     (
                         scene.Text("<script>alert(1)</script>"),
-                        scene.Time("2026-08-22T14:30:00+00:00", "R", "Updated: "),
-                        scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
+                        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
+                        scene.ZonedTime(
+                            instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="Starts: "
+                        ),
                         scene.Row((scene.Button("Save", "form.save", mode=ActionMode.EXCLUSIVE),)),
                         scene.Select((scene.Option("One", "1"),), "form.choice"),
                         scene.Gallery((scene.GalleryItem("https://example.invalid/image.png", "preview"),)),

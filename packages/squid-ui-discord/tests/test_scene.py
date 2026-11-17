@@ -26,8 +26,10 @@ def _scene() -> scene.Scene:
                 scene.Panel(
                     (
                         scene.Text("hello", markup=Markup.DISCORD_MARKDOWN),
-                        scene.Time("2026-08-22T14:30:00+00:00", "R", "Updated: "),
-                        scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
+                        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="Updated: "),
+                        scene.ZonedTime(
+                            instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="Starts: "
+                        ),
                         scene.Row(
                             (
                                 scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
@@ -40,7 +42,7 @@ def _scene() -> scene.Scene:
                 ),
             )
         ),
-        assets=(scene.Asset("report", "report.txt", "text/plain"),),
+        assets=(scene.Asset(key="report", name="report.txt", media_type="text/plain"),),
     )
 
 
@@ -79,7 +81,7 @@ def test_new_component_metadata_round_trips_on_protocol_one() -> None:
                     (
                         scene.Row(
                             (
-                                scene.PremiumButton(42),
+                                scene.PremiumButton(sku_id=42),
                                 scene.Link(
                                     None,
                                     "https://example.invalid",
@@ -134,6 +136,18 @@ def test_unknown_scene_protocol_fails_explicitly() -> None:
         scene.Codec.from_dict(payload)
 
 
+def test_typed_scene_values_reject_invalid_json_fields() -> None:
+    raw = scene.Codec.to_dict(_scene())
+    raw["assets"][0]["unexpected"] = "value"
+    with pytest.raises(scene.CodecError):
+        scene.Codec.from_dict(raw)
+
+    raw = scene.Codec.to_dict(_scene())
+    raw["body"]["children"][0]["children"][1]["style"] = 1
+    with pytest.raises(scene.CodecError):
+        scene.Codec.from_dict(raw)
+
+
 def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
     schema = scene.Codec.schema()
 
@@ -155,7 +169,9 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
         sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=DISCORD_V2_DPY27
     )
 
-    assert result.scene.components_v2.children == (scene.Time("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)
+    assert result.scene.components_v2.children == (
+        scene.Time(instant="2026-08-22T14:30:00+00:00", style="R", prefix="**Updated:** "),
+    )
 
 
 def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
@@ -167,7 +183,7 @@ def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
     result = sl.planning.plan(sl.zoned_timestamp(value, label="Starts"), target=DISCORD_V2_DPY27)
 
     assert result.scene.components_v2.children == (
-        scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "**Starts:** "),
+        scene.ZonedTime(instant="2026-08-22T14:30:00+00:00", timezone="America/New_York", prefix="**Starts:** "),
     )
 
 
@@ -205,7 +221,7 @@ def _classic_scene() -> scene.Scene:
                 scene.ClassicRow((scene.Select((scene.Option("One", "1"),), "form.choice"),)),
             ),
         ),
-        assets=(scene.Asset("report", "report.txt", "text/plain"),),
+        assets=(scene.Asset(key="report", name="report.txt", media_type="text/plain"),),
     )
 
 

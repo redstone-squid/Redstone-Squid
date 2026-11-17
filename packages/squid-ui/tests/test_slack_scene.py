@@ -55,6 +55,28 @@ def test_slack_message_scene_round_trips_and_validates() -> None:
     jsonschema.validate(encoded, scene.Codec.schema())
 
 
+def test_slack_text_decode_rejects_non_boolean_flags() -> None:
+    document = _document(scene.SlackMessage("", (scene.SlackHeader(scene.SlackText("Heading")),)))
+    raw = scene.Codec.to_dict(document)
+    raw["body"]["blocks"][0]["text"]["emoji"] = 1
+
+    with pytest.raises(scene.CodecError):
+        scene.Codec.from_dict(raw)
+
+
+def test_slack_limit_is_shared_by_codec_and_schema() -> None:
+    document = _document(
+        scene.SlackMessage("", (scene.SlackActions((scene.SlackButton(scene.SlackText("Go"), url="https://x"),)),))
+    )
+    raw = scene.Codec.to_dict(document)
+    raw["body"]["blocks"][0]["elements"][0]["url"] = "x" * 3001
+
+    with pytest.raises(scene.CodecError):
+        scene.Codec.from_dict(raw)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(raw, scene.Codec.schema())
+
+
 def test_slack_modal_and_home_scenes_round_trip() -> None:
     modal = _document(
         scene.SlackModalView(

@@ -68,8 +68,12 @@ def test_displays_have_shared_pages_and_exact_target_metadata(target: Target[Any
             assert isinstance(time, scene.HtmlElement)
             assert time.time == scene.HtmlTimeRef(INSTANT.isoformat(), timezone=zone, style=style)
     elif isinstance(pages[1].scene.body, scene.ComponentsV2):
-        assert pages[1].scene.body.children[0] == scene.Time(INSTANT.isoformat(), "R", "**Updated:** ")
-        assert pages[2].scene.body.children[0] == scene.ZonedTime(INSTANT.isoformat(), ZONED.timezone, "**Local:** ")
+        assert pages[1].scene.body.children[0] == scene.Time(
+            instant=INSTANT.isoformat(), style="R", prefix="**Updated:** "
+        )
+        assert pages[2].scene.body.children[0] == scene.ZonedTime(
+            instant=INSTANT.isoformat(), timezone=ZONED.timezone, prefix="**Local:** "
+        )
     else:
         assert ZONED.isoformat() in scene.Codec.dumps(pages[2].scene)
         token = (
@@ -146,8 +150,12 @@ def test_native_time_prefixes_remain_authored_markdown(target: Target[Any, Any, 
     assert result.allocation is not None
     assert "**Starts:** " in scene.Codec.dumps(result.scene)
     if isinstance(result.scene.body, scene.ComponentsV2):
-        assert result.scene.body.children[0] == scene.Time(INSTANT.isoformat(), "F", "**Starts:** ")
-        assert result.scene.body.children[1] == scene.ZonedTime(INSTANT.isoformat(), ZONED.timezone, "Local: ")
+        assert result.scene.body.children[0] == scene.Time(
+            instant=INSTANT.isoformat(), style="F", prefix="**Starts:** "
+        )
+        assert result.scene.body.children[1] == scene.ZonedTime(
+            instant=INSTANT.isoformat(), timezone=ZONED.timezone, prefix="Local: "
+        )
         assert result.cost.get(Axis.DISPLAY_TEXT) == len(f"**Starts:** <t:{int(INSTANT.timestamp())}:F>") + len(
             "Local: " + ZONED.isoformat()
         )

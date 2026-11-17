@@ -22,7 +22,9 @@ def test_discord_scene_queries_reach_nested_controls_and_options() -> None:
             ),
         )
     )
-    scene = s.Scene(1, "discord", 1, body, pagers=(s.Pager("pages", 0, 2, "fingerprint"),))
+    scene = s.Scene(
+        1, "discord", 1, body, pagers=(s.Pager(key="pages", page=0, pages=2, content_fingerprint="fingerprint"),)
+    )
     tree = index_tree(scene, children=scene_children)
 
     assert query(tree, select(s.Section).children(select(s.Button))).one().node is save
