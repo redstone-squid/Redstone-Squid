@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import MagicMock
 
 import anyio
@@ -36,6 +36,7 @@ class ScheduledEntries(EntryDebouncer):
     def __init__(self, scheduled: list[tuple[EntryKey, bool]]) -> None:
         self.scheduled = scheduled
 
+    @override
     def schedule(self, key: EntryKey, *, force: bool = False) -> None:
         self.scheduled.append((key, force))
 

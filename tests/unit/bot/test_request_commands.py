@@ -1,7 +1,7 @@
 """Command wrappers preserve owner scopes, access checks, and consent responses."""
 
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
@@ -22,6 +22,7 @@ class Reports(ErrorReportService):
     def __init__(self) -> None:
         self.recent_calls: AsyncCallRecorder = AsyncCallRecorder(result=())
 
+    @override
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         return await self.recent_calls(limit=limit, work_lost_only=work_lost_only)
 

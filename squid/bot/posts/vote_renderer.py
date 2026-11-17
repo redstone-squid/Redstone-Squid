@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 
 import discord
 
@@ -38,6 +38,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
 
+    @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
         snapshot = await self.bot.services.votes.get_session(int(resource_key))
         if snapshot is None:
@@ -48,6 +49,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             return await self._delete_log(snapshot)
         return await self._generic_poll(snapshot)
 
+    @override
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         """Seed the reactions the session is voted on with."""
         snapshot = await self.bot.services.votes.get_session(int(resource_key))

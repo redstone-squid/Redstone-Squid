@@ -1,7 +1,7 @@
 """A transport recorder for account edit commands; database invariants have integration tests."""
 
 from dataclasses import fields
-from typing import Protocol
+from typing import Protocol, override
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import (
@@ -26,6 +26,7 @@ class SnapshotAccountService(AccountService):
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         raise AssertionError("This fixture does not unlink identities")
 
+    @override
     async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
         account = await self.get_account_by_id(account_id)
         if account is None:

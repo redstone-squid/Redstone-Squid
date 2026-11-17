@@ -494,6 +494,7 @@ class MockRangePublication(RangePublicationService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get(self, query_id: int) -> RangePublication | None:
         return None
 

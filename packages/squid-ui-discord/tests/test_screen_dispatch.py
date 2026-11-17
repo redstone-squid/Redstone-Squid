@@ -119,6 +119,7 @@ async def test_result_rejects_nested_child_transaction() -> None:
 @pytest.mark.parametrize("swallow", [False, True])
 async def test_middleware_cannot_turn_missing_or_failed_callback_into_success(swallow: bool) -> None:
     class Middleware(ActionMiddleware):
+        @override
         async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
             if swallow:
                 with suppress(ValueError):

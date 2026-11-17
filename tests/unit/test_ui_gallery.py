@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -9,6 +10,7 @@ from tests.support.ui_gallery import GalleryRecorder
 
 
 class _Sample(sd.Screen):
+    @override
     def render(self) -> sl.LayoutNode:
         async def noop(event: sl.PressEvent) -> None:
             del event

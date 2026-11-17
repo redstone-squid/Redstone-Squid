@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, final, override
 
 import discord
 
@@ -31,6 +31,7 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
 
+    @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
         starboard_id, _, origin_message_id = resource_key.partition(":")
         state = await self.bot.services.starboards.entry_state(int(starboard_id), int(origin_message_id))
@@ -73,6 +74,7 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             )
         ]
 
+    @override
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         """Add the board's enabled baseline reactions to a newly sent mirror."""
         starboard_id, _, origin_message_id = resource_key.partition(":")

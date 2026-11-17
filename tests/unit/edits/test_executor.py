@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field, replace
 from functools import partial
 from types import TracebackType
+from typing import override
 from uuid import UUID
 
 import pytest
@@ -76,9 +77,11 @@ class Handler(FieldCommand[Work, Store, Values]):
 
         super().__init__(Aggregate(TARGET, load, lambda root: root.revision, flush), Values, authorize)
 
+    @override
     async def capture(self, uow: Work, root: Store, command: EditCommand) -> Values:
         return Values.model_validate(root.values.unpack())
 
+    @override
     async def write(self, uow: Work, root: Store, before: Values, after: Values) -> None:
         root.values = EditValues.of(after.model_dump(mode="json"))
 
@@ -130,6 +133,7 @@ async def test_noops_authorization_unknown_fields_and_stale_versions() -> None:
 @pytest.mark.parametrize("committed", [False, True])
 async def test_retrying_an_uncertain_commit_applies_the_edit_once(committed: bool) -> None:
     class FailingWork(Work):
+        @override
         async def commit(self) -> None:
             if committed:
                 await super().commit()
@@ -175,6 +179,7 @@ def test_value_projection_has_no_mutable_aliases() -> None:
 
 async def test_acknowledged_commit_survives_transaction_cleanup_failure() -> None:
     class CloseFailure(Work):
+        @override
         async def __aexit__(
             self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
         ) -> None:

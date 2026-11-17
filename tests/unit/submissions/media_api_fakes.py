@@ -3,6 +3,7 @@
 import stat
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import override
 from uuid import UUID, uuid4
 
 from litestar import Litestar
@@ -184,6 +185,7 @@ class MediaEditRecorder(EditRunner):
         self.drafts = drafts
         self.media = media
 
+    @override
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)

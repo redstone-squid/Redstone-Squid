@@ -6,7 +6,7 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest_asyncio
@@ -48,6 +48,7 @@ class RegistrationVotes(VoteService):
     def __init__(self) -> None:
         self.resolver: VoteActorResolver | None = None
 
+    @override
     def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
         self.resolver = resolver
 

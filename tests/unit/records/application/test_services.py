@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import override
 from unittest.mock import AsyncMock, create_autospec
 
 import anyio
@@ -676,6 +677,7 @@ async def test_process_queue_preserves_the_pinned_current_version() -> None:
 
 async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> None:
     class FailingRuns(FakeRuns):
+        @override
         async def activate(self, batch: ComputationBatch) -> int:
             if self.batches:
                 raise RuntimeError("second activation failed")

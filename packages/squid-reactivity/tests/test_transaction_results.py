@@ -1,7 +1,7 @@
 """Transaction outcomes remain accessible independently of diagnostic observers."""
 
 from contextvars import copy_context
-from typing import Literal
+from typing import Literal, override
 
 import pytest
 
@@ -132,6 +132,7 @@ def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() ->
         first: int = state(0)
         second: int = state(0)
 
+        @override
         def on_state_rollback(self) -> None:
             calls.append("rollback")
             raise RuntimeError("cleanup failed")

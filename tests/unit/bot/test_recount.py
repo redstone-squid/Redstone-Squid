@@ -1,7 +1,7 @@
 """The /recount command's routing, permission check, and request limits."""
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
@@ -32,9 +32,11 @@ class VoteReactions(VoteReactionHandler):
     running: set[int] = field(default_factory=set)
     recounted: list[int] = field(default_factory=list)
 
+    @override
     def is_recounting(self, vote_session_id: int) -> bool:
         return vote_session_id in self.running
 
+    @override
     async def recount(self, vote_session_id: int) -> bool:
         self.recounted.append(vote_session_id)
         return True
@@ -44,6 +46,7 @@ class VoteReactions(VoteReactionHandler):
 class Starboard(StarboardCog):
     recounted: list[int] = field(default_factory=list)
 
+    @override
     async def recount(self, message: Any) -> tuple[tuple[int, int], ...]:
         self.recounted.append(message.id)
         return ((1, message.id),)
@@ -58,6 +61,7 @@ class Posts(PostService):
     def __init__(self, mirror_of: int | None) -> None:
         self.mirror_of = mirror_of
 
+    @override
     async def resolve(self, message_id: int) -> PostReference | None:
         if self.mirror_of is None:
             return None
@@ -68,6 +72,7 @@ class Starboards(StarboardService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState:
         return EntryState(
             StarboardConfig(id=starboard_id, guild_id=GUILD_ID, channel_id=200, name="main"),

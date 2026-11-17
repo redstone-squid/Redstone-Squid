@@ -2,7 +2,7 @@
 
 from functools import partial
 from types import TracebackType
-from typing import Self
+from typing import Self, override
 
 import pytest
 
@@ -122,10 +122,12 @@ class SearchUnitOfWork(FakeUnitOfWork[FakeSearchBackend]):
     def __init__(self, backend: FakeSearchBackend) -> None:
         super().__init__(CommittedState(backend, clone=lambda value: value))
 
+    @override
     async def __aenter__(self) -> Self:
         self.state.active_scopes += 1
         return self
 
+    @override
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
     ) -> None:
@@ -139,6 +141,7 @@ class SearchUnitOfWork(FakeUnitOfWork[FakeSearchBackend]):
     def search_fields(self) -> StaticFields:
         return StaticFields()
 
+    @override
     async def commit(self) -> None:
         raise AssertionError("Search must not commit.")
 

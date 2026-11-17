@@ -1,6 +1,6 @@
 """Versioned configuration edits and reversible creation of unused starboards."""
 
-from typing import Annotated, Protocol, cast
+from typing import Annotated, Protocol, cast, override
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -169,9 +169,11 @@ class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, Board
             self, Aggregate("starboard", load, lambda row: row.revision, flush), BoardValues, authorize_root
         )
 
+    @override
     async def capture(self, uow: StarboardEditUnitOfWork, root: StarboardConfig, command: EditCommand) -> BoardValues:
         return await self.board_values(uow, root)
 
+    @override
     async def validate(
         self,
         uow: StarboardEditUnitOfWork,
@@ -200,6 +202,7 @@ class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, Board
             raise ConflictError(msg)
         return after.model_copy(update={"settings": after.settings | {"name": normalized.name}})
 
+    @override
     async def write(
         self, uow: StarboardEditUnitOfWork, root: StarboardConfig, before: BoardValues, after: BoardValues
     ) -> None:

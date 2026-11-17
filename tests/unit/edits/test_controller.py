@@ -1,6 +1,7 @@
 """Session history undoes and redoes this controller's own saves, and never another writer's."""
 
 from functools import partial
+from typing import override
 
 import pytest
 
@@ -81,6 +82,7 @@ async def test_an_uncertain_undo_forgets_history_without_blocking_edits(committe
     fail = False
 
     class SometimesFailingWork(Work):
+        @override
         async def commit(self) -> None:
             if not fail or committed:
                 await super().commit()

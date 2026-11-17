@@ -1,7 +1,7 @@
 """Permission commands share one graph revision and the administration policy."""
 
 from dataclasses import dataclass, replace
-from typing import Protocol, Self
+from typing import Protocol, Self, override
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from whenever import Instant
@@ -43,6 +43,7 @@ class PermissionEditStore(PermissionAdminStore, Protocol):
 
 class PermissionEditUnitOfWork(PermissionAdminUnitOfWork, EditUnitOfWork, Protocol):
     @property
+    @override
     def permission_admin(self) -> PermissionEditStore: ...
 
 
@@ -147,6 +148,7 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, GrantValues)
 
+    @override
     async def capture(self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand) -> GrantValues:
         values = GrantValues.model_validate_json(command.values.encoded)
         rules = await uow.permission_admin.list_rules(
@@ -163,6 +165,7 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
                 )
         return values.model_copy(update={"effect": None, "reason": None, "expires_at": None})
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -190,6 +193,7 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
         )
         return after
 
+    @override
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: GrantValues, after: GrantValues
     ) -> None:
@@ -219,6 +223,7 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, AssignmentValues)
 
+    @override
     async def capture(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
     ) -> AssignmentValues:
@@ -237,6 +242,7 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
                 )
         return values.model_copy(update={"present": False, "reason": None, "expires_at": None})
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -261,6 +267,7 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
         await root.admin.check_unassignment(uow, root.current_actor, role, after.scope_guild_id)
         return after.model_copy(update={"reason": None, "expires_at": None})
 
+    @override
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: AssignmentValues, after: AssignmentValues
     ) -> None:
@@ -290,10 +297,12 @@ class PermissionRankEdit(PermissionFieldCommand[RankValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, RankValues)
 
+    @override
     async def capture(self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand) -> RankValues:
         values = RankValues.model_validate_json(command.values.encoded)
         return RankValues(role_id=values.role_id, rank=root.role(values.role_id).rank)
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -306,6 +315,7 @@ class PermissionRankEdit(PermissionFieldCommand[RankValues]):
         root.admin.check_rank(root.current_actor, root.role(after.role_id), after.rank)
         return after
 
+    @override
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: RankValues, after: RankValues
     ) -> None:
@@ -316,6 +326,7 @@ class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, PatternValues)
 
+    @override
     async def capture(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
     ) -> PatternValues:
@@ -330,6 +341,7 @@ class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
         )
         return values.model_copy(update={"mode": mode})
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -346,6 +358,7 @@ class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
             root.admin.check_pattern(root.current_actor, role, after.pattern, after.mode)
         return after
 
+    @override
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: PatternValues, after: PatternValues
     ) -> None:
@@ -360,12 +373,14 @@ class PermissionIncludeEdit(PermissionFieldCommand[IncludeValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, IncludeValues)
 
+    @override
     async def capture(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
     ) -> IncludeValues:
         values = IncludeValues.model_validate_json(command.values.encoded)
         return values.model_copy(update={"present": values.included_id in root.role(values.role_id).includes_roles})
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -382,6 +397,7 @@ class PermissionIncludeEdit(PermissionFieldCommand[IncludeValues]):
             root.admin._require_role_management(root.current_actor, role)
         return after
 
+    @override
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: IncludeValues, after: IncludeValues
     ) -> None:
@@ -422,6 +438,7 @@ class PermissionRoleCreation(PermissionFieldCommand[RolePresenceValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, RolePresenceValues)
 
+    @override
     async def capture(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
     ) -> RolePresenceValues:
@@ -429,6 +446,7 @@ class PermissionRoleCreation(PermissionFieldCommand[RolePresenceValues]):
         row = await uow.permission_admin.role_identity(values.role_id)
         return values.model_copy(update={"present": False}) if row is None else RolePresenceValues.capture(row)
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -456,6 +474,7 @@ class PermissionRoleCreation(PermissionFieldCommand[RolePresenceValues]):
             raise ConflictError
         return after
 
+    @override
     async def write(
         self,
         uow: PermissionEditUnitOfWork,
@@ -496,6 +515,7 @@ class PermissionRoleDeletion(PermissionFieldCommand[RoleDeletionValues]):
     def __init__(self, admin: PermissionAdministrationService) -> None:
         super().__init__(admin, RoleDeletionValues)
 
+    @override
     async def capture(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
     ) -> RoleDeletionValues:
@@ -503,6 +523,7 @@ class PermissionRoleDeletion(PermissionFieldCommand[RoleDeletionValues]):
         root.admin._require_role_management(root.current_actor, root.role(values.role_id))
         return values.model_copy(update={"deleted": False})
 
+    @override
     async def validate(
         self,
         uow: PermissionEditUnitOfWork,
@@ -516,11 +537,13 @@ class PermissionRoleDeletion(PermissionFieldCommand[RoleDeletionValues]):
             raise ValidationError
         return after
 
+    @override
     async def prepare(
         self, uow: PermissionEditUnitOfWork, actor: Actor, command: EditCommand
     ) -> PreparedFields[PermissionGraph, RoleDeletionValues]:
         return replace(await super().prepare(uow, actor, command), final=True)
 
+    @override
     async def write(
         self,
         uow: PermissionEditUnitOfWork,

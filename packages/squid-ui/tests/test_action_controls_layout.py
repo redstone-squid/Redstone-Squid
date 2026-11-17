@@ -4,7 +4,7 @@ Before toggles and forms could join `action_controls`, each one took a row of it
 moved behind the actions. These tests pin the order and row sharing that replaced that.
 """
 
-from typing import Any
+from typing import Any, override
 
 import pytest
 
@@ -137,6 +137,7 @@ def test_the_factory_accepts_toggles_and_control_groups(entry: Any) -> None:
 
 
 class _Preferences(sl.Component):
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.action_controls(
             sl.toggle("Alerts", key="alerts"),
@@ -149,6 +150,7 @@ class _TwoPreferences(sl.Component):
     def __init__(self) -> None:
         self.first, self.second = _Preferences(), _Preferences()
 
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.block(self.first.keyed("first"), self.second.keyed("second"))
 

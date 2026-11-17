@@ -1,7 +1,7 @@
 """Profile and visibility edits share the owning account's optimistic revision."""
 
 from dataclasses import dataclass, fields
-from typing import Protocol
+from typing import Protocol, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -64,6 +64,7 @@ class AccountEditStore(AccountRepository, Protocol):
 
     async def has_current_consent(self, account_id: int) -> bool: ...
 
+    @override
     async def lock_for_edit(self, account_id: int) -> Account: ...
 
     async def flush_edit_revision(self, account: Account, expected: Revision) -> Revision: ...
@@ -71,6 +72,7 @@ class AccountEditStore(AccountRepository, Protocol):
 
 class AccountEditUnitOfWork(AccountUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
     @property
+    @override
     def accounts(self) -> AccountEditStore: ...
 
 
@@ -99,11 +101,13 @@ class AccountProfileEdit(FieldCommand[AccountEditUnitOfWork, Account, ProfileVal
         policy = AccountEdits(permissions)
         super().__init__(policy.aggregate, ProfileValues, policy.authorize)
 
+    @override
     async def capture(self, uow: AccountEditUnitOfWork, root: Account, command: EditCommand) -> ProfileValues:
         profile = await uow.accounts.get_profile(root.id)
         assert profile is not None
         return ProfileValues.model_validate(profile)
 
+    @override
     async def validate(
         self,
         uow: AccountEditUnitOfWork,
@@ -115,6 +119,7 @@ class AccountProfileEdit(FieldCommand[AccountEditUnitOfWork, Account, ProfileVal
     ) -> ProfileValues:
         return ProfileValues.model_validate(ProfileValues.patch(after.update().validated()).unpack())
 
+    @override
     async def write(
         self, uow: AccountEditUnitOfWork, root: Account, before: ProfileValues, after: ProfileValues
     ) -> None:
@@ -132,6 +137,7 @@ class AccountVisibilityEdit(FieldCommand[AccountEditUnitOfWork, Account, Visibil
         policy = AccountEdits(permissions)
         super().__init__(policy.aggregate, VisibilityValues, policy.authorize)
 
+    @override
     async def capture(self, uow: AccountEditUnitOfWork, root: Account, command: EditCommand) -> VisibilityValues:
         identity_id = VisibilityValues.model_validate(command.values.unpack()).identity_id
         identity = next((row for row in root.identities if row.id == identity_id), None)
@@ -139,6 +145,7 @@ class AccountVisibilityEdit(FieldCommand[AccountEditUnitOfWork, Account, Visibil
             raise AccountIdentityNotFoundError(identity_id, account_id=root.id)
         return VisibilityValues(identity_id=identity_id, is_public=identity.is_public)
 
+    @override
     async def write(
         self, uow: AccountEditUnitOfWork, root: Account, before: VisibilityValues, after: VisibilityValues
     ) -> None:

@@ -4,7 +4,7 @@ Every ignored line is an assertion that the checker rejects a target mismatch. A
 suppression means a generic parameter stopped reaching the component or rendered document.
 """
 
-from typing import assert_type
+from typing import assert_type, override
 
 import squid_ui as sl
 import squid_ui_widgets as sp
@@ -53,6 +53,7 @@ class NativeContext:
 
 
 class NativePanel(sl.Component[ComponentsV2Target, NativeContext]):
+    @override
     def render(self) -> DocumentLike[ComponentsV2Target, NativeContext]:
         return sl.paragraph("Native context required")
 

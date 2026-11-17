@@ -243,6 +243,7 @@ class PurgeRecorder(DurableSessionRuntime):
     def __init__(self) -> None:
         self.purge_calls: AsyncCallRecorder = AsyncCallRecorder()
 
+    @override
     async def purge(self, record_keys: Sequence[str]) -> tuple[PurgeResult, ...]:
         return await self.purge_calls(record_keys)
 

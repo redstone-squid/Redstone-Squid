@@ -1,7 +1,7 @@
 """Inference intake delegates to persisted drafts without direct build writes."""
 
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, override
 from uuid import UUID, uuid4
 
 import discord
@@ -39,6 +39,7 @@ class InferenceRecorder(SubmissionInferenceRuns):
         self.infer_calls: AsyncCallRecorder = AsyncCallRecorder()
         self.resume_calls: AsyncCallRecorder = AsyncCallRecorder()
 
+    @override
     async def infer(
         self,
         run_id: UUID,
@@ -60,6 +61,7 @@ class InferenceRecorder(SubmissionInferenceRuns):
             purpose=purpose,
         )
 
+    @override
     async def resume(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...] | None:
         return await self.resume_calls(run_id, actor)
 
@@ -68,6 +70,7 @@ class FinalizationRecorder(SubmissionFinalizationService):
     def __init__(self) -> None:
         self.submit_calls: AsyncCallRecorder = AsyncCallRecorder()
 
+    @override
     async def submit(
         self,
         draft_id: UUID,

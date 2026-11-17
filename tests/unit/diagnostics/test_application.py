@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import replace
 from functools import partial
+from typing import override
 
 import pytest
 from whenever import Instant
@@ -234,6 +235,7 @@ async def test_retention_must_be_at_least_an_hour() -> None:
 
 async def test_record_swallows_commit_failure_without_publishing_state(caplog: pytest.LogCaptureFixture) -> None:
     class FailingCommit(FakeErrorReportUnitOfWork):
+        @override
         async def commit(self) -> None:
             raise RuntimeError("commit failed")
 

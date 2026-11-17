@@ -151,6 +151,7 @@ async def test_stream_delivery_reads_off_loop_and_replays_after_close() -> None:
     read_threads: list[int] = []
 
     class Stream(io.BytesIO):
+        @override
         def read(self, size: int | None = -1, /) -> bytes:
             read_threads.append(threading.get_ident())
             return super().read(size)

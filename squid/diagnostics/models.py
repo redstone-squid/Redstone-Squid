@@ -1,6 +1,7 @@
 """SQLAlchemy model for stored error reports."""
 
 import uuid
+from typing import override
 
 from sqlalchemy import Boolean, Index, Text, false, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -16,6 +17,7 @@ from squid.persistence.types import InstantUTC, StrEnumText
 class ErrorCodeText(StrEnumText[ErrorCode]):
     """Read unknown codes from older deployments as unclassified errors."""
 
+    @override
     def process_result_value(self, value: str | None, dialect: Dialect) -> ErrorCode | None:
         try:
             return super().process_result_value(value, dialect)

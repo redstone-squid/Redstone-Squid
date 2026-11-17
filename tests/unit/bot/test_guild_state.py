@@ -3,7 +3,7 @@
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import MagicMock
 
 import discord
@@ -23,13 +23,16 @@ class FakeSettings(SettingsService):
     presence: list[frozenset[int]] = field(default_factory=list)
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
+    @override
     async def sync_presence(self, present_server_ids: Iterable[int]) -> tuple[list[int], list[int]]:
         self.presence.append(frozenset(present_server_ids))
         return [], []
 
+    @override
     async def referenced_channels(self, server_id: int) -> frozenset[int]:
         return self.referenced.get(server_id, frozenset())
 
+    @override
     async def forget_channels(self, server_id: int, channel_ids: Collection[int]) -> tuple[Setting, ...]:
         self.forgotten.append((server_id, frozenset(channel_ids)))
         return ()
@@ -40,9 +43,11 @@ class FakeStarboards(StarboardService):
     referenced: dict[int, frozenset[int]] = field(default_factory=dict)
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
+    @override
     async def referenced_channels(self, guild_id: int) -> frozenset[int]:
         return self.referenced.get(guild_id, frozenset())
 
+    @override
     async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> None:
         self.forgotten.append((guild_id, frozenset(channel_ids)))
 

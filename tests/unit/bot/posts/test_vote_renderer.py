@@ -170,6 +170,7 @@ async def test_a_deleted_vote_target_is_shown_from_its_stored_copy(monkeypatch: 
         def __init__(self) -> None:
             pass
 
+        @override
         async def get(self, message_id: int) -> Message:
             return Message(id=message_id, channel_id=1, author_id=2, content="the stored text")
 

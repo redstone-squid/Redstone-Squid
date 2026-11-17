@@ -237,6 +237,7 @@ class RetainedInference(SubmissionInferenceRuns):
     def __init__(self, candidate: InferenceCandidate) -> None:
         self.infer_calls: AsyncCallRecorder = AsyncCallRecorder(result=(candidate,))
 
+    @override
     async def infer(
         self,
         run_id: UUID,
@@ -263,6 +264,7 @@ class Proposals(RecalculationProposalService):
     def __init__(self, proposal: RecalculationProposal) -> None:
         self.create_calls: AsyncCallRecorder = AsyncCallRecorder(result=proposal)
 
+    @override
     async def create(
         self,
         *,

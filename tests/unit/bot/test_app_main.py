@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from types import TracebackType
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 import anyio
 import discord
@@ -45,12 +45,15 @@ class ProcessBot(bot_app.RedstoneSquid):
         self.background_tasks = BackgroundTaskSupervisor()
         self.starts: list[str] = []
 
+    @override
     async def start(self, token: str, *, reconnect: bool = True) -> None:
         self.starts.append(token)
 
+    @override
     async def __aenter__(self) -> Self:
         return self
 
+    @override
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
     ) -> None:

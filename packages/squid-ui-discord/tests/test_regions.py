@@ -2,6 +2,7 @@
 
 import asyncio
 from itertools import product
+from typing import override
 
 import discord
 import pytest
@@ -156,6 +157,7 @@ def test_small_allocations_match_exhaustive_page_capacity_oracle(left: int, righ
 
 
 class RegionScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return region("left", 6), region("right", 6)
 
@@ -163,6 +165,7 @@ class RegionScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
 class RecoveringScreen(sl.Component[sl.ComponentsV2Target, sd.Request]):
     keys: str = state("abcdef")
 
+    @override
     def render(self) -> sl.semantic.Region:
         return sl.region(
             *(sl.paragraph(key, key=key) for key in self.keys),

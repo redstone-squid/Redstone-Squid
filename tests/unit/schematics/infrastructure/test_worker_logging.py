@@ -10,7 +10,7 @@ import signal
 import sys
 from collections.abc import AsyncIterator, Callable, Coroutine
 from pathlib import Path
-from typing import Any, NoReturn, Protocol, cast
+from typing import Any, NoReturn, Protocol, cast, override
 from uuid import uuid4
 
 import anyio
@@ -387,6 +387,7 @@ async def test_job_runner_publishes_the_job_id_to_the_worker(mocker: MockerFixtu
         def __init__(self) -> None:
             pass
 
+        @override
         async def capabilities(self) -> AnalyzerCapabilities:
             return await _capture()
 
@@ -394,6 +395,7 @@ async def test_job_runner_publishes_the_job_id_to_the_worker(mocker: MockerFixtu
         def __init__(self) -> None:
             self.completed = AsyncCallRecorder(result=True)
 
+        @override
         async def complete(self, *args: Any, **kwargs: Any) -> bool:
             return await self.completed(*args, **kwargs)
 

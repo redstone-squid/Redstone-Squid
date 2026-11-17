@@ -5,7 +5,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass
 from types import TracebackType
-from typing import Self
+from typing import Self, override
 
 from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -90,6 +90,7 @@ class PublishingFakeUnitOfWork[StateT](FakeUnitOfWork[StateT]):
         self._published = state
         super().__init__(CommittedState(state, clone=clone))
 
+    @override
     async def commit(self) -> None:
         await super().commit()
         snapshot = self._committed.value

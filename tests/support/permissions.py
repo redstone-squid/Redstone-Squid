@@ -1,6 +1,7 @@
 """Read-only permission scopes for service and transport tests."""
 
 from functools import partial
+from typing import override
 
 from squid.permissions.application.ports import PermissionStore, PermissionUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
@@ -12,6 +13,7 @@ class ReadOnlyPermissionUnitOfWork(FakeUnitOfWork[PermissionStore]):
     def permissions(self) -> PermissionStore:
         return self.state
 
+    @override
     async def commit(self) -> None:
         raise AssertionError("Permission reads must not commit.")
 

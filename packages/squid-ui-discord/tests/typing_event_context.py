@@ -1,6 +1,6 @@
 """Frontend constraints survive callbacks, containers, and screen composition."""
 
-from typing import assert_type
+from typing import assert_type, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -34,6 +34,7 @@ other: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = node  # pyrefly: ign
 
 
 class DiscordPanel(sd.Screen):
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return node
 

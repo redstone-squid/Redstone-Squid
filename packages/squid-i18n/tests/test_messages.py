@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import override
 
 import pytest
 
@@ -236,6 +237,7 @@ def test_string_conversion_captures_objects_once_and_preserves_literal_markdown(
     class Value:
         calls = 0
 
+        @override
         def __str__(self) -> str:
             self.calls += 1
             return "**literal** { $injected }"
@@ -275,6 +277,7 @@ def test_repr_conversion_captures_literal_diagnostic_once(markdown: bool) -> Non
     class Diagnostic:
         calls = 0
 
+        @override
         def __repr__(self) -> str:
             self.calls += 1
             return "**literal** { $injected }"

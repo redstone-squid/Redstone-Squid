@@ -140,6 +140,7 @@ def test_models_created_in_an_action_need_no_super_initializer() -> None:
 
 def test_service_state_is_transactional_and_observed_by_multiple_readers() -> None:
     class Service(ManagedService, Search):
+        @override
         async def run(self, *, task_status: TaskStatus[None]) -> None:
             task_status.started()
 

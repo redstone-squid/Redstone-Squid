@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 import discord
 import pytest
@@ -27,11 +27,13 @@ class Command:
 class Identity:
     id: int
 
+    @override
     def __str__(self) -> str:
         return "SquidBot#0000"
 
 
 class ErrorCog(commands.Cog):
+    @override
     async def cog_command_error(self, ctx: commands.Context[Any], error: Exception) -> None:
         pass
 

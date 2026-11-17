@@ -1,5 +1,7 @@
 """Recorded Discord calls and serialized-payload queries used by the test suite."""
 
+from typing import override
+
 import discord
 import pytest
 
@@ -77,6 +79,7 @@ class TestFailureInjection:
 class OverflowingScreen(squid_discord.Screen):
     expanded: bool = sl.state(False)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, squid_discord.Request], ...]:
         if self.expanded:
             return tuple(sl.paragraph(f"private content {index}") for index in range(41))

@@ -1,7 +1,7 @@
 """Renderers deciding what each kind of resource shows in Discord."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast, final
+from typing import TYPE_CHECKING, cast, final, override
 
 import discord
 
@@ -32,6 +32,7 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
 
+    @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
         build = await self.bot.services.build_queries.get(int(resource_key))
         if build is None:
@@ -59,5 +60,6 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             if channel is not None
         ]
 
+    @override
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         return None

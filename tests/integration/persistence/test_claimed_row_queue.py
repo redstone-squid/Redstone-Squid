@@ -5,7 +5,7 @@ and acknowledgements are checked together with their effects on render generatio
 
 import logging
 from functools import partial
-from typing import Any
+from typing import Any, override
 from unittest.mock import patch
 
 import pytest
@@ -379,6 +379,7 @@ async def test_service_claim_is_not_published_when_commit_fails(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     class FailingUnitOfWork(SqlAlchemyUnitOfWork):
+        @override
         async def commit(self) -> None:
             raise RuntimeError("claim commit failed")
 

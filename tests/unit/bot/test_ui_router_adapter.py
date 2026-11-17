@@ -1,6 +1,6 @@
 """Persistent buttons and direct endpoint calls share the application's delivery path."""
 
-from typing import Literal, Self
+from typing import Literal, Self, override
 from unittest.mock import AsyncMock, MagicMock
 
 import anyio
@@ -49,6 +49,7 @@ async def test_screen_endpoint_is_delivered_without_a_forwarding_route() -> None
     router.add_middleware(deliver)
 
     class Screen(sd.Screen):
+        @override
         def render(self) -> tuple[()]:
             return ()
 

@@ -1,7 +1,7 @@
 """Retire public inference status posts while keeping submission review private."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 
@@ -25,8 +25,10 @@ class SubmissionStatusRenderer(PostRenderer):
     def __init__(self, bot: RedstoneSquid) -> None:
         self.bot = bot
 
+    @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost]:
         return ()
 
+    @override
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         return None

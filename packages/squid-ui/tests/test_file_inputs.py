@@ -2,6 +2,7 @@
 
 import io
 from pathlib import Path
+from typing import override
 
 import pytest
 
@@ -35,6 +36,7 @@ def test_binary_stream_snapshot_preserves_position_and_survives_close() -> None:
 
 def test_nonseekable_stream_can_be_reused_through_one_file() -> None:
     class Stream(io.BytesIO):
+        @override
         def seekable(self) -> bool:
             return False
 

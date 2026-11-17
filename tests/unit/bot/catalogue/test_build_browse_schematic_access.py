@@ -1,7 +1,7 @@
 """Check which actors the Discord build browser lets use a build's featured schematic."""
 
 from dataclasses import dataclass, field, replace
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import pytest
@@ -60,9 +60,11 @@ class FeaturedSchematics(SchematicService):
         self.stored = stored
 
     @property
+    @override
     def available(self) -> bool:
         return True
 
+    @override
     async def featured_for_build(self, build_id: int) -> StoredSchematic | None:
         assert build_id == 7
         return self.stored

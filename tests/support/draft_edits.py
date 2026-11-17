@@ -1,6 +1,6 @@
 """Record draft commands in transport tests; database tests cover atomic outcomes."""
 
-from typing import Protocol
+from typing import Protocol, override
 from uuid import UUID
 
 from squid.core.actors import Actor
@@ -31,6 +31,7 @@ class DraftEditRecorder(EditRunner):
     def __init__(self, drafts: RecordedDrafts) -> None:
         self.drafts = drafts
 
+    @override
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         expected = bound_revisions(command)[0]
         draft_id = UUID(expected.target.key)

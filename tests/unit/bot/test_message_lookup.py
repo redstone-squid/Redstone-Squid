@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import MagicMock
 
 import discord
@@ -48,10 +48,12 @@ class Messages(MessageService):
     refreshed: list[tuple[int, str | None, Instant | None]] = field(default_factory=list)
     deleted: list[int] = field(default_factory=list)
 
+    @override
     async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
         self.refreshed.append((message_id, content, edited_at))
         return True
 
+    @override
     async def mark_deleted(self, message_id: int) -> bool:
         self.deleted.append(message_id)
         return True

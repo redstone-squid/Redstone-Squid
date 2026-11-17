@@ -1,6 +1,7 @@
 """Build receipts preserve audit history and fence every aggregate change."""
 
 from functools import partial
+from typing import override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -171,6 +172,7 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     resume = anyio.Event()
 
     class PausedEmbeddings(Embeddings):
+        @override
         async def prepare(self, build: Build) -> None:
             entered.set()
             await resume.wait()

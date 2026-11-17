@@ -89,6 +89,7 @@ class TagEditRecorder(EditRunner):
         self.tags = tags
         self.restrictions = restrictions
 
+    @override
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         if command.kind == ALIAS_EDIT:
             values = AliasValues.model_validate_json(command.values.encoded)

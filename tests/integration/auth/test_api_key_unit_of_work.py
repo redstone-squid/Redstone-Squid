@@ -1,6 +1,7 @@
 """API-key authorization shares the credential transaction."""
 
 from functools import partial
+from typing import override
 
 import pytest
 from sqlalchemy import func, select
@@ -78,6 +79,7 @@ async def test_failed_commit_rolls_back_the_flushed_key_before_returning_a_secre
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     class FailingCommit(SqlAlchemyUnitOfWork):
+        @override
         async def commit(self) -> None:
             raise RuntimeError("commit failed")
 

@@ -1,7 +1,7 @@
 """Declarative runtime setting edits with current authority and aggregate revisions."""
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, override
 
 from squid.core.actors import Actor
 from squid.core.errors import AccountRequiredError, GuildContextRequiredError, ValidationError
@@ -29,6 +29,7 @@ class SettingsEditStore(SettingsStore, Protocol):
 
 class SettingsEditUnitOfWork(EditUnitOfWork, PermissionUnitOfWork, GuildSettingsUnitOfWork, Protocol):
     @property
+    @override
     def settings(self) -> SettingsEditStore: ...
 
 
@@ -109,9 +110,11 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
             Aggregate("guild-settings", load, lambda state: state.row.revision, flush), GuildSettings, authorize
         )
 
+    @override
     async def capture(self, uow: SettingsEditUnitOfWork, root: GuildEditState, command: EditCommand) -> GuildSettings:
         return root.values
 
+    @override
     async def validate(
         self,
         uow: SettingsEditUnitOfWork,
@@ -144,6 +147,7 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
                 raise ValidationError(message)
         return after
 
+    @override
     async def write(
         self, uow: SettingsEditUnitOfWork, root: GuildEditState, before: GuildSettings, after: GuildSettings
     ) -> None:

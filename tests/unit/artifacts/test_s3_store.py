@@ -3,6 +3,7 @@
 import asyncio
 import io
 import threading
+from typing import override
 from unittest.mock import Mock
 
 import anyio
@@ -60,6 +61,7 @@ async def test_cancellation_during_acquisition_still_closes_response(store: S3Ar
     closed = threading.Event()
 
     class ResponseBody(io.BytesIO):
+        @override
         def close(self) -> None:
             super().close()
             closed.set()

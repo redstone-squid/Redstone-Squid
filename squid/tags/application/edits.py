@@ -1,7 +1,7 @@
 """Showcase assignments participate in the owning build's revision and audit."""
 
 from dataclasses import dataclass, replace
-from typing import Annotated, Protocol, Self
+from typing import Annotated, Protocol, Self, override
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -109,6 +109,7 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
 
         super().__init__(Aggregate("build", load, lambda root: root.build.revision, flush), ShowcaseValues, authorize)
 
+    @override
     async def capture(self, uow: TagEditUnitOfWork, root: AssignmentRoot, command: EditCommand) -> ShowcaseValues:
         return ShowcaseValues(
             tag_id=root.definition.id,
@@ -116,6 +117,7 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
             value=None if root.assignment is None else assignment_value(root.assignment.value),
         )
 
+    @override
     async def validate(
         self,
         uow: TagEditUnitOfWork,
@@ -128,6 +130,7 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
         value = coerce_assignment_value(root.definition, after.value) if after.assigned else None
         return ShowcaseValues(tag_id=after.tag_id, assigned=after.assigned, value=assignment_value(value))
 
+    @override
     async def write(
         self, uow: TagEditUnitOfWork, root: AssignmentRoot, before: ShowcaseValues, after: ShowcaseValues
     ) -> None:
@@ -147,6 +150,7 @@ class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, Sho
         ):
             raise ValidationError
 
+    @override
     async def apply(
         self, uow: TagEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
@@ -203,10 +207,12 @@ class TagAliasEdit(FieldCommand[TagAliasUnitOfWork, TagDefinition, AliasValues])
 
         super().__init__(Aggregate("tag", load, lambda root: root.revision, flush), AliasValues, authorize)
 
+    @override
     async def capture(self, uow: TagAliasUnitOfWork, root: TagDefinition, command: EditCommand) -> AliasValues:
         values = AliasValues.model_validate_json(command.values.encoded)
         return AliasValues(alias=values.alias, present=await uow.restrictions.has_alias(root.id, values.alias))
 
+    @override
     async def write(
         self, uow: TagAliasUnitOfWork, root: TagDefinition, before: AliasValues, after: AliasValues
     ) -> None:
@@ -277,12 +283,14 @@ class TagProposalEdit(FieldCommand[TagEditUnitOfWork, ProposalRoot, ProposalValu
             authorize,
         )
 
+    @override
     async def capture(self, uow: TagEditUnitOfWork, root: ProposalRoot, command: EditCommand) -> ProposalValues:
         if root.definition is not None:
             return ProposalValues.capture(root.definition)
         values = ProposalValues.model_validate_json(command.values.encoded)
         return values.model_copy(update={"present": False})
 
+    @override
     async def validate(
         self,
         uow: TagEditUnitOfWork,
@@ -310,6 +318,7 @@ class TagProposalEdit(FieldCommand[TagEditUnitOfWork, ProposalRoot, ProposalValu
             raise ConflictError
         return after
 
+    @override
     async def write(
         self, uow: TagEditUnitOfWork, root: ProposalRoot, before: ProposalValues, after: ProposalValues
     ) -> None:
@@ -359,9 +368,11 @@ class TagModerationEdit(FieldCommand[TagEditUnitOfWork, TagDefinition, Moderatio
 
         super().__init__(Aggregate("tag", load, lambda root: root.revision, flush), ModerationValues, authorize)
 
+    @override
     async def capture(self, uow: TagEditUnitOfWork, root: TagDefinition, command: EditCommand) -> ModerationValues:
         return ModerationValues(status=root.moderation_status)
 
+    @override
     async def validate(
         self,
         uow: TagEditUnitOfWork,
@@ -381,11 +392,13 @@ class TagModerationEdit(FieldCommand[TagEditUnitOfWork, TagDefinition, Moderatio
         await self._permissions.require(actor, node, uow=uow)
         return after
 
+    @override
     async def prepare(
         self, uow: TagEditUnitOfWork, actor: Actor, command: EditCommand
     ) -> PreparedFields[TagDefinition, ModerationValues]:
         return replace(await super().prepare(uow, actor, command), final=True)
 
+    @override
     async def write(
         self, uow: TagEditUnitOfWork, root: TagDefinition, before: ModerationValues, after: ModerationValues
     ) -> None:

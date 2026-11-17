@@ -86,6 +86,7 @@ def test_inherited_transaction_is_closed_before_owner_notifications() -> None:
     class Model(Reactive):
         value: int = state(0)
 
+        @override
         def on_state_commit(self, names: frozenset[str]) -> None:
             with pytest.raises(StaleReactiveContextError):
                 inherited.run(setattr, self, "value", 2)

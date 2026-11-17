@@ -80,6 +80,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         row = await session.get(TagDefinition, tag_id)
         return None if row is None else row
 
+    @override
     async def reserve_identity(self) -> int:
         identity = await self._session().scalar(text("SELECT nextval(pg_get_serial_sequence('tag_definitions', 'id'))"))
         assert isinstance(identity, int)
@@ -121,6 +122,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
     async def flush_definition_revision(self, definition: TagDefinition, expected: Revision) -> Revision:
         return await flush_revision(self._session(), definition, expected)
 
+    @override
     async def build_revision(self, build_id: int) -> int:
         revision = await self._session().scalar(select(Build.revision).where(Build.id == build_id))
         if revision is None:
@@ -172,6 +174,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         )
         return row
 
+    @override
     async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None:
         session = self._session()
         # Serialize with all build edits, including assignments absent at the time of the read.
@@ -183,6 +186,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         )
         return None if row is None else AssignmentSnapshot.capture(row)
 
+    @override
     async def replace_assignment(
         self,
         build_id: int,

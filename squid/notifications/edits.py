@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue, StrictBool
@@ -41,6 +41,7 @@ def inbox_target(notification_id: int) -> EditTarget:
 
 
 class NotificationEditRepository(NotificationRepository, Protocol):
+    @override
     async def lock_settings(self, account_id: int) -> int: ...
 
     async def advance_settings(self, account_id: int) -> int: ...
@@ -60,6 +61,7 @@ class NotificationEditRepository(NotificationRepository, Protocol):
 
 class NotificationEditUnitOfWork(NotificationUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
     @property
+    @override
     def notifications(self) -> NotificationEditRepository: ...
 
 
@@ -125,6 +127,7 @@ class NotificationPreferencesEdit(
             authorize_root,
         )
 
+    @override
     async def capture(
         self, uow: NotificationEditUnitOfWork, root: NotificationSettingsState, command: EditCommand
     ) -> PreferencesValues:
@@ -132,6 +135,7 @@ class NotificationPreferencesEdit(
             await uow.notifications.get_preferences(root.account_id), from_attributes=True
         )
 
+    @override
     async def write(
         self,
         uow: NotificationEditUnitOfWork,

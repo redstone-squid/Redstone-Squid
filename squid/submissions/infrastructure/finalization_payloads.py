@@ -1,7 +1,7 @@
 """Strict serialization for versioned durable finalization payloads."""
 
 from dataclasses import replace
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, cast, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
@@ -300,6 +300,7 @@ class _TypedFinalizationPayload(_FinalizationPayloadBase):
     source_installation_id: str | None = None
     sponsor: _SponsorPayload | None = None
 
+    @override
     def _credits(self) -> tuple[Credit, ...]:
         return tuple(Credit.from_json(value) for value in self.credits)
 
@@ -320,6 +321,7 @@ class FinalizationPayloadV4(_TypedFinalizationPayload):
 class _LinkedFinalizationPayload(_TypedFinalizationPayload):
     links: list[_LinkPayload]
 
+    @override
     def _links(self) -> tuple[SubmissionLink, ...]:
         return tuple(link.to_domain() for link in self.links)
 
@@ -344,6 +346,7 @@ class _RestrictionProposalPayload(_StrictPayloadModel):
 class _CategorizedFinalizationPayload(_LinkedFinalizationPayload):
     restriction_proposal_fields: list[_RestrictionProposalPayload]
 
+    @override
     def _taxonomy(self) -> SubmissionTaxonomy:
         return replace(
             self.taxonomy.to_domain(),
@@ -364,6 +367,7 @@ class FinalizationPayloadV8(_CategorizedFinalizationPayload):
     general_pattern_keys: list[str]
     general_pattern_proposals: list[str]
 
+    @override
     def to_domain(self) -> NormalizedSubmission:
         submission = super().to_domain()
         if not isinstance(submission.details, GeneralSubmissionDetails):

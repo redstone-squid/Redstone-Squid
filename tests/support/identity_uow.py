@@ -5,6 +5,7 @@ repository. WebScope also publishes account changes when it commits.
 """
 
 from copy import deepcopy
+from typing import override
 
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
@@ -45,6 +46,7 @@ class WebScope[RepositoryT, AccountsT](PublishingFakeUnitOfWork[RepositoryT]):
     def web_sessions(self) -> RepositoryT:
         return self.state
 
+    @override
     async def commit(self) -> None:
         await super().commit()
         vars(self._accounts).update(vars(deepcopy(self.accounts)))

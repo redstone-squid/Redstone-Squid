@@ -111,6 +111,7 @@ class BuildScope(PublishingFakeUnitOfWork[FakeBuildRepository]):
         self.state.events.append("commit")
 
     @property
+    @override
     def builds(self) -> FakeBuildRepository:
         return self.state
 
@@ -374,6 +375,7 @@ async def test_edit_rechecks_revision_after_preparation(existing_build: DoorBuil
     service = build_service(repository)
 
     class ConcurrentEdit(FakeEmbeddings):
+        @override
         async def prepare(self, build: Build) -> None:
             existing_build.revision += 1
 
@@ -572,6 +574,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
     class Permissions(EmptyPermissions):
         held = True
 
+        @override
         async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
             return SubjectRecords(
                 epoch=1,
@@ -585,6 +588,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
     service = build_service(repository, permissions=permissions)
 
     class RevokeDuringPreparation(FakeEmbeddings):
+        @override
         async def prepare(self, build: Build) -> None:
             permissions.held = False
 
