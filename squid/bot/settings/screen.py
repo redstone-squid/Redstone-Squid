@@ -8,6 +8,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.diagnostics.permissions import GuildPermissionDiagnostics
 from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
@@ -17,7 +18,12 @@ from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues
 from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
+from squid.permissions.domain.catalogue import (
+    SETTINGS_SERVER_EDIT,
+    SETTINGS_SERVER_VIEW,
+    SETTINGS_VOTING_EDIT,
+    STARBOARD_BOARD_VIEW,
+)
 from squid.settings.application.edits import GUILD_EDIT, guild_target
 from squid.settings.domain import ScalarChannelSetting
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
@@ -92,6 +98,7 @@ class SettingsPanel(sd.Screen):
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD))
     page: str = sl.state("server")
+    diagnostics: GuildPermissionDiagnostics | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -105,6 +112,8 @@ class SettingsPanel(sd.Screen):
         owner_guild_id: int | None = None,
     ) -> None:
         self._capabilities = capabilities
+        self._guild = guild
+        self._owner_guild_id = owner_guild_id
         self.settings = SettingsEditor(settings, guild.id, authorize, edits, actor)
         self.edits = self.settings.edits
         self.server = ServerSettings(self.settings, guild, editable=capabilities.edit_server)
@@ -158,11 +167,41 @@ class SettingsPanel(sd.Screen):
                 available=self.page != "voting",
                 emphasis=sl.semantic.Emphasis.STRONG if self.page == "voting" else sl.semantic.Emphasis.NORMAL,
             ),
+            self.shows_server
+            and sl.action_control(
+                tr(t"settings-tab-diagnostics = Diagnostics"), self._show_diagnostics, key="diagnostics"
+            ),
             key="settings-navigation",
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
-        content = self.voting if self.page == "voting" else self.server
+        if self.page == "diagnostics" and self.diagnostics is not None:
+            content = self.diagnostics
+        elif self.page == "voting":
+            content = self.voting
+        else:
+            content = self.server
         return (navigation, content, *self.edits.refresh_controls())
+
+    async def _show_diagnostics(self, event: sd.PressEvent) -> None:
+        if not (
+            await self.settings.authorize(SETTINGS_SERVER_VIEW) or await self.settings.authorize(SETTINGS_SERVER_EDIT)
+        ):
+            await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
+            return
+        await self.settings.refresh()
+        snapshot = self.settings.snapshot
+        assert snapshot is not None
+        services = event.context.client.services
+        boards = (
+            await services.starboards.list_for_guild(self._guild.id)
+            if await self.settings.authorize(STARBOARD_BOARD_VIEW)
+            else ()
+        )
+        role_id = None
+        if self._guild.id == self._owner_guild_id:
+            role_id = (await services.settings.get_runtime()).redstoner_role_id
+        self.diagnostics = GuildPermissionDiagnostics(self._guild, snapshot, boards, redstoner_role_id=role_id)
+        self.page = "diagnostics"
 
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()
