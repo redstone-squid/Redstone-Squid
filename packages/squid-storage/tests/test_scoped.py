@@ -1,6 +1,7 @@
 """Shared contracts for memory, SQLite, and PostgreSQL scoped values."""
 
 import sqlite3
+from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,8 +9,7 @@ import anyio
 import pytest
 
 from squid_storage import Slot, SlotVersionError, SQLiteScopedStore, json_codec
-
-from .support import StorageBackend
+from tests.support.storage import StorageBackend
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ async def test_sqlite_touch_serializes_replacement(tmp_path: Path) -> None:
             touch_reads += 1
         if touch_reads == 2:
             # Simulate another writer between the touch's read and expiry update.
-            with sqlite3.connect(path, timeout=0) as connection:
+            with closing(sqlite3.connect(path, timeout=0)) as connection, connection:
                 try:
                     connection.execute(
                         "UPDATE squid_scoped_values SET payload = '2', ttl_seconds = 100, expires_at = 200"

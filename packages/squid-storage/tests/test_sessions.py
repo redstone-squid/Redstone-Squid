@@ -6,8 +6,7 @@ import anyio
 import pytest
 
 from squid_storage import ClaimToken, SQLiteSessionStore
-
-from .support import StorageBackend
+from tests.support.storage import StorageBackend
 
 
 async def test_fenced_session_store_contract(backend: StorageBackend) -> None:

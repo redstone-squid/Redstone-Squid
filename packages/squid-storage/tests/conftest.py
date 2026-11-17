@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 from asyncpg import Pool
-from testcontainers.postgres import PostgresContainer
+from testcontainers.community.postgres import PostgresContainer
 
-from .support import StorageBackend, isolated_postgres_pool
+from tests.support.storage import StorageBackend, isolated_postgres_pool
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
