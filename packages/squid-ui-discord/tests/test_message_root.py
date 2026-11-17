@@ -610,7 +610,7 @@ class TestDispatchProfiling:
             "reuse",
             "target_evaluations",
             "work_used",
-            "search_fallback",
+            "generated_states",
         }
         acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
         assert dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes) == {

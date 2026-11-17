@@ -151,7 +151,6 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
     assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
     assert result.metrics.target_evaluations > 0
     assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
-    assert not result.metrics.search_fallback
 
 
 def test_inactive_fallbacks_do_not_replace_the_primary_or_publish_effects() -> None:
@@ -168,7 +167,6 @@ def test_inactive_fallbacks_do_not_replace_the_primary_or_publish_effects() -> N
     assert any(isinstance(node, scene.Select) for node in result.scene.components_v2.children)
     assert "primary" in _texts(result)
     assert not any(event.code == "composition.effect" for event in result.report.events)
-    assert not result.metrics.search_fallback
 
 
 def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> None:
@@ -184,7 +182,6 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
 
     assert any(event.code == "composition.effect" and event.message == "Replacement" for event in result.report.events)
     assert sum(isinstance(node, scene.Select) for node in result.scene.components_v2.children) == 1
-    assert not result.metrics.search_fallback
 
 
 def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> None:

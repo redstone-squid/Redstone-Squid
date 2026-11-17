@@ -126,7 +126,6 @@ def plan_text(snapshot: MessageRootSnapshot) -> str:
     if report is None:
         return "Nothing has been committed yet, so this message root has no plan report."
     lines = [
-        f"logical  {report.logical_fingerprint or '—'}",
         f"scene    {report.scene_fingerprint or '—'}",
     ]
     if not report.events:
@@ -149,8 +148,10 @@ def metrics_text(snapshot: MessageRootSnapshot) -> str:
         return "Nothing has been committed yet, so this message root has no planner metrics."
     return "\n".join(
         (
-            f"states_explored: {metrics.states_explored}",
-            f"search_fallback: {metrics.search_fallback}",
+            f"work_used: {metrics.work_used}",
+            f"target_evaluations: {metrics.target_evaluations}",
+            f"generated_states: {metrics.generated_states}",
+            f"reuse: {metrics.reuse.value}",
             f"cache: {'hit' if metrics.cache_hit else 'miss'}",
         )
     )

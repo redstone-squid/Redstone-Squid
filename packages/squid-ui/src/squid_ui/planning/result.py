@@ -31,8 +31,6 @@ class PlanReuse(StrEnum):
 
     MISS = "miss"
     EXACT = "exact"
-    STRUCTURAL = "structural"
-    INCREMENTAL = "incremental"
     ALLOCATION = "allocation"
 
 
@@ -42,8 +40,6 @@ class PlanEvent:
     path: str
     message: str
     severity: PlanSeverity = PlanSeverity.ADAPTATION
-    before: Mapping[str, int] = field(default_factory=dict)
-    after: Mapping[str, int] = field(default_factory=dict)
 
 
 @immutable
@@ -60,7 +56,6 @@ class RegionReport:
 @immutable
 class PlanReport:
     events: tuple[PlanEvent, ...] = ()
-    logical_fingerprint: str = ""
     scene_fingerprint: str = ""
     regions: tuple[RegionReport, ...] = ()
     search: SearchDiagnostics | None = None
@@ -70,11 +65,8 @@ class PlanReport:
 class PlanMetrics:
     """Planner instrumentation kept outside deterministic reports and scene payloads."""
 
-    states_explored: int = 0
-    """`measure()` calls the search spent, across strategies, fallbacks, and ladder rungs."""
     cache_hit: bool = False
     reuse: PlanReuse = PlanReuse.MISS
-    search_fallback: bool = False
     work_used: int = 0
     """Shared search operations in this call, including cache fingerprinting; zero on retained turns."""
     generated_states: int = 0

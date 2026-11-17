@@ -192,7 +192,7 @@ class MessageRootInspector(sl.Component):
         children.append(
             sl.section(
                 sl.heading("Presentation"),
-                sl.note("cursors, selections, disclosures, strategies"),
+                sl.note("cursors, selections, disclosures"),
                 sl.code(dump(presentation_state(message_root.presentation))),
             )
         )
@@ -209,9 +209,8 @@ class MessageRootInspector(sl.Component):
         yield sl.section(
             sl.heading("Plan"),
             sl.note(
-                f"{metrics.states_explored} states explored · "
+                f"{metrics.work_used} work units · {metrics.target_evaluations} target evaluations · "
                 f"cache {'hit' if metrics.cache_hit else 'miss'}"
-                f"{' · search fell back' if metrics.search_fallback else ''}"
             ),
             sl.code(plan_text(snapshot)),
         )

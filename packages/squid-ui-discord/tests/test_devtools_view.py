@@ -106,7 +106,7 @@ class TestDetail:
         assert "'opened': False" in body
         assert "<@7>" in body
         assert "open" in body
-        assert "states explored" in body
+        assert "target evaluations" in body
         assert "1 suppressed" in body
 
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
@@ -212,8 +212,11 @@ class TestPlanDiagnostics:
         subject = await live_subject()
         snapshot = subject.snapshot()
 
-        assert "logical" in plan_text(snapshot)
-        assert "states_explored:" in metrics_text(snapshot)
+        assert snapshot.report is not None
+        assert snapshot.report.scene_fingerprint in plan_text(snapshot)
+        assert snapshot.metrics is not None
+        assert snapshot.metrics.target_evaluations > 0
+        assert f"target_evaluations: {snapshot.metrics.target_evaluations}" in metrics_text(snapshot)
         assert "cache:" in metrics_text(snapshot)
 
     def test_uncommitted_mounts_explain_missing_diagnostics(self) -> None:

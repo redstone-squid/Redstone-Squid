@@ -200,14 +200,14 @@ def test_operation_counters_survive_tail_sampling_and_roll_into_window() -> None
     with subject.operation(OperationKind.SEND, name="panel") as operation:
         operation.increment("planner.calls")
         operation.increment("planner.cache_hits")
-        operation.increment("planner.states_explored", 7)
+        operation.increment("planner.target_evaluations", 7)
 
     snapshot = subject.snapshot()
     counters = {aggregate.key.counter_name: aggregate for aggregate in snapshot.counter_aggregates}
     assert snapshot.recent == ()
     assert counters["planner.calls"].lifetime == 1
     assert counters["planner.cache_hits"].window == 1
-    assert counters["planner.states_explored"].lifetime == 7
+    assert counters["planner.target_evaluations"].lifetime == 7
 
 
 def test_task_local_parentage_carries_into_child_tasks() -> None:
