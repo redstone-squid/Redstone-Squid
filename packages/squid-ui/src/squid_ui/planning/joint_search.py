@@ -14,7 +14,7 @@ from heapq import heappop, heappush
 from itertools import count
 
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.planning.allocation import AllocationSnapshot, allocate_family
+from squid_ui.planning.allocation import AllocationSnapshot, PageFamily
 from squid_ui.planning.allocation_frontier import AllocationFrontier
 from squid_ui.planning.allocation_policy import (
     AllocationQuality,
@@ -188,7 +188,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     def _certify(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> tuple[bool, bool]:
         """Certify a partition and retain its measured result when feasible."""
         self.context.work.consume()
-        family = allocate_family(task.candidate, task.regions, task.cuts, self.context)
+        family = PageFamily.from_cuts(task.candidate, task.regions, task.cuts, self.context)
         region_map = {node.candidate.offer.occurrence.identity: node for node in task.regions}
         certificate = self.certifier.certify(family, region_map)
         if isinstance(certificate, FamilyRejection):

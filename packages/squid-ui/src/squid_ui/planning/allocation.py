@@ -45,6 +45,66 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
     def __post_init__(self) -> None:
         object.__setattr__(self, "regions", MappingProxyType(dict(self.regions)))
 
+    @classmethod
+    def from_cuts(
+        cls,
+        root: CandidateComposition[RenderTargetT, ContextT, PayloadT],
+        regions: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...],
+        cuts: tuple[tuple[int, ...], ...],
+        context: PlanningContext,
+    ) -> PageFamily[RenderTargetT, ContextT, PayloadT]:
+        """Build a page family from legal region cuts and their navigation chrome."""
+        allocated: dict[OccurrenceId, RegionAllocation[RenderTargetT, ContextT, PayloadT]] = {}
+        for node, ends in zip(regions, cuts, strict=True):
+            context.work.consume()
+            offer = node.candidate.offer
+            assert offer.region is not None
+            if ends != tuple(sorted(set(ends))) or not ends or ends[-1] != len(node.units):
+                message = "region cuts must cover every unit exactly once"
+                raise LayoutInvariantError(message)
+            nested: list[tuple[frozenset[SemanticRef], SemanticRef]] = []
+            pending = list(node.children)
+            while pending:
+                child = pending.pop()
+                child_offer = child.candidate.offer
+                if child_offer.region is not None:
+                    nested.append((child_offer.occurrence.sources, child_offer.occurrence.page_source))
+                else:
+                    pending.extend(child.children)
+            anchor_units: list[frozenset[SemanticRef]] = []
+            for unit in node.units:
+                sources = set(unit)
+                for covered, reference in nested:
+                    if covered and covered <= sources:
+                        sources.difference_update(covered)
+                        sources.add(reference)
+                anchor_units.append(frozenset(sources))
+            pages: list[CandidateComposition[RenderTargetT, ContextT, PayloadT]] = []
+            anchors: list[frozenset[SemanticRef]] = []
+            start = 0
+            for index, end in enumerate(ends):
+                context.work.consume()
+                fragment = slice_fragment(node, start, end, context)
+                chrome = offer.region.navigation(index, len(ends), context)
+                children = (
+                    *(child for child in fragment.children if child.offer.occurrence.placement != Placement.FOOTER),
+                    *chrome,
+                    *(child for child in fragment.children if child.offer.occurrence.placement == Placement.FOOTER),
+                )
+                pages.append(
+                    CandidateComposition(
+                        replace(fragment.offer, children=tuple(child.offer.occurrence for child in children)), children
+                    )
+                )
+                anchors.append(frozenset(source for unit in anchor_units[start:end] for source in unit))
+                start = end
+            sources = frozenset(source for unit in anchor_units for source in unit)
+            ordered = tuple(ref for ref in root.offer.occurrence.graph.units if ref in sources)
+            allocated[offer.occurrence.identity] = RegionAllocation(
+                offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors), source_order=ordered
+            )
+        return cls(root, allocated)
+
     def combinations(
         self, context: PlanningContext
     ) -> Iterator[tuple[tuple[tuple[OccurrenceId, int], ...], CandidateComposition[RenderTargetT, ContextT, PayloadT]]]:
@@ -86,64 +146,6 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
             yield from children(0, (), ())
 
         yield from visit(self.root)
-
-
-def allocate_family[RenderTargetT, ContextT, PayloadT](
-    root: CandidateComposition[RenderTargetT, ContextT, PayloadT],
-    regions: tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...],
-    cuts: tuple[tuple[int, ...], ...],
-    context: PlanningContext,
-) -> PageFamily[RenderTargetT, ContextT, PayloadT]:
-    allocated: dict[OccurrenceId, RegionAllocation[RenderTargetT, ContextT, PayloadT]] = {}
-    for node, ends in zip(regions, cuts, strict=True):
-        context.work.consume()
-        offer = node.candidate.offer
-        assert offer.region is not None
-        if ends != tuple(sorted(set(ends))) or not ends or ends[-1] != len(node.units):
-            message = "region cuts must cover every unit exactly once"
-            raise LayoutInvariantError(message)
-        nested: list[tuple[frozenset[SemanticRef], SemanticRef]] = []
-        pending = list(node.children)
-        while pending:
-            child = pending.pop()
-            child_offer = child.candidate.offer
-            if child_offer.region is not None:
-                nested.append((child_offer.occurrence.sources, child_offer.occurrence.page_source))
-            else:
-                pending.extend(child.children)
-        anchor_units: list[frozenset[SemanticRef]] = []
-        for unit in node.units:
-            sources = set(unit)
-            for covered, reference in nested:
-                if covered and covered <= sources:
-                    sources.difference_update(covered)
-                    sources.add(reference)
-            anchor_units.append(frozenset(sources))
-        pages: list[CandidateComposition[RenderTargetT, ContextT, PayloadT]] = []
-        anchors: list[frozenset[SemanticRef]] = []
-        start = 0
-        for index, end in enumerate(ends):
-            context.work.consume()
-            fragment = slice_fragment(node, start, end, context)
-            chrome = offer.region.navigation(index, len(ends), context)
-            children = (
-                *(child for child in fragment.children if child.offer.occurrence.placement != Placement.FOOTER),
-                *chrome,
-                *(child for child in fragment.children if child.offer.occurrence.placement == Placement.FOOTER),
-            )
-            pages.append(
-                CandidateComposition(
-                    replace(fragment.offer, children=tuple(child.offer.occurrence for child in children)), children
-                )
-            )
-            anchors.append(frozenset(source for unit in anchor_units[start:end] for source in unit))
-            start = end
-        sources = frozenset(source for unit in anchor_units for source in unit)
-        ordered = tuple(ref for ref in root.offer.occurrence.graph.units if ref in sources)
-        allocated[offer.occurrence.identity] = RegionAllocation(
-            offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors), source_order=ordered
-        )
-    return PageFamily(root, allocated)
 
 
 @dataclass(frozen=True, slots=True)
