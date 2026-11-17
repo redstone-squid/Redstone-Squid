@@ -53,7 +53,6 @@ def _snapshot(*, draft_id: UUID = DRAFT_ID, upload_id: UUID = UPLOAD_ID) -> Medi
             source_byte_size=3,
             source_sha256="a" * 64,
             source_object_key=f"media/raw/{upload_id}/{'a' * 64}",
-            strip_audio=False,
         ),
         status=MediaJobStatus.PENDING,
         attempts=0,
@@ -124,7 +123,6 @@ async def test_authorize_then_register_revalidates_owner_and_revision_and_consum
     snapshot = await service.register(
         authority,
         StagedUpload(source, "image/png"),
-        strip_audio=False,
         upload_id=UPLOAD_ID,
     )
 
@@ -152,7 +150,6 @@ async def test_register_cleans_staged_bytes_and_localizes_private_upload_conflic
         await service.register(
             DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7)),
             StagedUpload(source, "image/png"),
-            strip_audio=False,
             upload_id=UPLOAD_ID,
         )
 
@@ -167,7 +164,7 @@ async def test_register_rejects_reused_staging_authority(tmp_path: Path) -> None
     source.write_bytes(b"png")
     staged = StagedUpload(source, "image/png")
     authority = DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7))
-    await service.register(authority, staged, strip_audio=False, upload_id=UPLOAD_ID)
+    await service.register(authority, staged, upload_id=UPLOAD_ID)
     second_source = tmp_path / "second-source"
     second_source.write_bytes(b"png")
 
@@ -175,7 +172,6 @@ async def test_register_rejects_reused_staging_authority(tmp_path: Path) -> None
         await service.register(
             authority,
             StagedUpload(second_source, "image/png"),
-            strip_audio=False,
             upload_id=uuid4(),
         )
 
@@ -198,7 +194,6 @@ async def test_cleanup_failure_does_not_mask_successful_registration(
     snapshot = await service.register(
         DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE, Actor(account_id=7)),
         StagedUpload(source, "image/png"),
-        strip_audio=False,
         upload_id=UPLOAD_ID,
     )
 
@@ -230,5 +225,5 @@ async def test_staff_upload_authority_keeps_original_owner(tmp_path: Path) -> No
     assert authority.actor == actor
     source = tmp_path / "source"
     source.write_bytes(b"image")
-    await service.register(authority, StagedUpload(source, "image/png"), strip_audio=False, upload_id=UPLOAD_ID)
+    await service.register(authority, StagedUpload(source, "image/png"), upload_id=UPLOAD_ID)
     assert drafts.calls == [(DRAFT_ID, actor), (DRAFT_ID, actor)]

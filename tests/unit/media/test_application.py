@@ -1,4 +1,3 @@
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -142,40 +141,6 @@ async def test_source_byte_budget_is_checked_before_probe(tmp_path: Path) -> Non
     assert normalizer.probe_calls == []
 
 
-@pytest.mark.parametrize(
-    ("inspected", "reason"),
-    [
-        (video_probe(duration_milliseconds=None), MediaFailureReason.VIDEO_DURATION_UNKNOWN),
-        (video_probe(fps_numerator=0), MediaFailureReason.VIDEO_FRAME_RATE_UNKNOWN),
-        (video_probe(width=321), MediaFailureReason.VIDEO_DIMENSIONS_UNSUPPORTED),
-    ],
-)
-async def test_unsafe_video_probe_facts_are_rejected_before_decode(
-    tmp_path: Path,
-    inspected: MediaProbe,
-    reason: MediaFailureReason,
-) -> None:
-    normalizer = FakeMediaNormalizer(inspected)
-    service = MediaNormalizationService(normalizer)
-
-    with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(replace(request(tmp_path), strip_audio=True))
-
-    assert raised.value.reason is reason
-    assert normalizer.normalize_calls == []
-
-
-async def test_decoded_work_budget_is_checked_before_decode(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe(width=2_500, height=2_000, fps_numerator=51))
-    service = MediaNormalizationService(normalizer)
-
-    with pytest.raises(MediaLimitExceededError) as raised:
-        await service.normalize(replace(request(tmp_path), strip_audio=True))
-
-    assert raised.value.violations[0].measure is MediaLimitMeasure.DECODED_PIXELS_PER_SECOND
-    assert normalizer.normalize_calls == []
-
-
 async def test_source_changes_between_probe_and_decode_are_rejected(tmp_path: Path) -> None:
     normalizer = FakeMediaNormalizer(video_probe())
     normalizer.change_on_probe = True
@@ -252,16 +217,6 @@ async def test_service_closes_the_normalizer_port() -> None:
     await MediaNormalizationService(normalizer).aclose()
 
     assert normalizer.closed
-
-
-def test_image_request_cannot_hide_a_video_option(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="Image normalization"):
-        MediaNormalizationRequest(
-            kind=MediaKind.IMAGE,
-            source_path=tmp_path / "source.png",
-            output_path=tmp_path / "normalized.png",
-            strip_audio=True,
-        )
 
 
 @pytest.mark.parametrize(

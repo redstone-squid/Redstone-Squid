@@ -6,7 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from squid.core.errors import InvalidStateError
-from squid.media.application.jobs import MediaJobSnapshot, StoredMediaArtifact
+from squid.media.application.jobs import MediaJobSnapshot
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.domain.models import IMAGE_CONTENT_TYPES, VIDEO_CONTENT_TYPES
@@ -135,7 +135,7 @@ def _assess_media(
             continue
         if job.status is not MediaJobStatus.COMPLETED:
             continue
-        if job.upload.id in seen or not _valid_completed_job(job, limits):
+        if job.upload.id in seen or not _valid_completed_job(job):
             rejected = True
             continue
         seen.add(job.upload.id)
@@ -149,8 +149,8 @@ def _assess_media(
     return tuple(identifiers), tuple(issues)
 
 
-def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
-    """Check completion metadata, required artifact roles, content types, and pixel limits."""
+def _valid_completed_job(job: MediaJobSnapshot) -> bool:
+    """Check completion metadata, required artifact roles, content types, and dimensions."""
     if (
         job.completed_at is None
         or job.claimed_at is not None
@@ -181,14 +181,12 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
         return False
     if job.upload.kind is MediaKind.VIDEO:
         thumbnail = artifacts[MediaArtifactRole.VIDEO_THUMBNAIL]
-        if thumbnail.content_type != "image/jpeg" or not _valid_visual_artifact(thumbnail, limits):
+        if (
+            thumbnail.content_type != "image/jpeg"
+            or thumbnail.width is None
+            or thumbnail.height is None
+            or thumbnail.width <= 0
+            or thumbnail.height <= 0
+        ):
             return False
     return True
-
-
-def _valid_visual_artifact(artifact: StoredMediaArtifact, limits: MediaLimits) -> bool:
-    return (
-        artifact.width is not None
-        and artifact.height is not None
-        and artifact.width * artifact.height <= limits.max_pixels_per_frame
-    )

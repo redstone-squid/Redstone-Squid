@@ -169,9 +169,6 @@ enum MediaCommand {
         /// Explicit image/* or video/* type when the file extension is unknown.
         #[arg(long)]
         content_type: Option<String>,
-        /// Remove audio while normalizing a video.
-        #[arg(long)]
-        strip_audio: bool,
         /// Wait for normalization to complete or fail.
         #[arg(long)]
         wait: bool,
@@ -759,14 +756,10 @@ fn run_media(
             kind,
             path,
             content_type,
-            strip_audio,
             wait,
             timeout_seconds,
         } => {
             let kind = MediaKind::from(kind);
-            if kind == MediaKind::Image && strip_audio {
-                return Err(invalid_media_input("strip_audio_requires_video").into());
-            }
             let content_type = resolve_media_content_type(kind, &path, content_type.as_deref())?;
             let current = session
                 .request(|client, token| SubmissionMediaApi::new(client).list(draft_id, token))?;
@@ -782,7 +775,6 @@ fn run_media(
                     kind,
                     &path,
                     &content_type,
-                    strip_audio,
                     upload_id,
                     maximum_bytes,
                     token,
@@ -3258,7 +3250,6 @@ mod tests {
             draft_id,
             "video",
             "demo.mp4",
-            "--strip-audio",
             "--wait",
             "--timeout-seconds",
             "60",
@@ -3269,7 +3260,6 @@ mod tests {
                 command: Command::Media {
                     command: MediaCommand::Upload {
                         kind: MediaKindArgument::Video,
-                        strip_audio: true,
                         wait: true,
                         timeout_seconds: 60,
                         ..

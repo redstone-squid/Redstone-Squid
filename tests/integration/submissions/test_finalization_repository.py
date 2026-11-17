@@ -242,7 +242,6 @@ async def _store_media(
                 source_byte_size=len(source),
                 source_sha256="a" * 64,
                 source_object_key=f"media/raw/{upload_id}/{'a' * 64}",
-                strip_audio=False,
             )
         )
         await session.flush()

@@ -31,15 +31,12 @@ class MediaKind(StrEnum):
 
 
 class MediaLimitMeasure(StrEnum):
-    """Stable identifiers for capacity and decoder-work limits."""
+    """Stable identifiers for submission capacity limits."""
 
     IMAGE_COUNT = "image_count"
     VIDEO_COUNT = "video_count"
     SOURCE_BYTES = "source_bytes"
     OUTPUT_BYTES = "output_bytes"
-    DURATION_MILLISECONDS = "duration_milliseconds"
-    PIXELS_PER_FRAME = "pixels_per_frame"
-    DECODED_PIXELS_PER_SECOND = "decoded_pixels_per_second"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,26 +65,21 @@ class MediaBatchTotals:
 
 @dataclass(frozen=True, slots=True)
 class MediaLimits:
-    """Limits for submission totals and the work needed to decode each file."""
+    """Image/video counts and byte budgets for one submission."""
 
     max_images: int = 10
     max_videos: int = 3
-    max_duration_milliseconds: int = 5 * 60 * 1000
+
     max_source_bytes: int = 500 * MEBIBYTE
     max_output_bytes: int = 500 * MEBIBYTE
-    max_pixels_per_frame: int = 33_200_000
-    max_decoded_pixels_per_second: int = 250_000_000
 
     def __post_init__(self) -> None:
         if (
             min(
                 self.max_images,
                 self.max_videos,
-                self.max_duration_milliseconds,
                 self.max_source_bytes,
                 self.max_output_bytes,
-                self.max_pixels_per_frame,
-                self.max_decoded_pixels_per_second,
             )
             <= 0
         ):
@@ -102,33 +94,6 @@ class MediaLimits:
             (MediaLimitMeasure.SOURCE_BYTES, totals.source_bytes, self.max_source_bytes),
             (MediaLimitMeasure.OUTPUT_BYTES, totals.output_bytes, self.max_output_bytes),
         )
-        return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
-
-    def probe_violations(self, kind: MediaKind, probe: MediaProbe) -> tuple[MediaViolation, ...]:
-        """Check frame size and, for videos, duration and decoded pixels per second.
-
-        Unknown durations are skipped here; the normalization service rejects them
-        before applying video limits.
-        """
-        checks: list[tuple[MediaLimitMeasure, int, int]] = [
-            (MediaLimitMeasure.PIXELS_PER_FRAME, probe.pixels_per_frame, self.max_pixels_per_frame)
-        ]
-        if kind is MediaKind.VIDEO:
-            if probe.duration_milliseconds is not None:
-                checks.append(
-                    (
-                        MediaLimitMeasure.DURATION_MILLISECONDS,
-                        probe.duration_milliseconds,
-                        self.max_duration_milliseconds,
-                    )
-                )
-            checks.append(
-                (
-                    MediaLimitMeasure.DECODED_PIXELS_PER_SECOND,
-                    probe.decoded_pixels_per_second,
-                    self.max_decoded_pixels_per_second,
-                )
-            )
         return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
 
@@ -179,21 +144,11 @@ class MediaProbe:
         """Whether the inspected input contains an audio stream."""
         return self.audio_codec is not None
 
-    @property
-    def pixels_per_frame(self) -> int:
-        """Return decoded pixels in one full frame."""
-        return self.width * self.height
-
-    @property
-    def decoded_pixels_per_second(self) -> int:
-        """Return the ceiling of width x height x average FPS."""
-        numerator = self.pixels_per_frame * self.frame_rate_numerator
-        return (numerator + self.frame_rate_denominator - 1) // self.frame_rate_denominator
-
 
 class MediaNormalizationAction(StrEnum):
     """Stable, non-sensitive actions included in normalization reports."""
 
+    # Historical actions remain readable in immutable reports.
     METADATA_REMOVED = "metadata_removed"
     IMAGE_REENCODED = "image_reencoded"
     VIDEO_TRANSCODED = "video_transcoded"

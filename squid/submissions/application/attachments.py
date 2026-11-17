@@ -137,7 +137,6 @@ class DraftAttachmentService:
         authority: DraftUploadAuthority,
         staged: StagedUpload,
         *,
-        strip_audio: bool,
         upload_id: UUID | None,
     ) -> MediaJobSnapshot:
         """Register the staged file after rechecking access and its draft revision.
@@ -153,7 +152,6 @@ class DraftAttachmentService:
                     kind=authority.kind,
                     source_path=staged.consume(),
                     source_content_type=staged.source_content_type,
-                    strip_audio=strip_audio,
                     upload_id=upload_id,
                 ),
                 authorization=authority.consume(),

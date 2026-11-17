@@ -583,10 +583,7 @@ impl<'a> SubmissionApi<'a> {
         token: &SecretBytes,
     ) -> Result<ApiResponse<StoredDraft>, TransportError> {
         self.client.send_json(
-            ApiRequest::new(
-                ApiMethod::Get,
-                format!("/v1/submissions/drafts/{draft_id}"),
-            ),
+            ApiRequest::new(ApiMethod::Get, format!("/v1/submissions/drafts/{draft_id}")),
             Some(token),
         )
     }

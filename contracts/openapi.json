@@ -14363,20 +14363,6 @@
             "deprecated": false
           },
           {
-            "name": "strip_audio",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "description": "Remove audio while normalizing a video.",
-              "default": false
-            },
-            "description": "Remove audio while normalizing a video.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
             "name": "upload_id",
             "in": "query",
             "schema": {
@@ -20289,24 +20275,12 @@
           },
           "max_output_bytes": {
             "type": "integer"
-          },
-          "max_duration_milliseconds": {
-            "type": "integer"
-          },
-          "max_pixels_per_frame": {
-            "type": "integer"
-          },
-          "max_decoded_pixels_per_second": {
-            "type": "integer"
           }
         },
         "type": "object",
         "required": [
-          "max_decoded_pixels_per_second",
-          "max_duration_milliseconds",
           "max_images",
           "max_output_bytes",
-          "max_pixels_per_frame",
           "max_upload_bytes",
           "max_videos"
         ],
@@ -25829,10 +25803,6 @@
             "type": "integer",
             "exclusiveMinimum": 0.0
           },
-          "max_duration_milliseconds": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0
-          },
           "max_source_bytes": {
             "type": "integer",
             "exclusiveMinimum": 0.0
@@ -25840,23 +25810,12 @@
           "max_output_bytes": {
             "type": "integer",
             "exclusiveMinimum": 0.0
-          },
-          "max_pixels_per_frame": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0
-          },
-          "max_decoded_pixels_per_second": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0
           }
         },
         "type": "object",
         "required": [
-          "max_decoded_pixels_per_second",
-          "max_duration_milliseconds",
           "max_images",
           "max_output_bytes",
-          "max_pixels_per_frame",
           "max_source_bytes",
           "max_videos"
         ],

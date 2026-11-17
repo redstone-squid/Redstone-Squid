@@ -221,7 +221,6 @@ submitFlow-mediaBody = 服务器检查和处理期间，上传内容保持私密
 submitFlow-mediaUnavailable = 媒体处理暂时不可用。草稿的其他部分仍可编辑。
 submitFlow-upload = 添加图片或视频
 submitFlow-uploadBusy = 正在上传…
-submitFlow-stripAudio = 移除上传视频中的音频
 submitFlow-remove = 丢弃
 submitFlow-noMedia = 尚未上传媒体。
 submitFlow-limits = 最多 { $images } 张图片和 { $videos } 个视频；每次上传 { $size }。

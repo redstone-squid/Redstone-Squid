@@ -474,8 +474,6 @@ class _ServiceGraph:
                 ffprobe=media.ffprobe,
                 process_limits=MediaProcessLimits(
                     probe_timeout_seconds=media.probe_timeout_seconds,
-                    image_timeout_seconds=media.image_timeout_seconds,
-                    video_timeout_seconds=media.video_timeout_seconds,
                     poster_timeout_seconds=media.poster_timeout_seconds,
                     memory_bytes=media.memory_bytes,
                     cpu_seconds=media.cpu_seconds,

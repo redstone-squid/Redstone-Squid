@@ -221,7 +221,6 @@ submitFlow-mediaBody = Uploads stay private while the server checks and processe
 submitFlow-mediaUnavailable = Media processing is temporarily unavailable. The rest of your draft is still editable.
 submitFlow-upload = Add images or video
 submitFlow-uploadBusy = Uploading…
-submitFlow-stripAudio = Remove audio from uploaded videos
 submitFlow-remove = Discard
 submitFlow-noMedia = No media uploaded yet.
 submitFlow-limits = Up to { $images } images and { $videos } videos; { $size } per upload.

@@ -306,7 +306,6 @@ export const messageKeys = [
   "submitFlow.schematicNote",
   "submitFlow.signIn",
   "submitFlow.start",
-  "submitFlow.stripAudio",
   "submitFlow.submissionBody",
   "submitFlow.submissionTitle",
   "submitFlow.submit",

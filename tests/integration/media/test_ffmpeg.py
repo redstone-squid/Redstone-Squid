@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from squid.media.application import MediaNormalizationRequest, MediaNormalizationService
-from squid.media.domain import MediaKind, MediaLimits, MediaNormalizationAction
+from squid.media.domain import MediaKind, MediaNormalizationAction
 from squid.media.errors import InvalidMediaError, MediaFailureReason
 from squid.media.infrastructure import FfmpegMediaNormalizer
 
@@ -16,29 +16,11 @@ FFPROBE = shutil.which("ffprobe")
 pytestmark = pytest.mark.skipif(FFMPEG is None or FFPROBE is None, reason="requires ffmpeg and ffprobe")
 
 
-async def test_image_is_decoded_and_reencoded_as_metadata_free_png(tmp_path: Path) -> None:
-    source = tmp_path / "source.ppm"
-    source.write_bytes(b"P6\n# private-marker\n2 1\n255\n" + b"\xff\x00\x00\x00\xff\x00")
-    output = tmp_path / "normalized.png"
-    service = MediaNormalizationService(FfmpegMediaNormalizer())
-
-    result = await service.normalize(
-        MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output)
-    )
-
-    assert output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    assert result.report.output.content_type == "image/png"
-    assert (result.report.output.width, result.report.output.height) == (2, 1)
-    assert result.report.actions == (
-        MediaNormalizationAction.METADATA_REMOVED,
-        MediaNormalizationAction.IMAGE_REENCODED,
-    )
-    assert b"private-marker" not in output.read_bytes()
-
-
 async def test_existing_destination_is_never_overwritten(tmp_path: Path) -> None:
-    source = tmp_path / "source.ppm"
-    source.write_bytes(b"P6\n1 1\n255\n\xff\x00\x00")
+    source = tmp_path / "source.gif"
+    source.write_bytes(
+        bytes.fromhex("47494638396101000100800000000000ffffff21f90400000000002c00000000010001000002024401003b")
+    )
     output = tmp_path / "normalized.png"
     output.write_bytes(b"keep-me")
     service = MediaNormalizationService(FfmpegMediaNormalizer())
@@ -50,10 +32,8 @@ async def test_existing_destination_is_never_overwritten(tmp_path: Path) -> None
     assert output.read_bytes() == b"keep-me"
 
 
-@pytest.mark.parametrize("strip_audio", [False, True])
-async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
+async def test_video_preserves_original_bytes_and_audio(
     tmp_path: Path,
-    strip_audio: bool,
 ) -> None:
     source = tmp_path / "source.mp4"
     _generate_video(source)
@@ -67,19 +47,17 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
             source_path=source,
             output_path=output,
             poster_path=poster,
-            strip_audio=strip_audio,
         )
     )
 
     report = result.report
     assert report.output_probe.video_codec == "h264"
-    assert report.output_probe.audio_codec == (None if strip_audio else "aac")
+    assert report.output_probe.audio_codec == "aac"
     assert (report.output_probe.width, report.output_probe.height) == (320, 180)
     assert (report.output_probe.frame_rate_numerator, report.output_probe.frame_rate_denominator) == (24, 1)
     assert report.poster is not None
     assert poster.read_bytes().startswith(b"\xff\xd8")
-    assert (MediaNormalizationAction.AUDIO_REMOVED in report.actions) is strip_audio
-    assert (MediaNormalizationAction.AUDIO_PRESERVED in report.actions) is not strip_audio
+    assert MediaNormalizationAction.AUDIO_PRESERVED in report.actions
 
     assert FFPROBE is not None
     metadata = subprocess.run(
@@ -96,10 +74,8 @@ async def test_video_preserves_dimensions_and_fps_with_optional_audio_removal(
         check=True,
         capture_output=True,
     ).stdout
-    if strip_audio:
-        assert b"private-marker" not in metadata
-    else:
-        assert output.read_bytes() == source.read_bytes()
+    assert b"private-marker" in metadata
+    assert output.read_bytes() == source.read_bytes()
 
 
 @pytest.mark.parametrize(
@@ -516,9 +492,21 @@ async def test_raster_originals_preserve_bytes_and_animation(tmp_path: Path, ext
         check=True,
         capture_output=True,
     )
-    result = await MediaNormalizationService(
-        FfmpegMediaNormalizer(), limits=MediaLimits(max_pixels_per_frame=1)
-    ).normalize(MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output"))
+    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+        MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output")
+    )
     assert result.output_path.read_bytes() == source.read_bytes()
     assert result.report.actions == ()
     assert result.report.output.content_type == {"jpg": "image/jpeg"}.get(extension, f"image/{extension}")
+
+
+async def test_unsupported_images_are_rejected_without_conversion(tmp_path: Path) -> None:
+    source = tmp_path / "source.ppm"
+    source.write_bytes(b"P6\n1 1\n255\n\xff\x00\x00")
+    output = tmp_path / "output"
+    with pytest.raises(InvalidMediaError) as raised:
+        await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
+            MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output)
+        )
+    assert raised.value.reason is MediaFailureReason.FORMAT_UNSUPPORTED
+    assert not output.exists()

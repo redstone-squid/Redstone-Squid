@@ -132,9 +132,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
     draft = await reload(sessions, draft)
     async with factory() as uow:
         await uow.media_jobs.enqueue(
-            MediaUploadMetadata(
-                source, draft.snapshot.id, MediaKind.IMAGE, "image/png", 10, "a" * 64, "raw/image", strip_audio=False
-            ),
+            MediaUploadMetadata(source, draft.snapshot.id, MediaKind.IMAGE, "image/png", 10, "a" * 64, "raw/image"),
             MediaLimits(),
         )
         await uow.commit()
@@ -255,9 +253,7 @@ async def test_media_writers_without_intake_still_advance_the_draft_revision(
     source = uuid4()
     async with factory() as uow:
         await uow.media_jobs.enqueue(
-            MediaUploadMetadata(
-                source, draft.snapshot.id, MediaKind.IMAGE, "image/png", 10, "a" * 64, "raw/direct", strip_audio=False
-            ),
+            MediaUploadMetadata(source, draft.snapshot.id, MediaKind.IMAGE, "image/png", 10, "a" * 64, "raw/direct"),
             MediaLimits(),
         )
         await uow.commit()

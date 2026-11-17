@@ -58,11 +58,9 @@ class UploadCapabilities(BaseModel):
 
     max_images: int = Field(gt=0)
     max_videos: int = Field(gt=0)
-    max_duration_milliseconds: int = Field(gt=0)
+
     max_source_bytes: int = Field(gt=0)
     max_output_bytes: int = Field(gt=0)
-    max_pixels_per_frame: int = Field(gt=0)
-    max_decoded_pixels_per_second: int = Field(gt=0)
 
 
 class RendererCapabilities(BaseModel):

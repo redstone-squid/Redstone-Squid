@@ -128,7 +128,6 @@ def upload(
         source_byte_size=len(source),
         source_sha256=digest,
         source_object_key=f"media/raw/{upload_id}/{digest}",
-        strip_audio=False,
     )
 
 

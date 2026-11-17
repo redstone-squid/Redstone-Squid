@@ -35,9 +35,6 @@ pub struct MediaLimits {
     pub max_images: u32,
     pub max_videos: u32,
     pub max_output_bytes: u64,
-    pub max_duration_milliseconds: u64,
-    pub max_pixels_per_frame: u64,
-    pub max_decoded_pixels_per_second: u64,
 }
 
 /// Dimensions and content type reported for a normalized media artifact.
@@ -107,9 +104,6 @@ impl DraftMediaList {
             || self.limits.max_images > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND as u32
             || self.limits.max_videos > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND as u32
             || self.limits.max_output_bytes == 0
-            || self.limits.max_duration_milliseconds == 0
-            || self.limits.max_pixels_per_frame == 0
-            || self.limits.max_decoded_pixels_per_second == 0
             || self.media.len() > MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND
         {
             return Err(MediaContractError::InvalidResponse);
@@ -184,20 +178,15 @@ impl<'a> SubmissionMediaApi<'a> {
         kind: MediaKind,
         path: &Path,
         content_type: &str,
-        strip_audio: bool,
         upload_id: Uuid,
         maximum_bytes: u64,
         token: &SecretBytes,
     ) -> Result<ApiResponse<DraftMedia>, TransportError> {
         let request = ApiRequest::new(
             ApiMethod::Post,
-            format!(
-                "/v1/submissions/drafts/{draft_id}/media/{}",
-                kind.as_str()
-            ),
+            format!("/v1/submissions/drafts/{draft_id}/media/{}", kind.as_str()),
         )
         .with_query_param("upload_id", upload_id.hyphenated().to_string())?
-        .with_query_param("strip_audio", strip_audio.to_string())?
         .with_file(path, content_type, maximum_bytes)?;
         self.client.send_json(request, Some(token))
     }
@@ -266,9 +255,6 @@ mod tests {
                 max_images: 10,
                 max_videos: 3,
                 max_output_bytes: 500,
-                max_duration_milliseconds: 300_000,
-                max_pixels_per_frame: 33_200_000,
-                max_decoded_pixels_per_second: 250_000_000,
             },
             media: vec![item],
         };

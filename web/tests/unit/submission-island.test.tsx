@@ -199,9 +199,6 @@ const emptyMedia: DraftMediaListResponse = {
     max_images: 10,
     max_videos: 3,
     max_output_bytes: 20_000,
-    max_duration_milliseconds: 300_000,
-    max_pixels_per_frame: 33_200_000,
-    max_decoded_pixels_per_second: 250_000_000,
   },
   media: [],
 };

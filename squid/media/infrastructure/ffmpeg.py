@@ -8,18 +8,15 @@ import shutil
 import signal
 import tempfile
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
-from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import ffmpeg
 from anyio import CancelScope, fail_after
-from ffmpeg.codecs import encoders
 from ffmpeg.dag.nodes import OutputStream
-from ffmpeg.formats import muxers
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 try:
@@ -51,7 +48,6 @@ from squid.media.errors import (
 _NETWORK_PROTOCOLS = "http,https,tcp,tls,udp,rtmp,rtmps,rtp,rtsp,sftp,ftp"
 _INPUT_PROTOCOLS = "file,pipe"
 _MAX_PROBE_OUTPUT_BYTES = 1024 * 1024
-_TIMESTAMP_TOLERANCE = Decimal("0.001")
 
 
 class _FfprobeJson(BaseModel):
@@ -108,22 +104,6 @@ class _ColorProbeJson(_FfprobeJson):
     streams: tuple[_ColorStreamJson, ...]
 
 
-class _FrameTimestampJson(_FfprobeJson):
-    best_effort_timestamp_time: str
-
-
-class _FrameTimestampsJson(_FfprobeJson):
-    frames: tuple[_FrameTimestampJson, ...]
-
-
-class _FrameCountStreamJson(_FfprobeJson):
-    nb_read_frames: str | int | None = None
-
-
-class _FrameCountJson(_FfprobeJson):
-    streams: tuple[_FrameCountStreamJson, ...]
-
-
 @dataclass(frozen=True, slots=True)
 class MediaProcessLimits:
     """Timeouts, thread counts, and requested OS resource limits for each media process.
@@ -133,8 +113,6 @@ class MediaProcessLimits:
     """
 
     probe_timeout_seconds: float = 15.0
-    image_timeout_seconds: float = 120.0
-    video_timeout_seconds: float = 600.0
     poster_timeout_seconds: float = 120.0
     memory_bytes: int = 2 * 1024 * 1024 * 1024
     cpu_seconds: int = 540
@@ -145,8 +123,6 @@ class MediaProcessLimits:
         if (
             min(
                 self.probe_timeout_seconds,
-                self.image_timeout_seconds,
-                self.video_timeout_seconds,
                 self.poster_timeout_seconds,
                 self.memory_bytes,
                 self.cpu_seconds,
@@ -228,12 +204,10 @@ class FfmpegMediaNormalizer:
     ) -> MediaNormalizationResult:
         """Produce normalized artifacts, committing them only after validation."""
         if request.kind is MediaKind.IMAGE:
-            if probe.original_image_content_type is not None:
-                return await self._preserve_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
-            return await self._normalize_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
-        if not request.strip_audio:
-            return await self._preserve_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
-        return await self._normalize_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
+            if probe.original_image_content_type is None:
+                raise InvalidMediaError(MediaFailureReason.FORMAT_UNSUPPORTED)
+            return await self._preserve_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
+        return await self._preserve_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
 
     async def aclose(self) -> None:
         """One-shot FFmpeg processes leave no reusable resources."""
@@ -275,58 +249,6 @@ class FfmpegMediaNormalizer:
             ),
         )
 
-    async def _normalize_image(
-        self,
-        request: MediaNormalizationRequest,
-        *,
-        probe: MediaProbe,
-        source_bytes: int,
-        limits: MediaLimits,
-    ) -> MediaNormalizationResult:
-        with _staged_outputs((request.output_path, ".png")) as (temporary,):
-            await self._run_ffmpeg(
-                self._input(request.source_path)
-                .video_stream(0)
-                .output(
-                    filename=temporary,
-                    vframes=1,
-                    an=True,
-                    sn=True,
-                    dn=True,
-                    map_metadata=-1,
-                    map_chapters=-1,
-                    vcodec="png",
-                    pix_fmt="rgba",
-                    codec_options=ffmpeg.options.codec.encoder_codec_context(
-                        threads=self._process_limits.threads, flags="+bitexact"
-                    ),
-                    format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
-                    f="image2",
-                    extra_options={"update": 1},
-                ),
-                operation="normalize_image",
-                timeout_seconds=self._process_limits.image_timeout_seconds,
-                max_file_bytes=limits.max_output_bytes,
-            )
-            output_size = _bounded_size(temporary, limits.max_output_bytes)
-            output_probe = await self.probe(temporary)
-            _validate_image_output(probe, output_probe)
-            artifact = _artifact(temporary, "image/png", output_probe, byte_size=output_size)
-
-        report = MediaNormalizationReport(
-            kind=MediaKind.IMAGE,
-            source_bytes=source_bytes,
-            input_probe=probe,
-            output_probe=output_probe,
-            output=artifact,
-            poster=None,
-            actions=(
-                MediaNormalizationAction.METADATA_REMOVED,
-                MediaNormalizationAction.IMAGE_REENCODED,
-            ),
-        )
-        return MediaNormalizationResult(output_path=request.output_path, poster_path=None, report=report)
-
     async def _preserve_video(
         self,
         request: MediaNormalizationRequest,
@@ -352,7 +274,7 @@ class FfmpegMediaNormalizer:
         elif "mpeg" in containers:
             content_type = "video/mpeg"
         else:
-            raise InvalidMediaError(MediaFailureReason.PROBE_INVALID)
+            raise InvalidMediaError(MediaFailureReason.FORMAT_UNSUPPORTED)
         with _staged_outputs((request.output_path, ".video"), (request.poster_path, ".jpg")) as (video, poster):
             with CancelScope(shield=True):
                 await asyncio.to_thread(shutil.copyfile, request.source_path, video)
@@ -435,199 +357,6 @@ class FfmpegMediaNormalizer:
         return (
             {"bsf:v:0": "filter_units=remove_types=12,h264_metadata=" + ":".join(replacements)} if replacements else {}
         )
-
-    async def _normalize_video(
-        self,
-        request: MediaNormalizationRequest,
-        *,
-        probe: MediaProbe,
-        source_bytes: int,
-        limits: MediaLimits,
-    ) -> MediaNormalizationResult:
-        assert request.poster_path is not None
-        color_arguments = await self._video_color_arguments(request.source_path, probe)
-        with _staged_outputs((request.output_path, ".mp4"), (request.poster_path, ".jpg")) as (
-            video_temporary,
-            poster_temporary,
-        ):
-            source = self._input(request.source_path, color_arguments=color_arguments)
-            streams: list[ffmpeg.VideoStream | ffmpeg.AudioStream] = [source.video_stream(0)]
-            if not request.strip_audio:
-                streams.append(source.audio_stream(0, optional=True))
-            # A frame-rate-based encoder clock can merge closely spaced VFR timestamps.
-            # Keep the demuxer's precision as well as passing each frame through.
-            await self._run_ffmpeg(
-                ffmpeg.output(
-                    *streams,
-                    filename=video_temporary,
-                    an=request.strip_audio,
-                    acodec=None if request.strip_audio else "aac",
-                    ab=None if request.strip_audio else "192k",
-                    sn=True,
-                    dn=True,
-                    map_metadata=-1,
-                    map_chapters=-1,
-                    f="mp4",
-                    vcodec="libx264",
-                    encoder_options=encoders.libx264(
-                        preset="medium",
-                        # Bound queued frames so 4K clips fit the process memory limit.
-                        rc_lookahead=8,
-                        crf=20,
-                    ),
-                    codec_options=ffmpeg.options.codec.encoder_codec_context(
-                        threads=self._process_limits.threads, flags="+bitexact"
-                    ),
-                    pix_fmt="yuv420p",
-                    fps_mode="passthrough",
-                    enc_time_base="demux",
-                    muxer_options=muxers.mp4(movflags="+faststart"),
-                    format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
-                ),
-                operation="normalize_video",
-                timeout_seconds=self._process_limits.video_timeout_seconds,
-                max_file_bytes=limits.max_output_bytes,
-            )
-            video_size = _bounded_size(video_temporary, limits.max_output_bytes)
-            output_probe = await self.probe(video_temporary)
-            validation_source, validation_output = probe, output_probe
-            if (
-                probe.frame_count is not None
-                and output_probe.frame_count is not None
-                and probe.frame_count != output_probe.frame_count
-            ):
-                # MP4 sample counts can include frames the demuxer does not expose.
-                # Count decoded frames before treating a header mismatch as frame loss.
-                validation_source = replace(probe, frame_count=await self._decoded_frame_count(request.source_path))
-                validation_output = replace(output_probe, frame_count=await self._decoded_frame_count(video_temporary))
-            timestamps_verified = False
-            if _average_frame_rate_changed(validation_source, validation_output):
-                source_timestamps = await self._frame_timestamps(request.source_path)
-                output_timestamps = await self._frame_timestamps(video_temporary)
-                if len(source_timestamps) == len(output_timestamps):
-                    offset = output_timestamps[0] - source_timestamps[0]
-                    timestamps_verified = all(
-                        abs(output_time - source_time - offset) <= _TIMESTAMP_TOLERANCE
-                        for source_time, output_time in zip(source_timestamps, output_timestamps, strict=True)
-                    )
-            _validate_video_output(
-                validation_source,
-                validation_output,
-                strip_audio=request.strip_audio,
-                timestamps_verified=timestamps_verified,
-            )
-
-            await self._generate_poster(video_temporary, poster_temporary, output_probe, limits)
-            poster_size = _bounded_size(poster_temporary, limits.max_output_bytes)
-            _validate_combined_size(video_size, poster_size, limit=limits.max_output_bytes)
-            poster_probe = await self.probe(poster_temporary)
-            _validate_poster_output(poster_probe)
-
-            output_artifact = _artifact(video_temporary, "video/mp4", output_probe, byte_size=video_size)
-            poster_artifact = _artifact(poster_temporary, "image/jpeg", poster_probe, byte_size=poster_size)
-
-        actions = [
-            MediaNormalizationAction.METADATA_REMOVED,
-            MediaNormalizationAction.VIDEO_TRANSCODED,
-        ]
-        if probe.has_audio:
-            actions.append(
-                MediaNormalizationAction.AUDIO_REMOVED
-                if request.strip_audio
-                else MediaNormalizationAction.AUDIO_PRESERVED
-            )
-        actions.append(MediaNormalizationAction.POSTER_GENERATED)
-        report = MediaNormalizationReport(
-            kind=MediaKind.VIDEO,
-            source_bytes=source_bytes,
-            input_probe=probe,
-            output_probe=output_probe,
-            output=output_artifact,
-            poster=poster_artifact,
-            actions=tuple(actions),
-        )
-        return MediaNormalizationResult(
-            output_path=request.output_path,
-            poster_path=request.poster_path,
-            report=report,
-        )
-
-    async def _frame_timestamps(self, source_path: Path) -> tuple[Decimal, ...]:
-        """Read decoded presentation times when average-rate metadata cannot establish preservation."""
-        stdout = await self._run(
-            self._ffprobe,
-            (
-                "-v",
-                "error",
-                "-protocol_whitelist",
-                _INPUT_PROTOCOLS,
-                "-protocol_blacklist",
-                _NETWORK_PROTOCOLS,
-                "-threads",
-                str(self._process_limits.threads),
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "frame=best_effort_timestamp_time",
-                "-of",
-                "json",
-                str(source_path.absolute()),
-            ),
-            operation="frame_timestamps",
-            timeout_seconds=self._process_limits.video_timeout_seconds,
-            max_file_bytes=8 * _MAX_PROBE_OUTPUT_BYTES,
-            capture_stdout=True,
-        )
-        try:
-            payload = _FrameTimestampsJson.model_validate_json(stdout)
-            timestamps = tuple(Decimal(frame.best_effort_timestamp_time) for frame in payload.frames)
-            if (
-                timestamps
-                and all(value.is_finite() for value in timestamps)
-                # Decoder estimates can regress by less than a millisecond at EOF.
-                # Keep every value unchanged for the per-frame preservation check.
-                and all(later >= earlier - _TIMESTAMP_TOLERANCE for earlier, later in pairwise(timestamps))
-            ):
-                return timestamps
-        except TypeError, ValueError, InvalidOperation, ValidationError:
-            pass
-        raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="frame_timestamps")
-
-    async def _decoded_frame_count(self, source_path: Path) -> int:
-        """Count decoded video frames when container counts disagree after normalization."""
-        stdout = await self._run(
-            self._ffprobe,
-            (
-                "-v",
-                "error",
-                "-protocol_whitelist",
-                _INPUT_PROTOCOLS,
-                "-protocol_blacklist",
-                _NETWORK_PROTOCOLS,
-                "-threads",
-                str(self._process_limits.threads),
-                "-count_frames",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=nb_read_frames",
-                "-of",
-                "json",
-                str(source_path.absolute()),
-            ),
-            operation="count_frames",
-            timeout_seconds=self._process_limits.video_timeout_seconds,
-            max_file_bytes=_MAX_PROBE_OUTPUT_BYTES,
-            capture_stdout=True,
-        )
-        try:
-            payload = _FrameCountJson.model_validate_json(stdout)
-            frame_count = _optional_non_negative_int(payload.streams[0].nb_read_frames)
-            if frame_count is not None and frame_count > 0:
-                return frame_count
-        except IndexError, TypeError, ValueError, ValidationError:
-            pass
-        raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="count_frames")
 
     def _input(
         self, source_path: Path, *, color_arguments: dict[str, str] | None = None, seek: str | None = None
@@ -780,53 +509,6 @@ def _display_dimensions(video: _ProbeStreamJson) -> tuple[int, int]:
     return (height, width) if abs(rotation) % 180 == 90 else (width, height)
 
 
-def _average_frame_rate_changed(source: MediaProbe, output: MediaProbe) -> bool:
-    # Average rates depend on the muxer's first/last sample durations. Allow at most
-    # one frame of rate drift over the common interval; probe durations round up to milliseconds.
-    rate_difference = abs(
-        Fraction(output.frame_rate_numerator, output.frame_rate_denominator)
-        - Fraction(source.frame_rate_numerator, source.frame_rate_denominator)
-    )
-    clip_duration = max(1, min(source.duration_milliseconds or 0, output.duration_milliseconds or 0) - 1)
-    return rate_difference * clip_duration > 1000
-
-
-def _validate_video_output(
-    source: MediaProbe, output: MediaProbe, *, strip_audio: bool, timestamps_verified: bool = False
-) -> None:
-    expected_audio = source.has_audio and not strip_audio
-    duration_tolerance = max(250, _frame_duration_milliseconds(source) * 2)
-    if (
-        output.video_codec != "h264"
-        or "mp4" not in output.container_names
-        or output.width != source.width
-        or output.height != source.height
-        or output.frame_rate_numerator <= 0
-        or (not timestamps_verified and _average_frame_rate_changed(source, output))
-        or output.has_audio != expected_audio
-        or (output.has_audio and output.audio_codec != "aac")
-        or output.duration_milliseconds is None
-        or source.duration_milliseconds is None
-        or abs(output.duration_milliseconds - source.duration_milliseconds) > duration_tolerance
-        or (
-            source.frame_count is not None
-            and output.frame_count is not None
-            and source.frame_count != output.frame_count
-        )
-    ):
-        raise MediaProcessingError(MediaFailureReason.OUTPUT_MISMATCH, operation="validate_video")
-
-
-def _validate_image_output(source: MediaProbe, output: MediaProbe) -> None:
-    if (
-        output.video_codec != "png"
-        or output.width != source.width
-        or output.height != source.height
-        or output.has_audio
-    ):
-        raise MediaProcessingError(MediaFailureReason.OUTPUT_MISMATCH, operation="validate_image")
-
-
 def _validate_poster_output(output: MediaProbe) -> None:
     if output.video_codec != "mjpeg" or output.has_audio:
         raise MediaProcessingError(MediaFailureReason.OUTPUT_MISMATCH, operation="validate_poster")
@@ -966,13 +648,6 @@ def _short_string(raw: Any) -> str:
 
 def _format_milliseconds(value: int) -> str:
     return f"{value // 1000}.{value % 1000:03d}"
-
-
-def _frame_duration_milliseconds(probe: MediaProbe) -> int:
-    if probe.frame_rate_numerator <= 0:
-        return 0
-    numerator = 1000 * probe.frame_rate_denominator
-    return (numerator + probe.frame_rate_numerator - 1) // probe.frame_rate_numerator
 
 
 async def _terminate(process: asyncio.subprocess.Process) -> None:

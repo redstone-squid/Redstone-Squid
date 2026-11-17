@@ -100,7 +100,7 @@ class MediaUploadSubmission:
     kind: MediaKind
     source: bytes
     source_content_type: str
-    strip_audio: bool = False
+
     upload_id: UUID | None = None
 
     def __post_init__(self) -> None:
@@ -111,9 +111,6 @@ class MediaUploadSubmission:
             msg = tr(t"media-media-uploads-empty = Media uploads cannot be empty.")
             raise ValidationError(msg)
         _require_content_type(self.source_content_type)
-        if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
-            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +121,7 @@ class StagedMediaUploadSubmission:
     kind: MediaKind
     source_path: Path
     source_content_type: str
-    strip_audio: bool = False
+
     upload_id: UUID | None = None
 
     def __post_init__(self) -> None:
@@ -132,9 +129,6 @@ class StagedMediaUploadSubmission:
             msg = tr(t"media-media-upload-draft = Media upload and draft identifiers cannot be nil UUIDs.")
             raise ValidationError(msg)
         _require_content_type(self.source_content_type)
-        if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
-            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,7 +142,7 @@ class MediaUploadMetadata:
     source_byte_size: int
     source_sha256: str
     source_object_key: str
-    strip_audio: bool
+
     created_at: Instant | None = None
     raw_deleted_at: Instant | None = None
 
@@ -162,9 +156,6 @@ class MediaUploadMetadata:
         _require_content_type(self.source_content_type)
         _require_sha256(self.source_sha256)
         _require_object_key(self.source_object_key)
-        if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
-            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,7 +432,6 @@ class MediaNormalizationJobService:
                 source_byte_size=byte_size,
                 source_sha256=digest,
                 source_object_key=object_key,
-                strip_audio=submission.strip_audio,
             ),
             authorization=authorization,
         )
@@ -795,7 +785,6 @@ class MediaNormalizationJobRunner:
                 source_path=source_path,
                 output_path=output_path,
                 poster_path=poster_path,
-                strip_audio=job.upload.strip_audio,
             )
         )
         await self._require_claim(job, claim_lost)

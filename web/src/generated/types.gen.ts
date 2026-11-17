@@ -643,9 +643,6 @@ export type DraftMediaLimitsResponse = {
     max_images: number;
     max_videos: number;
     max_output_bytes: number;
-    max_duration_milliseconds: number;
-    max_pixels_per_frame: number;
-    max_decoded_pixels_per_second: number;
 };
 
 /**
@@ -2130,11 +2127,8 @@ export type TitleResolution = {
 export type UploadCapabilities = {
     max_images: number;
     max_videos: number;
-    max_duration_milliseconds: number;
     max_source_bytes: number;
     max_output_bytes: number;
-    max_pixels_per_frame: number;
-    max_decoded_pixels_per_second: number;
 };
 
 /**
@@ -6886,10 +6880,6 @@ export type SubmissionMediaUploadData = {
         kind: MediaKind;
     };
     query?: {
-        /**
-         * Remove audio while normalizing a video.
-         */
-        strip_audio?: boolean;
         /**
          * Stable client-generated UUID for safe upload retries.
          */

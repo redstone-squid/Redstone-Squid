@@ -1,9 +1,9 @@
 # Media processing deployment
 
 Videos retain their original bytes, container, audio, timing, rotation, and metadata. The worker decodes a JPEG
-thumbnail without transcoding the video. Explicit audio removal still uses the H.264/AAC conversion path.
+thumbnail without transcoding the video. Audio is always preserved.
 PNG, APNG, JPEG, GIF, and WebP images also retain their original bytes, including animation and metadata.
-Other supported image formats are converted to PNG.
+Other image formats are rejected.
 Original videos can require a player that supports their source codec; processing does not guarantee browser playback.
 
 Submission media processing is optional and disabled by default. The API streams an owned draft upload into private
@@ -107,8 +107,6 @@ The defaults below are subprocess backstops, not a substitute for a container or
 | `SQUID_MEDIA_CPU_SECONDS` | 540 s | CPU-time limit per child |
 | `SQUID_MEDIA_MAX_OPEN_FILES` | 128 | File descriptors per child |
 | `SQUID_MEDIA_PROBE_TIMEOUT_SECONDS` | 15 s | Wall time for each probe |
-| `SQUID_MEDIA_IMAGE_TIMEOUT_SECONDS` | 120 s | Wall time for image normalization |
-| `SQUID_MEDIA_VIDEO_TIMEOUT_SECONDS` | 600 s | Wall time for video normalization |
 | `SQUID_MEDIA_POSTER_TIMEOUT_SECONDS` | 120 s | Wall time for poster generation |
 | `SQUID_MEDIA_JOB_MAX_ATTEMPTS` | 3 | Durable attempts before a job becomes dead |
 
@@ -118,10 +116,9 @@ additional concurrent job, budget another 3 GiB memory and 1.5 GiB scratch disk.
 PID, and writable-layer limits in the deployment platform; the repository does not choose a one-size-fits-all machine
 budget.
 
-The submission contract rejects more than 10 images or 3 videos. Image conversion is limited to 33.2 megapixels; copying recognized raster originals does not decode them.
-Videos copied unchanged are not subject to encoder limits on duration, frame rate, or even dimensions; thumbnail
-decoding remains bounded by subprocess memory and time limits. Explicit audio removal retains the five-minute,
-33.2-megapixel, and 250-million-decoded-pixels-per-second encoding limits.
+The submission contract rejects more than 10 images or 3 videos. Originals are copied without decoding or imposing
+encoder constraints on duration, frame rate, or dimensions. Video thumbnail decoding is bounded by subprocess
+memory and time limits.
 
 ## Verification
 

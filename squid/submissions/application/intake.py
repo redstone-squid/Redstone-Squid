@@ -143,7 +143,6 @@ class SubmissionAttachmentIntake:
                     source_content_type=content_type
                     or mimetypes.guess_type(attachment.filename)[0]
                     or "application/octet-stream",
-                    strip_audio=False,
                     upload_id=attachment.id,
                 ),
                 authorization=MediaDraftUploadAuthorization(

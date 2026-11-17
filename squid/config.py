@@ -199,8 +199,6 @@ class MediaConfig(_FrozenModel):
     working_directory: Path | None = None
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     probe_timeout_seconds: float = Field(default=15.0, gt=0)
-    image_timeout_seconds: float = Field(default=120.0, gt=0)
-    video_timeout_seconds: float = Field(default=600.0, gt=0)
     poster_timeout_seconds: float = Field(default=120.0, gt=0)
     memory_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)
     cpu_seconds: int = Field(default=540, gt=0)

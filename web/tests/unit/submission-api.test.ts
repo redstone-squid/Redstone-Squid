@@ -64,9 +64,6 @@ const media = {
     max_images: 10,
     max_videos: 3,
     max_output_bytes: 500_000_000,
-    max_duration_milliseconds: 300_000,
-    max_pixels_per_frame: 33_200_000,
-    max_decoded_pixels_per_second: 250_000_000,
   },
   media: [mediaItem],
 } satisfies DraftMediaListResponse;
@@ -218,7 +215,7 @@ describe("submission API transport", () => {
       .mockRejectedValueOnce(new TypeError("connection reset"))
       .mockResolvedValueOnce(jsonResponse(mediaItem, 202));
     const api = createSubmissionApi("en", config);
-    await expect(api.uploadMedia(draft.id, "video", file, mediaItem.id, true)).resolves.toEqual(
+    await expect(api.uploadMedia(draft.id, "video", file, mediaItem.id)).resolves.toEqual(
       mediaItem,
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -227,7 +224,7 @@ describe("submission API transport", () => {
       const url = new URL(request.url);
       expect(request.headers.get("Content-Type")).toBe("video/mp4");
       expect(url.searchParams.get("upload_id")).toBe(mediaItem.id);
-      expect(url.searchParams.get("strip_audio")).toBe("true");
+      expect(url.searchParams.has("strip_audio")).toBe(false);
       expect(request.body).not.toBeNull();
     }
   });

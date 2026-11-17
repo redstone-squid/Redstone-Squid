@@ -74,9 +74,6 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
         "max_images": 2,
         "max_videos": 1,
         "max_output_bytes": 16,
-        "max_duration_milliseconds": 1_000,
-        "max_pixels_per_frame": 100,
-        "max_decoded_pixels_per_second": 200,
     }
     listed = {item["id"]: item for item in list_response.json()["media"]}
     assert listed[str(UPLOAD_ID)]["status"] == "completed"
@@ -108,9 +105,6 @@ async def test_media_dtos_reject_unknown_fields() -> None:
         "max_images": 2,
         "max_videos": 1,
         "max_output_bytes": 16,
-        "max_duration_milliseconds": 1_000,
-        "max_pixels_per_frame": 100,
-        "max_decoded_pixels_per_second": 200,
     }
     with pytest.raises(PydanticValidationError):
         DraftMediaListResponse.model_validate({"limits": limits, "media": [], "report": {}})

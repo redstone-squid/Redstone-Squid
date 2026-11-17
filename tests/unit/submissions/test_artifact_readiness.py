@@ -107,7 +107,6 @@ def _job(
             source_byte_size=source_bytes,
             source_sha256="b" * 64,
             source_object_key=f"private/raw/{number}",
-            strip_audio=False,
         ),
         status=status,
         attempts=1,

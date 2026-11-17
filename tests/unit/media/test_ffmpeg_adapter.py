@@ -3,9 +3,7 @@
 import asyncio
 import json
 import sys
-from collections.abc import AsyncIterator, Sequence
-from dataclasses import replace
-from decimal import Decimal
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
@@ -18,12 +16,11 @@ from squid.media.domain.models import MediaKind, MediaLimits, MediaProbe
 from squid.media.errors import (
     InvalidMediaError,
     MediaFailureReason,
-    MediaProcessingError,
     MediaProcessingTimeoutError,
     MediaToolUnavailableError,
 )
 from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits, parse_ffprobe_output
-from squid.media.infrastructure.ffmpeg import _staged_outputs, _validate_video_output
+from squid.media.infrastructure.ffmpeg import _staged_outputs
 
 
 @pytest.fixture
@@ -219,20 +216,19 @@ async def test_missing_ffprobe_has_a_stable_non_content_error() -> None:
     assert "private-file-name" not in str(raised.value)
 
 
-@pytest.mark.parametrize("kind", [MediaKind.IMAGE, MediaKind.VIDEO])
 async def test_cancelled_normalization_removes_every_staged_output(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: MediaKind
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     normalizer = FfmpegMediaNormalizer()
     monkeypatch.setattr(normalizer, "_run", AsyncMock(side_effect=asyncio.CancelledError))
     request = MediaNormalizationRequest(
-        kind=kind,
+        kind=MediaKind.VIDEO,
         source_path=tmp_path / "source",
         output_path=tmp_path / "output",
-        poster_path=tmp_path / "poster" if kind is MediaKind.VIDEO else None,
+        poster_path=tmp_path / "poster",
     )
     probe = MediaProbe(
-        container_names=("mp4",) if kind is MediaKind.VIDEO else ("ppm_pipe",),
+        container_names=("matroska",),
         video_codec="png",
         width=1,
         height=1,
@@ -241,10 +237,11 @@ async def test_cancelled_normalization_removes_every_staged_output(
         duration_milliseconds=1000,
     )
 
+    request.source_path.write_bytes(b"video")
     with pytest.raises(asyncio.CancelledError):
         await normalizer.normalize(request, probe=probe, source_bytes=1, limits=MediaLimits())
 
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.iterdir()) == [request.source_path]
 
 
 def test_failed_output_publication_rolls_back_only_owned_files(tmp_path: Path) -> None:
@@ -276,179 +273,3 @@ def test_failed_output_preparation_removes_earlier_staged_files(tmp_path: Path) 
 
     assert list(tmp_path.iterdir()) == [poster]
     assert poster.read_bytes() == b"existing"
-
-
-def test_video_validation_accepts_muxer_rounding_of_average_frame_rate() -> None:
-    source = MediaProbe(
-        container_names=("mp4",),
-        video_codec="h264",
-        width=854,
-        height=480,
-        frame_rate_numerator=31_200,
-        frame_rate_denominator=1_039,
-        duration_milliseconds=17_317,
-        audio_codec="aac",
-        frame_count=520,
-    )
-    output = replace(source, frame_rate_numerator=30, frame_rate_denominator=1, duration_milliseconds=17_334)
-
-    _validate_video_output(source, output, strip_audio=False)
-
-
-@pytest.mark.parametrize("output_rate", [0, 24, 60])
-def test_video_validation_still_rejects_changed_or_missing_frame_rates(output_rate: int) -> None:
-    source = MediaProbe(
-        container_names=("mp4",),
-        video_codec="h264",
-        width=854,
-        height=480,
-        frame_rate_numerator=30,
-        frame_rate_denominator=1,
-        duration_milliseconds=17_334,
-        frame_count=520,
-    )
-
-    with pytest.raises(MediaProcessingError):
-        _validate_video_output(source, replace(source, frame_rate_numerator=output_rate), strip_audio=False)
-
-
-@pytest.mark.parametrize("output_frames", [215, 214])
-async def test_video_header_mismatch_is_checked_against_decoded_frames(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output_frames: int
-) -> None:
-    source = MediaProbe(
-        container_names=("mp4",),
-        video_codec="h264",
-        width=1724,
-        height=1080,
-        frame_rate_numerator=60,
-        frame_rate_denominator=1,
-        duration_milliseconds=3600,
-        audio_codec="aac",
-        frame_count=216,
-    )
-    output = replace(source, duration_milliseconds=3584, frame_count=215)
-    poster = replace(output, video_codec="mjpeg", audio_codec=None, container_names=("jpeg_pipe",))
-    normalizer = FfmpegMediaNormalizer()
-
-    async def write_output(executable: str, arguments: Sequence[str], **kwargs: Any) -> bytes:
-        Path(arguments[-1]).write_bytes(b"normalized")
-        return b""
-
-    monkeypatch.setattr(normalizer, "_run", write_output)
-    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value={}))
-    monkeypatch.setattr(normalizer, "probe", AsyncMock(side_effect=[output, poster]))
-    count_frames = AsyncMock(side_effect=[215, output_frames])
-    monkeypatch.setattr(normalizer, "_decoded_frame_count", count_frames)
-    request = MediaNormalizationRequest(
-        kind=MediaKind.VIDEO,
-        source_path=tmp_path / "source",
-        output_path=tmp_path / "output.mp4",
-        poster_path=tmp_path / "poster.jpg",
-    )
-
-    if output_frames == 215:
-        result = await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
-        assert result.output_path.exists()
-        assert result.report.input_probe.frame_count == 216
-        assert result.report.output_probe.frame_count == 215
-    else:
-        with pytest.raises(MediaProcessingError):
-            await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
-        assert not request.output_path.exists()
-    assert count_frames.await_count == 2
-
-
-@pytest.mark.parametrize("count", [None, "N/A", "0", "-1"])
-async def test_unavailable_decoded_counts_cannot_prove_frame_preservation(
-    monkeypatch: pytest.MonkeyPatch, count: str | None
-) -> None:
-    normalizer = FfmpegMediaNormalizer()
-    monkeypatch.setattr(
-        normalizer, "_run", AsyncMock(return_value=json.dumps({"streams": [{"nb_read_frames": count}]}).encode())
-    )
-
-    with pytest.raises(MediaProcessingError) as raised:
-        await normalizer._decoded_frame_count(Path("source.mp4"))
-
-    assert raised.value.context["operation"] == "count_frames"
-
-
-@pytest.mark.parametrize("change", ["offset", "cadence", "missing_frame"])
-async def test_rate_metadata_fallback_requires_matching_frame_timestamps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
-) -> None:
-    source = MediaProbe(
-        container_names=("mp4",),
-        video_codec="h264",
-        width=1200,
-        height=700,
-        frame_rate_numerator=4_830_000,
-        frame_rate_denominator=162_821,
-        duration_milliseconds=10_855,
-        frame_count=322,
-    )
-    output = replace(source, frame_rate_numerator=100_625, frame_rate_denominator=3413, duration_milliseconds=10_872)
-    poster = replace(output, video_codec="mjpeg", container_names=("jpeg_pipe",))
-    source_timestamps = tuple(Decimal(index) / 30 for index in range(322))
-    output_timestamps = tuple(value + Decimal("0.05") for value in source_timestamps)
-    if change == "cadence":
-        output_timestamps = (
-            *output_timestamps[:100],
-            output_timestamps[100] + Decimal("0.01"),
-            *output_timestamps[101:],
-        )
-    elif change == "missing_frame":
-        output_timestamps = output_timestamps[:-1]
-    normalizer = FfmpegMediaNormalizer()
-
-    async def write_output(executable: str, arguments: Sequence[str], **kwargs: Any) -> bytes:
-        Path(arguments[-1]).write_bytes(b"normalized")
-        return b""
-
-    monkeypatch.setattr(normalizer, "_run", write_output)
-    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value={}))
-    monkeypatch.setattr(normalizer, "probe", AsyncMock(side_effect=[output, poster]))
-    timestamps = AsyncMock(side_effect=[source_timestamps, output_timestamps])
-    monkeypatch.setattr(normalizer, "_frame_timestamps", timestamps)
-    request = MediaNormalizationRequest(
-        kind=MediaKind.VIDEO,
-        source_path=tmp_path / "source",
-        output_path=tmp_path / "output.mp4",
-        poster_path=tmp_path / "poster.jpg",
-    )
-
-    if change == "offset":
-        result = await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
-        assert result.output_path.exists()
-        assert result.report.input_probe == source
-        assert result.report.output_probe == output
-    else:
-        with pytest.raises(MediaProcessingError):
-            await normalizer._normalize_video(request, probe=source, source_bytes=1, limits=MediaLimits())
-        assert not request.output_path.exists()
-    assert timestamps.await_count == 2
-
-
-@pytest.mark.parametrize("regression", ["0.000065", "0.001"])
-async def test_submillisecond_decoder_estimates_are_preserved(monkeypatch: pytest.MonkeyPatch, regression: str) -> None:
-    normalizer = FfmpegMediaNormalizer()
-    values = (Decimal("6.4"), Decimal("6.400065"), Decimal("6.400065") - Decimal(regression))
-    payload = {"frames": [{"best_effort_timestamp_time": str(value)} for value in values]}
-    monkeypatch.setattr(normalizer, "_run", AsyncMock(return_value=json.dumps(payload).encode()))
-
-    assert await normalizer._frame_timestamps(Path("source.mp4")) == values
-
-
-@pytest.mark.parametrize("values", [[], ["N/A"], ["NaN"], ["Infinity"], ["0.2", "0.1"], ["6.4", "6.398999"]])
-async def test_invalid_frame_timestamps_cannot_prove_timing_preservation(
-    monkeypatch: pytest.MonkeyPatch, values: list[str]
-) -> None:
-    normalizer = FfmpegMediaNormalizer()
-    payload = {"frames": [{"best_effort_timestamp_time": value} for value in values]}
-    monkeypatch.setattr(normalizer, "_run", AsyncMock(return_value=json.dumps(payload).encode()))
-
-    with pytest.raises(MediaProcessingError) as raised:
-        await normalizer._frame_timestamps(Path("source.mp4"))
-
-    assert raised.value.context["operation"] == "frame_timestamps"

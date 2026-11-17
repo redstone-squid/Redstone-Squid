@@ -45,7 +45,7 @@ _NO_STORE = "no-store"
 _MAX_UPLOAD_HEADER = "Squid-Max-Upload-Bytes"
 _MEDIA_TYPE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 _CONTENT_LENGTH = re.compile(r"^[1-9][0-9]*$")
-_UPLOAD_QUERY_NAMES = frozenset({"strip_audio", "upload_id"})
+_UPLOAD_QUERY_NAMES = frozenset({"upload_id"})
 _CONTENT_ENCODING_UNSUPPORTED = "content_encoding_not_supported"
 _CONTENT_LENGTH_INVALID = "content_length_invalid"
 _CONTENT_LENGTH_MISMATCH = "content_length_mismatch"
@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 
 AccountId = NamedDependency[SkipValidation[int]]
-StripAudio = Annotated[bool, QueryParameter(description="Remove audio while normalizing a video.")]
 UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-generated UUID for safe upload retries.")]
 
 
@@ -87,7 +86,6 @@ async def upload_draft_media(
     request: Request,
     attachments: DraftAttachments,
     account_id: AccountId,
-    strip_audio: StripAudio = False,
     upload_id: UploadId = None,
 ) -> Response[DraftMediaResponse]:
     """Stream one owned-draft upload through a private bounded staging file."""
@@ -97,9 +95,6 @@ async def upload_draft_media(
         _require_non_nil(upload_id, reason="nil_upload_id")
     authority = await attachments.authorize_upload(draft_id, Actor(account_id=account_id), kind)
     _require_query_names(request, _UPLOAD_QUERY_NAMES)
-    if kind is MediaKind.IMAGE and strip_audio:
-        reason = "strip_audio_requires_video"
-        raise DraftMediaRequestError(reason)
     content_type = _source_content_type(request, kind)
     content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
     with _private_upload_directory() as directory:
@@ -107,9 +102,7 @@ async def upload_draft_media(
         await _stream_to_private_file(
             request, source_path, content_length=content_length, max_bytes=attachments.limits.max_source_bytes
         )
-        snapshot = await attachments.register(
-            authority, StagedUpload(source_path, content_type), strip_audio=strip_audio, upload_id=upload_id
-        )
+        snapshot = await attachments.register(authority, StagedUpload(source_path, content_type), upload_id=upload_id)
     _prevent_storage(response_headers, attachments.limits)
     return Response(
         content=DraftMediaResponse.from_snapshot(snapshot),

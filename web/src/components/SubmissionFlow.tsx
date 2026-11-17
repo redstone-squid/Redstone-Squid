@@ -73,7 +73,6 @@ type Copy = {
   mediaUnavailable: string;
   upload: string;
   uploadBusy: string;
-  stripAudio: string;
   remove: string;
   noMedia: string;
   limits: (images: number, videos: number, size: string) => string;
@@ -116,7 +115,6 @@ const copyFor = (locale: Locale): Copy => ({
   mediaUnavailable: translate(locale, "submitFlow.mediaUnavailable"),
   upload: translate(locale, "submitFlow.upload"),
   uploadBusy: translate(locale, "submitFlow.uploadBusy"),
-  stripAudio: translate(locale, "submitFlow.stripAudio"),
   remove: translate(locale, "submitFlow.remove"),
   noMedia: translate(locale, "submitFlow.noMedia"),
   limits: (images, videos, size) =>
@@ -220,7 +218,6 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [stripAudio, setStripAudio] = useState(true);
   const [blockingError, setBlockingError] = useState<{ title: string; message: string }>();
   const [actionError, setActionError] = useState<SubmissionApiError>();
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
@@ -508,7 +505,6 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
           kind,
           file,
           crypto.randomUUID(),
-          stripAudio,
         );
         setMedia((current) =>
           current
@@ -736,9 +732,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         media={media}
         error={mediaError}
         uploading={uploading}
-        stripAudio={stripAudio}
         disabled={locked || finalization?.status === "completed"}
-        onStripAudio={setStripAudio}
         onFiles={uploadFiles}
         onDiscard={discardMedia}
       />
@@ -1019,9 +1013,7 @@ function MediaSection({
   media,
   error,
   uploading,
-  stripAudio,
   disabled,
-  onStripAudio,
   onFiles,
   onDiscard,
 }: {
@@ -1029,9 +1021,7 @@ function MediaSection({
   media?: DraftMediaListResponse;
   error?: string;
   uploading: boolean;
-  stripAudio: boolean;
   disabled: boolean;
-  onStripAudio: (value: boolean) => void;
   onFiles: (files: FileList | null) => Promise<void>;
   onDiscard: (item: DraftMediaResponse) => Promise<void>;
 }) {
@@ -1072,15 +1062,6 @@ function MediaSection({
                 });
               }}
             />
-            <label className="submission-checkbox">
-              <input
-                type="checkbox"
-                checked={stripAudio}
-                disabled={disabled || uploading}
-                onChange={(event) => onStripAudio(event.currentTarget.checked)}
-              />
-              <span>{copy.stripAudio}</span>
-            </label>
           </div>
           {media.media.filter((item) => item.status !== "discarded").length === 0 ? (
             <p>{copy.noMedia}</p>

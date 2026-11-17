@@ -96,7 +96,6 @@ export type SubmissionApi = {
     kind: MediaKind,
     file: File,
     uploadId: string,
-    stripAudio: boolean,
   ) => Promise<DraftMediaResponse>;
   discardMedia: (draftId: string, uploadId: string) => Promise<void>;
   submitDraft: (draftId: string) => Promise<SubmissionFinalizationGetResponse>;
@@ -233,7 +232,6 @@ async function uploadRawMedia(
   kind: MediaKind,
   file: File,
   uploadId: string,
-  stripAudio: boolean,
 ): Promise<DraftMediaResponse> {
   return mutations.execute(undefined, async (headers) =>
     unwrap(
@@ -242,7 +240,6 @@ async function uploadRawMedia(
         path: { draft_id: draftId, kind },
         query: {
           upload_id: uploadId,
-          ...(kind === "video" ? { strip_audio: stripAudio } : {}),
         },
         body: file,
         headers: { ...headers, "Content-Type": file.type },
@@ -327,12 +324,12 @@ export function createSubmissionApi(
           path: { draft_id: draftId },
         }),
       ),
-    uploadMedia: async (draftId, kind, file, uploadId, stripAudio) => {
+    uploadMedia: async (draftId, kind, file, uploadId) => {
       try {
-        return await uploadRawMedia(client, mutations, draftId, kind, file, uploadId, stripAudio);
+        return await uploadRawMedia(client, mutations, draftId, kind, file, uploadId);
       } catch (error) {
         if (!(error instanceof SubmissionApiError) || !error.networkFailure) throw error;
-        return await uploadRawMedia(client, mutations, draftId, kind, file, uploadId, stripAudio);
+        return await uploadRawMedia(client, mutations, draftId, kind, file, uploadId);
       }
     },
     discardMedia: async (draftId, uploadId) => {

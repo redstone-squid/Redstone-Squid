@@ -99,9 +99,6 @@ class DraftMediaLimitsResponse(StrictSchema):
     max_images: int
     max_videos: int
     max_output_bytes: int
-    max_duration_milliseconds: int
-    max_pixels_per_frame: int
-    max_decoded_pixels_per_second: int
 
     @classmethod
     def from_domain(cls, limits: MediaLimits) -> Self:
@@ -110,9 +107,6 @@ class DraftMediaLimitsResponse(StrictSchema):
             max_images=limits.max_images,
             max_videos=limits.max_videos,
             max_output_bytes=limits.max_output_bytes,
-            max_duration_milliseconds=limits.max_duration_milliseconds,
-            max_pixels_per_frame=limits.max_pixels_per_frame,
-            max_decoded_pixels_per_second=limits.max_decoded_pixels_per_second,
         )
 
 

@@ -73,7 +73,6 @@ def snapshot(
             source_byte_size=4,
             source_sha256="a" * 64,
             source_object_key=f"private/raw/{upload_id}",
-            strip_audio=kind is MediaKind.VIDEO,
             created_at=NOW,
         ),
         status=status,
@@ -114,11 +113,8 @@ class FakeMedia:
         self.limits = MediaLimits(
             max_images=2,
             max_videos=1,
-            max_duration_milliseconds=1_000,
             max_source_bytes=8,
             max_output_bytes=16,
-            max_pixels_per_frame=100,
-            max_decoded_pixels_per_second=200,
         )
         self.failure = failure
         self.snapshots: dict[UUID, MediaJobSnapshot] = {}

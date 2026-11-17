@@ -118,7 +118,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 source_byte_size=upload.source_byte_size,
                 source_sha256=upload.source_sha256,
                 source_object_key=upload.source_object_key,
-                strip_audio=upload.strip_audio,
             )
         )
         await session.flush()
@@ -714,7 +713,6 @@ def _same_upload(record: MediaUploadRecord, upload: MediaUploadMetadata) -> bool
         and record.source_byte_size == upload.source_byte_size
         and record.source_sha256 == upload.source_sha256
         and record.source_object_key == upload.source_object_key
-        and record.strip_audio == upload.strip_audio
     )
 
 
@@ -727,7 +725,6 @@ def _upload_metadata(record: MediaUploadRecord) -> MediaUploadMetadata:
         source_byte_size=record.source_byte_size,
         source_sha256=record.source_sha256,
         source_object_key=record.source_object_key,
-        strip_audio=record.strip_audio,
         created_at=record.created_at,
         raw_deleted_at=record.raw_deleted_at,
     )

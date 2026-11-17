@@ -44,7 +44,7 @@ FROM media_uploads u
 JOIN media_normalization_jobs j ON j.upload_id=u.id
 JOIN submission_drafts d ON d.id=u.draft_id
 LEFT JOIN submission_inference_runs r ON r.id=d.inference_run_id
-WHERE j.status IN ('completed', 'dead') AND NOT u.strip_audio
+WHERE j.status IN ('completed', 'dead')
   AND (CAST(:upload_id AS uuid) IS NULL OR u.id=CAST(:upload_id AS uuid))
   AND NOT EXISTS (SELECT 1 FROM media_artifacts a WHERE a.upload_id=u.id AND a.role='output'
                   AND a.sha256=u.source_sha256 AND j.status='completed')

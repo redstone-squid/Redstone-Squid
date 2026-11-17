@@ -72,7 +72,6 @@ async def upload_image(request: Request, media: FakeMedia | None = None) -> None
         request=request,
         attachments=DraftAttachmentService(FakeDrafts(media.events), media),
         account_id=ACCOUNT_ID,
-        strip_audio=False,
         upload_id=UPLOAD_ID,
     )
 
@@ -91,7 +90,7 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/video",
-            params={"strip_audio": "true", "upload_id": str(UPLOAD_ID)},
+            params={"upload_id": str(UPLOAD_ID)},
             headers={"Content-Type": "Video/MP4", "Content-Length": "4"},
             content=b"abcd",
         )
@@ -113,7 +112,6 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
         assert media.staged_mode == 0o600
         assert media.parent_mode == 0o700
     assert media.submission is not None
-    assert media.submission.strip_audio is True
     assert media.staged_path is not None
     assert not media.staged_path.exists()
     assert media.staged_parent is not None
@@ -130,7 +128,7 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
             {"Content-Type": "image/png", "Content-Length": "4"},
             {"strip_audio": "true"},
             b"four",
-            "strip_audio_requires_video",
+            "query_parameters_invalid",
         ),
         ({"Content-Type": "image/png", "Content-Length": "4"}, {"unknown": "1"}, b"four", "query_parameters_invalid"),
     ],
@@ -267,7 +265,7 @@ async def test_duplicate_query_parameter_is_rejected_after_authorization() -> No
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.post(
             f"/submissions/drafts/{DRAFT_ID}/media/image",
-            params=[("strip_audio", "false"), ("strip_audio", "false")],
+            params=[("upload_id", str(UPLOAD_ID)), ("upload_id", str(UPLOAD_ID))],
             headers={"Content-Type": "image/png", "Content-Length": "1"},
             content=b"x",
         )

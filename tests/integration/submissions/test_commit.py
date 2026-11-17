@@ -77,7 +77,6 @@ async def claimed_submission(
                     source_byte_size=3,
                     source_sha256="a" * 64,
                     source_object_key=f"media/raw/{upload_id}",
-                    strip_audio=False,
                 )
             )
             await session.flush()

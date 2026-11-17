@@ -38,11 +38,8 @@ async def capabilities() -> ApiCapabilities:
         uploads=UploadCapabilities(
             max_images=limits.max_images,
             max_videos=limits.max_videos,
-            max_duration_milliseconds=limits.max_duration_milliseconds,
             max_source_bytes=limits.max_source_bytes,
             max_output_bytes=limits.max_output_bytes,
-            max_pixels_per_frame=limits.max_pixels_per_frame,
-            max_decoded_pixels_per_second=limits.max_decoded_pixels_per_second,
         ),
         renderer=RendererCapabilities(
             controls=RENDERER_CONTROLS,

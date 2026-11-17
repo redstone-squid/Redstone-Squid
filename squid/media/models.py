@@ -48,10 +48,6 @@ class MediaUploadRecord(Base, kw_only=True):
             "char_length(source_content_type) BETWEEN 1 AND 255",
             name="media_uploads_content_type_length",
         ),
-        CheckConstraint(
-            "kind = 'video' OR strip_audio = false",
-            name="media_uploads_audio_only_for_video",
-        ),
         UniqueConstraint("source_object_key", name="media_uploads_source_object_key_key"),
         Index("media_uploads_draft_idx", "draft_id", "created_at"),
         Index(
@@ -68,7 +64,7 @@ class MediaUploadRecord(Base, kw_only=True):
     source_byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     source_sha256: Mapped[str] = mapped_column(Text, nullable=False)
     source_object_key: Mapped[str] = mapped_column(Text, nullable=False)
-    strip_audio: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+
     raw_deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
