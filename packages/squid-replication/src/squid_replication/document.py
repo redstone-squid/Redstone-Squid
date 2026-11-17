@@ -8,7 +8,9 @@ import weakref
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from squid_reactivity import CellAddress, ReactiveConflictError
 from squid_reactivity.internals import Cell as _Cell
@@ -36,6 +38,16 @@ from squid_replication.transport import ReplicationUpdate
 
 _DEDUP_LIMIT = 10_000
 _PENDING_UPDATE_LIMIT = 1_000
+
+
+class _HistoryTokenEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    backend: str
+    document: str
+    payload: str
+    version: Literal[1] = Field(default=1, alias="schema")
+    token_epoch: int = Field(ge=0, strict=True)
 
 
 class ReplicationError(Exception):
@@ -92,41 +104,34 @@ class ReplicationChangeToken:
         if document is None or document.closed:
             message = "replicated history token no longer has a live document"
             raise ReplicaClosedError(message)
-        payload = {
-            "backend": document.engine.backend_id,
-            "document": document.document_id,
-            "payload": base64.b64encode(document.engine.encode_token(self.backend_token)).decode("ascii"),
-            "schema": 1,
-            "token_epoch": self.token_epoch,
-        }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        envelope = _HistoryTokenEnvelope(
+            backend=document.engine.backend_id,
+            document=document.document_id,
+            payload=base64.b64encode(document.engine.encode_token(self.backend_token)).decode("ascii"),
+            token_epoch=self.token_epoch,
+        )
+        return json.dumps(
+            envelope.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":")
+        ).encode()
 
     @classmethod
     def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicationChangeToken:
         """Reload an encoded token against the current instance of its document."""
         document._ensure_open()
         try:
-            payload: Any = json.loads(token)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            envelope = _HistoryTokenEnvelope.model_validate_json(token, strict=True)
+        except ValidationError as error:
             message = "replicated history token has an unsupported or corrupt schema"
             raise ValueError(message) from error
-        if not isinstance(payload, dict) or payload.get("schema") != 1:
-            message = "replicated history token has an unsupported or corrupt schema"
-            raise ValueError(message)
-        if payload.get("backend") != document.engine.backend_id or payload.get("document") != document.document_id:
+        if envelope.backend != document.engine.backend_id or envelope.document != document.document_id:
             message = "replicated history token targets the wrong backend or document"
             raise ValueError(message)
-        encoded = payload.get("payload")
-        token_epoch = payload.get("token_epoch")
-        if not isinstance(encoded, str) or not isinstance(token_epoch, int):
-            message = "replicated history token has an unsupported or corrupt schema"
-            raise ValueError(message)  # noqa: TRY004
         try:
-            backend_token = document.engine.decode_token(base64.b64decode(encoded, validate=True))
+            backend_token = document.engine.decode_token(base64.b64decode(envelope.payload, validate=True))
         except (binascii.Error, TypeError, ValueError) as error:
             message = "replicated history token has corrupt backend data"
             raise ValueError(message) from error
-        return cls(weakref.ref(document), backend_token, token_epoch)
+        return cls(weakref.ref(document), backend_token, envelope.token_epoch)
 
     def plan_inverse(self) -> PreparedReplicationInverse | ConflictDetail:
         """Plan an inverse against current state, returning a conflict if it cannot be applied.
