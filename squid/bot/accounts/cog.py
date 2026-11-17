@@ -13,6 +13,7 @@ from squid.bot.accounts.profile_render import (
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.follows import FollowCard
 from squid.bot.ui import card_node, text_node
+from squid.bot.utils.autocomplete import suggests
 from squid.core.i18n import tr
 from squid.notifications.domain import SubscriptionKind
 from squid_i18n import md_tr
@@ -31,18 +32,32 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         name=tr(t"command-account-name = account"),
         description=tr(t"command-account-help = Manage your account or view a creator page"),
         options={
+            "creator": sd.Option(
+                name=tr(t"command-account-creator-name = creator"),
+                description=tr(t"command-account-creator-help = Search public creator pages by credited name"),
+                autocomplete=suggests("creator_profiles"),
+            ),
             "user": sd.Option(
                 name=tr(t"command-account-user-name = user"),
                 description=tr(
                     t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account."
                 ),
-            )
+            ),
         },
     )
     async def account(
-        self, request: sd.Request[Self, BotT], user: discord.Member | discord.User | None = None
+        self,
+        request: sd.Request[Self, BotT],
+        user: discord.Member | discord.User | None = None,
+        creator: str | None = None,
     ) -> sd.CommandResult:
         """Show your account, or somebody else's creator page."""
+        if creator is not None:
+            try:
+                public_id = UUID(creator)
+            except ValueError:
+                return text_node(tr(t"account-select-creator-result = Choose a creator from the name suggestions."))
+            return await self._public_profile_card(public_id, "Creator")
         actor = request.user
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)

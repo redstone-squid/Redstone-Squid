@@ -100,6 +100,30 @@ async def test_public_creator_profile_prefix_uses_the_same_compatibility_fold(
 
 
 @pytest.mark.usefixtures("creator_tables")
+async def test_public_profile_search_matches_every_alias_and_escapes_wildcards(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        public_id = str(account.public_creator_id)
+        session.add_all(
+            CreatorAlias(
+                name=name,
+                account_id=account.id,
+                claimed_at=Instant.now(),
+                claim_method=ClaimMethod.VERIFIED_IGN,
+            )
+            for name in ("Alpha", "Zulu")
+        )
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    assert await repository.creator_profiles("zul", limit=10) == [(public_id, "Zulu")]
+    assert await repository.creator_profiles("%", limit=10) == []
+    assert len(await repository.creator_profiles("", limit=10)) == 1
+
+
+@pytest.mark.usefixtures("creator_tables")
 async def test_claimed_flag_is_reported(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

@@ -16,9 +16,11 @@ from collections.abc import Awaitable, Callable
 from math import ceil
 from typing import TYPE_CHECKING, Self, cast
 
+import discord
 from discord import app_commands
 
 import squid_ui.ext.discord as sd
+from squid.bot.i18n import to_locale_str
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import tr
@@ -64,6 +66,9 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @app_commands.guild_only()
     async def recount(self, request: sd.Request[Self, BotT], message: str) -> sd.CommandResult:
         """Count the reactions on a vote or starboard message again."""
+        return await self._recount(request, message)
+
+    async def _recount(self, request: sd.Request[Self, BotT], message: str) -> sd.CommandResult:
         guild = request.guild
         assert guild is not None
 
@@ -71,6 +76,12 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await enforce(request, STARBOARD_BOARD_RECOUNT)
 
         return text_node(await self.recount_link(guild.id, message, authorize_starboard=authorize_starboard))
+
+    @sd.context_menu(name=to_locale_str(tr(t"command-recount-context = Recount reactions")), defer="private")
+    @app_commands.guild_only()
+    async def recount_message(self, request: sd.Request[Self, BotT], message: discord.Message) -> sd.CommandResult:
+        """Recount the selected message through the same authorization and rate limits."""
+        return await self._recount(request, message.jump_url)
 
     async def recount_link(
         self, guild_id: int, link: str, *, authorize_starboard: Callable[[], Awaitable[None]]

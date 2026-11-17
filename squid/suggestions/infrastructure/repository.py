@@ -152,11 +152,7 @@ class PostgresSuggestionRepository:
         return [(row.id, f"{row.edition} {row.major_version}.{row.minor_version}.{row.patch_number}") for row in rows]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
-        """Return public UUIDs for accounts with claimed aliases.
-
-        Each account is labelled by its alphabetically first alias. A nonempty
-        query matches the first normalized alias, not every alias on the account.
-        """
+        """Return public UUIDs labelled by a matching claimed alias."""
         statement = (
             select(Account.public_creator_id, func.min(CreatorAlias.name).label("name"))
             .join(CreatorAlias, CreatorAlias.account_id == Account.id)
@@ -164,7 +160,7 @@ class PostgresSuggestionRepository:
         )
         terms = fold_creator_name(query)
         if terms:
-            statement = statement.having(func.min(CreatorAlias.normalized_name).startswith(terms))
+            statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
         statement = statement.order_by("name").limit(limit)
         session = self._session()
         rows = (await session.execute(statement)).all()

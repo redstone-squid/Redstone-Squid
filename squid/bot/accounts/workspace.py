@@ -18,6 +18,7 @@ from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
+from squid.bot.lookup import pick
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
@@ -31,6 +32,7 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
 )
+from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
 
@@ -246,7 +248,7 @@ class AccountWorkspace(sd.Screen):
             sl.paragraph(
                 tr(
                     t"account-link-help = Enter your in-game link code to connect your Minecraft identity to this "
-                    t"account."
+                    t"account. Run /link in Minecraft on the community server to get a code."
                 )
             ),
             sl.note(tr(t"account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.")),
@@ -304,8 +306,16 @@ class AccountWorkspace(sd.Screen):
                 ),
                 sl.note(tr(t"account-claim-review-help = Staff review each claim before credits are connected.")),
             ),
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"account-search-credit-names = Search credited names"),
+                    self._choose_claim,
+                    key="search-claims",
+                ),
+                key="claim-search-actions",
+            ),
             sl.form(
-                tr(t"account-workspace-claim-creator-credit = Claim creator credit"),
+                tr(t"account-workspace-claim-creator-credit = Claim a name not listed"),
                 _ClaimForm().spec(),
                 key="claim",
                 on_submit=self._claim,
@@ -481,7 +491,22 @@ class AccountWorkspace(sd.Screen):
 
     async def _claim(self, event: sd.SubmitEvent) -> None:
         form = _ClaimForm.from_submission(event)
-        claim = await self._accounts.request_alias_claim(self._account_id(), form.name)
+        await self._submit_claim(event, form.name)
+
+    async def _choose_claim(self, event: sd.PressEvent) -> None:
+        await pick(
+            event,
+            "creators",
+            tr(t"account-search-credit-names = Search credited names"),
+            self._claim_picked,
+            confirm=tr(t"account-submit-claim = Submit claim"),
+        )
+
+    async def _claim_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
+        await self._submit_claim(event, item.value)
+
+    async def _submit_claim(self, event: sd.ActionEvent, name: str) -> None:
+        claim = await self._accounts.request_alias_claim(self._account_id(), name)
         claim_id = claim.id
         alias_name = claim.alias_name
         await event.notice(
