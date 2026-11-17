@@ -54,14 +54,10 @@ from squid.records.domain import (
     TitleFormatter,
     TitleResolution,
     VersionScope,
-    resolve_fastest,
-    resolve_fastest_smallest,
-    resolve_first,
-    resolve_smallest,
-    resolve_smallest_fastest,
 )
 from squid.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS, MaterializationSource
+from squid.records.domain.resolution import resolve_record
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.unit_of_work import UnitOfWorkFactory
 from squid_i18n import md_tr
@@ -796,15 +792,7 @@ def _resolve_record(
     kind: BuildKind,
     candidates: Iterable[Candidate],
 ) -> TitleResolution:
-    if base_title is BaseTitle.FIRST:
-        return resolve_first(candidates)
-    if base_title is BaseTitle.FASTEST:
-        return resolve_fastest(candidates, _timing_methods(kind))
-    if base_title is BaseTitle.SMALLEST:
-        return resolve_smallest(candidates)
-    if base_title is BaseTitle.FASTEST_SMALLEST:
-        return resolve_fastest_smallest(candidates, _timing_methods(kind))
-    return resolve_smallest_fastest(candidates, _timing_methods(kind))
+    return resolve_record(base_title, candidates, _timing_methods(kind))
 
 
 def _reconstruct_history(
@@ -815,8 +803,8 @@ def _reconstruct_history(
     """Reconstruct holder changes from today's facts and known completion dates.
 
     Builds completed at the same time enter together. Undated builds are omitted,
-    and unresolved prefixes leave the previous period open until another resolved
-    holder set appears. These intervals are reconstructed evidence, not an audit
+    and an unresolved comparison closes the previous period. A later resolved
+    comparison starts a new period, leaving the uncertain interval uncovered. These intervals are reconstructed evidence, not an audit
     log of previously published results.
     """
     dated = sorted(
@@ -829,10 +817,12 @@ def _reconstruct_history(
         active.extend(group)
         resolution = _resolve_record(base_title, kind, active)
         if resolution.status is not ResolutionStatus.RESOLVED:
+            if periods and periods[-1].held_until is None:
+                periods[-1] = replace(periods[-1], held_until=completion_at)
             continue
-        if periods and periods[-1].build_ids == resolution.holder_ids:
+        if periods and periods[-1].held_until is None and periods[-1].build_ids == resolution.holder_ids:
             continue
-        if periods:
+        if periods and periods[-1].held_until is None:
             previous = periods[-1]
             periods[-1] = replace(previous, held_until=completion_at)
         periods.append(

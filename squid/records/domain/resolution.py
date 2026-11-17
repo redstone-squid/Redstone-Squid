@@ -6,8 +6,10 @@ needs no lower-priority evidence.
 """
 
 from collections.abc import Iterable, Sequence
+from typing import assert_never
 
 from squid.records.domain.models import (
+    BaseTitle,
     Candidate,
     CandidateGap,
     ResolutionStatus,
@@ -195,3 +197,20 @@ def _resolved(candidates: Iterable[Candidate]) -> TitleResolution:
 
 def _candidate_ids(candidates: Iterable[Candidate]) -> tuple[int, ...]:
     return tuple(sorted(candidate.build_id for candidate in candidates))
+
+
+def resolve_record(base_title: BaseTitle, candidates: Iterable[Candidate], methods: Sequence[str]) -> TitleResolution:
+    """Apply a record's comparison order using the kind's timing methods."""
+    match base_title:
+        case BaseTitle.FIRST:
+            return resolve_first(candidates)
+        case BaseTitle.SMALLEST:
+            return resolve_smallest(candidates)
+        case BaseTitle.FASTEST:
+            return resolve_fastest(candidates, methods)
+        case BaseTitle.FASTEST_SMALLEST:
+            return resolve_fastest_smallest(candidates, methods)
+        case BaseTitle.SMALLEST_FASTEST:
+            return resolve_smallest_fastest(candidates, methods)
+        case _:
+            assert_never(base_title)

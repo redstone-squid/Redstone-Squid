@@ -25,14 +25,10 @@ from squid.records.domain import (
     ResolutionStatus,
     TimingVariant,
     TitleResolution,
-    resolve_fastest,
-    resolve_fastest_smallest,
-    resolve_first,
-    resolve_smallest,
-    resolve_smallest_fastest,
 )
 from squid.records.domain.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.records.domain.models import DOOR_TIMING_METHODS, CandidateGap
+from squid.records.domain.resolution import resolve_record
 
 type LookupDimension = Annotated[int, Field(strict=True, ge=1, le=2**31 - 1)]
 type LookupTagId = Annotated[int, Field(strict=True, ge=1, le=2**63 - 1)]
@@ -177,17 +173,7 @@ def resolve_door_configurations(
         if configuration.membership is PointStatus.SUPPORTED
     )
     methods = tuple(method.value for method in DOOR_TIMING_METHODS)
-    match request.base_title:
-        case BaseTitle.FIRST:
-            result = resolve_first(eligible)
-        case BaseTitle.SMALLEST:
-            result = resolve_smallest(eligible)
-        case BaseTitle.FASTEST:
-            result = resolve_fastest(eligible, methods)
-        case BaseTitle.FASTEST_SMALLEST:
-            result = resolve_fastest_smallest(eligible, methods)
-        case BaseTitle.SMALLEST_FASTEST:
-            result = resolve_smallest_fastest(eligible, methods)
+    result = resolve_record(request.base_title, eligible, methods)
 
     def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(sorted({configurations[id].build_id for id in ids}))
