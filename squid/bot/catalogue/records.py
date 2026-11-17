@@ -139,7 +139,14 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.heading(gap.title),
                 sl.paragraph(Text.join("\n", [_diagnostic_text(item) for item in gap.diagnostics])),
                 sl.note(_category_note(gap.definition_id)),
-                self._diagnostic_actions(gap),
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"records-recompute-definition = Recompute definition"),
+                        partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
+                        key=f"recompute-{gap.definition_id}",
+                    ),
+                    key="diagnostic-actions",
+                ),
             ),
             page_size=15,
             title=tr(t"bot-submission-records-record-title-diagnostics = Unrecognised record titles"),
@@ -165,19 +172,14 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             if self.open_build is not None and gap.build_ids
             else sl.paragraph(", ".join(f"#{build_id}" for build_id in gap.build_ids)),
             sl.note(_category_note(gap.definition_id)),
-            self._diagnostic_actions(gap),
-        )
-
-    def _diagnostic_actions(
-        self, gap: RecordGap | TitleDiagnosticGap
-    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        return sl.action_controls(
-            sl.action_control(
-                tr(t"records-recompute-definition = Recompute definition"),
-                partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
-                key=f"recompute-{gap.definition_id}",
+            sl.action_controls(
+                sl.action_control(
+                    tr(t"records-recompute-definition = Recompute definition"),
+                    partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
+                    key=f"recompute-{gap.definition_id}",
+                ),
+                key="diagnostic-actions",
             ),
-            key="diagnostic-actions",
         )
 
     async def _recompute_diagnostic(self, definition_id: int, kind: BuildKind, event: sl.PressEvent) -> None:
