@@ -14,9 +14,7 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27, render_message
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.planning.measurement.model import MeasuredPanel, MeasuredText
-from squid_ui.planning import SolveNoteCode, plan
+from squid_ui.planning import plan
 from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
 from squid_ui.planning.pagination.navigation import default_nav
@@ -37,21 +35,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.primitives.nodes import Node
 from squid_ui.selectors import query, select
-
-
-def _rendered(solved) -> str:
-    """Collect measured text nodes, descending through panels used by these fixtures."""
-    parts: list[str] = []
-
-    def walk(children) -> None:
-        for child in children:
-            if isinstance(child, MeasuredText):
-                parts.append(child.content)
-            elif isinstance(child, MeasuredPanel):
-                walk(child.children)
-
-    walk(solved.children)
-    return "\n".join(parts)
 
 
 def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult[scene.ComponentsV2]:
@@ -100,7 +83,7 @@ def _selected_rungs(result: PlanResult[scene.ComponentsV2]) -> list[int]:
 def _under_pressure(entries: tuple[Alt | str, ...], *, spare: int) -> str:
     """Solve a Lines node with only ``spare`` characters left for it."""
     filler = Text("x" * (LIMITS.total_text - spare), priority=10)
-    return _rendered(measure([filler, Lines(entries)]))
+    return _text(_planned([filler, Lines(entries)]))
 
 
 class TestEntryPriorities:
@@ -180,8 +163,8 @@ class TestVariants:
             Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),))))
             for index in range(12)
         ]
-        measured = measure(panels)
-        assert any(note.code is SolveNoteCode.COMPONENT_BUDGET for note in measured.notes)
+        with pytest.raises(JointInfeasibleError):
+            _planned(panels, strict=True)
 
     def test_a_later_rung_can_resolve_a_hard_failure_without_component_pressure(self):
         # plan() raises on an unresolved failure, so reaching a scene at all is the assertion.

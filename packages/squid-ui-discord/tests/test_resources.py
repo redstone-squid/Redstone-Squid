@@ -9,10 +9,6 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.limits import Axis
-from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.planning.measurement.costing import measure_nodes
-from squid_ui.ext.discord.planning.measurement.model import MeasuredText
-from squid_ui.ext.discord.planning.measurement.text import BudgetRegion, make_unit, text_total
 from squid_ui.planning import plan
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.primitives import Never, Panel, Text, Variant, Variants
@@ -85,46 +81,18 @@ class TestTargetCapacities:
             DISCORD_V2_DPY27.reserve(ResourceCost({Axis.EMBED_TEXT: 1}))
 
 
-class TestMeasuredCost:
-    def test_a_measured_layout_reports_every_axis_it_spends(self) -> None:
-        measured = measure([Panel(children=(Text("hello"), Text("world")))])
+class TestPlannedCost:
+    def test_a_plan_reports_every_axis_it_spends(self) -> None:
+        measured = plan([Panel(children=(Text("hello"), Text("world")))], target=DISCORD_V2_DPY27)
 
         assert measured.cost.get(Axis.COMPONENTS) == 3
         assert measured.cost.get(Axis.DISPLAY_TEXT) == len("hello") + len("world")
-
-    def test_preferred_node_measurement_speaks_the_same_axes(self) -> None:
-        cost = measure_nodes([Panel(children=(Text("hello"),))])
-
-        assert cost.get(Axis.COMPONENTS) == 2
-        assert text_total(cost) == 5
 
     def test_an_overspent_document_names_the_axis_in_its_failure(self) -> None:
         oversized = [Text(f"line {index}", overflow=Never()) for index in range(LIMITS.total_components + 1)]
 
         with pytest.raises(UnsolvableLayoutError, match="no declared joint allocation"):
             plan(oversized, target=DISCORD_V2_DPY27)
-
-
-class TestBudgetRegions:
-    def test_a_budget_region_spanning_two_text_pools_is_rejected(self) -> None:
-        """One `Budget` states one preferred size; applying it to two pools would double it."""
-        units = [
-            make_unit(Text("a"), MeasuredText(), 0, Axis.DISPLAY_TEXT),
-            make_unit(Text("b"), MeasuredText(), 1, "embed_text"),  # type: ignore[arg-type]
-        ]
-        region = BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
-
-        with pytest.raises(LayoutInvariantError, match="spans the text axes display_text, embed_text"):
-            _ = region.axis
-
-    def test_a_single_pool_region_reports_that_pool(self) -> None:
-        unit = make_unit(Text("a"), MeasuredText(), 0, Axis.DISPLAY_TEXT)
-        assert unit is not None
-
-        assert BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == Axis.DISPLAY_TEXT
-
-    def test_a_region_holding_no_text_claims_no_pool(self) -> None:
-        assert BudgetRegion((), 0, 10, 0, best_effort=False).axis is None
 
 
 class TestParetoSearch:

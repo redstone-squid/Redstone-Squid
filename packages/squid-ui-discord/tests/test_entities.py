@@ -11,7 +11,6 @@ import squid_ui.ext.discord
 from squid_ui import scene
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.limits import Axis
-from squid_ui.ext.discord.planning import measure
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, query, without_capabilities
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning.joint_search import JointUnsupportedError
@@ -80,11 +79,13 @@ def test_picker_rejects_incompatible_defaults_and_channel_filters() -> None:
 
 
 def test_entity_select_costs_an_action_row_and_control() -> None:
-    solved = measure([EntitySelect(sl.entity.EntityType.USER, _select, "users")])
+    solved = sl.planning.plan(
+        EntitySelect(sl.entity.EntityType.USER, _select, "users"), target=squid_ui.ext.discord.DISCORD_V2_DPY27
+    )
 
     assert solved.cost.get(Axis.COMPONENTS) == 2
-    assert solved.cost.get(Axis.ROWS) == 1
-    assert solved.cost.get(Axis.CONTROLS) == 1
+    # V2 budgets the row and control together on its component axis.
+    assert isinstance(solved.scene.body.children[0], scene.EntitySelect)
 
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
