@@ -174,6 +174,60 @@ Next, use the [API map](squid-ui-api.md) or read the complete
 [architecture and ownership guide](squid-ui-architecture.md).
 
 
+## Presentation controls
+
+Use `sl.presentation` when the runtime should handle a control's value and other
+UI needs to read it. Values belong to each mounted placement, whereas `sl.state`
+belongs to the component instance.
+
+```python
+class Filters(sl.Component):
+    flagged = sl.presentation.toggle("Flagged only")
+    selected = sl.presentation.choices(minimum=0, maximum=2)
+
+    def render(self):
+        return (
+            sl.paragraph(f"Selected: {len(self.selected.value)}"),
+            sl.action_controls(
+                self.flagged.bind,
+                sl.action_control("Apply", self.apply, key="apply"),
+                key="actions",
+            ),
+            self.selected.bind(
+                sl.choice("Pending", key="pending"),
+                sl.choice("Reviewed", key="reviewed"),
+            ),
+        )
+
+    async def apply(self, event: sl.PressEvent):
+        await event.acknowledge()
+        selected = event.read(self.selected)
+        # Use selected in the application operation.
+```
+
+A complete declaration can supply options up front and place `.bind` directly.
+Call `.bind(...)` for render-time options or control overrides such as
+`available=False`. Generic `sl.presentation(initial)` and
+`sl.presentation(factory=...)` return value bindings for custom controls.
+
+Reads use `.value` during rendering and `event.read(reference)` in handlers.
+Assignment to the declaration or `.value` is forbidden. A removed placement's
+references expire; hiding its control alone preserves the value.
+
+Set `record=edits` to opt into undo history, where `edits = sl.runtime.history()`
+can be declared earlier in the same class. Choices and generic values also need
+`record_label`. Set `persist=True` independently to include values in configured
+durable snapshots. Custom values use the restore recipe's paired
+`presentation_encode(path, name, value)` and `presentation_decode(...)` callbacks.
+Portable hosts can store `runtime.presentation_cells.export()` through a typed
+storage slot and call `.restore(values)` before rendering. Recovery starts with
+empty history.
+
+The generic constructor accepts `opaque=True` for identity-based collaborators.
+Use `factory=` for independent per-placement objects and `self.mutated(object)`
+after an in-place change during an interaction. The notification can roll back;
+the object's mutation cannot. Opaque values cannot use `persist=True`.
+
 ## Media and downloads
 
 Both accept a `Path`, bytes, an open binary stream, or an HTTP(S) URL. Strings are

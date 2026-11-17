@@ -9,6 +9,7 @@ composition and adapter contracts.
 | Observe external changes | `squid_reactivity.Topic`, `watch`, optional `TopicBus` |
 | Retain one model per key | Application-owned dictionary |
 | Declare stateful UI | `squid_ui.Component`, `state`, `computed`, `resource` |
+| Declare readable runtime-owned controls | `squid_ui.presentation`, `.value`, `.bind`, `event.read` |
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
 | Evaluate explicit composition choices | `squid_ui.planning.CompositionOptions`, `plan(..., composition=...)` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |

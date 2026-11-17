@@ -44,6 +44,8 @@ class WirePresentation(WireModel):
     cursors: dict[str, WireCursor]
     selections: dict[str, WireSelection]
     disclosures: dict[str, WireDisclosure]
+    declared_protocol: Literal[1] = 1
+    declared: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class WireTarget(WireModel):

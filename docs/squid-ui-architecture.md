@@ -183,7 +183,7 @@ and `reuse` compares allocation inputs. Imports from the former planning-level
 these paths. Composition tests are grouped under `packages/squid-ui/tests/composition/`.
 
 `ContextKey` is defined in `squid_ui.context`; presentation state and updates live in
-`squid_ui.presentation`. Planning and runtime both consume these contracts. Their existing
+`squid_ui.presentation_state`. Planning and runtime both consume these contracts. Their existing
 runtime import paths re-export the same objects for callers, but implementation modules use
 the defining modules so importing a shared value does not enter the runtime facade.
 

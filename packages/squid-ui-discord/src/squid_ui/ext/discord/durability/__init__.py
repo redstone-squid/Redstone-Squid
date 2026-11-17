@@ -12,7 +12,7 @@ recovery; DurableBot provides the login-before-recovery-before-gateway ordering.
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, Literal
 
 from pydantic import ValidationError
@@ -116,6 +116,7 @@ class PresentationSnapshot:
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
+    declared: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,7 +354,11 @@ def migrate_component_state(
 
 
 def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
+    # Custom values must pass through a registered codec, not Pydantic's implicit conversion.
+    json.dumps(state.declared, allow_nan=False)
     return {
+        "declared_protocol": 1,
+        "declared": dict(state.declared),
         "cursors": {
             key: {
                 "position": {
@@ -385,6 +390,7 @@ def _presentation_from_wire(wire: WirePresentation) -> PresentationSnapshot:
         },
         selections={key: SelectionState(tuple(item.selected)) for key, item in wire.selections.items()},
         disclosures={key: DisclosureState(item.open) for key, item in wire.disclosures.items()},
+        declared=wire.declared,
     )
 
 
@@ -402,6 +408,7 @@ class RestoreContext:
 
 
 type MessageRootStateMigration = Callable[[MessageRootState], MessageRootState]
+type PresentationTransform = Callable[[str, str, Any], Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,6 +417,8 @@ class _Registration:
     factory: Callable[[], AnyComponent] | None
     restore: Callable[[RestoreContext], MessageRoot] | None
     migrations: Mapping[int, MessageRootStateMigration]
+    presentation_encode: PresentationTransform | None
+    presentation_decode: PresentationTransform | None
 
 
 class ComponentRegistry:
@@ -430,6 +439,8 @@ class ComponentRegistry:
         restore: Callable[[RestoreContext], MessageRoot] | None = None,
         migrations: Mapping[int, MessageRootStateMigration] | None = None,
         factory: Callable[[], AnyComponent] | None = None,
+        presentation_encode: PresentationTransform | None = None,
+        presentation_decode: PresentationTransform | None = None,
     ) -> None:
         """Register a root recipe and migrations indexed by their source version.
 
@@ -448,10 +459,15 @@ class ComponentRegistry:
             message = f"durable component {key!r} is already registered"
             raise ValueError(message)
         migration_map = {} if migrations is None else dict(migrations)
+        if (presentation_encode is None) != (presentation_decode is None):
+            msg = "register presentation encode and decode together"
+            raise ValueError(msg)
         if any(source < 1 or source >= version for source in migration_map):
             message = "snapshot migration sources must be positive versions below the registered version"
             raise ValueError(message)
-        self._registrations[key] = _Registration(version, factory, restore, migration_map)
+        self._registrations[key] = _Registration(
+            version, factory, restore, migration_map, presentation_encode, presentation_decode
+        )
 
     def capture(self, message_root: AnyMessageRoot, component_key: str) -> MessageRootState:
         registration = self._registrations.get(component_key)
@@ -480,6 +496,17 @@ class ComponentRegistry:
                 dict(message_root.presentation.cursors),
                 dict(message_root.presentation.selections),
                 dict(message_root.presentation.disclosures),
+                {
+                    path: {
+                        name: value
+                        if registration.presentation_encode is None
+                        else registration.presentation_encode(path, name, value)
+                        for name, value in fields.items()
+                    }
+                    for path, fields in message_root.runtime.presentation_cells.export(
+                        message_root.runtime.components
+                    ).items()
+                },
             ),
             message_root.target.triple,
             message_root.target.version,
@@ -536,7 +563,23 @@ class ComponentRegistry:
             message = "mount state has no root component"
             raise MessageRootStateError(message)
         _restore_component(root, root_snapshot)
-        tree = render_component_tree(root)
+        message_root.presentation = PresentationState(
+            cursors=dict(state.presentation.cursors),
+            selections=dict(state.presentation.selections),
+            disclosures=dict(state.presentation.disclosures),
+        )
+        message_root.runtime.presentation_cells.restore(
+            {
+                path: {
+                    name: value
+                    if registration.presentation_decode is None
+                    else registration.presentation_decode(path, name, value)
+                    for name, value in fields.items()
+                }
+                for path, fields in state.presentation.declared.items()
+            }
+        )
+        tree = render_component_tree(root, runtime=message_root.runtime)
         if set(by_path) != set(tree.components):
             message = "restored component tree does not match the state paths"
             raise MessageRootStateError(message)
@@ -554,11 +597,6 @@ class ComponentRegistry:
                 canonical_instances.add(component)
                 if path != "$":
                     _restore_component(component, snapshot)
-        message_root.presentation = PresentationState(
-            cursors=dict(state.presentation.cursors),
-            selections=dict(state.presentation.selections),
-            disclosures=dict(state.presentation.disclosures),
-        )
         return message_root
 
     @staticmethod
