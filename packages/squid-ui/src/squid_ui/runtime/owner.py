@@ -19,6 +19,7 @@ from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.render_cache import RenderCache
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _ServiceLifecycle
 from squid_ui.runtime.tree import ComponentTree
+from squid_ui.selectors.source import QueryRoot
 from squid_ui.target_types import RenderTarget
 
 
@@ -103,6 +104,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         execution_host: UIExecutionHost | None = None,
         on_service_error: ServiceFailure | None = None,
     ) -> None:
+        self.queries = QueryRoot()
         self._closed = False
         self.root = root
         self._services = _ServiceLifecycle(execution_host, on_service_error)
@@ -396,6 +398,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if not incremental:
             self._cache.retain(tree.components)
         self.dirty = self.revision != rendered_revision
+        self.queries.publish(tree)
         self._raise_hook_errors()
 
     def _can_reconcile_incrementally(self, tree: ComponentTree[RenderTargetT]) -> bool:
@@ -536,6 +539,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._cache.clear()
         self._cached_tree = None
         self._committed_tree = None
+        self.queries.publish(())
         self.planning_snapshot.clear()
         self.presentation.retained_composition = None
         self.root._runtime = None

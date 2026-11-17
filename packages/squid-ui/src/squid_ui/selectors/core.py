@@ -271,7 +271,7 @@ class QueryError(SquidUiError, LookupError):
 
 
 @dataclass(frozen=True, slots=True)
-class Query[T]:
+class QuerySnapshot[T]:
     _matches: tuple[Match[T], ...]
     _description: str
     _available: tuple[Match[object], ...]
@@ -306,3 +306,28 @@ class Query[T]:
         if len(candidates) > 20:
             details += f"\n  ... {len(candidates) - 20} more"
         return QueryError(f"Expected {expected} {self._description}; found {len(self._matches)}.\n{details}")
+
+
+@dataclass(frozen=True, slots=True)
+class Query[T]:
+    """A reusable query. Capture it to pin several reads to one tree."""
+
+    _resolve: Callable[[], QuerySnapshot[T]]
+
+    def capture(self) -> QuerySnapshot[T]:
+        return self._resolve()
+
+    def all(self) -> tuple[Match[T], ...]:
+        return self.capture().all()
+
+    def count(self) -> int:
+        return self.capture().count()
+
+    def exists(self) -> bool:
+        return self.capture().exists()
+
+    def one(self) -> Match[T]:
+        return self.capture().one()
+
+    def optional(self) -> Match[T] | None:
+        return self.capture().optional()

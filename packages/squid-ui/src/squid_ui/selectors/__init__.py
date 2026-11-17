@@ -5,8 +5,9 @@ index_tree(render_component_tree(component)). Selectors never render or dispatch
 """
 
 from squid_ui.selectors._query import query
-from squid_ui.selectors.core import Query, QueryError, Selector, scope, select
+from squid_ui.selectors.core import Query, QueryError, QuerySnapshot, Selector, scope, select
 from squid_ui.selectors.parser import SelectorSyntaxError, parse
+from squid_ui.selectors.source import QueryRoot
 from squid_ui.selectors.tree import Children, Match, TreeIndex, index_tree, ui_children
 
 __all__ = [
@@ -14,6 +15,8 @@ __all__ = [
     "Match",
     "Query",
     "QueryError",
+    "QueryRoot",
+    "QuerySnapshot",
     "Selector",
     "SelectorSyntaxError",
     "TreeIndex",

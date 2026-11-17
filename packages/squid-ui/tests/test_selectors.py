@@ -8,10 +8,11 @@ import pytest
 
 import squid_ui as ui
 from squid_i18n import tr
+from squid_reactivity import Reactive, computed
 from squid_ui.authoring import semantic as s
 from squid_ui.runtime import ComponentRuntime
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.selectors import Match, QueryError, index_tree, query, scope, select
+from squid_ui.selectors import Match, QueryError, QueryRoot, index_tree, query, scope, select
 from squid_ui.testing import render_index
 
 
@@ -238,3 +239,45 @@ def test_string_query_can_select_custom_component_placements() -> None:
     assert_type(primary, Match[object])
     assert primary.node is screen.editor
     assert query(tree, 'ActionControl[key="save"]', within=primary).one().owner == "primary"
+
+
+def test_live_queries_publish_only_delivered_trees_and_captures_stay_pinned() -> None:
+    screen = Screen()
+    runtime = ComponentRuntime(screen)
+    editors = query(runtime.queries, select(Editor))
+    assert editors.count() == 0
+    first = runtime.render()
+    assert editors.count() == 0
+    runtime.commit(first)
+    captured = editors.capture()
+    original = captured.all()[0]
+    assert captured.count() == 2
+
+    screen.shown = False
+    candidate = runtime.render()
+    runtime.discard()
+    assert editors.count() == 2
+    runtime.commit(candidate)
+    assert editors.count() == 0
+    assert captured.count() == 2
+    assert captured.all()[0] is original
+    runtime.finish()
+
+
+def test_live_query_reads_invalidate_computed_consumers() -> None:
+    root = QueryRoot(toolbar("save"))
+    controls = query(root, select(s.ActionControl))
+
+    class Counter(Reactive):
+        @computed
+        def count(self) -> int:
+            return controls.count()
+
+    counter = Counter()
+    assert counter.count == 1
+    captured = controls.capture()
+    root.publish(toolbar("save", "cancel"))
+    assert counter.count == 2
+    assert captured.count() == 1
+    with pytest.raises(ValueError, match="different tree index"):
+        query(root, select(object), within=captured.one()).all()
