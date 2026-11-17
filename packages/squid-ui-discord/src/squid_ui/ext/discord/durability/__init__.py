@@ -13,7 +13,9 @@ recovery; DurableBot provides the login-before-recovery-before-gateway ordering.
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, ClassVar, Literal
+
+from pydantic import ValidationError
 
 from squid_reactivity import export_state, restore_state
 from squid_storage import (
@@ -28,6 +30,14 @@ from squid_storage import (
     TopicBridgeSnapshot,
 )
 from squid_ui.errors import SquidUiError
+from squid_ui.ext.discord.durability._wire import (
+    WireAddress,
+    WireComponent,
+    WireMount,
+    WirePresentation,
+    WireState,
+    WireTarget,
+)
 from squid_ui.ext.discord.messages.root import AnyMessageRoot, MessageRoot
 from squid_ui.ext.discord.sessions import SessionKey
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
@@ -86,16 +96,6 @@ __all__ = [
 
 class MessageRootStateError(SquidUiError, ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
-
-
-from squid_ui.ext.discord.durability._json import (
-    optional_string,
-    require_boolean,
-    require_integer,
-    require_object,
-    require_string,
-    require_strings,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,24 +164,23 @@ class DurableMessageRootRecord:
 class DurableMessageRootCodec:
     """Canonical JSON codec for operational mount record protocol 1."""
 
-    protocol = 1
+    protocol: ClassVar[Literal[1]] = 1
 
     @classmethod
     def dumps(cls, record: DurableMessageRootRecord) -> str:
         if record.protocol != cls.protocol:
             message = f"unsupported durable mount record protocol {record.protocol}"
             raise MessageRootStateError(message)
-        raw = {
-            "protocol": record.protocol,
-            "state": json.loads(MessageRootStateCodec.dumps(record.state)),
-            "address": {
-                "frontend": record.address.frontend,
-                "values": dict(record.address.values),
-            },
-            "expires_at": record.expires_at,
-        }
         try:
-            return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            wire = WireMount(
+                protocol=cls.protocol,
+                state=MessageRootStateCodec.to_wire(record.state),
+                address=WireAddress(frontend=record.address.frontend, values=dict(record.address.values)),
+                expires_at=record.expires_at,
+            )
+            return json.dumps(
+                wire.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
         except (TypeError, ValueError) as error:
             message = f"durable mount metadata is not JSON serializable: {error}"
             raise MessageRootStateError(message) from error
@@ -189,67 +188,32 @@ class DurableMessageRootCodec:
     @classmethod
     def loads(cls, payload: str) -> DurableMessageRootRecord:
         try:
-            raw = json.loads(payload)
-        except json.JSONDecodeError as error:
+            wire = WireMount.model_validate_json(payload)
+        except ValidationError as error:
             raise MessageRootStateError(str(error)) from error
-        item = require_object(raw, "durable mount record")
-        protocol = require_integer(item, "protocol", description="mount record field")
-        if protocol != cls.protocol or "state" not in item:
-            message = f"unsupported durable mount record protocol {protocol}"
-            raise MessageRootStateError(message)
-        address = require_object(item.get("address"), "mount address")
-        values: dict[str, str | int] = {}
-        for key, value in require_object(address.get("values"), "mount address values").items():
-            if not isinstance(key, str) or not isinstance(value, str | int):
-                message = "mount address values must contain string keys and string or integer values"
-                raise MessageRootStateError(message)
-            values[key] = value
-        expires_at = item.get("expires_at")
-        if expires_at is not None and not isinstance(expires_at, int | float):
-            message = "mount record expires_at must be a number or null"
-            raise MessageRootStateError(message)
-        state_payload = json.dumps(item.get("state"), ensure_ascii=False, separators=(",", ":"))
         return DurableMessageRootRecord(
-            protocol,
-            MessageRootStateCodec.loads(state_payload),
-            FrontendAddress(require_string(address, "frontend", description="mount address field"), values),
-            float(expires_at) if expires_at is not None else None,
+            wire.protocol,
+            MessageRootStateCodec.from_wire(wire.state),
+            FrontendAddress(wire.address.frontend, wire.address.values),
+            wire.expires_at,
         )
 
 
 class MessageRootStateCodec:
     """Canonical JSON codec for mount state protocol 1."""
 
-    protocol = 1
+    protocol: ClassVar[Literal[1]] = 1
 
     @classmethod
     def dumps(cls, state: MessageRootState) -> str:
         if state.protocol != cls.protocol:
             message = f"unsupported mount state protocol {state.protocol}"
             raise MessageRootStateError(message)
-        raw = {
-            "protocol": state.protocol,
-            "component_key": state.component_key,
-            "component_version": state.component_version,
-            "components": [
-                {
-                    "path": component.path,
-                    "type_id": component.type_id,
-                    "state": dict(component.state),
-                    **({"shared_with": component.shared_with} if component.shared_with is not None else {}),
-                }
-                for component in state.components
-            ],
-            "presentation": _presentation_to_dict(state.presentation),
-            "target": {
-                "triple": state.target_triple,
-                "version": state.target_version,
-                "fingerprint": state.target_fingerprint,
-                "adapter_capabilities": list(state.target_adapter_capabilities),
-            },
-        }
         try:
-            return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            wire = cls.to_wire(state)
+            return json.dumps(
+                wire.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
         except (TypeError, ValueError) as error:
             message = f"component state is not JSON serializable: {error}"
             raise MessageRootStateError(message) from error
@@ -263,50 +227,62 @@ class MessageRootStateCodec:
         if not isinstance(raw, dict):
             message = "mount state must be an object"
             raise MessageRootStateError(message)
-        protocol = require_integer(raw, "protocol", description="snapshot field")
-        if protocol != cls.protocol:
-            message = f"unsupported mount state protocol {protocol}"
+        if raw.get("protocol") != cls.protocol:
+            message = f"unsupported mount state protocol {raw.get('protocol')}"
             raise MessageRootStateError(message)
-        components = raw.get("components")
-        presentation = raw.get("presentation")
-        if not isinstance(components, list) or not isinstance(presentation, dict):
-            message = "mount state components or presentation are malformed"
+        try:
+            return cls.from_wire(WireState.model_validate(raw))
+        except ValidationError as error:
+            raise MessageRootStateError(str(error)) from error
+
+    @classmethod
+    def to_wire(cls, state: MessageRootState) -> WireState:
+        """Validate a snapshot and build its JSON contract without serializing it."""
+        if state.protocol != cls.protocol:
+            message = f"unsupported mount state protocol {state.protocol}"
             raise MessageRootStateError(message)
-        decoded_components: list[ComponentState] = []
-        for value in components:
-            item = require_object(value, "component snapshot")
-            state = item.get("state")
-            if not isinstance(state, dict) or not all(isinstance(key, str) for key in state):
-                message = "component snapshot state must be an object with string keys"
-                raise MessageRootStateError(message)
-            decoded_components.append(
-                ComponentState(
-                    path=require_string(item, "path", description="snapshot field"),
-                    type_id=require_string(item, "type_id", description="snapshot field"),
-                    state=state,
-                    shared_with=optional_string(item, "shared_with", description="snapshot field"),
+        return WireState(
+            protocol=cls.protocol,
+            component_key=state.component_key,
+            component_version=state.component_version,
+            components=[
+                WireComponent(
+                    path=component.path,
+                    type_id=component.type_id,
+                    state=dict(component.state),
+                    shared_with=component.shared_with,
                 )
-            )
-        _validate_component_aliases(decoded_components)
-        target = require_object(raw.get("target"), "mount target")
-        adapter_capabilities = target.get("adapter_capabilities")
-        if not isinstance(adapter_capabilities, list) or not all(
-            isinstance(capability, str) for capability in adapter_capabilities
-        ):
-            message = "mount state target adapter_capabilities must be a string list"
-            raise MessageRootStateError(message)
+                for component in state.components
+            ],
+            presentation=WirePresentation.model_validate(_presentation_to_dict(state.presentation)),
+            target=WireTarget(
+                triple=state.target_triple,
+                version=state.target_version,
+                fingerprint=state.target_fingerprint,
+                adapter_capabilities=list(state.target_adapter_capabilities),
+            ),
+        )
+
+    @classmethod
+    def from_wire(cls, wire: WireState) -> MessageRootState:
+        """Restore runtime snapshot values from a validated JSON contract."""
+        components = tuple(
+            ComponentState(item.path, item.type_id, item.state, item.shared_with) for item in wire.components
+        )
+        _validate_component_aliases(components)
+        adapter_capabilities = wire.target.adapter_capabilities
         if adapter_capabilities != sorted(set(adapter_capabilities)):
             message = "mount state target adapter_capabilities must be sorted and unique"
             raise MessageRootStateError(message)
         return MessageRootState(
-            protocol,
-            require_string(raw, "component_key", description="snapshot field"),
-            require_integer(raw, "component_version", description="snapshot field"),
-            tuple(decoded_components),
-            _presentation_from_dict(presentation),
-            require_string(target, "triple", description="snapshot target field"),
-            require_integer(target, "version", description="snapshot target field"),
-            require_string(target, "fingerprint", description="snapshot target field"),
+            wire.protocol,
+            wire.component_key,
+            wire.component_version,
+            components,
+            _presentation_from_wire(wire.presentation),
+            wire.target.triple,
+            wire.target.version,
+            wire.target.fingerprint,
             tuple(adapter_capabilities),
         )
 
@@ -396,42 +372,19 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
     }
 
 
-def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
-    cursors = require_object(raw.get("cursors"), "presentation cursors")
-    selections = require_object(raw.get("selections"), "presentation selections")
-    disclosures = require_object(raw.get("disclosures"), "presentation disclosures")
-    # Older snapshots contain strategies from the retired planner; ignore that field.
+def _presentation_from_wire(wire: WirePresentation) -> PresentationSnapshot:
     return PresentationSnapshot(
         cursors={
             key: CursorState(
-                PagePosition(
-                    optional_string(
-                        position := require_object(
-                            (item := require_object(value, "cursor state")).get("position"), "cursor position"
-                        ),
-                        "anchor",
-                        description="cursor position field",
-                    ),
-                    require_integer(position, "offset", description="cursor position field"),
-                ),
-                require_integer(item, "extent", description="cursor field"),
-                require_string(item, "fingerprint", description="cursor field"),
-                optional_string(item, "reveal_request", description="cursor field"),
+                PagePosition(item.position.anchor, item.position.offset),
+                item.extent,
+                item.fingerprint,
+                item.reveal_request,
             )
-            for key, value in cursors.items()
+            for key, item in wire.cursors.items()
         },
-        selections={
-            key: SelectionState(
-                require_strings(require_object(value, "selection state"), "selected", description="selection field")
-            )
-            for key, value in selections.items()
-        },
-        disclosures={
-            key: DisclosureState(
-                require_boolean(require_object(value, "disclosure state"), "open", description="disclosure field")
-            )
-            for key, value in disclosures.items()
-        },
+        selections={key: SelectionState(tuple(item.selected)) for key, item in wire.selections.items()},
+        disclosures={key: DisclosureState(item.open) for key, item in wire.disclosures.items()},
     )
 
 
