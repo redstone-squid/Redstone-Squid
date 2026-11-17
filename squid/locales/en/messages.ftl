@@ -517,19 +517,19 @@ accounts-discord-user-id-stored =
 # squid/accounts/domain/consent.py:17
 accounts-domain-consent-privacy-notice = Privacy notice
 
-# squid/accounts/domain/profiles.py:165
+# squid/accounts/domain/profiles.py:153
 accounts-domain-profiles-bio = Bio
 
-# squid/accounts/domain/profiles.py:159
+# squid/accounts/domain/profiles.py:147
 accounts-domain-profiles-display-name = Display name
 
-# squid/accounts/domain/profiles.py:99
+# squid/accounts/domain/profiles.py:87
 accounts-domain-profiles-link-label = Link label
 
-# squid/accounts/domain/profiles.py:109
+# squid/accounts/domain/profiles.py:97
 accounts-domain-profiles-link-url = Link URL
 
-# squid/accounts/domain/profiles.py:171
+# squid/accounts/domain/profiles.py:159
 accounts-domain-profiles-pronouns = Pronouns
 
 # squid/accounts/errors.py:182
@@ -592,16 +592,16 @@ accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $s
 # squid/accounts/errors.py:89
 accounts-last-identity-required = You cannot unlink your only remaining identity.
 
-# squid/accounts/domain/profiles.py:123
+# squid/accounts/domain/profiles.py:111
 accounts-link-credentials-forbidden = Links may not carry credentials.
 
 # squid/accounts/errors.py:93
 accounts-link-identity-before-unlink = Link another identity first, then unlink this one.
 
-# squid/accounts/domain/profiles.py:114
+# squid/accounts/domain/profiles.py:102
 accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 
-# squid/accounts/domain/profiles.py:102
+# squid/accounts/domain/profiles.py:90
 accounts-link-label-required = Every link needs a label.
 
 # squid/accounts/errors.py:357
@@ -613,16 +613,16 @@ accounts-link-prompt-expired = The linking prompt expired before you answered it
 # squid/accounts/errors.py:156
 accounts-link-restart = Run /account link again with a fresh code from the game.
 
-# squid/accounts/domain/profiles.py:105
+# squid/accounts/domain/profiles.py:93
 accounts-link-url-required = Every link needs a URL.
 
-# squid/accounts/domain/profiles.py:108
+# squid/accounts/domain/profiles.py:96
 accounts-link-url-too-long = Link URLs may be at most { $limit } characters.
 
 # squid/accounts/errors.py:69
 accounts-linked-identity-not-owned = That linked identity does not belong to your account.
 
-# squid/accounts/domain/profiles.py:119
+# squid/accounts/domain/profiles.py:107
 accounts-links-include-hostname = Links must include a hostname.
 
 # squid/accounts/errors.py:73
@@ -667,16 +667,16 @@ accounts-privacy-notice-refresh = Re-read the current privacy notice, then accep
 # squid/accounts/errors.py:234
 accounts-privacy-notice-updated = The privacy notice has changed since this one was shown.
 
-# squid/accounts/domain/profiles.py:61
+# squid/accounts/domain/profiles.py:49
 accounts-profile-control-characters = { $field } may not contain control characters.
 
 # squid/accounts/errors.py:105
 accounts-profile-data-invalid = The profile data is invalid.
 
-# squid/accounts/domain/profiles.py:80
+# squid/accounts/domain/profiles.py:68
 accounts-profile-field-too-long = { $field } may be at most { $limit } characters, got { $length }.
 
-# squid/accounts/domain/profiles.py:179
+# squid/accounts/domain/profiles.py:167
 accounts-profile-link-limit = A profile may have at most { $limit } links, got { $count }.
 
 # squid/accounts/errors.py:130
@@ -742,25 +742,25 @@ admin-that-message-is-not-from-this-server = That message is not from this serve
 # squid/bot/admin_cog.py:332
 admin-to-the-current-guild = to the current guild
 
-# squid/api/errors.py:264
+# squid/api/errors.py:263
 api-errors-http-error = HTTP error
 
-# squid/api/errors.py:202, squid/api/errors.py:284
+# squid/api/errors.py:201, squid/api/errors.py:283
 api-errors-internal-server-error = Internal server error
 
-# squid/api/errors.py:239
+# squid/api/errors.py:238
 api-errors-invalid-request = Invalid request
 
-# squid/api/errors.py:200
+# squid/api/errors.py:199
 api-errors-service-unavailable = Service unavailable
 
-# squid/api/errors.py:39
+# squid/api/errors.py:40
 api-internal-server-error-occurred = An internal server error occurred.
 
-# squid/api/errors.py:240
+# squid/api/errors.py:239
 api-request-validation-failed = The request did not pass validation.
 
-# squid/api/errors.py:40
+# squid/api/errors.py:41
 api-service-unavailable = A required service is temporarily unavailable. Please try again later.
 
 # squid/artifacts/infrastructure.py:107, squid/artifacts/infrastructure.py:255
@@ -903,6 +903,9 @@ bot-profile-render-value = { $provider } — { $name }
 # squid/bot/accounts/profile_render.py:36
 bot-profile-render-value-2 = { $provider } — { $subject }
 
+# squid/bot/limits.py:52
+bot-rate-limited = Too many requests. Try again in { $wait } seconds.
+
 # squid/bot/recount_cog.py:96
 bot-recount-give-a-link-to-a-message-in = Give a link to a message in this server.
 
@@ -924,100 +927,100 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount_cog.py:111
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings/screen.py:596
+# squid/bot/settings/screen.py:639
 bot-settings-role-multiplier = { $role } — { NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x
 
-# squid/bot/settings/screen.py:327
+# squid/bot/settings/screen.py:370
 bot-settings-view-bot-language = Bot language
 
-# squid/bot/settings/screen.py:61
+# squid/bot/settings/screen.py:70
 bot-settings-view-build-reviews = Build reviews
 
-# squid/bot/settings/screen.py:56
+# squid/bot/settings/screen.py:65
 bot-settings-view-builds-awaiting-review = Builds awaiting review
 
-# squid/bot/settings/screen.py:230
+# squid/bot/settings/screen.py:273
 bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied picker clears that setting.
 
-# squid/bot/settings/screen.py:305
+# squid/bot/settings/screen.py:348
 bot-settings-view-changed = Changed { $setting_label }
 
-# squid/bot/settings/screen.py:314
+# squid/bot/settings/screen.py:357
 bot-settings-view-changed-the-bot-language = Changed the bot language
 
-# squid/bot/settings/screen.py:388
+# squid/bot/settings/screen.py:431
 bot-settings-view-choose-a-role = Choose a role
 
-# squid/bot/settings/screen.py:402
+# squid/bot/settings/screen.py:445
 bot-settings-view-confirm-reset = Confirm reset
 
-# squid/bot/settings/screen.py:55
+# squid/bot/settings/screen.py:64
 bot-settings-view-confirmed-builds = Confirmed builds
 
-# squid/bot/settings/screen.py:610
+# squid/bot/settings/screen.py:653
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
 
-# squid/bot/settings/screen.py:62
+# squid/bot/settings/screen.py:71
 bot-settings-view-deletion-votes = Deletion votes
 
-# squid/bot/settings/screen.py:396
+# squid/bot/settings/screen.py:439
 bot-settings-view-edit-emojis = Edit emojis
 
-# squid/bot/settings/screen.py:603
+# squid/bot/settings/screen.py:646
 bot-settings-view-emojis = Emojis
 
-# squid/bot/settings/screen.py:53
+# squid/bot/settings/screen.py:62
 bot-settings-view-fastest-record-builds = Fastest-record builds
 
-# squid/bot/settings/screen.py:54
+# squid/bot/settings/screen.py:63
 bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds
 
-# squid/bot/settings/screen.py:271
+# squid/bot/settings/screen.py:314
 bot-settings-view-follow-discord = Follow Discord
 
-# squid/bot/settings/screen.py:509
+# squid/bot/settings/screen.py:552
 bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice.
 
-# squid/bot/settings/screen.py:589, squid/bot/settings/screen.py:601
+# squid/bot/settings/screen.py:632, squid/bot/settings/screen.py:644
 bot-settings-view-none = _None_
 
-# squid/bot/settings/screen.py:334
+# squid/bot/settings/screen.py:377
 bot-settings-view-not-found = _Not found_ ({ $channel_id })
 
-# squid/bot/settings/screen.py:332
+# squid/bot/settings/screen.py:375
 bot-settings-view-not-set = _Not set_
 
-# squid/bot/settings/screen.py:640
+# squid/bot/settings/screen.py:683
 bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line
 
-# squid/bot/settings/screen.py:63
+# squid/bot/settings/screen.py:72
 bot-settings-view-polls = Polls
 
-# squid/bot/settings/screen.py:404
+# squid/bot/settings/screen.py:447
 bot-settings-view-reset = Reset
 
-# squid/bot/settings/screen.py:604
+# squid/bot/settings/screen.py:647
 bot-settings-view-role-multipliers = Role multipliers
 
-# squid/bot/settings/screen.py:239
+# squid/bot/settings/screen.py:282
 bot-settings-view-server-settings = Server settings
 
-# squid/bot/settings/screen.py:52
+# squid/bot/settings/screen.py:61
 bot-settings-view-smallest-record-builds = Smallest-record builds
 
-# squid/bot/settings/screen.py:435
+# squid/bot/settings/screen.py:478
 bot-settings-view-that-role-has-been-deleted = That role has been deleted.
 
-# squid/bot/settings/screen.py:430
+# squid/bot/settings/screen.py:473
 bot-settings-view-that-role-selection-is-invalid = That role selection is invalid.
 
-# squid/bot/settings/screen.py:443
+# squid/bot/settings/screen.py:486
 bot-settings-view-vote-weight-for = Vote weight for { $role_name }
 
-# squid/bot/settings/screen.py:155
+# squid/bot/settings/screen.py:167
 bot-settings-view-voting = Voting
 
-# squid/bot/settings/screen.py:370
+# squid/bot/settings/screen.py:413
 bot-settings-view-voting-2 = Voting — { $kind_label }
 
 # squid/bot/starboard/render.py:26
@@ -1119,10 +1122,10 @@ bot-submission-build-browse-build-id = Build ID
 # squid/bot/catalogue/browse.py:332
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/catalogue/schematics/tools.py:342
+# squid/bot/catalogue/schematics/tools.py:349
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/catalogue/schematics/tools.py:351, squid/bot/catalogue/schematics/tools.py:98
+# squid/bot/catalogue/schematics/tools.py:358, squid/bot/catalogue/schematics/tools.py:98
 bot-submission-build-browse-convert-schematic = Other format or version
 
 # squid/bot/catalogue/schematics/tools.py:77
@@ -1143,7 +1146,7 @@ bot-submission-build-browse-open-build = Open build
 # squid/bot/catalogue/browse.py:634
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/catalogue/schematics/tools.py:354
+# squid/bot/catalogue/schematics/tools.py:361
 bot-submission-build-browse-output-format = Output format
 
 # squid/bot/catalogue/browse.py:282, squid/bot/catalogue/browse.py:326
@@ -1672,7 +1675,7 @@ bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 # squid/bot/voting/poll_wizard.py:463
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/cog.py:175, squid/bot/voting/poll_wizard.py:458
+# squid/bot/voting/cog.py:176, squid/bot/voting/poll_wizard.py:458
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:322
@@ -1702,19 +1705,19 @@ bot-voting-poll-wizard-visibility = Visibility
 # squid/bot/voting/poll_wizard.py:335
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/cog.py:189
+# squid/bot/voting/cog.py:190
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/cog.py:224
+# squid/bot/voting/cog.py:225
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/cog.py:205
+# squid/bot/voting/cog.py:206
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/cog.py:204
+# squid/bot/voting/cog.py:205
 bot-voting-vote-working = Working
 
-# squid/bot/voting/cog.py:138
+# squid/bot/voting/cog.py:139
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/catalogue/browse.py:888
@@ -2236,6 +2239,12 @@ command-build-submit-restrictions-name = restrictions
 # squid/bot/submission/cog.py:233
 command-build-submit-versions-name = versions
 
+# squid/bot/diagnostics/cog.py:26
+command-connection-help = Inspect the bot's gateway connection and recent reconnects.
+
+# squid/bot/diagnostics/cog.py:25
+command-connection-name = connection
+
 # squid/bot/chrome.py:174
 command-dev-help = Development-only operational diagnostics.
 
@@ -2278,25 +2287,25 @@ command-dev-ui-tab-help = The dashboard tab to open first.
 # squid/bot/chrome.py:176
 command-dev-ui-tab-name = tab
 
-# squid/bot/diagnostics/cog.py:24
+# squid/bot/diagnostics/cog.py:59
 command-errors-help = Browse private error reports, optionally opening one reference.
 
-# squid/bot/diagnostics/cog.py:23
+# squid/bot/diagnostics/cog.py:58
 command-errors-name = errors
 
-# squid/bot/diagnostics/cog.py:28
+# squid/bot/diagnostics/cog.py:63
 command-errors-reference-help = The error reference to open immediately
 
-# squid/bot/diagnostics/cog.py:27
+# squid/bot/diagnostics/cog.py:62
 command-errors-reference-name = reference
 
-# squid/bot/help_cog.py:194
+# squid/bot/help_cog.py:204
 command-help-command-name = command
 
-# squid/bot/help_cog.py:190
+# squid/bot/help_cog.py:200
 command-help-help = Show a grouped command directory or focused command details.
 
-# squid/bot/help_cog.py:191
+# squid/bot/help_cog.py:201
 command-help-name = help
 
 # squid/bot/showcase/cog.py:26
@@ -2350,10 +2359,10 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin_cog.py:126
 command-paste-name = paste
 
-# squid/bot/voting/cog.py:57
+# squid/bot/voting/cog.py:58
 command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/cog.py:56
+# squid/bot/voting/cog.py:57
 command-poll-name = poll
 
 # squid/bot/submission/cog.py:61
@@ -2494,8 +2503,23 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking_cog.py:126
 command-versions-name = versions
 
-# squid/bot/voting/cog.py:182
+# squid/bot/voting/cog.py:183
 command-vote-to-delete-name = Vote to Delete
+
+# squid/bot/diagnostics/cog.py:47
+connection-counts = Since startup: { $identifies } identifies, { $resumes } resumes, { $disconnects } disconnects.
+
+# squid/bot/diagnostics/cog.py:53
+connection-events = Recent events
+
+# squid/bot/diagnostics/cog.py:46
+connection-heading = Discord connection
+
+# squid/bot/diagnostics/cog.py:52
+connection-latency = Heartbeat latency (ms)
+
+# squid/bot/diagnostics/cog.py:51
+connection-ready = Ready
 
 # squid/bot/accounts/consent.py:106
 consent-agree = Agree
@@ -3193,64 +3217,64 @@ edits-revision-conflict = This item changed elsewhere. Reload it before editing.
 # squid/api/revisions.py:11
 edits-revision-required = Send the ETag you read in the If-Match header.
 
-# squid/bot/errors.py:200
+# squid/bot/errors.py:201
 errors-command-already-running = Command already running
 
-# squid/bot/errors.py:193
+# squid/bot/errors.py:194
 errors-command-on-cooldown = Command on cooldown
 
-# squid/bot/errors.py:205, squid/bot/errors.py:220
+# squid/bot/errors.py:206, squid/bot/errors.py:221
 errors-command-unavailable = Command unavailable
 
-# squid/bot/errors.py:168
+# squid/bot/errors.py:169
 errors-consent-required = Consent required
 
-# squid/bot/errors.py:169
+# squid/bot/errors.py:170
 errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it.
 
-# squid/bot/errors.py:206, squid/bot/errors.py:221
+# squid/bot/errors.py:207, squid/bot/errors.py:222
 errors-context-forbidden = You cannot use this command here.
 
-# squid/bot/errors.py:178
+# squid/bot/errors.py:179
 errors-context-unavailable = This command cannot be used in a private message.
 
-# squid/bot/errors.py:211
+# squid/bot/errors.py:212
 errors-invalid-arguments-hint = Check the command arguments and try again.
 
-# squid/bot/errors.py:210, squid/bot/errors.py:215
+# squid/bot/errors.py:211, squid/bot/errors.py:216
 errors-invalid-command-input = Invalid command input
 
-# squid/bot/errors.py:182, squid/permissions/errors.py:61
+# squid/bot/errors.py:183, squid/permissions/errors.py:61
 errors-missing-permission = Missing permission
 
-# squid/bot/errors.py:216
+# squid/bot/errors.py:217
 errors-one-of-the-command-options-is-invalid = One of the command options is invalid.
 
-# squid/bot/errors.py:201
+# squid/bot/errors.py:202
 errors-operation-in-progress = Wait for the current operation to finish and try again.
 
-# squid/bot/errors.py:187
+# squid/bot/errors.py:188
 errors-owner-only = Owner only
 
-# squid/bot/errors.py:188
+# squid/bot/errors.py:189
 errors-owner-only-hint = Only the bot owner can use this command.
 
-# squid/bot/errors.py:183
+# squid/bot/errors.py:184
 errors-permission-required = You do not have permission to use this command.
 
 # squid/permissions/errors.py:59
 errors-permission-withheld = Permission withheld
 
-# squid/bot/errors.py:177
+# squid/bot/errors.py:178
 errors-server-only = Server only
 
-# squid/bot/errors.py:232
+# squid/bot/errors.py:233
 errors-something-went-wrong = Something went wrong
 
-# squid/bot/errors.py:194
+# squid/bot/errors.py:195
 errors-try-again-in-seconds = Try again in { NUMBER($seconds, minimumFractionDigits: 1, maximumFractionDigits: 1) } seconds.
 
-# squid/bot/errors.py:249
+# squid/bot/errors.py:250
 errors-unexpected-reference = An unexpected error occurred. Reference: `{ $error_id }`
 
 # squid/events/application.py:77
@@ -3394,10 +3418,10 @@ help-administration-setup = Administration & setup
 # squid/bot/help_cog.py:24
 help-build = Build
 
-# squid/bot/help_cog.py:144
+# squid/bot/help_cog.py:154
 help-command-not-found = Command not found
 
-# squid/bot/help_cog.py:145
+# squid/bot/help_cog.py:155
 help-command-unavailable = No command named `{ $needle }` is available.
 
 # squid/bot/help_cog.py:27
@@ -3406,34 +3430,34 @@ help-community = Community
 # squid/bot/help_cog.py:25
 help-discover = Discover
 
-# squid/bot/help_cog.py:155
+# squid/bot/help_cog.py:165
 help-documentation = Documentation
 
-# squid/bot/help_cog.py:34
+# squid/bot/help_cog.py:44
 help-information = Information
 
-# squid/bot/help_cog.py:162
+# squid/bot/help_cog.py:172
 help-invite = Invite
 
-# squid/bot/help_cog.py:100
+# squid/bot/help_cog.py:110
 help-no-commands-are-available = No commands are available.
 
-# squid/bot/help_cog.py:116, squid/bot/help_cog.py:176
+# squid/bot/help_cog.py:126, squid/bot/help_cog.py:186
 help-no-details-provided = No details provided
 
-# squid/bot/help_cog.py:99
+# squid/bot/help_cog.py:109
 help-redstone-squid-help = Redstone Squid help
 
-# squid/bot/help_cog.py:156
+# squid/bot/help_cog.py:166
 help-regulations = Regulations
 
-# squid/bot/help_cog.py:153
+# squid/bot/help_cog.py:163
 help-source = Source
 
-# squid/bot/help_cog.py:154
+# squid/bot/help_cog.py:164
 help-submission-form = Submission form
 
-# squid/bot/help_cog.py:195
+# squid/bot/help_cog.py:205
 help-the-command-to-get-help-for = The command to get help for.
 
 # squid/idempotency/infrastructure/crypto.py:61
@@ -3457,10 +3481,10 @@ idempotency-request-idempotency-key = A request with this idempotency key is sti
 # squid/idempotency/domain.py:73
 idempotency-request-in-progress = Idempotent request in progress
 
-# squid/bot/submission/ui/inference.py:203
+# squid/bot/submission/ui/inference.py:204
 inference-candidate = Candidate { $number }: { $category }
 
-# squid/bot/submission/ui/inference.py:201
+# squid/bot/submission/ui/inference.py:202
 inference-candidate-uncategorized = Candidate { $number }: choose a category
 
 # squid/bot/submission/ui/inference.py:75
@@ -3484,7 +3508,7 @@ inference-candidates-open-draft = Open draft
 # squid/bot/submission/ui/inference.py:96
 inference-candidates-previous = Previous candidates
 
-# squid/bot/submission/ui/inference.py:151
+# squid/bot/submission/ui/inference.py:152
 inference-candidates-recovered = Retained inference recovered. Open a candidate to continue.
 
 # squid/bot/submission/ui/inference.py:67
@@ -4165,6 +4189,66 @@ notifications-tags-list = tags must be a list
 # squid/bot/notification_text.py:40
 notifications-update-summary = { $build } has an update.
 
+# squid/bot/diagnostics/permissions.py:87
+permission-add-reactions = Add Reactions
+
+# squid/bot/diagnostics/permissions.py:90
+permission-channel-missing = Channel { $channel_id }: missing { $missing }.
+
+# squid/bot/diagnostics/permissions.py:94
+permission-channel-ready = Channel { $channel_id }: required posting permissions are present.
+
+# squid/bot/diagnostics/permissions.py:73
+permission-channel-unavailable = Access could not be checked. Confirm that the channel still exists and the bot can access it.
+
+# squid/bot/diagnostics/permissions.py:66
+permission-channel-unset = No channel configured.
+
+# squid/bot/diagnostics/permissions.py:61
+permission-diagnostics-heading = Discord permissions
+
+# squid/bot/diagnostics/permissions.py:118
+permission-diagnostics-snapshot = Open Diagnostics again after changing roles or channel overrides. Source-channel access and individual member hierarchy may impose additional restrictions.
+
+# squid/bot/diagnostics/permissions.py:81
+permission-embed-links = Embed Links
+
+# squid/bot/diagnostics/permissions.py:38
+permission-posting-channel = { $key } posting
+
+# squid/bot/diagnostics/permissions.py:80
+permission-read-history = Read Message History
+
+# squid/bot/diagnostics/permissions.py:98
+permission-redstoner-role = Redstoner role assignment
+
+# squid/bot/diagnostics/permissions.py:107
+permission-role-hierarchy = Move the bot's highest role above the configured Redstoner role.
+
+# squid/bot/diagnostics/permissions.py:103
+permission-role-manage = Missing Manage Roles.
+
+# squid/bot/diagnostics/permissions.py:105
+permission-role-managed = Discord manages this role; the bot cannot assign it.
+
+# squid/bot/diagnostics/permissions.py:109
+permission-role-ready = The bot can assign the configured role to members below its highest role.
+
+# squid/bot/diagnostics/permissions.py:101
+permission-role-unavailable = The configured role or bot membership is unavailable.
+
+# squid/bot/diagnostics/permissions.py:82
+permission-send-messages = Send Messages (or Send Messages in Threads)
+
+# squid/bot/diagnostics/permissions.py:47
+permission-starboard = Starboard: { $name }
+
+# squid/bot/diagnostics/permissions.py:92
+permission-thread-closed = Channel { $channel_id }: the thread is archived or locked.
+
+# squid/bot/diagnostics/permissions.py:79
+permission-view-channel = View Channel
+
 # squid/permissions/errors.py:35
 permissions-action-requirement = This action requires { $node }, but { $detail }.
 
@@ -4411,43 +4495,43 @@ poll-choices-format = Separate choices with commas or line breaks; quote choices
 # squid/bot/voting/poll_wizard.py:225
 poll-choices-length = Keep the choices within 1000 characters.
 
-# squid/bot/voting/cog.py:66
+# squid/bot/voting/cog.py:67
 poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
 
-# squid/bot/voting/cog.py:65
+# squid/bot/voting/cog.py:66
 poll-command-choices-name = choices
 
-# squid/bot/voting/cog.py:70
+# squid/bot/voting/cog.py:71
 poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
 
-# squid/bot/voting/cog.py:69
+# squid/bot/voting/cog.py:70
 poll-command-duration-name = duration
 
-# squid/bot/voting/cog.py:165
+# squid/bot/voting/cog.py:166
 poll-command-network-denied = You do not have permission to publish to every server.
 
-# squid/bot/voting/cog.py:84
+# squid/bot/voting/cog.py:85
 poll-command-preview = Review and edit before publishing. Default: publish immediately.
 
-# squid/bot/voting/cog.py:83
+# squid/bot/voting/cog.py:84
 poll-command-preview-name = preview
 
-# squid/bot/voting/cog.py:62
+# squid/bot/voting/cog.py:63
 poll-command-question = Poll question; omit to open the editor.
 
-# squid/bot/voting/cog.py:61
+# squid/bot/voting/cog.py:62
 poll-command-question-name = question
 
-# squid/bot/voting/cog.py:79
+# squid/bot/voting/cog.py:80
 poll-command-scope = This server, or every server if you have permission.
 
-# squid/bot/voting/cog.py:78
+# squid/bot/voting/cog.py:79
 poll-command-scope-name = scope
 
-# squid/bot/voting/cog.py:74
+# squid/bot/voting/cog.py:75
 poll-command-visibility = Who can see votes and when results are shown.
 
-# squid/bot/voting/cog.py:73
+# squid/bot/voting/cog.py:74
 poll-command-visibility-name = visibility
 
 # squid/bot/voting/poll_wizard.py:446
@@ -4760,16 +4844,16 @@ schematic-build-measured-size =
     { "*" }*Non-air blocks**: { $blocks }
     { "*" }*Distinct block states**: { $states }
 
-# squid/bot/catalogue/schematics/tools.py:115, squid/bot/catalogue/schematics/tools.py:367
+# squid/bot/catalogue/schematics/tools.py:115, squid/bot/catalogue/schematics/tools.py:374
 schematic-conversion-maintenance = Conversion maintenance
 
-# squid/bot/catalogue/schematics/tools.py:355
+# squid/bot/catalogue/schematics/tools.py:362
 schematic-convert-format-help = litematic for Litematica; schem for WorldEdit; mcstructure for Bedrock.
 
 # squid/bot/catalogue/schematics/tools.py:110
 schematic-convert-original = Keep original version
 
-# squid/bot/catalogue/schematics/tools.py:104, squid/bot/catalogue/schematics/tools.py:309
+# squid/bot/catalogue/schematics/tools.py:104, squid/bot/catalogue/schematics/tools.py:314
 schematic-convert-release = Choose conversion release
 
 # squid/bot/catalogue/schematics/tools.py:83
@@ -4799,52 +4883,52 @@ schematic-simulation-input-unresolved = ### Simulation input not resolved
 # squid/bot/catalogue/schematics/tools.py:127
 schematic-video-action = Render video
 
-# squid/bot/catalogue/schematics/tools.py:403
+# squid/bot/catalogue/schematics/tools.py:410
 schematic-video-crashed = The rendering process stopped unexpectedly. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/catalogue/schematics/tools.py:380
+# squid/bot/catalogue/schematics/tools.py:387
 schematic-video-expired = The stored video has expired. Request a new render.
 
-# squid/bot/catalogue/schematics/tools.py:277
+# squid/bot/catalogue/schematics/tools.py:282
 schematic-video-failure-detail = Video #{ $job_id }: { $reason }
 
-# squid/bot/catalogue/schematics/tools.py:407
+# squid/bot/catalogue/schematics/tools.py:414
 schematic-video-internal-failure = Rendering failed. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/catalogue/schematics/tools.py:399
+# squid/bot/catalogue/schematics/tools.py:406
 schematic-video-invalid-failure = The renderer could not process this schematic. Ask an administrator to check the worker logs using this video number.
 
-# squid/bot/catalogue/schematics/tools.py:395
+# squid/bot/catalogue/schematics/tools.py:402
 schematic-video-no-input = No usable simulation input was selected. Specify a lever or button position, or keep the build static.
 
-# squid/bot/catalogue/schematics/tools.py:243
+# squid/bot/catalogue/schematics/tools.py:248
 schematic-video-pending = The video is still rendering.
 
-# squid/bot/catalogue/schematics/tools.py:227
+# squid/bot/catalogue/schematics/tools.py:232
 schematic-video-queued = Video #{ $job_id } queued. I'll attach it here when it is ready.
 
-# squid/bot/catalogue/schematics/tools.py:298
+# squid/bot/catalogue/schematics/tools.py:303
 schematic-video-ready = Your schematic video is ready.
 
 # squid/bot/catalogue/schematics/tools.py:132
 schematic-video-refresh = Check video
 
-# squid/bot/catalogue/schematics/tools.py:387
+# squid/bot/catalogue/schematics/tools.py:394
 schematic-video-timeout = Rendering exceeded its time limit. Try a shorter clip or a smaller schematic.
 
-# squid/bot/catalogue/schematics/tools.py:289
+# squid/bot/catalogue/schematics/tools.py:294
 schematic-video-too-large = This video exceeds Discord's attachment limit. Download it while signed in: { $url }
 
-# squid/bot/catalogue/schematics/tools.py:391
+# squid/bot/catalogue/schematics/tools.py:398
 schematic-video-too-large-failure = The schematic or output exceeded the rendering limits. Try a smaller schematic or shorter clip.
 
-# squid/bot/catalogue/schematics/tools.py:383
+# squid/bot/catalogue/schematics/tools.py:390
 schematic-video-unavailable = Video rendering is unavailable on the worker. Ask an administrator to check the video helper and FFmpeg installation.
 
-# squid/bot/catalogue/schematics/tools.py:371
+# squid/bot/catalogue/schematics/tools.py:378
 schematic-world-format-help = Minecraft world-format number, such as 3953; this is not a database version ID.
 
-# squid/bot/catalogue/schematics/tools.py:370
+# squid/bot/catalogue/schematics/tools.py:377
 schematic-world-format-version = World-format data version
 
 # squid/schematics/application/previews.py:52
@@ -5225,34 +5309,37 @@ search-sort-oldest = { $field }, oldest first
 # squid/search/application/ranking.py:76
 search-weight-negative = weight for { $branch_name } cannot be negative
 
-# squid/bot/settings/screen.py:207
+# squid/bot/settings/screen.py:192, squid/bot/settings/screen.py:250
 settings-change-permission-denied = You are no longer allowed to change this.
 
-# squid/bot/settings/screen.py:287
+# squid/bot/settings/screen.py:330
 settings-channel-invalid = That channel selection is invalid.
 
-# squid/bot/settings/screen.py:519
+# squid/bot/settings/screen.py:562
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
-# squid/bot/settings/screen.py:502
+# squid/bot/settings/screen.py:545
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
-# squid/bot/settings/screen.py:325
+# squid/bot/settings/screen.py:368
 settings-follow-server-language = Following this server's Discord language
 
-# squid/bot/settings/screen.py:618
+# squid/bot/settings/screen.py:661
 settings-review-weighting-explained = Build reviews are weighted by the network's own server, so these multipliers do not apply here.
 
-# squid/bot/settings/screen.py:631
+# squid/bot/settings/screen.py:674
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
 # squid/settings/domain/runtime.py:41
 settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
-# squid/bot/settings/screen.py:147
+# squid/bot/settings/screen.py:175
+settings-tab-diagnostics = Diagnostics
+
+# squid/bot/settings/screen.py:159
 settings-tab-server = Server
 
-# squid/bot/settings/screen.py:490
+# squid/bot/settings/screen.py:533
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
 # squid/bot/starboard/screen.py:193
@@ -6233,7 +6320,7 @@ video-use-input = Use this input
 # squid/bot/voting/reactions.py:297
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
-# squid/bot/voting/cog.py:190
+# squid/bot/voting/cog.py:191
 vote-message-guild-mismatch = The message is not from this guild.
 
 # squid/bot/voting/actors.py:22
@@ -6287,7 +6374,7 @@ vote-rows-title = Vote emojis
 # squid/bot/voting/actors.py:28
 vote-server-mismatch = That vote belongs to a different server.
 
-# squid/bot/voting/cog.py:114
+# squid/bot/voting/cog.py:115
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 
 # squid/bot/voting/controls.py:80
