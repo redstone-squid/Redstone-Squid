@@ -400,8 +400,9 @@ change exploration order without discarding the ordinary search frontier. Exhaus
 may return a certified incumbent without proving optimality, or report that no feasible
 candidate was found within the budget. Reports distinguish this from proven infeasibility.
 
-A retained allocation supports cursor-only turns without new search. Content, constraints,
-or bindings that change require current certification. Partition caches supply hints;
+A retained allocation supports cursor-only turns and ordinary action callback replacement
+without new search. Other content, constraints and binding-policy changes require current
+certification. Partition caches supply hints;
 they do not authorize stale callbacks or old route encodings. Rejected candidates publish
 no bindings, assets, or staged presentation changes.
 
@@ -1217,12 +1218,18 @@ resource accounting, and final scene construction; the solver does not inspect t
 
 Every reachable page combination is certified with its actual navigation. Delivery commits
 the chosen allocation, and cursor-only turns reuse it with zero new search operations.
-Content, bindings, or target changes require current certification; partition cache entries
-are only hints. An exhausted search may return a valid certificate without proving optimality.
+Content, binding-policy or target changes require current certification; ordinary action
+callbacks are projected from the current owner. Partition cache entries are only hints. An exhausted search may return a valid certificate without proving optimality.
 Unsupported explicit regions produce capability diagnostics rather than another planner attempt.
 Discord, HTML, and Slack targets all bind their rules through the shared composition
 contract, including Slack modal forms.
 See the [region API](squid-ui-quickstart.md#joint-page-regions).
+
+The runtime's `PlanningSnapshot` distinguishes a computed candidate from the committed
+plan. Exact replay skips preparation; allocation reuse selects certified display pages
+and resolves their current bindings. Immutable subtree fingerprints avoid rehashing
+unchanged content. Only publication commits presentation state. See the
+[caching design](plans/squid-ui-caching.md) for ownership, invalidation and memory bounds.
 
 ## Scenes and renderers
 

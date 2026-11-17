@@ -1,290 +1,149 @@
 # Dependency-based caching for squid-ui
 
-Status: incremental implementation started. Callback-independent allocation reuse
-for ordinary semantic `ActionControl` handlers is implemented; the broader artifact
-and dependency model below remains proposed.
+Status: the four-step owner-local migration is implemented. Display templates are
+separate from live bindings; `PlanningSnapshot` coordinates exact reuse and delivery
+commit; the superseded memo and fingerprint implementation are removed; immutable
+subtrees reuse their fingerprints. Cross-owner sharing and partial recertification
+remain optional future work, not prerequisites for this design.
 
-## Implemented increments
+## How the pieces fit
 
-Live plans now separate ordinary semantic action templates from current callbacks
-when the first allocation is prepared. `ActionAllocation` projects those templates
-through explicit framework handler edges, preserving frontend selection and grouped
-routes. A committed owner can reuse the templates when only `on_trigger` changes.
-Controlled page turns retain the same allocation view and its projection cache.
+Planning chooses and certifies a layout. Rendering turns its Scene into fresh SDK
+objects. Delivery establishes what the remote message actually displays. These stages
+have different dependencies and keep separate reuse mechanisms, coordinated by the
+runtime rather than combined into one general-purpose cache.
 
-`ActionPage` now stores explicit `ActionSlot` and `ActionGroupSlot` values rather than
-`ActionBinding` objects containing placeholder functions. Ordinary slots retain only
-action keys; grouped slots also retain the routing shape and group mode. Projection
-builds live bindings from the current control snapshot, including guards, busy state,
-labels, and history, then selects the frontend handlers. The placeholder callback and
-custom replacement binder have been removed.
+| Owner | Retained value | What permits reuse |
+|---|---|---|
+| Component runtime | Expanded subtrees and reactive observations | Observed dependencies remain valid; lifecycle reconciliation still runs |
+| `PlanningSnapshot` | Candidate and committed live plans | Same authored object, environment, presentation identity and revision |
+| `RetainedComposition` | Certified allocation, prepared semantic graph, content fingerprints | Compatible authored structure, binding policy, environment and composition options |
+| `ActionAllocation` | Bounded projections of display pages | Same certified page and current binding generation |
+| `FingerprintCache` | Immutable subtree digests | The exact deeply immutable object is still present |
+| `PlanCache` | Callback-free partition hints | Always recertified against current inputs |
+| Renderer | Drawing instructions and audit status | Matching Scene and renderer/extension dependencies; each draw creates fresh SDK objects |
+| Publication | Actual delivered Scene and control generation | Successful delivery or a verified unchanged presentation |
 
-Grouped options map their local keys to scoped action slots. A one-item group can
-share its identity with its action, so projection recognizes the group before the
-individual slot. Both the group handler and the dispatcher-selected route receive the
-current callback, including when different groups repeat the same local option key.
+The runtime owns one `PlanningSnapshot`. Its committed result corresponds to the
+presentation session's retained allocation. Keeping the latter on the session also
+supports callers that use `plan()` without a runtime or snapshot.
 
-This replaces the transitional `ReboundAllocation` path. The old implementation
-compared previous/current graphs, detached newly changed handlers, and flattened a
-wrapper on each generation. The new path prepares all supported slots once and
-replaces only the current callback snapshot. The old `action_reuse` module and its
-incremental detachment bookkeeping have been removed.
+## Display and live behavior
 
-All other control fields still participate in allocation comparison. Forms, native
-controls, and actions inside alternative/fallback presentations remain conservative.
-Live template preparation excludes alternate source branches, so a selected alternate
-keeps its actual handler rather than acquiring the canonical content's callback.
-Static plans and custom selectors retain their existing output contracts.
+Built-in live allocations prepare `ActionPage` templates. A page contains a
+`DisplayPage` (Scene, cost, effects and diagnostics), action slots and a page slot.
+It contains no `PlanResult`, handlers, form schemas, file providers or presentation
+updates. Navigation geometry retains neutral page ownership rather than owner callbacks.
 
-Template snapshots contain certified page outputs and navigation metadata without the
-search graph. The retained diagnostic envelope has no obsolete page bindings. Once
-callers release a live generation, its ordinary action receivers can be collected even
-if its template snapshot remains cached. Undelivered candidates leave the displayed
-generation intact. Forms, resources, region owners, and unsupported action kinds may
-still hold live objects: snapshots remain owner-local, not generally shareable artifacts.
+The live `ActionAllocation` supplies current ordinary controls, region ownership and
+`PageBindings` tables for forms, resources and unsupported actions. Projection resolves
+the slots and applies frontend handler selection. Ordinary `ActionControl.on_trigger`
+changes replace this live generation while keeping the certified templates. Grouped
+controls retain scoped route mappings, including repeated local keys in different groups.
+Guards, busy state, labels and history remain allocation dependencies.
 
-Page projections have an owner-local LRU capped at 32 entries. It is keyed by certified
-output identity, so clamped or hidden coordinates selecting the same output reuse one
-projection. Changed callbacks get a fresh generation. Failed frontend binding stores
-no entry. Cache snapshots expose entry, hit, miss, and eviction counts without exposing
-callbacks. The cap bounds entry count, not the byte size of captured application data.
+Forms, native controls and actions inside alternative/fallback presentations use
+conservative allocation comparison. Their live values are separated from display data,
+but changes still require certification. Static plans and custom allocation selectors
+keep their existing contracts. No artifacts are shared across owners automatically.
 
-Prepared semantic graphs and Document fingerprints survive replacement of a retained
-result. Region content fingerprints are computed once per retained authored snapshot,
-then reused across page turns. These caches never retain cursor decisions or delivery
-outcomes: presentation still resolves current positions and stages updates each time.
+A retained diagnostic envelope has no obsolete page bindings. Holding only a built-in
+display template therefore does not keep its form receiver or resource provider alive.
+Holding a projected result intentionally keeps the bindings needed to dispatch it.
 
-General incremental subtree fingerprints, callback-free shared artifacts, byte-based
-cache accounting, and partial certification remain future work.
+## Refresh and delivery
 
-Tests cover callbacks on every page, isolation from the previous generation, repeated
-updates, frontend selection, shared callback identity, and invalidation by display or
-dispatch-policy changes. Projection tests cover LRU eviction, failed binding, coordinate
-clamping, generation isolation, and retention across controlled page turns. Work-count
-tests verify that page revisits do not rebuild the graph or rehash unchanged content.
-Weak-reference tests cover retirement of individual and grouped action receivers after
-commit while preserving the displayed generation before commit. Retaining ordinary
-action templates alone also releases their receivers, guards, and history objects;
-projected bindings retain the original dispatch policy. Snapshot tests cover
-nested coordinate selection; grouped actions with repeated local keys retain their scope.
-Existing composition and Discord cache tests exercise the surrounding planning and
-rendering paths.
+1. The runtime expands dirty components using reactive observations. Explicit refreshes
+   still sample nonreactive application inputs through the component render.
+2. `PlanningSnapshot` attempts exact replay before composition preparation. Its key
+   captures the target, chrome, palette, localization, reservation, strictness,
+   navigation/version, composition identity, search budget and a copy of positions.
+   Source identity and presentation revision are checked separately. Route factories and opaque native extensions
+   are never staged for exact replay because their external dependencies are unknown.
+3. Otherwise, prepare the authored input and compare it with the retained allocation.
+   Ordinary callback replacement and controlled page changes can reuse its certificate.
+   Changed content, constraints, policies or environment require current certification.
+   Previous partition hints may help search but never authorize an old certificate.
+4. Select a certified page and project current bindings. Resolve cursors against current
+   presentation state and stage their updates. A page revisit can reuse the projection;
+   selection itself never commits a cursor or establishes delivery success.
+5. Publication checks the actual delivered record. An unchanged presentation can skip
+   drawing and editing while committing current bindings and reconciling lifecycle work.
+   Changed output uses renderer instructions to construct fresh SDK objects and deliver.
+6. After acceptance, publication applies session updates and commits the matching
+   snapshot candidate before component commit hooks. Failed delivery leaves the
+   previously displayed generation intact. A retry may reuse the pending computation,
+   but must still attempt delivery. Superseded or unmatched results are not promoted.
 
-An earlier local microbenchmark of 100 callback-only updates to a paragraph and one action
-measured median planning time of about 0.51 ms with a fresh presentation state versus
-0.21 ms with the retained allocation. Target evaluations fell from 100 to zero.
-This is illustrative planning-only evidence, not an end-to-end latency guarantee.
+Existing stale-candidate, authority, attachment and per-message partial-delivery rules
+remain in publication. A planning cache hit grants no authority and cannot prove that
+all continuation messages were delivered. There is no new all-or-nothing delivery rule.
 
-## Objective
+## Incremental fingerprints and bounds
 
-Avoid recomputing results whose inputs have not changed, while preserving current
-handlers, valid layouts, lifecycle behavior, and accurate knowledge of what Discord
-actually displays. Keep planning and drawing separate. Let the runtime coordinate
-reuse through explicit dependency records rather than inspecting their internals.
+Content fingerprints use tagged, length-framed child digests. The cache keeps identity
+and digest together, so Python object-ID recycling cannot produce a hit. A changed leaf
+rehashes its ancestors while unchanged immutable subtrees contribute stored digests.
+Hashes identify content; they do not authorize callback reuse or replace the allocation
+comparer. The internal digest format is not the serialized Scene protocol.
 
-A cache hit must answer two questions: which result can we reuse, and what proves
-that it is still valid? A component key identifies a piece of content; it does not
-prove that its text, behavior, resource cost, or environment is unchanged.
+Mutable mappings/sequences, opaque objects, callbacks and their ancestors are not
+retained in the fingerprint cache. Immutable children can still hit. Fields omitted from
+content identity also prevent caching their parent, since an omitted value could hold
+live state. Cold and cached traversal produce the same digest.
 
-## First principles
+Fingerprint retention is limited to 4,096 entries and 4 MiB of accounted subtree weight.
+The accounting includes descendants and deliberately overcounts shared subtrees.
+Page projections are limited to 32 entries and 1 MiB of accounted display/binding weight.
+Oversized entries are returned without caching. Projection accounting charges serialized
+Scene size and binding bookkeeping, not the application object graph behind borrowed
+handlers or providers; it is not a process-memory limit. A new binding generation gets
+an empty projection cache. Eviction never unmounts components or changes dispatch.
+Closing the runtime clears its snapshot and fingerprint entries.
 
-1. Reuse applies to a particular output and its dependencies, not to a whole screen
-   merely because it looks similar. Different outputs have different dependencies.
-2. Pure artifacts and live behavior have different lifetimes. Shared caches may
-   retain immutable descriptions, never callbacks, mutable SDK objects, file streams,
-   message handles, or authority to act on behalf of a user.
-3. Layout validity is global unless independence has been proved. Hidden content can
-   change page boundaries, navigation, and the space available to visible regions.
-4. Computing a candidate is not presenting it. Reusing a computation cannot establish
-   that delivery succeeded or advance committed presentation state.
-5. Unknown dependencies cause recomputation. Extensions and mutable inputs must not
-   gain reuse merely because their Python identity or filename stayed unchanged.
-6. Caching must save more work than validating it costs. Hashing the entire Document
-   on every interaction is still a full traversal, even when the cache hits.
+## Diagnostics and verification
 
-## What exists today
+`PlanMetrics.reuse` distinguishes exact, allocation and miss paths. Work and target
+counts describe the current call, including zero work for exact replay.
+`PlanningSnapshot.statistics()` reports exact hits, misses and the latest failure category
+(source, environment, presentation or disabled). Fingerprint and projection snapshots
+report hits, misses, entries, evictions and accounted bytes.
 
-The component runtime's `RenderCache` retains render observations and expanded
-subtrees, including dependency invalidation and lifecycle reconciliation.
-`PlanMemo` retains an owner's callback-bearing result for exact input identity and
-accepted presentation revisions. `PlanCache` stores callback-free partition hints;
-those hints require current certification. `RetainedComposition` reuses committed
-allocations for compatible page changes. `RenderProgramCache` stores constructor
-instructions and audit status, while each draw creates fresh SDK objects.
+`PlanningSnapshot(enabled=False)` disables exact replay, retained allocation reuse,
+partition hints and subtree hash reuse while preserving presentation history. It is the
+cold reference path for tests; component and renderer caches have their own contracts.
 
-Message publication can compare the candidate with the live Scene before drawing,
-suppress an unchanged presentation, and update bindings behind existing control IDs.
-These mechanisms are useful foundations. This proposal does not assume they are
-missing or that their cost dominates without measurement.
+Tests cover generated edits and page changes against that cold path under fixed
+partitions; diagnostics, resource selection and committed cursors must agree. Additional
+tests cover callback replacement, grouped dispatch, mutable coordinates, candidate versus
+commit, weak-reference lifetimes, bounded eviction, failed binding and unchanged subtree
+work counts. Existing publication tests exercise failed writes, stale work, lifecycle
+changes and partial continuation delivery.
 
-## Separate the reusable results
+Run `uv run scripts/benchmarks/ui_planning_cache.py` for a repeatable planning-only
+benchmark. One local run with 12 paragraphs, two fixed pages and an action gave these
+medians over 60 updates (milliseconds):
 
-Introduce internal immutable artifacts; these names describe proposed contracts,
-not new public APIs. Keep `plan()` and `PlanResult` as the public interface.
+| Scenario | Cold reference | Reuse enabled | Target evaluations across updates |
+|---|---:|---:|---:|
+| Cold start | 2.819 | 2.666 | 120 / 120 |
+| Exact input | 2.978 | 0.010 | 120 / 0 |
+| New callbacks | 3.346 | 0.759 | 120 / 0 |
+| Page turn | 3.111 | 0.285 | 120 / 0 |
+| One leaf edited | 2.967 | 2.583 | 120 / 120 |
 
-| Artifact | Contents | Required dependencies | Lifetime |
-|---|---|---|---|
-| Prepared fragment | Resolved content, semantic structure, representation offers, dependency record | Authored values, context reads, localization, target rules involved in preparation | Owner by default |
-| Certified allocation | Representation choices, page boundaries, measurements, validity certificate | All layout-relevant fragment inputs, limits, reservations, navigation, policies | Owner initially |
-| Page projection | Scene for a selected page combination and binding/resource slots | Allocation identity, selected positions, display inputs, resource descriptors | Bounded owner cache |
-| Binding snapshot | Current action/form handlers and resource providers for the slots | Current component render and binding preparation inputs | One owner, candidate or committed |
-| Drawing program | Immutable instructions for building SDK objects | Scene, renderer implementation/version, extension compilation inputs | Bounded renderer cache |
-| Presentation record | Actual delivered Scene, attachment identities, control topology and generation | Successful delivery or verified unchanged presentation | One live message |
+The unchanged sibling subtrees reduce fingerprint work on leaf edits; certification
+still runs. Timings are illustrative, not end-to-end latency guarantees. This run showed
+no cold-start regression. Fingerprint accounting stayed below 190 KiB in these scenarios.
 
-Do not store a whole `PlanResult` in a shared cache. Compose it from reusable pure
-artifacts and current owner-local bindings. Preserve exact owner-local memoization
-when every dependency, including bindings, remains valid.
+## What was removed, and what stays
 
-## Dependency identity and validation
+`PlanMemo`, its accepted-revision set, the duplicate request/environment comparisons,
+the old whole-tree JSON fingerprint path and transitional callback-rebinding wrappers
+are removed. Callers pass `snapshot=PlanningSnapshot()` instead of `memo=PlanMemo()`.
 
-Use immutable node versions and retained observation records to avoid walking
-unchanged subtrees. A reused subtree can carry its previously calculated fingerprints;
-a changed leaf requires recomputing only its ancestors. Explicit refreshes that sample
-nonreactive inputs still execute the relevant component render before claiming reuse.
-
-Keep distinct dependency projections:
-
-- **Preparation:** semantic values, stable scoped keys, context and localization reads.
-- **Layout:** representation offers, exact resource costs, break constraints, fidelity
-  contracts, control structure, attachments, and target capabilities/limits.
-- **Display:** selected content, styles, enabled state, labels, route payloads, and
-  descriptors of resources used by that page.
-- **Bindings:** action/form implementation and behavior, including guards and schemas.
-- **Delivery:** displayed content plus attachment revisions, routing/control topology,
-  mention settings and other transport-affecting options.
-
-These are dependency sets, not five unconditional whole-tree hashes. An input can
-belong to several sets. A button label affects both layout and display; a new closure
-can affect only bindings; a changed form schema can affect bindings and layout.
-Start conservatively: classify uncertain inputs as affecting preparation and layout.
-
-The planner owns the extraction of layout dependencies. The runtime must not guess
-that equal text length implies equivalent layout. Break opportunities, escaping,
-representation selection, control adaptation, and fidelity can still differ.
-
-An environment key includes target identity and implementation revision, capabilities,
-limits, reservations, strictness, composition policy, locale/catalog revision, palette,
-chrome/navigation, and extension versions as applicable. Begin with a coarse key;
-split it only where measurements justify narrower dependencies. Search budget and
-search policy remain part of request compatibility: a cached layout must not silently
-change the meaning of an explicitly bounded or fixed-choice request.
-
-Within an owner, immutable artifact identity is an inexpensive equality proof.
-Cross-owner sharing requires canonical values and explicit shareability. Hashes are
-lookup aids; retain comparable canonical keys where collision could affect correctness.
-Opaque or externally mutable values are uncacheable unless an adapter supplies a
-reliable revision and declares what it covers. A URL is not a content revision.
-
-## Allocation reuse requires evidence
-
-A certified allocation records the exact layout dependencies and environment under
-which it was checked. Exact matches can reuse it without search or recertification.
-A previous partition without that match remains only a hint.
-
-Initially, any changed layout dependency requires certification against current
-content. Reuse prepared fragments and try previous choices/cuts first, but fall back
-to the normal planner when they fail. Do not claim that failure of old cuts proves
-that no valid layout exists.
-
-Later, a target may provide an equivalence contract that permits replacing content
-inside a certified slot. The contract must cover every affected constraint and choice,
-not merely a scalar cost. Until that contract exists, even equal-cost text changes
-require certification. This deliberately limits the first implementation's ambition.
-
-Hidden-page changes must update the allocation unless their layout dependencies are
-proved unchanged. Only after validating the allocation may the runtime conclude that
-the selected Scene stayed the same. For independent regions, finer certification is
-possible only if the certificate records their shared budgets and cross-region
-constraints; independently valid regions are not automatically valid together.
-
-## Refresh algorithm
-
-1. Capture the owner revision and environment. Expand dirty components using existing
-   reactive observations, retaining unchanged fragments and their dependency records.
-2. Prepare changed fragments. Obtain current binding snapshots even when their visual
-   output equals the old output. Never compare closures by function name or bytecode.
-3. Validate the allocation certificate. Reuse an exact match; otherwise certify current
-   inputs using previous cuts as a hint or perform normal search.
-4. Select pages and build/reuse their Scene projections. Resolve current bindings and
-   resource slots. A page-selection-only change should stop short of allocation search.
-5. Compare each message with its committed presentation record. If all transport
-   inputs match and the live generation is usable, skip drawing and delivery, but
-   commit current bindings and reconcile lifecycle changes.
-6. For changed messages, reuse/compile drawing instructions and create fresh SDK
-   objects with current wiring. Audit mounted controls and opaque extensions as today.
-7. Deliver through current authority. Commit presentation updates for the accepted
-   result and record actual writes. Failure retains dirty work and the prior displayed
-   record; pure artifacts may survive only if valid independently of delivery.
-
-Before publication, check whether the captured revision was superseded. Follow the
-existing serialization policy: discard/recompute a stale candidate, or finish its
-ordered delivery and retain a pending refresh. Never mark intervening writes clean.
-A cached artifact grants no access permission and cannot renew an expired edit handle.
-
-For multi-message output, preserve per-message write tracking and existing partial
-failure semantics. A successful write to one continuation does not prove that another
-message displays its candidate. Do not introduce an all-or-nothing delivery fiction.
-
-## Concrete expected behavior
-
-| Change | Expected work |
-|---|---|
-| No observed input changed | Reuse component result and exact owner plan; no draw/edit |
-| Callback captures a newer model, with unchanged display | Refresh binding snapshot; reuse certified allocation and Scene; no draw/edit |
-| Next page selected | Reuse allocation; select projection; draw/edit changed messages |
-| Visible label changed | Prepare changed fragment; validate layout; update Scene and affected message |
-| Hidden item added | Revalidate allocation and navigation; edit only if resulting visible output changes |
-| Locale or limits changed | Invalidate affected preparation/allocation; replan |
-| Resource contents changed behind a stable filename | Require resource revision; update delivery even if text is unchanged |
-| Native extension has no revision contract | Recompute its affected stages and audit output |
-| Delivery fails, then identical refresh retries | Reuse valid pure work; retry delivery rather than suppress against an undelivered candidate |
-
-## Ownership and memory
-
-Start with owner-local preparation, allocation, and projection caches. Bound projections
-by retained bytes and entry count; do not materialize every page combination in a cache.
-Keep certificate representation compact and preserve the planner's existing search
-budget. Cross-owner fragment sharing is a later optimization, allowed only for explicit
-immutable, callback-free values with no owner context or user-specific retention risk.
-
-Closing an owner clears bindings, observations, and owner artifacts. Eviction never
-unmounts components, cancels application work, or changes behavior. Drawing programs
-remain separately bounded; share them only when extensions satisfy the same purity
-contract. No disk cache or distributed cache is proposed.
-
-## Validation and rollout
-
-First add diagnostic counters for component renders, preparation work, certificate
-checks, search evaluations, Scene construction, instruction compilation, SDK object
-construction, edits, and retained bytes. Record why a stage missed reuse. Benchmark
-page turns, new closures with identical output, single-item edits, hidden-page edits,
-locale changes, and failed-delivery retries. Include cold starts and small documents:
-cache bookkeeping must not quietly make the ordinary case slower.
-
-Implement in independently reviewable steps:
-
-1. Add measurements and a cache-disabled reference path for tests.
-2. Separate callback-free allocation/projection data from current binding snapshots,
-   retaining existing public results and exact memo behavior.
-3. Add dependency records to prepared fragments and propagate unchanged identities.
-4. Reuse exact allocation certificates and page projections through the existing
-   publication preflight. Preserve hint-based fallback on any uncertain dependency.
-5. Consider finer equivalence contracts or cross-owner reuse only after profiling.
-
-Differential tests compare cached execution with a cold execution under the same
-presentation history and deterministic planning policy. Compare Scenes, diagnostics,
-resource selection, session updates, and observable action behavior; metrics may differ.
-If allocation stability permits multiple layouts, test the same feasibility/fidelity
-and anchor contracts rather than requiring unrelated cold searches to choose identical
-page cuts.
-
-Test generated edit sequences: reorder/remove keyed content, replace handlers, switch
-locales, change limits, navigate, fail delivery, mutate during delivery, and close the
-owner. Explicitly exercise equal-looking buttons with different behavior, attachment
-revision changes, stale interactions, partial continuation delivery, extension fallback,
-and lifecycle invalidation during commit. Assert stage counters for the expected fast
-paths so correctness tests cannot pass while every operation silently recomputes.
-
-Accept each phase only if these invariants hold and measurements show reduced work
-without material cold-path or memory regression. The architectural gain is reusable
-proofs passed between stages; fewer independent caches is not itself a goal.
+Component observations, partition hints and renderer instruction caches remain because
+they retain different results with different validity rules. Removing them would discard
+useful work rather than simplify ownership. The next optional optimizations are explicit
+cross-owner shareability and target-provided equivalence contracts for partial
+recertification. Until those contracts exist, unknown dependencies cause recomputation.

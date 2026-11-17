@@ -231,8 +231,9 @@ boundaries, instead of relying solely on tests of the machinery being deleted.
 
 Use the ordinary Discord target factories; the dynamic variants are removed.
 Dialect implementations construct their rules directly in `composer`.
-`PlanCache` no longer takes a body type argument. `PlanMemo` retains its body
-type and exposes `replay`/`store` rather than raw `get`/`put` operations.
+`PlanCache` no longer takes a body type argument. The subsequent
+[caching migration](squid-ui-caching.md) replaces `PlanMemo` with `PlanningSnapshot`;
+callers now pass `snapshot=` and publication commits the accepted candidate.
 
 Plan results expose typed `effects` and `lossless` instead of a synthetic
 `degradation` profile. Reports no longer have logical fingerprints or before/after

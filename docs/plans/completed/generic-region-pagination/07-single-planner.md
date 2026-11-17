@@ -30,7 +30,8 @@ supply `AutomaticComposition` or `FixedComposition` with their own rules.
 - `PlanCache` stores callback-free partition hints, not completed scenes or
   incremental measurement certificates. Inspect `partition_hint` and shared
   work metrics. Current callbacks and content are certified again.
-  `PlanMemo` retains one owner's exact live result; committed allocations
-  support page turns without repeating search.
+  `PlanningSnapshot` retains an owner's candidate and committed live results;
+  committed allocations support page turns and ordinary action callback replacement
+  without repeating search. See the [caching design](../../squid-ui-caching.md).
 - Delivery resources retain the adapter convention `asset:<key>`. Assets with
   public URLs do not consume Discord upload capacity.
