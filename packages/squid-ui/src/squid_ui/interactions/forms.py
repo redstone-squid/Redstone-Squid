@@ -25,6 +25,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
 from squid_i18n import source_text
+from squid_ui._dataclass import immutable
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.temporal import (
@@ -50,10 +51,10 @@ if TYPE_CHECKING:
 class FieldError:
     """One validation message associated with one or more field declarations."""
 
-    fields: tuple[FormField[Any], ...]
+    fields: tuple[FormField[Any, Any], ...]
     message: TextLike
 
-    def __init__(self, *fields: FormField[Any], message: TextLike) -> None:
+    def __init__(self, *fields: FormField[Any, Any], message: TextLike) -> None:
         if not fields or any(not isinstance(field, FormField) for field in fields):
             error = "FieldError requires one or more form fields"
             raise TypeError(error)
@@ -62,7 +63,7 @@ class FieldError:
         object.__setattr__(self, "message", Text(message))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormError:
     """A validation error concerning the form as a whole."""
 
@@ -96,7 +97,7 @@ class FormValueError(SquidUiError, ValueError):
         super().__init__(source_text(message, format="plain"))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormText:
     """Static text placed in a form's declaration order."""
 
@@ -120,7 +121,7 @@ def _prefill(value: object) -> PrefillValue:
     return None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormField[ValueT, RequiredT: bool = bool](ABC):
     """One typed value in a portable form schema.
 
@@ -136,22 +137,22 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
     required: RequiredT = cast(RequiredT, True)  # noqa: FBT003 -- the cast preserves the generic constructor default.
     default: ValueT | None = None
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
-    _declaration: FormField[Any] | None = dataclass_field(default=None, repr=False, compare=False)
+    _declaration: object | None = dataclass_field(default=None, repr=False, compare=False)
 
-    def __set_name__(self, owner: type[Form], name: str) -> None:
+    def __set_name__(self, owner: type[Form[Any]], name: str) -> None:
         del owner
         object.__setattr__(self, "_name", name)
 
     @overload
-    def __get__(self, instance: None, owner: type[Form]) -> Self: ...
+    def __get__(self, instance: None, owner: type[Form[Any]]) -> Self: ...
 
     @overload
-    def __get__(self: FormField[ValueT, Literal[True]], instance: Form, owner: type[Form]) -> ValueT: ...
+    def __get__(self: FormField[ValueT, Literal[True]], instance: Form[Any], owner: type[Form[Any]]) -> ValueT: ...
 
     @overload
-    def __get__(self, instance: Form, owner: type[Form]) -> ValueT | None: ...
+    def __get__(self, instance: Form[Any], owner: type[Form[Any]]) -> ValueT | None: ...
 
-    def __get__(self, instance: Form | None, owner: type[Form]) -> Self | ValueT | None:
+    def __get__(self, instance: Form[Any] | None, owner: type[Form[Any]]) -> Self | ValueT | None:
         del owner
         if instance is None:
             return self
@@ -160,7 +161,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
             raise FieldNotReadyError(message)
         return instance._values[self._name]
 
-    def __set__(self, instance: Form, value: ValueT | None) -> None:
+    def __set__(self, instance: Form[Any], value: ValueT | None) -> None:
         if value is None and self.required:
             message = f"Required form field {self._name!r} cannot contain None"
             raise ValueError(message)
@@ -169,8 +170,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
     def bind(self, name: str) -> Self:
         """Fill descriptor-derived schema metadata without mutating the declaration."""
         label = self.label if self.label is not None else name.replace("_", " ").capitalize()
-        # Pyrefly treats this stored field reference as an invoked descriptor.
-        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)  # pyrefly: ignore[no-matching-overload]
+        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)
 
     @abstractmethod
     def parse(self, raw: object) -> ValueT | None:
@@ -200,7 +200,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
         return True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[str, RequiredT]):
     """A single-line text value."""
 
@@ -227,12 +227,12 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class TextAreaField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](TextField[RequiredT]):
     """A multi-line text value."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """An integer constrained by optional inclusive bounds."""
 
@@ -257,7 +257,7 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
         return value
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[float, RequiredT]):
     """A finite floating-point number constrained by optional inclusive bounds."""
 
@@ -288,7 +288,7 @@ _DURATION = re.compile(r"^(\d+(?:\.\d+)?)\s*(s|m|h|d|w)$", re.IGNORECASE)
 _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """Parse compact durations into integer seconds, with optional inclusive bounds.
 
@@ -338,7 +338,7 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         return f"{value}s"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[date, RequiredT]):
     """An ISO-8601 calendar date."""
 
@@ -367,7 +367,7 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value.isoformat() if isinstance(value, date) else _prefill(value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[TimeValue, RequiredT]):
     """An ISO-8601 wall-clock time with optional inclusive bounds."""
 
@@ -396,7 +396,7 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[DateTimeValue, RequiredT]):
     """An ISO-8601 instant; naive input is resolved in ``timezone``.
 
@@ -452,7 +452,7 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[ZonedDateTime, RequiredT]
 ):
@@ -520,7 +520,7 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
         return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """One point on an inclusive ordinal scale, such as a 1-5 rating.
 
@@ -570,7 +570,7 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         return None if value is None else str(value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ChoiceOption[ValueT]:
     """One submitted key, reader-facing label, and typed value."""
 
@@ -584,7 +584,7 @@ class ChoiceOption[ValueT]:
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[ValueT, RequiredT]):
     """A single choice mapped from a stable submitted key to a typed value."""
 
@@ -612,7 +612,7 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
         return option.key if option is not None else _prefill(value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[tuple[ValueT, ...], RequiredT]
 ):
@@ -666,7 +666,7 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
         )
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class UploadedFile:
     """Portable metadata and byte access for a frontend upload."""
 
@@ -677,7 +677,7 @@ class UploadedFile:
     read: Callable[[], Awaitable[bytes]] = dataclass_field(repr=False, compare=False)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[bool, RequiredT]):
     """Parse a checkbox value; missing input means False even when required is True."""
 
@@ -695,7 +695,7 @@ class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         _invalid(self.chrome.form_invalid_boolean)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT]):
     """A frontend-specific field with an optional portable fallback."""
 
@@ -703,7 +703,7 @@ class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT
     capability: ClassVar[str] = ""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormResult:
     """Parsed values, original attempted input, and errors from one submission.
 
@@ -723,7 +723,7 @@ type FormValidator = Callable[
 type SubmitHandler[ContextT = object] = Callable[[SubmitEvent[ContextT]], Awaitable[None]]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormSpec[ContextT = object]:
     """Fields and validation rules that a frontend uses to present and evaluate a form.
 
@@ -734,7 +734,7 @@ class FormSpec[ContextT = object]:
     """
 
     title: TextLike
-    items: tuple[FormField[Any] | FormText, ...]
+    items: tuple[FormField[Any, Any] | FormText, ...]
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
     validation: FormValidationMode = FormValidationMode.RETRY
@@ -794,14 +794,13 @@ class FormSpec[ContextT = object]:
             issues = await validated if inspect.isawaitable(validated) else validated
             for issue in issues:
                 if isinstance(issue, FieldError):
-                    resolved: list[FormField[Any]] = []
+                    resolved: list[FormField[Any, Any]] = []
                     for reference in issue.fields:
                         matched = next(
                             (
                                 item
                                 for item in self.items
-                                # Pyrefly treats this stored field reference as an invoked descriptor.
-                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)  # pyrefly: ignore[no-matching-overload]
+                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)
                             ),
                             None,
                         )
@@ -813,7 +812,7 @@ class FormSpec[ContextT = object]:
                 errors.append(issue)
         return FormResult(MappingProxyType(values), raw, tuple(errors))
 
-    def prefill_for(self, field: FormField[Any]) -> PrefillValue:
+    def prefill_for(self, field: FormField[Any, Any]) -> PrefillValue:
         """Return the serialized prefill for one field."""
         value = self.prefill.get(field.key, field.default)
         return field.format(value)
@@ -833,7 +832,7 @@ class FormSpec[ContextT = object]:
         if maximum_fields is not None and len(self.items) > maximum_fields:
             message = f"form has {len(self.items)} components; target permits 1-{maximum_fields}"
             raise LayoutInvariantError(message)
-        adapted: list[FormField[Any] | FormText] = []
+        adapted: list[FormField[Any, Any] | FormText] = []
         for field in self.items:
             if isinstance(field, FormText):
                 adapted.append(field)
@@ -841,10 +840,8 @@ class FormSpec[ContextT = object]:
             if not isinstance(field, ExtensionField) or field.capability in capabilities:
                 adapted.append(field)
                 continue
-            # `FormField` is also the `Form` descriptor, so BasedPyright runs `__get__` over this
-            # field's declared type; the slot on a frozen slotted dataclass holds a plain value.
-            # Pyrefly treats this stored field reference as an invoked descriptor.
-            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[no-matching-overload]
+            # FormField is a descriptor, but this instance slot stores a plain field reference.
+            declared: FormField[Any, Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[no-matching-overload]
             if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)
@@ -855,8 +852,7 @@ class FormSpec[ContextT = object]:
                     key=field.key,
                     label=fallback.label if fallback.label is not None else field.label,
                     description=fallback.description if fallback.description is not None else field.description,
-                    # Pyrefly treats this stored field reference as an invoked descriptor.
-                    _declaration=field._declaration or field,  # pyrefly: ignore[no-matching-overload]
+                    _declaration=field._declaration or field,
                 )
             )
         return replace(self, items=tuple(adapted))
@@ -878,11 +874,11 @@ class Form[ContextT = object]:
     title: ClassVar[TextLike] = "Form"
     validation: ClassVar[FormValidationMode] = FormValidationMode.RETRY
     action_mode: ClassVar[ActionMode] = ActionMode.EXCLUSIVE
-    _form_fields: ClassVar[tuple[tuple[str, FormField[Any]], ...]] = ()
+    _form_fields: ClassVar[tuple[tuple[str, FormField[Any, Any]], ...]] = ()
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
-        declarations: dict[str, FormField[Any]] = {}
+        declarations: dict[str, FormField[Any, Any]] = {}
         for base in reversed(cls.__mro__[1:]):
             declarations.update(getattr(base, "_form_fields", ()))
         for name, value in vars(cls).items():
@@ -912,7 +908,7 @@ class Form[ContextT = object]:
         return MappingProxyType(self._prefill)
 
     @classmethod
-    def from_submission(cls, event: SubmitEvent[ContextT]) -> Self:
+    def from_submission[EventContextT](cls, event: SubmitEvent[EventContextT]) -> Self:
         """Bind an event with no reported errors to a new form instance.
 
         This does not parse or validate again. The caller must supply values already
@@ -977,7 +973,7 @@ class Form[ContextT = object]:
         """Handle a submission after parsing and cross-field validation succeed."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormBinding[ContextT = object]:
     """One render's answer for a form key: what to present, and what to do with it.
 

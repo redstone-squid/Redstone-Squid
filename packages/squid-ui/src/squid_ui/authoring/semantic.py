@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
+from squid_ui._dataclass import immutable
 from squid_ui.authoring.grids import GridCell, validate_grid
 from squid_ui.authoring.rosters import RosterPlacement
 from squid_ui.content.assets import Asset
@@ -195,26 +196,26 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
         )
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     key: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Stack[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     key: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Cluster[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A subtree planned with a presentation palette override."""
 
@@ -222,7 +223,7 @@ class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
     palette: Palette
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """An untitled semantic region with a palette role, exact colour, or inherited accent."""
 
@@ -232,7 +233,7 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
     key: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A titled block of related content.
 
@@ -251,7 +252,7 @@ class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
     key: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
@@ -261,20 +262,20 @@ class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
     thumbnail: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Aside[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     tone: Tone | Role = Tone.NEUTRAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Heading(Adaptable[RenderTarget]):
     content: TextLike
     level: int = 2
     importance: Importance = Importance.HIGH
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Paragraph(Adaptable[RenderTarget]):
     content: TextLike
     importance: Importance = Importance.NORMAL
@@ -282,14 +283,14 @@ class Paragraph(Adaptable[RenderTarget]):
     key: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ListItem:
     key: str
     content: TextLike
     importance: Importance = Importance.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class List(Adaptable[RenderTarget]):
     """A keyed list with application-owned or remembered paging.
 
@@ -309,7 +310,7 @@ class List(Adaptable[RenderTarget]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Field:
     """One labelled value.
 
@@ -325,29 +326,29 @@ class Field:
     fallbacks: tuple[TextLike, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Fields(Adaptable[RenderTarget]):
     fields: tuple[Field, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Column:
     key: str
     heading: TextLike
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Columns:
     columns: tuple[Column, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class TableRow:
     key: str
     cells: tuple[TextLike, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Table(Adaptable[RenderTarget]):
     columns: Columns
     rows: tuple[TableRow, ...]
@@ -365,7 +366,7 @@ class Table(Adaptable[RenderTarget]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Note(Adaptable[RenderTarget]):
     """Small print: an id, a timestamp, a caveat the reader may skip."""
 
@@ -373,19 +374,19 @@ class Note(Adaptable[RenderTarget]):
     importance: Importance = Importance.LOW
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Quote(Adaptable[RenderTarget]):
     content: TextLike
     attribution: TextLike | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Code(Adaptable[RenderTarget]):
     content: str
     language: str = ""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class MediaItem:
     key: str
     source: str | Asset
@@ -393,13 +394,13 @@ class MediaItem:
     spoiler: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Figure(Adaptable[RenderTarget]):
     media: MediaItem
     caption: TextLike | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Media(Adaptable[RenderTarget]):
     items: tuple[MediaItem, ...]
     key: str
@@ -407,12 +408,12 @@ class Media(Adaptable[RenderTarget]):
     flexibility: Flexibility = Flexibility.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Summary:
     content: TextLike
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Details[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     key: str
     summary: Summary
@@ -420,14 +421,14 @@ class Details[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
     open: DisclosureOwnership[ContextT] = CLOSED
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ToggleEvent[ContextT = object](ActionEvent[ContextT]):
     """The reader requested a new boolean value."""
 
     value: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """One keyed boolean control with explicit state ownership."""
 
@@ -440,7 +441,7 @@ class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
     available: bool = True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Download(Adaptable[RenderTarget]):
     """A visible file control whose asset is declared at its point of use."""
 
@@ -452,21 +453,21 @@ class Download(Adaptable[RenderTarget]):
     spoiler: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Status(Adaptable[RenderTarget]):
     content: TextLike
     tone: Tone | Role = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ProgressBar(Adaptable[RenderTarget]):
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Roster[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A host-owned roster allocation rendered with active localized chrome."""
 
@@ -490,7 +491,7 @@ class Roster[ContextT = object](Adaptable[RenderTarget, ContextT]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Grid[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A selectable spatial collection with target-shaped fallback strategies."""
 
@@ -507,14 +508,14 @@ class Grid[ContextT = object](Adaptable[RenderTarget, ContextT]):
         validate_grid(self.cells, self.columns)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Metric(Adaptable[RenderTarget]):
     value: int | float | str
     label: TextLike
     unit: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Timestamp(Adaptable[RenderTarget]):
     """An aware instant plus a portable display preference."""
 
@@ -526,7 +527,7 @@ class Timestamp(Adaptable[RenderTarget]):
         return timestamp_text(self.instant, style=self.style.value)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ZonedTimestamp(Adaptable[RenderTarget]):
     """An exact instant rendered visibly in its named timezone."""
 
@@ -534,7 +535,7 @@ class ZonedTimestamp(Adaptable[RenderTarget]):
     label: TextLike | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormTrigger[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A content entry point that presents a portable form."""
 
@@ -551,7 +552,7 @@ class FormTrigger[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """History the successful submission enters under this trigger's label."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ActionControl[ContextT = object]:
     key: str
     label: TextLike
@@ -569,7 +570,7 @@ class ActionControl[ContextT = object]:
     """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Link:
     key: str
     label: TextLike
@@ -577,7 +578,7 @@ class Link:
     emphasis: Emphasis = Emphasis.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RoutedActionControl:
     """A control dispatched by a host route rather than an in-memory mounted handler.
 
@@ -596,14 +597,14 @@ class RoutedActionControl:
     available: bool = True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ControlGroup[ContextT = object]:
     key: str
     controls: tuple[ActionControl[ContextT] | Link | RoutedActionControl, ...]
     label: TextLike | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ActionControls[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A set of controls that the planner lays out together.
 
@@ -627,7 +628,7 @@ class ActionControls[ContextT = object](Adaptable[RenderTarget, ContextT]):
     flexibility: Flexibility = Flexibility.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Choice:
     key: str
     label: TextLike
@@ -635,21 +636,21 @@ class Choice:
     available: bool = True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ChoiceEvent[ContextT = object](ActionEvent[ContextT]):
     selected: tuple[str, ...] = ()
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class EntityEvent[ContextT = object](ActionEvent[ContextT]):
     selected: tuple[EntityRef, ...] = ()
     added: tuple[EntityRef, ...] = ()
     removed: tuple[EntityRef, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class EntityChoice:
     ref: EntityRef
     label: TextLike
@@ -664,14 +665,14 @@ class OpenEvent[ValueT, ContextT = object](ActionEvent[ContextT]):
     opened: ValueT
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ScaleEvent[ContextT = object](ActionEvent[ContextT]):
     """The reader picked one point on an ordinal scale."""
 
     value: int = 0
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """Let the reader select between minimum and maximum options.
 
@@ -689,7 +690,7 @@ class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
     flexibility: Flexibility = Flexibility.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A picker over frontend-resolved entities with an optional enumerated fallback."""
 
@@ -712,7 +713,7 @@ class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RoutedChoices(Adaptable[RenderTarget]):
     """An explicitly stateless picker whose values are submitted to one route."""
 
@@ -726,12 +727,12 @@ class RoutedChoices(Adaptable[RenderTarget]):
     selected: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ItemLabel:
     content: TextLike
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     key: str
     label: ItemLabel
@@ -739,7 +740,7 @@ class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTar
     summary: TextLike | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Items[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     key: str
     items: tuple[Item[RenderTargetT, ContextT], ...]
@@ -748,19 +749,19 @@ class Items[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
     flexibility: Flexibility = Flexibility.NORMAL
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class NavOption:
     key: str
     label: TextLike
     available: bool = True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class NavigateEvent[ContextT = object](ActionEvent[ContextT]):
     destination: str = ""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Navigation[ContextT = object](Adaptable[RenderTarget, ContextT]):
     key: str
     options: tuple[NavOption, ...]
@@ -770,24 +771,24 @@ class Navigation[ContextT = object](Adaptable[RenderTarget, ContextT]):
     flexibility: Flexibility = Flexibility.STABLE
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Truncated[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
     keep: Literal["head", "tail"] = "head"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Spilled[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
     importance: Importance = Importance.LOW
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Complete author-supplied representations of one region, best first."""
 
@@ -800,12 +801,12 @@ class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class BestEffort[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Reserve and cap the character grant for one logical region."""
 
@@ -823,21 +824,21 @@ class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Adaptable[Render
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Unbreakable[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Keep every primitive produced by ``node`` together on a region page."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Forbid a region page break immediately after ``node``."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A jointly allocated page region with persistent content and independent position.
 
@@ -858,7 +859,7 @@ class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
             raise ValueError(msg)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Paginate a keyed region's children, resolving `page` after measuring their sizes."""
 

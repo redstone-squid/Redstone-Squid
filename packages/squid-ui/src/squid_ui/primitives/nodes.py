@@ -7,11 +7,12 @@ The planner fits the chosen primitives to target limits and produces a Scene for
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import field
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
+from squid_ui._dataclass import immutable
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.content.temporal import ZonedDateTime
@@ -39,14 +40,14 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Text(Renderable[DiscordTarget]):
     content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Heading(Renderable[DiscordTarget]):
     content: TextLike
     level: int = 2
@@ -54,7 +55,7 @@ class Heading(Renderable[DiscordTarget]):
     priority: int = 10
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Footer(Renderable[DiscordTarget]):
     """Small (`-#`) text at the card's foot; first to shrink by default."""
 
@@ -63,7 +64,7 @@ class Footer(Renderable[DiscordTarget]):
     priority: int = -10
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Code(Renderable[DiscordTarget]):
     """Fenced code block; embedded fences are escaped so content cannot break out."""
 
@@ -73,7 +74,7 @@ class Code(Renderable[DiscordTarget]):
     priority: int = 0
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Lines(Renderable[DiscordTarget]):
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
@@ -97,7 +98,7 @@ class Lines(Renderable[DiscordTarget]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Time(Renderable[DiscordTarget]):
     """A typed instant retained through scene conversion."""
 
@@ -106,7 +107,7 @@ class Time(Renderable[DiscordTarget]):
     prefix: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ZonedTime(Renderable[DiscordTarget]):
     """An exact instant visibly retained with its named timezone."""
 
@@ -114,7 +115,7 @@ class ZonedTime(Renderable[DiscordTarget]):
     prefix: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class File(Renderable[ComponentsV2Target]):
     """A visible file component backed by a separately carried asset resource."""
 
@@ -124,13 +125,13 @@ class File(Renderable[ComponentsV2Target]):
     spoiler: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Sep(Renderable[ComponentsV2Target]):
     large: bool = False
     visible: bool = True
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class LinkButton(Renderable[DiscordTarget]):
     label: TextLike | None
     url: str
@@ -141,7 +142,7 @@ class LinkButton(Renderable[DiscordTarget]):
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PremiumButton(Renderable[DiscordTarget]):
     """A Discord premium button identified solely by its application SKU."""
 
@@ -153,7 +154,7 @@ class PremiumButton(Renderable[DiscordTarget]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Button[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
@@ -173,7 +174,7 @@ class Button[ContextT = object](Renderable[DiscordTarget, ContextT]):
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FormButton[ContextT = object](Button[ContextT]):
     """A form-opening button with the form binding its handler uses.
 
@@ -181,10 +182,10 @@ class FormButton[ContextT = object](Button[ContextT]):
     current form when a submission arrives after the form has been refreshed.
     """
 
-    form: FormBinding | None = None
+    form: FormBinding[ContextT] | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RoutedButton(Renderable[DiscordTarget]):
     """A button dispatched by a stable route ID instead of a mounted Python callback.
 
@@ -204,7 +205,7 @@ class RoutedButton(Renderable[DiscordTarget]):
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Option:
     label: TextLike
     value: str
@@ -216,7 +217,7 @@ class Option:
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SelectMenu[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """A string select; occupies its own row when materialized."""
 
@@ -231,7 +232,7 @@ class SelectMenu[ContextT = object](Renderable[DiscordTarget, ContextT]):
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """A frontend-resolved entity picker; occupies its own row."""
 
@@ -255,7 +256,7 @@ class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RoutedSelect(Renderable[DiscordTarget]):
     """A string select dispatched by its stable route id rather than a mount binding."""
 
@@ -267,7 +268,7 @@ class RoutedSelect(Renderable[DiscordTarget]):
     disabled: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RawItem(Renderable[DiscordTarget]):
     """Internal prepared target item retained until scene drawing."""
 
@@ -280,7 +281,7 @@ class RawItem(Renderable[DiscordTarget]):
     composition: NativeComposition | None = field(default=None, kw_only=True)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Place a child component in the layout under its own control and presentation keys.
 
@@ -309,7 +310,7 @@ class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
 # implementations.
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Content(Renderable[ClassicTarget]):
     """The classic message's content field, also used in reply previews and notifications.
 
@@ -336,7 +337,7 @@ def card_text(value: CardText) -> Text:
     return value if isinstance(value, Text) else Text(value, overflow=Never())
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CardField:
     """One embed field. A nested value, never a legal root node."""
 
@@ -345,20 +346,20 @@ class CardField:
     inline: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CardAuthor:
     name: CardText
     url: str | None = None
     icon_url: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CardFooter:
     text: CardText
     icon_url: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CardMedia:
     """An embed image or thumbnail. The description is kept even where Discord drops it."""
 
@@ -367,7 +368,7 @@ class CardMedia:
     asset_name: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Card(Renderable[ClassicTarget]):
     """One embed: a titled, coloured, field-structured block beside the message text.
 
@@ -392,7 +393,7 @@ class Card(Renderable[ClassicTarget]):
     timestamp: ZonedDateTime | datetime | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
@@ -402,28 +403,28 @@ class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[Ren
     fallback: Node
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Row[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """An exact target row; invalid local structure is a planning error."""
 
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ControlGroup[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """Buttons automatically arranged into as many valid target rows as needed."""
 
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Thumbnail(Renderable[ComponentsV2Target]):
     url: str
     description: TextLike | None = None
     spoiler: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class GalleryItem:
     """One gallery image with its accessible description and spoiler state."""
 
@@ -438,7 +439,7 @@ def normalize_gallery_item(value: str | GalleryItem) -> GalleryItem:
     return GalleryItem(value) if isinstance(value, str) else value
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Gallery(Renderable[ComponentsV2Target]):
     """One exact target gallery."""
 
@@ -448,7 +449,7 @@ class Gallery(Renderable[ComponentsV2Target]):
         object.__setattr__(self, "items", tuple(normalize_gallery_item(item) for item in self.items))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class MediaCollection(Renderable[ComponentsV2Target]):
     """Media automatically arranged into valid target galleries."""
 
@@ -458,7 +459,7 @@ class MediaCollection(Renderable[ComponentsV2Target]):
         object.__setattr__(self, "items", tuple(normalize_gallery_item(item) for item in self.items))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     """An exact Components V2 section with up to three texts beside an accessory.
 
@@ -471,7 +472,7 @@ class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     accessory: Thumbnail | LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     """A Container: children grouped under an optional accent colour."""
 
@@ -480,7 +481,7 @@ class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     spoiler: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Budget[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Group text under an explicit character reservation and preferred size.
 
@@ -497,7 +498,7 @@ class Budget[RenderTargetT = DiscordTarget, ContextT = object](Renderable[Render
     best_effort: bool = False
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Break[RenderTargetT = DiscordTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
@@ -524,7 +525,7 @@ class Fidelity(StrEnum):
     """Something the author wrote is not shown at all."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Variant[RenderTargetT = DiscordTarget]:
     """One nonempty representation of a region and the capabilities it requires.
 
@@ -547,7 +548,7 @@ class Variant[RenderTargetT = DiscordTarget]:
             raise ValueError(message)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Ordered representations the planner can choose to fit one region.
 

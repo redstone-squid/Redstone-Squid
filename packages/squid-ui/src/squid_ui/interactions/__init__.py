@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.transactions import Transaction, TransactionContext
+from squid_ui._dataclass import immutable
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import TextLike
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class BusySpec:
     """Ask the framework to show that a slow action is running.
 
@@ -54,7 +55,7 @@ class Visibility(StrEnum):
     PRIVATE = "private"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Actor:
     """Portable identity facts supplied by a frontend."""
 
@@ -84,10 +85,10 @@ class ActionResponder(Protocol):
 
     async def present_form(
         self,
-        form: FormLike,
+        form: FormLike[Any],
         *,
         key: str = "form",
-        on_submit: SubmitHandler | None = None,
+        on_submit: SubmitHandler[Any] | None = None,
         mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
@@ -96,7 +97,7 @@ class ActionResponder(Protocol):
     def invalidate(self) -> None: ...
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ActionEvent[ContextT = object]:
     """Portable action input whose response authority ends when the handler returns.
 
@@ -156,10 +157,10 @@ class ActionEvent[ContextT = object]:
 
     async def present_form(
         self,
-        form: FormLike,
+        form: FormLike[Any],
         *,
         key: str = "form",
-        on_submit: SubmitHandler | None = None,
+        on_submit: SubmitHandler[Any] | None = None,
         mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
@@ -179,26 +180,26 @@ class ActionEvent[ContextT = object]:
         self.responder.invalidate()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PressEvent[ContextT = object](ActionEvent[ContextT]):
     """A button or equivalent action was pressed."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """A selection control submitted one or more values."""
 
     values: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class EntitySelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """An entity selection submitted portable concrete references."""
 
     values: tuple[EntityRef, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
     """A form attempt with parsed values, original attempted input, and validation issues.
 
@@ -222,7 +223,7 @@ class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
         await self._retry()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ActionRequest:
     """One admitted mounted action supplied to application middleware.
 
@@ -267,8 +268,8 @@ type SelectionHandler[ContextT = object] = Callable[[SelectionEvent[ContextT]], 
 type EntitySelectionHandler[ContextT = object] = Callable[[EntitySelectionEvent[ContextT]], Awaitable[None]]
 
 
-@dataclass(frozen=True, slots=True)
-class ActionBinding[EventT: ActionEvent = Any]:
+@immutable
+class ActionBinding[EventT: ActionEvent[Any] = Any]:
     """A callback and dispatch policy addressed by a planned control's action key.
 
     PlanResult carries these Python objects alongside its serializable Scene. A grouped

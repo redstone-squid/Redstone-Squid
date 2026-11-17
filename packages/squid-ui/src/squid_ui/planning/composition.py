@@ -5,11 +5,12 @@ certifying all reachable page combinations belongs to the joint solver.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import field, replace
 from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_ui._dataclass import immutable
 from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.authoring.semantic import Budgeted
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from squid_ui.planning.adapter import ExtensionAdapter
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class OccurrenceId:
     """One placement, distinct from semantic identity and representation choice."""
 
@@ -45,7 +46,7 @@ class Placement(StrEnum):
     NAVIGATION = "navigation"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FragmentCoverage:
     logical: OccurrenceId
     start: int
@@ -54,7 +55,7 @@ class FragmentCoverage:
     repeated: frozenset[SemanticRef] = frozenset()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class NavigationInput:
     region: OccurrenceId
     route: str
@@ -62,7 +63,7 @@ class NavigationInput:
     enabled: bool
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FragmentContract[PayloadT]:
     """Ordered source units and a pure constructor for an exact contiguous fragment.
 
@@ -92,7 +93,7 @@ class FragmentContract[PayloadT]:
             seen.update(unit)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RegionContract[RenderTargetT, ContextT, PayloadT]:
     """Target-declared pagination chrome, composed and charged on every visible page."""
 
@@ -109,7 +110,7 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
     required_ends: tuple[int, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SemanticOccurrence[RenderTargetT, ContextT]:
     identity: OccurrenceId
     graph: SemanticGraph[RenderTargetT, ContextT]
@@ -159,7 +160,7 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
         return tuple(scoped)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class AtomicContract:
     """Declared costs and legal placements for one opaque realization.
 
@@ -183,7 +184,7 @@ class AtomicContract:
         return result
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     """A target's declared representation, with its source structure still available.
 
@@ -218,7 +219,7 @@ class DiscoveryCompletion(StrEnum):
     EXHAUSTED = "exhausted"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
     """Explicit completeness for extensions; a complete empty domain is infeasible.
 
@@ -232,7 +233,7 @@ class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
     limitation: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
     offer: RealizationOffer[RenderTargetT, ContextT, PayloadT]
     children: tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...] = ()
@@ -298,7 +299,7 @@ class WorkBudget:
         self._spent += amount
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PlanningContext:
     work: WorkBudget
     localization: Localization = NEUTRAL
@@ -316,7 +317,7 @@ class PlanningContext:
     limits: TargetLimits | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SharedUse[ResourceT]:
     identity: ResourceIdentity
     value: ResourceT
@@ -331,7 +332,7 @@ class SharedResourceConflictError(LayoutInvariantError):
         super().__init__(f"conflicting declarations for shared resource {identity}")
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class SharedResources[ResourceT]:
     uses: Mapping[ResourceIdentity, SharedUse[ResourceT]] = field(default_factory=dict)
 
@@ -356,7 +357,7 @@ class SharedResources[ResourceT]:
         return cls(combined)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class CapacityExceeded:
     occurrence: OccurrenceId
     axis: Axis
@@ -364,19 +365,19 @@ class CapacityExceeded:
     capacity: int
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class UnsupportedCapability:
     occurrence: OccurrenceId
     feature: str
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class ConstraintViolation:
     occurrence: OccurrenceId
     constraint: str
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class LocalCapacityExceeded:
     occurrence: OccurrenceId
     limit: str
@@ -387,7 +388,7 @@ class LocalCapacityExceeded:
 type CandidateViolation = CapacityExceeded | UnsupportedCapability | ConstraintViolation | LocalCapacityExceeded
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Evaluation[ResourceT, PreparationT = None]:
     """Facts about one composition, never a proof that every layout is infeasible.
 
@@ -396,7 +397,7 @@ class Evaluation[ResourceT, PreparationT = None]:
     """
 
     additive_cost: ResourceCost = EMPTY_COST
-    resources: SharedResources[ResourceT] = field(default_factory=SharedResources)
+    resources: SharedResources[ResourceT] = field(default_factory=lambda: SharedResources[ResourceT]())
     violations: tuple[CandidateViolation, ...] = ()
     effects: tuple[FidelityEffect, ...] = ()
     interactions: frozenset[SemanticRef] = frozenset()
@@ -453,7 +454,7 @@ class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparati
     ) -> None: ...
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]:
     body: BodyT
     evaluation: Evaluation[ResourceT, PreparationT]
@@ -534,7 +535,9 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     if set(evaluation.effects) - allowed:
         message = "target evaluation introduced an undeclared fidelity effect"
         raise DrawInvariantError(message)
-    if evaluation.feasible and (set(evaluation.effects) != allowed or evaluation.interactions != interactions):
+    if evaluation.feasible and (
+        set(evaluation.effects) != allowed or evaluation.interactions != frozenset(interactions)
+    ):
         message = "target evaluation lost declared effects or visible interaction references"
         raise DrawInvariantError(message)
     if context.strict and evaluation.effects:
@@ -580,7 +583,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         if evaluation.scoped_costs.get(identity) != contract.total:
             message = "atomic evaluation disagrees with its declared resource cost"
             raise DrawInvariantError(message)
-        if evaluation.scoped_resources.get(identity, frozenset()) != contract.shared_costs.keys():
+        if evaluation.scoped_resources.get(identity, frozenset()) != frozenset(contract.shared_costs):
             message = "atomic evaluation disagrees with its declared shared resources"
             raise DrawInvariantError(message)
         for resource, cost in contract.shared_costs.items():
@@ -616,7 +619,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     return AdmittedComposition(evaluation, MappingProxyType(bindings), MappingProxyType(forms))
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class AdmittedComposition[ResourceT, PreparationT, ContextT]:
     evaluation: Evaluation[ResourceT, PreparationT]
     bindings: Mapping[str, ActionBinding]
