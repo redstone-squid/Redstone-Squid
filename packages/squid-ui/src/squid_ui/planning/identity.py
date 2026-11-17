@@ -27,11 +27,7 @@ class _Digest:
     immutable: bool
 
 
-class FingerprintCache(IdentityCache[_Digest]):
-    """Retain immutable subtree digests; admission is decided during traversal."""
-
-    def __init__(self, *, capacity: int = 4096, max_bytes: int = 4 * 1024 * 1024) -> None:
-        super().__init__(capacity=capacity, max_bytes=max_bytes)
+FingerprintCache = IdentityCache[_Digest]
 
 
 def stable_fingerprint(

@@ -16,7 +16,7 @@ class CacheStats:
 class IdentityCache[ValueT]:
     """Keep keys alive to prevent ID recycling; callers own admission and byte estimates."""
 
-    def __init__(self, *, capacity: int, max_bytes: int) -> None:
+    def __init__(self, *, capacity: int = 4096, max_bytes: int = 4 * 1024 * 1024) -> None:
         if capacity < 1 or max_bytes < 1:
             message = "cache bounds must be positive"
             raise ValueError(message)
