@@ -230,6 +230,19 @@ def durable_summary(snapshot: DurableRuntimeSnapshot | None) -> str:
     return f"running={snapshot.running} active={len(snapshot.active)} dirty={len(snapshot.dirty)}"
 
 
+def preparation(message_root: MessageRoot) -> list[str]:
+    """Required loading durations, separate from layout timing and work units."""
+    loading = message_root.runtime.preparation
+    lines = [f"latest batch: {loading.latest.elapsed * 1000:.1f}ms (concurrent)"]
+    for report in loading.reports.values():
+        reused = " reused" if report.reused else ""
+        lines.append(
+            f"{type(report.component).__name__} at {', '.join(report.paths)}: "
+            f"{report.elapsed * 1000:.1f}ms {report.outcome}{reused}"
+        )
+    return lines
+
+
 def component_state(message_root: MessageRoot) -> dict[str, object]:
     """Declared field values for every component in the committed tree, by path.
 

@@ -146,20 +146,13 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
         return Boundary(self, str(key))
 
     async def on_load(self) -> None:
-        """Fetch what this component cannot render without, before its first render.
+        """Prepare the first useful render, once per successfully loaded instance.
 
-        Runs once per instance, before the first delivery that would show it, and before
-        :meth:`render` is ever called on it: a frontend stops expanding at an unloaded
-        component rather than rendering it empty. Writes are ordinary pre-delivery state, so
-        the delivered view is the loaded one -- there is no loading paint to design for.
-
-        A raise leaves the instance eligible to retry on the next delivery attempt, and
-        nothing is delivered in the meantime. Data the component can degrade without belongs
-        in declared state with a render branch, refreshed by a handler, not here.
-
-        Data that has to stay live belongs in a `sl.resource` instead. Because this runs once
-        and under no consumer, its reads are untracked: `sl.watch()` here would follow
-        nothing, and there would be no second run to reload it anyway.
+        Required database or network work may await here. Optional enrichment
+        belongs in a resource with useful initial content. Declared slots prepare
+        eagerly, including slots the eventual layout hides; loading starts no
+        owned services. Failure permits retry on the next delivery attempt.
+        Reads here are untracked, so watch() establishes no subscription.
         """
 
     def on_mount(self) -> None:

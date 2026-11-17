@@ -1354,13 +1354,13 @@ class MessageRoot[
                         tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
                 if tree.deferred:
                     if profile is None:
-                        await self._load_all(tree.deferred)
+                        await self._load_all(tree.deferred, paths=tree.deferred_paths)
                     else:
                         with profile.span(
                             "component_load",
                             attributes={"count": len(tree.deferred), "pass": pass_index},
                         ):
-                            await self._load_all(tree.deferred)
+                            await self._load_all(tree.deferred, paths=tree.deferred_paths)
                     continue
                 atomic = self._pending_resources(tree, PendingMode.ATOMIC)
                 if atomic:
@@ -1540,20 +1540,16 @@ class MessageRoot[
                     self._candidates.commit_presented(candidate)
             return candidate
 
-    async def _load_all(self, components: Sequence[Component[RenderTargetT, Any]]) -> None:
-        """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
-        if len(components) == 1:
-            # The overwhelmingly common case, and no group to unwrap.
-            await self._load_one(components[0])
-            return
+    async def _load_all(
+        self,
+        components: Sequence[Component[RenderTargetT, Any]],
+        *,
+        paths: Mapping[str, Component[Any, Any]] | None = None,
+    ) -> None:
+        """Prepare one tier; preserve the frontend's single-error unwrapping."""
+        placements = paths if paths is not None else {"$": components[0]}
         with _unwrapped():
-            async with anyio.create_task_group() as tasks:
-                for component in components:
-                    tasks.start_soon(self._load_one, component)
-
-    async def _load_one(self, component: Component[Any, Any]) -> None:
-        await component.on_load()
-        component._loaded = True
+            await self.runtime.preparation.prepare(placements)
 
     # --- Lifecycle ---------------------------------------------------------------------
 

@@ -89,6 +89,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.document_key: str | None = None
         self.active: set[int] = set()
         self.deferred: list[AnyComponent] = []
+        self.deferred_paths: dict[str, AnyComponent] = {}
         self.observed_addresses: list[DependencyAddress] = []
         self.observed_bindings: list[AsyncBinding[object]] = []
 
@@ -128,6 +129,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
             unique_async_bindings(self.observed_bindings),
             tuple(dict.fromkeys(self.observed_addresses)),
             root_subtree.topology if root_subtree is not None else object(),
+            deferred_paths=self.deferred_paths,
         )
 
     def _reset(self) -> None:
@@ -136,6 +138,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.assets.clear()
         self.active.clear()
         self.deferred.clear()
+        self.deferred_paths.clear()
         self.observed_addresses.clear()
         self.observed_bindings.clear()
         self.document_key = None
@@ -291,10 +294,11 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
                 child_component._parent = component
                 if self.runtime is not None:
                     self.runtime.claim(child_component)
+                child_path = item.key if path == "$" else f"{path}.{item.key}"
                 if self.defer is not None and self.defer(child_component):
                     self.deferred.append(child_component)
+                    self.deferred_paths[child_path] = child_component
                     return []
-                child_path = item.key if path == "$" else f"{path}.{item.key}"
                 expanded = _namespace(self.expand(child_component, child_path, context), item.key)
                 child_splices[child_path] = _NodeSplice(route, len(expanded), item.key)
                 return expanded

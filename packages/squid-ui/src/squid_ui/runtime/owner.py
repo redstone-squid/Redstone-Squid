@@ -16,6 +16,7 @@ from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation_state import PresentationState
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
+from squid_ui.runtime.preparation import ComponentPreparation
 from squid_ui.runtime.render_cache import RenderCache
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _ServiceLifecycle
 from squid_ui.runtime.tree import ComponentTree
@@ -104,6 +105,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         execution_host: UIExecutionHost | None = None,
         on_service_error: ServiceFailure | None = None,
     ) -> None:
+        self.preparation = ComponentPreparation()
         self.queries = QueryRoot()
         self._closed = False
         self.root = root
@@ -180,6 +182,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 component._runtime = None
                 component._parent = None
         self._claimed.intersection_update(retained)
+        for component in self.preparation.reports.keys() - retained:
+            del self.preparation.reports[component]
 
     def stage(self, tree: ComponentTree[RenderTargetT]) -> RenderCandidate[RenderTargetT]:
         """Return the candidate for this tree, replacing any earlier prospective tree.
@@ -535,6 +539,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 component._runtime = None
                 component._parent = None
         self._claimed.clear()
+        self.preparation.reports.clear()
         self._components.clear()
         self._cache.clear()
         self._cached_tree = None

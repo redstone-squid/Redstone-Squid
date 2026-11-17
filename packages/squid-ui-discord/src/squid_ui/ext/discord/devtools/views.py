@@ -30,6 +30,7 @@ from squid_ui.ext.discord.devtools.presentation import (
     members,
     operational_attachment,
     plan_text,
+    preparation,
     presentation_state,
     profile_summary,
     reactivity,
@@ -175,6 +176,7 @@ class MessageRootInspector(sl.Component):
                 )
             )
         children.extend(self._plan_section(snapshot))
+        children.append(sl.section(sl.heading("Preparation"), sl.code(dump_lines(preparation(message_root)))))
         children.append(
             sl.section(
                 sl.heading("Component state"),
