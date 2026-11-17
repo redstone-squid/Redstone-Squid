@@ -214,6 +214,30 @@ boundaries, instead of relying solely on tests of the machinery being deleted.
   page footers, and page budgets.
 - Removed strategy axes, remembered strategy choices, and their traversal helpers
   (3). Durable restoration ignores the retired field in older snapshots.
-- Remaining: the measured API (4), obsolete
-  telemetry (6), duplicate degradation profiles (7), and the generated-handler
-  base (10). Each still needs implementation and boundary verification.
+- Removed the generated-handler base in `6c9010243` (10). Concrete callable
+  signatures and the explicit callback-binding contract remain.
+- Removed unproduced telemetry in `4cc75b625` (6). Developer tools and profiling
+  now display actual composition work and evaluations.
+- Replaced the projected result degradation profile with typed fidelity effects
+  and a derived `lossless` property in `17e7f6e69` (7).
+- Removed the uncalled measured-layout dialect API and converters in
+  `af4420ce0` (part of 4).
+- Remaining: retire the standalone `measure` solver and its exclusively owned
+  types, diagnostics, and degradation model (4 and the remainder of 7).
+  Migrate useful solver tests to public planning and preserve independent host
+  inspection. Finish with broad UI validation and package-build checks.
+
+## API changes for callers
+
+Use the ordinary Discord target factories; the dynamic variants are removed.
+Dialect implementations construct their rules directly in `composer`.
+`PlanCache` no longer takes a body type argument. `PlanMemo` retains its body
+type and exposes `replay`/`store` rather than raw `get`/`put` operations.
+
+Plan results expose typed `effects` and `lossless` instead of a synthetic
+`degradation` profile. Reports no longer have logical fingerprints or before/after
+event deltas. Metrics expose live composition work rather than the retired
+`states_explored` and `search_fallback` fields.
+
+Strategy-state APIs are removed. Durable readers accept older snapshots by
+ignoring their obsolete strategy field. New snapshots omit it.
