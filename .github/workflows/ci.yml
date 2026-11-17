@@ -123,6 +123,8 @@ jobs:
       contents: read
     env:
       UV_PYTHON: "3.15"
+      # Static analyzers need the adapters merged into squid_ui.ext on disk.
+      UV_NO_EDITABLE: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,7 +170,7 @@ jobs:
         run: uv run --locked pytest --no-cov tests/deployment -m "not docker"
 
       - name: Check types with BasedPyright
-        run: uvx --from basedpyright==1.39.9 basedpyright --level=warning
+        run: uv run --locked python -m scripts.check_basedpyright
 
       - name: Check types with Pyrefly
         run: uv run --locked pyrefly check --config pyproject.toml
