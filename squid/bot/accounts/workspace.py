@@ -1,5 +1,6 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal, Self, cast, override
 
@@ -403,13 +404,16 @@ class AccountWorkspace(sd.Screen):
             )
 
         settled = False
+        settlement = asyncio.Lock()
 
         async def release() -> None:
             nonlocal settled
-            if settled:
-                return
-            settled = True
-            await self._accounts.release_minecraft_link(code, reservation)
+            with anyio.CancelScope(shield=True):
+                async with settlement:
+                    if settled:
+                        return
+                    await self._accounts.release_minecraft_link(code, reservation)
+                    settled = True
 
         async def consented_account_id(consent: AccountConsent) -> int:
             linked_account = account
@@ -432,18 +436,21 @@ class AccountWorkspace(sd.Screen):
                 await release()
                 return
             try:
-                linked_account_id = await consented_account_id(consent)
-                refresh = await self._accounts.link_minecraft_account(
-                    linked_account_id,
-                    code,
-                    consent=consent,
-                    attempted_by=attempted_by,
-                    reservation=reservation,
-                )
-            except Exception:
+                async with settlement:
+                    if settled:
+                        return
+                    linked_account_id = await consented_account_id(consent)
+                    refresh = await self._accounts.link_minecraft_account(
+                        linked_account_id,
+                        code,
+                        consent=consent,
+                        attempted_by=attempted_by,
+                        reservation=reservation,
+                    )
+                    settled = True
+            except BaseException:
                 await release()
                 raise
-            settled = True
             await self._rebuild(changed_account_id=linked_account_id)
             await prompt.notice(link_message(refresh))
 

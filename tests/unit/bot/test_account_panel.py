@@ -1,5 +1,6 @@
 """What `/account` answers with, and to whom."""
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any, cast, override
@@ -7,6 +8,7 @@ from uuid import UUID
 
 import discord
 import pytest
+from pytest_mock import MockerFixture
 from whenever import Instant
 
 import squid_ui as sl
@@ -472,6 +474,11 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
     granted = AccountConsent.grant_current()
     assert consent.answered is not None
     await consent.answered(cast(sd.PressEvent, prompt), granted)
+
+    # A repeated callback or late abandonment must not redeem or release again.
+    await consent.answered(cast(sd.PressEvent, prompt), granted)
+    assert consent.on_abandon is not None
+    await consent.on_abandon()
 
     assert accounts.created_consents == [granted]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
@@ -1150,3 +1157,31 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
         assert focusable.focus_targets() == frozenset({"identity"})
         with pytest.raises(ValueError, match="Unavailable account tab"):
             focusable.focus("claims")
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("redemption failed"), asyncio.CancelledError()])
+async def test_link_cleanup_survives_redemption_failure(failure: BaseException, mocker: MockerFixture) -> None:
+    accounts = LinkAccountService()
+    consent = ConsentCapture()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = _workspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    mocker.patch.object(accounts, "link_minecraft_account", side_effect=failure)
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    assert consent.answered is not None
+    with pytest.raises(type(failure)):
+        await consent.answered(cast(sd.PressEvent, NoticeSource()), AccountConsent.grant_current())
+    assert consent.on_abandon is not None
+    await consent.on_abandon()
+    assert accounts.released == ["abcd"]
