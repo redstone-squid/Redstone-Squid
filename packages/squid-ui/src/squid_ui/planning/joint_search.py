@@ -9,22 +9,20 @@ Opaque payloads and scalar resource envelopes never establish dominance.
 """
 
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from heapq import heappop, heappush
 from itertools import count
-from types import MappingProxyType
 
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.planning.allocation import AllocationSnapshot, PageFamily, allocate_family
+from squid_ui.planning.allocation import AllocationSnapshot, allocate_family
+from squid_ui.planning.allocation_frontier import AllocationFrontier
 from squid_ui.planning.allocation_policy import (
     AllocationQuality,
     RegionPolicy,
     SearchCompletion,
     SearchDiagnostics,
-    compare_quality,
 )
-from squid_ui.planning.allocation_scoring import score_family
-from squid_ui.planning.certification import FamilyCertificate, FamilyCertifier, FamilyRejection
+from squid_ui.planning.certification import FamilyCertifier, FamilyRejection
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
@@ -34,10 +32,8 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.fragments import FragmentTree
 from squid_ui.planning.offer_explorer import AssignmentTask, OfferExplorer
 from squid_ui.planning.partition_explorer import PartitionExplorer, PartitionTask
-from squid_ui.planning.resources import EMPTY_COST
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -109,7 +105,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 AssignmentTask[RenderTargetT, ContextT, PayloadT] | PartitionTask[RenderTargetT, ContextT, PayloadT],
             ]
         ] = []
-        self.retained: list[tuple[AllocationQuality, AllocationSnapshot[OutputT]]] = []
+        self.frontier = AllocationFrontier[RenderTargetT, ContextT, PayloadT, OutputT](context, self.policy)
         self.certifier = FamilyCertifier(rules, context, self.policy, finalize)
         self.unsupported: set[OccurrenceId] = set()
         self.violations: list[CandidateViolation] = []
@@ -132,7 +128,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                         self._enqueue(
                             self.partitions.seed(
                                 task.choices,
-                                tuple(quality for quality, _ in self.retained),
+                                self.frontier.qualities(),
                                 repair=task.repair is not None,
                             )
                         )
@@ -203,56 +199,8 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 if isinstance(violation, UnsupportedCapability)
             )
             return False, False
-        satisfied = self._retain(task, family, region_map, certificate)
+        satisfied = self.frontier.consider(family, task.choices, region_map, certificate)
         return True, satisfied
-
-    def _retain(
-        self,
-        task: PartitionTask[RenderTargetT, ContextT, PayloadT],
-        family: PageFamily[RenderTargetT, ContextT, PayloadT],
-        region_map: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
-        certificate: FamilyCertificate[OutputT],
-    ) -> bool:
-        """Score a feasible allocation and keep it unless a retained one is at least as good.
-
-        Returns:
-            Whether the allocation meets every soft goal and break.
-        """
-        self.context.work.consume(1 + len(task.choices) + len(region_map) + len(self.policy) + len(self.retained))
-        quality, satisfied = score_family(family, task.choices, region_map, certificate, self.policy, self.context)
-        if not any(
-            compare_quality(previous, quality) == -1
-            or (compare_quality(previous, quality) == 0 and previous.tie <= quality.tie)
-            for previous, _ in self.retained
-        ):
-            self.context.work.consume(len(self.retained) + len(certificate.pages) + len(region_map) + len(task.choices))
-            self.retained = [
-                (previous, allocation)
-                for previous, allocation in self.retained
-                if compare_quality(quality, previous) not in (-1, 0)
-            ]
-            family = replace(
-                family,
-                regions=MappingProxyType(
-                    {
-                        identity: replace(region, allocation=certificate.peaks.get(identity, EMPTY_COST))
-                        for identity, region in family.regions.items()
-                    }
-                ),
-            )
-            self.context.work.consume(sum(1 + len(page.coordinates) for page in certificate.pages))
-            allocation = AllocationSnapshot.certify(
-                family,
-                certificate.pages,
-                tuple(
-                    sorted(
-                        ((offer.occurrence.identity, offer.key) for offer, _ in task.choices),
-                        key=lambda item: item[0].path,
-                    )
-                ),
-            )
-            self.retained.append((quality, allocation))
-        return satisfied
 
     def _result(self) -> JointResult[OutputT]:
         """Return the best retained allocation, or raise why the search found none."""
@@ -282,16 +230,14 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
             tuple(self.violations),
             tuple(sorted(self.unsupported, key=lambda identity: identity.path)),
         )
-        if not self.retained:
+        if not self.frontier.has_result:
             if exhausted:
                 raise JointExhaustedError(diagnostics)
             if self.unsupported:
                 raise JointUnsupportedError(diagnostics)
             raise JointInfeasibleError(diagnostics)
-        _, allocation = min(self.retained, key=lambda entry: entry[0].tie)
-        return JointResult(
-            allocation, diagnostics, tuple(entry[0] for entry in sorted(self.retained, key=lambda entry: entry[0].tie))
-        )
+        allocation, qualities = self.frontier.best()
+        return JointResult(allocation, diagnostics, qualities)
 
 
 def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT](
