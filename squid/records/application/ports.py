@@ -15,6 +15,7 @@ from squid.records.application.models import (
     RecordGap,
     TitleDiagnosticGap,
 )
+from squid.records.application.snapshots import RecordSnapshot
 from squid.records.domain import BaseTitle, BuildKind, FormattedTitle
 from squid.unit_of_work import UnitOfWork
 
@@ -92,6 +93,12 @@ class RecordRunRepository(Protocol):
     async def active_current_version_id(self) -> int | None: ...
 
     async def set_current_version(self, version_id: int | None) -> None: ...
+
+    async def input_generation(self, kind: BuildKind) -> int: ...
+
+    async def save_snapshot(self, snapshot: RecordSnapshot) -> int: ...
+
+    async def activate_snapshot(self, snapshot_id: int, batch: ComputationBatch) -> int: ...
 
     async def activate(self, batch: ComputationBatch) -> int: ...
 

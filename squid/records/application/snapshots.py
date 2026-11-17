@@ -27,6 +27,7 @@ class RecordSnapshot(BaseModel):
     sources: tuple[CandidateBuild, ...]
     requested: tuple[CategoryIdentity, ...]
     captured_at: datetime
+    input_generation: int = 0
 
     @field_validator("sources", mode="before")
     @classmethod

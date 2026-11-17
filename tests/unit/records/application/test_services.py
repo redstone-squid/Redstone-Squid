@@ -27,6 +27,7 @@ from squid.records.application.models import (
 )
 from squid.records.application.ports import DoorRangeAnalyzer, RecomputeLease
 from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.records.application.snapshots import RecordSnapshot
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -99,12 +100,14 @@ class FakeCandidates:
 class FakeRuns:
     """Capture computed batches and supply the configured record queries.
 
-    RecordScope copies this state and publishes it on commit, so a failed rebuild leaves the
-    fixture unchanged. Queue methods record calls without enforcing claim-token ownership.
+    RecordScope copies this state and publishes it on commit. Failed publication
+    leaves batches unchanged but retains captured snapshots. Queue methods record
+    calls without enforcing claim-token ownership.
     """
 
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
+        self.snapshots: dict[int, RecordSnapshot] = {}
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
         self.requested_titles: dict[str, dict[BaseTitle, FormattedTitle]] = {}
         self.definition_identities: dict[int, CategoryIdentity] = {}
@@ -124,6 +127,18 @@ class FakeRuns:
 
     async def set_current_version(self, version_id: int | None) -> None:
         self.current_version_id = version_id
+
+    async def input_generation(self, kind: BuildKind) -> int:
+        return 1
+
+    async def save_snapshot(self, snapshot: RecordSnapshot) -> int:
+        snapshot_id = len(self.snapshots) + 1
+        self.snapshots[snapshot_id] = snapshot
+        return snapshot_id
+
+    async def activate_snapshot(self, snapshot_id: int, batch: ComputationBatch) -> int:
+        assert snapshot_id in self.snapshots
+        return await self.activate(batch)
 
     async def activate(self, batch: ComputationBatch) -> int:
         self.batches.append(batch)
@@ -190,10 +205,12 @@ class FakeRuns:
         return RecomputeLease(kinds=kinds, claim_tokens=tuple(uuid.uuid4() for _ in kinds))
 
     async def complete_recompute(self, lease: RecomputeLease) -> None:
-        self.completed = lease.kinds
+        self.completed += lease.kinds
+        self.queued = tuple(kind for kind in self.queued if kind not in lease.kinds)
 
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
         self.failed = (lease.kinds, error)
+        self.queued = tuple(kind for kind in self.queued if kind not in lease.kinds)
 
 
 class FakePublicBuilds:
@@ -992,3 +1009,22 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
     assert smallest.door_evidence is None
     assert smallest.history_complete
     assert [period.build_ids for period in smallest.history] == [(1,)]
+
+
+async def test_failed_kind_does_not_roll_back_other_kind_publication() -> None:
+    class FailingRuns(FakeRuns):
+        async def activate(self, batch: ComputationBatch) -> int:
+            if batch.kind is BuildKind.DOOR:
+                raise RuntimeError("door computation failed")
+            return await super().activate(batch)
+
+    runs = FailingRuns()
+    runs.queued = (BuildKind.DOOR, BuildKind.EXTENDER)
+    service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
+
+    with pytest.raises(RuntimeError, match="door computation failed"):
+        await service.process_queue()
+
+    assert runs.completed == (BuildKind.EXTENDER,)
+    assert runs.failed == ((BuildKind.DOOR,), "door computation failed")
+    assert [batch.kind for batch in runs.batches] == [BuildKind.EXTENDER]

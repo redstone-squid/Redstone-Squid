@@ -39,6 +39,7 @@ from squid.records.application.models import (
 from squid.records.application.ports import (
     DoorRangeAnalyzer,
     PublicBuildSummaryReader,
+    RecomputeLease,
     RecordQueryUnitOfWork,
     RecordUnitOfWork,
 )
@@ -103,51 +104,50 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Publish concrete-title runs together; range work has its own queue."""
+        """Capture immutable inputs, compute without a connection, then publish."""
+        return await self._rebuild(current_version_id=current_version_id, kinds=kinds)
+
+    async def _rebuild(
+        self,
+        *,
+        current_version_id: int | None,
+        kinds: Sequence[BuildKind],
+        lease: RecomputeLease | None = None,
+    ) -> RebuildSummary:
+        snapshots: list[tuple[int, RecordSnapshot]] = []
         async with self._uow_factory() as uow:
             await uow.record_candidates.begin_computation()
-            result = await self.rebuild_in(uow, current_version_id=current_version_id, kinds=kinds)
+            revision = await uow.records.active_rules_revision_id()
+            for kind in kinds:
+                generation = await uow.records.input_generation(kind)
+                source = tuple(await uow.record_candidates.list_confirmed(kind))
+                requested = tuple(await uow.records.list_requested_categories(kind))
+                versions = (None,) if current_version_id is None else (None, current_version_id)
+                for version_id in versions:
+                    snapshot = RecordSnapshot(
+                        rules_revision_id=revision,
+                        kind=kind,
+                        sources=source,
+                        version_id=version_id,
+                        requested=requested,
+                        captured_at=datetime.now(UTC),
+                        input_generation=generation,
+                    )
+                    snapshot_id = await uow.records.save_snapshot(snapshot)
+                    # Match the persisted JSON representation before arithmetic.
+                    replay = RecordSnapshot.model_validate_json(snapshot.model_dump_json())
+                    snapshots.append((snapshot_id, replay))
             await uow.commit()
-        return result
 
-    async def rebuild_in(
-        self,
-        uow: RecordUnitOfWork,
-        *,
-        current_version_id: int | None = None,
-        kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
-    ) -> RebuildSummary:
-        """Stage replacement runs in the caller's transaction without committing.
-
-        Every kind gets an all-time run. A supplied current version also gets a
-        filtered run. The caller must pin a consistent snapshot before reading
-        or writing computation inputs.
-        """
-        rules_revision_id = await uow.records.active_rules_revision_id()
-        run_ids: list[int] = []
-        records: list[ComputedRecord] = []
-        for kind in kinds:
-            source = tuple(await uow.record_candidates.list_confirmed(kind))
-            requested = tuple(await uow.records.list_requested_categories(kind))
-            snapshot = RecordSnapshot(
-                rules_revision_id=rules_revision_id,
-                kind=kind,
-                sources=source,
-                version_id=None,
-                requested=requested,
-                captured_at=datetime.now(UTC),
-            )
-            all_time = await self._compute_snapshot(snapshot)
-            run_ids.append(await uow.records.activate(all_time))
-            records.extend(all_time.records)
-
-            if current_version_id is not None:
-                current = await self._compute_snapshot(snapshot.model_copy(update={"version_id": current_version_id}))
-                run_ids.append(await uow.records.activate(current))
-                records.extend(current.records)
-
+        batches = [(snapshot_id, await self._compute_snapshot(snapshot)) for snapshot_id, snapshot in snapshots]
+        async with self._uow_factory() as uow:
+            run_ids = tuple([await uow.records.activate_snapshot(snapshot_id, batch) for snapshot_id, batch in batches])
+            if lease is not None:
+                await uow.records.complete_recompute(lease)
+            await uow.commit()
+        records = tuple(record for _, batch in batches for record in batch.records)
         return RebuildSummary(
-            run_ids=tuple(run_ids),
+            run_ids=run_ids,
             definitions=len(records),
             resolved=sum(record.resolution.status is ResolutionStatus.RESOLVED for record in records),
             unresolved=sum(record.resolution.status is ResolutionStatus.UNRESOLVED for record in records),
@@ -242,31 +242,48 @@ class RecordComputationService:
         current_version_id: int | None = None,
         limit: int = 20,
     ) -> QueueProcessSummary:
-        """Claim scopes, rebuild their kinds, then acknowledge the owned claims.
+        """Process each claimed scope independently; publication also acknowledges it.
 
-        Claiming, publication, and acknowledgement use separate transactions;
-        claim locks are released before rebuilding starts. An omitted version
-        reuses the current pin. Rebuild failures release owned claims for retry
-        and propagate.
+        Failed scopes back off while other due kinds continue. New source changes
+        replace the claim token and therefore survive the atomic acknowledgement.
         """
-        async with self._uow_factory() as uow:
-            lease = await uow.records.claim_recompute_kinds(limit=limit)
-            if current_version_id is None:
-                current_version_id = await uow.records.active_current_version_id()
-            await uow.commit()
-        if not lease:
-            return QueueProcessSummary(kinds=(), rebuild=None)
-        try:
-            summary = await self.rebuild(current_version_id=current_version_id, kinds=lease.kinds)
-        except Exception as error:
+        kinds: list[BuildKind] = []
+        summaries: list[RebuildSummary] = []
+        failures: list[Exception] = []
+        for _ in range(limit):
             async with self._uow_factory() as uow:
-                await uow.records.fail_recompute(lease, str(error))
+                lease = await uow.records.claim_recompute_kinds(limit=1)
+                version_id = (
+                    current_version_id
+                    if current_version_id is not None
+                    else await uow.records.active_current_version_id()
+                )
                 await uow.commit()
-            raise
-        async with self._uow_factory() as uow:
-            await uow.records.complete_recompute(lease)
-            await uow.commit()
-        return QueueProcessSummary(kinds=lease.kinds, rebuild=summary)
+            if not lease:
+                break
+            try:
+                summary = await self._rebuild(current_version_id=version_id, kinds=lease.kinds, lease=lease)
+            except Exception as error:
+                async with self._uow_factory() as uow:
+                    await uow.records.fail_recompute(lease, str(error))
+                    await uow.commit()
+                failures.append(error)
+                continue
+            kinds.extend(lease.kinds)
+            summaries.append(summary)
+        if failures:
+            raise failures[0]
+        return QueueProcessSummary(
+            kinds=tuple(dict.fromkeys(kinds)),
+            rebuild=RebuildSummary(
+                run_ids=tuple(run_id for summary in summaries for run_id in summary.run_ids),
+                definitions=sum(summary.definitions for summary in summaries),
+                resolved=sum(summary.resolved for summary in summaries),
+                unresolved=sum(summary.unresolved for summary in summaries),
+            )
+            if summaries
+            else None,
+        )
 
     def _eager_categories(
         self,
@@ -553,13 +570,11 @@ class RecordService:
             await uow.records.save_requested_category(
                 rules_revision_id, identity, self._computation.format_record_titles(category)
             )
-            result = await self._computation.rebuild_in(
-                uow,
-                current_version_id=request.version_id,
-                kinds=(request.kind,),
-            )
             await uow.commit()
-            return result
+        return await self._computation.rebuild(
+            current_version_id=request.version_id,
+            kinds=(request.kind,),
+        )
 
 
 class PublicRecordQueryService:

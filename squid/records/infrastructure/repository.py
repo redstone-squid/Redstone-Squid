@@ -16,7 +16,7 @@ from whenever import Instant
 
 from squid.builds.domain import Status
 from squid.builds.models import DoorBuild, ExtenderBuild
-from squid.core.errors import DataIntegrityError
+from squid.core.errors import DataIntegrityError, ServiceUnavailableError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
     CandidateBuild,
@@ -29,6 +29,7 @@ from squid.records.application.models import (
     TitleDiagnosticGap,
 )
 from squid.records.application.ports import RecomputeLease
+from squid.records.application.snapshots import RecordSnapshot
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -51,6 +52,8 @@ from squid.records.models import (
     ExtenderTimingVariant,
     FacetKind,
     MaterializationSource,
+    RecordInputGeneration,
+    RecordInputSnapshot,
     RecordRecomputeQueueItem,
     RecordSettings,
     RecordTitle,
@@ -265,6 +268,74 @@ class PostgresRecordRepository:
                     },
                 )
             )
+
+    async def input_generation(self, kind: BuildKind) -> int:
+        return (
+            await self._session().execute(
+                select(RecordInputGeneration.generation).where(RecordInputGeneration.build_kind == kind)
+            )
+        ).scalar_one()
+
+    async def save_snapshot(self, snapshot: RecordSnapshot) -> int:
+        stored = RecordInputSnapshot(document=snapshot.model_dump(mode="json"))
+        self._session().add(stored)
+        await self._session().flush()
+        return stored.id
+
+    async def activate_snapshot(self, snapshot_id: int, batch: ComputationBatch) -> int:
+        """Publish only if no newer input generation has already been checked.
+
+        Source edits during arithmetic are allowed. Their queue token remains
+        pending, while the generation check prevents a late older computation
+        from replacing a newer publication. The caller commits acknowledgement
+        in this same transaction.
+        """
+        session = self._session()
+        await session.execute(
+            select(func.pg_advisory_xact_lock_shared(func.hashtextextended("record-rules-revision-activation", 0)))
+        )
+        stored = await session.get(RecordInputSnapshot, snapshot_id)
+        if stored is None:
+            msg = "Missing record input snapshot."
+            raise DataIntegrityError(msg)
+        snapshot = RecordSnapshot.model_validate(stored.document)
+        if (snapshot.kind, snapshot.version_id, snapshot.rules_revision_id) != (
+            batch.kind,
+            batch.version_id,
+            batch.rules_revision_id,
+        ):
+            msg = "Record output does not match its input snapshot scope."
+            raise DataIntegrityError(msg)
+        active_revision = await session.scalar(
+            select(RulesRevision.id).where(
+                RulesRevision.id == snapshot.rules_revision_id, RulesRevision.activated_at.is_not(None)
+            )
+        )
+        if active_revision is None:
+            raise ServiceUnavailableError(context={"reason": "record_rules_changed"})
+        await _advisory_lock(session, f"record-run:{batch.kind.value}:{batch.version_id}")
+        previous = await session.scalar(
+            select(ComputationRun).where(
+                ComputationRun.build_kind == batch.kind,
+                ComputationRun.version_id.is_not_distinct_from(batch.version_id),
+                ComputationRun.is_active,
+            )
+        )
+        if (
+            previous is not None
+            and previous.checked_generation is not None
+            and previous.checked_generation > snapshot.input_generation
+        ):
+            return previous.id
+        run_id = await self.activate(batch)
+        run = await session.get(ComputationRun, run_id)
+        assert run is not None
+        if run.input_snapshot_id is None:
+            run.input_snapshot_id = snapshot_id
+        run.checked_snapshot_id = snapshot_id
+        run.checked_generation = snapshot.input_generation
+        await session.flush()
+        return run_id
 
     async def activate(self, batch: ComputationBatch) -> int:
         """Publish changed results, or return the unchanged active run after recording a check.
@@ -630,6 +701,20 @@ class PostgresRecordRepository:
                 )
                 for base_title, title in titles.items()
             ),
+        )
+
+        await session.execute(
+            insert(RecordRecomputeQueueItem)
+            .values(scope_key=category.kind.value, build_kind=category.kind, reasons=["requested_category"])
+            .on_conflict_do_update(
+                index_elements=[RecordRecomputeQueueItem.scope_key],
+                set_={
+                    "enqueued_at": func.now(),
+                    "available_at": func.now(),
+                    "claimed_at": None,
+                    "claim_token": None,
+                },
+            )
         )
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:

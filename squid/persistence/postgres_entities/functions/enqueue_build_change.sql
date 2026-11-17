@@ -6,12 +6,16 @@ CREATE FUNCTION public.enqueue_build_change() RETURNS trigger
 DECLARE
     target_build_id bigint;
     target_kind text;
+    previous_kind text;
     build_exists boolean := true;
     build_deleted boolean := TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE';
 BEGIN
     IF TG_TABLE_NAME = 'builds' THEN
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
         target_kind := lower(CASE WHEN TG_OP = 'DELETE' THEN OLD.category ELSE NEW.category END);
+        IF TG_OP = 'UPDATE' THEN
+            previous_kind := lower(OLD.category);
+        END IF;
     ELSE
         -- When the row is going away with its build, the build's own trigger queues the deletion.
         target_build_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END;
@@ -25,19 +29,19 @@ BEGIN
             'build', target_build_id::text, CASE WHEN build_deleted THEN 'delete' ELSE 'upsert' END
         );
 
-        IF target_kind IN ('door', 'extender') THEN
+        IF target_kind IN ('door', 'extender') OR previous_kind IN ('door', 'extender') THEN
             -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
             -- from acknowledging the new request.
             INSERT INTO public.record_recompute_queue
                 (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
-            VALUES (
-                target_kind,
-                target_kind,
+            SELECT kind, kind,
                 CASE WHEN build_deleted THEN NULL ELSE target_build_id END,
-                '["source_change"]'::jsonb,
-                now(),
-                now()
-            )
+                '["source_change"]'::jsonb, now(), now()
+            FROM (
+                SELECT DISTINCT kind FROM unnest(ARRAY[target_kind, previous_kind]) AS kinds(kind)
+                WHERE kind IN ('door', 'extender')
+            ) AS affected
+            ORDER BY kind
             ON CONFLICT (scope_key) DO UPDATE
             SET build_id = EXCLUDED.build_id,
                 reasons = (
