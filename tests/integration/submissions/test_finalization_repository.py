@@ -677,7 +677,9 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
     legacy.pop("credits")
     legacy.pop("links")
     legacy["details"] = {"kind": "general"}
-    legacy["taxonomy"].pop("restriction_proposal_fields")
+    taxonomy = legacy["taxonomy"]
+    assert isinstance(taxonomy, dict)
+    taxonomy.pop("restriction_proposal_fields")
     job = await transact(
         repository,
         lambda uow: uow.finalization_jobs.enqueue(stored_draft, normalized, now=NOW, expires_at=NOW.add(hours=1)),
@@ -699,17 +701,17 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
         str(Path("alembic/versions/2026_11_17_1900-b8e2c6f0a4d9_reset_finalization_payload_schema.py"))
     )
 
-    def upgrade(session: Session) -> None:
+    def apply(session: Session, operation: str) -> None:
         with Operations.context(MigrationContext.configure(session.connection())):
-            migration["upgrade"]()
+            migration[operation]()
 
     if corrupt_input:
         with pytest.raises(RuntimeError, match="conflicting digest"):
             async with async_session_factory.begin() as session:
-                await session.run_sync(upgrade)
+                await session.run_sync(apply, "upgrade")
     else:
         async with async_session_factory.begin() as session:
-            await session.run_sync(upgrade)
+            await session.run_sync(apply, "upgrade")
 
     async with async_session_factory() as session:
         retained = await session.get(SubmissionFinalizationJob, job.job_id)
@@ -723,3 +725,19 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
             assert retained.payload == original.payload == current
             assert retained.payload_sha256 == original.payload_sha256 == submission_payload_digest(current)
             assert decode_submission(original.payload) == normalized
+
+    if not corrupt_input:
+        async with async_session_factory.begin() as session:
+            await session.run_sync(apply, "downgrade")
+        async with async_session_factory() as session:
+            for model in (SubmissionFinalizationJob, SubmissionFinalizationInput):
+                row = (await session.execute(select(model.payload, model.payload_sha256))).one()
+                assert row.payload["payload_schema"] == 8
+                assert row.payload_sha256 == submission_payload_digest(row.payload)
+        async with async_session_factory.begin() as session:
+            await session.run_sync(apply, "upgrade")
+        async with async_session_factory() as session:
+            for model in (SubmissionFinalizationJob, SubmissionFinalizationInput):
+                row = (await session.execute(select(model.payload, model.payload_sha256))).one()
+                assert row.payload == current
+                assert row.payload_sha256 == submission_payload_digest(current)

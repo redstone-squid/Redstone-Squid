@@ -2398,7 +2398,10 @@ def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
                     "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated, extra_info) "
                     "VALUES (0, 'Other', :account, false, CAST(:info AS jsonb)) RETURNING id"
                 ),
-                {"account": account, "info": json.dumps({"submission_provenance": {"owner_account_id": account}})},
+                {
+                    "account": account,
+                    "info": json.dumps({"submission_provenance": {"owner_account_id": account, "origin": "discord"}}),
+                },
             ).scalar_one()
             connection.execute(text("INSERT INTO other_builds (build_id) VALUES (:id)"), {"id": build})
         with engine.connect() as connection:
@@ -2411,7 +2414,7 @@ def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
             metadata, retained_revision = connection.execute(
                 text("SELECT extra_info, revision FROM builds WHERE id = :id"), {"id": build}
             ).one()
-            assert metadata == {"source_submission": {"owner_account_id": account}}
+            assert metadata == {"source_submission": {"owner_account_id": account, "origin": "discord"}}
             assert retained_revision == revision
             assert connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one() == history
             snapshots = (
@@ -2432,5 +2435,14 @@ def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
             )
             assert "origin" in columns
             assert "provenance" not in columns
+        command.downgrade(config, "b8e2c6f0a4d9")
+        with engine.connect() as connection:
+            metadata, retained_revision = connection.execute(
+                text("SELECT extra_info, revision FROM builds WHERE id = :id"), {"id": build}
+            ).one()
+            assert metadata == {"submission_provenance": {"owner_account_id": account, "origin": "discord"}}
+            assert retained_revision == revision
+            assert connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one() == history
+        command.upgrade(config, "head")
     finally:
         engine.dispose()

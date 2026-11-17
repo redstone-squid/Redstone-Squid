@@ -7,6 +7,7 @@ Revises: a7c1e5b9d304
 import copy
 import hashlib
 import json
+from collections.abc import Callable
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -61,7 +62,7 @@ def _digest(payload: dict) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def upgrade() -> None:
+def _migrate_payloads(rewrite: Callable[[dict], dict]) -> None:
     connection = op.get_bind()
     for name, identity in [("submission_finalization_jobs", "id"), ("submission_finalization_inputs", "job_id")]:
         table = sa.table(
@@ -74,7 +75,7 @@ def upgrade() -> None:
             if _digest(payload) != digest:
                 message = "Cannot rewrite a finalization payload with a conflicting digest"
                 raise RuntimeError(message)
-            rewritten = _rewrite(payload)
+            rewritten = rewrite(payload)
             connection.execute(
                 table.update()
                 .where(table.c[identity] == row_id)
@@ -82,6 +83,28 @@ def upgrade() -> None:
             )
 
 
+def upgrade() -> None:
+    _migrate_payloads(_rewrite)
+
+
+def _restore(payload: dict) -> dict:
+    if payload.get("payload_schema") != 1:
+        message = "Cannot restore an unknown finalization payload schema"
+        raise RuntimeError(message)
+    document = copy.deepcopy(payload)
+    document["creators"] = []
+    document["restriction_proposal_fields"] = document["taxonomy"].pop("restriction_proposal_fields")
+    details = document["details"]
+    if details["kind"] == "general":
+        document["payload_schema"] = 8
+        document["general_pattern_keys"] = details.pop("pattern_keys")
+        document["general_pattern_proposals"] = details.pop("pattern_proposals")
+    else:
+        document["payload_schema"] = 7
+    return document
+
+
 def downgrade() -> None:
-    message = "The retired finalization schemas cannot be reconstructed; restore a database backup"
-    raise RuntimeError(message)
+    # Restore the most recent retired representation, without discarding facts
+    # or reintroducing compatibility branches in the application's codec.
+    _migrate_payloads(_restore)
