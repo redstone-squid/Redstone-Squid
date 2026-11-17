@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
+from pydantic import TypeAdapter
 from pytest_mock import MockerFixture
 
 pytest.importorskip("nucleation")
@@ -229,6 +230,20 @@ def test_engine_base64_is_strictly_validated(payload: str) -> None:
 def test_conversion_loss_json_rejects_malformed_required_evidence(payload: object) -> None:
     with pytest.raises(InvalidSchematicError):
         nucleation_adapter._loss_entries(payload)
+
+
+@pytest.mark.parametrize(
+    ("wire", "payload"),
+    [
+        (nucleation_adapter._SNAPSHOT_WIRE, '[{"pos":[true,2,3],"state":"lever"}]'),
+        (nucleation_adapter._EVENTS_WIRE, '[{"tick":1,"piston":true}]'),
+        (nucleation_adapter._AUDIT_WIRE, '{"missing_total":"1"}'),
+        (nucleation_adapter._PROBES_WIRE, '["powered",42]'),
+    ],
+)
+def test_native_json_contract_rejects_wrong_types(wire: TypeAdapter[Any], payload: str) -> None:
+    with pytest.raises(InvalidSchematicError):
+        nucleation_adapter._engine_json(payload, wire, "test")
 
 
 def test_video_failure_preserves_a_bounded_renderer_log(tmp_path: Path, mocker: MockerFixture) -> None:

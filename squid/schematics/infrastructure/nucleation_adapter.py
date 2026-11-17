@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import nucleation
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.video import VideoRenderRequest
@@ -74,6 +75,47 @@ _EXPORTERS: Mapping[SchematicFormat, str] = {
 
 _RESOURCE_PACK_CACHE: dict[str, Any] = {}
 """Engine resource-pack handles cached per persistent worker process by content digest."""
+
+
+class _EngineRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=True, frozen=True)
+
+
+class _LossWire(_EngineRecord):
+    version: str
+    kind: str
+    severity: Literal["Loss", "Approximated"]
+    path: str
+    detail: str
+
+
+class _ConversionWire(_EngineRecord):
+    data_b64: str
+    loss: list[_LossWire]
+
+
+class _SnapshotBlock(_EngineRecord):
+    pos: Vector3
+    state: str
+
+
+class _SimulationEvent(_EngineRecord):
+    tick: int
+    piston: int = 0
+    redstone: int = 0
+
+
+class _BlockEntityAudit(_EngineRecord):
+    missing_total: int = 0
+
+
+_CONVERSION_WIRE = TypeAdapter(_ConversionWire)
+_SNAPSHOT_WIRE = TypeAdapter(list[_SnapshotBlock])
+_EVENTS_WIRE = TypeAdapter(list[_SimulationEvent])
+_AUDIT_WIRE = TypeAdapter(_BlockEntityAudit)
+_PROBES_WIRE = TypeAdapter(list[str])
+_REGION_NAMES_WIRE = TypeAdapter(list[str])
+_LOSSES_WIRE = TypeAdapter(list[_LossWire])
 
 
 def analyzer_version() -> str:
@@ -143,8 +185,10 @@ def convert(
         return _export(schematic, target), ()
 
     if target is SchematicFormat.LITEMATIC:
-        payload = _json_object(schematic.to_litematic_for_version_json(data_version), "conversion result")
-        return _base64_bytes(payload.get("data_b64"), "converted schematic data"), _loss_entries(payload.get("loss"))
+        payload = _engine_json(
+            schematic.to_litematic_for_version_json(data_version), _CONVERSION_WIRE, "conversion result"
+        )
+        return _base64_bytes(payload.data_b64, "converted schematic data"), _loss_entries(payload.loss)
 
     source_version = schematic.source_data_version()
     if source_version == _UNKNOWN_DATA_VERSION:
@@ -231,7 +275,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         raise InvalidSchematicError(msg, end_user_action="Save the build while it is completely at rest.")
 
     # Start timing from the chosen input, after confirming the saved circuit is at rest.
-    snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
+    snapshot = _engine_json(simulation.world_snapshot_json(), _SNAPSHOT_WIRE, "simulation snapshot")
     input_position, input_source = _resolve_simulation_input(schematic, snapshot, request.input_position)
     simulation.use_block(*input_position)
     samples: list[SimulationSample] = []
@@ -247,15 +291,12 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         settled = bool(simulation.run_until_quiescent(request.max_ticks))
 
     # Audit the run before presenting its piston timing as usable evidence.
-    summary = _json_array(simulation.events_summary_json(), "simulation event summary")
-    event_rows = tuple(_object(row, "simulation event") for row in summary)
-    piston_ticks = [
-        _integer(row, "tick", "simulation event")
-        for row in event_rows
-        if _integer(row, "piston", "simulation event", default=0) > 0
-    ]
-    audit = _json_object(nucleation.TickSimulation.block_entity_audit_json(schematic), "block entity audit")
-    missing_block_entities = _integer(audit, "missing_total", "block entity audit", default=0)
+    event_rows = _engine_json(simulation.events_summary_json(), _EVENTS_WIRE, "simulation event summary")
+    piston_ticks = [row.tick for row in event_rows if row.piston > 0]
+    audit = _engine_json(
+        nucleation.TickSimulation.block_entity_audit_json(schematic), _AUDIT_WIRE, "block entity audit"
+    )
+    missing_block_entities = audit.missing_total
     unsupported_contacts = int(simulation.piston_retract_contacts())
     notes: list[str] = []
     if not settled:
@@ -272,8 +313,8 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         input_source=input_source,
         last_piston_tick=max(piston_ticks) if piston_ticks else None,
         block_changes=int(simulation.changes_count()),
-        piston_events=sum(_integer(row, "piston", "simulation event", default=0) for row in event_rows),
-        redstone_events=sum(_integer(row, "redstone", "simulation event", default=0) for row in event_rows),
+        piston_events=sum(row.piston for row in event_rows),
+        redstone_events=sum(row.redstone for row in event_rows),
         trustworthy=settled and missing_block_entities == 0 and unsupported_contacts == 0 and bool(piston_ticks),
         samples=tuple(samples),
         notes=tuple(notes),
@@ -302,8 +343,9 @@ def _simulation_samples(
     simulation: nucleation.TickSimulation, watch_positions: Sequence[Vector3]
 ) -> tuple[SimulationSample, ...]:
     """Read every requested observation after the simulation's current tick."""
-    payload = _json_array(
+    payload = _engine_json(
         simulation.read_probes(json.dumps([list(position) for position in watch_positions])),
+        _PROBES_WIRE,
         "simulation probes",
     )
     if len(payload) != len(watch_positions):
@@ -314,8 +356,7 @@ def _simulation_samples(
         )
     tick = int(simulation.tick_count())
     return tuple(
-        _simulation_sample(tick, position, _string_value(state, "simulation probe state"))
-        for position, state in zip(watch_positions, payload, strict=True)
+        _simulation_sample(tick, position, state) for position, state in zip(watch_positions, payload, strict=True)
     )
 
 
@@ -349,15 +390,14 @@ def _simulation_sample(tick: int, position: Vector3, state: str) -> SimulationSa
 
 def _resolve_simulation_input(
     schematic: nucleation.Schematic,
-    snapshot: Sequence[object],
+    snapshot: Sequence[_SnapshotBlock],
     manual: Vector3 | None,
 ) -> tuple[Vector3, Literal["insign", "heuristic", "manual"]]:
     """Choose one actuator without ever guessing between ambiguous controls."""
     controls: dict[Vector3, str] = {}
-    for item in snapshot:
-        entry = _object(item, "simulation snapshot entry")
-        state = _string(entry, "state", "simulation snapshot entry")
-        position = _required_vector(entry.get("pos"), "simulation snapshot position")
+    for entry in snapshot:
+        state = entry.state
+        position = entry.pos
         if any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
             controls[position] = state
 
@@ -500,9 +540,7 @@ def _metrics(
         bounding_volume=tight.volume,
         entity_count=int(schematic.entity_count()),
         palette_size=len(_json_array(schematic.palette_json(), "palette")),
-        region_names=tuple(
-            _string_value(name, "region name") for name in _json_array(schematic.region_names_json(), "region names")
-        ),
+        region_names=tuple(_engine_json(schematic.region_names_json(), _REGION_NAMES_WIRE, "region names")),
         source_data_version=_optional_data_version(schematic),
         declared_name=_non_empty(schematic.name()),
         declared_author=_non_empty(schematic.author()),
@@ -657,26 +695,14 @@ def _export(schematic: nucleation.Schematic, target: SchematicFormat) -> bytes:
 
 def _loss_entries(payload: object) -> tuple[VersionLossEntry, ...]:
     """Translate the engine's required fidelity-loss report."""
-    if not isinstance(payload, list):
+    try:
+        records = _LOSSES_WIRE.validate_python(payload, strict=True)
+    except ValidationError as exc:
         msg = "The engine returned an unexpected conversion loss payload."
-        raise InvalidSchematicError(msg, context={"payload_type": type(payload).__name__})
-    entries: list[VersionLossEntry] = []
-    for item in cast(list[object], payload):
-        record = _object(item, "conversion loss entry")
-        severity = _string(record, "severity", "conversion loss entry")
-        if severity not in ("Loss", "Approximated"):
-            msg = f"The engine returned an invalid conversion-loss severity {severity!r}."
-            raise InvalidSchematicError(msg)
-        entries.append(
-            VersionLossEntry(
-                version=_string(record, "version", "conversion loss entry"),
-                kind=_string(record, "kind", "conversion loss entry"),
-                severity=cast(Literal["Loss", "Approximated"], severity),
-                path=_string(record, "path", "conversion loss entry"),
-                detail=_string(record, "detail", "conversion loss entry"),
-            )
-        )
-    return tuple(entries)
+        raise InvalidSchematicError(msg, context={"validation_error": str(exc)}) from exc
+    return tuple(
+        VersionLossEntry(record.version, record.kind, record.severity, record.path, record.detail) for record in records
+    )
 
 
 def _dimensions(reported: object) -> SchematicDimensions:
@@ -720,6 +746,15 @@ def _json_value(payload: object) -> object:
         ) from exc
 
 
+def _engine_json[T](payload: str, adapter: TypeAdapter[T], what: str) -> T:
+    """Validate one native JSON result and keep parse details in developer context."""
+    try:
+        return adapter.validate_json(payload, strict=True)
+    except ValidationError as exc:
+        msg = f"The engine returned an unexpected {what} payload."
+        raise InvalidSchematicError(msg, context={"validation_error": str(exc)}) from exc
+
+
 def _json_array(payload: str, what: str) -> list[object]:
     value = _json_value(payload)
     if not isinstance(value, list):
@@ -734,48 +769,6 @@ def _json_object(payload: str, what: str) -> Mapping[str, Any]:
         msg = f"The engine returned an unexpected {what} payload."
         raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
     return cast(Mapping[str, Any], value)
-
-
-def _object(value: object, what: str) -> Mapping[str, Any]:
-    if not isinstance(value, dict):
-        msg = f"The engine returned an unexpected {what}."
-        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
-    return cast(Mapping[str, Any], value)
-
-
-def _string(payload: Mapping[str, Any], key: str, what: str) -> str:
-    if key not in payload:
-        msg = f"The engine omitted {key!r} from its {what}."
-        raise InvalidSchematicError(msg)
-    return _string_value(payload[key], f"{what} {key}")
-
-
-def _string_value(value: object, what: str) -> str:
-    if not isinstance(value, str):
-        msg = f"The engine returned a non-text {what}."
-        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
-    return value
-
-
-def _integer(payload: Mapping[str, Any], key: str, what: str, *, default: int | None = None) -> int:
-    if key not in payload:
-        if default is not None:
-            return default
-        msg = f"The engine omitted {key!r} from its {what}."
-        raise InvalidSchematicError(msg)
-    value = payload[key]
-    if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"The engine returned a non-integer {what} {key}."
-        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
-    return value
-
-
-def _required_vector(value: object, what: str) -> Vector3:
-    vector = _vector(value)
-    if vector is None:
-        msg = f"The engine returned an invalid {what}."
-        raise InvalidSchematicError(msg)
-    return vector
 
 
 def _base64_bytes(value: object, what: str) -> bytes:
@@ -829,7 +822,7 @@ def render_video(
                 schematic, nucleation.TickSettleMode.InWorld, 0, 0, 0, ""
             )
         simulation.run(interaction.tick - int(simulation.tick_count()))
-        snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
+        snapshot = _engine_json(simulation.world_snapshot_json(), _SNAPSHOT_WIRE, "simulation snapshot")
         position, _ = _resolve_simulation_input(schematic, snapshot, position)
         simulation.use_block(*position)
         args.extend(("--click", f"{position[0]},{position[1]},{position[2]}@{interaction.tick}"))
