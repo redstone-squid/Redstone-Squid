@@ -5,8 +5,11 @@ from dataclasses import replace
 import pytest
 
 import squid_ui as sl
+from squid_ui import testing
+from squid_ui.action_mode import ActionMode
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.interactions.handlers import FrontendHandler, HandlerSet
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
@@ -141,3 +144,96 @@ def test_hint_preserves_complete_search_winner() -> None:
     assert expected.allocation is not None and hinted.allocation is not None
     assert hinted.allocation.regions[REGION].cuts == expected.allocation.regions[REGION].cuts
     assert hinted.scene == expected.scene
+
+
+async def test_callback_only_render_reuses_certificate_and_refreshes_every_page() -> None:
+    called: list[str] = []
+
+    def document(version: str) -> sl.Document:
+        async def handler(event: sl.PressEvent) -> None:
+            called.append(version)
+
+        return sl.Document(
+            (
+                sl.region(
+                    *(sl.action_controls(sl.action_control(key, handler, key=key), key=f"row-{key}") for key in "abcd"),
+                    key="r",
+                    title="R",
+                ),
+            )
+        )
+
+    session = PresentationState()
+    first = plan(document("old"), target=V2, session=session, composition=OPTIONS)
+    session.apply_updates(first.session_updates)
+    current = plan(document("new"), target=V2, session=session, composition=OPTIONS)
+    assert current.metrics.reuse == PlanReuse.ALLOCATION
+    assert current.metrics.target_evaluations == 0
+    assert first.allocation is not None and current.allocation is not None
+    assert current.allocation.identity == first.allocation.identity
+    assert current.scene == first.scene
+    for page in (0, 1):
+        selected = current.for_page({REGION: page})
+        for key, binding in selected.bindings.items():
+            if key in "abcd":
+                await binding.handler(testing.press_event())
+    assert called == ["new"] * 4
+    # Preparing a candidate must not mutate the committed generation's handlers.
+    await first.bindings["a"].handler(testing.press_event())
+    assert called[-1] == "old"
+
+
+@pytest.mark.parametrize("change", ["label", "available", "mode"])
+def test_action_display_and_policy_changes_recertify(change: str) -> None:
+    async def handler(event: sl.PressEvent) -> None:
+        pass
+
+    action = sl.action_control("Action", handler, key="action")
+    session = PresentationState()
+    first = plan(sl.action_controls(action, key="actions"), target=V2, session=session)
+    session.apply_updates(first.session_updates)
+    changed = (
+        replace(action, label="Changed")
+        if change == "label"
+        else replace(action, available=False)
+        if change == "available"
+        else replace(action, mode=ActionMode.IMMEDIATE)
+    )
+    result = plan(sl.action_controls(changed, key="actions"), target=V2, session=session)
+    assert result.metrics.reuse == PlanReuse.MISS
+    assert result.metrics.target_evaluations > 0
+
+
+async def test_repeated_rebinding_keeps_control_identity_and_selects_frontend() -> None:
+    called: list[str] = []
+
+    async def original(event: sl.PressEvent) -> None:
+        called.append("original")
+
+    session = PresentationState()
+    controls = sl.action_controls(
+        sl.action_control("First", original, key="first"),
+        sl.action_control("Second", original, key="second"),
+        key="actions",
+    )
+    initial = plan(controls, target=V2, session=session)
+    session.apply_updates(initial.session_updates)
+    assert initial.allocation is not None
+    for version in ("one", "two", "three"):
+
+        async def changed(event: sl.PressEvent, value: str = version) -> None:
+            called.append(value)
+
+        handler = HandlerSet((FrontendHandler("reuse", changed),), fallback=original)
+        current_controls = replace(
+            controls,
+            items=(replace(sl.action_control("First", original, key="first"), on_trigger=handler), controls.items[1]),
+        )
+        current = plan(current_controls, target=V2, session=session)
+        assert current.metrics.reuse == PlanReuse.ALLOCATION
+        assert current.allocation is not None and current.allocation.identity == initial.allocation.identity
+        event = replace(testing.press_event(), metadata={"frontend": "reuse"})
+        await current.bindings["first"].handler(event)
+        await current.bindings["second"].handler(event)
+        session.apply_updates(current.session_updates)
+    assert called == ["one", "original", "two", "original", "three", "original"]

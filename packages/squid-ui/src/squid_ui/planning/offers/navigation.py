@@ -290,6 +290,13 @@ def region_cursor_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[Re
 def _control_key[RenderTargetT, ContextT](
     occurrence: SemanticOccurrence[RenderTargetT, ContextT], context: PlanningContext
 ) -> str:
+    return control_key(occurrence, consume=context.work.consume)
+
+
+def control_key[RenderTargetT, ContextT](
+    occurrence: SemanticOccurrence[RenderTargetT, ContextT], *, consume: Callable[[int], None] | None = None
+) -> str:
+    """Resolve an authored control's identity independently of its live callback."""
     sources = occurrence.sources
     if occurrence.origin is None and isinstance(
         occurrence.graph.units[occurrence.reference].value, sem.Navigation | sem.Items
@@ -314,7 +321,8 @@ def _control_key[RenderTargetT, ContextT](
             key = f"{source_key}.back"
         elif isinstance(value, sem.Items):
             key += ".focus"
-        context.work.consume(len(occurrence.graph.units))
+        if consume is not None:
+            consume(len(occurrence.graph.units))
         if (
             not key.startswith("@")
             and len(key) <= 64

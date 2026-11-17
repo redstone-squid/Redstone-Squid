@@ -14,6 +14,7 @@ from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navig
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
+from squid_ui.planning.action_reuse import rebind_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
@@ -86,6 +87,12 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         # Controlled coordinates do not invalidate cuts, but their new values must
         # participate in cursor resolution. Unchanged snapshots keep the prepared graph.
         owner = self if document == self.document else self.prepare(document, request, options, self.result)
+        if owner is not self:
+            allocation = self.result.allocation
+            assert allocation is not None
+            frontend = request.target.adapter.frontend or request.target.adapter.name
+            allocation = rebind_allocation(allocation, self.graph, owner.graph, frontend)
+            owner = replace(owner, result=replace(self.result, allocation=allocation))
         return owner.present(options.pages, request=request, options=options)
 
     def matches(
