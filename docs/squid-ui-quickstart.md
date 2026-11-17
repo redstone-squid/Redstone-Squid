@@ -6,6 +6,11 @@ Squid UI requires Python 3.14 or newer and discord.py 2.7.
 python -m pip install squid-ui-discord==0.1.0a1
 ```
 
+A screen's `render()` describes content. The framework then plans a layout that fits
+Discord, constructs a message payload, and sends it. State changes repeat that cycle.
+See [the rendering pipeline](squid-ui-architecture.md#end-to-end-flow) for the stages,
+including the difference between component rendering and `Renderer.draw()`.
+
 Install one runtime after constructing the Discord client:
 
 ```python

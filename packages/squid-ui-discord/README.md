@@ -1,8 +1,13 @@
 # squid-ui-discord
 
 The discord.py adapter and application runtime for [`squid-ui`](https://pypi.org/project/squid-ui/).
-It renders planned scenes, delivers them, and owns live message roots, sessions, routing,
-challenges, and optional durability.
+It plans Documents for Discord, constructs discord.py message payloads from the
+resulting Scenes, and sends or edits messages. A live message root coordinates that
+cycle, dispatches interactions, and commits the presentation after delivery.
+
+See [the rendering pipeline](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/#end-to-end-flow)
+for how these stages fit together. Sessions, routing, challenges, and optional durability
+support interfaces that need shared ownership or recovery after a restart.
 
 This is an alpha release. The Python API may change before 1.0.
 

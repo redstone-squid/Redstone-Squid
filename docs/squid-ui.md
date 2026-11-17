@@ -1,8 +1,15 @@
 # Squid UI framework suite
 
-Squid UI is a framework for declarative, stateful interfaces. Application code writes
-semantic components; the planner produces an immutable, limits-checked scene; adapters draw and
-deliver that scene. Discord provides a complete runtime, Slack provides SDK-ready Block Kit
+Squid UI builds interfaces from application state. Components describe content and
+controls; a planner chooses a layout that fits the selected platform; a renderer
+constructs the platform's output. For live Discord screens, a message root sends
+that output and refreshes it after interactions change state.
+
+Read [how rendering and planning work](squid-ui-architecture.md#end-to-end-flow)
+for the full cycle, including what “compilation” means, how pagination is chosen,
+and why delivery has a separate commit step.
+
+Discord provides a complete live runtime. Slack produces SDK-ready Block Kit
 messages and views without owning transport, and HTML produces native accessible markup.
 
 The suite is currently a public alpha. Install the adapter for a Discord application:

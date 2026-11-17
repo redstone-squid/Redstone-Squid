@@ -1,8 +1,12 @@
 # squid-ui
 
-`squid-ui` is a frontend-neutral, limits-aware UI engine. Components describe semantic intent;
-the planner turns that intent into an immutable scene that a renderer can draw without making
-new layout decisions.
+`squid-ui` builds interfaces from application state. Components describe content and
+controls in a Document. The planner chooses a layout that fits a frontend's limits
+and records it in an immutable Scene. A renderer constructs the frontend output
+without making new layout decisions.
+
+See [how rendering and planning work](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/#end-to-end-flow)
+for the complete cycle, compilation, pagination, and caching.
 
 This is an alpha release. The scene protocol is versioned, but the Python API may change before
 1.0.
