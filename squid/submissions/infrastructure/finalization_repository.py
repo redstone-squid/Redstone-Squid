@@ -106,7 +106,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             or payload.category.value != draft.snapshot.category
             or payload.source_installation_id != draft.source_installation_id
         ):
-            msg = "normalized submission provenance does not match its source draft"
+            msg = "normalized submission origin does not match its source draft"
             raise ValueError(msg)
         encoded = encode_submission(payload)
         digest = submission_payload_digest(encoded)
@@ -566,7 +566,7 @@ def _require_expected_draft(model: SubmissionDraft, expected: StoredDraft) -> No
     if model.revision != expected.snapshot.revision:
         raise DraftRevisionConflictError(expected=expected.snapshot.revision, actual=model.revision)
     if model.origin is not expected.origin or model.source_installation_id != expected.source_installation_id:
-        msg = "submission draft installation provenance changed during finalization"
+        msg = "submission draft installation origin changed during finalization"
         raise InvalidStateError(msg)
 
 

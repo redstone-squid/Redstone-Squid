@@ -76,7 +76,7 @@ def test_invalid_queries_and_unknown_refresh_are_rejected() -> None:
     publications.request_refresh.assert_awaited_once_with(99)
 
 
-def test_published_point_is_public_and_retains_saved_provenance() -> None:
+def test_published_point_is_public_and_retains_saved_origin() -> None:
     publications = create_autospec(RangePublicationService, instance=True)
     state = publication(analyze_door_widths((family(),), height=3))
     publications.get_point.return_value = PublishedDoorPoint.from_publication(state, 9999)

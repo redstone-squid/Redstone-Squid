@@ -346,10 +346,10 @@ class NormalizedSubmission:
 
     def __post_init__(self) -> None:
         if self.source_draft_id.int == 0 or self.owner_account_id < 1:
-            msg = tr(t"submissions-normalized-submission-provenance = normalized submission provenance is invalid")
+            msg = tr(t"submissions-normalized-submission-origin = normalized submission origin is invalid")
             raise ValidationError(msg)
         if self.schema_revision < 1 or not self.schema_id:
-            msg = tr(t"submissions-normalized-submission-schema = normalized submission schema provenance is invalid")
+            msg = tr(t"submissions-normalized-submission-schema = normalized submission schema origin is invalid")
             raise ValidationError(msg)
         if self.source_version == "":
             msg = tr(t"submissions-normalized-source-version-blank = normalized source versions cannot be blank")
@@ -371,10 +371,7 @@ class NormalizedSubmission:
                 )
             )
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = tr(
-                t"submissions-paper-installation-only = Only "
-                t"Paper submissions may retain an installation provenance ID."
-            )
+            msg = tr(t"submissions-paper-installation-only = Only Paper submissions may retain an installation ID.")
             raise ValidationError(msg)
         if self.sponsor_attribution:
             if (

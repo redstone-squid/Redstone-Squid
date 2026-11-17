@@ -170,9 +170,9 @@ _EDIT_ONLY = frozenset({FormPurpose.EDIT})
 def _build_form_manifest(revision: int) -> FormManifest:
     # The manifest is JSON for web clients, so its text is resolved in the requested locale here.
     localize = Text.resolve
-    context_section_id = "provenance" if revision == 2 else "submission_context"
+    context_section_id = "submission_context"
     context_title = (
-        tr(t"submissions-application-forms-provenance = About this submission")
+        tr(t"submissions-application-forms-origin = About this submission")
         if revision == 2
         else tr(t"submissions-about-submission = About this submission")
     )

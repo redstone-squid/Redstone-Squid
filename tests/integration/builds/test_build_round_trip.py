@@ -507,7 +507,7 @@ async def test_saving_a_build_keeps_newer_source_message_content(
 async def test_one_message_can_source_several_builds(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A build-log message can supply provenance for every build in a submission bundle."""
+    """A build-log message can supply origin for every build in a submission bundle."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     shared = MessageSnapshot(id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")

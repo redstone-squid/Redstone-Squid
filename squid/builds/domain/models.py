@@ -97,7 +97,7 @@ class Info(TypedDict, total=False):
     schematic_duplicates: list[SchematicDuplicateInfo]
     attachment_failures: list[AttachmentFailureInfo]
     inference_review_notes: list[str]
-    submission_provenance: dict[str, Any]
+    source_submission: dict[str, Any]
 
 
 class Status(IntEnum):

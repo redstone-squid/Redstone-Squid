@@ -1,4 +1,4 @@
-"""Immutable file provenance supplied alongside inferred message details."""
+"""Immutable file origin supplied alongside inferred message details."""
 
 from dataclasses import dataclass
 from uuid import UUID

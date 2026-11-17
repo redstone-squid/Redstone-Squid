@@ -98,7 +98,7 @@ class PostgresBuildTaxonomy:
             assignments=tuple(
                 TagAssignment(
                     definition=row,
-                    provenance="submitted",
+                    origin="submitted",
                 )
                 for row in rows
             ),

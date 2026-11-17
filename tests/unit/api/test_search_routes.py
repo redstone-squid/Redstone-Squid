@@ -123,7 +123,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     assert result.next.offset == 3
 
 
-async def test_grouped_api_returns_record_context_and_provenance() -> None:
+async def test_grouped_api_returns_record_context_and_origin() -> None:
     record = RecordSearchHit(
         "result:7",
         "Smallest door",

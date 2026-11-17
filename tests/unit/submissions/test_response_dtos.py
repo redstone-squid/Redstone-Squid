@@ -16,7 +16,7 @@ from tests.support.litestar import asgi_transport
 SOURCE_ID = UUID("6d9a5b5f-4b5b-4b31-b148-e56d478ca862")
 
 
-async def test_supplied_file_dto_omits_private_provenance_and_internal_flags() -> None:
+async def test_supplied_file_dto_omits_private_origin_and_internal_flags() -> None:
     source = SuppliedAttachment(
         SOURCE_ID,
         "door.schem",

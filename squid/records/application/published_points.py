@@ -19,7 +19,7 @@ class PublishedPointStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RangeAttemptSummary:
-    """Attempt provenance without the full partition of opening sizes."""
+    """Attempt origin without the full partition of opening sizes."""
 
     id: int
     generation: int

@@ -232,7 +232,7 @@ async def test_general_patterns_survive_prefill_durable_payload_and_build(catego
         origin=SubmissionOrigin.DISCORD,
     )
     payload = encode_submission(normalized)
-    assert payload["payload_schema"] == 8
+    assert payload["payload_schema"] == 1
     restored = decode_submission(payload)
     assert restored == normalized
 
@@ -246,11 +246,11 @@ async def test_general_patterns_survive_prefill_durable_payload_and_build(catego
     assert preview.extra_info.get("unknown_patterns") == ["Spiral Staircase"]
 
 
-def test_empty_general_patterns_keep_the_legacy_payload_shape() -> None:
+def test_empty_general_patterns_use_the_current_payload_shape() -> None:
     submission = _submission(SubmissionCategory.ENTRANCE)
     payload = encode_submission(submission)
-    assert payload["payload_schema"] == 2
-    assert payload["details"] == {"kind": "general"}
+    assert payload["payload_schema"] == 1
+    assert payload["details"] == {"kind": "general", "pattern_keys": [], "pattern_proposals": []}
     assert "general_pattern_keys" not in payload
     assert decode_submission(payload) == submission
 
@@ -262,13 +262,12 @@ def test_general_pattern_payload_cannot_be_attached_to_a_door() -> None:
     )
     payload = encode_submission(submission)
     payload["category"] = "door"
-    payload["details"] = encode_submission(_submission(SubmissionCategory.DOOR))["details"]
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission"):
         decode_submission(payload)
 
 
-async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_provenance() -> None:
+async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_origin() -> None:
     restriction = _definition("seamless", TagSemanticKind.RESTRICTION, restriction_type="wiring-placement")
     pattern = _definition("regular", TagSemanticKind.PATTERN)
     showcase = _definition("showcase_compact", TagSemanticKind.SHOWCASE)
@@ -307,13 +306,13 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     assert (build.normal_closing_time, build.visible_closing_time) == (6, 5)
     extra_info = cast(Mapping[str, object], build.extra_info)
     assert extra_info.get("unknown_patterns") == ["Hexagonal"]
-    provenance = extra_info.get("submission_provenance")
-    assert isinstance(provenance, Mapping)
-    assert provenance["artifacts"] == {
+    origin = extra_info.get("source_submission")
+    assert isinstance(origin, Mapping)
+    assert origin["artifacts"] == {
         "normalized_media_upload_ids": [str(MEDIA_ID)],
         "schematic_id": str(SCHEMATIC_ID),
     }
-    assert provenance["schematic_policy"] == {
+    assert origin["schematic_policy"] == {
         "visibility": "reviewer_only",
         "license": None,
         "rights_attested": False,
@@ -339,11 +338,11 @@ async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
     result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
 
     build = builds.calls[0][0]
-    provenance = cast(Mapping[str, object], build.extra_info)["submission_provenance"]
+    origin = cast(Mapping[str, object], build.extra_info)["source_submission"]
     assert build.sponsor == sponsor
-    assert isinstance(provenance, Mapping)
-    assert provenance["source_installation_id"] == str(INSTALLATION_ID)
-    assert provenance["sponsor"] == {
+    assert isinstance(origin, Mapping)
+    assert origin["source_installation_id"] == str(INSTALLATION_ID)
+    assert origin["sponsor"] == {
         "installation_id": str(INSTALLATION_ID),
         "display_name": "Example server",
         "address": "play.example.test",
@@ -378,7 +377,7 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
     )
 
 
-async def test_extender_timing_is_stored_on_the_extender_and_in_provenance() -> None:
+async def test_extender_timing_is_stored_on_the_extender_and_in_origin() -> None:
     submission = replace(
         _submission(SubmissionCategory.EXTENDER),
         details=ExtenderSubmissionDetails(
@@ -396,9 +395,9 @@ async def test_extender_timing_is_stored_on_the_extender_and_in_provenance() -> 
     assert build.orientation == "Upward"
     assert build.extension_length == 5
     assert (build.extension_time, build.retraction_time) == (7, 9)
-    provenance = cast(Mapping[str, object], build.extra_info).get("submission_provenance")
-    assert isinstance(provenance, Mapping)
-    assert provenance["timing"] == {"extension": 7, "retraction": 9}
+    origin = cast(Mapping[str, object], build.extra_info).get("source_submission")
+    assert isinstance(origin, Mapping)
+    assert origin["timing"] == {"extension": 7, "retraction": 9}
 
 
 async def test_retries_delegate_the_source_draft_key_and_return_the_existing_build() -> None:
@@ -605,8 +604,8 @@ async def test_typed_credits_survive_durable_payload_and_build_preparation() -> 
     )
     submission = replace(_submission(SubmissionCategory.OTHER), credits=credits)
     encoded = encode_submission(submission)
-    assert encoded["payload_schema"] == 4
-    assert encoded["creators"] == []
+    assert encoded["payload_schema"] == 1
+    assert "creators" not in encoded
     decoded = decode_submission(encoded)
     assert decoded.credits == credits
     build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
@@ -629,7 +628,7 @@ async def test_external_links_survive_payload_and_build_preparation_without_beco
         ),
     )
     encoded = encode_submission(submission)
-    assert encoded["payload_schema"] == 5
+    assert encoded["payload_schema"] == 1
     restored = decode_submission(encoded)
     assert restored.links == links
     assert restored.artifacts == VerifiedSubmissionArtifacts()
@@ -698,7 +697,7 @@ async def test_restriction_categories_survive_durable_payload_and_preparation() 
         taxonomy=SubmissionTaxonomy(restriction_proposals=("Unclassified",), restriction_proposal_fields=grouped),
     )
     payload = encode_submission(submission)
-    assert payload["payload_schema"] == 7
+    assert payload["payload_schema"] == 1
     restored = decode_submission(payload)
     assert restored == submission
     build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)

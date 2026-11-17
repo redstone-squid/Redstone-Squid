@@ -1,223 +1,223 @@
-# squid/bot/access_view.py:469
+# squid/bot/access_view.py:464
 access-audit-empty = No permission changes are recorded for this server.
 
-# squid/bot/access_view.py:428
+# squid/bot/access_view.py:423
 access-cancel = Cancel
 
-# squid/bot/access_view.py:576
+# squid/bot/access_view.py:571
 access-change-forbidden = You are no longer allowed to change access controls.
 
-# squid/bot/access_view.py:199, squid/bot/access_view.py:252
+# squid/bot/access_view.py:194, squid/bot/access_view.py:247
 access-choose-permission = Choose permission
 
-# squid/bot/access_view.py:205, squid/bot/access_view.py:267
+# squid/bot/access_view.py:200, squid/bot/access_view.py:262
 access-choose-role = Choose internal role
 
-# squid/bot/access_view.py:209, squid/bot/access_view.py:344, squid/bot/access_view.py:721
+# squid/bot/access_view.py:204, squid/bot/access_view.py:339, squid/bot/access_view.py:716
 access-custom-pattern = Custom permission pattern
 
-# squid/bot/access_view.py:725
+# squid/bot/access_view.py:720
 access-custom-pattern-help = For example, build.*.view matches view permissions across build resources.
 
-# squid/bot/access_view.py:453
+# squid/bot/access_view.py:448
 access-permission-catalogue-empty = No permission nodes are registered.
 
-# squid/bot/access_view.py:425
+# squid/bot/access_view.py:420
 access-role-delete-warning = Deleting an internal role removes every assignment of it.
 
-# squid/bot/access_view.py:290
+# squid/bot/access_view.py:285
 access-role-list-empty = No internal roles are visible in this server.
 
-# squid/bot/access_view.py:262, squid/bot/access_view.py:391
+# squid/bot/access_view.py:257, squid/bot/access_view.py:386
 access-role-unavailable = That role is no longer available.
 
-# squid/bot/access_view.py:189
+# squid/bot/access_view.py:184
 access-subject-rules-empty = This subject has no explicit access rules or internal roles.
 
-# squid/bot/access_view.py:146
+# squid/bot/access_view.py:141
 access-view-access-for = Access for { $subject_label }
 
-# squid/bot/access_view.py:650
+# squid/bot/access_view.py:645
 access-view-action = Action
 
-# squid/bot/access_view.py:653
+# squid/bot/access_view.py:648
 access-view-actor-account = Actor account
 
-# squid/bot/access_view.py:674
+# squid/bot/access_view.py:669
 access-view-allow = Allow
 
-# squid/bot/access_view.py:691
+# squid/bot/access_view.py:686
 access-view-assign = Assign
 
-# squid/bot/access_view.py:141
+# squid/bot/access_view.py:136
 access-view-audit = Audit
 
-# squid/bot/access_view.py:138
+# squid/bot/access_view.py:133
 access-view-catalogue = Catalogue
 
-# squid/bot/access_view.py:669
+# squid/bot/access_view.py:664
 access-view-change-direct-permission-rule = Change direct permission rule
 
-# squid/bot/access_view.py:223
+# squid/bot/access_view.py:218
 access-view-change-direct-rule = Change direct rule
 
-# squid/bot/access_view.py:686
+# squid/bot/access_view.py:681
 access-view-change-internal-role-assignment = Change internal role assignment
 
-# squid/bot/access_view.py:236
+# squid/bot/access_view.py:231
 access-view-change-role-assignment = Change role assignment
 
-# squid/bot/access_view.py:638
+# squid/bot/access_view.py:633
 access-view-composed-roles = Composed roles
 
-# squid/bot/access_view.py:297, squid/bot/access_view.py:701
+# squid/bot/access_view.py:292, squid/bot/access_view.py:696
 access-view-create-internal-role = Create internal role
 
-# squid/bot/access_view.py:544
+# squid/bot/access_view.py:539
 access-view-created-internal-role = Created internal role **{ $slug }**.
 
-# squid/bot/access_view.py:448
+# squid/bot/access_view.py:443
 access-view-default = Default
 
-# squid/bot/access_view.py:166
+# squid/bot/access_view.py:161
 access-view-delete-and-its-assignments = Delete **{ $slug }** and its assignments?
 
-# squid/bot/access_view.py:164
+# squid/bot/access_view.py:159
 access-view-delete-internal-role = Delete internal role
 
-# squid/bot/access_view.py:336, squid/bot/access_view.py:427, squid/bot/access_view.py:664
+# squid/bot/access_view.py:331, squid/bot/access_view.py:422, squid/bot/access_view.py:659
 access-view-delete-role = Delete role
 
-# squid/bot/access_view.py:568
+# squid/bot/access_view.py:563
 access-view-deleted-internal-role = Deleted internal role **{ $slug }**.
 
-# squid/bot/access_view.py:675
+# squid/bot/access_view.py:670
 access-view-deny = Deny
 
-# squid/bot/access_view.py:449
+# squid/bot/access_view.py:444
 access-view-description = Description
 
-# squid/bot/access_view.py:485
+# squid/bot/access_view.py:480
 access-view-direct-permission-rule-updated = Direct permission rule updated.
 
-# squid/bot/access_view.py:709
+# squid/bot/access_view.py:704
 access-view-display-name = Display name
 
-# squid/bot/access_view.py:136
+# squid/bot/access_view.py:131
 access-view-edit-roles = Edit roles
 
-# squid/bot/access_view.py:615
+# squid/bot/access_view.py:610
 access-view-effect = Effect
 
-# squid/bot/access_view.py:593
+# squid/bot/access_view.py:588
 access-view-everywhere = Everywhere
 
-# squid/bot/access_view.py:659
+# squid/bot/access_view.py:654
 access-view-exclude-pattern = Exclude pattern
 
-# squid/bot/access_view.py:636
+# squid/bot/access_view.py:631
 access-view-excludes = Excludes
 
-# squid/bot/access_view.py:676
+# squid/bot/access_view.py:671
 access-view-forbid = Forbid
 
-# squid/bot/access_view.py:658
+# squid/bot/access_view.py:653
 access-view-include-pattern = Include pattern
 
-# squid/bot/access_view.py:661
+# squid/bot/access_view.py:656
 access-view-include-role = Include role
 
-# squid/bot/access_view.py:635
+# squid/bot/access_view.py:630
 access-view-includes = Includes
 
-# squid/bot/access_view.py:621
+# squid/bot/access_view.py:616
 access-view-internal-role = Internal role
 
-# squid/bot/access_view.py:509
+# squid/bot/access_view.py:504
 access-view-internal-role-assignment-updated = Internal role assignment updated.
 
-# squid/bot/access_view.py:695
+# squid/bot/access_view.py:690
 access-view-internal-role-slug = Internal role slug
 
-# squid/bot/access_view.py:363, squid/bot/access_view.py:373, squid/bot/access_view.py:384
+# squid/bot/access_view.py:358, squid/bot/access_view.py:368, squid/bot/access_view.py:379
 access-view-internal-role-updated = Internal role updated.
 
-# squid/bot/access_view.py:135, squid/bot/access_view.py:289
+# squid/bot/access_view.py:130, squid/bot/access_view.py:284
 access-view-internal-roles = Internal roles
 
-# squid/bot/access_view.py:174
+# squid/bot/access_view.py:169
 access-view-loading-access-controls = Loading access controls.
 
-# squid/bot/access_view.py:320, squid/bot/access_view.py:711
+# squid/bot/access_view.py:315, squid/bot/access_view.py:706
 access-view-management-rank = Management rank
 
-# squid/bot/access_view.py:672, squid/bot/access_view.py:689, squid/bot/access_view.py:731
+# squid/bot/access_view.py:667, squid/bot/access_view.py:684, squid/bot/access_view.py:726
 access-view-operation = Operation
 
-# squid/bot/access_view.py:616, squid/bot/access_view.py:651
+# squid/bot/access_view.py:611, squid/bot/access_view.py:646
 access-view-pattern = Pattern
 
-# squid/bot/access_view.py:468
+# squid/bot/access_view.py:463
 access-view-permission-audit = Permission audit
 
-# squid/bot/access_view.py:452
+# squid/bot/access_view.py:447
 access-view-permission-catalogue = Permission catalogue
 
-# squid/bot/access_view.py:680, squid/bot/access_view.py:724
+# squid/bot/access_view.py:675, squid/bot/access_view.py:719
 access-view-permission-pattern = Permission pattern
 
-# squid/bot/access_view.py:712
+# squid/bot/access_view.py:707
 access-view-rank-help = Higher ranks can manage lower ranks. Choose a rank below your own.
 
-# squid/bot/access_view.py:618, squid/bot/access_view.py:652, squid/bot/access_view.py:682, squid/bot/access_view.py:697
+# squid/bot/access_view.py:613, squid/bot/access_view.py:647, squid/bot/access_view.py:677, squid/bot/access_view.py:692
 access-view-reason = Reason
 
-# squid/bot/access_view.py:662
+# squid/bot/access_view.py:657
 access-view-remove-included-role = Remove included role
 
-# squid/bot/access_view.py:660
+# squid/bot/access_view.py:655
 access-view-remove-pattern = Remove pattern
 
-# squid/bot/access_view.py:677
+# squid/bot/access_view.py:672
 access-view-revoke = Revoke
 
-# squid/bot/access_view.py:129, squid/bot/access_view.py:188
+# squid/bot/access_view.py:124, squid/bot/access_view.py:183
 access-view-rules-and-assignments = Rules and assignments
 
-# squid/bot/access_view.py:447, squid/bot/access_view.py:589, squid/bot/access_view.py:617, squid/bot/access_view.py:622
+# squid/bot/access_view.py:442, squid/bot/access_view.py:584, squid/bot/access_view.py:612, squid/bot/access_view.py:617
 access-view-scope = Scope
 
-# squid/bot/access_view.py:314, squid/bot/access_view.py:663
+# squid/bot/access_view.py:309, squid/bot/access_view.py:658
 access-view-set-rank = Set rank
 
-# squid/bot/access_view.py:705
+# squid/bot/access_view.py:700
 access-view-slug-help = Leave empty to generate a unique identifier from the display name.
 
-# squid/bot/access_view.py:704
+# squid/bot/access_view.py:699
 access-view-slug-override = Advanced: slug override
 
-# squid/bot/access_view.py:122
+# squid/bot/access_view.py:117
 access-view-subject = Subject
 
-# squid/bot/access_view.py:592
+# squid/bot/access_view.py:587
 access-view-this-server = This server
 
-# squid/bot/access_view.py:692
+# squid/bot/access_view.py:687
 access-view-unassign = Unassign
 
 # squid/bot/accounts/presentation.py:59
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
 
-# squid/bot/accounts/workspace.py:304
+# squid/bot/accounts/workspace.py:305
 account-claim-heading = Claim your earlier builds
 
-# squid/bot/accounts/workspace.py:306
+# squid/bot/accounts/workspace.py:307
 account-claim-help = Used another creator name? Submit that name to connect its build credits to your account.
 
-# squid/bot/accounts/workspace.py:517
+# squid/bot/accounts/workspace.py:524
 account-claim-pending-review = Claim #{ $claim_id } for **{ $alias_name }** is awaiting staff approval.
 
-# squid/bot/accounts/workspace.py:311
+# squid/bot/accounts/workspace.py:312
 account-claim-review-help = Staff review each claim before credits are connected.
 
 # squid/bot/accounts/presentation.py:51
@@ -250,34 +250,34 @@ account-history-visibility = Change identity visibility
 # squid/bot/accounts/overview.py:236
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:251
+# squid/bot/accounts/workspace.py:252
 account-link-heading = Connect Minecraft
 
-# squid/bot/accounts/workspace.py:253
+# squid/bot/accounts/workspace.py:254
 account-link-help = Enter your in-game link code to connect your Minecraft identity to this account. Run /link in Minecraft on the community server to get a code.
 
 # squid/bot/accounts/overview.py:328
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:526
+# squid/bot/accounts/workspace.py:533
 account-merge-code-warning = Merge code: `{ $code }`. It expires { $expiry }. Keep it private: it hands this account over.
 
-# squid/bot/accounts/workspace.py:565
+# squid/bot/accounts/workspace.py:572
 account-merge-complete = Merged. `{ $redirected }` now redirects to your creator page.
 
-# squid/bot/accounts/workspace.py:332
+# squid/bot/accounts/workspace.py:333
 account-merge-heading = Bring your accounts together
 
-# squid/bot/accounts/workspace.py:334
+# squid/bot/accounts/workspace.py:335
 account-merge-help = On the account you want to move, create a merge code. Then open the account you want to keep and enter that code.
 
-# squid/bot/accounts/workspace.py:348
+# squid/bot/accounts/workspace.py:349
 account-merge-preview-action = Enter merge code
 
-# squid/bot/accounts/workspace.py:340
+# squid/bot/accounts/workspace.py:341
 account-merge-preview-help = You will review the transfer before confirming. Keep merge codes private.
 
-# squid/bot/accounts/workspace.py:542
+# squid/bot/accounts/workspace.py:549
 account-merge-transfer-preview = Move { $aliases } creator names, { $identities } identities, and { $builds } build credits here? This cannot be undone.
 
 # squid/bot/accounts/presentation.py:41
@@ -286,22 +286,22 @@ account-name-changed = Your Minecraft name changed from **{ $old }** to **{ $new
 # squid/bot/accounts/presentation.py:37
 account-name-unchanged = Your Minecraft name is still **{ $name }**. Nothing changed.
 
-# squid/bot/accounts/workspace.py:469
+# squid/bot/accounts/workspace.py:476
 account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.
 
-# squid/bot/accounts/workspace.py:258
+# squid/bot/accounts/workspace.py:259
 account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.
 
-# squid/bot/accounts/workspace.py:293
+# squid/bot/accounts/workspace.py:294
 account-refresh-member-action = Refresh member
 
-# squid/bot/accounts/workspace.py:315, squid/bot/accounts/workspace.py:504
+# squid/bot/accounts/workspace.py:316, squid/bot/accounts/workspace.py:511
 account-search-credit-names = Search credited names
 
 # squid/bot/accounts/cog.py:59
 account-select-creator-result = Choose a creator from the name suggestions.
 
-# squid/bot/accounts/workspace.py:506
+# squid/bot/accounts/workspace.py:513
 account-submit-claim = Submit claim
 
 # squid/bot/accounts/profile_editor.py:90
@@ -397,67 +397,67 @@ account-view-verified = { $visibility } · verified { $age }
 # squid/bot/accounts/overview.py:125, squid/bot/accounts/profile_editor.py:192
 account-view-your-account = Your account
 
-# squid/bot/accounts/workspace.py:237
+# squid/bot/accounts/workspace.py:238
 account-workspace-account = Account
 
-# squid/bot/accounts/workspace.py:548
+# squid/bot/accounts/workspace.py:555
 account-workspace-cancel = Cancel
 
-# squid/bot/accounts/workspace.py:591
+# squid/bot/accounts/workspace.py:598
 account-workspace-claim-an-older-creator-name = Claim an older creator name
 
-# squid/bot/accounts/workspace.py:322
+# squid/bot/accounts/workspace.py:323
 account-workspace-claim-creator-credit = Claim a name not listed
 
-# squid/bot/accounts/workspace.py:354
+# squid/bot/accounts/workspace.py:355
 account-workspace-create-merge-code = Create merge code
 
-# squid/bot/accounts/workspace.py:227
+# squid/bot/accounts/workspace.py:228
 account-workspace-creator-claims = Creator claims
 
-# squid/bot/accounts/workspace.py:593
+# squid/bot/accounts/workspace.py:600
 account-workspace-creator-name = Creator name
 
-# squid/bot/accounts/workspace.py:587
+# squid/bot/accounts/workspace.py:594
 account-workspace-discord-member = Discord member
 
-# squid/bot/accounts/workspace.py:581
+# squid/bot/accounts/workspace.py:588
 account-workspace-in-game-link-code = In-game link code
 
-# squid/bot/accounts/workspace.py:224
+# squid/bot/accounts/workspace.py:225
 account-workspace-link-and-refresh = Link and refresh
 
-# squid/bot/accounts/workspace.py:271, squid/bot/accounts/workspace.py:579
+# squid/bot/accounts/workspace.py:272, squid/bot/accounts/workspace.py:586
 account-workspace-link-minecraft-account = Link Minecraft account
 
-# squid/bot/accounts/workspace.py:245
+# squid/bot/accounts/workspace.py:246
 account-workspace-loading-account = Loading account.
 
-# squid/bot/accounts/workspace.py:228, squid/bot/accounts/workspace.py:547
+# squid/bot/accounts/workspace.py:229, squid/bot/accounts/workspace.py:554
 account-workspace-merge-accounts = Merge accounts
 
-# squid/bot/accounts/workspace.py:599
+# squid/bot/accounts/workspace.py:606
 account-workspace-merge-code = Merge code
 
-# squid/bot/accounts/workspace.py:222
+# squid/bot/accounts/workspace.py:223
 account-workspace-overview = Overview
 
-# squid/bot/accounts/workspace.py:597
+# squid/bot/accounts/workspace.py:604
 account-workspace-preview-account-merge = Preview account merge
 
-# squid/bot/accounts/workspace.py:480
+# squid/bot/accounts/workspace.py:487
 account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity.
 
-# squid/bot/accounts/workspace.py:585
+# squid/bot/accounts/workspace.py:592
 account-workspace-refresh-member-identity = Refresh member identity
 
-# squid/bot/accounts/workspace.py:285
+# squid/bot/accounts/workspace.py:286
 account-workspace-refresh-minecraft-identity = Refresh Minecraft identity
 
-# squid/bot/accounts/workspace.py:230
+# squid/bot/accounts/workspace.py:231
 account-workspace-review-claims = Review claims
 
-# squid/bot/accounts/workspace.py:264
+# squid/bot/accounts/workspace.py:265
 account-workspace-review-privacy-notice = Review privacy notice
 
 # squid/accounts/errors.py:179
@@ -517,19 +517,19 @@ accounts-discord-user-id-stored =
 # squid/accounts/domain/consent.py:17
 accounts-domain-consent-privacy-notice = Privacy notice
 
-# squid/accounts/domain/profiles.py:153
+# squid/accounts/domain/profiles.py:154
 accounts-domain-profiles-bio = Bio
 
-# squid/accounts/domain/profiles.py:147
+# squid/accounts/domain/profiles.py:148
 accounts-domain-profiles-display-name = Display name
 
-# squid/accounts/domain/profiles.py:87
+# squid/accounts/domain/profiles.py:88
 accounts-domain-profiles-link-label = Link label
 
-# squid/accounts/domain/profiles.py:97
+# squid/accounts/domain/profiles.py:98
 accounts-domain-profiles-link-url = Link URL
 
-# squid/accounts/domain/profiles.py:159
+# squid/accounts/domain/profiles.py:160
 accounts-domain-profiles-pronouns = Pronouns
 
 # squid/accounts/errors.py:182
@@ -592,16 +592,16 @@ accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $s
 # squid/accounts/errors.py:89
 accounts-last-identity-required = You cannot unlink your only remaining identity.
 
-# squid/accounts/domain/profiles.py:111
+# squid/accounts/domain/profiles.py:112
 accounts-link-credentials-forbidden = Links may not carry credentials.
 
 # squid/accounts/errors.py:93
 accounts-link-identity-before-unlink = Link another identity first, then unlink this one.
 
-# squid/accounts/domain/profiles.py:102
+# squid/accounts/domain/profiles.py:103
 accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 
-# squid/accounts/domain/profiles.py:90
+# squid/accounts/domain/profiles.py:91
 accounts-link-label-required = Every link needs a label.
 
 # squid/accounts/errors.py:357
@@ -613,16 +613,16 @@ accounts-link-prompt-expired = The linking prompt expired before you answered it
 # squid/accounts/errors.py:156
 accounts-link-restart = Run /account link again with a fresh code from the game.
 
-# squid/accounts/domain/profiles.py:93
+# squid/accounts/domain/profiles.py:94
 accounts-link-url-required = Every link needs a URL.
 
-# squid/accounts/domain/profiles.py:96
+# squid/accounts/domain/profiles.py:97
 accounts-link-url-too-long = Link URLs may be at most { $limit } characters.
 
 # squid/accounts/errors.py:69
 accounts-linked-identity-not-owned = That linked identity does not belong to your account.
 
-# squid/accounts/domain/profiles.py:107
+# squid/accounts/domain/profiles.py:108
 accounts-links-include-hostname = Links must include a hostname.
 
 # squid/accounts/errors.py:73
@@ -667,16 +667,16 @@ accounts-privacy-notice-refresh = Re-read the current privacy notice, then accep
 # squid/accounts/errors.py:234
 accounts-privacy-notice-updated = The privacy notice has changed since this one was shown.
 
-# squid/accounts/domain/profiles.py:49
+# squid/accounts/domain/profiles.py:50
 accounts-profile-control-characters = { $field } may not contain control characters.
 
 # squid/accounts/errors.py:105
 accounts-profile-data-invalid = The profile data is invalid.
 
-# squid/accounts/domain/profiles.py:68
+# squid/accounts/domain/profiles.py:69
 accounts-profile-field-too-long = { $field } may be at most { $limit } characters, got { $length }.
 
-# squid/accounts/domain/profiles.py:167
+# squid/accounts/domain/profiles.py:168
 accounts-profile-link-limit = A profile may have at most { $limit } links, got { $count }.
 
 # squid/accounts/errors.py:130
@@ -3999,7 +3999,7 @@ navigation-draft-unavailable = That draft is unavailable.
 # squid/bot/navigation/cog.py:36
 navigation-invalid-address = That screen address is invalid. Try /builds, /drafts, or /account.
 
-# squid/bot/accounts/workspace.py:158
+# squid/bot/accounts/workspace.py:159
 navigation-tab-unavailable = That account tab is unavailable.
 
 # squid/bot/notifications_view.py:383
@@ -4252,88 +4252,88 @@ permission-view-channel = View Channel
 # squid/permissions/errors.py:35
 permissions-action-requirement = This action requires { $node }, but { $detail }.
 
-# squid/permissions/domain/catalogue.py:244
+# squid/permissions/domain/catalogue.py:253
 permissions-add-alias-restriction = Add an alias for a restriction.
 
-# squid/permissions/domain/catalogue.py:263
+# squid/permissions/domain/catalogue.py:272
 permissions-approve-creator-alias = Approve a creator alias claim.
 
-# squid/permissions/domain/catalogue.py:159
+# squid/permissions/domain/catalogue.py:168
 permissions-approve-pending-build = Approve pending build submissions.
 
-# squid/permissions/domain/catalogue.py:225
+# squid/permissions/domain/catalogue.py:234
 permissions-approve-tag-proposal = Approve a tag proposal.
 
-# squid/permissions/domain/catalogue.py:428
+# squid/permissions/domain/catalogue.py:437
 permissions-archive-channel-messages = Archive a channel's messages.
 
-# squid/permissions/domain/catalogue.py:237
+# squid/permissions/domain/catalogue.py:246
 permissions-archive-tag = Archive a tag.
 
-# squid/permissions/domain/catalogue.py:477
+# squid/permissions/domain/catalogue.py:486
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
-# squid/permissions/application/administration.py:70
+# squid/permissions/application/administration.py:75
 permissions-built-role = Built-in role
 
-# squid/permissions/domain/catalogue.py:376
+# squid/permissions/domain/catalogue.py:385
 permissions-change-server-bot = Change this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:381
+# squid/permissions/domain/catalogue.py:390
 permissions-change-server-voting = Change this server's voting emojis and role weights.
 
-# squid/permissions/domain/catalogue.py:398
+# squid/permissions/domain/catalogue.py:407
 permissions-change-starboard-configuration = Change a starboard's configuration.
 
-# squid/permissions/domain/catalogue.py:422
+# squid/permissions/domain/catalogue.py:431
 permissions-change-starboard-per = Change a starboard's per-role vote weights.
 
-# squid/permissions/domain/catalogue.py:417
+# squid/permissions/domain/catalogue.py:426
 permissions-change-which-emojis = Change which emojis count towards a starboard.
 
-# squid/permissions/domain/catalogue.py:357
+# squid/permissions/domain/catalogue.py:366
 permissions-change-wide-settings = Change application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:305
+# squid/permissions/domain/catalogue.py:314
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/permissions/domain/catalogue.py:461
+# squid/permissions/domain/catalogue.py:470
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
-# squid/permissions/domain/catalogue.py:317
+# squid/permissions/domain/catalogue.py:326
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/permissions/domain/catalogue.py:501
+# squid/permissions/domain/catalogue.py:510
 permissions-create-edit-server = Create and edit this server's permission roles.
 
-# squid/permissions/domain/catalogue.py:451
+# squid/permissions/domain/catalogue.py:460
 permissions-create-poll = Create a poll.
 
-# squid/permissions/domain/catalogue.py:456
+# squid/permissions/domain/catalogue.py:465
 permissions-create-poll-carded = Create a poll carded in every server's vote channel.
 
-# squid/permissions/domain/catalogue.py:393
+# squid/permissions/domain/catalogue.py:402
 permissions-create-starboard = Create a starboard.
 
 # squid/permissions/errors.py:79
 permissions-credential-scope = This action requires { $node }, but your credential does not include that permission.
 
-# squid/permissions/domain/catalogue.py:329
+# squid/permissions/domain/catalogue.py:338
 permissions-delete-every-stored = Delete every stored error report.
 
-# squid/permissions/domain/catalogue.py:403
+# squid/permissions/domain/catalogue.py:412
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
 
 # squid/permissions/errors.py:13
 permissions-deny-reason = an explicit deny rule blocks that permission
 
-# squid/permissions/domain/catalogue.py:182
+# squid/permissions/domain/catalogue.py:191
 permissions-download-convert-schematics = Download or convert schematics that are not publicly downloadable, on builds you did not upload them to.
 
-# squid/permissions/domain/catalogue.py:299
+# squid/permissions/domain/catalogue.py:308
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
 
-# squid/permissions/domain/catalogue.py:154
+# squid/permissions/domain/catalogue.py:163
 permissions-edit-unsubmitted-builds = Edit builds you did not submit.
 
 # squid/permissions/application/epoch.py:61
@@ -4345,79 +4345,79 @@ permissions-forbid-reason = an explicit forbid rule blocks that permission
 # squid/permissions/errors.py:14
 permissions-grant-reason = your current permissions do not grant it
 
-# squid/permissions/domain/catalogue.py:312
+# squid/permissions/domain/catalogue.py:321
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/permissions/domain/catalogue.py:496
+# squid/permissions/domain/catalogue.py:505
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
-# squid/permissions/domain/catalogue.py:484
+# squid/permissions/domain/catalogue.py:493
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
-# squid/permissions/domain/catalogue.py:190
+# squid/permissions/domain/catalogue.py:199
 permissions-inspect-nonpublic-schematics = Inspect and render schematics that are not publicly downloadable, without receiving the file.
 
-# squid/permissions/domain/catalogue.py:206
+# squid/permissions/domain/catalogue.py:215
 permissions-inspect-record-gaps = Inspect record gaps, lookups and title issues.
 
 # squid/permissions/domain/models.py:84
 permissions-invalid-permission-pattern = Invalid permission pattern
 
-# squid/permissions/domain/catalogue.py:257
+# squid/permissions/domain/catalogue.py:266
 permissions-list-pending-creator = List pending creator alias claims.
 
-# squid/permissions/domain/catalogue.py:219
+# squid/permissions/domain/catalogue.py:228
 permissions-list-pending-tag = List pending tag proposals.
 
-# squid/permissions/domain/catalogue.py:199
+# squid/permissions/domain/catalogue.py:208
 permissions-measure-schematic-timing = Measure a schematic's timing.
 
 # squid/permissions/domain/models.py:83
 permissions-not-valid-permission = That is not a valid permission pattern.
 
-# squid/permissions/application/administration.py:58
+# squid/permissions/application/administration.py:63
 permissions-outside-authority = Outside your authority
 
-# squid/permissions/domain/catalogue.py:434
+# squid/permissions/domain/catalogue.py:443
 permissions-post-manage-redstoner = Post and manage the Redstoner self-assign panel.
 
-# squid/permissions/domain/catalogue.py:287
+# squid/permissions/domain/catalogue.py:296
 permissions-re-read-linked = Re-read your linked Minecraft name after a rename.
 
-# squid/permissions/domain/catalogue.py:293
+# squid/permissions/domain/catalogue.py:302
 permissions-re-read-user = Re-read another user's linked Minecraft name.
 
-# squid/permissions/domain/catalogue.py:280
+# squid/permissions/domain/catalogue.py:289
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/permissions/domain/catalogue.py:490
+# squid/permissions/domain/catalogue.py:499
 permissions-read-permission-audit = Read the permission audit log.
 
-# squid/permissions/domain/catalogue.py:323
+# squid/permissions/domain/catalogue.py:332
 permissions-read-stored-error = Read a stored error report by the reference its user was shown.
 
-# squid/permissions/domain/catalogue.py:212
+# squid/permissions/domain/catalogue.py:221
 permissions-rebuild-record-table = Rebuild the record table from scratch.
 
-# squid/permissions/domain/catalogue.py:177
+# squid/permissions/domain/catalogue.py:186
 permissions-recompute-build-derived = Recompute a build's derived attributes.
 
-# squid/permissions/domain/catalogue.py:412
+# squid/permissions/domain/catalogue.py:421
 permissions-recount-starboard-reactions = Recount a starboard's reactions.
 
-# squid/permissions/domain/catalogue.py:251
+# squid/permissions/domain/catalogue.py:260
 permissions-register-minecraft-version = Register a new Minecraft version.
 
-# squid/permissions/domain/catalogue.py:269
+# squid/permissions/domain/catalogue.py:278
 permissions-reject-creator-alias = Reject a creator alias claim.
 
-# squid/permissions/domain/catalogue.py:165
+# squid/permissions/domain/catalogue.py:174
 permissions-reject-pending-build = Reject pending build submissions.
 
-# squid/permissions/domain/catalogue.py:231
+# squid/permissions/domain/catalogue.py:240
 permissions-reject-tag-proposal = Reject a tag proposal.
 
-# squid/permissions/domain/catalogue.py:275
+# squid/permissions/domain/catalogue.py:284
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
 # squid/permissions/errors.py:41
@@ -4426,43 +4426,43 @@ permissions-require-all = This action requires all of these permissions:
 # squid/permissions/errors.py:39
 permissions-require-any = This action requires at least one of these permissions:
 
-# squid/permissions/domain/catalogue.py:439
+# squid/permissions/domain/catalogue.py:448
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
-# squid/permissions/application/administration.py:64
+# squid/permissions/application/administration.py:69
 permissions-role-not-yours = Role is not yours to manage
 
-# squid/permissions/domain/catalogue.py:344
+# squid/permissions/domain/catalogue.py:353
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
-# squid/permissions/domain/catalogue.py:148
+# squid/permissions/domain/catalogue.py:157
 permissions-submit-build-review = Submit a build for review.
 
-# squid/permissions/domain/catalogue.py:339
+# squid/permissions/domain/catalogue.py:348
 permissions-synchronise-command-tree = Synchronise the application command tree with Discord.
 
-# squid/permissions/domain/catalogue.py:141
+# squid/permissions/domain/catalogue.py:150
 permissions-view-published-builds = View published builds.
 
-# squid/permissions/domain/catalogue.py:370
+# squid/permissions/domain/catalogue.py:379
 permissions-view-server-bot = View this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:387
+# squid/permissions/domain/catalogue.py:396
 permissions-view-server-starboards = View this server's starboards.
 
-# squid/permissions/domain/catalogue.py:171
+# squid/permissions/domain/catalogue.py:180
 permissions-view-unreviewed-builds = View builds that have not been reviewed yet.
 
-# squid/permissions/domain/catalogue.py:351
+# squid/permissions/domain/catalogue.py:360
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:466
+# squid/permissions/domain/catalogue.py:475
 permissions-vote-build-log = Vote in build log deletion votes.
 
-# squid/permissions/domain/catalogue.py:445
+# squid/permissions/domain/catalogue.py:454
 permissions-vote-polls = Vote in polls.
 
-# squid/permissions/domain/catalogue.py:471
+# squid/permissions/domain/catalogue.py:480
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/poll_wizard.py:396
@@ -5519,11 +5519,11 @@ submissions-application-forms-opening-time = Opening time
 # squid/submissions/application/forms.py:496
 submissions-application-forms-opening-width = Opening width
 
+# squid/submissions/application/forms.py:175
+submissions-application-forms-origin = About this submission
+
 # squid/submissions/application/forms.py:487
 submissions-application-forms-other = Other
-
-# squid/submissions/application/forms.py:175
-submissions-application-forms-provenance = About this submission
 
 # squid/submissions/application/forms.py:398
 submissions-application-forms-public-download = Anyone
@@ -5778,10 +5778,10 @@ submissions-normalized-media-upload = normalized media upload identifiers must b
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
 # squid/submissions/domain/finalization.py:349
-submissions-normalized-submission-provenance = normalized submission provenance is invalid
+submissions-normalized-submission-origin = normalized submission origin is invalid
 
 # squid/submissions/domain/finalization.py:352
-submissions-normalized-submission-schema = normalized submission schema provenance is invalid
+submissions-normalized-submission-schema = normalized submission schema origin is invalid
 
 # squid/submissions/domain/normalization.py:210
 submissions-not-string-list = validated field { $field_id } is not a string list
@@ -5802,13 +5802,13 @@ submissions-optional-name-shown = Optional. Shown next to the title generated fr
 submissions-owner-account-id = owner_account_id must be positive
 
 # squid/submissions/domain/finalization.py:374
-submissions-paper-installation-only = Only Paper submissions may retain an installation provenance ID.
+submissions-paper-installation-only = Only Paper submissions may retain an installation ID.
 
 # squid/submissions/application/drafts.py:322
-submissions-paper-installation-provenance-required = Paper drafts require server-derived installation provenance.
+submissions-paper-installation-origin-required = Paper drafts require server-derived installation identity.
 
 # squid/submissions/application/drafts.py:101
-submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.
+submissions-paper-may-retain = Only Paper drafts may retain an installation ID.
 
 # squid/submissions/application/forms.py:351
 submissions-propose-animation-restrictions = Other animation restrictions
@@ -5975,7 +5975,7 @@ submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.
 # squid/suggestions/application/registry.py:82
 suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source_id }
 
-# squid/suggestions/application/services.py:125
+# squid/suggestions/application/services.py:126
 suggestions-enumerated = { $source_id } cannot be enumerated
 
 # squid/suggestions/application/registry.py:55

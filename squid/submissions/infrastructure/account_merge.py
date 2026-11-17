@@ -129,7 +129,7 @@ async def _canonicalize_finalization_job_owners(
             raise DataIntegrityError(msg)
         owner = payload.get("owner_account_id")
         if not isinstance(owner, int) or isinstance(owner, bool) or owner not in {absorbed, survivor}:
-            msg = "A retained submission finalization payload has conflicting account provenance."
+            msg = "A retained submission finalization payload has conflicting account origin."
             raise DataIntegrityError(msg)
         rewritten = dict(payload)
         rewritten["owner_account_id"] = survivor

@@ -111,7 +111,7 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
 async def replace_showcase_tags(build: Build, keys: Sequence[str], resolver: BuildTaxonomyResolver) -> None:
     """Make `keys` the build's showcase tags, in that order.
 
-    A showcase tag the build already has keeps its assignment, including its value and provenance.
+    A showcase tag the build already has keeps its assignment, including its value and origin.
     A newly added key must name an approved showcase tag that takes no value, as for submissions,
     because a key alone cannot supply one. Restriction and pattern tags are left alone.
 
@@ -139,7 +139,7 @@ async def replace_showcase_tags(build: Build, keys: Sequence[str], resolver: Bui
             if assignment.definition.semantic_kind is not TagSemanticKind.SHOWCASE
         ),
         *(
-            current[key] if key in current else TagAssignment(definition=definitions[key], provenance="submitted")
+            current[key] if key in current else TagAssignment(definition=definitions[key], origin="submitted")
             for key in requested
         ),
     ]

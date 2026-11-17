@@ -640,7 +640,7 @@ async def test_vote_outcome_leaves_an_existing_decision_unchanged(existing_build
 async def test_showcase_tags_are_replaced_by_key_keeping_existing_assignments(existing_build: DoorBuild) -> None:
     existing_build.tags = [
         TagAssignment(SHOWCASE_TAGS["speed"], Decimal(3)),
-        TagAssignment(definition=SHOWCASE_TAGS["compact"], provenance="submitted"),
+        TagAssignment(definition=SHOWCASE_TAGS["compact"], origin="submitted"),
     ]
     repository = FakeBuildRepository(existing_build)
 

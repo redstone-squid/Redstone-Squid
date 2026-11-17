@@ -212,7 +212,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
     """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
     source_messages: Final[tuple[MessageRef, ...]] = frozen_field(default=())
-    """Source messages in submission order. This provenance is fixed after submission.
+    """Source messages in submission order. This origin is fixed after submission.
 
     A loaded build holds plain references; read message content from the `messages` table.
     A new build may hold snapshots instead, which the repository records when it first saves the build.
@@ -287,7 +287,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
                 "display_unit": tag.display_unit,
                 "display_order": tag.display_order,
                 "evidence": tag.evidence,
-                "provenance": tag.provenance,
+                "origin": tag.origin,
             }
             for tag in self.tags
         ]
@@ -308,7 +308,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
         }
         values["links"] = [BuildLink(url=link.url, media_type=link.media_type) for link in self.links]
         values["tags"] = [
-            TagAssignment(tag.definition, tag.value, tag.display_unit, tag.display_order, tag.evidence, tag.provenance)
+            TagAssignment(tag.definition, tag.value, tag.display_unit, tag.display_order, tag.evidence, tag.origin)
             for tag in self.tags
         ]
         for original, copied in zip(self.tags, values["tags"], strict=True):

@@ -67,7 +67,7 @@ def patch_values(patch: BuildEditPatch) -> EditValues:
 
 
 def build_values(build: Build) -> EditValues:
-    """Capture editable facts without derived values or submission provenance."""
+    """Capture editable facts without derived values or submission origin."""
     server = build.extra_info.get("server_info", {})
     patch = BuildEditPatch(
         display_name=build.display_name,

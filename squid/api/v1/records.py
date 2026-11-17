@@ -208,7 +208,7 @@ async def get_door_range_point(
     width: Annotated[int, PathParameter(ge=1, le=2**31 - 1)],
     publications: RangePublications,
 ) -> PublishedDoorPoint:
-    """Read one opening from saved regions, with publication and latest-attempt provenance."""
+    """Read one opening from saved regions, with publication and latest-attempt origin."""
     point = await publications.get_point(query_id, width)
     if point is None:
         raise RecordNotFoundError(query_id)

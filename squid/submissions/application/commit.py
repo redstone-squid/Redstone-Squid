@@ -75,7 +75,7 @@ class BuildSubmissionExecutor:
             or candidate.submitter_account_id != job.payload.owner_account_id
             or candidate.sponsor != job.payload.sponsor
         ):
-            message = "Prepared build does not match its submission provenance."
+            message = "Prepared build does not match its submission origin."
             raise InvalidStateError(message)
         async with (
             self._uow_factory() as uow,
@@ -111,7 +111,7 @@ class BuildSubmissionExecutor:
                     existing.submitter_account_id != job.payload.owner_account_id
                     or existing.sponsor != candidate.sponsor
                 ):
-                    message = "Existing source build has conflicting immutable provenance."
+                    message = "Existing source build has conflicting immutable origin."
                     raise InvalidStateError(message)
                 candidate = existing
             else:

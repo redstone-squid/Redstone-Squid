@@ -98,7 +98,7 @@ class StoredDraft:
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.")
+            msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation ID.")
             raise ValidationError(msg)
 
 
@@ -320,15 +320,15 @@ class SubmissionDraftService:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(
-                t"submissions-paper-installation-provenance-required "
-                t"= Paper drafts require server-derived installation provenance."
+                t"submissions-paper-installation-origin-required "
+                t"= Paper drafts require server-derived installation identity."
             )
             raise ValidationError(msg)
         if door_expansion is not None and category != "door":
             message = "Expansion facts can only be retained on door drafts."
             raise ValidationError(message)
         if inferred and origin is not SubmissionOrigin.DISCORD:
-            message = "Inferred drafts require Discord source provenance."
+            message = "Inferred drafts require Discord source origin."
             raise ValidationError(message)
         limit = self._inferred_capacity if inferred else await self._capacity.limit_for(owner_account_id)
         manifest = await self._manifests.current(locale=locale)
@@ -561,7 +561,7 @@ class SubmissionDraftService:
         """
         current = await self.get_accessible(draft_id, actor)
         manifest = await self._pinned_manifest(current, locale)
-        # Ingestion provenance is set by the server, not by the form's origin or
+        # Ingestion origin is set by the server, not by the form's origin or
         # AI checkbox. Normal Discord submissions retain the pinned requirements.
         ingested = (
             current.origin is SubmissionOrigin.DISCORD and current.inferred and current.inference_run_id is not None

@@ -146,7 +146,7 @@ def test_ambiguous_trapdoor_is_retained_with_diagnostic() -> None:
     assert category.diagnostics[-1].code is TitleDiagnosticCode.AMBIGUOUS_TRAPDOOR
 
 
-def test_unknown_subtitle_terms_keep_section_provenance() -> None:
+def test_unknown_subtitle_terms_keep_section_origin() -> None:
     category = RulesTitleFormatter().format_extender(
         ExtenderCategory(
             wiring_restrictions=(),

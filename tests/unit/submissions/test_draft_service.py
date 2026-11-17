@@ -257,7 +257,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
         (SubmissionOrigin.WEB, INSTALLATION_ID),
     ],
 )
-async def test_create_requires_server_derived_installation_provenance_only_for_paper(
+async def test_create_requires_server_derived_installation_origin_only_for_paper(
     origin: SubmissionOrigin,
     source_installation_id: UUID | None,
 ) -> None:
@@ -265,7 +265,7 @@ async def test_create_requires_server_derived_installation_provenance_only_for_p
         CheckedInFormManifestRegistry(), now=lambda: NOW, uow_factory=partial(DraftScope, FakeDraftRepository())
     )
 
-    with pytest.raises(ValueError, match="Paper drafts require server-derived installation provenance"):
+    with pytest.raises(ValueError, match="Paper drafts require server-derived installation identity"):
         await service.create(
             owner_account_id=7,
             category="other",

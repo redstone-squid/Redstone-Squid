@@ -90,7 +90,7 @@ class BuildLoader:
                 f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
             )
 
-        # Join source links to messages so the whole page needs one provenance query.
+        # Join source links to messages so the whole page needs one origin query.
         source_messages: dict[int, list[MessageRef]] = {build_id: [] for build_id in build_ids}
         for build_id, message_id, channel_id, guild_id in await session.execute(
             select(BuildSourceMessage.build_id, Message.id, Message.channel_id, Message.guild_id)

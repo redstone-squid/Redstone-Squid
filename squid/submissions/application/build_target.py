@@ -196,11 +196,11 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     pattern_names = [definitions[key].display_name for key in submission.details.pattern_keys]
     pattern_proposals = submission.details.pattern_proposals
     showcase_assignments = [
-        TagAssignment(definitions[key], provenance="submitted") for key in submission.taxonomy.showcase_tag_keys
+        TagAssignment(definitions[key], origin="submitted") for key in submission.taxonomy.showcase_tag_keys
     ]
 
     extra_info: dict[str, JSONValue] = {
-        "submission_provenance": _submission_provenance(submission),
+        "source_submission": _source_submission(submission),
     }
     UnresolvedTaxonomy().add(
         restrictions=[
@@ -268,7 +268,7 @@ def _target_rejected() -> BuildSubmissionRejected:
     return BuildSubmissionRejected((SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),))
 
 
-def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:
+def _source_submission(submission: NormalizedSubmission) -> dict[str, JSONValue]:
     timing: dict[str, JSONValue] = {}
     if isinstance(submission.details, DoorSubmissionDetails):
         timing = {
@@ -292,7 +292,7 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
         "source_installation_id": (
             str(submission.source_installation_id) if submission.source_installation_id is not None else None
         ),
-        "sponsor": _sponsor_provenance(submission),
+        "sponsor": _sponsor_attribution(submission),
         "timing": timing,
         "schematic_policy": {
             "visibility": submission.schematic_policy.visibility.value,
@@ -310,7 +310,7 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
     }
 
 
-def _sponsor_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue] | None:
+def _sponsor_attribution(submission: NormalizedSubmission) -> dict[str, JSONValue] | None:
     if submission.sponsor is None:
         return None
     return {
@@ -368,9 +368,7 @@ def preview_build(
         "depth": integer("capture_depth"),
         **_restriction_values(keys("restrictions"), definitions),
         "tags": [
-            TagAssignment(definitions[key], provenance="submitted")
-            for key in keys("showcase_tags")
-            if key in definitions
+            TagAssignment(definitions[key], origin="submitted") for key in keys("showcase_tags") if key in definitions
         ],
         "extra_info": cast(Info, extra_info),
         "credits": read_credits(answers.get("credits", [])) or name_credits(keys("creators"), legacy=True),

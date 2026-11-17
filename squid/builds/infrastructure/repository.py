@@ -462,7 +462,7 @@ class BuildRepository:
 
         A None ID selects insertion. A supplied ID must already exist; this is not
         an upsert. Updates check the revision and reject changes to category,
-        existing draft provenance, or sponsor attribution.
+        existing draft origin, or sponsor attribution.
         """
         build.edited_time = Instant.now()
 
@@ -684,7 +684,7 @@ class BuildRepository:
                     ),
                     display_order=assignment.display_order,
                     evidence=assignment.evidence,
-                    provenance=assignment.provenance,
+                    origin=assignment.origin,
                     created_by_account_id=build.submitter_account_id,
                 )
             )

@@ -150,7 +150,7 @@ async def test_the_new_resolver_matches_the_old_tiers(
     assert (await permissions.check(_subject(accounts, who), node)).allowed is expected
 
 
-async def test_the_original_grant_provenance_survives(
+async def test_the_original_grant_origin_survives(
     backfilled: tuple[async_sessionmaker, dict[str, int]],
 ) -> None:
     """Carry the original granting account and timestamp into the new role assignment."""

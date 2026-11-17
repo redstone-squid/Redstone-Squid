@@ -15,7 +15,7 @@ class AssignmentSnapshot:
     display_unit: str | None
     display_order: int | None
     evidence: str | None
-    provenance: str
+    origin: str
     created_by_account_id: int | None
     created_at: Instant
 
@@ -27,7 +27,7 @@ class AssignmentSnapshot:
             row.display_unit,
             row.display_order,
             row.evidence,
-            row.provenance,
+            row.origin,
             row.created_by_account_id,
             row.created_at,
         )

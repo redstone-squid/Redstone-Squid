@@ -223,7 +223,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             row.display_unit = replacement.display_unit
             row.display_order = replacement.display_order
             row.evidence = replacement.evidence
-            row.provenance = replacement.provenance
+            row.origin = replacement.origin
             row.created_by_account_id = replacement.created_by_account_id
             row.created_at = replacement.created_at
             row.updated_at = Instant.now()
@@ -264,7 +264,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             numeric_value=numeric_value,
             text_value=text_value,
             boolean_value=boolean_value,
-            provenance="submitted",
+            origin="submitted",
             created_by_account_id=actor_account_id,
         )
         await session.execute(

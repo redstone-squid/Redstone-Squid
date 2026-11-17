@@ -1,14 +1,13 @@
 """Strict serialization for versioned durable finalization payloads."""
 
-from dataclasses import replace
-from typing import Annotated, Literal, cast, override
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from squid.builds.domain import RestrictionField
-from squid.builds.domain.credits import Credit, CreditAttribution, name_credits
+from squid.builds.domain.credits import Credit
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
@@ -48,16 +47,23 @@ class _DimensionsPayload(_StrictPayloadModel):
         return SubmissionDimensions(self.width, self.height, self.depth)
 
 
+class _RestrictionProposalPayload(_StrictPayloadModel):
+    field: RestrictionField
+    name: str
+
+
 class _TaxonomyPayload(_StrictPayloadModel):
     restriction_keys: list[str]
     restriction_proposals: list[str]
     showcase_tag_keys: list[str]
+    restriction_proposal_fields: list[_RestrictionProposalPayload]
 
     def to_domain(self) -> SubmissionTaxonomy:
         return SubmissionTaxonomy(
             restriction_keys=tuple(self.restriction_keys),
             restriction_proposals=tuple(self.restriction_proposals),
             showcase_tag_keys=tuple(self.showcase_tag_keys),
+            restriction_proposal_fields=tuple((value.field, value.name) for value in self.restriction_proposal_fields),
         )
 
 
@@ -148,9 +154,13 @@ class _ExtenderDetailsPayload(_StrictPayloadModel):
 
 class _GeneralDetailsPayload(_StrictPayloadModel):
     kind: Literal["general"]
+    pattern_keys: list[str]
+    pattern_proposals: list[str]
 
     def to_domain(self) -> GeneralSubmissionDetails:
-        return GeneralSubmissionDetails()
+        return GeneralSubmissionDetails(
+            pattern_keys=tuple(self.pattern_keys), pattern_proposals=tuple(self.pattern_proposals)
+        )
 
 
 type _DetailsPayload = Annotated[
@@ -184,7 +194,10 @@ class _LinkPayload(_StrictPayloadModel):
         return SubmissionLink(self.url, self.media_type)
 
 
-class _FinalizationPayloadBase(_StrictPayloadModel):
+class FinalizationPayload(_StrictPayloadModel):
+    """The current durable schema, with optional sponsor attribution."""
+
+    payload_schema: Literal[1]
     source_draft_id: str
     owner_account_id: int
     origin: str
@@ -193,7 +206,11 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
     category: str
     display_name: str | None
     description: str | None
-    creators: list[str]
+    credits: list[dict[str, JSONValue]]
+    links: list[_LinkPayload]
+    sponsor_attribution: bool
+    source_installation_id: str | None
+    sponsor: _SponsorPayload | None
     capture_dimensions: _DimensionsPayload
     source_version: str | None
     version_compatibility: str | None
@@ -205,7 +222,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
     details: _DetailsPayload
 
     @model_validator(mode="after")
-    def require_matching_details(self) -> _FinalizationPayloadBase:
+    def require_matching_details(self) -> FinalizationPayload:
         category = SubmissionCategory(self.category)
         compatible = (
             (category is SubmissionCategory.DOOR and isinstance(self.details, _DoorDetailsPayload))
@@ -220,22 +237,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             raise ValueError(msg)
         return self
 
-    def _credits(self) -> tuple[Credit, ...]:
-        return ()
-
-    def _links(self) -> tuple[SubmissionLink, ...]:
-        return ()
-
-    def _taxonomy(self) -> SubmissionTaxonomy:
-        return self.taxonomy.to_domain()
-
-    def _to_domain(
-        self,
-        *,
-        sponsor_attribution: bool,
-        source_installation_id: str | None,
-        sponsor: PublicSponsor | None,
-    ) -> NormalizedSubmission:
+    def to_domain(self) -> NormalizedSubmission:
         return NormalizedSubmission(
             source_draft_id=UUID(self.source_draft_id),
             owner_account_id=self.owner_account_id,
@@ -245,221 +247,40 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
             category=SubmissionCategory(self.category),
             display_name=self.display_name,
             description=self.description,
-            credits=self._credits() or tuple(name_credits(self.creators, legacy=True)),
-            links=self._links(),
+            credits=tuple(Credit.from_json(value) for value in self.credits),
+            links=tuple(link.to_domain() for link in self.links),
             capture_dimensions=self.capture_dimensions.to_domain(),
             source_version=self.source_version,
             version_compatibility=self.version_compatibility,
-            taxonomy=self._taxonomy(),
+            taxonomy=self.taxonomy.to_domain(),
             schematic_policy=self.schematic_policy.to_domain(),
             completion=self.completion,
             ai_generated=self.ai_generated,
-            sponsor_attribution=sponsor_attribution,
+            sponsor_attribution=self.sponsor_attribution,
             artifacts=self.artifacts.to_domain(),
             details=self.details.to_domain(),
-            source_installation_id=UUID(source_installation_id) if source_installation_id is not None else None,
-            sponsor=sponsor,
-        )
-
-
-class FinalizationPayloadV2(_FinalizationPayloadBase):
-    """Ordinary submission payload retained for mixed-version workers."""
-
-    payload_schema: Literal[2]
-    sponsor_attribution: Literal[False]
-    source_installation_id: str | None = None
-    sponsor: None = None
-
-    def to_domain(self) -> NormalizedSubmission:
-        return self._to_domain(
-            sponsor_attribution=False,
-            source_installation_id=self.source_installation_id,
-            sponsor=None,
-        )
-
-
-class FinalizationPayloadV3(_FinalizationPayloadBase):
-    """Sponsor-attributed submission payload retained for mixed-version workers."""
-
-    payload_schema: Literal[3]
-    sponsor_attribution: Literal[True]
-    source_installation_id: str
-    sponsor: _SponsorPayload
-
-    def to_domain(self) -> NormalizedSubmission:
-        return self._to_domain(
-            sponsor_attribution=True,
-            source_installation_id=self.source_installation_id,
-            sponsor=self.sponsor.to_domain(),
-        )
-
-
-class _TypedFinalizationPayload(_FinalizationPayloadBase):
-    credits: list[dict[str, JSONValue]]
-    sponsor_attribution: bool
-    source_installation_id: str | None = None
-    sponsor: _SponsorPayload | None = None
-
-    @override
-    def _credits(self) -> tuple[Credit, ...]:
-        return tuple(Credit.from_json(value) for value in self.credits)
-
-    def to_domain(self) -> NormalizedSubmission:
-        return self._to_domain(
-            sponsor_attribution=self.sponsor_attribution,
-            source_installation_id=self.source_installation_id,
+            source_installation_id=UUID(self.source_installation_id)
+            if self.source_installation_id is not None
+            else None,
             sponsor=self.sponsor.to_domain() if self.sponsor is not None else None,
         )
 
 
-class FinalizationPayloadV4(_TypedFinalizationPayload):
-    """Typed credits, independent of sponsor attribution."""
-
-    payload_schema: Literal[4]
-
-
-class _LinkedFinalizationPayload(_TypedFinalizationPayload):
-    links: list[_LinkPayload]
-
-    @override
-    def _links(self) -> tuple[SubmissionLink, ...]:
-        return tuple(link.to_domain() for link in self.links)
-
-
-class FinalizationPayloadV5(_LinkedFinalizationPayload):
-    """Typed credits and external media references, independent of uploaded artifacts."""
-
-    payload_schema: Literal[5]
-
-
-class FinalizationPayloadV6(_LinkedFinalizationPayload):
-    """Expandable-door source facts alongside typed credits and links."""
-
-    payload_schema: Literal[6]
-
-
-class _RestrictionProposalPayload(_StrictPayloadModel):
-    field: RestrictionField
-    name: str
-
-
-class _CategorizedFinalizationPayload(_LinkedFinalizationPayload):
-    restriction_proposal_fields: list[_RestrictionProposalPayload]
-
-    @override
-    def _taxonomy(self) -> SubmissionTaxonomy:
-        return replace(
-            self.taxonomy.to_domain(),
-            restriction_proposal_fields=tuple((value.field, value.name) for value in self.restriction_proposal_fields),
-        )
-
-
-class FinalizationPayloadV7(_CategorizedFinalizationPayload):
-    """Categorized restriction proposals, with optional expandable-door source facts."""
-
-    payload_schema: Literal[7]
-
-
-class FinalizationPayloadV8(_CategorizedFinalizationPayload):
-    """Pattern facts for categories whose older payloads had no pattern fields."""
-
-    payload_schema: Literal[8]
-    general_pattern_keys: list[str]
-    general_pattern_proposals: list[str]
-
-    @override
-    def to_domain(self) -> NormalizedSubmission:
-        submission = super().to_domain()
-        if not isinstance(submission.details, GeneralSubmissionDetails):
-            msg = "general pattern fields require general submission details"
-            raise TypeError(msg)
-        return replace(
-            submission,
-            details=GeneralSubmissionDetails(
-                pattern_keys=tuple(self.general_pattern_keys),
-                pattern_proposals=tuple(self.general_pattern_proposals),
-            ),
-        )
-
-
-type FinalizationPayload = Annotated[
-    FinalizationPayloadV2
-    | FinalizationPayloadV3
-    | FinalizationPayloadV4
-    | FinalizationPayloadV5
-    | FinalizationPayloadV6
-    | FinalizationPayloadV7
-    | FinalizationPayloadV8,
-    Field(discriminator="payload_schema"),
-]
-
-_PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
-
-
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    """Preserve expansion and categorized proposals without changing older payload shapes."""
-    expandable = isinstance(submission.details, DoorSubmissionDetails) and submission.details.expansion is not None
-    grouped = bool(submission.taxonomy.restriction_proposal_fields)
-    general_patterns = isinstance(submission.details, GeneralSubmissionDetails) and bool(
-        submission.details.pattern_keys or submission.details.pattern_proposals
-    )
-    typed = (
-        expandable
-        or grouped
-        or general_patterns
-        or bool(submission.links)
-        or any(credit.attribution is not CreditAttribution.LEGACY for credit in submission.credits)
-    )
-    model_type = (
-        FinalizationPayloadV8
-        if general_patterns
-        else FinalizationPayloadV7
-        if grouped
-        else FinalizationPayloadV6
-        if expandable
-        else FinalizationPayloadV5
-        if submission.links
-        else FinalizationPayloadV4
-        if typed
-        else (FinalizationPayloadV3 if submission.sponsor_attribution else FinalizationPayloadV2)
-    )
+    """Encode the one current schema, independent of category or sponsorship."""
     try:
-        document = _submission_document(submission)
-        if typed:
-            document.update(payload_schema=4, creators=[], credits=[credit.to_json() for credit in submission.credits])
-        if submission.links or expandable or grouped or general_patterns:
-            document.update(
-                payload_schema=6 if expandable else 5,
-                links=[{"url": link.url, "media_type": link.media_type} for link in submission.links],
-            )
-        if grouped or general_patterns:
-            document.update(
-                payload_schema=7,
-                restriction_proposal_fields=[
-                    {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
-                ],
-            )
-        if general_patterns:
-            document.update(
-                payload_schema=8,
-                general_pattern_keys=list(submission.details.pattern_keys),
-                general_pattern_proposals=list(submission.details.pattern_proposals),
-            )
-        payload = model_type.model_validate(document)
+        payload = FinalizationPayload.model_validate(_submission_document(submission))
+        payload.to_domain()
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "normalized submission cannot be encoded as a durable payload"
         raise DataIntegrityError(msg) from error
-    encoded = cast(dict[str, object], payload.model_dump(mode="json"))
-    details = encoded.get("details")
-    if not expandable and isinstance(details, dict):
-        details.pop("expansion", None)
-    return encoded
+    return cast(dict[str, object], payload.model_dump(mode="json"))
 
 
 def decode_submission(value: object) -> NormalizedSubmission:
-    """Decode a strict retained payload version into the domain value."""
+    """Decode the current strict payload; retired versions are rejected."""
     try:
-        payload = _PAYLOAD_ADAPTER.validate_python(value, strict=True)
+        payload = FinalizationPayload.model_validate(value, strict=True)
         return payload.to_domain()
     except (PydanticValidationError, DomainValidationError, TypeError, ValueError) as error:
         msg = "persisted normalized submission payload is invalid"
@@ -496,9 +317,13 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
             },
         }
     else:
-        details = {"kind": "general"}
+        details = {
+            "kind": "general",
+            "pattern_keys": list(submission.details.pattern_keys),
+            "pattern_proposals": list(submission.details.pattern_proposals),
+        }
     return {
-        "payload_schema": 3 if submission.sponsor_attribution else 2,
+        "payload_schema": 1,
         "source_draft_id": str(submission.source_draft_id),
         "owner_account_id": submission.owner_account_id,
         "origin": submission.origin.value,
@@ -507,7 +332,8 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
         "category": submission.category.value,
         "display_name": submission.display_name,
         "description": submission.description,
-        "creators": list(submission.creators),
+        "credits": [credit.to_json() for credit in submission.credits],
+        "links": [{"url": link.url, "media_type": link.media_type} for link in submission.links],
         "capture_dimensions": _dimensions_document(submission.capture_dimensions),
         "source_version": submission.source_version,
         "version_compatibility": submission.version_compatibility,
@@ -515,6 +341,9 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
             "restriction_keys": list(submission.taxonomy.restriction_keys),
             "restriction_proposals": list(submission.taxonomy.restriction_proposals),
             "showcase_tag_keys": list(submission.taxonomy.showcase_tag_keys),
+            "restriction_proposal_fields": [
+                {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
+            ],
         },
         "schematic_policy": {
             "visibility": submission.schematic_policy.visibility.value,

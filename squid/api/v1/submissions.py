@@ -198,7 +198,7 @@ async def authenticated_account(caller: NamedDependency[SkipValidation[Caller]])
 
 
 async def authenticated_submission_caller(request: Request) -> Caller:
-    """Resolve submission provenance without trusting a request-body origin."""
+    """Resolve submission origin without trusting a request-body origin."""
     caller = await current_caller(request)
     _submission_origin(caller)
     return caller

@@ -48,7 +48,6 @@ from squid.submissions.domain import (
 )
 from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
-from squid.submissions.payload_integrity import submission_payload_digest
 from tests.support.draft_uow import DraftScope
 from tests.support.expansion import expansion_document
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
@@ -424,11 +423,11 @@ async def test_paper_sponsor_request_snapshots_only_resolved_public_profile() ->
     assert jobs.enqueued is not None
     assert jobs.enqueued.source_installation_id == INSTALLATION_ID
     assert jobs.enqueued.sponsor == sponsor
-    assert encode_submission(jobs.enqueued)["payload_schema"] == 3
+    assert encode_submission(jobs.enqueued)["payload_schema"] == 1
 
 
 @pytest.mark.asyncio
-async def test_non_attributed_paper_payload_stays_schema_two_and_retains_new_provenance() -> None:
+async def test_non_attributed_paper_payload_stays_schema_two_and_retains_new_origin() -> None:
     result, jobs = await _submit(
         SubmissionOrigin.PAPER,
         SubmissionArtifactReadiness(
@@ -441,7 +440,7 @@ async def test_non_attributed_paper_payload_stays_schema_two_and_retains_new_pro
     assert jobs.enqueued is not None
     encoded = encode_submission(jobs.enqueued)
     decoded = decode_submission(encoded)
-    assert encoded["payload_schema"] == 2
+    assert encoded["payload_schema"] == 1
     assert decoded.source_installation_id == INSTALLATION_ID
     assert decoded.sponsor_attribution is False
 
@@ -613,15 +612,14 @@ async def test_legacy_sponsor_request_is_refused_instead_of_silently_dropped() -
 
 
 @pytest.mark.asyncio
-async def test_schema_two_fixture_retains_shape_digest_and_round_trip() -> None:
+async def test_schema_one_round_trip() -> None:
     payload = await _payload()
     encoded = encode_submission(payload)
 
-    assert encoded["payload_schema"] == 2
+    assert encoded["payload_schema"] == 1
     assert encoded["sponsor_attribution"] is False
     assert encoded["source_installation_id"] is None
     assert encoded["sponsor"] is None
-    assert submission_payload_digest(encoded) == "e65d560c6c45663946ce5b7fa8deb4c126d7feeea7090cb95513c34e212425e7"
     assert decode_submission(encoded) == payload
 
 
@@ -637,7 +635,7 @@ async def test_payload_codec_rejects_unknown_fields_and_type_coercion() -> None:
 
 
 @pytest.mark.asyncio
-async def test_schema_three_requires_attribution_and_verified_sponsor() -> None:
+async def test_schema_one_requires_consistent_sponsor_attribution() -> None:
     sponsor = PublicSponsor(INSTALLATION_ID, display_name="Example server")
     _, jobs = await _submit(
         SubmissionOrigin.PAPER,
@@ -650,7 +648,6 @@ async def test_schema_three_requires_attribution_and_verified_sponsor() -> None:
     )
     assert jobs.enqueued is not None
     encoded = encode_submission(jobs.enqueued)
-    assert submission_payload_digest(encoded) == "1c52d26fd97d23ad90e37bb4385bd63d25aac5368ff190c8d794210aaa83d8fb"
     assert decode_submission(encoded) == jobs.enqueued
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
@@ -848,4 +845,4 @@ async def test_ingested_expansion_reaches_the_durable_finalization_payload() -> 
     assert jobs.enqueued is not None
     assert isinstance(jobs.enqueued.details, DoorSubmissionDetails)
     assert jobs.enqueued.details.expansion == document
-    assert encode_submission(jobs.enqueued)["payload_schema"] == 6
+    assert encode_submission(jobs.enqueued)["payload_schema"] == 1

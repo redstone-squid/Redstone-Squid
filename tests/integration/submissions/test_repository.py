@@ -513,7 +513,7 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
     ).inferred is not inferred
 
 
-async def test_stable_draft_identity_rejects_changed_inference_provenance(
+async def test_stable_draft_identity_rejects_changed_inference_origin(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

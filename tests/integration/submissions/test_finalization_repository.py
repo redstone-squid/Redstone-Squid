@@ -1,14 +1,20 @@
 """Finalization state transitions, payload integrity, and claim ownership against PostgreSQL."""
 
 import asyncio
+import copy
+import runpy
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from functools import partial
+from pathlib import Path
 from uuid import UUID
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Session
 from whenever import Instant
 
 from squid.accounts.models import Account
@@ -42,6 +48,7 @@ from squid.submissions.domain import (
     VerifiedSubmissionArtifacts,
 )
 from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
@@ -57,6 +64,7 @@ from squid.submissions.models.finalization import (
 )
 from squid.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
+from squid.submissions.payload_integrity import submission_payload_digest
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
@@ -653,3 +661,65 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
         )
         == ()
     )
+
+
+@pytest.mark.parametrize("corrupt_input", [False, True])
+async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    corrupt_input: bool,
+) -> None:
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    normalized = _payload(stored_draft)
+    current = encode_submission(normalized)
+    legacy = copy.deepcopy(current)
+    legacy.update(payload_schema=2, creators=["Builder"])
+    legacy.pop("credits")
+    legacy.pop("links")
+    legacy["details"] = {"kind": "general"}
+    legacy["taxonomy"].pop("restriction_proposal_fields")
+    job = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(stored_draft, normalized, now=NOW, expires_at=NOW.add(hours=1)),
+        commit=True,
+    )
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(SubmissionFinalizationJob.id == job.job_id)
+            .values(payload=legacy, payload_sha256=submission_payload_digest(legacy))
+        )
+        await session.execute(
+            update(SubmissionFinalizationInput)
+            .where(SubmissionFinalizationInput.job_id == job.job_id)
+            .values(payload=legacy, payload_sha256="0" * 64 if corrupt_input else submission_payload_digest(legacy))
+        )
+
+    migration = runpy.run_path(
+        str(Path("alembic/versions/2026_11_17_1900-b8e2c6f0a4d9_reset_finalization_payload_schema.py"))
+    )
+
+    def upgrade(session: Session) -> None:
+        with Operations.context(MigrationContext.configure(session.connection())):
+            migration["upgrade"]()
+
+    if corrupt_input:
+        with pytest.raises(RuntimeError, match="conflicting digest"):
+            async with async_session_factory.begin() as session:
+                await session.run_sync(upgrade)
+    else:
+        async with async_session_factory.begin() as session:
+            await session.run_sync(upgrade)
+
+    async with async_session_factory() as session:
+        retained = await session.get(SubmissionFinalizationJob, job.job_id)
+        original = await session.get(SubmissionFinalizationInput, job.job_id)
+        assert retained is not None
+        assert original is not None
+        if corrupt_input:
+            assert retained.payload == legacy
+            assert retained.payload_sha256 == submission_payload_digest(legacy)
+        else:
+            assert retained.payload == original.payload == current
+            assert retained.payload_sha256 == original.payload_sha256 == submission_payload_digest(current)
+            assert decode_submission(original.payload) == normalized

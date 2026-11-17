@@ -332,7 +332,7 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (2, "19a6c9ea5209c84e8aee12a4c1ad2485454b5c4091cbd9e737eb0b8ed8fc400f"),
+        (2, "d94305480829b469df09eb39f7692b30ab93c55aad1823acda3f19763930888b"),
         (3, "06fc4358f2688a923763f2c7679c7683ecba91af48360fa4d1685c35c9788e8c"),
         (4, "a83a309e70b20690dbe671443f847e65de62619b4f4166248e34a0fc5692f711"),
     ],
@@ -561,7 +561,7 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
     assert "attempts" not in payload
     assert "last_error" not in payload
     assert "target_key" not in payload
-    assert "provenance" not in payload
+    assert "origin" not in payload
 
 
 @pytest.mark.parametrize(
@@ -588,6 +588,6 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
         ),
     ],
 )
-async def test_submission_caller_rejects_incomplete_or_inconsistent_provenance(caller: Caller) -> None:
+async def test_submission_caller_rejects_incomplete_or_inconsistent_origin(caller: Caller) -> None:
     with pytest.raises(AuthenticationError):
         await authenticated_submission_caller(make_request({"type": "http", "user": caller}))

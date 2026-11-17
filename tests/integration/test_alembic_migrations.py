@@ -2379,3 +2379,58 @@ def test_video_thumbnail_role_migration_preserves_objects(migration_database_url
                 )
     finally:
         engine.dispose()
+
+
+def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b8e2c6f0a4d9")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            _begin_build_edit(connection)
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            build = connection.execute(
+                text(
+                    "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated, extra_info) "
+                    "VALUES (0, 'Other', :account, false, CAST(:info AS jsonb)) RETURNING id"
+                ),
+                {"account": account, "info": json.dumps({"submission_provenance": {"owner_account_id": account}})},
+            ).scalar_one()
+            connection.execute(text("INSERT INTO other_builds (build_id) VALUES (:id)"), {"id": build})
+        with engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT revision FROM builds WHERE id = :id"), {"id": build}
+            ).scalar_one()
+            history = connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one()
+        command.upgrade(config, "c9f3a7e1b5d0")
+        with engine.connect() as connection:
+            metadata, retained_revision = connection.execute(
+                text("SELECT extra_info, revision FROM builds WHERE id = :id"), {"id": build}
+            ).one()
+            assert metadata == {"source_submission": {"owner_account_id": account}}
+            assert retained_revision == revision
+            assert connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one() == history
+            snapshots = (
+                connection.execute(
+                    text("SELECT snapshot FROM build_history_states WHERE build_id = :id"), {"id": build}
+                )
+                .scalars()
+                .all()
+            )
+            assert snapshots
+            assert all("submission_provenance" not in value["build"]["extra_info"] for value in snapshots)
+            columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = 'build_tag_assignments'"
+                    )
+                ).scalars()
+            )
+            assert "origin" in columns
+            assert "provenance" not in columns
+    finally:
+        engine.dispose()

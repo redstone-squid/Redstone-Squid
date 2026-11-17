@@ -243,8 +243,8 @@ class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
         ),
         CheckConstraint("display_order IS NULL OR display_order >= 0", name="build_tag_assignments_order_check"),
         CheckConstraint(
-            "provenance IN ('submitted', 'inferred', 'moderated', 'legacy_import')",
-            name="build_tag_assignments_provenance_check",
+            "origin IN ('submitted', 'inferred', 'moderated', 'legacy_import')",
+            name="build_tag_assignments_origin_check",
         ),
         Index("build_tag_assignments_tag_build_idx", "tag_id", "build_id"),
         Index(
@@ -285,7 +285,7 @@ class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
     )
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
-    provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
+    origin: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
     created_by_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="build_tag_assignments_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
@@ -302,7 +302,7 @@ class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
         display_unit: str | None = None,
         display_order: int | None = None,
         evidence: str | None = None,
-        provenance: str = "submitted",
+        origin: str = "submitted",
         *,
         created_by_account_id: int | None = None,
     ) -> None:
@@ -312,7 +312,7 @@ class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
         self.display_unit = display_unit
         self.display_order = display_order
         self.evidence = evidence
-        self.provenance = provenance
+        self.origin = origin
         self.created_by_account_id = created_by_account_id
         self.created_at = self.updated_at = Instant.now()
 

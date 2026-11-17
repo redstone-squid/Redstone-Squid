@@ -219,7 +219,7 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
     confirmed.submission_status = Status.CONFIRMED
     confirmed.display_name = "Public prototype"
     confirmed.description = "moderation-only description"
-    confirmed.extra_info = {"submission_provenance": {"private": True}}
+    confirmed.extra_info = {"source_submission": {"private": True}}
     confirmed.links = [
         BuildLink(url="https://cdn.example.test/render.png", media_type="render"),
         BuildLink(url="https://cdn.example.test/evidence.mp4", media_type="video"),
@@ -883,14 +883,14 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     completed_job = jobs[claimed_draft_id]
     assert pending_job.status == FinalizationJobStatus.PENDING.value
     assert pending_job.payload is not None
-    assert pending_job.payload["payload_schema"] == 2
+    assert pending_job.payload["payload_schema"] == 1
     assert pending_job.payload["owner_account_id"] == survivor.id
     assert pending_job.payload_sha256 == submission_payload_digest(pending_job.payload)
     assert original_inputs[pending_job.id].payload["owner_account_id"] == absorbed.id
     assert original_inputs[pending_job.id].payload_sha256 != pending_job.payload_sha256
     assert completed_job.status == FinalizationJobStatus.COMPLETED.value
     assert completed_job.payload is not None
-    assert completed_job.payload["payload_schema"] == 3
+    assert completed_job.payload["payload_schema"] == 1
     assert completed_job.payload["owner_account_id"] == survivor.id
     assert completed_job.payload_sha256 == submission_payload_digest(completed_job.payload)
     assert original_inputs[completed_job.id].payload["owner_account_id"] == absorbed.id
@@ -1182,7 +1182,7 @@ async def test_external_links_and_separate_timings_survive_durable_finalization(
         )
         assert record is not None
         assert record.payload is not None
-        assert record.payload["payload_schema"] == 5
+        assert record.payload["payload_schema"] == 1
 
 
 @pytest.mark.parametrize("category", [SubmissionCategory.DOOR, SubmissionCategory.EXTENDER])
@@ -1250,7 +1250,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         )
         assert record is not None
         assert record.payload is not None
-        assert record.payload["payload_schema"] == 7
+        assert record.payload["payload_schema"] == 1
 
 
 async def test_version_lookup_handles_empty_duplicate_and_missing_names(

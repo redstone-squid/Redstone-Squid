@@ -61,7 +61,7 @@ class TagAssignmentPayload:
     display_unit: str | None = None
     display_order: int | None = None
     evidence: str | None = None
-    provenance: str = "submitted"
+    origin: str = "submitted"
 
 
 @dataclass(kw_only=True)
@@ -140,7 +140,7 @@ class BuildDraftPayload:
                 display_unit=tag.display_unit,
                 display_order=tag.display_order,
                 evidence=tag.evidence,
-                provenance=tag.provenance,
+                origin=tag.origin,
             )
             for tag in draft.tags
         ]
@@ -161,7 +161,7 @@ class BuildDraftPayload:
                 display_unit=tag.display_unit,
                 display_order=tag.display_order,
                 evidence=tag.evidence,
-                provenance=tag.provenance,
+                origin=tag.origin,
             )
             for tag in self.tags
         ]

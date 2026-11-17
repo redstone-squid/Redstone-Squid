@@ -117,7 +117,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
     assert revision_two is not None
     assert revision_three is not None
     assert current.revision == 8
-    old_context = next(section for section in revision_two.common_sections if section.id == "provenance")
+    old_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
     new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
         tuple(field.id for field in old_context.fields)

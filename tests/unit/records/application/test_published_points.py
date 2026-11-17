@@ -1,4 +1,4 @@
-"""Published point views retain periodic domains, gaps, and snapshot provenance."""
+"""Published point views retain periodic domains, gaps, and snapshot origin."""
 
 from dataclasses import replace
 from datetime import UTC, datetime
