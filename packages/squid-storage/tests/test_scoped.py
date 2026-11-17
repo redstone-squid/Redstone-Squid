@@ -4,6 +4,7 @@ import sqlite3
 from datetime import timedelta
 from pathlib import Path
 
+import anyio
 import pytest
 
 from squid_storage import MemoryScopedStore, Slot, SlotVersionError, SQLiteScopedStore, json_codec
@@ -102,3 +103,13 @@ async def test_sqlite_touch_serializes_replacement(tmp_path: Path) -> None:
     await store.put(slot, "scope", 2, ttl=timedelta(seconds=100))
     now = 111.0
     assert await store.get(slot, "scope") == 2
+
+
+async def test_sqlite_instances_initialize_one_file_concurrently(tmp_path: Path) -> None:
+    stores = [SQLiteScopedStore(tmp_path / "shared.sqlite3") for _ in range(8)]
+    slot = Slot[str, int]("value", json_codec())
+    async with anyio.create_task_group() as tasks:
+        for index, store in enumerate(stores):
+            tasks.start_soon(store.put, slot, str(index), index)
+    for index in range(len(stores)):
+        assert await stores[0].get(slot, str(index)) == index

@@ -303,6 +303,7 @@ class SQLiteScopedStore:
 
     def _open(self) -> None:
         with closing(self._connect()) as connection, connection:
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
@@ -519,6 +520,7 @@ class PostgresScopedStore:
             if self._initialized:
                 return
             async with self.pool.acquire() as connection, connection.transaction():
+                await connection.execute("SELECT pg_advisory_xact_lock(hashtext($1))", self.table_name)
                 await connection.execute(
                     f"""
                     CREATE TABLE IF NOT EXISTS {self.table_name} (
