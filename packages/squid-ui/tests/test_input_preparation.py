@@ -1,7 +1,7 @@
 """Target-native traversal participates in shared authoring policies."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from squid_ui.authoring import semantic as sem
 from squid_ui.content.text import NEUTRAL, plain
@@ -21,6 +21,7 @@ class LabelInput(NativeInput):
     def __init__(self, context: InputPreparation) -> None:
         self.context = context
 
+    @override
     def visit(self, node: Renderable[Any]) -> Renderable[Any] | None:
         if isinstance(node, NativeLabel):
             return self.context.visit(sem.Paragraph(plain(node.text)))

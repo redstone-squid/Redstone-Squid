@@ -44,6 +44,14 @@ def test_scope_rejects_none() -> None:
         installed.scope(None)
 
 
+async def test_scope_render_accepts_a_native_layout_view() -> None:
+    view = discord.ui.LayoutView(timeout=None)
+
+    payload = runtime().app.render(view)
+
+    assert payload.layout is view
+
+
 async def test_scope_close_finishes_tracked_roots_and_allows_a_new_scope() -> None:
     installed = runtime()
     owner = Owner()

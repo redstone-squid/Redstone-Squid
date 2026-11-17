@@ -1,7 +1,7 @@
 """Prepare Discord native nodes while sharing portable traversal and work estimates."""
 
 from dataclasses import replace
-from typing import Any, cast
+from typing import Any, cast, override
 
 from squid_ui.content.text import resolve_text
 from squid_ui.ext.discord.planning.native_extensions import ComposableExtension
@@ -22,6 +22,7 @@ class DiscordInput(NativeInput):
         self.context = context
         self.card_depth = 0
 
+    @override
     def visit(self, node: Renderable[Any]) -> Renderable[Any] | None:
         context = self.context
         match node:

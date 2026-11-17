@@ -24,7 +24,7 @@ type DocumentContent[ClientT: discord.Client = discord.Client] = (
     | Sequence[LayoutNode[ComponentsV2Target, Request[Any, ClientT]]]
 )
 type StaticContent[ClientT: discord.Client = discord.Client] = (
-    MessagePayload | str | discord.Embed | discord.ui.View | DocumentContent[ClientT]
+    MessagePayload | str | discord.Embed | discord.ui.View | discord.ui.LayoutView | DocumentContent[ClientT]
 )
 type FacadeContent[ClientT: discord.Client = discord.Client] = (
     StaticContent[ClientT] | Component[ComponentsV2Target, Request[Any, ClientT]]

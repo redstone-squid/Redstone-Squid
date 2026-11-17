@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from types import MappingProxyType
+from typing import override
 
 from squid_ui import scene
 from squid_ui.authoring.document import Document, DocumentLike, as_document
@@ -318,6 +319,7 @@ class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, Pre
 
     rules: TargetRules[RenderTargetT, object, PayloadT, ResourceT, BodyT, PreparationT]
 
+    @override
     def plan[AdapterT](
         self,
         rendered: DocumentLike[RenderTargetT],
