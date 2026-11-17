@@ -13,6 +13,7 @@ from squid.bot.catalogue.schematics.presentation import (
     _describe,
 )
 from squid.bot.catalogue.schematics.video import VideoEditor
+from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
 from squid.permissions.domain import PermissionNode
@@ -24,6 +25,7 @@ from squid.schematics.application import ConvertRequest, SchematicService, Store
 from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import SchematicRenderRefusedError
+from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
@@ -35,6 +37,7 @@ type SchematicRequest = sd.Request[Any, RedstoneSquid]
 class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
     """Own schematic actions, permission checks, and the latest generated result."""
 
+    _conversion_version: Suggestion | None = sl.state(None)
     _schematic_result: sl.TextLike | None = sl.state(None)
     _asset: sl.document.Asset | None = sl.state(None, opaque=True)
     _video_job_id: int | None = sl.state(None)
@@ -75,6 +78,9 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                     key="build-download",
                 )
             )
+        if self._conversion_version is not None:
+            label = self._conversion_version.label
+            nodes.append(sl.note(tr(t"schematic-convert-selected = Conversion release: {label}")))
         return nodes
 
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, SchematicRequest], ...]:
@@ -93,6 +99,23 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
                     _ConvertForm().spec(),
                     key="convert",
                     on_submit=self._convert,
+                ),
+                sl.action_control(
+                    tr(t"schematic-convert-release = Choose conversion release"),
+                    sd.on_press(self._choose_conversion_version),
+                    key="convert-version",
+                ),
+                self._conversion_version is not None
+                and sl.action_control(
+                    tr(t"schematic-convert-original = Keep original version"),
+                    self._reset_conversion_version,
+                    key="source-version",
+                ),
+                sl.form(
+                    tr(t"schematic-conversion-maintenance = Conversion maintenance"),
+                    _ConversionMaintenanceForm().spec(),
+                    key="conversion-maintenance",
+                    on_submit=self._convert_maintenance,
                 ),
                 sl.action_control(
                     tr(t"bot-submission-build-browse-render-schematic = Preview image"),
@@ -279,16 +302,33 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         )
         return True
 
+    async def _choose_conversion_version(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        await pick(
+            event,
+            "conversion_versions",
+            tr(t"schematic-convert-release = Choose conversion release"),
+            self._conversion_version_picked,
+        )
+
+    async def _conversion_version_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
+        self._conversion_version = item
+
+    async def _reset_conversion_version(self, _event: sl.PressEvent) -> None:
+        self._conversion_version = None
+
     async def _convert(self, event: sl.SubmitEvent) -> None:
         form = _ConvertForm.from_submission(event)
-        version = (form.version or "").strip()
-        # A bare number is a Minecraft data version; anything else names a release, such as Java 1.21.
-        if version.isdigit():
-            await self._convert_output(
-                event, ConvertRequest(target_format=form.format, target_data_version=int(version))
-            )
-        else:
-            await self._convert_output(event, ConvertRequest(target_format=form.format), version_label=version or None)
+        await self._convert_output(
+            event,
+            ConvertRequest(target_format=form.format),
+            version_label=self._conversion_version.value if self._conversion_version else None,
+        )
+
+    async def _convert_maintenance(self, event: sl.SubmitEvent) -> None:
+        form = _ConversionMaintenanceForm.from_submission(event)
+        await self._convert_output(
+            event, ConvertRequest(target_format=form.format, target_data_version=form.data_version)
+        )
 
     async def _convert_output(
         self, event: sl.SubmitEvent, request: ConvertRequest, *, version_label: str | None = None
@@ -321,14 +361,17 @@ class _ConvertForm(sl.forms.Form):
             for file_format in WRITABLE_EXTENSIONS
         ),
     )
-    version = sl.forms.TextField(
-        label=tr(t"schematic-convert-version = Minecraft version"),
+
+
+class _ConversionMaintenanceForm(_ConvertForm):
+    title = tr(t"schematic-conversion-maintenance = Conversion maintenance")
+
+    data_version = sl.forms.IntField(
+        label=tr(t"schematic-world-format-version = World-format data version"),
         description=tr(
-            t"schematic-convert-version-help = Leave blank to keep the original. A release such as Java 1.21, "
-            t"or a numeric data version such as 3953."
+            t"schematic-world-format-help = Minecraft world-format number, such as 3953; this is not a database version ID."
         ),
-        required=False,
-        maximum=100,
+        minimum=0,
     )
 
 

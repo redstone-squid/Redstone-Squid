@@ -61,3 +61,20 @@ def _sort_key(value: str) -> tuple[bool, tuple[int, ...]]:
     """Order Java before Bedrock, and newer releases before older ones."""
     edition, _, version = value.partition(" ")
     return edition != "Java", tuple(-int(part) for part in version.split(".") if part.isdigit())
+
+
+class ConversionVersionReader(Protocol):
+    async def conversion_versions(self) -> Sequence[tuple[int, str]]: ...
+
+
+class ConversionVersionProvider:
+    """Offer mapped Java releases while retaining their world-format number."""
+
+    def __init__(self, reader: ConversionVersionReader) -> None:
+        self._reader = reader
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        return tuple(
+            Candidate.create(name, label=name, kind="version")
+            for _number, name in await self._reader.conversion_versions()
+        )

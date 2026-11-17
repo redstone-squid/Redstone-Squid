@@ -42,6 +42,8 @@ class SuggestionRepository(Protocol):
         self, resource_kind: str, query: str, *, statuses: Collection[str] | None = None, limit: int
     ) -> Sequence[DocumentEntry]: ...
     async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
+    async def conversion_versions(self) -> Sequence[tuple[int, str]]: ...
+
     async def version_ids(self) -> Sequence[tuple[int, str]]: ...
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
     async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
@@ -70,6 +72,10 @@ class SuggestionQueryService:
     async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
         async with self._uow_factory() as uow:
             return await uow.suggestions.title_definitions(query, limit=limit)
+
+    async def conversion_versions(self) -> Sequence[tuple[int, str]]:
+        async with self._uow_factory() as uow:
+            return await uow.suggestions.conversion_versions()
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
         async with self._uow_factory() as uow:

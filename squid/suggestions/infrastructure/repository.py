@@ -151,6 +151,20 @@ class PostgresSuggestionRepository:
         rows = (await session.execute(statement)).all()
         return [(row.id, f"{row.edition} {row.major_version}.{row.minor_version}.{row.patch_number}") for row in rows]
 
+    async def conversion_versions(self) -> Sequence[tuple[int, str]]:
+        """Return Java releases with a known world-format version."""
+        statement = (
+            select(Version)
+            .where(Version.edition == "Java", Version.data_version.is_not(None))
+            .order_by(Version.major_version.desc(), Version.minor_version.desc(), Version.patch_number.desc())
+        )
+        rows = (await self._session().scalars(statement)).all()
+        return [
+            (version.data_version, f"Java {version.major_version}.{version.minor_version}.{version.patch_number}")
+            for version in rows
+            if version.data_version is not None
+        ]
+
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
         """Return public UUIDs labelled by a matching claimed alias."""
         statement = (

@@ -139,6 +139,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.heading(gap.title),
                 sl.paragraph(Text.join("\n", [_diagnostic_text(item) for item in gap.diagnostics])),
                 sl.note(_category_note(gap.definition_id)),
+                self._diagnostic_actions(gap),
             ),
             page_size=15,
             title=tr(t"bot-submission-records-record-title-diagnostics = Unrecognised record titles"),
@@ -164,6 +165,32 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             if self.open_build is not None and gap.build_ids
             else sl.paragraph(", ".join(f"#{build_id}" for build_id in gap.build_ids)),
             sl.note(_category_note(gap.definition_id)),
+            self._diagnostic_actions(gap),
+        )
+
+    def _diagnostic_actions(
+        self, gap: RecordGap | TitleDiagnosticGap
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        return sl.action_controls(
+            sl.action_control(
+                tr(t"records-recompute-definition = Recompute definition"),
+                partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
+                key=f"recompute-{gap.definition_id}",
+            ),
+            key="diagnostic-actions",
+        )
+
+    async def _recompute_diagnostic(self, definition_id: int, kind: BuildKind, event: sl.PressEvent) -> None:
+        if not await self._may(event, RECORD_ENTRY_INSPECT):
+            return
+        summary = await self._records.materialize_definition(
+            definition_id, kind=kind, version_id=int(self._version.value) if self._version else None
+        )
+        await self._refresh_diagnostics()
+        self._build_tabs()
+        definitions, resolved = summary.definitions, summary.resolved
+        await event.notice(
+            md_tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
         )
 
     def _build_tabs(self) -> None:

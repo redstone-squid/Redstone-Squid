@@ -503,6 +503,7 @@ class PostgresRecordRepository:
                 definition_id=definition.id,
                 title=definition.title,
                 diagnostics=tuple(definition.title_diagnostics),
+                build_kind=definition.build_kind,
             )
             for definition in definitions
         )
@@ -1162,6 +1163,7 @@ def _gap_from_row(definition: TitleDefinition, result: TitleResult) -> RecordGap
         base_title=definition.base_title,
         build_ids=tuple(build_ids),
         fields=tuple(fields),
+        build_kind=definition.build_kind,
     )
 
 

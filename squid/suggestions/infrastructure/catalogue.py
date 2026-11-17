@@ -51,7 +51,7 @@ from squid.suggestions.infrastructure.providers.records import (
     RecordTitleProvider,
 )
 from squid.suggestions.infrastructure.providers.taxonomy import PendingTagDefinitions
-from squid.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions
+from squid.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions, ConversionVersionProvider
 from squid.tags.domain import TagSemanticKind
 
 PUBLIC_BUILD_STATUSES = ("confirmed",)
@@ -100,6 +100,12 @@ def build_registry(
                 required_node=TAG_PROPOSAL_LIST.name,
                 value_type=ValueType.INTEGER,
                 kind_label="tag",
+            ),
+            SuggestionSource(
+                id="conversion_versions",
+                provider=ConversionVersionProvider(repository),
+                kind=SourceKind.ENUMERABLE,
+                kind_label="version",
             ),
             SuggestionSource(
                 id="version_ids",

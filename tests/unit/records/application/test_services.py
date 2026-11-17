@@ -553,6 +553,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         base_title=BaseTitle.FASTEST,
         build_ids=(4,),
         fields=("closing",),
+        build_kind=BuildKind.DOOR,
     )
     runs.gap_rows = (gap,)
     candidates = FakeCandidates(())
@@ -649,6 +650,7 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
         definition_id=1,
         title="Fastest Mystery 2x2 Door",
         diagnostics=({"code": "unknown_token", "message": "Unknown term.", "terms": ["Mystery"]},),
+        build_kind=BuildKind.DOOR,
     )
     runs.title_gap_rows = (gap,)
     candidates = FakeCandidates(())

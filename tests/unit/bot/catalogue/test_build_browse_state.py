@@ -367,10 +367,10 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
         prev=None,
     )
     records.gaps.return_value = tuple(
-        RecordGap(index, title, None, BaseTitle.SMALLEST, (7,), ("width",)) for index in range(count)
+        RecordGap(index, title, None, BaseTitle.SMALLEST, (7,), ("width",), BuildKind.DOOR) for index in range(count)
     )
     records.title_gaps.return_value = tuple(
-        TitleDiagnosticGap(index, title, ({"code": "unknown"},)) for index in range(count)
+        TitleDiagnosticGap(index, title, ({"code": "unknown"},), BuildKind.DOOR) for index in range(count)
     )
     tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
     screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
@@ -406,7 +406,9 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
 
 async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
     records = AsyncMock()
-    records.gaps.return_value = (RecordGap(1, "Smallest 2x2 door", None, BaseTitle.SMALLEST, (7,), ("width",)),)
+    records.gaps.return_value = (
+        RecordGap(1, "Smallest 2x2 door", None, BaseTitle.SMALLEST, (7,), ("width",), BuildKind.DOOR),
+    )
     records.title_gaps.return_value = ()
     tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
     async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
@@ -754,7 +756,7 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
         ui.assert_within_limits()
 
 
-async def test_schematic_tools_fit_one_row_and_convert_with_one_form() -> None:
+async def test_schematic_conversion_separates_releases_from_maintenance() -> None:
     async with stage(_screen(schematics_available=True), owner=object()) as ui:
         await ui.press(ui.key_for("schematic-tools"))
         form = await ui.press_for_form(ui.key_for("convert"))
@@ -762,14 +764,15 @@ async def test_schematic_tools_fit_one_row_and_convert_with_one_form() -> None:
             getattr(item, "custom_id", None) for item in form.modal.walk_children() if hasattr(item, "custom_id")
         } == {
             "format",
-            "version",
         }
         for key in ("schematic-download", "schematic-render", "schematic-info"):
             ui.control(ui.key_for(key))
-        assert not any(
-            key.endswith(("convert-version", "source-version", "conversion-maintenance"))
-            for key in ui.root.snapshot().handler_keys
-        )
+        ui.control(ui.key_for("convert-version"))
+        maintenance = await ui.press_for_form(ui.key_for("conversion-maintenance"))
+        assert {item.custom_id for item in maintenance.modal.walk_children() if hasattr(item, "custom_id")} == {
+            "format",
+            "data_version",
+        }
 
 
 async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> None:

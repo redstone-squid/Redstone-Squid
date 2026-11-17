@@ -19,7 +19,8 @@ from squid.records.application import (
     TitleDiagnosticGap,
 )
 from squid.records.domain import BaseTitle, BuildKind
-from squid_ui.testing import RecordingResponder, labels, press, submit, submit_event
+from squid.suggestions.domain import Suggestion
+from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
 
 
 class RecordRecorder(RecordService):
@@ -30,11 +31,11 @@ class RecordRecorder(RecordService):
     @override
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         self.gap_reads += 1
-        return (RecordGap(1, "Smallest door", None, BaseTitle.SMALLEST, (7,), ("volume",)),)
+        return (RecordGap(1, "Smallest door", None, BaseTitle.SMALLEST, (7,), ("volume",), BuildKind.DOOR),)
 
     @override
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
-        return (TitleDiagnosticGap(2, "Unknown door", ({"code": "unknown"},)),)
+        return (TitleDiagnosticGap(2, "Unknown door", ({"code": "unknown"},), BuildKind.DOOR),)
 
     @override
     async def materialize_definition(
@@ -188,3 +189,18 @@ async def test_rebuild_explicitly_sets_the_shared_current_version() -> None:
 
     assert harness.computation.pin_calls == [3]
     assert harness.computation.rebuild_calls == [(3, (BuildKind.DOOR, BuildKind.EXTENDER))]
+
+
+@pytest.mark.parametrize("kind", list(BuildKind))
+async def test_diagnostic_recompute_carries_kind_version_and_rechecks_permission(kind: BuildKind) -> None:
+    harness = make_screen()
+    screen = harness.screen
+    await screen.on_load()
+
+    with sl.runtime.transaction():
+        screen._version = Suggestion(value="9", label="Java 1.21", kind="version")
+        await screen._recompute_diagnostic(42, kind, press_event())
+    assert harness.records.materialize_calls == [(42, kind, 9)]
+    screen._authorize = Authorizer(inspect=False, rebuild=True)
+    await screen._recompute_diagnostic(42, kind, press_event())
+    assert harness.records.materialize_calls == [(42, kind, 9)]

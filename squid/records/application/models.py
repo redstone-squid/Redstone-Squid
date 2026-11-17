@@ -148,6 +148,7 @@ class RecordGap:
     base_title: BaseTitle
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]
+    build_kind: BuildKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +158,7 @@ class TitleDiagnosticGap:
     definition_id: int
     title: str
     diagnostics: tuple[dict[str, str | list[str]], ...]
+    build_kind: BuildKind
 
 
 @dataclass(frozen=True, slots=True)
