@@ -1229,7 +1229,7 @@ The runtime's `PlanningSnapshot` distinguishes a computed candidate from the com
 plan. Exact replay skips preparation; allocation reuse selects certified display pages
 and resolves their current bindings. Immutable subtree fingerprints avoid rehashing
 unchanged content. Only publication commits presentation state. See the
-[caching design](plans/squid-ui-caching.md) for ownership, invalidation and memory bounds.
+[caching design](plans/completed/squid-ui-caching.md) for ownership, invalidation and memory bounds.
 
 ## Scenes and renderers
 

@@ -22,10 +22,10 @@ release revision, and its renderer version advances to `nucleation-0.12.2-video-
 
 - Verify the deployed synchronized-draft upload flow end to end. The upload endpoint and backend reader exist and are
   wired into finalization; Paper/Fabric finalization still depends on the world-extraction adapters below.
-- Minecraft world capture and upload are planned in [minecraft-build-verification.md](minecraft-build-verification.md),
-  [minecraft-schematic-upload.md](minecraft-schematic-upload.md),
-  [minecraft-paper-world-capture.md](minecraft-paper-world-capture.md), and
-  [minecraft-fabric-world-capture.md](minecraft-fabric-world-capture.md). The platform adapters report capture
+- Minecraft world capture and upload are planned in [minecraft-build-verification.md](../minecraft-build-verification.md),
+  [minecraft-schematic-upload.md](../minecraft-schematic-upload.md),
+  [minecraft-paper-world-capture.md](../minecraft-paper-world-capture.md), and
+  [minecraft-fabric-world-capture.md](../minecraft-fabric-world-capture.md). The platform adapters report capture
   unavailable until those land.
 - Verify actual resource-pack rendering and the deployed upload-to-publication flow.
 

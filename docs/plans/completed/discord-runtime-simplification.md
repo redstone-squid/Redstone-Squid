@@ -11,7 +11,7 @@ removed state and coordination, rather than smaller files alone.
 
 ## Scope and evidence
 
-The main work is in `packages/squid-ui-discord/src/squid_ui/ext/discord/`:
+The main work is in `../../../packages/squid-ui-discord/src/squid_ui/ext/discord`:
 
 - `message_root.py` coordinates candidate preparation, delivery, interaction admission,
   action execution, challenges, refresh scheduling, and closure. It is about 3,100 lines.
@@ -30,7 +30,7 @@ The main work is in `packages/squid-ui-discord/src/squid_ui/ext/discord/`:
   indexes the root before rendering, delivers it, performs optional durable registration
   work, registers the newcomer, and retires incumbents. Those ordering constraints matter.
 
-Use [the architecture guide](../squid-ui-architecture.md) as the behavior reference and
+Use [the architecture guide](../../squid-ui-architecture.md) as the behavior reference and
 update its affected sections with implementation changes. This work does not reopen the
 portable planner, reactivity transaction model, storage format, or target design. Public API
 reductions and easier runtime startup are separate follow-up work.
