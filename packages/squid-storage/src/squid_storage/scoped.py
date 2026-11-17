@@ -337,6 +337,8 @@ class SQLiteScopedStore:
 
     def _get(self, slot_name: str, scope_key: str, touch: bool) -> _StoredValue | None:
         with closing(self._connect()) as connection:
+            if touch:
+                connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 f"""
                 SELECT payload, version, ttl_seconds, expires_at
@@ -423,6 +425,7 @@ class PostgresScopedStore:
                     FROM {self.table_name}
                     WHERE slot_name = $1 AND scope_key = $2
                       AND (expires_at IS NULL OR expires_at > clock_timestamp())
+                    {"FOR UPDATE" if touch else ""}
                     """,
                 slot.name,
                 scope_key,

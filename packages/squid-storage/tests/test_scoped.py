@@ -1,5 +1,6 @@
 """Contract tests for the local scoped stores."""
 
+import sqlite3
 from datetime import timedelta
 from pathlib import Path
 
@@ -69,3 +70,35 @@ async def test_stored_none_is_a_row_and_newer_versions_are_refused() -> None:
     await store.put(current, "scope", {"version": 2})
     with pytest.raises(SlotVersionError, match="newer than declared"):
         await store.get(old, "scope")
+
+
+async def test_sqlite_touch_serializes_replacement(tmp_path: Path) -> None:
+    path = tmp_path / "scoped.sqlite3"
+    now = 100.0
+    replace_during_touch = False
+    replacement_blocked = False
+
+    def clock() -> float:
+        nonlocal replacement_blocked
+        if replace_during_touch:
+            # Simulate another writer between the touch's read and expiry update.
+            with sqlite3.connect(path, timeout=0) as connection:
+                try:
+                    connection.execute(
+                        "UPDATE squid_scoped_values SET payload = '2', ttl_seconds = 100, expires_at = 200"
+                    )
+                except sqlite3.OperationalError as error:
+                    assert "locked" in str(error)
+                    replacement_blocked = True
+        return now
+
+    store = SQLiteScopedStore(path, clock=clock)
+    slot = Slot[str, int]("value", json_codec(), ttl=timedelta(seconds=10))
+    await store.put(slot, "scope", 1)
+    replace_during_touch = True
+    assert await store.get(slot, "scope", touch=True) == 1
+    assert replacement_blocked
+    replace_during_touch = False
+    await store.put(slot, "scope", 2, ttl=timedelta(seconds=100))
+    now = 111.0
+    assert await store.get(slot, "scope") == 2
