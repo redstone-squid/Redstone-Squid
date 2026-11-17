@@ -1,15 +1,21 @@
 """Bounded, process-owned Mojang account lookup adapter."""
 
-import json
-from typing import Any
 from uuid import UUID
 
 import aiohttp
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from squid.accounts.errors import MinecraftServiceUnavailableError
 
 MAX_PROFILE_RESPONSE_BYTES = 64 * 1024
 DEFAULT_PROFILE_URL = "https://sessionserver.mojang.com/session/minecraft/profile"
+
+
+class _MojangProfile(BaseModel):
+    # The upstream may add unrelated profile fields; this client only uses the name.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    name: str
 
 
 class MojangClient:
@@ -56,12 +62,9 @@ class MojangClient:
             raise _service_error(minecraft_uuid, None) from error
 
         try:
-            document: Any = json.loads(payload)
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            return _MojangProfile.model_validate_json(payload).name
+        except ValidationError as error:
             raise _service_error(minecraft_uuid, 200) from error
-        if not isinstance(document, dict) or not isinstance(document.get("name"), str):
-            raise _service_error(minecraft_uuid, 200)
-        return document["name"]
 
     async def aclose(self) -> None:
         """Close the reusable HTTP session when this client owns it."""
