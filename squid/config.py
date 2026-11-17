@@ -1409,39 +1409,39 @@ def load_worker_process_config(*, dotenv_path: Path | None = None) -> WorkerProc
     return _load_settings(WorkerProcessConfig, dotenv_path)
 
 
+class DatabaseSettings(_EnvironmentSettings):
+    database: DatabaseConfig
+
+
+class BuildSettings(_EnvironmentSettings):
+    build: BuildConfig = BuildConfig()
+
+
+class WorkerObservabilitySettings(_EnvironmentSettings):
+    observability: ObservabilityConfig = ObservabilityConfig()
+
+
+class WorkerLogSettings(_EnvironmentSettings):
+    log: LogConfig = LogConfig()
+
+
 def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
     """Load only the database settings needed by migration tooling."""
-
-    class DatabaseSettings(_EnvironmentSettings):
-        database: DatabaseConfig
-
     return _load_settings(DatabaseSettings, dotenv_path).database
 
 
 def load_build_config(*, dotenv_path: Path | None = None) -> BuildConfig:
-    """Load only the build metadata needed to attribute a migration run to a release."""
-
-    class BuildSettings(_EnvironmentSettings):
-        build: BuildConfig = BuildConfig()
-
+    """Load build metadata for migration attribution."""
     return _load_settings(BuildSettings, dotenv_path).build
 
 
 def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:
-    """Load only inherited observability settings in a schematic worker child."""
-
-    class WorkerObservabilitySettings(_EnvironmentSettings):
-        observability: ObservabilityConfig = ObservabilityConfig()
-
+    """Load inherited observability settings in a worker child."""
     return _load_settings(WorkerObservabilitySettings, dotenv_path).observability
 
 
 def load_worker_log_config(*, dotenv_path: Path | None = None) -> LogConfig:
-    """Load only inherited logging settings in a schematic worker child."""
-
-    class WorkerLogSettings(_EnvironmentSettings):
-        log: LogConfig = LogConfig()
-
+    """Load inherited logging settings in a worker child."""
     return _load_settings(WorkerLogSettings, dotenv_path).log
 
 

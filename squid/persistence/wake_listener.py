@@ -85,5 +85,9 @@ class PostgresWakeListener:
 
 
 def asyncpg_dsn(url: SecretStr) -> str:
-    """Render a SQLAlchemy database URL as the plain DSN asyncpg connects with."""
-    return make_url(url.get_secret_value()).set(drivername="postgresql").render_as_string(hide_password=False)
+    """Accept PostgreSQL URLs, including SQLAlchemy driver-qualified forms."""
+    parsed = make_url(url.get_secret_value())
+    if parsed.get_backend_name() not in {"postgresql", "postgres"}:
+        message = "Wake listeners require a PostgreSQL URL"
+        raise ValueError(message)
+    return parsed.set(drivername="postgresql").render_as_string(hide_password=False)
