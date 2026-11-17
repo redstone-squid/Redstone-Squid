@@ -8,12 +8,12 @@ forms, and other replies through that frontend.
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.transactions import Transaction, TransactionContext
-from squid_ui._dataclass import immutable
+from squid_ui._dataclass import immutable, immutable_kw_only
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import TextLike
@@ -212,7 +212,7 @@ class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
     errors: tuple[FormIssue, ...] = ()
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@immutable_kw_only
 class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
     """An invalid attempt with partial values; retry authority ends when the handler returns."""
 

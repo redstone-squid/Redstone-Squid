@@ -28,7 +28,8 @@ async def test_run_outcome_survives_owner_shutdown_and_remount(fail: bool) -> No
         await tasks.start(host.run)
         owner = ServiceOwner()
         service = owner.own(Finite())
-        assert service.current_run is None
+        initial_run = service.current_run
+        assert initial_run is None
         owner.activate(host, on_error=report)
         first = service.current_run
         assert first is not None
@@ -75,6 +76,7 @@ async def test_completed_owner_wait_releases_failed_run_locals() -> None:
     async def report(error: Exception) -> None:
         pass
 
+    service = None
     async with anyio.create_task_group() as tasks:
         host = UIExecutionHost()
         await tasks.start(host.run)
@@ -88,6 +90,7 @@ async def test_completed_owner_wait_releases_failed_run_locals() -> None:
             await owner.wait()
         await host.close()
     gc.collect()
+    assert service is not None
     assert service.current_run is None
     assert references[0]() is None
 

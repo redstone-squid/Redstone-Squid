@@ -72,7 +72,10 @@ def test_native_break_annotations_forbid_partial_groups(unbreakable: bool) -> No
         ),
     ],
 )
-def test_checked_alternatives_cannot_weaken_native_policies(source: native.Node, changed: native.Node) -> None:
+def test_checked_alternatives_cannot_weaken_native_policies(
+    source: native.Break[sl.ComponentsV2Target] | native.Budget[sl.ComponentsV2Target],
+    changed: native.Break[sl.ComponentsV2Target] | native.Budget[sl.ComponentsV2Target],
+) -> None:
     choice = sl.alternative(changed, key="weakened", fidelity=sl.equivalent())
     with pytest.raises(LayoutInvariantError, match=r"preserve the .* boundary"):
         check_alternative(sl.alternatives(choice, content=source, key="choice"), choice)

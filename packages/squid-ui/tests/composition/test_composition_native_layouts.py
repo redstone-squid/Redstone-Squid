@@ -98,7 +98,9 @@ def test_separators_preserve_spacing_and_visibility() -> None:
         native.Section((native.Text("Body"),), native.Thumbnail("https://example.com", "x" * 1025)),
     ],
 )
-def test_invalid_native_placement_or_accessible_text_is_not_certified(node: native.Node) -> None:
+def test_invalid_native_placement_or_accessible_text_is_not_certified(
+    node: native.Panel | native.Thumbnail | native.Section,
+) -> None:
     with pytest.raises(JointInfeasibleError):
         plan(sl.region(node, key="r", title="R"), target=TARGET)
 

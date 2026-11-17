@@ -201,4 +201,4 @@ def test_generated_adapters_must_declare_binding_behavior() -> None:
     # Calling through a factory exercises the runtime abstract-method contract.
     factory: Callable[[], object] = Incomplete
     with pytest.raises(TypeError, match="_bind_handlers"):
-        factory()
+        factory()  # pyright: ignore[reportAbstractUsage]  # Runtime rejection test.

@@ -93,7 +93,9 @@ def test_persistent_controls_are_reserved_on_every_page() -> None:
     assert result.report.regions[0].pages > 1
     for index in range(result.report.regions[0].pages):
         page = plan(document, target=target(8), nav=default_nav, positions={"$/items": PagePosition(page=index)})
-        texts = [node.content for node in page.scene.components_v2.children if hasattr(node, "content")]
+        texts = [
+            getattr(node, "content", None) for node in page.scene.components_v2.children if hasattr(node, "content")
+        ]
         assert texts[0] == "header"
         assert texts[-1] == "footer"
         assert page.cost.get(Axis.COMPONENTS) <= 8
@@ -321,7 +323,11 @@ def test_keep_with_next_and_unbreakable_constrain_legal_page_boundaries() -> Non
         title="Root",
     )
     result = plan(content, target=target(6), nav=default_nav)
-    assert [node.content for node in result.scene.components_v2.children[:2] if isinstance(node, scene.Text)] == [
+    assert [
+        getattr(node, "content", None)
+        for node in result.scene.components_v2.children[:2]
+        if isinstance(node, scene.Text)
+    ] == [
         "heading",
         "body",
     ]

@@ -300,6 +300,7 @@ async def test_closure_during_attachment_leaves_no_orphan(
 async def test_completed_children_are_collectible_while_session_stays_open(mode: str) -> None:
     async with lifecycle_session(mode, FakeFrontend()) as (session, _store):
         references: list[weakref.ReferenceType[squid_ui.ext.discord.MessageRoot]] = []
+        child = None
         for child in session.message_roots[1:]:
             references.append(weakref.ref(child))
             await child.finish()
@@ -991,12 +992,14 @@ async def test_cancellation_releases_claims_through_an_asynchronous_store() -> N
 
     store = AsyncStore()
     first = runtime(store, FakeFrontend())
+    opened = None
     async with anyio.create_task_group() as tasks:
         await tasks.start(first.run)
         _, opened = await open_counter(first)
         assert isinstance(opened, Opened)
         tasks.cancel_scope.cancel()
 
+    assert isinstance(opened, Opened)
     assert opened.session._durable_runtime is None
     assert not first.snapshot().running
     second = runtime(store, FakeFrontend())

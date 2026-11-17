@@ -229,7 +229,7 @@ def test_changed_callback_rebuilds_bindings_in_a_retained_owner() -> None:
 def test_production_list_recovers_a_deleted_anchor_across_targets[
     LimitsT: TargetLimits,
     BodyT: scene.Body,
-    RenderTargetT,
+    RenderTargetT: sl.RenderTarget,
     AdapterT,
 ](target: Target[LimitsT, BodyT, RenderTargetT, AdapterT]) -> None:
     session = PresentationState()

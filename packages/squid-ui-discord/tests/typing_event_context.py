@@ -20,7 +20,7 @@ assert_type(control, ActionControl[sd.Request])
 node = sl.stack(sl.action_controls(control, key="actions"))
 compatible: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = node
 # A portable document must accept every invocation context.
-incompatible: sl.LayoutNode = node  # pyrefly: ignore[bad-assignment]
+incompatible: sl.LayoutNode = node  # type: ignore
 portable_node = sl.action_controls(sl.action_control("Portable", portable, key="portable"), key="actions")
 portable_on_discord: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = portable_node
 
@@ -30,7 +30,7 @@ class OtherContext:
 
 
 # Matching render targets do not make unrelated invocation contexts compatible.
-other: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = node  # pyrefly: ignore[bad-assignment]
+other: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = node  # type: ignore
 
 
 class DiscordPanel(sd.Screen):
@@ -40,7 +40,7 @@ class DiscordPanel(sd.Screen):
 
 
 # The context constraint survives a component boundary, too.
-other_component: sl.Component[sl.ComponentsV2Target, OtherContext] = DiscordPanel()  # pyrefly: ignore[bad-assignment]
+other_component: sl.Component[sl.ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore
 
 
 async def other_press(event: sl.PressEvent[OtherContext]) -> None:
@@ -48,14 +48,14 @@ async def other_press(event: sl.PressEvent[OtherContext]) -> None:
 
 
 # A frontend registration validates the callback's context type.
-wrong_registration = sd.on_press(other_press)  # pyrefly: ignore[bad-argument-type]
+wrong_registration = sd.on_press(other_press)  # type: ignore
 
 
 async def incompatible_response(
     request: sd.Request, component: sl.Component[sl.ComponentsV2Target, OtherContext]
 ) -> None:
     # The public response boundary must not erase an incompatible context.
-    await request.respond(component)  # pyrefly: ignore[no-matching-overload]
+    await request.respond(component)  # type: ignore
 
 
 # Direct and keyed placement preserve the child's required event context.

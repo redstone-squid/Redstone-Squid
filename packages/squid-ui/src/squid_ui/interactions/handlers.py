@@ -2,16 +2,17 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Self, cast
 
+from squid_ui._dataclass import immutable
 from squid_ui.interactions import ActionBinding, ActionEvent
 
 if TYPE_CHECKING:
     from squid_ui.interactions.forms import FormBinding, FormSpec
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class FrontendHandler[EventT: ActionEvent[Any] = ActionEvent]:
     """One explicitly registered frontend implementation."""
 
@@ -25,7 +26,7 @@ class FrontendHandler[EventT: ActionEvent[Any] = ActionEvent]:
         await self.callback(event)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class HandlerSet[EventT: ActionEvent[Any] = ActionEvent]:
     """Frontend implementations with an optional portable fallback."""
 

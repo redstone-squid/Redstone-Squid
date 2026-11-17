@@ -27,11 +27,11 @@ assert_type(classic_only, Stack[ClassicTarget])
 
 # --- and the meet survives nesting, wrappers, and plain strings ---------------------------
 
-assert_type(sl.stack(sl.stack(sl.stack(Panel(())), "text"), None), Stack[ComponentsV2Target])
-assert_type(sl.truncate(sl.stack(Panel(()))), sl.semantic.Truncated[ComponentsV2Target])
-assert_type(sl.stack(Panel(())).truncate(), sl.semantic.Truncated[ComponentsV2Target])
-assert_type(sl.stack(Panel(())).truncate().budget(min=1, prefer=2), sl.semantic.Budgeted[ComponentsV2Target])
-assert_type(sl.section(sl.heading("h"), sl.aside(Panel(()))), sl.semantic.Section[ComponentsV2Target])
+assert_type(sl.stack(sl.stack(sl.stack(Panel[object](())), "text"), None), Stack[ComponentsV2Target])
+assert_type(sl.truncate(sl.stack(Panel[object](()))), sl.semantic.Truncated[ComponentsV2Target])
+assert_type(sl.stack(Panel[object](())).truncate(), sl.semantic.Truncated[ComponentsV2Target])
+assert_type(sl.stack(Panel[object](())).truncate().budget(min=1, prefer=2), sl.semantic.Budgeted[ComponentsV2Target])
+assert_type(sl.section(sl.heading("h"), sl.aside(Panel[object](()))), sl.semantic.Section[ComponentsV2Target])
 
 # --- which makes the mismatch a type error where the author wrote it ----------------------
 

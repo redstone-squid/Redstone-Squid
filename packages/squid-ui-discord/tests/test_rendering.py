@@ -787,8 +787,10 @@ class Nest(Component[sl.ComponentsV2Target]):
         self.child = Nest(depth - 1) if depth else None
 
     @override
-    def render(self):
-        nodes: list[Node | Boundary] = [Row((Button(label="x", on_click=self._click, key="click"),))]
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+            Row((Button(label="x", on_click=self._click, key="click"),))
+        ]
         if self.child is not None:
             nodes.append(self.child.keyed(f"level{self.depth}" + "_padding" * 4))
         return sl.block(*nodes)

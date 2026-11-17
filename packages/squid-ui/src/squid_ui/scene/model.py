@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
+from squid_ui._dataclass import immutable
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.emoji import Emoji
@@ -641,7 +642,7 @@ class Pager:
     content_fingerprint: str
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class Scene[BodyT = Body](QueryIndexOwner):
     """One planned display, including its target, content, assets, and selected pages.
 

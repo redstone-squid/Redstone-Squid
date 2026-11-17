@@ -149,7 +149,7 @@ async def test_invalid_form_keeps_context_and_retry_authority() -> None:
         def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
             return sl.form(
                 "Submit",
-                sl.forms.FormSpec(
+                sl.forms.FormSpec[sd.Request](
                     "Number",
                     (sl.forms.IntField(key="number", label="Number"),),
                     on_invalid=sl.handlers(sd.on_invalid_submit(invalid)),

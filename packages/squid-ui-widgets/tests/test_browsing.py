@@ -11,7 +11,7 @@ from squid_ui.sources import LoadedWindow, Position, SourceCapabilities, Window,
 from squid_ui_widgets.browsing import BrowseSession
 
 
-async def settle(session: BrowseSession[str]) -> None:
+async def settle[ItemT](session: BrowseSession[ItemT]) -> None:
     execution = session.operation
     if execution is not None:
         await execution

@@ -5,9 +5,10 @@ updates remain here; hosts apply updates only after successfully delivering the 
 """
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import field, replace
 from enum import StrEnum
 
+from squid_ui._dataclass import immutable
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.allocation import AllocationSelection
@@ -35,7 +36,7 @@ class PlanReuse(StrEnum):
     ALLOCATION = "allocation"
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PlanEvent:
     code: str
     path: str
@@ -45,7 +46,7 @@ class PlanEvent:
     after: Mapping[str, int] = field(default_factory=dict)
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class RegionReport:
     """The selected allocation and reconciled position of a materialized region."""
 
@@ -56,7 +57,7 @@ class RegionReport:
     anchor: str | None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PlanReport:
     events: tuple[PlanEvent, ...] = ()
     logical_fingerprint: str = ""
@@ -65,7 +66,7 @@ class PlanReport:
     search: SearchDiagnostics | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PlanMetrics:
     """Planner instrumentation kept outside deterministic reports and scene payloads."""
 
@@ -83,7 +84,7 @@ class PlanMetrics:
     """A cached partition was offered to search; it still required current certification."""
 
 
-@dataclass(frozen=True, slots=True)
+@immutable
 class PlanResult[BodyT = Body]:
     """A scene and the Python objects needed to deliver it and handle interactions.
 
