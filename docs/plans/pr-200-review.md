@@ -18,6 +18,24 @@ Paths below are relative to `packages/squid-ui-discord/src/squid_ui/ext/discord/
 The former `DiscordUI` is now `Scope`, `DiscordRequest` is now `Request`, and
 `ext/cog.py` has moved to `cog.py`.
 
+## Implementation progress — 2026-11-17
+
+This plan remains open. The following local changes supersede the older inventory:
+
+- Scope and Request already preserve concrete owner/client types; whole-project
+  Pyrefly checks the existing inference fixtures without errors.
+- In `1f7f88355`, response settings now narrow sentinel types explicitly, removing both resolver
+  casts. Screen policy discovery uses the typed `Screen` contract. Retain compiled
+  class defaults: they supply inherited audience/access and session naming before
+  runtime defaults and per-call overrides are combined.
+- Static dispatch now uses `match`, with LayoutView before View. Native payloads
+  pass through; component/document rendering remains unchanged. Facade and screen
+  tests passed.
+
+Import-cycle removal, source normalization, typed form results, and the remaining
+inventory dispositions still need work. Published heads and GitHub thread state
+have not been rechecked or changed.
+
 ## Comment inventory
 
 | # | Comment and original location | Audit result |
@@ -56,7 +74,7 @@ Comments: 1–3, 7, 9–12.
 - [ ] Narrow native interaction, command context, and message sources by their
   actual types. Inspect structural `Replyable` support and its callers before
   changing accepted inputs; isolate any necessary adapter boundary.
-- [ ] Review sentinel and access-policy narrowing in `ResponseSpec.resolve`.
+- [x] Review sentinel and access-policy narrowing in `ResponseSpec.resolve`.
   Remove redundant casts and justify genuinely necessary ones at the boundary
   that establishes their invariant. Moving casts does not close the concern.
 - [ ] Verify concrete client/owner inference, hybrid contexts, bare messages,
@@ -69,11 +87,11 @@ Comments: 4–6.
 - [ ] Trace the dependency cycle between runtime, scope, and request resolution.
   Move ownership lookup or request construction to its natural owner so runtime
   imports can be module-level. Do not add forwarding modules merely to hide cycles.
-- [ ] Inspect screen declarations and policy precedence. Decide whether
+- [x] Inspect screen declarations and policy precedence. Decide whether
   `__response_spec__` discovery is needed or can be replaced by an explicit typed
   contract. Preserve installation defaults, screen defaults, and per-call overrides.
   Record the rationale if class-level declarations remain useful.
-- [ ] Express static render dispatch with `match`, preserving `LayoutView` before
+- [x] Express static render dispatch with `match`, preserving `LayoutView` before
   `View`, native payload passthrough, and component/document rendering behavior.
 - [ ] Verify imports in a fresh interpreter and focused rendering/policy tests.
 
@@ -127,4 +145,4 @@ Before declaring the review addressed:
 - [ ] Report remaining GitHub thread state separately from code status. Posting
   replies or resolving threads requires an explicit request to do so.
 
-This plan does not implement changes or update GitHub threads.
+Local implementation is in progress; GitHub threads have not been updated.

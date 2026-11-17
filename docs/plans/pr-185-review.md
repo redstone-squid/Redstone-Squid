@@ -1,5 +1,35 @@
 # PR 185 review follow-up plan
 
+## Implementation progress — 2026-11-17
+
+The inventory below retains the original audit baseline. This plan remains open.
+
+- P2 complete: route/router declarations own privacy metadata; the outer ASGI
+  wrapper also protects unmatched private descendants and early body failures.
+  Transport boundary and API application tests passed (`637e9a9c7`).
+- P1 partial: the Discord adapter rejects foreign-guild membership before account
+  lookup and strips membership authority in DMs while preserving bot-owner identity.
+  Subject binding and core principal types remain outstanding.
+- P4 partial: `Catalogue` is a mapping with key iteration and node expansion;
+  `Rank` names precedence components and trace loss reasons form a closed type.
+  Node names are produced at persistence/presentation boundaries. Role pattern
+  parsing remains to be consolidated. `rules_from_role` has one input contract
+  and one return type, so overloads would add no precision (`01ae0e63f`).
+- P5 partial: `RoleGraph` rejects missing roles, cycles, and excess depth, validates
+  composition mutations, and reuses shared subtrees per snapshot. A diamond test
+  counts one expansion of its shared exclusion; cached subtree height cannot
+  bypass the depth limit. Pattern/cache measurement remains outstanding.
+- P7 partial: require the parent's explicit fake port before proxy startup; rename
+  the committed contract argument. Stage diagnostics and typed event decoding remain.
+- P8 partial: reject non-PostgreSQL listener URLs while preserving credentials,
+  query options, and SQLAlchemy driver-qualified forms (`c4511c1e9`).
+- P9 partial: narrow settings models live at module scope; loaders still read the
+  environment on each call. Configuration tests passed (`c4511c1e9`).
+
+Permission, authentication, suggestion, and access-screen tests passed. Whole-project
+Pyrefly reported zero errors. P1, P3, P6 and unfinished parts above still need work;
+none of these local changes updates GitHub threads or published PR heads.
+
 ## Scope and audit baseline
 
 Collect all 61 inline comments by `Glinte` on
@@ -18,7 +48,7 @@ The inventory at the end preserves every comment's text and link once. **Satisfi
 requested behavior is present or the criticized code was removed with its responsibility replaced.
 **Partial** means related improvements landed but the concern remains. **Open** includes design
 questions that need an explicit decision, rather than assuming a suggested implementation is mandatory.
-This is a planning change; implementation and GitHub thread updates are separate work.
+The inventory records the original audit; implementation progress is tracked above.
 
 ## Verified dispositions requiring no new implementation
 
@@ -278,7 +308,7 @@ rename, an existing cache elsewhere, or an unresolved GitHub flag alone is not a
 The section references assign each comment once. Duplicate comments remain separate source records
 but share implementation work. Comment text is quoted verbatim, including links and spelling.
 
-Totals: 5 satisfied, 5 partial, 51 open.
+Original audit totals: 5 satisfied, 5 partial, 51 open. See implementation progress for later fixes.
 
 ### 01 Comment 3886685322
 

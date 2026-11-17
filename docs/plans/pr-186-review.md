@@ -19,16 +19,37 @@ claim the current checkout still has the problem, or that a GitHub thread is
 unresolved. Questions remain decisions to investigate rather than predetermined
 implementation requirements.
 
-## Follow-up work
+## Implementation audit — 2026-11-17
 
-### P1 Search request arguments
+P1 is satisfied: the backend receives raw request options plus the parsed query;
+the redundant separate offset argument is gone. Keeping raw query text alongside
+the parsed expression supports lexical/semantic ranking. Search service tests pass.
 
-- [ ] Review `SearchService.search` and the backend contract. The reviewed call
-  passes `request`, a parsed query, and `offset=request.offset`; remove redundant
-  inputs or make the distinction between raw and parsed input explicit.
-- [ ] Verify query parsing and pagination behavior after any contract change.
+P3 is satisfied by `MessageSnapshot` and `to_message_snapshot`; observations now
+use that name throughout the application and Discord adapters.
 
-Comment: 1.
+P4 is satisfied: a Discord NotFound suppresses the recorded post and marks its
+message deleted. Forbidden and unreachable channels do not assert deletion.
+Suppression survives later reconciliations. Keep `partial(self._remove, post)`:
+`run_all` accepts zero-argument factories so it can acquire capacity before
+starting each operation. Removing that binding would break its callable contract.
+Reconciler tests cover suppression and repeated cleanup.
+
+P5 is satisfied in `c5d706296`: the renderer explicitly implements `PostRenderer`;
+`StarboardEntryKey` validates and encodes the board/message pair at the shared
+boundary, and native channel types provide NSFW checks, including threads.
+Resource-key and channel-safety tests passed.
+
+P6 is satisfied: option parsing is imported at module scope. Keep the publisher
+as the wizard's transport adapter: the application service creates the durable
+session; publication attaches a Discord message and reconciliation owns its card.
+`PollPublicationError` retains retry state so failed attachment reuses a returned
+message and never creates a second session. Publisher and wizard tests pass.
+
+P2 remains open. Actor-based suggestion identity is already shared; provider source
+ownership and the service/transport limit policy still need completion.
+
+## Remaining work
 
 ### P2 Suggestion service and autocomplete API
 
@@ -52,65 +73,11 @@ Comment: 1.
 
 Comments: 2–7.
 
-### P3 Message terminology
+## Validation
 
-- [ ] Choose a clearer name for `MessageFact` based on the information it carries
-  and how observation/persistence uses it. Update the type, adapter function,
-  callers, and relevant documentation consistently.
-
-Comment: 8.
-
-### P4 Reconciliation state and task calls
-
-- [ ] Decide what should be recorded when a deleted post is deliberately not
-  recreated. Inspect existing tombstone/suppression state before adding storage,
-  and distinguish a missing message from evidence of deliberate moderator action.
-- [ ] Review why `_remove_all` wraps `_remove` with `partial` for `run_all`. Check
-  the task runner's callable contract and simplify it if the wrapper is unnecessary.
-- [ ] Verify deletion suppression survives repeated reconciliation and that bulk
-  removal retains its concurrency and failure behavior after any change.
-
-Comments: 9–10.
-
-### P5 Renderer contracts and channel safety
-
-- [ ] Review explicit inheritance from `PostRenderer` or an appropriate ABC for
-  `StarboardEntryRenderer`, including whether it improves contract checking.
-- [ ] Make the relationship between `resource_kind` and `resource_key` explicit.
-  Replace scattered assumptions about colon-separated starboard/message IDs with
-  a typed representation or a shared, validated encoding boundary.
-- [ ] Replace or justify `_unsafe_nsfw`'s dynamic
-  `getattr(channel, "is_nsfw", lambda: False)()` calls using the actual supported
-  channel types. Preserve the restriction on mirroring NSFW content into an
-  unmarked destination, including thread/channel edge cases.
-- [ ] Validate resource-key handling, renderer conformance, and channel safety
-  with focused tests after implementation.
-
-Comments: 11–13. The terse wording of comment 13 is interpreted from its diff
-anchor in `_unsafe_nsfw`; it does not specify a preferred replacement.
-
-### P6 Poll publisher design
-
-- [ ] Remove the local import of `parse_option_lines` from `resolve_options`.
-  Inspect the dependency direction between publisher and wizard and move shared
-  parsing to an appropriate module if a module-level import would cause a cycle.
-- [ ] Review the publisher facade as a whole: option parsing, palette lookup,
-  poll creation, and Discord publication should have clear owners and a coherent
-  interface for wizard callers. Record the design decision before restructuring.
-- [ ] Verify option parsing and the wizard's create-and-publish flow after changes.
-
-Comments: 14–15.
-
-## Execution and validation
-
-First compare each concern with the implementation branch and record whether it
-still needs work. Implement independently valid changes in small commits; P2's
-source API decisions should precede its call-site changes, and P5's resource
-contract should be settled before changing callers in reconciliation.
-
-For implementation changes, run the affected tests with `--no-cov`, format and
-lint the changed code, run `just typecheck`, and run `git diff --check`. This file
-only collects review feedback; it does not implement fixes or update GitHub threads.
+The focused search, publisher, wizard, reconciliation, resource-key, and channel
+safety tests pass. Commit hooks format and lint changed files. Whole-project
+Pyrefly passes. GitHub review threads were not changed.
 
 ## Original comments
 

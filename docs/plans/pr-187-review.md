@@ -17,6 +17,23 @@ The plan uses the review anchors and a preliminary inspection of the current
 not GitHub thread status. The broad design comments require investigation before
 choosing a replacement; moving code alone does not establish that they are resolved.
 
+## Implementation progress — 2026-11-17
+
+P3 is satisfied in `637e9a9c7`: one optional runtime lookup is followed by typed
+`ApplicationRuntime`/`ApiServices` access. Observability imports are module-level;
+reporting failures remain contained. API application tests passed.
+
+P4 is satisfied in `63af9dd89`: the workspace owns reservation cleanup, while the account service
+owns redemption and credit reconciliation. Reserve and conflict checks precede
+consent; declined consent never creates an account. Settlement is serialized so
+repeated answers and late abandonment cannot redeem twice or release a consumed
+reservation. Cleanup is shielded and catches cancellation during redemption as
+well as ordinary failures. Account panel, consent, and service tests passed,
+including new cancellation/failure and duplicate-answer regressions.
+
+P1 and P2 remain open. Shared `Actor` has replaced several former identity shapes,
+but the REST lifecycle and remaining wrappers still require a complete audit.
+
 ## Follow-up work
 
 ### P1 Discord REST responsibilities
@@ -64,56 +81,12 @@ It now wraps only `Subject`. Related representations include permission-admin
 allowed and denied outcomes, including missing identity and scoped permissions;
 remaining actor types have a clear reason to exist.
 
-### P3 Typed error-report service access
+## Validation
 
-Comment 3 targets the nested `getattr` chain in `squid/api/errors.py::_capture`.
-That chain remains in the current checkout.
-
-- [ ] Inspect application initialization and existing typed runtime accessors.
-  Use one explicit optional boundary for an app without a runtime, then typed
-  access to services and error reporting. Avoid replacing the chain with unchecked
-  casts or a second untyped lookup helper.
-- [ ] Keep error capture usable when dependency resolution fails. Retain the
-  protection that reporting failures cannot prevent the problem-detail response.
-- [ ] Move the local observability import to module scope if dependencies permit;
-  resolve any real cycle at its owning boundary.
-
-**Acceptance:** tests cover a wired application, an application without reporting,
-and reporting failure; each still returns the expected HTTP problem document.
-Successful capture retains correlation metadata and the buffered log tail.
-
-### P4 Account-linking flow
-
-Comment 4 targets `VerifyCog.link` at the reviewed commit. That method read the
-account, reserved a code, checked conflicts, requested consent, linked identities,
-released unused reservations, and rendered the result. The current command opens
-`AccountWorkspace`, whose `_link` method owns the linking interaction.
-
-- [ ] Compare the reviewed method with `AccountWorkspace._link`, the account
-  service, consent callbacks, and presentation helpers. Record which concerns
-  the move has already addressed before planning further extraction.
-- [ ] Make the normal reserve → check → consent → redeem flow easy to follow,
-  with a clear owner for reservation cleanup. Keep presentation in the bot and
-  account/link rules in the application service where appropriate.
-- [ ] Preserve validation before consent, no account creation for an invalid code
-  or declined consent, and release of unused reservations on conflict, timeout,
-  abandonment, cancellation, or failure. Review asynchronous cleanup and duplicate
-  callbacks explicitly; successful redemption must not be undone by cleanup.
-
-**Acceptance:** focused linking/consent tests cover success, invalid code, conflict,
-declined or expired consent, cancellation, and failure during redemption. Confirm
-credit attribution and user-facing results remain correct.
-
-## Execution and validation
-
-Audit each work package against the implementation branch before editing. Settle
-P2's identity contract before changing P1's actor construction if those types are
-affected. Otherwise implement the packages independently in small, reviewable commits.
-
-For implementation changes, run focused tests with `--no-cov` during development
-and after the final edit, format and lint affected code, run `just typecheck`, and
-run `git diff --check`. This plan collects feedback; it does not implement fixes
-or change GitHub threads.
+API application, account service, account panel, and consent tests pass, including
+redemption cancellation and repeated callbacks. Whole-project Pyrefly passes.
+Remaining REST and actor work must retain transactional authorization checks and
+shared client ownership. GitHub threads were not changed.
 
 ## Original comments
 

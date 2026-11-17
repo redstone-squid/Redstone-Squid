@@ -14,92 +14,54 @@ were retrieved from the comments endpoint for the pending
 Its summary is empty, and there are no conversation comments. Original wording
 and anchors are preserved below.
 
-The plan includes a preliminary inspection of `schematics-phase-0-stack-23`.
-Unchecked items describe follow-up work, not GitHub thread status. Recheck the
-implementation before editing: the third request already appears implemented.
+## Completion audit — 2026-11-17
 
-## Follow-up work
+All three requests are addressed in the implementation checkout. GitHub review
+state and propagation to the published stack are separate from this audit.
 
-### P1 Profile types and module responsibilities
+### P1 Profile contracts
 
-Comment 1 concerns the whole `squid/accounts/domain/profiles.py` file. It currently
-combines text/link validation, partial updates, internal profile records, public
-views, avatar presentation, and merge-preview types and constants.
+Traced profile validation, repositories, `AccountProfileEdit`, API schemas, and
+`AccountWorkspace`. Retain `ProfileUpdate`: UNSET means omitted, while None clears
+text. Retain `CreatorProfileRecord` and `PublicCreatorProfile`: the former carries
+private identity data, and the latter is the visibility-filtered public contract.
+Combining these types would erase patch semantics or expose private information.
+`CreditedAlias` supplies build counts without conflating display names with credit.
 
-- [ ] Trace the profile types through repositories, application services, API
-  schemas, and bot presentation. Identify which similar shapes represent real
-  boundaries and which only add copying or naming overhead.
-- [ ] Simplify redundant representations and conversions. Preserve the distinction
-  between omitted update fields (`UNSET`), explicit clearing, internal records,
-  and public output; merging those contracts could change edits or expose private data.
-- [ ] Group validation, public presentation, and merge-specific definitions by
-  responsibility where that makes callers easier to follow. Choose boundaries
-  after reading their uses, rather than creating one module per dataclass.
-- [ ] Trim repetitive explanations while retaining the reasons for visibility
-  filtering, URL restrictions, and patch semantics. Explain the remaining types'
-  relationships once near their definitions.
+In `2562d7013`, merge ticket constants and `MergePreview` now live with account ownership models,
+not profile editing. The profile module explains its remaining representations
+once at the top. Validation and public presentation stay together because they
+operate on the same small profile contract; separate forwarding services would
+add indirection without changing ownership.
 
-**Acceptance:** a reader can follow profile editing and public presentation without
-guessing why each representation exists. Focused profile validation and presentation
-tests preserve normalization, link validation, omitted-versus-cleared fields, hidden
-profiles, private identities and avatars, and merge redirects. Profile edits must
-remain separate from creator-credit attribution.
+### P2 Account operations
 
-### P2 Account service flow and ownership
+Keep `AccountService` as the transaction owner for identity lookup, verification,
+linking, merge tickets, and alias claims. Its current entry points already express
+the separate operations; splitting them into delegating facades would obscure the
+shared unit of work. Transport adapters authenticate the acting account. Profile
+writes now belong to `AccountProfileEdit` through `EditRunner`, which rechecks
+ownership, permissions, consent, and revisions in the write transaction.
 
-Comment 2 concerns the whole `squid/accounts/application/services.py` file and does
-not prescribe a replacement. `AccountService` currently coordinates account lookup,
-consent, verification and linking, merges, profiles, identity refresh, and alias claims.
+Linking reserves and checks the code before the bot requests consent, then redeems
+it through the service. Reservation cleanup belongs to `AccountWorkspace`; see
+PR 187 P4 for cancellation and duplicate-callback fixes. Merge preview is read-only;
+completion consumes the ticket and merges identities and credit atomically. Alias
+review resolves the claim and reconciles credit through repository operations.
+External name lookup remains outside write transactions. No repository transaction
+boundaries were changed by this review cleanup.
 
-- [ ] Trace representative callers and repository operations. Describe the normal
-  flow for linking, merging, editing profiles, and resolving alias claims, including
-  who authenticates the actor and who commits related changes.
-- [ ] Identify the specific branches, duplicate orchestration, or mixed responsibilities
-  that obscure those flows. Decide whether clearer methods and grouping suffice or
-  whether cohesive services would help; avoid replacing one large file with a facade
-  and many forwarding wrappers.
-- [ ] Coordinate profile ownership with P1 and linking responsibilities with P4 of
-  [the PR 187 plan](pr-187-review.md). Update bootstrap and transport callers together
-  if service boundaries change.
-- [ ] Preserve transaction boundaries and build-edit history when account operations
-  change credit. Keep consent checks, verification lockouts, reservation expiry and
-  release, conflict handling, recent merge proofs, and single-use merge tickets intact.
-  External username lookups should remain outside write transactions.
+### P3 Caller consent
 
-**Acceptance:** the service's public entry points and their owners are easy to find,
-and each main flow can be read without following redundant delegation. Focused
-account service tests and affected repository integration tests preserve success,
-failure, rollback, and concurrent-use behavior for the operations changed.
+`Caller.require_consented_account()` owns the check. No free-function imports
+remain. Dependency adapters retain browser-only versus account-owned credential
+restrictions and supply dependency injection rather than duplicating validation.
 
-### P3 Consent check as a caller method
-
-Comment 3 targets the former module-level `require_consented_account(caller)`.
-The current checkout already defines `Caller.require_consented_account()` in
-`squid/api/security.py`; routes and dependency adapters call it. Existing coverage
-in `tests/unit/api/test_consent_dependency.py` exercises the method.
-
-- [ ] Verify the implementation branch retains this method and has no stale imports
-  or calls to the former free function. Keep FastAPI dependency adapters where they
-  provide dependency injection rather than duplicating the check.
-- [ ] Run the consent dependency tests. Confirm callers without an account raise
-  `AuthenticationError`, pending consent raises `ConsentRequiredError` with consent
-  links, and accepted account-owned credentials return their account ID. Preserve
-  the browser-only restriction in `current_browser_account_id`.
-- [ ] Record this request as satisfied if those checks pass; make further changes
-  only if the audit finds a gap.
-
-**Acceptance:** consent validation belongs to `Caller`, its callers use that method,
-and the existing credential and error behavior remains covered.
-
-## Execution and validation
-
-Verify P3 first, then settle P1's type boundaries before changing profile operations
-in P2. Implement independently valid changes in small commits. Run affected tests
-with `--no-cov` during development and after the final edit, format and lint changed
-code, run `just typecheck`, and run `git diff --check`.
-
-This file records feedback and follow-up work; it does not implement the refactors
-or change the pending review or its threads.
+Validation: account unit tests, consent dependencies, profile routes, account panel,
+and consent-gate tests passed. Coverage includes patch normalization and clearing,
+hidden profiles and private avatars, redirects, verification failure and lockout,
+reservation release, and single-use merge behavior. Repository code is unchanged;
+no new database migration or repository integration run was needed.
 
 ## Original comments
 
