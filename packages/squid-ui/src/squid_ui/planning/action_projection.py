@@ -6,7 +6,6 @@ retain their chosen bindings because their source correspondence can change keys
 """
 
 import sys
-from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
@@ -21,6 +20,7 @@ from squid_ui.interactions.handlers import _HandlerBinder
 from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, CertifiedAllocation, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.display import DisplayPage, PageBindings
+from squid_ui.planning.identity_cache import CacheStats, IdentityCache
 from squid_ui.planning.interaction_handlers import RouteSelection
 from squid_ui.planning.offers.navigation import control_key, grouped_control_key
 from squid_ui.planning.result import PlanResult
@@ -133,64 +133,21 @@ def _bind_page[BodyT: scene.Body](
     return page.display.bind(MappingProxyType(dict(prepared)), live)
 
 
-@dataclass(frozen=True, slots=True)
-class ProjectionCacheSnapshot:
-    entries: int
-    hits: int
-    misses: int
-    evictions: int
-    retained_bytes: int
+def _projection_weight(result: PlanResult) -> int:
+    # Borrowed application objects behind handlers/providers belong to the owner.
+    def binding_weight(binding: ActionBinding) -> int:
+        return (
+            sys.getsizeof(binding)
+            + 128
+            + sum(len(key.encode()) + binding_weight(route) for key, route in binding.routes.items())
+        )
 
-
-class _ProjectionCache[BodyT: scene.Body]:
-    """Bound rebinding results by certified output identity within one generation."""
-
-    def __init__(self, capacity: int, max_bytes: int) -> None:
-        if capacity < 1 or max_bytes < 1:
-            message = "projection cache bounds must be positive"
-            raise ValueError(message)
-        self.capacity = capacity
-        self.max_bytes = max_bytes
-        self.retained_bytes = 0
-        self.entries: OrderedDict[int, tuple[ActionPage[BodyT], PlanResult[BodyT], int]] = OrderedDict()
-        self.hits = self.misses = self.evictions = 0
-
-    def get(self, source: ActionPage[BodyT]) -> PlanResult[BodyT] | None:
-        entry = self.entries.get(id(source))
-        if entry is None:
-            self.misses += 1
-            return None
-        # Entries retain the source, so its identity cannot be recycled while cached.
-        self.entries.move_to_end(id(source))
-        self.hits += 1
-        return entry[1]
-
-    def put(self, source: ActionPage[BodyT], result: PlanResult[BodyT]) -> None:
-        # Charge serialized display size and projected binding bookkeeping. Application
-        # objects behind handlers/providers are borrowed from the owner, not copied here.
-        def binding_weight(binding: ActionBinding) -> int:
-            return (
-                sys.getsizeof(binding)
-                + 128
-                + sum(len(key.encode()) + binding_weight(route) for key, route in binding.routes.items())
-            )
-
-        weight = len(scene.Codec.dumps(result.scene).encode()) + sys.getsizeof(result) + 256
-        weight += sum(len(key.encode()) + binding_weight(binding) for key, binding in result.bindings.items())
-        if weight > self.max_bytes:
-            return
-        previous = self.entries.pop(id(source), None)
-        if previous is not None:
-            self.retained_bytes -= previous[2]
-        self.entries[id(source)] = (source, result, weight)
-        self.retained_bytes += weight
-        while len(self.entries) > self.capacity or self.retained_bytes > self.max_bytes:
-            _, (_, _, removed) = self.entries.popitem(last=False)
-            self.retained_bytes -= removed
-            self.evictions += 1
-
-    def snapshot(self) -> ProjectionCacheSnapshot:
-        return ProjectionCacheSnapshot(len(self.entries), self.hits, self.misses, self.evictions, self.retained_bytes)
+    return (
+        len(scene.Codec.dumps(result.scene).encode())
+        + sys.getsizeof(result)
+        + 256
+        + sum(len(key.encode()) + binding_weight(binding) for key, binding in result.bindings.items())
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,15 +165,17 @@ class ActionAllocation[BodyT: scene.Body]:
     region_bindings: Mapping[OccurrenceId, RegionPages]
     capacity: int = 32
     max_bytes: int = 1024 * 1024
-    _cache: _ProjectionCache[BodyT] = field(init=False, repr=False, compare=False)
+    _cache: IdentityCache[PlanResult[BodyT]] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "controls", MappingProxyType(dict(self.controls)))
         object.__setattr__(self, "live", MappingProxyType(dict(self.live)))
         object.__setattr__(self, "region_bindings", MappingProxyType(dict(self.region_bindings)))
-        object.__setattr__(self, "_cache", _ProjectionCache[BodyT](self.capacity, self.max_bytes))
+        object.__setattr__(
+            self, "_cache", IdentityCache[PlanResult[BodyT]](capacity=self.capacity, max_bytes=self.max_bytes)
+        )
 
-    def cache_snapshot(self) -> ProjectionCacheSnapshot:
+    def cache_snapshot(self) -> CacheStats:
         """Inspect page-projection reuse without exposing cached callbacks."""
         return self._cache.snapshot()
 
@@ -237,7 +196,7 @@ class ActionAllocation[BodyT: scene.Body]:
             return cached
         projected = _bind_page(result, self.controls, self.frontend, self.live[result.slot])
         # Failed frontend binding must not publish a partially prepared projection.
-        self._cache.put(result, projected)
+        self._cache.put(result, projected, weight=_projection_weight(projected))
         return projected
 
 
