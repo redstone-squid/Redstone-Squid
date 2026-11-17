@@ -13,7 +13,6 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnav
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.door_categories import door_category_lookup, family_at_category
-from squid.records.application.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.records.application.live import (
     DoorRecordLookup,
@@ -61,6 +60,7 @@ from squid.records.domain import (
     resolve_smallest,
     resolve_smallest_fastest,
 )
+from squid.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS, MaterializationSource
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.unit_of_work import UnitOfWorkFactory

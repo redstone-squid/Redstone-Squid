@@ -17,7 +17,6 @@ from squid.builds.domain.expansion_evaluation import (
     NormalizedExpansion,
     PointStatus,
 )
-from squid.records.application.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import CandidateBuild, CategoryIdentity
 from squid.records.domain import (
     BaseTitle,
@@ -32,6 +31,7 @@ from squid.records.domain import (
     resolve_smallest,
     resolve_smallest_fastest,
 )
+from squid.records.domain.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.records.domain.models import DOOR_TIMING_METHODS, CandidateGap
 
 type LookupDimension = Annotated[int, Field(strict=True, ge=1, le=2**31 - 1)]

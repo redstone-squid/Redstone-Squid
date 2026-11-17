@@ -36,8 +36,8 @@ from whenever import Instant
 from squid.persistence.base import Base
 from squid.persistence.queue_models import QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText
-from squid.records.application.door_evidence import DoorRecordEvidence
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.records.domain.door_evidence import DoorRecordEvidence
 from squid.records.domain.models import FacetKind, MaterializationSource
 from squid.records.persistence_types import DoorRecordEvidenceJSON
 

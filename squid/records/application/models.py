@@ -9,7 +9,6 @@ from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain.expansion import DoorExpansion
-from squid.records.application.door_evidence import DoorRecordEvidence
 from squid.records.domain import (
     BaseTitle,
     BuildKind,
@@ -21,6 +20,7 @@ from squid.records.domain import (
     TitleResolution,
     VersionScope,
 )
+from squid.records.domain.door_evidence import DoorRecordEvidence
 from squid.records.domain.models import FacetKind, MaterializationSource
 
 

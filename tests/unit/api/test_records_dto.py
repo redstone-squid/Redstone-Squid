@@ -24,13 +24,13 @@ from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
 from squid.records.application import PublicRecordQueryService, RecordService
-from squid.records.application.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.application.range_publication import RangePublicationService
 from squid.records.application.range_snapshots import RangeAttempt, RangePublication
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
+from squid.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
 _RECORD = PublishedTitle(

@@ -18,7 +18,6 @@ from squid.builds.domain import Status
 from squid.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
-from squid.records.application.door_evidence import LiveDoorConfiguration
 from squid.records.application.models import (
     CandidateBuild,
     CandidateFacet,
@@ -42,6 +41,7 @@ from squid.records.domain import (
     VersionScope,
     reduce_timing_variants,
 )
+from squid.records.domain.door_evidence import LiveDoorConfiguration
 from squid.records.models import (
     ComputationRun,
     ComputationStatus,

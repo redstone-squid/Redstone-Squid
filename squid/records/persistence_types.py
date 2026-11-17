@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
-from squid.records.application.door_evidence import DoorRecordEvidence
+from squid.records.domain.door_evidence import DoorRecordEvidence
 
 
 class DoorRecordEvidenceJSON(TypeDecorator[DoorRecordEvidence]):
