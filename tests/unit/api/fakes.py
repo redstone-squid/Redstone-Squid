@@ -23,7 +23,6 @@ from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
-from squid.builds.application.services import BuildEditor
 from squid.builds.domain.models import Status
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
@@ -253,11 +252,12 @@ class MockBuilds(BuildService):
     @override
     async def apply_edit(
         self,
-        actor: BuildEditor,
+        actor: Actor,
         build_id: int,
         patch: BuildEditPatch,
         *,
         expected_revision: int | None = None,
+        source: str = "build_edit",
     ) -> Build:
         raise BuildNotFoundError(build_id)
 

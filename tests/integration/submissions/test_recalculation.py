@@ -204,7 +204,7 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
         ]
     )
     actor = {
-        "owner": owner.subject,
+        "owner": owner,
         "requester": Actor(account_id=requester.id),
         "staff": Actor(account_id=staff.id),
     }[role]
@@ -236,12 +236,12 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
     )
     service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 
-    assert (await service.get(proposal.id, owner.subject)).id == proposal.id
+    assert (await service.get(proposal.id, owner)).id == proposal.id
     with pytest.raises(AuthorizationError):
-        await service.get(foreign.id, owner.subject)
+        await service.get(foreign.id, owner)
     with pytest.raises(AuthorizationError):
-        await service.list_for_source(proposal.source_message_id, owner.subject)
-    assert await service.list_for_source(999, owner.subject) == ()
+        await service.list_for_source(proposal.source_message_id, owner)
+    assert await service.list_for_source(999, owner) == ()
 
 
 def revision_service(
