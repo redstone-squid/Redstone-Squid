@@ -97,11 +97,11 @@ async def test_an_unmarked_route_on_the_same_prefix_is_still_bounded() -> None:
 
 async def test_private_paths_are_no_store_on_success_and_errors() -> None:
 
-    @get("/v1/submissions/drafts/{draft_id:uuid}", opt={"private_response": True})
+    @get("/v1/submissions/drafts/{draft_id:uuid}", opt={"x-squid-private-response": True})
     async def private_draft(draft_id: UUID) -> dict[str, str]:
         return {"id": str(draft_id)}
 
-    @get("/v1/users/me/failure", opt={"private_response": True})
+    @get("/v1/users/me/failure", opt={"x-squid-private-response": True})
     async def private_failure() -> None:
         raise HTTPException(status_code=404)
 
@@ -133,7 +133,7 @@ async def test_private_router_policy_follows_renaming_and_covers_early_errors() 
         return data
 
     app = Litestar(
-        route_handlers=[Router(path="/renamed", opt={"private_response": True}, route_handlers=[item])],
+        route_handlers=[Router(path="/renamed", opt={"x-squid-private-response": True}, route_handlers=[item])],
         middleware=[
             DefineMiddleware(BoundedRequestBodyMiddleware, max_bytes=8),
         ],

@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Mapping
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 from litestar import Litestar, Request, Response
 from litestar.exceptions import HTTPException, ValidationException
@@ -31,8 +32,10 @@ from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
 from squid.edits.domain import ConcurrentEditError, RevisionConflictError
 from squid.observability import correlated_log_buffer, correlation_id, correlation_reference
-from squid.runtime import ApiServices, ApplicationRuntime
 from squid_i18n import localization_scope
+
+if TYPE_CHECKING:
+    from squid.runtime import ApiServices, ApplicationRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +64,8 @@ async def _capture(request: Request, error: Exception, request_id: str) -> None:
     storage errors so reporting cannot prevent the HTTP error response.
     """
     try:
-        runtime = request.app.state.get("runtime")
-        if not isinstance(runtime, ApplicationRuntime) or not isinstance(runtime.services, ApiServices):
+        runtime: ApplicationRuntime[ApiServices] | None = request.app.state.get("runtime")
+        if runtime is None:
             return
         reports = runtime.services.error_reports
         buffer = correlated_log_buffer()

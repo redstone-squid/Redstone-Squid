@@ -130,7 +130,7 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
 
 
 router = Router(
-    opt={"private_response": True},
+    opt={"x-squid-private-response": True},
     dependencies={
         "vote_members": Provide(get_vote_members, sync_to_thread=False),
         "votes": Provide(get_votes, sync_to_thread=False),

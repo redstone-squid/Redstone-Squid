@@ -417,7 +417,7 @@ async def revoke_grant(
 
 
 router = Router(
-    opt={"private_response": True},
+    opt={"x-squid-private-response": True},
     dependencies={
         "installations": Provide(get_minecraft_installations, sync_to_thread=False),
         "players": Provide(get_minecraft_player_authorization, sync_to_thread=False),

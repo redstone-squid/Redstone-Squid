@@ -7,7 +7,7 @@ from litestar.routes import HTTPRoute
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 # Endpoint and router opt metadata; routers protect unknown descendant paths too.
-PRIVATE_RESPONSE = "private_response"
+PRIVATE_RESPONSE = "x-squid-private-response"
 
 
 def private_response[EndpointT: Callable[..., object]](endpoint: EndpointT) -> EndpointT:

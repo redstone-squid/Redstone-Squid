@@ -78,7 +78,9 @@ async def test_require_distinguishes_credential_scope_from_account_acl(scoped: b
         if effect is None
         else (PermissionGrant(pattern=BUILD_SUBMISSION_VIEW_PENDING.name, effect=int(effect), subject_account_id=7),)
     )
-    uow.permissions.load_for_subject.return_value = SubjectRecords(subject=Actor(), epoch=1, grants=grants)
+    uow.permissions.load_for_subject.side_effect = lambda subject: SubjectRecords(
+        subject=subject, epoch=1, grants=grants if subject.account_id == 7 else ()
+    )
     permissions = PermissionService(uow_factory=lambda: uow)
     caller = Caller(kind="service", subject="owned", account_id=7, nodes=UNBOUNDED if scoped else frozenset())
     error_type = PermissionDeniedError if scoped else CredentialPermissionDeniedError

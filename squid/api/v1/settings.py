@@ -97,7 +97,7 @@ async def update_runtime_settings(
 
 
 router = Router(
-    opt={"private_response": True},
+    opt={"x-squid-private-response": True},
     path="/settings/runtime",
     tags=["settings"],
     route_handlers=[get_runtime_settings, update_runtime_settings],

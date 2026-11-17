@@ -380,7 +380,7 @@ async def revoke_current_session(
 
 
 router = Router(
-    opt={"private_response": True},
+    opt={"x-squid-private-response": True},
     path="/cli/auth",
     tags=["cli-authentication"],
     route_handlers=[
