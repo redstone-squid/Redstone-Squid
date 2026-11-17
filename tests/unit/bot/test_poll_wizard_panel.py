@@ -12,6 +12,7 @@ from squid.bot.ui import render_payload
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui import testing as st
 from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
@@ -58,9 +59,9 @@ async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardStat
     harness = wt.driving(screen.driver)
 
     async def submit(key: str, values: dict[str, object]) -> None:
-        trigger = sl.testing.find(sl.testing.render_tree(screen.driver), sl.semantic.FormTrigger, key=key)
+        trigger = st.find(st.render_tree(screen.driver), sl.semantic.FormTrigger, key=key)
         with transaction() as current:
-            await trigger.on_submit(replace(sl.testing.submit_event(values), _transaction=current))
+            await trigger.on_submit(replace(st.submit_event(values), _transaction=current))
 
     await submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
     await submit(
@@ -169,12 +170,10 @@ async def test_editing_a_prefilled_poll_preserves_settings_and_can_be_undone() -
     harness = wt.driving(screen.driver)
     original = harness.state.answers
     screen.driver.machine_state = screen.wizard.transition(harness.state, "goto:content")
-    trigger = sl.testing.find(sl.testing.render_tree(screen.driver), sl.semantic.FormTrigger, key="poll.content")
+    trigger = st.find(st.render_tree(screen.driver), sl.semantic.FormTrigger, key="poll.content")
     with transaction() as current:
         await trigger.on_submit(
-            replace(
-                sl.testing.submit_event({"question": "Best colour?", "options": "Green, Blue"}), _transaction=current
-            )
+            replace(st.submit_event({"question": "Best colour?", "options": "Green, Blue"}), _transaction=current)
         )
     assert harness.state.current == sp.REVIEW_STEP
     settings = screen.wizard.live_answers(harness.state)["settings"]

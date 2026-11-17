@@ -136,7 +136,11 @@ async def test_a_stale_form_fails_without_dropping_history() -> None:
     state = CommittedState(Store())
     controller = controller_for(state)
     form = controller.bind("example", TARGET, 1)
-    writer = form.writer(lambda name: EditValues.of({"name": name}), "Old form")
+
+    def rename(name: str) -> EditValues:
+        return EditValues.of({"name": name})
+
+    writer = form.writer(rename, "Old form")
     await controller.bind("example", TARGET, 1).save(EditValues.of({"name": "Newer"}), "New form")
     with pytest.raises(RevisionConflictError):
         await writer("Stale")

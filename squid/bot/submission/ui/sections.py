@@ -490,7 +490,7 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
                 values[field.id] = cast(JSONValue, raw)
         await ws.save_values(event.transaction, values, base_revision=base_revision)
 
-    entries: list[sl.forms.FormField[Any]] = []
+    entries: list[sl.forms.FormField[Any, Any]] = []
     for field in chunk.fields:
         group = next((group for group in groups if group.field_ids[0] == field.id), None)
         if group is not None:
@@ -498,7 +498,9 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
         elif field.id not in grouped:
             entries.append(_form_entry(field, answers.get(field.id)))
     await event.present_form(
-        sl.forms.FormSpec(chunk.title[:45], tuple(entries)), key=f"draft-{chunk.id}", on_submit=submitted
+        sl.forms.FormSpec[sd.Request[Any, Any]](chunk.title[:45], tuple(entries)),
+        key=f"draft-{chunk.id}",
+        on_submit=submitted,
     )
 
 
@@ -511,7 +513,7 @@ class _TicksField(sl.forms.DurationField[Any]):
         return _seconds(value) if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
+def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, Any]:
     """Build the modal input for one manifest field, prefilled with its saved value.
 
     Discord marks required inputs itself, so labels carry no "(required)" suffix.
@@ -633,7 +635,7 @@ def dimension_groups(fields: Sequence[FormField]) -> tuple[DimensionGroup, ...]:
 
 def _dimensions_entry(
     group: DimensionGroup, fields: Sequence[FormField], answers: Mapping[str, JSONValue]
-) -> sl.forms.FormField[Any]:
+) -> sl.forms.FormField[Any, Any]:
     """Build the single modal input for a size, prefilled as "5 x 7 x ?"."""
     values = tuple(answers.get(field_id) for field_id in group.field_ids)
     return _DimensionsField(

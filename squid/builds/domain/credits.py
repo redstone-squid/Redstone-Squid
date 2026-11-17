@@ -157,7 +157,8 @@ class StagedCredits:
         return creator_names(self.credits)
 
     @creators_ign.setter
-    def creators_ign(self, names: Iterable[str]) -> None:
+    def creators_ign(self, names: Iterable[str]) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
+        # Assignment accepts any iterable; reads return a newly materialized list.
         self.credits = name_credits(names, legacy=True)
 
 

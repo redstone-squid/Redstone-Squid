@@ -232,7 +232,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     if config.getoption("--ui-gallery") is None:
         return
-    recorder = GalleryRecorder(module_prefix=config.getoption("--ui-gallery-module"))
+    recorder = GalleryRecorder(module_prefix=cast(str, config.getoption("--ui-gallery-module")))
     config.stash[_recorder_key] = (recorder, recorder.install())
 
 
@@ -248,10 +248,13 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
         return
     recorder, uninstall = installed
     uninstall()
-    recorder.write(Path(config.getoption("--ui-gallery")), screenshots=config.getoption("--ui-gallery-screenshots"))
+    recorder.write(
+        Path(cast(str, config.getoption("--ui-gallery"))),
+        screenshots=bool(config.getoption("--ui-gallery-screenshots")),
+    )
 
 
 def pytest_terminal_summary(terminalreporter: Any, config: pytest.Config) -> None:
     if (installed := config.stash.get(_recorder_key, None)) is not None:
-        index = Path(config.getoption("--ui-gallery")) / "index.html"
+        index = Path(cast(str, config.getoption("--ui-gallery"))) / "index.html"
         terminalreporter.write_line(f"UI gallery: {len(installed[0].renders)} distinct renders in {index}")

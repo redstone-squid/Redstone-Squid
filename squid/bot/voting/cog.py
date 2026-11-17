@@ -101,7 +101,12 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """Publish supplied poll content, or open an editor with the supplied defaults."""
         actor = request.user
         account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
-        if account is None or account.id is None or account.needs_consent_refresh:
+        # ORM identity columns may still be None before flush.
+        if (
+            account is None
+            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
+            or account.needs_consent_refresh
+        ):
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
             return sd.Response(

@@ -26,6 +26,11 @@ class AccountConsentedVoterLookup:
 
     async def consented_account_id(self, discord_id: int) -> int | None:
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
-        if account is None or account.id is None or account.needs_consent_refresh:
+        # ORM identity columns may still be None before flush.
+        if (
+            account is None
+            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
+            or account.needs_consent_refresh
+        ):
             return None
         return account.id

@@ -54,7 +54,8 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
     ) -> sd.CommandResult:
         """Somebody else's page is shared content and answers where the channel sees it."""
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
-        if account is None or account.public_creator_id is None:
+        # ORM identity columns may still be None before flush.
+        if account is None or account.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return sd.Response(
                 text_node(_missing_creator_page(user.display_name)),
                 audience="personal",

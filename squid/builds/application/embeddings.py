@@ -35,7 +35,8 @@ class BuildEmbeddingService:
 
     async def index(self, build: Build) -> None:
         """Index an already-persisted build when it has an embedding."""
-        if build.id is not None and build.embedding is not None:
+        # ORM identity columns may still be None before flush.
+        if build.id is not None and build.embedding is not None:  # pyright: ignore[reportUnnecessaryComparison]
             async with self._uow_factory() as uow:
                 await uow.build_vectors.upsert(build.id, build.embedding)
                 await uow.commit()

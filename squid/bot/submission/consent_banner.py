@@ -25,7 +25,12 @@ async def open_consent_prompt(request: AppRequest) -> None:
     accounts = request.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(request.user.id))
-    if account is not None and account.id is not None and not account.needs_consent_refresh:
+    # ORM identity columns may still be None before flush.
+    if (
+        account is not None
+        and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and not account.needs_consent_refresh
+    ):
         await request.respond(
             text_node(
                 md_tr(

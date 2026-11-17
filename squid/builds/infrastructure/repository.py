@@ -466,7 +466,8 @@ class BuildRepository:
         """
         build.edited_time = Instant.now()
 
-        if build.id is None:
+        # ORM identity columns may still be None before flush.
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             session = self._session()
             await self._insert(session, build)
             await session.flush()
@@ -475,7 +476,7 @@ class BuildRepository:
 
     async def _insert(self, session: AsyncSession, build: Build) -> None:
         """Insert a prepared build within the caller's transaction, including its database events."""
-        if build.id is not None:
+        if build.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             message = "Transactional insertion requires a new build."
             raise InvalidStateError(message)
         build.edited_time = Instant.now()
@@ -794,7 +795,7 @@ class BuildRepository:
 
     async def confirm(self, build: Build) -> None:
         """Mark a persisted build confirmed, checking and advancing its revision."""
-        if build.id is None:
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
 
@@ -802,7 +803,7 @@ class BuildRepository:
 
     async def deny(self, build: Build) -> None:
         """Mark a persisted build denied, checking and advancing its revision."""
-        if build.id is None:
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
 

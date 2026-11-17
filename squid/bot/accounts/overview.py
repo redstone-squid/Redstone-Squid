@@ -141,7 +141,8 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                             description=self.identity_detail(identity),
                         )
                         for identity in self.identities
-                        if identity.id is not None
+                        # ORM identity columns may still be None before flush.
+                        if identity.id is not None  # pyright: ignore[reportUnnecessaryComparison]
                     ),
                     key="identity",
                     selection=sl.controlled(
@@ -201,7 +202,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _toggle_identity(self, event: sd.ToggleEvent) -> None:
         identity = self.selected
-        if identity is None or identity.id is None:
+        if identity is None or identity.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return
         identity_id, is_public = identity.id, event.value
 
@@ -224,7 +225,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _unlink(self, event: sd.PressEvent) -> None:
         """Remove the selected identity. The reader has already agreed to this."""
         identity = self.selected
-        if identity is None or identity.id is None:
+        if identity is None or identity.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return
         await event.acknowledge()
         await self.edits.bind(UNLINK_EDIT, account_target(self._account_id), self._revision).save(

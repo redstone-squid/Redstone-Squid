@@ -38,27 +38,33 @@ class AnswerPatch(BaseModel):
 
 def answer_values(answers: Mapping[str, JSONValue]) -> EditValues:
     """Encode UI answers, where an empty input removes the saved answer."""
-    return AnswerPatch(
-        answers={key: value for key, value in answers.items() if value is not None},
-        unset=tuple(key for key, value in answers.items() if value is None),
+    return AnswerPatch.model_validate(
+        {
+            "answers": {key: value for key, value in answers.items() if value is not None},
+            "unset": tuple(key for key, value in answers.items() if value is None),
+        }
     ).values()
 
 
 def captured_answers(answers: Mapping[str, JSONValue], fields: tuple[str, ...]) -> EditValues:
-    return AnswerPatch(
-        answers={key: answers[key] for key in fields if key in answers},
-        unset=tuple(key for key in fields if key not in answers),
+    return AnswerPatch.model_validate(
+        {
+            "answers": {key: answers[key] for key in fields if key in answers},
+            "unset": tuple(key for key in fields if key not in answers),
+        }
     ).values()
 
 
 def change_command(draft_id: UUID, change: DraftChange) -> EditCommand:
     """Retain the existing client retry identity and audit metadata at the command boundary."""
-    patch = AnswerPatch(
-        answers={op.field_id: op.value for op in change.operations if op.kind is FieldOperationKind.SET},
-        unset=tuple(op.field_id for op in change.operations if op.kind is FieldOperationKind.UNSET),
-        client_instance_id=change.client_instance_id,
-        change_key=change.idempotency_key,
-        operation_ids={op.field_id: op.operation_id for op in change.operations},
+    patch = AnswerPatch.model_validate(
+        {
+            "answers": {op.field_id: op.value for op in change.operations if op.kind is FieldOperationKind.SET},
+            "unset": tuple(op.field_id for op in change.operations if op.kind is FieldOperationKind.UNSET),
+            "client_instance_id": change.client_instance_id,
+            "change_key": change.idempotency_key,
+            "operation_ids": {op.field_id: op.operation_id for op in change.operations},
+        }
     )
     return EditCommand(
         DRAFT_ANSWERS,

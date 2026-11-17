@@ -1,7 +1,7 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import override
+from typing import Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -153,7 +153,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _resolve(
         self,
-        event: sl.ActionEvent,
+        event: sl.ActionEvent[Any],
         claim: AliasClaim,
         staff_account_id: int,
         *,

@@ -285,7 +285,7 @@ async def test_unparseable_timings_preserve_source_facts_without_model_review_co
     assert "Opening: between 1 and 2 seconds" in build.description
     assert "Needs review:" not in build.description
     assert "Unclear whether" not in build.description
-    assert build.extra_info["inference_review_notes"] == [
+    assert build.extra_info.get("inference_review_notes") == [
         "Unclear whether flush + funnel describes one build or two variants."
     ]
     prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)

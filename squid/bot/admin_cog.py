@@ -85,7 +85,14 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             str(request.user.id),
         )
         account_id = (
-            account.id if account is not None and account.id is not None and not account.needs_consent_refresh else None
+            # ORM identity columns may still be None before flush.
+            account.id
+            if (
+                account is not None
+                and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+                and not account.needs_consent_refresh
+            )
+            else None
         )
         return TagsScreen(
             self.tags,
@@ -275,7 +282,11 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             IdentityProvider.DISCORD,
             str(request.user.id),
         )
-        if account is None or account.id is None or account.needs_consent_refresh:
+        if (
+            account is None
+            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
+            or account.needs_consent_refresh
+        ):
             return text_node("Open /account and accept the current privacy notice before changing runtime settings.")
         if revision is not None and revision < 1:
             return text_node("Revision must be positive.")

@@ -1,7 +1,7 @@
 """Independent reviewer histories over one invocation's shared sample review."""
 
 from dataclasses import dataclass, replace
-from typing import Literal, override
+from typing import Any, Literal, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -41,7 +41,7 @@ class ReviewRoom(sl.Reactive):
         return f"{approved} approved · {changes} requested changes · {len(self.seats)} reviewers"
 
 
-class ReviewForm(sl.forms.Form):
+class ReviewForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"layout-review-review-sample-build = Review sample build")
     decision = sl.forms.ChoiceField(
         label=tr(t"layout-review-decision = Decision"),

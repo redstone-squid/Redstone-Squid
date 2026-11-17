@@ -31,7 +31,7 @@ class FollowCard(sd.Screen):
         return self.content, sl.action_controls(follow_control(self.kind, self.subject_id), key="follow-actions")
 
 
-def follow_control(kind: SubscriptionKind, subject_id: UUID) -> sl.semantic.ActionControl:
+def follow_control(kind: SubscriptionKind, subject_id: UUID) -> sl.semantic.ActionControl[sd.Request]:
     return sl.action_control(
         tr(t"context-follow-creator = Follow creator")
         if kind is SubscriptionKind.CREATOR

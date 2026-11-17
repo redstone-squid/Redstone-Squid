@@ -96,11 +96,11 @@ def test_taxonomy_replacements_remove_only_the_replaced_fields_proposals() -> No
         }
     )
     BuildEditPatch(component_restrictions=[]).apply(build)
-    assert build.extra_info["unknown_restrictions"] == {"animated_restrictions": ["New motion"]}
-    assert build.extra_info["unknown_patterns"] == ["New pattern"]
+    assert build.extra_info.get("unknown_restrictions") == {"animated_restrictions": ["New motion"]}
+    assert build.extra_info.get("unknown_patterns") == ["New pattern"]
     BuildEditPatch(door_type=[]).apply(build)
     assert "unknown_patterns" not in build.extra_info
-    assert build.extra_info["unknown_restrictions"] == {"animated_restrictions": ["New motion"]}
+    assert build.extra_info.get("unknown_restrictions") == {"animated_restrictions": ["New motion"]}
 
 
 def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:

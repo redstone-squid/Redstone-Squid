@@ -13,6 +13,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.accounts.consent import ConsentPrompt
+from squid.bot.routes import AppRequest
 from squid.bot.submission.consent_banner import (
     CONSENT_BUTTON_CUSTOM_ID,
     BuildLogConsentStickyMessage,
@@ -219,7 +220,7 @@ async def test_routed_consent_button_shows_already_consented() -> None:
     accounts = AccountRecorder(_discord_account(consented=True))
     interaction = _make_interaction(accounts)
 
-    await open_consent_prompt(await sd.request(cast(Any, interaction)))
+    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
 
     assert accounts.reads == [(IdentityProvider.DISCORD, str(USER_ID))]
     interaction.response.send_message.assert_awaited_once()
@@ -238,7 +239,7 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
-    await open_consent_prompt(await sd.request(cast(Any, interaction)))
+    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
 
     assert len(accounts.creations) == 1
     creation = accounts.creations[0]
@@ -260,7 +261,7 @@ async def test_routed_consent_button_cancelling_stores_no_account(
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
-    await open_consent_prompt(await sd.request(cast(Any, interaction)))
+    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
 
     assert accounts.creations == []
     interaction.response.send_message.assert_awaited_once()

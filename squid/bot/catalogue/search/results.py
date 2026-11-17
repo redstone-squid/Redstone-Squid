@@ -145,7 +145,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Redstone
             ),
         )
 
-    async def _open_build(self, event: sl.ActionEvent) -> None:
+    async def _open_build(self, event: sl.ActionEvent[Any]) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
             await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
@@ -296,19 +296,19 @@ class _GroupedBuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, Re
             else None,
         )
 
-    async def _open_holder(self, build_id: int, _event: sl.ActionEvent) -> None:
+    async def _open_holder(self, build_id: int, _event: sl.ActionEvent[Any]) -> None:
         self._holder_id = build_id
         if self._build_detail is not None:
             self._holder_build = self._build_detail(build_id)
 
-    async def _back_to_records(self, _event: sl.ActionEvent) -> None:
+    async def _back_to_records(self, _event: sl.ActionEvent[Any]) -> None:
         self._holder_id = None
         self._show_records = True
 
-    async def _back_to_build(self, _event: sl.ActionEvent) -> None:
+    async def _back_to_build(self, _event: sl.ActionEvent[Any]) -> None:
         self._show_records = False
 
-    async def _retry(self, _event: sl.ActionEvent) -> None:
+    async def _retry(self, _event: sl.ActionEvent[Any]) -> None:
         self.card.invalidate()
 
 

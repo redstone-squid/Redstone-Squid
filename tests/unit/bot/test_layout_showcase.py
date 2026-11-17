@@ -20,7 +20,7 @@ async def test_commands_deliver_live_panels(command: str, count: int) -> None:
     harness = ContextHarness(message=MessageHarness(message_id=1), bot=bot, user_id=7)
     ctx = cast(commands.Context[Any], harness.source)
     entry = next(entry for entry in cog.__cog_commands__ if entry.name == command)
-    await entry.callback(cog, ctx)
+    await cast(Any, entry.callback)(cog, ctx)
     assert harness.source.send.await_count == count
     for call in harness.source.send.await_args_list:
         assert isinstance(call.kwargs["view"], discord.ui.LayoutView)
@@ -51,7 +51,7 @@ async def test_live_join_is_idempotent_and_host_close_finishes_children() -> Non
     cog = LayoutShowcaseCog(cast(Any, bot))
     ctx = cast(commands.Context[Any], ContextHarness(bot=bot, user_id=7).source)
     entry = next(entry for entry in cog.__cog_commands__ if entry.name == "review")
-    await entry.callback(cog, ctx, "live")
+    await cast(Any, entry.callback)(cog, ctx, "live")
     session = next(bot.ui.sessions.active())
     summary = session.root
     join = InteractionHarness(user_id=8, client=bot)

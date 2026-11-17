@@ -7,7 +7,7 @@ recent report IDs and offer refresh without replacing the report being read.
 import dataclasses
 import io
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol, cast, override
+from typing import Any, Protocol, cast, override
 
 import discord
 
@@ -309,7 +309,7 @@ class ErrorReportScreen(sd.Screen[int]):
         await event.acknowledge()
         await self._load_recent()
 
-    async def _toggle_filter(self, event: sl.ActionEvent) -> None:
+    async def _toggle_filter(self, event: sl.ActionEvent[Any]) -> None:
         await event.acknowledge()
         self.work_lost_only = not self.work_lost_only
         await self._load_recent()

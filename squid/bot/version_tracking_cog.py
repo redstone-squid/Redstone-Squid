@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, Self, override
+from typing import TYPE_CHECKING, Any, Protocol, Self, override
 
 import discord
 
@@ -174,7 +174,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(VersionTracker(bot))
 
 
-class _AddVersionForm(sl.forms.Form):
+class _AddVersionForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-version-tracking-add-minecraft-version = Add Minecraft version")
 
     edition = sl.forms.ChoiceField[Edition](

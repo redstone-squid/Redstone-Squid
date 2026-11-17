@@ -1,6 +1,6 @@
 """Persistent buttons and direct endpoint calls share the application's delivery path."""
 
-from typing import Literal, Self, override
+from typing import Literal, Self, cast, override
 from unittest.mock import AsyncMock, MagicMock
 
 import anyio
@@ -35,7 +35,7 @@ async def test_button_and_direct_call_dispatch_the_same_endpoint() -> None:
     clicked = InteractionHarness(user_id=77, client=bot)
     await button.callback(clicked.source)
     direct = InteractionHarness(user_id=77, client=bot)
-    await vote(await sd.request(direct.source), 12)
+    await vote(cast(AppRequest, await sd.request(direct.source)), 12)
     assert seen == [(77, 12), (77, 12)]
     clicked.response.send_message.assert_awaited_once()
     direct.response.send_message.assert_awaited_once()
@@ -91,7 +91,7 @@ async def test_watchdog_uses_endpoint_policy_before_delivery(audience: Literal["
         return sd.Response("Done.")
 
     clicked = InteractionHarness(user_id=77, client=make_layout_bot())
-    await slow(await sd.request(clicked.source))
+    await slow(cast(AppRequest, await sd.request(clicked.source)))
     assert clicked.response.defer.await_args.kwargs["ephemeral"] is (audience == "personal")
 
 
@@ -105,4 +105,4 @@ async def test_domain_errors_are_not_wrapped_by_acknowledgement_task_group() -> 
 
     clicked = InteractionHarness(user_id=77, client=make_layout_bot())
     with pytest.raises(ValueError, match="failed operation"):
-        await failed(await sd.request(clicked.source))
+        await failed(cast(AppRequest, await sd.request(clicked.source)))

@@ -266,11 +266,11 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await pick(event, "permission_role_ids", tr(t"access-choose-role = Choose internal role"), selected)
 
     @staticmethod
-    def _rule_form() -> sl.forms.FormSpec:
+    def _rule_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         return _RuleForm().spec()
 
     @staticmethod
-    def _assignment_form() -> sl.forms.FormSpec:
+    def _assignment_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         return _AssignmentForm().spec()
 
     def _role_browser(
@@ -430,7 +430,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         ).build_component(on_decide=self._decide_delete)
 
     @staticmethod
-    def _create_role_form() -> sl.forms.FormSpec:
+    def _create_role_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         return _CreateRoleForm().spec()
 
     @staticmethod
@@ -555,7 +555,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._save(ROLE_DELETE, RoleDeletionValues(role_id=identity), revision, label)
         await event.source.notice(label)
 
-    async def _authorize_mutation(self, event: sl.ActionEvent, *nodes: PermissionNode) -> bool:
+    async def _authorize_mutation(self, event: sl.ActionEvent[Any], *nodes: PermissionNode) -> bool:
         for node in nodes:
             if await self._authorize(node):
                 return True
@@ -563,7 +563,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         return False
 
 
-def _without(form: sl.forms.FormSpec, key: str) -> sl.forms.FormSpec:
+def _without(form: sl.forms.FormSpec[sd.Request[Any, Any]], key: str) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
     return replace(
         form, items=tuple(item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != key)
     )
@@ -651,7 +651,7 @@ _ROLE_ACTIONS = (
 )
 
 
-class _RuleForm(sl.forms.Form):
+class _RuleForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-change-direct-permission-rule = Change direct permission rule")
 
     operation = sl.forms.ChoiceField(
@@ -668,7 +668,7 @@ class _RuleForm(sl.forms.Form):
     reason = sl.forms.TextField(label=tr(t"access-view-reason = Reason"), required=False, maximum=500)
 
 
-class _AssignmentForm(sl.forms.Form):
+class _AssignmentForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-change-internal-role-assignment = Change internal role assignment")
 
     operation = sl.forms.ChoiceField(
@@ -683,7 +683,7 @@ class _AssignmentForm(sl.forms.Form):
     reason = sl.forms.TextField(label=tr(t"access-view-reason = Reason"), required=False, maximum=500)
 
 
-class _CreateRoleForm(sl.forms.Form):
+class _CreateRoleForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-create-internal-role = Create internal role")
 
     slug = sl.forms.TextField(label=tr(t"access-view-slug = Slug"), maximum=100)
@@ -694,7 +694,7 @@ class _CreateRoleForm(sl.forms.Form):
     scope = _scope_field()
 
 
-class _RolePatternForm(sl.forms.Form):
+class _RolePatternForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-custom-pattern = Custom permission pattern")
 
     pattern = sl.forms.TextField(

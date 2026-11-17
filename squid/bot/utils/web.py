@@ -102,6 +102,7 @@ async def extract_video_preview(video_data: bytes, *, timeout_seconds: float = 1
     with tempfile.TemporaryDirectory(prefix="squid-preview-") as directory:
         source = anyio.Path(directory) / "source"
         await source.write_bytes(video_data)
+        process = None
         try:
             with anyio.fail_after(timeout_seconds):
                 probe = await anyio.run_process(
@@ -156,6 +157,7 @@ async def extract_video_preview(video_data: bytes, *, timeout_seconds: float = 1
         except TimeoutError:
             msg = "Video frame extraction exceeded its deadline."
             raise RuntimeError(msg) from None
+    assert process is not None
     if process.returncode != 0:
         detail = process.stderr.decode("utf-8", errors="replace").strip()[-2000:]
         msg = f"Video frame extraction failed (exit {process.returncode}): {detail}"

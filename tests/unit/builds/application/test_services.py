@@ -67,7 +67,8 @@ class FakeBuildRepository(FakeBuildEditing):
         return None
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
-        if self.build is None or self.build.id is None:
+        # ORM identity columns may still be None before flush.
+        if self.build is None or self.build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return []
         return [self.build.id for source in self.build.source_messages if source.id == message_id]
 
@@ -613,7 +614,7 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     # An unrelated edit keeps the names, and does not add Regular in place of the unresolved pattern.
     await apply_build_taxonomy(build, FakeTaxonomyResolver())
     assert build.patterns == []
-    assert build.extra_info["unknown_patterns"] == ["Spiral"]
+    assert build.extra_info.get("unknown_patterns") == ["Spiral"]
 
     resolver = FakeTaxonomyResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
     await apply_build_taxonomy(build, resolver)

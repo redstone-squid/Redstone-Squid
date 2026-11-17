@@ -16,6 +16,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, Ident
 from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
+from squid.bot.routes import AppRequest
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
@@ -402,7 +403,7 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     opened = InteractionHarness(user_id=7, client=cog.bot)
     opened.user = member
     opened.guild = guild
-    await DraftEditorScreen.open_draft(await sd.request(opened.source), draft.snapshot.id)
+    await DraftEditorScreen.open_draft(cast(AppRequest, await sd.request(opened.source)), draft.snapshot.id)
     opened.response.send_message.assert_awaited_once()
     call = opened.response.send_message.await_args
     assert call is not None
@@ -419,7 +420,7 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     member.roles = []
     assert not await editor.workspace.may_edit()
     with pytest.raises(PermissionDeniedError) as denied:
-        await DraftEditorScreen.open_draft(await sd.request(opened.source), draft.snapshot.id)
+        await DraftEditorScreen.open_draft(cast(AppRequest, await sd.request(opened.source)), draft.snapshot.id)
     assert denied.value.public_context == {
         "required_permission": "build.submission.edit",
         "permission_reason": "missing_grant",

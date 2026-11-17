@@ -111,7 +111,12 @@ async def render_build_card(
     """Return a build card that callers can compose with other layout nodes."""
     metadata = build_metadata_fields(build)
     schematic_field = None
-    if build.id is not None and build.submission_status is Status.CONFIRMED and schematic_summaries is not None:
+    # ORM identity columns may still be None before flush.
+    if (
+        build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and build.submission_status is Status.CONFIRMED
+        and schematic_summaries is not None
+    ):
         try:
             summary = await schematic_summaries.summary_for(build.id)
         except Exception:
@@ -170,7 +175,11 @@ async def render_build_card(
         return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
     # A draft preview renders an unsaved build, which has no ID yet.
-    footer = f"Submission ID: {build.id}" if build.id is not None else "Preview · not submitted yet"
+    footer = (
+        f"Submission ID: {build.id}"
+        if build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        else "Preview · not submitted yet"
+    )
     if build.edited_time is not None:
         footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
     rows = ()

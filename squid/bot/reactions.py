@@ -645,7 +645,10 @@ class ReactionRouter:
             # rebind EventT across the union even though each queued item pairs its own event type with
             # its own callbacks -- which is exactly what the generic dataclass guarantees.
             functools.partial(  # pyright: ignore[reportArgumentType]
-                self._run_recovery, callback, item.kind, dataclasses.replace(item.event, recovering=True)
+                self._run_recovery,
+                callback,  # pyright: ignore[reportArgumentType]  # Paired with its event by _QueuedReaction.
+                item.kind,
+                dataclasses.replace(item.event, recovering=True),  # pyright: ignore[reportArgumentType]
             )
             for callback in item.recoveries
         )

@@ -169,7 +169,12 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     if not hit_ids:
         return {}
     builds = await build_queries.get_many(hit_ids)
-    summaries = {build.id: PublicBuildSummary.from_build(build) for build in builds if build.id is not None}
+    # ORM identity columns may still be None before flush.
+    summaries = {
+        build.id: PublicBuildSummary.from_build(build)
+        for build in builds
+        if build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+    }
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:
         logger.warning("Search projection referenced missing builds", extra={"build_ids": missing})

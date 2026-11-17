@@ -45,10 +45,11 @@ async def test_run_and_draft_changes_enqueue_minimal_status(
     }
     runs = partial(SqlAlchemyUnitOfWork, sessions)
     claim = await transact(runs, lambda uow: uow.inference_runs.begin(run, owner, inputs, capacity=1000), commit=True)
-    assert claim.token is not None
+    claim_token = claim.token
+    assert claim_token is not None
     await transact(
         runs,
-        lambda uow: uow.inference_runs.complete(run, claim.token, (BuildDraft(category=BuildCategory.OTHER),)),
+        lambda uow: uow.inference_runs.complete(run, claim_token, (BuildDraft(category=BuildCategory.OTHER),)),
         commit=True,
     )
     initial = await create_draft(sessions, owner)

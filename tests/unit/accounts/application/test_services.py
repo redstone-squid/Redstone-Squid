@@ -212,7 +212,8 @@ class FakeAccountRepository:
             (candidate for candidate in self.accounts.values() if candidate.public_creator_id == public_id),
             None,
         )
-        if account is None or account.id is None:
+        # ORM identity columns may still be None before flush.
+        if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return None
         return CreatorProfileRecord(
             public_id=public_id,

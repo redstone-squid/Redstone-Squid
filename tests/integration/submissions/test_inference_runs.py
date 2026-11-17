@@ -26,12 +26,13 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
     claim = await transact(
         repository, lambda uow: uow.inference_runs.begin(run, owner, inputs, capacity=1000), commit=True
     )
-    assert claim.token is not None
+    claim_token = claim.token
+    assert claim_token is not None
     candidates = await transact(
         repository,
         lambda uow: uow.inference_runs.complete(
             run,
-            claim.token,
+            claim_token,
             (
                 BuildDraft(category=None),
                 BuildDraft(category=BuildCategory.DOOR, door_width=3, door_expansion=expansion_document()),
@@ -67,7 +68,8 @@ async def test_reclaimed_run_fences_late_completion_and_failure(
     repository = partial(SqlAlchemyUnitOfWork, sessions)
     run = uuid4()
     first = await transact(repository, lambda uow: uow.inference_runs.begin(run, owner, {}, capacity=1000), commit=True)
-    assert first.token is not None
+    first_token = first.token
+    assert first_token is not None
     with pytest.raises(ConflictError):
         await transact(repository, lambda uow: uow.inference_runs.begin(run, owner, {}, capacity=1000), commit=True)
     async with sessions.begin() as session:
@@ -80,15 +82,16 @@ async def test_reclaimed_run_fences_late_completion_and_failure(
     second = await transact(
         repository, lambda uow: uow.inference_runs.begin(run, owner, {}, capacity=1000), commit=True
     )
-    assert second.token is not None
-    assert second.token != first.token
+    second_token = second.token
+    assert second_token is not None
+    assert second_token != first_token
     with pytest.raises(ConflictError):
         await transact(
-            repository, lambda uow: uow.inference_runs.complete(run, first.token, (BuildDraft(width=1),)), commit=True
+            repository, lambda uow: uow.inference_runs.complete(run, first_token, (BuildDraft(width=1),)), commit=True
         )
-    await transact(repository, lambda uow: uow.inference_runs.fail(run, first.token), commit=True)
+    await transact(repository, lambda uow: uow.inference_runs.fail(run, first_token), commit=True)
     result = await transact(
-        repository, lambda uow: uow.inference_runs.complete(run, second.token, (BuildDraft(width=2),)), commit=True
+        repository, lambda uow: uow.inference_runs.complete(run, second_token, (BuildDraft(width=2),)), commit=True
     )
     assert result[0].facts.width == 2
 
@@ -105,17 +108,19 @@ async def test_completed_empty_run_releases_admission_capacity(
     claim = await transact(
         repository, lambda uow: uow.inference_runs.begin(run, owner, {"purpose": "submission"}, capacity=1), commit=True
     )
-    assert claim.token is not None
+    claim_token = claim.token
+    assert claim_token is not None
     with pytest.raises(DraftCapacityExceededError):
         await transact(
             repository,
             lambda uow: uow.inference_runs.begin(uuid4(), owner, {"purpose": "submission"}, capacity=1),
             commit=True,
         )
-    await transact(repository, lambda uow: uow.inference_runs.complete(run, claim.token, ()), commit=True)
+    await transact(repository, lambda uow: uow.inference_runs.complete(run, claim_token, ()), commit=True)
     next_claim = await transact(
         repository,
         lambda uow: uow.inference_runs.begin(uuid4(), owner, {"purpose": "submission"}, capacity=1),
         commit=True,
     )
-    assert next_claim.token is not None
+    next_claim_token = next_claim.token
+    assert next_claim_token is not None

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
@@ -201,7 +201,7 @@ class SettingsEditor(sl.Reactive):
             await self.refresh()
         await self.edits.bind(GUILD_EDIT, guild_target(self._guild_id), self.revision).save(values, label)
 
-    async def may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+    async def may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
         if await self.authorize(node):
             return True
         await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
@@ -626,7 +626,7 @@ class VotingSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.confirming_reset = False
 
 
-class _VoteWeightForm(sl.forms.Form):
+class _VoteWeightForm(sl.forms.Form[sd.Request[Any, Any]]):
     multiplier = sl.forms.TextField(
         label=tr(t"settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight"),
         placeholder="1.5",
@@ -635,7 +635,7 @@ class _VoteWeightForm(sl.forms.Form):
     )
 
 
-class _VoteEmojisForm(sl.forms.Form):
+class _VoteEmojisForm(sl.forms.Form[sd.Request[Any, Any]]):
     aliases = sl.forms.TextAreaField(
         label=md_tr(t"bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line"),
         placeholder="approve | ✅\ndeny | ❌",

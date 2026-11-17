@@ -3,6 +3,7 @@
 import hashlib
 import json
 from collections.abc import Callable, Sequence
+from typing import cast
 
 from pydantic import TypeAdapter
 from sqlalchemy import and_, func, or_, select, update
@@ -188,7 +189,11 @@ class PostgresRangePublicationRepository:
         if not rows:
             return None
         registration = rows[0][0]
-        attempts = tuple(_attempt(run, snapshot) for _, run, snapshot in rows if run is not None)
+        attempts = tuple(
+            _attempt(matched_run, snapshot)
+            for _, run, snapshot in rows
+            if (matched_run := cast(DoorRangeRun | None, run)) is not None
+        )
         return RangePublication(
             registration.id,
             DoorRangeQuery.model_validate(registration.query),

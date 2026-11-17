@@ -213,11 +213,12 @@ async def test_late_analysis_cannot_resurrect_a_deleted_source(
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))
         await session.execute(update(DraftSchematicSource).values(updated_at=Instant.now().subtract(minutes=10)))
     await uploads.cleanup()
-    assert source.sha256 is not None
+    source_sha256 = source.sha256
+    assert source_sha256 is not None
     await transact(
         uows,
         lambda uow: uow.draft_schematics.finish_analysis(
-            source, IngestedSchematic(source.sha256, make_analysis(sha256=source.sha256))
+            source, IngestedSchematic(source_sha256, make_analysis(sha256=source_sha256))
         ),
         commit=True,
     )

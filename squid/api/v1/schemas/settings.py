@@ -1,6 +1,6 @@
 """Runtime settings wire representations. Discord IDs are decimal strings to avoid JavaScript rounding."""
 
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -33,7 +33,7 @@ class RuntimeSettingsDetail(BaseModel):
 
     @classmethod
     def from_domain(cls, settings: RuntimeSettings, *, revision: int = 1) -> Self:
-        values = settings.model_dump() | {"revision": revision}
+        values: dict[str, Any] = settings.model_dump() | {"revision": revision}
         for name in cls.model_fields:
             if name.endswith("_id"):
                 values[name] = str(values[name])

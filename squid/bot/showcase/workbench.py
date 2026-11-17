@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import override
+from typing import Any, override
 from uuid import uuid4
 
 import anyio
@@ -126,7 +126,7 @@ class BuildDraft(sl.Reactive):
         return self.publication is not None and isinstance(self.publication.status, sl.operations.Pending)
 
 
-class BuildForm(sl.forms.Form):
+class BuildForm(sl.forms.Form[sd.Request[Any, Any]]):
     """Keep the whole build edit in one validated action and history entry."""
 
     title = tr(t"layout-workbench-edit-sample-build = Edit sample build")

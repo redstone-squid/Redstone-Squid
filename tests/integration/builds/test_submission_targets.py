@@ -127,7 +127,8 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     loaded = [
         await transact(repository, lambda uow, build=build: uow.builds.get_by_id(build.id))
         for build in builds
-        if build.id is not None
+        # ORM identity columns may still be None before flush.
+        if build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
     ]
     assert [build.category if build is not None else None for build in loaded] == list(BuildCategory)
     assert all(build is not None and build.submitter_account_id == account_id for build in loaded)
@@ -1230,7 +1231,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
     assert loaded is not None
     assert loaded.versions == ["Java 1.21.0", "Java 1.21.1"]
     assert loaded.version_spec == "Java 1.21+"
-    assert loaded.extra_info["unknown_restrictions"] == {
+    assert loaded.extra_info.get("unknown_restrictions") == {
         "wiring_placement_restrictions": ["Unlisted wiring"],
         "animated_restrictions": ["Unlisted animation"],
         "component_restrictions": ["Unlisted component"],

@@ -319,7 +319,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         await event.notice(tr(t"tags-applied = Tag applied."))
 
     @staticmethod
-    def _proposal_form() -> sl.forms.FormSpec:
+    def _proposal_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         return _ProposalForm().spec()
 
     def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
@@ -483,7 +483,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._decision = None
         await event.source.notice(md_tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
 
-    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
         await event.notice(
@@ -513,7 +513,7 @@ def _action_label(action: str) -> sl.TextLike:
     }[action]
 
 
-class _ProposalForm(sl.forms.Form):
+class _ProposalForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-tags-view-propose-showcase-tag = Propose showcase tag")
 
     name = sl.forms.TextField(label=tr(t"bot-tags-view-display-name = Display name"), maximum=80)
@@ -525,7 +525,7 @@ class _ProposalForm(sl.forms.Form):
     query_name = sl.forms.TextField(label=tr(t"bot-tags-view-query-field = Query field"), required=False, maximum=64)
 
 
-class _AliasForm(sl.forms.Form):
+class _AliasForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-tags-view-add-restriction-alias = Add restriction alias")
 
     restriction = sl.forms.TextField(
@@ -534,7 +534,7 @@ class _AliasForm(sl.forms.Form):
     alias = sl.forms.TextField(label=tr(t"bot-tags-view-new-alias = New alias"), maximum=100)
 
 
-class _ApplyForm(sl.forms.Form):
+class _ApplyForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-tags-view-apply-showcase-tag = Apply showcase tag")
 
     build_id = sl.forms.IntField(label=tr(t"bot-tags-view-build-id = Build ID"), minimum=1)

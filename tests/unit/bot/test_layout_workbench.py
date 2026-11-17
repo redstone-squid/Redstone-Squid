@@ -77,6 +77,7 @@ async def test_publish_captures_revision_and_rejects_duplicate_start() -> None:
     await writer.send(delivered_to(message_harness(message_id=1)))
     await reader.send(delivered_to(message_harness(message_id=2)))
     generation = writer.generation
+    execution = None
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(writer.dispatch, "publish", interaction_harness(user_id=7))
         with anyio.fail_after(3):
@@ -92,6 +93,7 @@ async def test_publish_captures_revision_and_rejects_duplicate_start() -> None:
         await writer.dispatch("publish", interaction_harness(user_id=7), generation=generation)
         assert draft.publication is execution
         await writer.dispatch("large", interaction_harness(user_id=7))
+    assert execution is not None
     assert await execution == (BuildSample(), frozenset({"Flush"}))
     assert draft.publication_text() == "Draft changed · publish again"
 

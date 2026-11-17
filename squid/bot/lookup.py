@@ -90,7 +90,7 @@ class LookupScreen(sd.Screen[Suggestion]):
     async def on_load(self) -> None:
         self.picker.session = sp.BrowseSession(self.picker.search(""), identity=lambda item: item.value, page_size=25)
 
-    async def _picked(self, _event: sl.ActionEvent, _items: tuple[Suggestion, ...]) -> None:
+    async def _picked(self, _event: sl.ActionEvent[Any], _items: tuple[Suggestion, ...]) -> None:
         pass
 
     async def _confirm(self, event: sd.PressEvent) -> None:

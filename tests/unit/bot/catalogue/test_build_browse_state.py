@@ -758,7 +758,9 @@ async def test_schematic_tools_fit_one_row_and_convert_with_one_form() -> None:
     async with stage(_screen(schematics_available=True), owner=object()) as ui:
         await ui.press(ui.key_for("schematic-tools"))
         form = await ui.press_for_form(ui.key_for("convert"))
-        assert {item.custom_id for item in form.modal.walk_children() if hasattr(item, "custom_id")} == {
+        assert {
+            getattr(item, "custom_id", None) for item in form.modal.walk_children() if hasattr(item, "custom_id")
+        } == {
             "format",
             "version",
         }

@@ -172,11 +172,11 @@ class RecordComputationService:
         fixed = tuple(c for c in scoped if c.expansion is None)
         concrete = {_base_key(c) for c in fixed} | {identity.base_key for identity in requested}
         projected = tuple(
-            projected
+            projection
             for candidate in scoped
             if candidate.expansion is not None
             for base_key in sorted(concrete)
-            if (projected := family_at_category(candidate, CategoryIdentity(kind, base_key, ()), competing_only=True))
+            if (projection := family_at_category(candidate, CategoryIdentity(kind, base_key, ()), competing_only=True))
             is not None
         )
         categories = self._eager_categories(kind, (*fixed, *projected))

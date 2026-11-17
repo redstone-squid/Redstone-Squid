@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import Literal, Self, override
+from typing import Any, Literal, Self, override
 
 import anyio
 import discord
@@ -154,7 +154,8 @@ class AccountWorkspace(sd.Screen):
 
     def focus_targets(self) -> frozenset[AccountTab]:
         tabs: set[AccountTab] = {"identity"}
-        if self._account is not None and self._account.id is not None:
+        # ORM identity columns may still be None before flush.
+        if self._account is not None and self._account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             tabs.update(("overview", "claims", "merge"))
         if self._can_review_claims:
             tabs.add("review")
@@ -269,7 +270,7 @@ class AccountWorkspace(sd.Screen):
         )
         if (
             account is not None
-            and account.id is not None
+            and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
             and not account.needs_consent_refresh
             and self._can_refresh_identity
         ):
@@ -349,7 +350,7 @@ class AccountWorkspace(sd.Screen):
             if consent is None:
                 return
             account = self._account
-            if account is None or account.id is None:
+            if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 await self._accounts.get_or_create_identity(
                     IdentityProvider.DISCORD,
                     str(self._actor_id),
@@ -398,7 +399,7 @@ class AccountWorkspace(sd.Screen):
 
         async def consented_account_id(consent: AccountConsent) -> int:
             linked_account = account
-            if linked_account is None or linked_account.id is None:
+            if linked_account is None or linked_account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 linked_account = await self._accounts.get_or_create_identity(
                     IdentityProvider.DISCORD,
                     str(self._actor_id),
@@ -407,7 +408,7 @@ class AccountWorkspace(sd.Screen):
             elif linked_account.consent is None or linked_account.needs_consent_refresh:
                 linked_account = await self._accounts.grant_current_consent(linked_account.id)
             account_id = linked_account.id
-            if account_id is None:
+            if account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
             return account_id
 
@@ -472,7 +473,7 @@ class AccountWorkspace(sd.Screen):
         member = form.user
         assert isinstance(member, discord.abc.Snowflake)
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
-        if account is None or account.id is None:
+        if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
         refresh = await self._accounts.refresh_java_identity(account.id)
         await self._rebuild(changed_account_id=account.id)
@@ -539,31 +540,31 @@ class AccountWorkspace(sd.Screen):
 
     def _account_id(self) -> int:
         account = self._account
-        if account is None or account.id is None:
+        if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             message = "account workflow requires a persisted account"
             raise RuntimeError(message)
         return account.id
 
 
-class _LinkForm(sl.forms.Form):
+class _LinkForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"account-workspace-link-minecraft-account = Link Minecraft account")
 
     code = sl.forms.TextField(label=tr(t"account-workspace-in-game-link-code = In-game link code"), maximum=100)
 
 
-class _RefreshMemberForm(sl.forms.Form):
+class _RefreshMemberForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"account-workspace-refresh-member-identity = Refresh member identity")
 
     user = EntityField(label=tr(t"account-workspace-discord-member = Discord member"))
 
 
-class _ClaimForm(sl.forms.Form):
+class _ClaimForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"account-workspace-claim-an-older-creator-name = Claim an older creator name")
 
     name = sl.forms.TextField(label=tr(t"account-workspace-creator-name = Creator name"), maximum=100)
 
 
-class _MergeForm(sl.forms.Form):
+class _MergeForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"account-workspace-preview-account-merge = Preview account merge")
 
     code = sl.forms.TextField(label=tr(t"account-workspace-merge-code = Merge code"), maximum=100)
@@ -578,7 +579,7 @@ async def refresh_discord_avatar_key(
     user object; public profile rendering can then use the stored hash.
     """
     identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
-    if account.id is None or identity is None or identity.id is None:
+    if account.id is None or identity is None or identity.id is None:  # pyright: ignore[reportUnnecessaryComparison]
         return
     key = user.avatar.key if user.avatar is not None else None
     if key != identity.avatar_key:

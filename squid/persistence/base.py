@@ -32,8 +32,9 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=F
         }
     )
 
-    __eq__ = object.__eq__
-    __hash__ = object.__hash__
+    # eq=False keeps identity methods; MappedAsDataclass stubs still declare value methods.
+    __eq__ = object.__eq__  # pyright: ignore[reportAssignmentType]
+    __hash__ = object.__hash__  # pyright: ignore[reportAssignmentType]
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Use model docstrings as table and column comments.

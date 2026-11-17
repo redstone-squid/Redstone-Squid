@@ -102,7 +102,8 @@ class PublicBuildSummary:
         The caller must check visibility first; this method does not require the
         build to be confirmed.
         """
-        if build.id is None:
+        # ORM identity columns may still be None before flush.
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = "persisted build is missing its identifier"
             raise DataIntegrityError(msg)
         return cls(

@@ -577,7 +577,15 @@ class PostgresNotificationRepository:
                 select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
             )
         ).scalars()
-        payload = {"build_id": build.id, "category": None if build.category is None else str(build.category)}
+        # Transient models can omit category.
+        payload = {
+            "build_id": build.id,
+            "category": (
+                None
+                if build.category is None  # pyright: ignore[reportUnnecessaryComparison]
+                else str(build.category)
+            ),
+        }
         await self._insert_candidates(
             session,
             event=event,

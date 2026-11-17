@@ -4,7 +4,7 @@ import csv
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import cast, override
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -249,9 +249,9 @@ def parse_poll_choices(value: str) -> tuple[str, ...]:
     return tuple(choice.strip() for choice in choices)
 
 
-def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
+def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
     """Describe the poll's free-text input through the portable form API."""
-    return sl.forms.FormSpec(
+    return sl.forms.FormSpec[sd.Request[Any, Any]](
         tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
         (
             sl.forms.TextAreaField(
@@ -276,7 +276,7 @@ type ResolveOptions = Callable[[tuple[str, ...]], Awaitable[tuple[VoteOption, ..
 type PublishPoll = Callable[[PollDraft, tuple[VoteOption, ...]], Awaitable[str]]
 
 
-def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
+def _settings_form(allow_network: bool) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
     fields: list[sl.forms.FormField[object]] = [
         cast(
             sl.forms.FormField[object],
@@ -318,7 +318,9 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
                 ),
             )
         )
-    return sl.forms.FormSpec(tr(t"bot-voting-poll-wizard-poll-settings = Poll settings"), tuple(fields))
+    return sl.forms.FormSpec[sd.Request[Any, Any]](
+        tr(t"bot-voting-poll-wizard-poll-settings = Poll settings"), tuple(fields)
+    )
 
 
 def _poll_steps(

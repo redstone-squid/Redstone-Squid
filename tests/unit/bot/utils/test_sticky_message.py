@@ -135,6 +135,7 @@ async def test_close_retains_timer_scheduled_while_another_is_cancelled(channel:
             await resume_cancellation.wait()
             await super().cancel(*handles)
 
+    replacement = None
     async with GatedSupervisor().running() as supervisor:
         sticky = StubStickyMessage(supervisor, debounce_delay=60)
         await sticky.trigger(channel.source)
@@ -147,6 +148,7 @@ async def test_close_retains_timer_scheduled_while_another_is_cancelled(channel:
                 replacement = sticky._debounce_tasks[channel.id]
                 resume_cancellation.set()
 
+        assert replacement is not None
         assert sticky._debounce_tasks[channel.id] is replacement
         await sticky.close()
         assert replacement.finished.is_set()

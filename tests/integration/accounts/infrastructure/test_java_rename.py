@@ -204,10 +204,11 @@ async def test_rename_into_a_held_name_opens_a_claim_and_transfers_nothing(
     assert refresh.claimed_alias is None
     assert refresh.contested_alias is not None
     assert refresh.contested_alias.account_id == holder.id, "the credit must not move"
-    assert refresh.opened_claim is not None
-    assert refresh.opened_claim.status is ClaimStatus.PENDING
+    opened_claim = refresh.opened_claim
+    assert opened_claim is not None
+    assert opened_claim.status is ClaimStatus.PENDING
     assert [claim.id for claim in await transact(repository, lambda uow: uow.accounts.pending_claims())] == [
-        refresh.opened_claim.id
+        opened_claim.id
     ]
 
 
@@ -377,13 +378,14 @@ async def test_approving_a_contested_claim_needs_reassign(
         ),
         commit=True,
     )
-    assert refresh.opened_claim is not None
+    opened_claim = refresh.opened_claim
+    assert opened_claim is not None
 
     with pytest.raises(AliasAlreadyClaimedError):
         await transact(
             repository,
             lambda uow: uow.accounts.resolve_claim(
-                claim_id=refresh.opened_claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=staff.id
+                claim_id=opened_claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=staff.id
             ),
             commit=True,
         )
@@ -391,7 +393,7 @@ async def test_approving_a_contested_claim_needs_reassign(
     resolved = await transact(
         repository,
         lambda uow: uow.accounts.resolve_claim(
-            claim_id=refresh.opened_claim.id,
+            claim_id=opened_claim.id,
             status=ClaimStatus.APPROVED,
             resolved_by_account_id=staff.id,
             reassign=True,

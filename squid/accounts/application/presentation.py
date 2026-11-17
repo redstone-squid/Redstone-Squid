@@ -21,7 +21,8 @@ def claimant_label(claim: AliasClaim) -> str:
         if java is not None and java.display_name is not None:
             return java.display_name
         discord = claimant.most_recent_identity_for(IdentityProvider.DISCORD)
-        if claimant.public_creator_id is not None:
+        # ORM identity columns may still be None before flush.
+        if claimant.public_creator_id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             creator_id = claimant.public_creator_id
             message = md_tr(
                 t"accounts-application-presentation-creator = creator {creator_id!s}",

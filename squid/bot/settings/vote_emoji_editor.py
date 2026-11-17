@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from functools import partial
-from typing import override
+from typing import Any, override
 from uuid import uuid4
 
 import discord
@@ -52,7 +52,7 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
                     ),
                 )
             )
-        return sl.forms.FormSpec(tr(t"vote-row-title = Vote emoji"), tuple(fields))
+        return sl.forms.FormSpec[sd.Request[Any, Any]](tr(t"vote-row-title = Vote emoji"), tuple(fields))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

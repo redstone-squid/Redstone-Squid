@@ -48,7 +48,7 @@ def test_generated_summaries_and_foreign_source_ids_are_replaced_with_real_excer
                 domain="x=1-14 wide",
                 volume="40+20x blocks",
                 claimed_record_domain="n=5-14 wide",
-                evidence=[ExpansionEvidence(source_message_id=10, text="A summary that never appeared in the source")],
+                evidence=(ExpansionEvidence(source_message_id=10, text="A summary that never appeared in the source"),),
             )
         ],
     )

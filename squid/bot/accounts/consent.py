@@ -209,7 +209,7 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
 
 
 async def prompt_for_consent(
-    request: sd.Request[Any],
+    request: sd.Request[Any, Any],
     *,
     user_id: int,
     preview: LinkPreview | None = None,
@@ -283,7 +283,12 @@ async def with_consented_account(
     request = event.context
     user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
-    if account is not None and account.id is not None and not account.needs_consent_refresh:
+    # ORM identity columns may still be None before flush.
+    if (
+        account is not None
+        and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and not account.needs_consent_refresh
+    ):
         await work(event, account.id)
         return
     message_root = request.root
@@ -306,7 +311,7 @@ async def with_consented_account(
 
 
 async def ensure_consented_account(
-    request: sd.Request[Any],
+    request: sd.Request[Any, Any],
     accounts: AccountService,
     *,
     timeout: float = 120.0,
@@ -319,7 +324,11 @@ async def ensure_consented_account(
     """
     user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
-    if account is not None and account.id is not None and not account.needs_consent_refresh:
+    if (
+        account is not None
+        and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        and not account.needs_consent_refresh
+    ):
         return account.id
 
     consent = await prompt_for_consent(request, user_id=user.id, timeout=timeout, parent=parent)

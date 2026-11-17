@@ -119,7 +119,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
             ),
         )
 
-    async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode) -> StoredSchematic | None:
+    async def _primary(self, event: sl.ActionEvent[Any], private_access: PermissionNode) -> StoredSchematic | None:
         """Return the featured schematic if the actor may use it, otherwise tell them why not.
 
         A publicly downloadable schematic is open to everyone. Otherwise the uploader may use it, as
@@ -185,7 +185,7 @@ class SchematicTools(sl.Component[sl.ComponentsV2Target, SchematicRequest]):
         stored: StoredSchematic,
         account_id: int,
         recipe: VideoRenderRequest,
-        event: sl.ActionEvent,
+        event: sl.ActionEvent[Any],
     ) -> None:
         service = self._schematics.videos
         assert service is not None

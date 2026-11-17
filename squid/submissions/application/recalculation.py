@@ -234,8 +234,6 @@ class RecalculationProposalService:
             ) or retained.owner_account_id != build.submitter_account_id:
                 raise AuthorizationError
             await self._builds.authorize_edit_in(uow, actor, current)
-            if actor.subject.account_id is None:
-                raise AccountRequiredError
             build.edited_time = Instant.now()
             await uow.builds.save(
                 build,

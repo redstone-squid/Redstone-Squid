@@ -14,7 +14,7 @@ class MixinTestBase(DeclarativeBase):
     pass
 
 
-class MutableRecord(AuditTimestampsMixin, MixinTestBase):
+class MutableRecord(AuditTimestampsMixin, MixinTestBase, kw_only=True):
     __tablename__ = "mutable_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

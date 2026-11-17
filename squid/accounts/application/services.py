@@ -186,7 +186,8 @@ class AccountService:
                 # renders a confirmation for something that cannot commit.
                 raise InvalidMergeCodeError
             absorbed = await uow.accounts.get_by_id(ticket.account_id)
-            if absorbed is None or absorbed.public_creator_id is None:
+            # ORM identity columns may still be None before flush.
+            if absorbed is None or absorbed.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 raise InvalidMergeCodeError
             record = await uow.accounts.get_creator_profile_record(absorbed.public_creator_id)
             aliases = () if record is None else record.aliases
@@ -430,7 +431,7 @@ class AccountService:
             uow.builds.editing(actor=account_id, operation="edit", source="alias_claim"),
         ):
             account = await uow.accounts.get_by_id(account_id)
-            if account is None or account.id is None:
+            if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 raise AccountNotFoundError(account_id)
             if account.needs_consent_refresh:
                 raise ConsentRequiredError(account_id=account_id)

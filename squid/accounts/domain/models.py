@@ -153,7 +153,8 @@ class VerificationCode:
 
 
 def _identity_order(identity: AccountIdentity) -> tuple[bool, int, str]:
-    return identity.id is not None, identity.id or 0, identity.subject
+    # ORM identity columns may still be None before flush.
+    return identity.id is not None, identity.id or 0, identity.subject  # pyright: ignore[reportUnnecessaryComparison]
 
 
 @dataclass(frozen=True, slots=True)

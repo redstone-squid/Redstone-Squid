@@ -331,7 +331,7 @@ class StarboardScreen(sd.Screen):
             ),
         )
 
-    async def _remove_emoji(self, before: StarboardSnapshot, emoji: str, event: sl.ActionEvent) -> None:
+    async def _remove_emoji(self, before: StarboardSnapshot, emoji: str, event: sl.ActionEvent[Any]) -> None:
         if await self._may(event, STARBOARD_EMOJI_EDIT):
             await self._save(before, replace(before, emojis=tuple(item for item in before.emojis if item[0] != emoji)))
 
@@ -344,13 +344,13 @@ class StarboardScreen(sd.Screen):
         weights[role_id] = form.multiplier
         await self._save(before, replace(before, weights=tuple(sorted(weights.items()))))
 
-    async def _remove_weight(self, before: StarboardSnapshot, role_id: int, event: sl.ActionEvent) -> None:
+    async def _remove_weight(self, before: StarboardSnapshot, role_id: int, event: sl.ActionEvent[Any]) -> None:
         if await self._may(event, STARBOARD_WEIGHT_EDIT):
             await self._save(
                 before, replace(before, weights=tuple(item for item in before.weights if item[0] != role_id))
             )
 
-    async def _request_delete(self, snapshot: StarboardSnapshot, event: sl.ActionEvent) -> None:
+    async def _request_delete(self, snapshot: StarboardSnapshot, event: sl.ActionEvent[Any]) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
         self._deleting = snapshot
@@ -380,7 +380,7 @@ class StarboardScreen(sd.Screen):
         self._decision = None
         await event.source.notice(tr(t"bot-starboard-screen-starboard-deleted = Starboard deleted."))
 
-    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
         await event.notice(
@@ -407,9 +407,9 @@ def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:
     )
 
 
-def _setting_form(setting: str, value: object) -> sl.forms.FormSpec:
+def _setting_form(setting: str, value: object) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
     label = setting.replace("_", " ").title()
-    field: sl.forms.FormField[Any]
+    field: sl.forms.FormField[Any, Any]
     if setting == "channel_id":
         field = EntityField(
             key="value",
@@ -426,10 +426,10 @@ def _setting_form(setting: str, value: object) -> sl.forms.FormSpec:
         field = sl.forms.IntField(key="value", label=label, default=cast(int, value))
     else:
         field = sl.forms.TextField(key="value", label=label, default=str(value), maximum=200)
-    return sl.forms.FormSpec(label, (field,))
+    return sl.forms.FormSpec[sd.Request[Any, Any]](label, (field,))
 
 
-class _CreateBoardForm(sl.forms.Form):
+class _CreateBoardForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-starboard-screen-create-starboard = Create starboard")
 
     name = sl.forms.TextField(label=tr(t"bot-starboard-screen-name = Name"), default="main", maximum=100)
@@ -441,7 +441,7 @@ class _CreateBoardForm(sl.forms.Form):
     required = sl.forms.FloatField(label=tr(t"bot-starboard-screen-post-threshold = Post threshold"), default=3.0)
 
 
-class _EditEmojiForm(sl.forms.Form):
+class _EditEmojiForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"starboard-emoji-editor-title = Add or remove starboard emoji")
 
     emoji = sl.forms.TextField(label=tr(t"bot-starboard-screen-emoji = Emoji"), maximum=100)
@@ -456,7 +456,7 @@ class _EditEmojiForm(sl.forms.Form):
     multiplier = sl.forms.FloatField(label=tr(t"bot-starboard-screen-multiplier = Multiplier"), default=1.0)
 
 
-class _EditWeightForm(sl.forms.Form):
+class _EditWeightForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"starboard-role-multiplier-action = Set or remove role multiplier")
 
     role_id = EntityField(label=tr(t"starboard-role = Role"), entity_type=sl.entity.EntityType.ROLE)

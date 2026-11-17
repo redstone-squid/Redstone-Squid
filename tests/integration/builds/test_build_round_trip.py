@@ -836,7 +836,7 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
     saved = await transact(repository, lambda uow: uow.builds.get_by_id(loaded.id))
     assert saved is not None
     assert saved.width == preview.width
-    assert saved.extra_info["unknown_patterns"] == ["preview only"]
+    assert saved.extra_info.get("unknown_patterns") == ["preview only"]
     assert "https://example.com/preview.png" in saved.image_urls
     assert saved.revision == loaded.revision + 1
 

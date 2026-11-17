@@ -450,8 +450,9 @@ def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
         msg = "normalized submission cannot be encoded as a durable payload"
         raise DataIntegrityError(msg) from error
     encoded = cast(dict[str, object], payload.model_dump(mode="json"))
-    if not expandable and isinstance(encoded.get("details"), dict):
-        encoded["details"].pop("expansion", None)
+    details = encoded.get("details")
+    if not expandable and isinstance(details, dict):
+        details.pop("expansion", None)
     return encoded
 
 

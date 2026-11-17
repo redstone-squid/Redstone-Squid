@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import replace
-from typing import cast, override
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -70,7 +70,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         profile_section = sp.EditorSection.from_form(
             "profile",
             tr(t"account-view-profile = Profile"),
-            sl.forms.FormSpec(
+            sl.forms.FormSpec[sd.Request[Any, Any]](
                 tr(t"account-view-edit-profile = Edit profile"),
                 (
                     sl.forms.TextField(
@@ -96,7 +96,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         links = sp.CollectionEditor(
             tr(t"account-view-links-2 = Links"),
-            create=sl.forms.FormSpec(
+            create=sl.forms.FormSpec[sd.Request[Any, Any]](
                 tr(t"account-view-profile-link = Profile link"),
                 (
                     sl.forms.TextField(

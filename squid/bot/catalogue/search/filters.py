@@ -253,7 +253,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         )
 
     def _query_form(self, query: str) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
-        return sl.forms.FormSpec(
+        return sl.forms.FormSpec[sd.Request[Any, Any]](
             tr(t"guided-search-query-title = Search query"),
             (
                 sl.forms.TextField(
@@ -349,13 +349,13 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
                 default=negated,
             )
         )
-        return sl.forms.FormSpec(label, tuple(fields))
+        return sl.forms.FormSpec[sd.Request[Any, Any]](label, tuple(fields))
 
     def _text_form(
         self, item: QueryExpression, *, negated: bool = False
     ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         assert isinstance(item, TextExpression)
-        return sl.forms.FormSpec(
+        return sl.forms.FormSpec[sd.Request[Any, Any]](
             tr(t"guided-search-edit-text = Edit keywords"),
             (
                 sl.forms.TextField(
@@ -426,7 +426,7 @@ class GuidedSearch(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
             )
             return SuggestionSource(request.client.services.suggestions, suggestion, RequestAuthorizer(request))
 
-        async def picked(action: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
+        async def picked(action: sl.ActionEvent[Any], items: tuple[Suggestion, ...]) -> None:
             if items:
                 await on_pick(cast(sd.ActionEvent, action), items[0])
 

@@ -304,7 +304,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @classmethod
-    def _lookup_form(cls) -> sl.forms.FormSpec:
+    def _lookup_form(cls) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         form = _LookupForm().spec()
         return replace(
             form,
@@ -316,7 +316,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @classmethod
-    def _rebuild_form(cls) -> sl.forms.FormSpec:
+    def _rebuild_form(cls) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         form = _RebuildForm().spec()
         return replace(
             form,
@@ -443,7 +443,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             )
         )
 
-    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
         await event.notice(
@@ -476,7 +476,7 @@ def _remove_label(label: sl.TextLike) -> sl.TextLike:
     return tr(t"records-remove-restriction = Remove {label}")
 
 
-class _LookupForm(sl.forms.Form):
+class _LookupForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-submission-records-lookup-record-category = Lookup record category")
 
     kind = RecordsScreen._kind_field()
@@ -491,7 +491,7 @@ class _LookupForm(sl.forms.Form):
     )
 
 
-class _RebuildForm(sl.forms.Form):
+class _RebuildForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-submission-records-rebuild-records = Rebuild all records")
 
     kind = RecordsScreen._kind_field(required=False)

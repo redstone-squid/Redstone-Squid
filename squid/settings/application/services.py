@@ -94,7 +94,7 @@ class SettingsService:
             row = await uow.settings.get(server_id, for_update=True)
             if row is None:
                 return ()
-            cleared = tuple(
+            cleared: tuple[Setting, ...] = tuple(
                 setting for setting, column in CHANNEL_FIELDS.items() if getattr(row, column) in channel_ids
             )
             for setting in cleared:

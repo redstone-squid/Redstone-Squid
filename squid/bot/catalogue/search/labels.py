@@ -79,7 +79,7 @@ def field_label(name: str) -> sl.TextLike:
             return name.replace("_", " ").capitalize()
 
 
-def value_label(value: ScalarValue) -> str:
+def value_label(value: ScalarValue | date | datetime) -> str:
     """Format a filter value without query quoting, such as `observerless` or `2025-01-01`."""
     match value:
         case bool():

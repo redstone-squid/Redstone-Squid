@@ -96,7 +96,8 @@ class ProfileDetail(BaseModel):
         )
         avatar = (
             None
-            if source is None or source.id is None
+            # ORM identity columns may still be None before flush.
+            if source is None or source.id is None  # pyright: ignore[reportUnnecessaryComparison]
             else AvatarDetail(identity_id=source.id, provider=source.provider, url=avatar_url_for(source))
         )
         return cls(

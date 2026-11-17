@@ -198,7 +198,8 @@ async def _require_pending_view(permissions: PermissionService, caller: Caller) 
 
 def build_etag(build: Build) -> str:
     """Return the strong validator for one persisted build revision."""
-    if build.id is None:
+    # ORM identity columns may still be None before flush.
+    if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
         msg = "Cannot create an ETag for an unpersisted build."
         raise ValueError(msg)
     return f'"build-{build.id}-r{build.revision}"'

@@ -42,7 +42,8 @@ async def ensure_build_review(
     Returns:
         The session ID, or None when the supplied channel list is empty.
     """
-    if build.id is None or build.submitter_account_id is None:
+    # ORM identity columns may still be None before flush.
+    if build.id is None or build.submitter_account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
         msg = "A persisted build and submitter account are required for review."
         raise ValueError(msg)
     if build.submission_status != Status.PENDING:

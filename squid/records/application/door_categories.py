@@ -68,7 +68,8 @@ def family_at_category(
     ):
         return None
     if competing_only and source.expansion is not None:
-        point = _normalized(source.expansion).evaluate(query.opening)
+        point = _normalized(source.expansion).evaluate(query.opening)  # pyright: ignore[reportArgumentType]
+        # The frozen Pydantic expansion model generates a hash at runtime.
         if not any(c.status in (PointStatus.SUPPORTED, PointStatus.UNRESOLVED) for c in point.configurations):
             return None
     size = identity.base_key.split("|")[1]

@@ -369,7 +369,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request[Any, RedstoneS
         self.projection.invalidate()
         await self._refresh_posts(self._build_id)
 
-    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
         await event.notice(
@@ -656,7 +656,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._selected = None
         await self._browser._back(_event)
 
-    async def _open_holder(self, build_id: int, event: sl.ActionEvent) -> None:
+    async def _open_holder(self, build_id: int, event: sl.ActionEvent[Any]) -> None:
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
 
@@ -871,7 +871,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         # A new search shows its results, so help gives way to them.
         self._show_search_help = False
 
-    async def _back(self, _event: sl.ActionEvent) -> None:
+    async def _back(self, _event: sl.ActionEvent[Any]) -> None:
         self._selected = None
 
 
@@ -915,7 +915,7 @@ def _build_summary(build: Build) -> sl.TextLike:
     return build_row(build.id, build.one_line_title, build.dimensions)
 
 
-class _OpenBuildForm(sl.forms.Form):
+class _OpenBuildForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"bot-submission-build-browse-open-build = Open build")
 
     id = sl.forms.IntField(label=tr(t"bot-submission-build-browse-build-id = Build ID"), minimum=1)

@@ -204,6 +204,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     native = FakeSchematicAnalyzer()
     current = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
 
+    completed = None
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(stale.process_batch)
@@ -221,6 +222,8 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
             assert completed.result_object_key is not None
             release.set()
 
+    assert completed is not None
+    assert completed.result_object_key is not None
     assert await jobs.get(job_id) == completed
     assert await artifacts.get(completed.result_object_key, max_bytes=1024) == native.render_output
 

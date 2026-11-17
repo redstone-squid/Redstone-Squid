@@ -68,7 +68,7 @@ class DiscordActorResolver:
 
     async def resolve(
         self,
-        source: sd.Request[Any] | Context[Any] | discord.Member,
+        source: sd.Request[Any, Any] | Context[Any] | discord.Member,
         *,
         refresh: bool = False,
     ) -> Actor:

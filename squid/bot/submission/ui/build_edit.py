@@ -239,7 +239,8 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         changes: Topic | None = None,
         recovered: bool = False,
     ) -> None:
-        if build.id is None:
+        # ORM identity columns may still be None before flush.
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             message = "only saved builds can be edited"
             raise ValueError(message)
         self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None] | None = (build, node)
@@ -512,7 +513,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         self.controller.forget({build_target(self._build_id).identity})
         await self.controller.refresh()
 
-    async def _may_event(self, event: sl.ActionEvent) -> bool:
+    async def _may_event(self, event: sl.ActionEvent[Any]) -> bool:
         if not await self.may_edit():
             await event.notice(
                 tr(

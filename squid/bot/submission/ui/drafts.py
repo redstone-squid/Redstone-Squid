@@ -750,7 +750,7 @@ class FilesEditorScreen(sd.Screen[None]):
                     self.selected_file = str(new_id)
 
         await event.present_form(
-            sl.forms.FormSpec(
+            sl.forms.FormSpec[sd.Request[Any, Any]](
                 tr(t"draft-editor-replace-title = Replace file"),
                 (FileField(key="file", label=tr(t"draft-editor-replacement-label = New file"), minimum=1, maximum=1),),
             ),
@@ -947,7 +947,7 @@ async def present_add_files(ws: DraftWorkspace, event: sd.PressEvent) -> None:
         )
 
     await event.present_form(
-        sl.forms.FormSpec(
+        sl.forms.FormSpec[sd.Request[Any, Any]](
             tr(t"draft-editor-add-files = Add files"),
             (
                 FileField(

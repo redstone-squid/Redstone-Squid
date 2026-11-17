@@ -65,7 +65,8 @@ async def page_ids(
             limit=limit,
         ),
     )
-    return [build.id for build in builds if build.id is not None]
+    # ORM identity columns may still be None before flush.
+    return [build.id for build in builds if build.id is not None]  # pyright: ignore[reportUnnecessaryComparison]
 
 
 async def test_a_backward_page_comes_back_in_display_order(

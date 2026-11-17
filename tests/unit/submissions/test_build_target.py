@@ -10,6 +10,7 @@ import pytest
 
 from squid.builds.domain import BuildCategory, BuildDraft, Status
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
+from squid.builds.domain.taxonomy import RestrictionField
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
@@ -238,11 +239,11 @@ async def test_general_patterns_survive_prefill_durable_payload_and_build(catego
     build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags((pattern,)), FakeVersions()).prepare(restored)
     assert isinstance(build, Build)
     assert build.patterns == [pattern.display_name]
-    assert build.extra_info["unknown_patterns"] == ["Spiral Staircase"]
+    assert build.extra_info.get("unknown_patterns") == ["Spiral Staircase"]
     preview = preview_build(category.value, answers, {pattern.stable_key: pattern})
     assert preview is not None
     assert preview.patterns == build.patterns
-    assert preview.extra_info["unknown_patterns"] == ["Spiral Staircase"]
+    assert preview.extra_info.get("unknown_patterns") == ["Spiral Staircase"]
 
 
 def test_empty_general_patterns_keep_the_legacy_payload_shape() -> None:
@@ -687,7 +688,7 @@ async def test_unparseable_compatibility_keeps_the_claim_without_failing_the_bui
 
 
 async def test_restriction_categories_survive_durable_payload_and_preparation() -> None:
-    grouped = (
+    grouped: tuple[tuple[RestrictionField, str], ...] = (
         ("wiring_placement_restrictions", "Seamless"),
         ("animated_restrictions", "Full Sync"),
         ("component_restrictions", "Contained"),
@@ -702,7 +703,7 @@ async def test_restriction_categories_survive_durable_payload_and_preparation() 
     assert restored == submission
     build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
     assert isinstance(build, Build)
-    assert build.extra_info["unknown_restrictions"] == {
+    assert build.extra_info.get("unknown_restrictions") == {
         "wiring_placement_restrictions": ["Seamless"],
         "animated_restrictions": ["Full Sync"],
         "component_restrictions": ["Contained"],

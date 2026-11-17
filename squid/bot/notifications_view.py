@@ -457,7 +457,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
         text = str(value).strip() if value is not None else ""
         return text or None
 
-    def _filter_form(self) -> sl.forms.FormSpec:
+    def _filter_form(self) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         value_fields: tuple[sl.forms.FormField, ...] = ()
         label = tr(t"bot-notifications-view-exact-tag-value = Exact tag value")
         if self.filter_tag is not None and self.filter_tag_type is not TagValueType.NONE:
@@ -477,7 +477,7 @@ class NotificationSubscriptions(sl.Component[sl.ComponentsV2Target, sd.Request[A
             else:
                 field = sl.forms.TextField(key="tag_value", label=label, required=False, maximum=100)
             value_fields = (field,)
-        return sl.forms.FormSpec(
+        return sl.forms.FormSpec[sd.Request[Any, Any]](
             tr(t"bot-notifications-view-follow-matching-records = Follow matching records"),
             (
                 sl.forms.ChoiceField(

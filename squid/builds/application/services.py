@@ -319,7 +319,8 @@ class BuildService:
         get_for_update holds a database row lock until commit. Embedding index
         updates run after both locks have been released.
         """
-        if build.id is None:
+        # ORM identity columns may still be None before flush.
+        if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             async with (
                 self._uow_factory() as uow,
                 uow.builds.editing(

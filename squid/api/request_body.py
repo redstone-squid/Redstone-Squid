@@ -77,7 +77,11 @@ class BoundedRequestBodyMiddleware:
     def _must_bound(self, scope: Scope) -> bool:
         # Litestar resolves the native handler before entering route middleware.
         handler = scope.get("route_handler")
-        if handler is not None and getattr(handler.fn, _STREAMS_OWN_BODY, False):
+        # Non-route ASGI scopes may omit the handler.
+        if (
+            handler is not None  # pyright: ignore[reportUnnecessaryComparison]
+            and getattr(handler.fn, _STREAMS_OWN_BODY, False)
+        ):
             return False
         return (
             scope["type"] == "http"

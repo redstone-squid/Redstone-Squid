@@ -1,7 +1,7 @@
 """PostgreSQL persistence for durable submission finalization."""
 
 from collections.abc import Callable, Sequence
-from typing import override
+from typing import cast, override
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, and_, or_, select
@@ -264,6 +264,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         )
         claims: list[ClaimedFinalizationJob] = []
         for job, original_input in rows:
+            original_input = cast(SubmissionFinalizationInput | None, original_input)
             payload = job.payload
             if not isinstance(payload, dict):
                 msg = "claimable finalization job has no JSON object payload"

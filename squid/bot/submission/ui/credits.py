@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from functools import partial
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
@@ -198,7 +198,7 @@ class CreditEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.page = max(0, page)
 
 
-class _IdentityReferenceForm(sl.forms.Form):
+class _IdentityReferenceForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"credits-add-reference = Add identity reference")
 
     kind = sl.forms.ChoiceField(

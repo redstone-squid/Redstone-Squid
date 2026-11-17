@@ -58,7 +58,12 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD, str(message.author.id)
         )
-        if account is None or account.id is None or account.needs_consent_refresh:
+        # ORM identity columns may still be None before flush.
+        if (
+            account is None
+            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
+            or account.needs_consent_refresh
+        ):
             logger.debug(
                 "Skipping build inference for unconsented author %s in channel %s",
                 message.author.id,
@@ -102,7 +107,11 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD, str(message.author.id)
         )
-        if account is None or account.id is None or account.needs_consent_refresh:
+        if (
+            account is None
+            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
+            or account.needs_consent_refresh
+        ):
             user_id = message.author.id
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)

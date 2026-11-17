@@ -208,7 +208,9 @@ async def test_guided_edits_preserve_or_and_negation() -> None:
     screen = editor('(closing_time>"5" OR opening_time>"5") AND NOT width:3')
     async with stage(screen, owner=object()) as ui:
         first = await ui.press_for_form(ui.key_for("edit-0"))
-        assert {item.custom_id for item in first.modal.walk_children() if hasattr(item, "custom_id")} == {
+        assert {
+            getattr(item, "custom_id", None) for item in first.modal.walk_children() if hasattr(item, "custom_id")
+        } == {
             "value",
             "operator",
             "upper",
