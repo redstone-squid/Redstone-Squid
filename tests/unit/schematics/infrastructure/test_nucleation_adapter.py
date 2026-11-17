@@ -177,12 +177,31 @@ def test_malformed_optional_sign_entries_are_skipped_without_inventing_coordinat
         '"cell_max":[1,1,1],"region_min":[0,0,0],"region_max":[1,1,1]}]',
         '[{"mode":"2d","vectors":[[1,0,0]],"coverage":1,"cell_min":[0,0,0],'
         '"cell_max":[1,1,1],"region_min":[0,0,0],"region_max":[1,1,1]}]',
+        '[{"mode":"1d","vectors":[[true,0,0]],"coverage":1,"cell_min":[0,0,0],'
+        '"cell_max":[1,1,1],"region_min":[0,0,0],"region_max":[1,1,1]}]',
     ],
 )
 def test_malformed_optional_lattice_entries_are_dropped(payload: str, mocker: MockerFixture) -> None:
     mocker.patch.object(nucleation_adapter.nucleation.Autostack, "detect_structures", return_value=payload)
 
     assert nucleation_adapter._detect_lattice(mocker.Mock()) is None
+
+
+def test_optional_lattice_uses_typed_engine_record() -> None:
+    lattice = nucleation_adapter._lattice(
+        {
+            "mode": "1d",
+            "vectors": [[1, 0, 0]],
+            "coverage": 0.75,
+            "cell_min": [0, 0, 0],
+            "cell_max": [1, 1, 1],
+            "region_min": [0, 0, 0],
+            "region_max": [2, 1, 1],
+        }
+    )
+    assert lattice is not None
+    assert lattice.vectors == ((1, 0, 0),)
+    assert lattice.coverage == 0.75
 
 
 def test_tick_engine_text_stays_in_developer_context(monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture) -> None:

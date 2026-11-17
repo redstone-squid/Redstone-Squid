@@ -13,17 +13,16 @@ import binascii
 import hashlib
 import json
 import logging
-import math
 import os
 import shutil
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 import nucleation
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, TypeAdapter, ValidationError
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.video import VideoRenderRequest
@@ -107,6 +106,20 @@ class _SimulationEvent(_EngineRecord):
 
 class _BlockEntityAudit(_EngineRecord):
     missing_total: int = 0
+
+
+_PositionWire = Annotated[list[StrictInt], Field(min_length=3, max_length=3)]
+
+
+class _LatticeWire(_EngineRecord):
+    mode: Literal["1d", "2d"]
+    vectors: list[_PositionWire]
+    cell_min: _PositionWire
+    cell_max: _PositionWire
+    region_min: _PositionWire
+    region_max: _PositionWire
+    coverage: float = Field(ge=0, le=1, allow_inf_nan=False)
+    label: str | None = None
 
 
 _CONVERSION_WIRE = TypeAdapter(_ConversionWire)
@@ -600,38 +613,21 @@ def _detect_lattice(schematic: nucleation.Schematic) -> AutostackLattice | None:
 
 
 def _lattice(candidate: object) -> AutostackLattice | None:
-    if not isinstance(candidate, dict):
+    try:
+        entry = _LatticeWire.model_validate(candidate)
+    except ValidationError:
         return None
-    entry = cast(Mapping[str, Any], candidate)
-    mode = entry.get("mode")
-    raw_vectors = entry.get("vectors")
-    if mode not in ("1d", "2d") or not isinstance(raw_vectors, list):
-        return None
-    vectors = tuple(vector for vector in map(_vector, raw_vectors) if vector is not None)
-    if len(vectors) != (1 if mode == "1d" else 2):
-        return None
-    cell_min, cell_max = _vector(entry.get("cell_min")), _vector(entry.get("cell_max"))
-    region_min, region_max = _vector(entry.get("region_min")), _vector(entry.get("region_max"))
-    coverage = entry.get("coverage")
-    label = entry.get("label")
-    if (
-        None in (cell_min, cell_max, region_min, region_max)
-        or not isinstance(coverage, int | float)
-        or isinstance(coverage, bool)
-        or not math.isfinite(float(coverage))
-        or not 0.0 <= float(coverage) <= 1.0
-        or not isinstance(label, str | None)
-    ):
+    if len(entry.vectors) != (1 if entry.mode == "1d" else 2):
         return None
     return AutostackLattice(
-        mode=mode,
-        vectors=vectors,
-        coverage=float(coverage),
-        cell_min=cast(Vector3, cell_min),
-        cell_max=cast(Vector3, cell_max),
-        region_min=cast(Vector3, region_min),
-        region_max=cast(Vector3, region_max),
-        label=_non_empty(label),
+        mode=entry.mode,
+        vectors=tuple((vector[0], vector[1], vector[2]) for vector in entry.vectors),
+        coverage=entry.coverage,
+        cell_min=(entry.cell_min[0], entry.cell_min[1], entry.cell_min[2]),
+        cell_max=(entry.cell_max[0], entry.cell_max[1], entry.cell_max[2]),
+        region_min=(entry.region_min[0], entry.region_min[1], entry.region_min[2]),
+        region_max=(entry.region_max[0], entry.region_max[1], entry.region_max[2]),
+        label=_non_empty(entry.label),
     )
 
 
