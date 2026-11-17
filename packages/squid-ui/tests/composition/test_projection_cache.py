@@ -98,7 +98,9 @@ class Outputs:
 
     def __init__(self, result: PlanResult[scene.ComponentsV2]) -> None:
         controls = {"open": sl.action_control("Open", ignored, key="open")}
-        self.outputs = tuple(ActionPage.prepare(replace(result), controls) for _ in range(3))
+        prepared = tuple(ActionPage.prepare(replace(result), controls, slot=index) for index in range(3))
+        self.outputs = tuple(page for page, _ in prepared)
+        self.live = {page.slot: live for page, live in prepared}
 
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
         return {REGION: max(0, min(2, coordinates.get(REGION, 0)))}
@@ -111,7 +113,7 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
     original = plan(sl.action_controls(sl.action_control("Open", ignored, key="open"), key="actions"), target=TARGET)
     controls: dict[str, sl.semantic.ActionControl[Any]] = {"open": sl.action_control("Open", ignored, key="open")}
     source = Outputs(original)
-    allocation = ActionAllocation(source, controls, "projection", capacity=2)
+    allocation = ActionAllocation(source, controls, "projection", source.live, source.regions, capacity=2)
     controls.clear()
     first = allocation.select({REGION: 0})
     second = allocation.select({REGION: 1})
@@ -122,14 +124,15 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
     assert allocation.cache_snapshot().entries == 2
     assert allocation.cache_snapshot().evictions == 2
     assert source.select({REGION: 0}).bindings["open"] == ActionSlot("open")
-    assert not source.select({REGION: 0}).display.bindings
+    assert not hasattr(source.select({REGION: 0}).display, "bindings")
     assert "open" in allocation.controls
 
 
 def test_failed_binding_does_not_cache_a_projection() -> None:
     original = plan(sl.action_controls(sl.action_control("Open", ignored, key="open"), key="actions"), target=TARGET)
     controls = {"open": sl.action_control("Open", FrontendHandler("different", ignored), key="open")}
-    allocation = ActionAllocation(Outputs(original), controls, "projection")
+    source = Outputs(original)
+    allocation = ActionAllocation(source, controls, "projection", source.live, source.regions)
     for _ in range(2):
         with pytest.raises(TypeError, match="cannot be bound"):
             allocation.select()
@@ -335,4 +338,4 @@ async def test_action_templates_release_live_dispatch_policy(display: sl.semanti
     gc.collect()
     assert receiver_ref() is None
     assert history_ref() is None
-    assert not templates.select().display.bindings
+    assert not hasattr(templates.select().display, "bindings")

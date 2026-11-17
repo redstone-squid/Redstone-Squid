@@ -80,7 +80,14 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             frontend = request.target.adapter.frontend or request.target.adapter.name
             allocation = prepare_action_allocation(result.allocation, graph, frontend)
             # The envelope supplies diagnostics; selected pages supply live bindings.
-            result = replace(result, bindings=MappingProxyType({}), allocation=allocation)
+            result = replace(
+                result,
+                bindings=MappingProxyType({}),
+                form_bindings=MappingProxyType({}),
+                form_plans=MappingProxyType({}),
+                resources=MappingProxyType({}),
+                allocation=allocation,
+            )
         return cls(
             document, request, _navigation_version(request.nav), replace(options, pages={}), result, graph, fingerprint
         )

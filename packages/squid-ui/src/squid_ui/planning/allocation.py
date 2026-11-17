@@ -303,10 +303,12 @@ class AllocationSnapshot[OutputT]:
         cls,
         source: CertifiedAllocation[RenderTargetT, ContextT, PayloadT, SourceT] | AllocationSnapshot[SourceT],
         convert: Callable[[SourceT], OutputT],
+        *,
+        regions: Mapping[OccurrenceId, RegionPages] | None = None,
     ) -> AllocationSnapshot[OutputT]:
         return cls(
             source.identity,
-            source.regions,
+            source.regions if regions is None else regions,
             tuple(CertifiedPage(page.coordinates, convert(page.output)) for page in source.pages),
         )
 
