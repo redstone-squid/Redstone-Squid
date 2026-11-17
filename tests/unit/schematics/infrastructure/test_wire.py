@@ -302,7 +302,7 @@ def test_render_request_decode_rejects_non_array_rgba_values() -> None:
     encoded = dict(wire.encode_render_request(RenderRequest()))
     encoded["background"] = {"red": 0.0, "green": 0.0, "blue": 0.0, "alpha": 0.0}
 
-    with pytest.raises(TypeError, match="JSON array"):
+    with pytest.raises(ValueError, match="background"):
         wire.decode_render_request(encoded)
 
 

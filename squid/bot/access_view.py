@@ -1,5 +1,6 @@
 """Canonical permission and internal-role administration workspace."""
 
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from functools import partial
@@ -527,6 +528,19 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             return
         form = _CreateRoleForm.from_submission(event)
         slug = form.slug
+        if not slug:
+            stem = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")[:28]
+            if not stem or not stem[0].isalpha():
+                stem = f"role-{stem}"[:28]
+            if len(stem) < 2:
+                stem += "-role"
+            existing = {role.slug for role in await self._admin.roles(guild_id=_scope(form.scope, self._guild_id))}
+            slug = stem
+            suffix = 2
+            while slug in existing:
+                tail = f"-{suffix}"
+                slug = stem[: 32 - len(tail)] + tail
+                suffix += 1
         label = md_tr(t"access-view-created-internal-role = Created internal role **{slug}**.")
         await self._save(
             ROLE_CREATE,
@@ -686,10 +700,19 @@ class _AssignmentForm(sl.forms.Form[sd.Request[Any, Any]]):
 class _CreateRoleForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-create-internal-role = Create internal role")
 
-    slug = sl.forms.TextField(label=tr(t"access-view-slug = Slug"), maximum=100)
+    slug = sl.forms.TextField(
+        label=tr(t"access-view-slug-override = Advanced: slug override"),
+        description=tr(t"access-view-slug-help = Leave empty to generate a unique identifier from the display name."),
+        required=False,
+        maximum=32,
+    )
     name = sl.forms.TextField(label=tr(t"access-view-display-name = Display name"), maximum=100)
     rank = sl.forms.IntField(
-        label=tr(t"access-view-management-rank = Management rank"), default=0, minimum=0, maximum=999
+        label=tr(t"access-view-management-rank = Management rank"),
+        description=tr(t"access-view-rank-help = Higher ranks can manage lower ranks. Choose a rank below your own."),
+        default=0,
+        minimum=0,
+        maximum=999,
     )
     scope = _scope_field()
 

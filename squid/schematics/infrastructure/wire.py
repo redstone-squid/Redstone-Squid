@@ -21,9 +21,10 @@ import base64
 import binascii
 import dataclasses
 import json
-import math
 from collections.abc import Mapping, Sequence
-from typing import IO, Any, Literal, cast
+from typing import IO, Annotated, Any, Literal, cast
+
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, TypeAdapter, ValidationError, model_validator
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.video import VideoRenderRequest
@@ -33,15 +34,9 @@ from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,
     SchematicComparison,
-    SchematicDimensions,
-    SchematicFingerprints,
     SchematicFormat,
     SchematicLimits,
-    SchematicMetrics,
-    SchematicSign,
     SimulationResult,
-    SimulationSample,
-    Vector3,
     VersionLossEntry,
 )
 from squid.schematics.domain.values import RESOURCE_PACK_MEDIA_TYPE, RgbaColor, VerifiedResourcePack
@@ -59,9 +54,6 @@ type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "
 
 _OPERATIONS: frozenset[str] = frozenset(
     {"capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "autostack"}
-)
-_ERROR_KINDS: frozenset[str] = frozenset(
-    {"invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"}
 )
 _REQUEST_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "capabilities": 0,
@@ -89,6 +81,217 @@ _DURABLE_REQUEST_PAYLOAD_ARITY: Mapping[Operation, tuple[int, ...]] = {
     "render_video": (1, 2),
 }
 MAX_FRAME_PARTS = max(_REQUEST_PAYLOAD_ARITY.values())
+
+type _FiniteFloat = Annotated[float, Field(strict=True, allow_inf_nan=False)]
+type _UnitFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, ge=0.0, le=1.0)]
+type _NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
+type _NonnegativeFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, ge=0.0)]
+type _PositiveInt = Annotated[int, Field(strict=True, ge=1)]
+type _PositiveFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, gt=0.0)]
+type _StrictVector3 = tuple[StrictInt, StrictInt, StrictInt]
+
+
+class _WorkerJson(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class _RenderRequestJson(_WorkerJson):
+    width: StrictInt
+    height: StrictInt
+    projection: Literal["orthographic", "perspective"]
+    sphere_fit: StrictBool
+    yaw: _FiniteFloat | None = None
+    pitch: _FiniteFloat | None = None
+    zoom: _FiniteFloat | None = None
+    background: tuple[_UnitFloat, _UnitFloat, _UnitFloat, _UnitFloat]
+
+
+class _SimulationRequestJson(_WorkerJson):
+    input_position: _StrictVector3 | None = None
+    watch_positions: tuple[_StrictVector3, ...]
+    max_ticks: _PositiveInt
+
+
+class _LimitsJson(_WorkerJson):
+    max_upload_bytes: _PositiveInt
+    max_inflated_bytes: _PositiveInt
+    max_allocated_volume: _PositiveInt
+    max_axis_length: _PositiveInt
+    max_sniff_bytes: _PositiveInt
+
+
+class _AnalyzeParamsJson(_WorkerJson):
+    limits: _LimitsJson
+    with_lattice: StrictBool
+    source_format: SchematicFormat | None = None
+    lattice_max_block_count: _PositiveInt = 200_000
+
+
+class _ConvertParamsJson(_WorkerJson):
+    target: SchematicFormat
+    data_version: _NonnegativeInt | None = None
+
+
+class _CompareParamsJson(_WorkerJson):
+    preset: FingerprintPreset
+
+
+class _DimensionsJson(_WorkerJson):
+    width: _NonnegativeInt
+    height: _NonnegativeInt
+    length: _NonnegativeInt
+
+
+class _SignJson(_WorkerJson):
+    x: StrictInt
+    y: StrictInt
+    z: StrictInt
+    text: str
+
+
+class _MetricsJson(_WorkerJson):
+    source_format: SchematicFormat
+    byte_size: _NonnegativeInt
+    sha256: str
+    dimensions: _DimensionsJson
+    allocated_dimensions: _DimensionsJson
+    block_count: _NonnegativeInt
+    bounding_volume: _NonnegativeInt
+    entity_count: _NonnegativeInt
+    palette_size: _NonnegativeInt
+    region_names: tuple[str, ...] = ()
+    source_data_version: StrictInt | None = None
+    declared_name: str | None = None
+    declared_author: str | None = None
+    signs: tuple[_SignJson, ...] = ()
+
+
+class _FingerprintsJson(_WorkerJson):
+    structural: str
+    shape: str
+    exact: str
+    signature_structural: str | None = None
+
+
+class _LatticeJson(_WorkerJson):
+    mode: Literal["1d", "2d"]
+    vectors: tuple[_StrictVector3, ...]
+    coverage: _UnitFloat
+    cell_min: _StrictVector3
+    cell_max: _StrictVector3
+    region_min: _StrictVector3
+    region_max: _StrictVector3
+    label: str | None = None
+
+    @model_validator(mode="after")
+    def require_period_vectors(self) -> _LatticeJson:
+        expected = 1 if self.mode == "1d" else 2
+        if len(self.vectors) != expected:
+            msg = f"A {self.mode} lattice requires exactly {expected} vector(s)."
+            raise ValueError(msg)
+        return self
+
+
+class _AutostackParamsJson(_WorkerJson):
+    lattice: _LatticeJson
+    counts: tuple[_PositiveInt, ...]
+
+    @model_validator(mode="after")
+    def require_repeat_counts(self) -> _AutostackParamsJson:
+        expected = 1 if self.lattice.mode == "1d" else 2
+        if len(self.counts) != expected:
+            msg = f"A {self.lattice.mode} lattice requires exactly {expected} repeat count(s)."
+            raise ValueError(msg)
+        return self
+
+
+class _AnalysisJson(_WorkerJson):
+    metrics: _MetricsJson
+    fingerprints: _FingerprintsJson
+    analyzer_version: str
+    analysis_schema_version: Annotated[int, Field(strict=True, ge=1)]
+    lattice: _LatticeJson | None = None
+
+
+class _ComparisonJson(_WorkerJson):
+    preset: FingerprintPreset
+    identical: StrictBool
+    footprint_distance: _NonnegativeFloat
+    edit_distance: _NonnegativeInt | None = None
+    support: _UnitFloat | None = None
+    summary: str | None = None
+
+
+class _LossJson(_WorkerJson):
+    version: str
+    kind: str
+    severity: Literal["Loss", "Approximated"]
+    path: str
+    detail: str
+
+
+class _CapabilitiesJson(_WorkerJson):
+    available: StrictBool
+    analyzer_version: str | None = None
+    can_render: StrictBool
+    can_simulate: StrictBool
+    render_backends: tuple[str, ...]
+    unavailable_reason: str | None = None
+
+
+class _SimulationSampleJson(_WorkerJson):
+    tick: _NonnegativeInt
+    x: StrictInt
+    y: StrictInt
+    z: StrictInt
+    powered: StrictBool
+    signal_strength: Annotated[int, Field(strict=True, ge=0, le=15)]
+
+
+class _SimulationJson(_WorkerJson):
+    ticks_run: _NonnegativeInt
+    settled_tick: _NonnegativeInt | None
+    input_position: _StrictVector3 | None = None
+    input_source: Literal["insign", "heuristic", "manual"] | None = None
+    last_piston_tick: _NonnegativeInt | None = None
+    block_changes: _NonnegativeInt
+    piston_events: _NonnegativeInt
+    redstone_events: _NonnegativeInt
+    trustworthy: StrictBool
+    samples: tuple[_SimulationSampleJson, ...]
+    notes: tuple[str, ...]
+
+
+class _ResourcePackJson(_WorkerJson):
+    sha256: str
+    media_type: str
+
+    @model_validator(mode="after")
+    def require_media_type(self) -> _ResourcePackJson:
+        if self.media_type != RESOURCE_PACK_MEDIA_TYPE:
+            msg = f"Unsupported resource-pack media type {self.media_type!r}."
+            raise ValueError(msg)
+        return self
+
+
+class _SimulationInputErrorJson(_WorkerJson):
+    candidates: tuple[_StrictVector3, ...]
+    rejected: _StrictVector3 | None = None
+
+
+class _WorkerErrorJson(_WorkerJson):
+    kind: ErrorKind
+    message: str
+    context: dict[str, Any]
+
+
+_ANALYSIS = TypeAdapter(SchematicAnalysis)
+_LATTICE = TypeAdapter(AutostackLattice)
+_COMPARISON = TypeAdapter(SchematicComparison)
+_LOSSES = TypeAdapter(tuple[VersionLossEntry, ...])
+_CAPABILITIES = TypeAdapter(AnalyzerCapabilities)
+_SIMULATION = TypeAdapter(SimulationResult)
+_OPTIONAL_TIMEOUT = TypeAdapter(_PositiveFloat | None)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -267,223 +470,137 @@ def _read_exactly(stream: IO[bytes], size: int) -> bytes:
 
 def encode_analysis(analysis: SchematicAnalysis) -> Mapping[str, Any]:
     """Convert an analysis and its nested values into JSON-safe primitives."""
-    return cast(Mapping[str, Any], dataclasses.asdict(analysis))
+    return _AnalysisJson.model_validate(dataclasses.asdict(analysis)).model_dump(mode="json")
 
 
 def decode_analysis(payload: Mapping[str, Any]) -> SchematicAnalysis:
-    lattice = payload.get("lattice")
-    return SchematicAnalysis(
-        metrics=_decode_metrics(_mapping(payload.get("metrics"), "analysis metrics")),
-        fingerprints=_decode_fingerprints(_mapping(payload.get("fingerprints"), "analysis fingerprints")),
-        analyzer_version=_string(payload.get("analyzer_version"), "analyzer version"),
-        analysis_schema_version=_integer(payload.get("analysis_schema_version"), "analysis schema version", minimum=1),
-        lattice=decode_lattice(_mapping(lattice, "analysis lattice")) if lattice is not None else None,
-    )
+    return _ANALYSIS.validate_python(_AnalysisJson.model_validate(payload).model_dump())
 
 
 def encode_lattice(lattice: AutostackLattice) -> Mapping[str, Any]:
-    return cast(Mapping[str, Any], dataclasses.asdict(lattice))
+    return _LatticeJson.model_validate(dataclasses.asdict(lattice)).model_dump(mode="json")
 
 
 def decode_lattice(payload: object) -> AutostackLattice:
-    payload = _mapping(payload, "lattice")
-    mode_value = _string(payload.get("mode"), "lattice mode")
-    if mode_value not in ("1d", "2d"):
-        msg = f"Invalid lattice mode {mode_value!r}."
-        raise ValueError(msg)
-    mode = cast(Literal["1d", "2d"], mode_value)
-    vectors = tuple(_vector(vector, "lattice vector") for vector in _array(payload.get("vectors"), "lattice vectors"))
-    expected_vectors = 1 if mode == "1d" else 2
-    if len(vectors) != expected_vectors:
-        msg = f"A {mode} lattice requires exactly {expected_vectors} vector(s)."
-        raise ValueError(msg)
-    return AutostackLattice(
-        mode=mode,
-        vectors=vectors,
-        coverage=_number(payload.get("coverage"), "lattice coverage", minimum=0.0, maximum=1.0),
-        cell_min=_vector(payload.get("cell_min"), "lattice cell minimum"),
-        cell_max=_vector(payload.get("cell_max"), "lattice cell maximum"),
-        region_min=_vector(payload.get("region_min"), "lattice region minimum"),
-        region_max=_vector(payload.get("region_max"), "lattice region maximum"),
-        label=_optional_string(payload.get("label"), "lattice label"),
-    )
+    return _LATTICE.validate_python(_LatticeJson.model_validate(payload).model_dump())
 
 
 def encode_comparison(comparison: SchematicComparison) -> Mapping[str, Any]:
-    return cast(Mapping[str, Any], dataclasses.asdict(comparison))
+    return _ComparisonJson.model_validate(dataclasses.asdict(comparison)).model_dump(mode="json")
 
 
 def decode_comparison(payload: Mapping[str, Any]) -> SchematicComparison:
-    return SchematicComparison(
-        preset=FingerprintPreset(_string(payload.get("preset"), "comparison preset")),
-        identical=_boolean(payload.get("identical"), "comparison identity"),
-        footprint_distance=_number(payload.get("footprint_distance"), "footprint distance", minimum=0.0),
-        edit_distance=_optional_integer(payload.get("edit_distance"), "edit distance", minimum=0),
-        support=_optional_number(payload.get("support"), "comparison support", minimum=0.0, maximum=1.0),
-        summary=_optional_string(payload.get("summary"), "comparison summary"),
-    )
+    return _COMPARISON.validate_python(_ComparisonJson.model_validate(payload).model_dump())
 
 
 def encode_losses(losses: Sequence[VersionLossEntry]) -> list[Mapping[str, Any]]:
-    return [cast(Mapping[str, Any], dataclasses.asdict(loss)) for loss in losses]
+    return [_LossJson.model_validate(dataclasses.asdict(loss)).model_dump(mode="json") for loss in losses]
 
 
 def decode_losses(payload: object) -> tuple[VersionLossEntry, ...]:
-    losses: list[VersionLossEntry] = []
-    for value in _array(payload, "conversion losses"):
-        entry = _mapping(value, "conversion loss entry")
-        severity_value = _string(entry.get("severity"), "conversion loss severity")
-        if severity_value not in ("Loss", "Approximated"):
-            msg = f"Invalid conversion loss severity {severity_value!r}."
-            raise ValueError(msg)
-        losses.append(
-            VersionLossEntry(
-                version=_string(entry.get("version"), "conversion loss version"),
-                kind=_string(entry.get("kind"), "conversion loss kind"),
-                severity=cast(Literal["Loss", "Approximated"], severity_value),
-                path=_string(entry.get("path"), "conversion loss path"),
-                detail=_string(entry.get("detail"), "conversion loss detail"),
-            )
-        )
-    return tuple(losses)
+    return _LOSSES.validate_python(
+        [_LossJson.model_validate(value).model_dump() for value in _array(payload, "conversion losses")]
+    )
 
 
 def encode_capabilities(capabilities: AnalyzerCapabilities) -> Mapping[str, Any]:
-    return cast(Mapping[str, Any], dataclasses.asdict(capabilities))
+    return _CapabilitiesJson.model_validate(dataclasses.asdict(capabilities)).model_dump(mode="json")
 
 
 def decode_capabilities(payload: Mapping[str, Any]) -> AnalyzerCapabilities:
-    return AnalyzerCapabilities(
-        available=_boolean(payload.get("available"), "analyzer availability"),
-        analyzer_version=_optional_string(payload.get("analyzer_version"), "analyzer version"),
-        can_render=_boolean(payload.get("can_render"), "render capability"),
-        can_simulate=_boolean(payload.get("can_simulate"), "simulation capability"),
-        render_backends=tuple(
-            _string(backend, "render backend") for backend in _array(payload.get("render_backends"), "render backends")
-        ),
-        unavailable_reason=_optional_string(payload.get("unavailable_reason"), "unavailable reason"),
-    )
+    return _CAPABILITIES.validate_python(_CapabilitiesJson.model_validate(payload).model_dump())
 
 
 def encode_render_request(request: RenderRequest) -> Mapping[str, Any]:
     """Encode a render request without changing the established RGBA array shape."""
-    return {
-        "width": request.width,
-        "height": request.height,
-        "projection": request.projection,
-        "sphere_fit": request.sphere_fit,
-        "yaw": request.yaw,
-        "pitch": request.pitch,
-        "zoom": request.zoom,
-        "background": list(request.background),
-    }
+    return _RenderRequestJson(
+        width=request.width,
+        height=request.height,
+        projection=request.projection,
+        sphere_fit=request.sphere_fit,
+        yaw=request.yaw,
+        pitch=request.pitch,
+        zoom=request.zoom,
+        background=request.background.as_tuple(),
+    ).model_dump(mode="json")
 
 
 def decode_render_request(payload: object) -> RenderRequest:
     """Decode and validate a render request received across a worker boundary."""
-    payload = _mapping(payload, "render request")
-    background = payload["background"]
-    if not isinstance(background, list):
-        msg = "Render background must be a four-channel JSON array."
-        raise TypeError(msg)
+    value = _RenderRequestJson.model_validate(payload)
     return RenderRequest(
-        width=_integer(payload.get("width"), "render width"),
-        height=_integer(payload.get("height"), "render height"),
-        projection=_projection(payload.get("projection")),
-        sphere_fit=_boolean(payload.get("sphere_fit"), "render sphere-fit flag"),
-        yaw=_optional_number(payload.get("yaw"), "render yaw"),
-        pitch=_optional_number(payload.get("pitch"), "render pitch"),
-        zoom=_optional_number(payload.get("zoom"), "render zoom"),
-        background=RgbaColor.from_channels(
-            tuple(_number(channel, "RGBA channel", minimum=0.0, maximum=1.0) for channel in background)
-        ),
+        width=value.width,
+        height=value.height,
+        projection=value.projection,
+        sphere_fit=value.sphere_fit,
+        yaw=value.yaw,
+        pitch=value.pitch,
+        zoom=value.zoom,
+        background=RgbaColor.from_channels(value.background),
     )
 
 
 def encode_simulation_request(request: SimulationRequest) -> Mapping[str, Any]:
     """Encode a simulation request into explicit JSON arrays and scalars."""
-    return {
-        "input_position": list(request.input_position) if request.input_position is not None else None,
-        "watch_positions": [list(position) for position in request.watch_positions],
-        "max_ticks": request.max_ticks,
-    }
+    return _SimulationRequestJson(
+        input_position=request.input_position,
+        watch_positions=request.watch_positions,
+        max_ticks=request.max_ticks,
+    ).model_dump(mode="json")
 
 
 def decode_simulation_request(payload: object) -> SimulationRequest:
     """Decode and validate a simulation request received across a worker boundary."""
-    payload = _mapping(payload, "simulation request")
-    input_position = payload.get("input_position")
+    value = _SimulationRequestJson.model_validate(payload)
     return SimulationRequest(
-        input_position=_vector(input_position, "simulation input position") if input_position is not None else None,
-        watch_positions=tuple(
-            _vector(position, "simulation watch position")
-            for position in _array(payload.get("watch_positions"), "simulation watch positions")
-        ),
-        max_ticks=_integer(payload.get("max_ticks"), "simulation tick budget", minimum=1),
+        input_position=value.input_position,
+        watch_positions=value.watch_positions,
+        max_ticks=value.max_ticks,
     )
 
 
 def decode_limits(payload: object) -> SchematicLimits:
     """Decode attacker-facing worker resource limits without coercing JSON values."""
-    value = _mapping(payload, "schematic limits")
-    return SchematicLimits(
-        max_upload_bytes=_integer(value.get("max_upload_bytes"), "maximum upload bytes", minimum=1),
-        max_inflated_bytes=_integer(value.get("max_inflated_bytes"), "maximum inflated bytes", minimum=1),
-        max_allocated_volume=_integer(value.get("max_allocated_volume"), "maximum allocated volume", minimum=1),
-        max_axis_length=_integer(value.get("max_axis_length"), "maximum axis length", minimum=1),
-        max_sniff_bytes=_integer(value.get("max_sniff_bytes"), "maximum sniff bytes", minimum=1),
-    )
+    return SchematicLimits(**_LimitsJson.model_validate(payload).model_dump())
 
 
 def decode_analyze_params(
     payload: Mapping[str, Any],
 ) -> tuple[SchematicLimits, bool, SchematicFormat | None, int]:
     """Decode the parameters for an analyze request."""
-    source_value = payload.get("source_format")
-    source_format = None if source_value is None else SchematicFormat(_string(source_value, "schematic source format"))
+    value = _AnalyzeParamsJson.model_validate(payload)
     return (
-        decode_limits(payload.get("limits")),
-        _boolean(payload.get("with_lattice"), "lattice analysis flag"),
-        source_format,
-        _integer(payload.get("lattice_max_block_count", 200_000), "lattice block-count limit", minimum=1),
+        SchematicLimits(**value.limits.model_dump()),
+        value.with_lattice,
+        value.source_format,
+        value.lattice_max_block_count,
     )
 
 
 def decode_convert_params(payload: Mapping[str, Any]) -> tuple[SchematicFormat, int | None]:
     """Decode the parameters for a conversion request."""
-    data_version = payload.get("data_version")
-    return (
-        SchematicFormat(_string(payload.get("target"), "conversion target")),
-        None if data_version is None else _integer(data_version, "conversion data version", minimum=0),
-    )
+    value = _ConvertParamsJson.model_validate(payload)
+    return value.target, value.data_version
 
 
 def decode_compare_params(payload: Mapping[str, Any]) -> FingerprintPreset:
     """Decode the fingerprint preset for a comparison request."""
-    return FingerprintPreset(_string(payload.get("preset"), "comparison preset"))
+    return _CompareParamsJson.model_validate(payload).preset
 
 
 def decode_optional_timeout(value: object) -> float | None:
     """Decode an optional positive operation timeout."""
-    timeout = _optional_number(value, "operation timeout", minimum=0.0)
-    if timeout is not None and timeout == 0:
-        msg = "Expected operation timeout to be greater than zero."
-        raise ValueError(msg)
-    return timeout
+    try:
+        return _OPTIONAL_TIMEOUT.validate_python(value)
+    except ValidationError as error:
+        msg = f"Invalid operation timeout: {error}"
+        raise ValueError(msg) from error
 
 
 def decode_autostack_params(payload: Mapping[str, Any]) -> tuple[AutostackLattice, tuple[int, ...]]:
     """Decode a lattice and repeat counts, enforcing their shared dimensionality."""
-    lattice = decode_lattice(_mapping(payload.get("lattice"), "autostack lattice"))
-    counts = tuple(
-        _integer(count, "autostack repeat count", minimum=1)
-        for count in _array(payload.get("counts"), "autostack repeat counts")
-    )
-    expected = 1 if lattice.mode == "1d" else 2
-    if len(counts) != expected:
-        msg = f"A {lattice.mode} lattice requires exactly {expected} repeat count(s)."
-        raise ValueError(msg)
-    return lattice, counts
+    value = _AutostackParamsJson.model_validate(payload)
+    return _LATTICE.validate_python(value.lattice.model_dump()), value.counts
 
 
 def decode_base64(value: object, what: str) -> bytes:
@@ -501,137 +618,43 @@ def decode_base64(value: object, what: str) -> bytes:
 
 def encode_resource_pack(resource_pack: VerifiedResourcePack) -> Mapping[str, str]:
     """Encode pack metadata separately from the bytes that its digest verifies."""
-    return {"sha256": resource_pack.sha256, "media_type": resource_pack.media_type}
+    return _ResourcePackJson(sha256=resource_pack.sha256, media_type=resource_pack.media_type).model_dump()
 
 
 def decode_resource_pack(payload: object, data: bytes) -> VerifiedResourcePack:
     """Rebuild a verified pack from raw bytes and its JSON metadata."""
-    payload = _mapping(payload, "resource-pack metadata")
-    media_type = _string(payload.get("media_type"), "resource-pack media type")
-    if media_type != RESOURCE_PACK_MEDIA_TYPE:
-        msg = f"Unsupported resource-pack media type {media_type!r}."
-        raise ValueError(msg)
-    return VerifiedResourcePack(data, _string(payload.get("sha256"), "resource-pack SHA-256"), RESOURCE_PACK_MEDIA_TYPE)
+    metadata = _ResourcePackJson.model_validate(payload)
+    return VerifiedResourcePack(data, metadata.sha256, metadata.media_type)
 
 
 def encode_simulation(result: SimulationResult) -> Mapping[str, Any]:
-    return cast(Mapping[str, Any], dataclasses.asdict(result))
+    return _SimulationJson.model_validate(dataclasses.asdict(result)).model_dump(mode="json")
 
 
 def decode_simulation(payload: Mapping[str, Any]) -> SimulationResult:
-    input_position = payload.get("input_position")
-    input_source = payload.get("input_source")
-    if input_source is not None and input_source not in ("insign", "heuristic", "manual"):
-        msg = f"Invalid simulation input source {input_source!r}."
-        raise ValueError(msg)
-    return SimulationResult(
-        ticks_run=_integer(payload.get("ticks_run"), "simulation ticks run", minimum=0),
-        settled_tick=_optional_integer(payload.get("settled_tick"), "simulation settled tick", minimum=0),
-        input_position=_vector(input_position, "simulation input position") if input_position is not None else None,
-        input_source=cast(Literal["insign", "heuristic", "manual"], input_source) if input_source else None,
-        last_piston_tick=_optional_integer(payload.get("last_piston_tick"), "last piston tick", minimum=0),
-        block_changes=_integer(payload.get("block_changes"), "simulation block changes", minimum=0),
-        piston_events=_integer(payload.get("piston_events"), "simulation piston events", minimum=0),
-        redstone_events=_integer(payload.get("redstone_events"), "simulation redstone events", minimum=0),
-        trustworthy=_boolean(payload.get("trustworthy"), "simulation trustworthiness"),
-        samples=tuple(
-            SimulationSample(
-                tick=_integer(sample.get("tick"), "simulation sample tick", minimum=0),
-                x=_integer(sample.get("x"), "simulation sample x"),
-                y=_integer(sample.get("y"), "simulation sample y"),
-                z=_integer(sample.get("z"), "simulation sample z"),
-                powered=_boolean(sample.get("powered"), "simulation sample powered flag"),
-                signal_strength=_integer(
-                    sample.get("signal_strength"), "simulation sample signal", minimum=0, maximum=15
-                ),
-            )
-            for sample in (
-                _mapping(value, "simulation sample") for value in _array(payload.get("samples"), "simulation samples")
-            )
-        ),
-        notes=tuple(_string(note, "simulation note") for note in _array(payload.get("notes"), "simulation notes")),
-    )
-
-
-def _decode_metrics(payload: Mapping[str, Any]) -> SchematicMetrics:
-    return SchematicMetrics(
-        source_format=SchematicFormat(_string(payload.get("source_format"), "source format")),
-        byte_size=_integer(payload.get("byte_size"), "schematic byte size", minimum=0),
-        sha256=_string(payload.get("sha256"), "schematic SHA-256"),
-        dimensions=_decode_dimensions(_mapping(payload.get("dimensions"), "schematic dimensions")),
-        allocated_dimensions=_decode_dimensions(
-            _mapping(payload.get("allocated_dimensions"), "allocated schematic dimensions")
-        ),
-        block_count=_integer(payload.get("block_count"), "schematic block count", minimum=0),
-        bounding_volume=_integer(payload.get("bounding_volume"), "schematic bounding volume", minimum=0),
-        entity_count=_integer(payload.get("entity_count"), "schematic entity count", minimum=0),
-        palette_size=_integer(payload.get("palette_size"), "schematic palette size", minimum=0),
-        region_names=tuple(
-            _string(name, "schematic region name")
-            for name in _array(payload.get("region_names"), "schematic region names")
-        ),
-        source_data_version=_optional_integer(payload.get("source_data_version"), "source data version"),
-        declared_name=_optional_string(payload.get("declared_name"), "declared schematic name"),
-        declared_author=_optional_string(payload.get("declared_author"), "declared schematic author"),
-        signs=tuple(
-            SchematicSign(
-                x=_integer(sign.get("x"), "sign x"),
-                y=_integer(sign.get("y"), "sign y"),
-                z=_integer(sign.get("z"), "sign z"),
-                text=_string(sign.get("text"), "sign text"),
-            )
-            for sign in (_mapping(value, "schematic sign") for value in _array(payload.get("signs"), "schematic signs"))
-        ),
-    )
-
-
-def _decode_fingerprints(payload: Mapping[str, Any]) -> SchematicFingerprints:
-    return SchematicFingerprints(
-        structural=_string(payload.get("structural"), "structural fingerprint"),
-        shape=_string(payload.get("shape"), "shape fingerprint"),
-        exact=_string(payload.get("exact"), "exact fingerprint"),
-        signature_structural=_optional_string(payload.get("signature_structural"), "structural signature"),
-    )
-
-
-def _decode_dimensions(payload: Mapping[str, Any]) -> SchematicDimensions:
-    return SchematicDimensions(
-        width=_integer(payload.get("width"), "schematic width", minimum=0),
-        height=_integer(payload.get("height"), "schematic height", minimum=0),
-        length=_integer(payload.get("length"), "schematic length", minimum=0),
-    )
+    return _SIMULATION.validate_python(_SimulationJson.model_validate(payload).model_dump())
 
 
 def encode_simulation_input_error(error: AmbiguousSimulationInputError) -> Mapping[str, Any]:
     """Preserve the controls a caller can choose when simulation input is ambiguous."""
-    return {
-        "candidates": [list(candidate) for candidate in error.candidates],
-        "rejected": list(error.rejected) if error.rejected is not None else None,
-    }
+    return _SimulationInputErrorJson(candidates=error.candidates, rejected=error.rejected).model_dump(mode="json")
 
 
 def decode_simulation_input_error(context: Mapping[str, Any]) -> AmbiguousSimulationInputError:
     """Read current wire coordinates or the domain context retained by older durable workers."""
-    candidates = context.get("candidates", context.get("input_candidates"))
-    rejected = context.get("rejected")
+    value = _SimulationInputErrorJson.model_validate(
+        {"candidates": context.get("candidates", context.get("input_candidates")), "rejected": context.get("rejected")}
+    )
     return AmbiguousSimulationInputError(
-        candidates=tuple(_vector(value, "input candidate") for value in _array(candidates, "input candidates")),
-        rejected=_vector(rejected, "rejected input") if rejected is not None else None,
+        candidates=value.candidates,
+        rejected=value.rejected,
     )
 
 
 def decode_error(payload: object) -> tuple[ErrorKind, str, Mapping[str, Any]]:
     """Decode a worker error object, rejecting unknown error kinds."""
-    error = _mapping(payload, "worker error")
-    kind_value = _string(error.get("kind"), "worker error kind")
-    if kind_value not in _ERROR_KINDS:
-        msg = f"Invalid worker error kind {kind_value!r}."
-        raise ValueError(msg)
-    return (
-        cast(ErrorKind, kind_value),
-        _string(error.get("message"), "worker error message"),
-        _mapping(error.get("context"), "worker error context"),
-    )
+    value = _WorkerErrorJson.model_validate(payload)
+    return value.kind, value.message, value.context
 
 
 def _mapping(value: object, what: str) -> Mapping[str, Any]:
@@ -653,10 +676,6 @@ def _string(value: object, what: str) -> str:
         msg = f"Expected {what} to be a string, got {type(value).__name__}."
         raise TypeError(msg)
     return value
-
-
-def _optional_string(value: object, what: str) -> str | None:
-    return None if value is None else _string(value, what)
 
 
 def _boolean(value: object, what: str) -> bool:
@@ -683,69 +702,6 @@ def _integer(
         msg = f"Expected {what} to be at most {maximum}."
         raise ValueError(msg)
     return value
-
-
-def _optional_integer(
-    value: object,
-    what: str,
-    *,
-    minimum: int | None = None,
-    maximum: int | None = None,
-) -> int | None:
-    return None if value is None else _integer(value, what, minimum=minimum, maximum=maximum)
-
-
-def _number(
-    value: object,
-    what: str,
-    *,
-    minimum: float | None = None,
-    maximum: float | None = None,
-) -> float:
-    if not isinstance(value, int | float) or isinstance(value, bool):
-        msg = f"Expected {what} to be a number, got {type(value).__name__}."
-        raise TypeError(msg)
-    number = float(value)
-    if not math.isfinite(number):
-        msg = f"Expected {what} to be finite."
-        raise ValueError(msg)
-    if minimum is not None and number < minimum:
-        msg = f"Expected {what} to be at least {minimum}."
-        raise ValueError(msg)
-    if maximum is not None and number > maximum:
-        msg = f"Expected {what} to be at most {maximum}."
-        raise ValueError(msg)
-    return number
-
-
-def _optional_number(
-    value: object,
-    what: str,
-    *,
-    minimum: float | None = None,
-    maximum: float | None = None,
-) -> float | None:
-    return None if value is None else _number(value, what, minimum=minimum, maximum=maximum)
-
-
-def _vector(value: object, what: str) -> Vector3:
-    parts = _array(value, what)
-    if len(parts) != 3:
-        msg = f"Expected {what} to contain exactly three coordinates."
-        raise ValueError(msg)
-    return (
-        _integer(parts[0], f"{what} x"),
-        _integer(parts[1], f"{what} y"),
-        _integer(parts[2], f"{what} z"),
-    )
-
-
-def _projection(value: object) -> Literal["orthographic", "perspective"]:
-    projection = _string(value, "render projection")
-    if projection not in ("orthographic", "perspective"):
-        msg = f"Invalid render projection {projection!r}."
-        raise ValueError(msg)
-    return cast(Literal["orthographic", "perspective"], projection)
 
 
 def _operation(value: object) -> Operation:

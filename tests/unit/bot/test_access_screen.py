@@ -154,3 +154,29 @@ async def test_custom_role_pattern_uses_selected_identity_and_rechecks_permissio
     else:
         saved.assert_not_awaited()
         event.notice.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"), [("Review Crew", "review-crew-2"), ("123", "role-123"), ("建築", "role-")]
+)
+async def test_role_creation_derives_available_slug(name: str, expected: str) -> None:
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    admin.roles.return_value = (PermissionRole(id=15, slug="review-crew", name="Review Crew"),)
+    admin.reserve_role_identity.return_value = 16
+    screen = AccessScreen(
+        admin,
+        AsyncMock(spec=EditRunner),
+        guild_id=42,
+        account_id=2,
+        discord_role_id=None,
+        subject_label="Member",
+        capabilities=frozenset(),
+        actor=AsyncMock(return_value=Actor(account_id=1)),
+        authorize=AsyncMock(return_value=True),
+    )
+    saved = AsyncMock()
+    screen._save = saved
+    event = Submission()
+    event.values = {"name": name, "slug": None, "rank": 0, "scope": "guild"}
+    await screen._create_role(cast(sl.SubmitEvent, event), base_revision=7)
+    assert saved.call_args.args[1].slug == expected

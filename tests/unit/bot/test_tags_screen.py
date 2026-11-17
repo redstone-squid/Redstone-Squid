@@ -241,7 +241,7 @@ async def test_proposal_refreshes_the_service_backed_browsers() -> None:
     with transaction():
         await screen._propose(cast(sl.SubmitEvent, event))
 
-    assert tags.proposals == [("Reliable", TagValueType.NONE, None, 7)]
+    assert tags.proposals == [("Reliable", TagValueType.NONE, "reliable", 7)]
     assert tags.public_reads == 2
     assert len(event.notices) == 1
 

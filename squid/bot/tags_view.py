@@ -1,5 +1,6 @@
 """Canonical tag catalogue, contribution, and moderation workspace."""
 
+import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from functools import partial
 from typing import Any, Protocol, override
@@ -383,6 +384,10 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         name = form.name
         value_type = form.value_type
         query_name = form.query_name
+        if not query_name:
+            candidate = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:64]
+            if candidate and candidate[0].isalpha():
+                query_name = candidate
         tag_id = await self._tags.reserve_identity()
         await self.edits.bind(PROPOSAL_EDIT, tag_target(tag_id), 0).save(
             ProposalValues(display_name=name, value_type=value_type, query_name=query_name).edit_values(),
@@ -522,7 +527,14 @@ class _ProposalForm(sl.forms.Form[sd.Request[Any, Any]]):
         default=TagValueType.NONE,
         options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
     )
-    query_name = sl.forms.TextField(label=tr(t"bot-tags-view-query-field = Query field"), required=False, maximum=64)
+    query_name = sl.forms.TextField(
+        label=tr(t"bot-tags-view-query-field-override = Advanced: query field"),
+        description=tr(
+            t"bot-tags-view-query-field-help = Used in search expressions. Leave empty to derive it from the name."
+        ),
+        required=False,
+        maximum=64,
+    )
 
 
 class _AliasForm(sl.forms.Form[sd.Request[Any, Any]]):
