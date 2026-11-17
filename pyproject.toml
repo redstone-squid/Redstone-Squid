@@ -372,15 +372,6 @@ addopts = [
     # default prepend mode derives a module name from the basename alone and two packages that
     # both ship a `test_topics.py` collide. importlib mode keys on the full path instead.
     "--import-mode=importlib",
-    "--cov=squid",
-    "--cov=squid_reactivity",
-    "--cov=squid_storage",
-    "--cov=squid_ui",
-    "--cov=squid_i18n",
-    "--cov=squid_replication",
-    "--cov=squid_ui.ext.discord",
-    "--cov=squid_ui.ext.slack",
-    "--cov=squid_ui_widgets",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
 # When a warning matches more than one option in the list, the action for the last matching option is performed.

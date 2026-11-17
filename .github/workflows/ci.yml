@@ -512,7 +512,19 @@ jobs:
       - name: Run unit and architecture tests
         env:
           HYPOTHESIS_PROFILE: ci
-        run: uv run --locked pytest --cov-report=term-missing --cov-report=html
+        run: >-
+          uv run --locked pytest
+          --cov=squid
+          --cov=squid_reactivity
+          --cov=squid_storage
+          --cov=squid_ui
+          --cov=squid_i18n
+          --cov=squid_replication
+          --cov=squid_ui.ext.discord
+          --cov=squid_ui.ext.slack
+          --cov=squid_ui_widgets
+          --cov-report=term-missing
+          --cov-report=html
 
       - name: Upload coverage report
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
