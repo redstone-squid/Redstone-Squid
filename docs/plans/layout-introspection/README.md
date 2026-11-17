@@ -53,8 +53,17 @@ selector, and Discord types. Neither file is a runtime implementation.
 
 ## Queries, identities, and absence
 
-Reuse `Selector[T]`, `Query[T]`, and `Match[T]`; do not create another selector
-language. Context exposes three explicit scopes:
+Reuse the existing selector language and typed matches. A live root query follows
+the latest committed tree and registers reactive dependencies when read. An
+explicit `.capture()` pins membership and layout facts for several consistent
+operations; it does not deep-copy application objects. Prefer this single query
+API over a `live=True` flag or unrelated functions. A returned match identifies
+one occurrence and does not retarget itself when another element matches.
+
+Layout evaluations pin queries to their candidate and coordinate. They never
+read another candidate's latest answers. The current typing spike covers these
+pinned results; live root queries and capture types need the next typing pass.
+Context exposes three explicit scopes:
 
 | Scope | Meaning |
 | --- | --- |
@@ -127,21 +136,56 @@ reference, observed values, and iterations. Caches require render-snapshot,
 candidate, occurrence, callback, and coordinate identity; query dependencies may
 permit sharing within that boundary. No answers are written to `sl.presentation`.
 
-## Decisions to review before production
+## Component preparation and visibility
 
-These refine the agreed direction; the spike does not silently implement them:
+Contextual content may place component slots declared before planning. The runtime
+can discover their keyed component instances without executing every layout
+branch. Callbacks choose among prepared slots; they cannot introduce undeclared
+instances or construct components during layout. The slot declaration and its
+generic target/context signature still need a typing pass.
 
-- Hidden regions expose `selection=None`, and location queries return all
-  fragments. Recommend this explicit treatment over selecting an arbitrary page.
-- Recommend querying contextual output through `placed`/`visible`, while `authored`
-  remains the fixed application snapshot. This supports generated-document queries
-  and gives summaries a stable authored denominator.
-- Recommend allowing generated document nodes and controls first, while rejecting
-  `Component`/`Boundary` output until layout-dependent component mounting has a
-  lifecycle design. This is a real expressiveness boundary, not a typing detail.
-- Recommend rejecting a nonconverging candidate and considering other declared
-  alternatives. Fail the document if none can be certified; retain rejected-branch
-  diagnostics. Work exhaustion must not be reported as proof of infeasibility.
+Use eager preparation by default: discover declared slots, prepare independent
+components concurrently, capture their rendered subtrees, then begin layout.
+Planning has no asynchronous loading pauses. Load a shared component instance
+once even when it has several declared placements. Keep loading policy separate
+from query and layout APIs so explicit lazy slots can be considered later.
+
+`on_load()` holds work needed before the component can render its first useful
+state. Required database or network requests are legitimate; expensive optional
+enrichment should use a useful initial/loading state and the resource system.
+Eager preparation may wait for a slot that the final layout omits. It does not
+start that component's owned services during speculative preparation.
+
+Mounting follows the committed logical slot declaration. A hidden slot retains
+its state, presentation cells, history, and mounted services until its declaration
+or owner is removed. Proposed `on_show` and `on_hide` hooks report per-placement
+visibility changes after successful delivery. Provisional candidates trigger
+neither hook. A placement is shown when any fragment appears and hidden when its
+last fragment leaves the active delivered interface; this is not viewport tracking.
+Shown placements receive `on_hide` before their eventual unmount. Start with
+synchronous notifications alongside the existing mount/unmount hooks; ongoing
+work uses owned services. Visibility-dependent activity can pause or resume
+without changing logical ownership.
+
+## Preparation diagnostics
+
+Tooling is part of the preparation contract. Record per-component preparation
+wall time, outcome, whether loading was reused, and the declaring slot paths.
+Report batch elapsed time separately: concurrent durations are not additive.
+If concurrency is limited, distinguish queueing time from load execution.
+
+Developer inspection and slow-preparation diagnostics should identify which
+required load delayed delivery, separately from layout time, resolution rounds,
+and planning work. Slow thresholds are configurable diagnostics, not implicit
+timeouts or layout-ranking inputs. Keep these details in developer tooling.
+
+## Candidate failure
+
+Reject a nonconverging candidate and consider other declared alternatives. Retain
+the rejected-branch diagnostics. If no candidate can be certified, fail without
+replacing the last delivered UI. Work exhaustion must not be reported as proof of
+infeasibility. Hidden regions retain their explicit optional selection, and
+location queries retain all fragments rather than choosing an arbitrary page.
 
 ## Experiment results
 
