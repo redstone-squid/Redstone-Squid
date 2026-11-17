@@ -4,9 +4,10 @@ from typing import TYPE_CHECKING, Self
 
 import squid_ui.ext.discord as sd
 from squid.bot.diagnostics.screen import ErrorReportScreen
+from squid.bot.ui import CardField, card_node
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
-from squid_i18n import tr
+from squid_i18n import Text, tr
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -18,6 +19,39 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.error_reports = bot.services.error_reports
+
+    @sd.command(
+        name=tr(t"command-connection-name = connection"),
+        description=tr(t"command-connection-help = Inspect the bot's gateway connection and recent reconnects."),
+        defer="private",
+    )
+    @hide_unless(manage_guild=True)
+    async def connection(self, request: sd.Request[Self, BotT]) -> sd.CommandResult:
+        await enforce(request, DIAGNOSTICS_ERROR_READ)
+        history = self.bot.gateway_history
+        counts = history.counts
+        identifies, resumes, disconnects = counts["identify"], counts["resume"], counts["disconnect"]
+        ready = self.bot.is_ready()
+        latency = round(self.bot.latency * 1000) if ready else None
+        events = Text.join(
+            "\n",
+            (
+                Text(t"{discord_timestamp} · {entry.kind}")
+                for entry in reversed(tuple(history.events)[-10:])
+                for discord_timestamp in (f"<t:{int(entry.occurred_at.timestamp())}:T>",)
+            ),
+        )
+        return card_node(
+            tr(t"connection-heading = Discord connection"),
+            tr(
+                t"connection-counts = Since startup: {identifies} identifies, {resumes} resumes, {disconnects} disconnects."
+            ),
+            fields=(
+                CardField(tr(t"connection-ready = Ready"), str(ready)),
+                CardField(tr(t"connection-latency = Heartbeat latency (ms)"), str(latency)),
+                CardField(tr(t"connection-events = Recent events (UTC)"), events or "—"),
+            ),
+        )
 
     @sd.command(
         name=tr(t"command-errors-name = errors"),

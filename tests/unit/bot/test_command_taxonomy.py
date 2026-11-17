@@ -52,6 +52,7 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # Runtime permission checks remain authoritative. Comparing the whole map keeps
     # newly restricted or newly public commands visible in review.
     "errors": frozenset({"manage_guild"}),
+    "connection": frozenset({"manage_guild"}),
     "access": frozenset({"manage_guild"}),
     "paste": frozenset({"manage_messages"}),
     "redstoner": frozenset({"manage_roles"}),

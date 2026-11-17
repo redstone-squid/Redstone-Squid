@@ -20,6 +20,7 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
+from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.interaction_metrics import InteractionMetrics
@@ -148,6 +149,7 @@ class RedstoneSquid(Bot):
             intents=intents,
             description=description or None,
             tree_cls=SquidCommandTree,
+            allowed_mentions=discord.AllowedMentions.none(),
         )
 
         self.bot_name = config.bot_name
@@ -173,6 +175,7 @@ class RedstoneSquid(Bot):
         self.account_ids = AccountIdCache()
         self.actors = DiscordActorResolver(self)
         self.interaction_metrics = InteractionMetrics()
+        self.gateway_history = GatewayHistory()
         self.layout_profiler = MemoryProfiler()
         self.action_ledger = EventLedger(limit=200)
         self.topic_bus = LocalTopicBus()
@@ -235,6 +238,23 @@ class RedstoneSquid(Bot):
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         self.interaction_metrics.observe(interaction)
+
+    @override
+    async def before_identify_hook(self, shard_id: int | None, *, initial: bool = False) -> None:
+        self.gateway_history.record("identify", shard_id=shard_id)
+        await super().before_identify_hook(shard_id, initial=initial)
+
+    async def on_connect(self) -> None:
+        self.gateway_history.record("connect")
+
+    async def on_ready(self) -> None:
+        self.gateway_history.record("ready")
+
+    async def on_disconnect(self) -> None:
+        self.gateway_history.record("disconnect")
+
+    async def on_resumed(self) -> None:
+        self.gateway_history.record("resume")
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
