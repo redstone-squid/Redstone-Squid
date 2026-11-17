@@ -419,10 +419,10 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         violations.append(ConstraintViolation(identity, "row needs a button"))
                     if controls:
                         rows.append(scene.ClassicRow(tuple(controls)))
-                case ImageRealization() as media:
-                    if media.spoiler:
+                case ImageRealization() as image:
+                    if image.spoiler:
                         violations.append(UnsupportedCapability(identity, "classic embed spoiler image"))
-                    asset = media.source if isinstance(media.source, Asset) else None
+                    asset = image.source if isinstance(image.source, Asset) else None
                     if asset is not None:
                         uses.append(
                             SharedUse(
@@ -431,15 +431,15 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                                 ResourceCost({Axis.ATTACHMENTS: int(asset.url is None)}),
                             )
                         )
-                    url = (asset.url or f"attachment://{asset.name}") if asset is not None else str(media.source)
-                    limit("embed.description", len(media.description), self.limits.embeds.description)
-                    if media.description:
-                        texts.append(media.description)
+                    url = (asset.url or f"attachment://{asset.name}") if asset is not None else str(image.source)
+                    limit("embed.description", len(image.description), self.limits.embeds.description)
+                    if image.description:
+                        texts.append(image.description)
                     embeds.append(
                         scene.Embed(
-                            description=media.description or None,
+                            description=image.description or None,
                             image=scene.EmbedMedia(
-                                url, media.description or None, asset.name if asset is not None else None
+                                url, image.description or None, asset.name if asset is not None else None
                             ),
                         )
                     )

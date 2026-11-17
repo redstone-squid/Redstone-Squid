@@ -841,7 +841,10 @@ class FormSpec[ContextT = object]:
                 adapted.append(field)
                 continue
             # FormField is a descriptor, but this instance slot stores a plain field reference.
-            declared: FormField[Any, Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[no-matching-overload]
+            declared = cast(
+                FormField[Any, Any] | None,
+                getattr(field, "fallback", None),  # pyright: ignore[reportAttributeAccessIssue]
+            )
             if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)

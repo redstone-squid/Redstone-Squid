@@ -747,8 +747,8 @@ class SlackCompositionRules[
             not isinstance(self.limits, SlackModalLimits)
             or len(body.callback_id) > self.limits.callback_id
             or len(body.title.content) > self.limits.title
-            or (body.submit is not None and len(body.submit.content) > self.limits.submit)
-            or (body.close is not None and len(body.close.content) > self.limits.close)
+            or len(body.submit.content) > self.limits.submit
+            or len(body.close.content) > self.limits.close
         ):
             message = "built Slack modal exceeds its header limits"
             raise DrawInvariantError(message)

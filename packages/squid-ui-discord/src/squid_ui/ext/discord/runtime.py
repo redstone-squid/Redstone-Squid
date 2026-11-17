@@ -187,7 +187,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     @classmethod
     @overload
-    def of(cls, source: RuntimeSource) -> DiscordUIRuntime[discord.Client]: ...
+    def of(cls, source: Replyable | discord.Message) -> DiscordUIRuntime[Any]: ...
 
     @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:

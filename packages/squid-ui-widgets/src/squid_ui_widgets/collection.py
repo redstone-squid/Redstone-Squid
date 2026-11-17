@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
+from typing import Any
 
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import ControlDisplay, FormTrigger, Tone
@@ -62,8 +63,8 @@ class CollectionEditor:
         title: TextLike,
         *,
         key: str = "collection",
-        create: FormLike,
-        edit: Callable[[FormValues], FormLike] | None = None,
+        create: FormLike[Any],
+        edit: Callable[[FormValues], FormLike[Any]] | None = None,
         label: Callable[[FormValues], TextLike],
         identity: Callable[[FormValues], str] | None = None,
         minimum: int = 0,
@@ -218,7 +219,7 @@ class CollectionEditor:
             return CollectionState(state.entries, state.selected, max(0, min(window.page + delta, window.pages - 1)))
         return state
 
-    def form_for(self, state: CollectionState, action: str) -> FormSpec | None:
+    def form_for(self, state: CollectionState, action: str) -> FormSpec[Any] | None:
         """Return the create or edit form available for `action`."""
         if action == _Action.ADD:
             if self.maximum is not None and len(state.entries) >= self.maximum:

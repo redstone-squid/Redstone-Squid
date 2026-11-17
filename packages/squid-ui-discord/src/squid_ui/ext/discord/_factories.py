@@ -244,7 +244,7 @@ def _controls[ContextT = object](
     for index, item in enumerate(items):
         if item is None or item is False:
             continue
-        if item is True or not isinstance(item, LinkButton | PremiumButton | Button | RoutedButton | RawItem):
+        if not isinstance(item, LinkButton | PremiumButton | Button | RoutedButton | RawItem):
             message = f"{origin} argument {index} is not a Discord button"
             raise TypeError(message)
         collected.append(item)

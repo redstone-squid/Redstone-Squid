@@ -93,7 +93,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         state = self.__dict__.get("_screen_flow")
         if state is None:
             state = _Flow[ResultT, OwnerT, ClientT]()
-            self.__dict__["_screen_flow"] = state
+            cast(dict[str, Any], self.__dict__)["_screen_flow"] = state
         return state
 
     @property
@@ -250,6 +250,8 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                     callback = state.on_result
                     assert callback is not None
 
+                    completed_value = outcome.value
+
                     async def deliver(fresh: PortableActionEvent) -> None:
                         assert isinstance(fresh.context, Request)
                         await callback(
@@ -259,7 +261,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                                 locale=fresh.locale,
                                 metadata=fresh.metadata,
                                 context=fresh.context,
-                                value=outcome.value,
+                                value=completed_value,
                                 _transaction=fresh.transaction,
                             )
                         )

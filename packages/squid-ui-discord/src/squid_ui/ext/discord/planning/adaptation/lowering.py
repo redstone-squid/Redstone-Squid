@@ -539,7 +539,8 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
             # `Panel` is claimed above because its children may carry semantic nodes to lower,
             # so this arm must stay after it.
             return [_primitive(node, context)]
-        case Region():
+        case Region():  # pyright: ignore[reportUnnecessaryComparison]
+            # Reject unsupported runtime inputs even when the static union excludes them.
             message = "regions must be planned through the joint region planner"
             raise LayoutInvariantError(message)
         case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
@@ -687,7 +688,8 @@ def _primitive(node: Node, context: LoweringContext) -> Node:
             # Nothing on these carries author text; stated by name so a new primitive that
             # does carry some cannot slip through unresolved.
             return node
-        case Region():
+        case Region():  # pyright: ignore[reportUnnecessaryComparison]
+            # Reject unsupported runtime inputs even when the static union excludes them.
             message = "regions must be planned through the joint region planner"
             raise LayoutInvariantError(message)
         case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point

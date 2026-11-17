@@ -273,7 +273,9 @@ class MultiChoice:
         labels = [display_text(self._choices[key].label) for key in selected if key in self._choices]
         return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
 
-    def form_for(self, state: MultiChoiceState, action: str, *, chrome: Chrome = DEFAULT_CHROME) -> FormSpec | None:
+    def form_for(
+        self, state: MultiChoiceState, action: str, *, chrome: Chrome = DEFAULT_CHROME
+    ) -> FormSpec[Any] | None:
         """Resolve the routed modal action to its small-panel form schema."""
         if action != "modal" or len(self._choice_order) > 25:
             return None

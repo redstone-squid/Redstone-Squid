@@ -391,28 +391,30 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         )
                     components += 1
                     return (node,)
-                case GalleryRealization(items=items, collection=collection):
+                case GalleryRealization(items=gallery_items, collection=collection):
                     identity = part.offer.occurrence.identity
-                    if (not items and not collection) or self.limits.gallery_items < 1:
+                    if (not gallery_items and not collection) or self.limits.gallery_items < 1:
                         violations.append(ConstraintViolation(identity, "gallery needs an item and positive capacity"))
-                    if not collection and len(items) > self.limits.gallery_items:
+                    if not collection and len(gallery_items) > self.limits.gallery_items:
                         violations.append(
-                            LocalCapacityExceeded(identity, "gallery.items", len(items), self.limits.gallery_items)
+                            LocalCapacityExceeded(
+                                identity, "gallery.items", len(gallery_items), self.limits.gallery_items
+                            )
                         )
-                    for item in items:
+                    for gallery_item in gallery_items:
                         context.work.consume()
-                        if len(item.description or "") > self.limits.gallery_item_description:
+                        if len(gallery_item.description or "") > self.limits.gallery_item_description:
                             violations.append(
                                 LocalCapacityExceeded(
                                     identity,
                                     "gallery.description",
-                                    len(item.description or ""),
+                                    len(gallery_item.description or ""),
                                     self.limits.gallery_item_description,
                                 )
                             )
-                        if item.asset_name is not None:
-                            matches = [asset for asset in context.assets if asset.name == item.asset_name]
-                            if len(matches) != 1 or item.url != f"attachment://{item.asset_name}":
+                        if gallery_item.asset_name is not None:
+                            matches = [asset for asset in context.assets if asset.name == gallery_item.asset_name]
+                            if len(matches) != 1 or gallery_item.url != f"attachment://{gallery_item.asset_name}":
                                 violations.append(
                                     ConstraintViolation(identity, "gallery image must match one declared attachment")
                                 )
@@ -424,11 +426,12 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                                         ResourceCost({Axis.ATTACHMENTS: 1}),
                                     )
                                 )
-                        elif item.url.startswith("attachment://"):
+                        elif gallery_item.url.startswith("attachment://"):
                             violations.append(ConstraintViolation(identity, "gallery attachment needs its asset name"))
-                    size = max(1, self.limits.gallery_items) if collection else max(1, len(items))
+                    size = max(1, self.limits.gallery_items) if collection else max(1, len(gallery_items))
                     galleries = tuple(
-                        scene.Gallery(items[start : start + size]) for start in range(0, len(items), size)
+                        scene.Gallery(gallery_items[start : start + size])
+                        for start in range(0, len(gallery_items), size)
                     )
                     components += len(galleries)
                     return galleries
@@ -522,7 +525,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         UnsupportedCapability(part.offer.occurrence.identity, "classic message structure")
                     )
                     return ()
-                case unknown:
+                case unknown:  # pyright: ignore[reportUnnecessaryComparison]  # Exhaustiveness check.
                     assert_never(unknown)
 
         def visit(
@@ -692,7 +695,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(message)
                     for child in node.children:
                         visit(child, in_panel=True, slot="panel")
-                case _:
+                case _:  # pyright: ignore[reportUnnecessaryComparison]  # Validate external scenes.
                     message = "unexpected node in shared V2 composition"
                     raise DrawInvariantError(message)
 

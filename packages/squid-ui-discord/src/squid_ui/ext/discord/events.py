@@ -32,7 +32,7 @@ type ScaleEvent[ClientT: discord.Client = discord.Client] = semantic.ScaleEvent[
 type OpenEvent[ValueT, ClientT: discord.Client = discord.Client] = semantic.OpenEvent[ValueT, Request[Any, ClientT]]
 
 
-def _register[EventT: interactions.ActionEvent](
+def _register[EventT: interactions.ActionEvent[Any]](
     callback: Callable[[EventT], Awaitable[None]],
 ) -> FrontendHandler[Any]:
     async def invoke(event: interactions.ActionEvent) -> None:

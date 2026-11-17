@@ -148,7 +148,7 @@ class _Planner:
             msg = f"{path} must contain 1-{maximum} characters"
             raise LayoutInvariantError(msg)
 
-    def control(self, field: FormField[Any], prefill: object) -> FormControl:
+    def control(self, field: FormField[Any, Any], prefill: object) -> FormControl:
         limits = self.limits
         path = f"form field {field.key!r}"
         if isinstance(

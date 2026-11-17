@@ -9,7 +9,7 @@ new selected state for a persistent message's route handler.
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, overload, override, runtime_checkable
+from typing import Any, Literal, Protocol, overload, override, runtime_checkable
 
 from squid_reactivity import state
 from squid_ui.authoring.document import DocumentLike
@@ -120,7 +120,7 @@ class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget, 
     on `StateMachine`. `Editor` resolves nested sections through it.
     """
 
-    def form_for(self, state: StateT, action: str) -> FormSpec | None: ...
+    def form_for(self, state: StateT, action: str) -> FormSpec[Any] | None: ...
 
 
 class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Protocol):
@@ -163,14 +163,14 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
 
     def form(
         self,
-        spec: FormLike,
+        spec: FormLike[Any],
         action_name: str,
         *,
         key: str,
         label: TextLike,
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger | RoutedActionControl: ...
+    ) -> FormTrigger[ContextT] | RoutedActionControl: ...
 
     def paged_lines(
         self, lines: Sequence[TextLike], action_name: str, *, key: str, page: int, per: int
@@ -340,14 +340,14 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
 
     def form(
         self,
-        spec: FormLike,
+        spec: FormLike[Any],
         action_name: str,
         *,
         key: str,
         label: TextLike,
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger:
+    ) -> FormTrigger[ContextT]:
         """Bind a mounted form submission to machine dispatch."""
         resolved = spec.spec() if isinstance(spec, Form) else spec
 
@@ -486,7 +486,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
 
     def form(
         self,
-        spec: FormLike,
+        spec: FormLike[Any],
         action_name: str,
         *,
         key: str,

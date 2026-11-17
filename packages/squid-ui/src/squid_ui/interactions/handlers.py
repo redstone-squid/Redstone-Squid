@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 from squid_ui.interactions import ActionBinding, ActionEvent
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class FrontendHandler[EventT: ActionEvent = ActionEvent]:
+class FrontendHandler[EventT: ActionEvent[Any] = ActionEvent]:
     """One explicitly registered frontend implementation."""
 
     frontend: str
@@ -26,7 +26,7 @@ class FrontendHandler[EventT: ActionEvent = ActionEvent]:
 
 
 @dataclass(frozen=True, slots=True)
-class HandlerSet[EventT: ActionEvent = ActionEvent]:
+class HandlerSet[EventT: ActionEvent[Any] = ActionEvent]:
     """Frontend implementations with an optional portable fallback."""
 
     branches: tuple[FrontendHandler[EventT], ...]
@@ -54,7 +54,7 @@ class HandlerSet[EventT: ActionEvent = ActionEvent]:
         await self.select(event.metadata["frontend"])(event)
 
 
-def handlers[EventT: ActionEvent](
+def handlers[EventT: ActionEvent[Any]](
     *branches: FrontendHandler[EventT],
     fallback: Callable[[EventT], Awaitable[None]] | None = None,
 ) -> HandlerSet[EventT]:
@@ -121,12 +121,12 @@ class _HandlerBinder:
 
         return self.cached(values, resolve)
 
-    def actions[EventT: ActionEvent](
+    def actions[EventT: ActionEvent[Any]](
         self, bindings: Mapping[str, ActionBinding[EventT]]
     ) -> Mapping[str, ActionBinding[EventT]]:
         return self._mapping(bindings, self.action)
 
-    def action[EventT: ActionEvent](self, binding: ActionBinding[EventT]) -> ActionBinding[EventT]:
+    def action[EventT: ActionEvent[Any]](self, binding: ActionBinding[EventT]) -> ActionBinding[EventT]:
         def resolve() -> ActionBinding[EventT]:
             handler = self.callback(binding.handler)
             routes = self.actions(binding.routes)

@@ -608,7 +608,7 @@ class HtmlCompositionRules[RenderTargetT, ContextT]:
         if (
             body != expected.preparation
             or tuple(texts) != expected.text
-            or assets != expected.resources.uses.keys()
+            or assets != set(expected.resources.uses)
             or expected.cost != ResourceCost({Axis.DISPLAY_TEXT: sum(map(len, texts))})
         ):
             message = "built HTML composition disagrees with evaluation"

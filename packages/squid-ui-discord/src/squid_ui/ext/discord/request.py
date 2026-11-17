@@ -13,7 +13,7 @@ import contextlib
 import weakref
 from collections.abc import Awaitable, Callable, Hashable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, Unpack, cast, overload
 
 import discord
 from discord import app_commands
@@ -94,8 +94,13 @@ def _memo_set(source: object, request: Request[Any, Any]) -> None:
         _MEMO[source] = request
 
 
+# A request exposes its client but never replaces it with another client type.
+OwnerT = TypeVar("OwnerT", default=Any)
+ClientT = TypeVar("ClientT", bound=discord.Client, covariant=True, default=discord.Client)
+
+
 @dataclass(slots=True, eq=False)
-class Request[OwnerT = Any, ClientT: discord.Client = discord.Client]:
+class Request(Generic[OwnerT, ClientT]):
     """One Discord source, its resolved owner and locale, and its facade response ledger.
 
     The native source determines how long delivery credentials remain usable. Native sends

@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from types import MappingProxyType
+from typing import Any
 
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import ActionControl, ControlDisplay, LayoutNode, Link, RoutedActionControl, Tone
@@ -63,14 +64,14 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
     key: str
     label: TextLike
-    form: FormSpec | None
+    form: FormSpec[Any] | None
     content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
-    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT, ContextT]) -> None:
+    def __init__(self, key: str, label: TextLike, body: FormLike[Any] | ContentLike[RenderTargetT, ContextT]) -> None:
         label = Text(label)
         require_key(key, name="WizardStep.key")
         if isinstance(body, Form):
-            form_spec: FormSpec | None = body.spec()
+            form_spec: FormSpec[Any] | None = body.spec()
             content: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
         elif isinstance(body, FormSpec):
             form_spec = body
@@ -247,13 +248,13 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             return WizardState(recomputed[recomputed_index].key, answers, complete=True)
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
-    def _prefilled(self, step: WizardStep[RenderTargetT, ContextT], state: WizardState) -> FormSpec:
+    def _prefilled(self, step: WizardStep[RenderTargetT, ContextT], state: WizardState) -> FormSpec[Any]:
         """Apply a retained answer to one form step."""
         assert step.form is not None
         attempted = self._answer_map(state.answers).get(step.key)
         return step.form if attempted is None else step.form.with_prefill(attempted)
 
-    def form_for(self, state: WizardState, action: str) -> FormSpec | None:
+    def form_for(self, state: WizardState, action: str) -> FormSpec[Any] | None:
         """Resolve a routed form action to the schema its handler should present."""
         if not action.startswith("submit:"):
             return None

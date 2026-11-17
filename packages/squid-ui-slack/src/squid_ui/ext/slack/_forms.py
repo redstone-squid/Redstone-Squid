@@ -80,7 +80,7 @@ class SlackFormRenderer:
         self,
         form_key: str,
         spec: forms.FormSpec[ContextT],
-        field: forms.FormField[Any],
+        field: forms.FormField[Any, Any],
         path: str,
     ) -> scene.SlackInput:
         self._stable_id(field.key, path)
@@ -102,7 +102,7 @@ class SlackFormRenderer:
             block_id = f"form:{digest}"
         return scene.SlackInput(block_id, label, element, optional=not field.required, hint=hint)
 
-    def _form_element(self, field: forms.FormField[Any], prefill: object, path: str) -> scene.SlackInputElement:
+    def _form_element(self, field: forms.FormField[Any, Any], prefill: object, path: str) -> scene.SlackInputElement:
         placeholder_value: object = getattr(field, "placeholder", None)
         if placeholder_value is not None and not isinstance(placeholder_value, str | TextExpression | Template):
             message = f"{path}: form field placeholder is not text"

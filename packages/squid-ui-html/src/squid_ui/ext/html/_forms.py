@@ -71,7 +71,7 @@ class HtmlFormRenderer:
         return scene.HtmlElement(tag, tuple(children), attributes, action=action, form=form)
 
     def _form_field[ContextT](
-        self, form_key: str, spec: form_types.FormSpec[ContextT], field: form_types.FormField[Any]
+        self, form_key: str, spec: form_types.FormSpec[ContextT], field: form_types.FormField[Any, Any]
     ) -> scene.HtmlElement:
         control_id = f"squid-{form_key}-{field.key}"
         description_id = f"{control_id}-description"

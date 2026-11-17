@@ -67,7 +67,7 @@ def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     return Uncontrolled(initial)
 
 
-def form[ContextT = object](
+def form[ContextT](
     label: TextValue,
     spec: FormLike[ContextT],
     *,
@@ -204,7 +204,7 @@ def control_group[ContextT = object](
     return ControlGroup(key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), label)
 
 
-def action_controls[ContextT = object](
+def action_controls[ContextT](
     *entries: Conditional[
         ActionControl[ContextT]
         | Link

@@ -88,7 +88,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
         machine: StateMachine[StateT, RenderTargetT, ContextT] | None = None,
-        form: FormSpec | None = None,
+        form: FormSpec[Any] | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
         label = Text(label)
@@ -107,7 +107,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         cls,
         key: str,
         label: TextLike,
-        form: FormLike,
+        form: FormLike[Any],
         *,
         summary: Callable[[FormValues], TextLike] | None = None,
     ) -> EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget]:
@@ -401,7 +401,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         changed = self._replace_slot(state, replace(slot, state=nested_state))
         return self._commit_valid(changed)
 
-    def form_for(self, state: EditorState, action: str) -> FormSpec | None:
+    def form_for(self, state: EditorState, action: str) -> FormSpec[Any] | None:
         """Resolve direct and nested routed form actions."""
         if (key := match_keyed_action(action, "submit")) is not None:
             section = self._sections.get(key)
@@ -595,14 +595,14 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
 
     def form(
         self,
-        spec: FormLike,
+        spec: FormLike[Any],
         action_name: str,
         *,
         key: str,
         label: TextLike,
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger | RoutedActionControl:
+    ) -> FormTrigger[ContextT] | RoutedActionControl:
         """Delegate a child form through namespaced action and control keys."""
         return self.parent.form(
             spec,
