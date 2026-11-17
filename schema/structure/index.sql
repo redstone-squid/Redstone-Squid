@@ -133,6 +133,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/record_computation_runs_id_seq.sql
 \ir public/TABLES/record_recompute_queue.sql
 \ir public/SEQUENCES/record_recompute_queue_id_seq.sql
+\ir public/TABLES/record_settings.sql
 \ir public/TABLES/record_titles.sql
 \ir public/TABLES/rules_revisions.sql
 \ir public/SEQUENCES/rules_revisions_id_seq.sql

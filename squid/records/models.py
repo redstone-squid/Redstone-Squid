@@ -50,6 +50,22 @@ class ComputationStatus(StrEnum):
     FAILED = "failed"
 
 
+class RecordSettings(Base, kw_only=True):
+    """The shared current Minecraft version, independent of published runs."""
+
+    __tablename__ = "record_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="record_settings_singleton_check"),
+        CheckConstraint("revision >= 0", name="record_settings_revision_check"),
+    )
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, autoincrement=False, default=1)
+    current_version_id: Mapped[int | None] = mapped_column(
+        SmallInteger, ForeignKey("versions.id", ondelete="RESTRICT"), default=None
+    )
+    revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
+
+
 class RulesRevision(Base, kw_only=True):
     """Calculator and formatter versions with a mutable activation timestamp."""
 

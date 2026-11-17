@@ -122,6 +122,9 @@ class FakeRuns:
     async def active_current_version_id(self) -> int | None:
         return self.current_version_id
 
+    async def set_current_version(self, version_id: int | None) -> None:
+        self.current_version_id = version_id
+
     async def activate(self, batch: ComputationBatch) -> int:
         self.batches.append(batch)
         return len(self.batches)

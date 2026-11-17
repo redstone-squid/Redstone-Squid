@@ -52,6 +52,7 @@ from squid.records.models import (
     FacetKind,
     MaterializationSource,
     RecordRecomputeQueueItem,
+    RecordSettings,
     RecordTitle,
     RulesRevision,
     TitleDefinition,
@@ -235,18 +236,35 @@ class PostgresRecordRepository:
         return rules_revision.id
 
     async def active_current_version_id(self) -> int | None:
-        """Return the version pinned by the newest active current-scope run."""
+        """Read the shared pin; unrelated fixed-version publications never change it."""
+        return await self._session().scalar(select(RecordSettings.current_version_id).where(RecordSettings.id == 1))
+
+    async def set_current_version(self, version_id: int | None) -> None:
+        """Change the shared pin and invalidate both kinds in the caller's transaction."""
         session = self._session()
-        statement = (
-            select(ComputationRun.version_id)
-            .where(
-                ComputationRun.is_active,
-                ComputationRun.version_id.is_not(None),
-            )
-            .order_by(ComputationRun.started_at.desc(), ComputationRun.id.desc())
-            .limit(1)
+        changed = await session.scalar(
+            update(RecordSettings)
+            .where(RecordSettings.id == 1, RecordSettings.current_version_id.is_distinct_from(version_id))
+            .values(current_version_id=version_id, revision=RecordSettings.revision + 1)
+            .returning(RecordSettings.id)
         )
-        return (await session.execute(statement)).scalar_one_or_none()
+        if changed is None:
+            return
+        for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
+            await session.execute(
+                insert(RecordRecomputeQueueItem)
+                .values(scope_key=kind.value, build_kind=kind, reasons=["current_version_changed"])
+                .on_conflict_do_update(
+                    index_elements=[RecordRecomputeQueueItem.scope_key],
+                    set_={
+                        "reasons": ["current_version_changed"],
+                        "enqueued_at": func.now(),
+                        "available_at": func.now(),
+                        "claimed_at": None,
+                        "claim_token": None,
+                    },
+                )
+            )
 
     async def activate(self, batch: ComputationBatch) -> int:
         """Publish changed results, or return the unchanged active run after recording a check.

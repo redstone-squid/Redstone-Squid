@@ -55,6 +55,11 @@ class RecordRecorder(RecordService):
 class ComputationRecorder(RecordComputationService):
     def __init__(self) -> None:
         self.rebuild_calls: list[tuple[int | None, tuple[BuildKind, ...]]] = []
+        self.pin_calls: list[int | None] = []
+
+    @override
+    async def pin_current_version(self, version_id: int | None) -> None:
+        self.pin_calls.append(version_id)
 
     @override
     async def rebuild(
@@ -171,3 +176,15 @@ async def test_failed_diagnostic_refresh_rolls_back_the_visible_browsers() -> No
         await refresh_then_fail()
 
     assert (screen._gaps, screen._titles, screen._tabs) == original
+
+
+async def test_rebuild_explicitly_sets_the_shared_current_version() -> None:
+    harness = make_screen()
+    await harness.screen.on_load()
+    assert harness.screen._tabs is not None
+    await press(harness.screen._tabs, "records-tabs.maintenance")
+
+    await submit(harness.screen._tabs, "rebuild", {"kind": None, "version_id": 3})
+
+    assert harness.computation.pin_calls == [3]
+    assert harness.computation.rebuild_calls == [(3, (BuildKind.DOOR, BuildKind.EXTENDER))]

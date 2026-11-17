@@ -91,6 +91,12 @@ class RecordComputationService:
         self._category_limit = category_limit
         self._compute_limiter = anyio.CapacityLimiter(1)
 
+    async def pin_current_version(self, version_id: int | None) -> None:
+        """Set the shared current version and queue affected publications."""
+        async with self._uow_factory() as uow:
+            await uow.records.set_current_version(version_id)
+            await uow.commit()
+
     async def rebuild(
         self,
         *,

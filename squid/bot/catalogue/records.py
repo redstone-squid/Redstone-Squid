@@ -46,6 +46,8 @@ class RecordOperations(Protocol):
 class RecordComputationOperations(Protocol):
     """Record rebuild operation exposed by the maintenance tab."""
 
+    async def pin_current_version(self, version_id: int | None) -> None: ...
+
     async def rebuild(
         self,
         *,
@@ -429,6 +431,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             form.version_id if form.version_id is not None else (int(self._version.value) if self._version else None)
         )
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
+        if version_id is not None:
+            await self._computation.pin_current_version(version_id)
         summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
         if self._can_inspect:
             await self._refresh_diagnostics()
