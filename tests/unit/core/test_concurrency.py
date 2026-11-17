@@ -3,7 +3,15 @@
 import anyio
 import pytest
 
-from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled, settle_all, task_group
+from squid.core.concurrency import (
+    TaskFailure,
+    TaskSuccess,
+    run_all,
+    run_all_awaitables,
+    run_all_settled,
+    settle_all,
+    task_group,
+)
 
 
 async def test_run_all_returns_results_in_argument_order() -> None:
@@ -114,8 +122,9 @@ async def test_settle_all_runs_every_branch_despite_a_failure() -> None:
     outcomes = await settle_all([make(n) for n in range(4)], limit=2)
 
     assert completed == {0, 2, 3}
-    assert isinstance(outcomes[1], PermissionError)
-    assert [outcomes[0], outcomes[2], outcomes[3]] == [0, 2, 3]
+    assert isinstance(outcomes[1], TaskFailure)
+    assert isinstance(outcomes[1].error, PermissionError)
+    assert [outcomes[0], outcomes[2], outcomes[3]] == [TaskSuccess(0), TaskSuccess(2), TaskSuccess(3)]
 
 
 async def test_settle_all_still_propagates_cancellation() -> None:
@@ -246,3 +255,13 @@ async def test_task_group_groups_several_child_failures() -> None:
         await supervise()
 
     assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
+
+
+async def test_returned_exception_is_data_in_both_settled_helpers() -> None:
+    value = ValueError("data")
+
+    async def operation() -> ValueError:
+        return value
+
+    assert await settle_all([operation]) == [TaskSuccess(value)]
+    assert await run_all_settled([operation]) == [value]

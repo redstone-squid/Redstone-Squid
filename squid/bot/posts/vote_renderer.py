@@ -11,7 +11,7 @@ from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
-from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
+from squid.core.concurrency import DISCORD_FANOUT_LIMIT, TaskFailure, settle_all
 from squid.posts.domain import ResourceKind
 from squid.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, PollScope, VoteSessionSnapshot
 
@@ -61,12 +61,16 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             [_add_reaction(message, option.emoji) for option in snapshot.options_for_guild(guild_id)],
             limit=DISCORD_FANOUT_LIMIT,
         )
-        forbidden = sum(1 for outcome in outcomes if isinstance(outcome, discord.Forbidden))
+        forbidden = sum(
+            1
+            for outcome in outcomes
+            if isinstance(outcome, TaskFailure) and isinstance(outcome.error, discord.Forbidden)
+        )
         if forbidden:
             logger.debug("Missing permission to add %s vote reaction(s)", forbidden)
         for outcome in outcomes:
-            if isinstance(outcome, Exception) and not isinstance(outcome, discord.Forbidden):
-                logger.warning("Failed to add a vote reaction", exc_info=outcome)
+            if isinstance(outcome, TaskFailure) and not isinstance(outcome.error, discord.Forbidden):
+                logger.warning("Failed to add a vote reaction", exc_info=outcome.error)
 
     async def _build_review(self, snapshot: VoteSessionSnapshot) -> Sequence[DesiredPost]:
         target = snapshot.target

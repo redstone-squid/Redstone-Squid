@@ -10,7 +10,7 @@ returns those failures as values. All return results in input order. Use
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from contextlib import asynccontextmanager, nullcontext
-from typing import cast
+from dataclasses import dataclass
 
 import anyio
 import anyio.abc
@@ -75,7 +75,7 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
     factories = list(operations)
     if not factories:
         return []
-    results: list[T] = cast(list[T], [None] * len(factories))
+    results: dict[int, T] = {}
     limiter = _limiter(limit)
 
     async def run(index: int, factory: Callable[[], Awaitable[T]]) -> None:
@@ -85,7 +85,7 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
     async with task_group() as tasks:
         for index, factory in enumerate(factories):
             tasks.start_soon(run, index, factory)
-    return results
+    return [results[index] for index in range(len(factories))]
 
 
 async def run_all_settled[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
@@ -93,22 +93,36 @@ async def run_all_settled[T](operations: Iterable[Callable[[], Awaitable[T]]], *
 
     Successful results keep input order. One failure is raised directly; several
     are grouped. Cancellation and other BaseException subclasses still interrupt
-    the batch. An Exception returned as a result is also treated as a failure.
+    the batch. An Exception returned as data remains a successful result.
 
     Args:
         operations: Zero-argument callables, each returning an awaitable.
         limit: Maximum operations in flight at once. None runs them all.
     """
     outcomes = await settle_all(operations, limit=limit)
-    failures = [outcome for outcome in outcomes if isinstance(outcome, Exception)]
+    failures = [outcome.error for outcome in outcomes if isinstance(outcome, TaskFailure)]
     if failures:
         raise _failure(failures)
-    return cast(list[T], outcomes)
+    return [outcome.value for outcome in outcomes if isinstance(outcome, TaskSuccess)]
+
+
+@dataclass(frozen=True, slots=True)
+class TaskSuccess[T]:
+    """An operation returned this value, even when the value is an exception."""
+
+    value: T
+
+
+@dataclass(frozen=True, slots=True)
+class TaskFailure:
+    """An operation raised this exception."""
+
+    error: Exception
 
 
 async def settle_all[T](
     operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None
-) -> list[T | Exception]:
+) -> list[TaskSuccess[T] | TaskFailure]:
     """Return each operation's result or exception in input order.
 
     An ordinary failure does not cancel siblings. For example, a permission error
@@ -118,20 +132,20 @@ async def settle_all[T](
     factories = list(operations)
     if not factories:
         return []
-    results: list[T | Exception] = cast(list[T | Exception], [None] * len(factories))
+    results: dict[int, TaskSuccess[T] | TaskFailure] = {}
     limiter = _limiter(limit)
 
     async def run(index: int, factory: Callable[[], Awaitable[T]]) -> None:
         async with limiter:
             try:
-                results[index] = await factory()
+                results[index] = TaskSuccess(await factory())
             except Exception as error:
-                results[index] = error
+                results[index] = TaskFailure(error)
 
     async with task_group() as tasks:
         for index, factory in enumerate(factories):
             tasks.start_soon(run, index, factory)
-    return results
+    return [results[index] for index in range(len(factories))]
 
 
 async def run_all_awaitables[T](awaitables: Iterable[Awaitable[T]]) -> list[T]:
