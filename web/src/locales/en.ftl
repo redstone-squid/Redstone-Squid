@@ -425,3 +425,6 @@ catalogue-browse = Browse all builds
 catalogue-clear = Clear filters
 catalogue-emptyTitle = Nothing here yet
 search-moreFilters = More filters
+
+record-lastChecked = Last checked { $date }
+record-refreshPending = Refresh pending

@@ -422,3 +422,6 @@ catalogue-browse = 浏览所有作品
 catalogue-clear = 清除筛选
 catalogue-emptyTitle = 暂无内容
 search-moreFilters = 更多筛选
+
+record-lastChecked = 上次检查：{ $date }
+record-refreshPending = 等待刷新

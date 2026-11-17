@@ -1,12 +1,7 @@
 ---
+import RecordFreshness from "../../components/RecordFreshness.astro";
 import type { PublishedTitle } from "../../generated/types.gen";
-import {
-  formatDate,
-  localizePath,
-  translate,
-  translateTaxonomy,
-  type Locale,
-} from "../../lib/i18n";
+import { localizePath, translate, translateTaxonomy, type Locale } from "../../lib/i18n";
 type Props = { record: PublishedTitle; locale: Locale };
 const { record, locale } = Astro.props;
 ---
@@ -25,6 +20,6 @@ const { record, locale } = Astro.props;
   </div>
   <p class="sq-muted">
     {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })} ·{" "}
-    {formatDate(locale, record.computed_at)}
+    <RecordFreshness {record} {locale} />
   </p>
 </article>

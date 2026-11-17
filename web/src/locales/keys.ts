@@ -185,9 +185,11 @@ export const messageKeys = [
   "record.holderCount",
   "record.holders",
   "record.kind",
+  "record.lastChecked",
   "record.openingReset",
   "record.openingVisible",
   "record.parameters",
+  "record.refreshPending",
   "record.sourceFormulas",
   "record.status",
   "record.timingVariant",
@@ -461,6 +463,7 @@ export type MessageVariables = {
   "record.computed": { date: string | number };
   "record.detail": { id: string | number };
   "record.holderCount": { count: string | number };
+  "record.lastChecked": { date: string | number };
   "record.timingVariant": { number: string | number };
   "submitFlow.completed": { id: string | number };
   "submitFlow.limits": {

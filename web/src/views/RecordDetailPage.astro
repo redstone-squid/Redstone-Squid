@@ -1,4 +1,5 @@
 ---
+import RecordFreshness from "../components/RecordFreshness.astro";
 import BuildCard from "../components/BuildCard.astro";
 import DoorRecordConfigurations from "../components/DoorRecordConfigurations.astro";
 import ErrorState from "../components/ErrorState.astro";
@@ -97,6 +98,11 @@ const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : 
           </div>
         </dl>
       </section>
+      {(record!.last_checked_at || record!.refresh_pending) && (
+        <p>
+          <RecordFreshness record={record!} {locale} />
+        </p>
+      )}
       <section aria-labelledby="holders-heading">
         <div class="section-heading">
           <div>
