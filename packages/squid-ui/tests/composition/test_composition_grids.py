@@ -12,12 +12,13 @@ from squid_ui import scene
 from squid_ui.authoring.grids import GridCell
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "grid", "1")
 SLACK = AdapterProfile(SlackAdapter, "grid", "1")

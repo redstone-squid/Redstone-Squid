@@ -13,6 +13,7 @@ from squid_ui.authoring.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.html.target_types import HtmlTarget
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.interactions.forms import (
     BoolField,
@@ -38,7 +39,7 @@ from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState, SelectionState
-from squid_ui.target_types import HtmlTarget, Renderable
+from squid_ui.target_types import Renderable
 
 
 async def _pressed(_event: ActionEvent) -> None:

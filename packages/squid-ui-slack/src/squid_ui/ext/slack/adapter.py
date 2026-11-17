@@ -7,8 +7,8 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import DrawInvariantError
+from squid_ui.ext.slack.target_types import SlackSdk343Adapter, SlackSdkAdapter
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.target_types import SlackSdk343Adapter, SlackSdkAdapter
 
 SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
     {

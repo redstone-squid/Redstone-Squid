@@ -21,6 +21,7 @@ from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
 from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache
@@ -30,7 +31,7 @@ from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
+from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

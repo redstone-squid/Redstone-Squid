@@ -12,8 +12,9 @@ from squid_ui.ext.discord.messages.contracts import (
     MessageRootOptions as MessageRootOptions,
 )
 from squid_ui.ext.discord.messages.root import MessageRoot
+from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
+from squid_ui.target_types import ComponentsV2Target, DiscordTarget
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

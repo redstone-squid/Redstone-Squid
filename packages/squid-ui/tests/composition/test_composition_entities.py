@@ -12,12 +12,13 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionResponder, Actor, EntitySelectionEvent, SelectionEvent
 from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUnsupportedError, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "entities.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "entities.slack", "1")

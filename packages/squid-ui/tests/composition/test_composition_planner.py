@@ -13,13 +13,14 @@ from squid_ui.authoring.presentations import budget
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanningSnapshot
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives import nodes as primitive
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "composition.slack", ">=1"))

@@ -10,13 +10,13 @@ from squid_ui.authoring.presentations import Replacement
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never, Paginate
-from squid_ui.target_types import DiscordAdapter
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-variants", "1")
 

@@ -14,10 +14,11 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.authoring.semantic import ControlDisplay
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.runtime.expansion import render_component_tree
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 from squid_ui.testing import keys
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "tests.actions", ">=1"))

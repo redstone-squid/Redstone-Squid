@@ -16,6 +16,7 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, confor
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
 from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_ui.ext.discord.planning import components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
 from squid_ui.planning import plan
@@ -33,7 +34,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
-from squid_ui.target_types import DiscordAdapter
 
 
 class TestPositionPolicy:

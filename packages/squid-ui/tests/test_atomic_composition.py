@@ -13,6 +13,7 @@ from squid_ui.content.assets import Asset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning import CompositionRejectedError, FixedComposition
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import (
@@ -27,7 +28,7 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.realizations import DownloadRealization, Realization, TextRealization
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
+from squid_ui.target_types import ComponentsV2Target
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "composition.atoms", ">=1"))
 

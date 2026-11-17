@@ -15,7 +15,9 @@ from squid_ui.authoring.semantic import TimeStyle
 from squid_ui.content.temporal import ZonedDateTime
 from squid_ui.ext.discord.limits import ClassicLimits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.slack.protocol import SlackHomeLimits, SlackMessageLimits
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -24,7 +26,6 @@ from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives import nodes as native
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "displays", "1")
 SLACK = AdapterProfile(SlackAdapter, "displays", "1")

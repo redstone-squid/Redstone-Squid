@@ -10,6 +10,8 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
@@ -18,7 +20,6 @@ from squid_ui.planning.pagination.navigation import TurnPage, default_nav, page_
 from squid_ui.planning.resources import Axis, TargetLimits
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "test", ">=1"))
 REGION = OccurrenceId(("root", "r"))

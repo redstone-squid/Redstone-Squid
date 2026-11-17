@@ -15,6 +15,7 @@ from squid_ui.errors import DrawInvariantError, LayoutInvariantError
 from squid_ui.ext.discord.form_planning import DiscordFormPlan, plan_form
 from squid_ui.ext.discord.inspection import _walk, audit_items, cost
 from squid_ui.ext.discord.limits import V2Limits
+from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.extensions import ExtensionKind
 from squid_ui.interactions.forms import FormSpec
 from squid_ui.planning.adapter import (
@@ -28,7 +29,6 @@ from squid_ui.planning.native_extensions import NativeComposition, NativePlaceme
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import AnyTarget
 from squid_ui.primitives.nodes import RawItem
-from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 

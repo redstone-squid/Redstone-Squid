@@ -14,13 +14,13 @@ from squid_ui.authoring.document import DocumentLike
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.rendering.contracts import MountedRenderer
 from squid_ui.ext.discord.rendering.controls import Wire
+from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.profiling import OperationRecorder, SpanRecorder
-from squid_ui.target_types import DiscordPyAdapter
 
 logger = logging.getLogger(__name__)
 

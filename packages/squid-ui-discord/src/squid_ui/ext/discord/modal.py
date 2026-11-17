@@ -32,9 +32,9 @@ from squid_ui.ext.discord.form_planning import (
 )
 from squid_ui.ext.discord.form_planning import _entity_defaults as _entity_defaults
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS, ComponentLimits
+from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.interactions.forms import FormSpec, FormText, UploadedFile
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.target_types import DiscordPyAdapter
 
 logger = logging.getLogger(__name__)
 

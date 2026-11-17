@@ -12,6 +12,7 @@ import pytest
 from squid_i18n import tr
 from squid_ui import scene
 from squid_ui.ext.discord.planning import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointUnsupportedError
@@ -38,7 +39,7 @@ from squid_ui.primitives.nodes import (
     Text,
     Thumbnail,
 )
-from squid_ui.target_types import DiscordAdapter, DiscordTarget, Renderable
+from squid_ui.target_types import DiscordTarget, Renderable
 
 ADAPTER = AdapterProfile(DiscordAdapter, "text-tests", "1")
 

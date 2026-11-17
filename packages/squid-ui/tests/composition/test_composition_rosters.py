@@ -13,12 +13,13 @@ from squid_ui.authoring.rosters import RosterEntry, RosterOverflow, RosterSlot, 
 from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 DISCORD = AdapterProfile(DiscordAdapter, "roster.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "roster.slack", "1")

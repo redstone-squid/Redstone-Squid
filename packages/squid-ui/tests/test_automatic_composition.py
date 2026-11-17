@@ -12,6 +12,8 @@ from squid_ui.chrome import Chrome
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions.handlers import FrontendHandler, handlers
 from squid_ui.planning import (
     AutomaticComposition,
@@ -24,7 +26,7 @@ from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation import PresentationState
-from squid_ui.target_types import ComponentsV2Target, DiscordAdapter, SlackAdapter
+from squid_ui.target_types import ComponentsV2Target
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "joint.discord", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "joint.slack", ">=1"))

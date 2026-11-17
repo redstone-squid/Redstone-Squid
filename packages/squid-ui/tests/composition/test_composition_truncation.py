@@ -13,13 +13,15 @@ from squid_ui.authoring.presentations import budget
 from squid_ui.authoring.semantic import Importance
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.primitives import nodes as native
-from squid_ui.target_types import DiscordAdapter, RenderTarget, SlackAdapter
+from squid_ui.target_types import RenderTarget
 
 DISCORD = AdapterProfile(DiscordAdapter, "truncate.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "truncate.slack", "1")

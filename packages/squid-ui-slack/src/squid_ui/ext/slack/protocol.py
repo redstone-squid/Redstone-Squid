@@ -32,13 +32,13 @@ from squid_ui.ext.slack.limits import (
 from squid_ui.ext.slack.limits import (
     SlackModalLimits as SlackModalLimits,
 )
+from squid_ui.ext.slack.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTarget, SlackModalTarget
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition_planner import RuleComposition
 from squid_ui.planning.composition_request import TargetComposition
 from squid_ui.planning.dialect import InputPolicy
 from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.planning.target import Target
-from squid_ui.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTarget, SlackModalTarget
 
 _COMMON_CAPABILITIES = frozenset(
     {

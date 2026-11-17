@@ -110,6 +110,7 @@ from squid_ui.ext.discord.rendering.contracts import MountedRenderer
 from squid_ui.ext.discord.rendering.controls import RoutedItem, RoutedSelectItem
 from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
+from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
@@ -160,7 +161,7 @@ from squid_ui.runtime.definition import Component
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.tree import ComponentTree
-from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
+from squid_ui.target_types import ComponentsV2Target, DiscordTarget
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

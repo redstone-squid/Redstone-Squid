@@ -2,10 +2,10 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import PreparedExtension
-from squid_ui.target_types import DiscordAdapter
 
 
 class AlternateAdapter(DiscordAdapter):

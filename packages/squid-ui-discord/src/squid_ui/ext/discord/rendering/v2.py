@@ -35,9 +35,9 @@ from squid_ui.ext.discord.rendering.controls import (
     draw_routed_select,
 )
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.result import PlanResult
-from squid_ui.target_types import DiscordPyAdapter
 
 type Accessory = (
     scene.Thumbnail | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension

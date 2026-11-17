@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.ext.slack.target_types import SlackAdapter, SlackMessageTarget
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
@@ -18,7 +19,6 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.result import PlanReuse, PlanSeverity
 from squid_ui.runtime import PresentationState
-from squid_ui.target_types import SlackAdapter, SlackMessageTarget
 
 ADAPTER = AdapterProfile(SlackAdapter, "tests.slack", ">=3.43,<4")
 MESSAGE = squid_ui.ext.slack.message_target(adapter=ADAPTER)

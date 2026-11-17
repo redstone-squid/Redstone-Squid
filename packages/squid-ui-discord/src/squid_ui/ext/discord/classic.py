@@ -55,6 +55,7 @@ from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
 from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
 from squid_ui.ext.discord.rendering.result import RenderedMessage
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
+from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
@@ -79,7 +80,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
-from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
+from squid_ui.target_types import ClassicTarget, Renderable
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request

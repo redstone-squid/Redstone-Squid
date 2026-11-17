@@ -15,15 +15,15 @@ from squid_ui.ext.slack.protocol import (
     message_target,
     modal_target,
 )
-from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.target import Target
-from squid_ui.target_types import (
+from squid_ui.ext.slack.target_types import (
     SlackHomeTarget,
     SlackMessageTarget,
     SlackModalTarget,
     SlackSdk343Adapter,
     SlackSdkAdapter,
 )
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.target import Target
 
 # The verified default, widened to the family every implementation below accepts. `AdapterProfile`
 # is frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright

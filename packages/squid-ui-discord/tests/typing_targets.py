@@ -13,13 +13,11 @@ from squid_ui.authoring.semantic import FallbackContent, Paragraph
 from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning import classic_target, components_v2_target
 from squid_ui.ext.discord.target import classic, v2
+from squid_ui.ext.discord.target_types import DiscordAdapter, DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.planning import (
     AdapterProfile,
     ClassicTarget,
     ComponentsV2Target,
-    DiscordAdapter,
-    DiscordPy27Adapter,
-    DiscordPyAdapter,
     PlanCache,
     PlanningSnapshot,
     Renderable,

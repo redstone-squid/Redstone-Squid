@@ -7,9 +7,9 @@ import pytest
 import squid_ui.ext.slack as slack
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.target_types import SlackAdapter
 
 SLACK_TEST_ADAPTER = AdapterProfile(
     SlackAdapter,

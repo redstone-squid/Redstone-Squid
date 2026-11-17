@@ -14,9 +14,10 @@ from squid_ui.ext.discord.messages.scheduler import MessageRootScheduler
 from squid_ui.ext.discord.messages.wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.rendering import render_static
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
+from squid_ui.target_types import ComponentsV2Target
 
 
 def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT, AdapterT](

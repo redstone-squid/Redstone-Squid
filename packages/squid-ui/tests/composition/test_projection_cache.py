@@ -12,6 +12,7 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene, testing
 from squid_ui.ext.discord.planning.discord import components_v2_target
+from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec, PressHandler
 from squid_ui.interactions.forms import FormBinding, FormSpec, SubmitEvent, TextField
 from squid_ui.interactions.guards import ADMIT, GuardDecision, GuardLedger
@@ -24,7 +25,6 @@ from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState
 from squid_ui.runtime.histories import History
-from squid_ui.target_types import DiscordAdapter
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "projection", ">=1"))
 REGION = OccurrenceId(("root", "r"))

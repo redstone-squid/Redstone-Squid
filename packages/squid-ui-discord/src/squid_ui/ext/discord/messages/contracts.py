@@ -19,6 +19,7 @@ from squid_ui.content.text import NEUTRAL, Localization, TextLike
 from squid_ui.ext.discord.access import AccessPolicy
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
+from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.interactions import ActionMiddleware
 from squid_ui.interactions.guards import Challenge
 from squid_ui.palette import DEFAULT_PALETTE, Palette
@@ -27,12 +28,7 @@ from squid_ui.planning.result import PlanMetrics, PlanReport
 from squid_ui.planning.target import Target
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.services import UIExecutionHost
-from squid_ui.target_types import (
-    ComponentsV2Target,
-    DiscordPy27Adapter,
-    DiscordPyAdapter,
-    DiscordTarget,
-)
+from squid_ui.target_types import ComponentsV2Target, DiscordTarget
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.messages.root import AnyMessageRoot
