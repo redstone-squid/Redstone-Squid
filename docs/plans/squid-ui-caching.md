@@ -12,6 +12,18 @@ through explicit framework handler edges, preserving frontend selection and grou
 routes. A committed owner can reuse the templates when only `on_trigger` changes.
 Controlled page turns retain the same allocation view and its projection cache.
 
+`ActionPage` now stores explicit `ActionSlot` and `ActionGroupSlot` values rather than
+`ActionBinding` objects containing placeholder functions. Ordinary slots retain only
+action keys; grouped slots also retain the routing shape and group mode. Projection
+builds live bindings from the current control snapshot, including guards, busy state,
+labels, and history, then selects the frontend handlers. The placeholder callback and
+custom replacement binder have been removed.
+
+Grouped options map their local keys to scoped action slots. A one-item group can
+share its identity with its action, so projection recognizes the group before the
+individual slot. Both the group handler and the dispatcher-selected route receive the
+current callback, including when different groups repeat the same local option key.
+
 This replaces the transitional `ReboundAllocation` path. The old implementation
 compared previous/current graphs, detached newly changed handlers, and flattened a
 wrapper on each generation. The new path prepares all supported slots once and
@@ -51,12 +63,14 @@ dispatch-policy changes. Projection tests cover LRU eviction, failed binding, co
 clamping, generation isolation, and retention across controlled page turns. Work-count
 tests verify that page revisits do not rebuild the graph or rehash unchanged content.
 Weak-reference tests cover retirement of individual and grouped action receivers after
-commit while preserving the displayed generation before commit. Snapshot tests cover
+commit while preserving the displayed generation before commit. Retaining ordinary
+action templates alone also releases their receivers, guards, and history objects;
+projected bindings retain the original dispatch policy. Snapshot tests cover
 nested coordinate selection; grouped actions with repeated local keys retain their scope.
 Existing composition and Discord cache tests exercise the surrounding planning and
 rendering paths.
 
-A local microbenchmark of 100 callback-only updates to a paragraph and one action
+An earlier local microbenchmark of 100 callback-only updates to a paragraph and one action
 measured median planning time of about 0.51 ms with a fresh presentation state versus
 0.21 ms with the retained allocation. Target evaluations fell from 100 to zero.
 This is illustrative planning-only evidence, not an end-to-end latency guarantee.
