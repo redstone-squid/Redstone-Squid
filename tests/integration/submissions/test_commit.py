@@ -138,7 +138,7 @@ async def test_receipt_failure_rolls_back_build_and_events(
         raise RuntimeError("receipt unavailable")
 
     with monkeypatch.context() as patch:
-        patch.setattr(commit_module, "_complete", fail_receipt)
+        patch.setattr(commit_module.PostgresFinalizationJobRepository, "_complete", fail_receipt)
         with pytest.raises(RuntimeError, match="receipt unavailable"):
             await executor.execute(claim, now=Instant.now())
     async with migrated_session_factory() as session:

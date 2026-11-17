@@ -17,7 +17,6 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 BACKFILL_DATABASE = "redstone_squid_backfill"
 TABLES_REVISION = "d8e9f0a1b2c3"
-BACKFILL_REVISION = "e9f0a1b2c3d4"
 
 GUILD = 900
 TRUSTED_ROLE = 901
@@ -88,7 +87,7 @@ async def backfilled(
         )
     engine.dispose()
 
-    command.upgrade(config, BACKFILL_REVISION)
+    command.upgrade(config, "head")
 
     async_engine = create_async_engine(backfill_database_url.replace("psycopg2", "asyncpg"))
     accounts = {"administrator": administrator, "ordinary": ordinary, "trusted_member": trusted_member}

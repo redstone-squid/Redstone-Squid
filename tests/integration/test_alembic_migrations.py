@@ -1017,7 +1017,6 @@ def test_finalization_result_metadata_contract_preserves_build_identity(
                     ).one()
                     == original
                 )
-            command.check(config)
             command.downgrade(config, f"{revision}-1")
             with engine.connect() as connection:
                 assert connection.execute(

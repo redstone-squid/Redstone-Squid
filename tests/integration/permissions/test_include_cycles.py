@@ -22,9 +22,12 @@ async def test_concurrent_includes_cannot_commit_a_cycle(
             ).scalars()
         )
     started = anyio.Event()
+    competing_pid: int | None = None
 
     async def reverse_edge() -> None:
+        nonlocal competing_pid
         async with sessions() as session:
+            competing_pid = await session.scalar(text("SELECT pg_backend_pid()"))
             started.set()
             with pytest.raises(IntegrityError, match="inclusion cycle"):
                 await session.execute(
@@ -46,9 +49,10 @@ async def test_concurrent_includes_cannot_commit_a_cycle(
                 async with sessions() as observer:
                     while not await observer.scalar(
                         text(
-                            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' "
-                            "AND classid = 1936812391 AND objid = 1 AND NOT granted)"
-                        )
+                            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'transactionid' "
+                            "AND pid = :pid AND NOT granted)"
+                        ),
+                        {"pid": competing_pid},
                     ):
                         await anyio.sleep(0.01)
                 await first.commit()
