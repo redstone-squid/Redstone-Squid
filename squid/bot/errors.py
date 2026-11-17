@@ -18,8 +18,9 @@ from discord.ext import commands
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.accounts.errors import ConsentRequiredError
+from squid.bot.limits import CommandLimits
 from squid.bot.ui import error_node
-from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
+from squid.core.errors import DomainError, JSONValue, RateLimitedError, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
@@ -477,6 +478,10 @@ async def record_operation_error(
 class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT]):
     """Application command tree with centralized error handling."""
 
+    def __init__(self, client: ClientT, **kwargs: Any) -> None:
+        super().__init__(client, **kwargs)
+        self.command_limits = CommandLimits()
+
     @override
     async def _call(self, interaction: discord.Interaction[ClientT]) -> None:
         if interaction.type is discord.InteractionType.autocomplete:
@@ -505,6 +510,12 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             except sd.DiscordUIRuntimeMissing:
                 localization = NEUTRAL
             with localization_scope(localization):
+                try:
+                    self.command_limits.check(interaction.user.id)
+                except RateLimitedError as error:
+                    interaction.command_failed = True
+                    await handle_interaction_error(interaction, error, surface="application_command")
+                    return
                 await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
                 if interaction.command_failed:
                     span.set_error()

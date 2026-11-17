@@ -5,7 +5,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Self, override
+from typing import Any, Self, cast, override
 
 import anyio
 import discord
@@ -41,6 +41,7 @@ from squid.config import (
     load_bot_process_config,
     load_or_exit,
 )
+from squid.core.errors import RateLimitedError
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
@@ -153,6 +154,8 @@ class RedstoneSquid(Bot):
         )
 
         self.bot_name = config.bot_name
+        self.command_limits = cast(SquidCommandTree[Self], self.tree).command_limits
+        self.add_check(self._check_command_limit, call_once=True)
         self.bot_version = config.bot_version
         self.owner_server_id = config.owner_server_id
         self.source_code_url = config.source_code_url
@@ -238,6 +241,17 @@ class RedstoneSquid(Bot):
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         self.interaction_metrics.observe(interaction)
+
+    async def _check_command_limit(self, ctx: commands.Context[Self]) -> bool:
+        # Hybrid slash commands have already spent their unit in the command tree.
+        if ctx.interaction is None:
+            try:
+                self.command_limits.check(ctx.author.id)
+            except RateLimitedError as error:
+                raise commands.CommandOnCooldown(
+                    commands.Cooldown(12, 15), error.retry_after, commands.BucketType.user
+                ) from error
+        return True
 
     @override
     async def before_identify_hook(self, shard_id: int | None, *, initial: bool = False) -> None:

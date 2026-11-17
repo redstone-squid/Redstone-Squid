@@ -140,6 +140,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         return nodes
 
     async def _retry(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        event.context.client.command_limits.check(event.context.user.id, cost=4)
         await event.acknowledge()
         actor = await event.context.client.actors.resolve(event.context)
         try:

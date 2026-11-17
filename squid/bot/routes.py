@@ -57,6 +57,7 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
         "squid.route.format": match.endpoint.path,
     }
     with localization_scope(request.localization), trace_span("ui.route", attributes), correlation_scope():
+        request.client.command_limits.check(request.user.id)
         failure: Exception | None = None
         result: Any = None
         async with anyio.create_task_group() as tasks:
