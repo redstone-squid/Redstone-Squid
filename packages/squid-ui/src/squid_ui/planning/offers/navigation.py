@@ -277,11 +277,7 @@ def control_key[RenderTargetT, ContextT](
             key += ".focus"
         if consume is not None:
             consume(len(occurrence.graph.units))
-        if (
-            not key.startswith("@")
-            and len(key) <= 64
-            and sum(ref.keys[-1] in (source_key, key) for ref in occurrence.graph.units) == 1
-        ):
+        if not key.startswith("@") and sum(ref.keys[-1] in (source_key, key) for ref in occurrence.graph.units) == 1:
             return key
     return grouped_control_key(occurrence)
 

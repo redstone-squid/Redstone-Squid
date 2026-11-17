@@ -132,6 +132,26 @@ async def test_local_control_lookup_requires_a_unique_suffix() -> None:
             ui.key_for("editor.add")
 
 
+async def test_long_semantic_keys_survive_native_id_shortening() -> None:
+    namespace = "nested-component-" * 5
+
+    class Parent(sd.Screen):
+        def __init__(self) -> None:
+            self.editor = Editor()
+
+        @override
+        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
+            return self.editor.keyed(namespace)
+
+    parent = Parent()
+    async with sd.testing.stage(parent, owner=object()) as ui:
+        key = ui.key_for("editor.add")
+        assert key == f"{namespace}.editor.add"
+        assert len(ui.control(key).payload["custom_id"]) <= 100
+        await ui.press(key)
+        assert parent.editor.count == 1
+
+
 class SubmissionModal(discord.ui.Modal):
     def __init__(self) -> None:
         super().__init__(title="Edit", custom_id="modal-root")
