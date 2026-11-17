@@ -158,6 +158,10 @@ class Accounts(AccountService):
     async def get_account_by_id(self, account_id: int) -> Account | None:
         return self.account if self.account.id == account_id else None
 
+    @override
+    async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        return {self.account.id: self.account} if self.account.id in account_ids else {}
+
 
 @dataclass
 class Permissions(PermissionService):

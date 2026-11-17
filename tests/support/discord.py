@@ -13,6 +13,7 @@ from squid.bot.actors import DiscordActorResolver
 from squid.bot.errors import UI_ERRORS
 from squid.bot.i18n import localization_resolver
 from squid.bot.limits import CommandLimits
+from squid.bot.members import DiscordMembers
 from squid.bot.ui import HOST_DEFAULTS
 from squid.core.actors import Actor
 from squid.diagnostics.application import ErrorReportService
@@ -378,5 +379,6 @@ def make_layout_bot(**attributes: Any) -> Any:
         sessions=runtime.sessions,
         command_limits=CommandLimits(),
         actors=DiscordActorResolver(cast("squid.bot.app.RedstoneSquid", client)),
+        members=DiscordMembers(cast(discord.Client, client)),
     )
     return client

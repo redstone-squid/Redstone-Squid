@@ -24,6 +24,7 @@ from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.interaction_metrics import InteractionMetrics
+from squid.bot.members import DiscordMembers
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
@@ -177,6 +178,7 @@ class RedstoneSquid(Bot):
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
         self.actors = DiscordActorResolver(self)
+        self.members = DiscordMembers(self)
         self.interaction_metrics = InteractionMetrics()
         self.gateway_history = GatewayHistory()
         self.layout_profiler = MemoryProfiler()

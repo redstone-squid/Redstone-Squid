@@ -500,15 +500,22 @@ class VoteService:
         if self._actor_resolver is None:
             return {}, []
         owner_guild_id = self._owner_guild_id(snapshot)
+        by_guild: dict[int, set[int]] = {}
+        for selection in snapshot.selections:
+            if replacing is not None and replacing.account_id == selection.account_id:
+                continue
+            guild_id = owner_guild_id if owner_guild_id is not None else selection.guild_id or 0
+            by_guild.setdefault(guild_id, set()).add(selection.account_id)
+        actors: dict[tuple[int, int], Actor | None] = {}
+        for guild_id, account_ids in by_guild.items():
+            resolved = await self._actor_resolver.resolve_many(sorted(account_ids), guild_id, snapshot.kind)
+            actors.update(((guild_id, account_id), actor) for account_id, actor in resolved.items())
         weights: dict[int, float] = {}
         unresolved: list[int] = []
         for selection in snapshot.selections:
             actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
-            actor = actor or await self._actor_resolver.resolve(
-                selection.account_id,
-                owner_guild_id if owner_guild_id is not None else selection.guild_id or 0,
-                snapshot.kind,
-            )
+            guild_id = owner_guild_id if owner_guild_id is not None else selection.guild_id or 0
+            actor = actor or actors.get((guild_id, selection.account_id))
             if actor is None:
                 unresolved.append(selection.account_id)
                 continue

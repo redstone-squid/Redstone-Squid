@@ -1,5 +1,6 @@
 """HTTP vote mutation tests."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
@@ -95,6 +96,9 @@ class MemberRecorder:
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         return await self.member(account_id, guild_id, kind)
+
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
 
     async def aclose(self) -> None:
         pass

@@ -49,8 +49,8 @@ async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member
     function loads permissions and uses roles from the supplied member object;
     it does not create an account or refresh Discord membership.
     """
-    subject = await bot.actors.resolve(member)
+    subject = await bot.actors.resolve(member, account_id=account_id)
     capabilities = (
         await bot.services.permissions.check(subject, *(VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY))
     ).allowed_nodes
-    return replace(subject, account_id=account_id, capabilities=capabilities)
+    return replace(subject, capabilities=capabilities)

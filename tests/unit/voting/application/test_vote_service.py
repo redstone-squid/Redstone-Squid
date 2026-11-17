@@ -233,6 +233,9 @@ class MissingActorResolver:
         del account_id, guild_id, kind
         return
 
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        return dict.fromkeys(account_ids)
+
 
 class RecordingActorResolver:
     """Resolve members from a fixed roster, recording which guild was asked."""
@@ -240,6 +243,7 @@ class RecordingActorResolver:
     def __init__(self, members: dict[tuple[int, int], Actor] | None = None):
         self.members = members or {}
         self.calls: list[tuple[int, int]] = []
+        self.batch_calls: list[tuple[tuple[int, ...], int]] = []
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         del kind
@@ -248,6 +252,10 @@ class RecordingActorResolver:
             return self.members[(account_id, guild_id)]
         # Definitely not a member, as opposed to a guild we could not reach.
         return Actor(account_id=account_id, discord_user_id=account_id * 10, guild_id=guild_id)
+
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        self.batch_calls.append((tuple(account_ids), guild_id))
+        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
 
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
@@ -836,6 +844,7 @@ async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
     assert unresolved == []
     # The cast guild is never consulted, so the ballot cast in 999 loses its 100x.
     assert [guild for _, guild in resolver.calls] == [OWNER_GUILD_ID, OWNER_GUILD_ID]
+    assert resolver.batch_calls == [((7, 8), OWNER_GUILD_ID)]
     assert weights == {7: 1.0, 8: 4.0}
 
 

@@ -11,7 +11,7 @@ per client, so separate clients would each hit Discord's limits without knowing 
 import asyncio
 import enum
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from time import monotonic
 from typing import Any, Protocol, override
@@ -208,6 +208,10 @@ class DiscordRestActorResolver:
                 return Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
             case _NotAMember.UNKNOWN:
                 return None
+
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        """Use the REST membership cache; Discord's REST API has no bulk lookup."""
+        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in dict.fromkeys(account_ids)}
 
     async def _discord_id(self, account_id: int) -> int | None:
         if self._discord_ids is None:

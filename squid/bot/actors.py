@@ -71,13 +71,15 @@ class DiscordActorResolver:
         source: sd.Request[Any, Any] | Context[Any] | discord.Member,
         *,
         refresh: bool = False,
+        account_id: int | None = None,
     ) -> Actor:
         """Resolve a request, command context, or already-fetched member.
 
         Normal checks use the supplied membership and cached account lookup.
         Command contexts also memoize the actor across their parent-group checks.
         With `refresh=True`, fetch current guild membership and bypass both
-        caches. Discord failures propagate; a departed member is denied.
+        caches. Discord failures propagate; a departed member is denied. Callers
+        that already resolved the user's identity may supply its `account_id`.
         """
         if isinstance(source, discord.Member):
             user, guild = source, source.guild
@@ -87,7 +89,7 @@ class DiscordActorResolver:
             memoize = False
         else:
             user, guild = source.author, source.guild
-            memoize = not refresh
+            memoize = not refresh and account_id is None
             if memoize and isinstance(memoized := getattr(source, _ACTOR_ATTRIBUTE, None), Actor):
                 return memoized
 
@@ -101,7 +103,7 @@ class DiscordActorResolver:
                     raise AuthorizationError from error
             account = await self._bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
             account_id = None if account is None else account.id
-        else:
+        elif account_id is None:
             account_id = await self._bot.account_ids.resolve(self._bot.services.accounts, user.id)
 
         actor = Actor(

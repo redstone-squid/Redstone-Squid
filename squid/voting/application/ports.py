@@ -32,6 +32,10 @@ class VoteWeightPolicy(Protocol):
 class VoteActorResolver(Protocol):
     """Resolve membership in the guild whose roles determine ballot weight."""
 
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        """Resolve accounts together, preserving unknown membership as None."""
+        ...
+
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         """Return the account's membership facts in `guild_id`.
 

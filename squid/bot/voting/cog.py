@@ -1,6 +1,7 @@
 """Voting commands and current actor resolution for persisted ballot weights."""
 
 import contextlib
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Self, cast, override
 
 import discord
@@ -230,24 +231,31 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         actor with no roles. An unavailable guild or denied member lookup returns
         `None`, which tells the service to retain the cached ballot weight.
         """
+        return (await self.resolve_many((account_id,), guild_id, kind))[account_id]
+
+    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+        """Read accounts together and resolve uncached Discord members in batches."""
+        accounts = await self.bot.services.accounts.get_accounts(account_ids)
+        result: dict[int, Actor | None] = {}
+        discord_ids: dict[int, int] = {}
+        for account_id in dict.fromkeys(account_ids):
+            account = accounts.get(account_id)
+            identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
+            discord_id = None if identity is None else identity.discord_id
+            if discord_id is None:
+                result[account_id] = Actor(account_id=account_id, discord_user_id=None, guild_id=guild_id)
+            else:
+                discord_ids[account_id] = discord_id
         guild = self.bot.get_guild(guild_id)
-        account = await self.bot.services.accounts.get_account_by_id(account_id)
-        identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
-        if identity is None or identity.discord_id is None:
-            # No Discord identity at all, so no roles anywhere.
-            return Actor(account_id=account_id, discord_user_id=None, guild_id=guild_id)
-        discord_id = identity.discord_id
-        if guild is None:
-            return None
-        member = guild.get_member(discord_id)
-        if member is None:
-            try:
-                member = await guild.fetch_member(discord_id)
-            except discord.NotFound:
-                return Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
-            except discord.Forbidden:
-                return None
-        return await resolve_actor(self.bot, member, account_id=account_id)
+        members = await self.bot.members.resolve(guild, tuple(discord_ids.values())) if guild is not None else {}
+        for account_id, discord_id in discord_ids.items():
+            if discord_id not in members:
+                result[account_id] = None
+            elif (member := members[discord_id]) is None:
+                result[account_id] = Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
+            else:
+                result[account_id] = await resolve_actor(self.bot, member, account_id=account_id)
+        return result
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
