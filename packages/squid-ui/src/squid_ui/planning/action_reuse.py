@@ -6,8 +6,9 @@ conservative. Rebinding follows explicit framework handler edges, including grou
 select routes, rather than traversing arbitrary application objects.
 """
 
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, cast, override
 
@@ -40,17 +41,68 @@ class _ActionRebinder(_HandlerBinder):
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectionCacheSnapshot:
+    entries: int
+    hits: int
+    misses: int
+    evictions: int
+
+
+class _ProjectionCache[BodyT: scene.Body]:
+    """Bound rebinding results by certified output identity within one generation."""
+
+    def __init__(self, capacity: int) -> None:
+        if capacity < 1:
+            message = "projection cache capacity must be positive"
+            raise ValueError(message)
+        self.capacity = capacity
+        self.entries: OrderedDict[int, tuple[PlanResult[BodyT], PlanResult[BodyT]]] = OrderedDict()
+        self.hits = self.misses = self.evictions = 0
+
+    def get(self, source: PlanResult[BodyT]) -> PlanResult[BodyT] | None:
+        entry = self.entries.get(id(source))
+        if entry is None:
+            self.misses += 1
+            return None
+        # Entries retain the source, so its identity cannot be recycled while cached.
+        self.entries.move_to_end(id(source))
+        self.hits += 1
+        return entry[1]
+
+    def put(self, source: PlanResult[BodyT], result: PlanResult[BodyT]) -> None:
+        self.entries[id(source)] = (source, result)
+        self.entries.move_to_end(id(source))
+        while len(self.entries) > self.capacity:
+            self.entries.popitem(last=False)
+            self.evictions += 1
+
+    def snapshot(self) -> ProjectionCacheSnapshot:
+        return ProjectionCacheSnapshot(len(self.entries), self.hits, self.misses, self.evictions)
+
+
+@dataclass(frozen=True, slots=True)
 class ReboundAllocation[BodyT: scene.Body]:
     """Owner-local projection of current handlers over an existing certificate.
 
     Wrappers are flattened on the next render so page navigation cannot accumulate
     callback generations. The underlying allocation is never mutated or shared with
-    another owner by this operation.
+    another owner by this operation. Revisited pages reuse their rebound bindings;
+    the bounded cache belongs to this callback generation, never to delivery state.
     """
 
     source: AllocationSelection[PlanResult[BodyT]]
     controls: Mapping[str, ActionControl[Any]]
     frontend: str
+    capacity: int = 32
+    _cache: _ProjectionCache[BodyT] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "controls", MappingProxyType(dict(self.controls)))
+        object.__setattr__(self, "_cache", _ProjectionCache[BodyT](self.capacity))
+
+    def cache_snapshot(self) -> ProjectionCacheSnapshot:
+        """Inspect page-projection reuse without exposing cached callbacks."""
+        return self._cache.snapshot()
 
     @property
     def identity(self) -> str:
@@ -65,8 +117,13 @@ class ReboundAllocation[BodyT: scene.Body]:
 
     def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> PlanResult[BodyT]:
         result = self.source.select(coordinates)
+        if (cached := self._cache.get(result)) is not None:
+            return cached
         binder = _ActionRebinder(self.frontend, self.controls)
-        return replace(result, bindings=binder.actions(result.bindings))
+        projected = replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
+        # Failed frontend binding must not publish a partially prepared projection.
+        self._cache.put(result, projected)
+        return projected
 
 
 def rebind_allocation[BodyT: scene.Body](
@@ -77,6 +134,7 @@ def rebind_allocation[BodyT: scene.Body](
 ) -> AllocationSelection[PlanResult[BodyT]]:
     source = allocation.source if isinstance(allocation, ReboundAllocation) else allocation
     controls = dict(allocation.controls) if isinstance(allocation, ReboundAllocation) else {}
+    changed = False
     for reference, unit in current.units.items():
         old = previous.units.get(reference)
         if (
@@ -85,6 +143,9 @@ def rebind_allocation[BodyT: scene.Body](
             and isinstance(old.value, ActionControl)
             and unit.value.on_trigger is not old.value.on_trigger
         ):
+            changed = True
             key = control_key(SemanticOccurrence(OccurrenceId(reference.keys), current, reference))
             controls[key] = unit.value
-    return ReboundAllocation(source, MappingProxyType(controls), frontend) if controls else source
+    if not changed and (not isinstance(allocation, ReboundAllocation) or allocation.frontend == frontend):
+        return allocation
+    return ReboundAllocation(source, controls, frontend) if controls else source
