@@ -1,9 +1,9 @@
 # Readable presentation controls
 
-Proposal, with a static typing spike; no runtime API has been implemented.
+Proposal with a static typing spike; no runtime API has been implemented.
 
-Declare a control once, let the runtime update its value, and read that value from
-other parts of the UI without an assignment callback:
+Declare a control once, let the runtime update its value, and read that value
+elsewhere in the UI without an assignment callback:
 
 ```python
 class Reports(sl.Component):
@@ -16,186 +16,243 @@ class Reports(sl.Component):
         )
 ```
 
-Keep `sl.state` for component-owned data and `controlled(value, callback)` for
-changes that require application behavior. Runtime-owned controls acknowledge
-interactions, update presentation state, and invalidate their readers. They do
-not save domain data or invoke application change handlers.
+Keep `sl.state` for component-owned data, `controlled(value, callback)` for
+application-managed changes, and `uncontrolled(initial)` for inline, key-owned
+presentation state. Declared presentation controls acknowledge interactions,
+update their cells, and invalidate readers without application change handlers.
 
-## Separate declarations, references, and controls
+## Descriptors and binding types
 
-`sl.presentation` is one callable factory object with named control factories.
-Each factory returns a descriptor. Class access returns that descriptor; instance
-access returns a typed handle associated with the component instance:
-
-```python
-class PresentationField[HandleT]:
-    @overload
-    def __get__(self, instance: None, owner: type | None = None) -> PresentationField[HandleT]: ...
-    @overload
-    def __get__(self, instance: object, owner: type | None = None) -> HandleT: ...
-    def __set__(self, instance: object, value: Never) -> None: ...
-```
-
-The handle exposes read-only `.value` and `.bind` properties. It is neither a
-boolean proxy nor a renderable node. Reassigning the field or `.value` is an
-error. Reset/write operations can be designed separately with explicit interaction
-scope; they must not become writes during render.
-
-Different factories return different handle types. Avoid one generic `.bind`
-type that promises both a renderable control and a value binding for every case:
+`sl.presentation` is a callable factory object with named control factories.
+Factories return descriptors; class access returns the descriptor and instance
+access returns a handle. Handles have read-only `.value` and `.bind` properties.
+Neither the handle nor the value is a proxy for the other. Assigning to the field
+or `.value` is forbidden; explicit write/reset APIs are outside this plan.
 
 | Declaration | `.value` | `.bind` |
 | --- | --- | --- |
 | `presentation(initial)` | Inferred value type | `ValueBinding[ValueT]` |
+| `presentation(factory=...)` | Factory's return type | `ValueBinding[ValueT]` |
 | `presentation.toggle(label)` | `bool` | Callable subclass of `Toggle[object]` |
 | `presentation.choices(first, *rest)` | `tuple[str, ...]` | Callable subclass of `Choices[object]` |
 | `presentation.choices()` | `tuple[str, ...]` | Builder requiring choice entries |
 
-`PresentationField[HandleT]` means descriptor typing is implemented once, while
-each handle keeps its precise binding type. No `Any`, owner context type, or
-callback event type is needed in the public declaration.
+One `PresentationField[HandleT]` descriptor implements overloaded `__get__`
+methods returning itself on class access and `HandleT` on instance access. Its
+`__set__` accepts `Never`. Each specialized handle retains its exact binding
+type without introducing an application context or callback event type.
 
-Value bindings must be invariant: a control that writes an `int` cannot accept
-a binding whose cell only permits `bool`, even though `bool` is an `int` subtype.
-The spike includes the internal commit operation to make both read and write
-positions visible to variance inference. Read-only references may be covariant.
-Descriptors also define a rejecting `__set__` signature so assigning another
-handle cannot silently replace a field.
+Value bindings must be invariant: a control that writes `int` cannot accept a
+cell restricted to `bool`. The spike includes the internal commit operation so
+variance inference sees both reads and writes. Read-only references may be
+covariant. Event reads use a nominal reference base, so arbitrary objects with a
+`.value` property do not accidentally satisfy the contract.
 
-The callable constructor uses a generic `__call__` method, so its initial value
-infers the value type. For an optional or empty custom value whose type cannot be
-inferred, annotate the field explicitly. Python does not permit type arguments
-on a generic function call; earlier sketches of `presentation[ValueT](...)`
-should not become the promised syntax.
+A generic `__call__` infers the value type from `initial` or `factory`. Optional
+or empty custom values may need an explicit field annotation. Earlier sketches
+of `presentation[ValueT](...)` are not the proposed syntax: generic function
+calls do not support that subscription. Supply exactly one of initial or factory.
+Factories create independent defaults per placement; shared defaults are for
+values treated as immutable. Initialization must respect candidate isolation.
 
-## Make `.bind` fit the existing vocabulary
-
-For a declared toggle, `.bind` is a concrete `Toggle[object]` subclass with a
-typed `__call__` method. Therefore it already fits `action_controls`, concrete
-factory validation, and `LayoutNode`; merely implementing `Renderable` would
-not satisfy all those consumers. Calling it returns an ordinary `Toggle[object]`
-whose supplied configuration overrides the declaration for that render:
+For a complete control, `.bind` is a concrete node subclass with a typed
+`__call__` method:
 
 ```python
 sl.action_controls(self.work_lost.bind, key="filters")
 sl.action_controls(self.work_lost.bind(available=can_filter), key="filters")
 ```
 
-The subclass adds behavior, not another copy of the control's value. Its `on`
-ownership contains a typed presentation reference. Construction and dataclass
-replacement must preserve that reference. Factories should use explicit typed
-parameters, with an omitted-value sentinel where `None` is a meaningful override;
-do not introduce an untyped `**kwargs` configuration channel.
+Concrete subclasses fit existing factory membership checks as well as
+`LayoutNode`. Their ownership contains the cell reference; construction and
+replacement must preserve it. Use explicit typed override parameters, with an
+omitted-value sentinel when needed, rather than untyped `**kwargs`. Bind-time
+configuration cannot change initial values, persistence, history ownership, or
+cell identity. These policies belong to the declaration.
 
-Generated controls have no application callbacks and use `object` context. The
-existing contravariant context contract lets them appear in Discord screens
-without parameterizing the descriptor by Discord request or client types.
-Controls that wrap children must infer target/context from those children in
-their builder method; they cannot assume every generated node is portable.
+Generated controls have no application callbacks and use `object` context.
+Existing context contravariance lets them compose inside Discord screens.
+Future child-wrapping factories must infer target/context from their children.
 
-For custom controls, `.bind` is only a `ValueBinding[ValueT]`:
-
-```python
-class Prices(sl.Component):
-    price_range = sl.presentation(PriceRange(10, 100))
-
-    def render(self):
-        return PriceRangePicker(value=self.price_range.bind)
-```
-
-Extend the existing `Ownership[ValueT, EventT]` union with
-`ValueBinding[ValueT]`. Unlike `Controlled`, that member needs no event type:
-the control's existing handler knows how to obtain the next value from its
-event. It writes that value to the reference's cell, rather than to the control's
-own key. A generic custom control can accept the same ownership union. The
-spike's custom picker accepts only `ValueBinding[PriceRange]` to pin type safety.
-
-## Distinguish complete controls from builders
-
-An optionless choices declaration is useful when options come from loaded data:
+Optionless choices declarations return a builder, not a renderable control:
 
 ```python
 selected = sl.presentation.choices(minimum=0, maximum=25)
 
-# Inside render:
+# Inside render, after checking options is nonempty:
 self.selected.bind(*options)
 ```
 
-Its `.bind` must be callable but must not inherit `Renderable` or `Choices`.
-Otherwise passing it directly would type-check yet render an incomplete control.
-Use overloads to return a complete handle when declaration-time choices exist,
-and a builder handle when they do not. The spike requires a first choice for
-both declaration and binding; callers with a possibly empty sequence must branch
-to an empty-state view before binding. This is a deliberate restriction to review
-against existing collection usage before implementation.
+Overloads distinguish complete declarations from builders. The spike requires a
+first choice when binding; possibly empty collections need an empty-state branch.
+Review that restriction against collection usage before implementation. A builder
+passed directly into a document must fail type checking.
 
-Other configuration can vary during render without changing the value type.
-`initial` and the field's state identity cannot be overridden by `.bind(...)`.
-Control keys identify rendered controls; the cell belongs to the declaration.
-Changing a control key must not silently reset that cell.
+For custom controls, `.bind` is a value binding rather than a node:
 
-## Placement and reads
+```python
+price_range = sl.presentation(PriceRange(10, 100))
 
-A cell is identified by mounted placement, declaring component, and field name.
-Two placements of the same component instance have separate cells. Field
-descriptors contain immutable defaults/configuration, never live values. Generic
-mutable defaults need a factory variant or a documented immutable-value
-restriction; the initial API should require immutable values.
+# Inside render:
+PriceRangePicker(value=self.price_range.bind)
+```
 
-`.value` resolves the current render placement and registers a reactive read.
-It must work before `.bind` appears in the render, using the declared initial
-value without mutating live state. Reading without a render scope raises; it
-must not fall back to a default or choose an arbitrary mounted placement.
+Extend `Ownership[ValueT, EventT]` with `ValueBinding[ValueT]`. The existing
+control handler extracts the next value and commits it to the reference's cell;
+this member requires no callback event type. A custom control can accept the
+same ownership union.
 
-An interaction reads through `event.read(self.selected)`, using a shared nominal
-reference base to infer `tuple[str, ...]`. That base prevents arbitrary objects
-with a `.value` property from accidentally satisfying the contract. Runtime
-resolution must use the internal cell reference,
-not evaluate the render-only `.value` property. The dispatcher must carry the
-placement and transaction snapshot into the event. Values must follow the
-existing admission/transaction rules, rather than capture a stale rendered value.
+## Share the state backend, not `_State`'s descriptor contract
 
-Readers in child components can consume a reference anchored to a particular
-ancestor placement. Unanchored references to multiply placed siblings are
-ambiguous and must fail. This needs explicit placement metadata; ordinary
-component identity or a global string lookup is insufficient.
+Reuse the existing cell, transaction, dependency, version, and comparison
+machinery. An internal placement-owned reactive model can use ordinary state
+fields. Extract shared lower-level machinery only where composition requires it.
 
-Dependencies must participate in component and subtree render caches, transaction
-rollback, and successful-delivery reconciliation. Planning remains free of
-application callbacks. Removing the declaring placement collects its cells after
-successful delivery; omitting its control while the owner remains mounted does
-not reset them. Existing anonymous uncontrolled controls retain their current
-key-based behavior.
+Do not subclass `_State` as it currently stands. Its descriptor returns a value,
+accepts assignments, and stores cells on the component instance. Presentation
+returns a handle, rejects assignments, and resolves cells by placement. Making it
+an `_State` merely to satisfy discovery would also send export and inspection
+through the wrong owner. Extend those integration points explicitly.
 
-Ordinary readers see the stored value, not a value silently normalized against
-options constructed later in the same render. Removed selections need an explicit
-policy before migration.
+The generic constructor supports `opaque=True` with existing state semantics:
 
-## Pagination is outside this plan
+```python
+draft = sl.presentation(factory=CustomSelection, opaque=True)
+```
 
-Keep existing pagination and uncontrolled page ownership intact. The effective
-page is a layout result, which needs a separate document-introspection design;
-this plan proposes no page descriptor, deferred value, or layout query API.
+Opaque values compare by identity. Replacements are transactional; in-place
+mutations are not reversible. Extend `self.mutated(object)` to search both ordinary
+opaque state and opaque presentation declarations. Presentation lookup uses the
+active interaction placement and transaction; no separate mutation API is needed.
+Require exactly one matching cell across both kinds, preserving existing ambiguity
+errors. Render-time mutation notification is forbidden, and ordinary state-only
+notification outside a placement keeps its existing behavior.
 
-## Evidence and implementation boundary
+Notification is staged until commit and discarded on rollback, but the object's
+mutation cannot be rolled back or undone. History may restore an opaque reference
+replacement; a mutation notification must not claim to capture an inverse of the
+object's contents. Reject `opaque=True, persist=True`, as ordinary state does.
+Built-in toggle and choices factories do not expose `opaque`: their boolean and
+tuple values already have value semantics.
 
-`spikes/presentation_api.pyi` sketches the public signatures against current
-semantic nodes. `spikes/typing_examples.py` checks descriptor inference, direct
-and callable bindings, generic custom values, event reads, and composition in an
-actual Discord screen. Its commented negative probes must each be rejected.
-This is a typing experiment, not importable production code.
+## Placement, reads, and lifetime
 
-Before implementation, validate those examples with Pyrefly and BasedPyright.
-The current spike passes both; all eight negative probes are rejected. Pyrefly's
-whole-project check also passes. BasedPyright needs a merged workspace import
-tree (as in CI's installed-package approach) because `squid_ui.ext` is distributed
-across packages. Validation used a temporary merged source tree and disabled only
-the missing-source warning for the intentionally stub-only `presentation_api`.
-Runtime tests will additionally need to cover concrete factory membership,
-namespacing, duplicate placements, reader invalidation, rollback, failed delivery,
-and removal. In particular, static acceptance of node subclasses does not prove
-that every planner/replacement path preserves their ownership references.
+A cell belongs to a mounted placement and declaration. Two placements of one
+component instance have different cells. Descriptors hold defaults and policies,
+never live values. Control keys identify controls, not cells; changing a control
+key must not reset the declaration's value.
 
-Implement value references and placement-aware reads first, then toggle and
-choices descriptors. Defer other control factories until their child and value requirements have
-equally precise signatures.
+`.value` resolves the render placement and registers a dependency, even before
+`.bind` appears. It uses the declared default without publishing candidate state.
+Outside render, use `event.read(self.selected)` to resolve the interaction's
+placement and transaction snapshot. Do not evaluate the render-only `.value`
+property or silently choose a placement when scope is missing.
+
+Children can receive references anchored to an ancestor placement. References
+to multiply placed siblings require explicit placement identity; component
+identity and global string lookup are insufficient. Dependencies participate in
+component/subtree caching, rollback, and successful-delivery reconciliation.
+
+Omitting a control while its owner remains mounted preserves its cell. Removing
+the owner collects cells after successful delivery, subject to history retention
+below. Existing anonymous uncontrolled controls retain key-based behavior.
+Readers see stored values; options built later in render cannot silently rewrite
+them. Define a stale-selection policy before migrating collection controls.
+
+## History is explicit and can be declared at class scope
+
+Transaction participation, undo recording, and persistence are independent:
+
+```python
+from squid_ui.runtime import history
+
+class SubscriptionList(sl.Component):
+    edits = history()
+    selected = sl.presentation.choices(
+        minimum=0,
+        maximum=25,
+        record=edits,
+        record_label="Change selection",
+        persist=True,
+    )
+```
+
+`record` accepts a concrete `History` or its declaration descriptor. Resolve the
+latter against the same component instance when binding, obtaining `self.edits`.
+Expose the actual descriptor return type of `history()` instead of its current
+suppression-backed `History` return annotation. No lambda, string field lookup,
+or new class-global stack is needed. Inheritance must preserve owner resolution.
+
+By default, presentation writes roll back with failed actions but are excluded
+from undo plans. Merely omitting a history entry is insufficient: current history
+captures transaction patches, so explicitly distinguish transactional presentation
+writes from history-eligible patches. Reading a selection for a recorded Remove
+action must not make the selection part of that action's undo state.
+
+With `record=`, the generated handler reserves one history entry before its value
+write. Undo/redo restore the cell and invalidate readers without replaying the
+interaction. Use the toggle label by default; choices and generic bindings require
+`record_label` when recording. Avoid duplicate reservations when a custom control
+already records its surrounding action. Suppress empty/no-op entries.
+
+Use existing conditional patches and retention machinery. Entry identity includes
+the original placement incarnation: never apply an old patch to a new placement
+reusing its path. If the placement is removed, its local presentation entries
+become unavailable and release retained cells. Do not silently discard unrelated
+domain-operation receipts or external-effect reconciliation records. A history
+shared by several placements must still distinguish each placement's cells.
+
+## Serialization and `squid_storage`
+
+`persist=True` marks values for export; it does not configure or create a storage
+backend. Serialize values by stable placement path and field name, never handles,
+descriptors, bindings, callbacks, history objects, or opaque collaborators.
+Reconstruct declarations from the registered component restore recipe.
+
+Add an explicit section for declared presentation cells to durable UI snapshots,
+with schema validation/migration. Restore before the first consuming render.
+Existing snapshots remain readable through a defined migration; unsupported
+newer formats fail clearly. Removed/renamed declarations require migration rather
+than accidental rebinding. Missing fields use declared defaults.
+
+`squid_storage` stores the resulting snapshot through a typed `Slot` and codec.
+`PersistentStatePool` currently calls ordinary `export_state`/`restore_state`, so
+it cannot discover placement-owned presentation cells automatically. Adapt through
+the internal placement model or an explicit presentation snapshot exporter. Keep
+storage dependencies out of the portable UI core.
+
+Reuse existing tuple restoration and codec facilities. Custom values need an
+explicit codec in the snapshot/storage adapter, with clear errors for unsupported
+values; annotations alone cannot supply serialization. Storage failure keeps the
+configured backend's behavior, including asynchronous pool writes that report
+errors without rolling back an already committed action.
+
+Persisting values does not persist undo stacks. Recovery reconstructs presentation
+values with empty history; durable history requires a separate design for patches,
+versions, resources, and reversible external operations.
+
+## Scope and validation
+
+Pagination stays unchanged. Its effective page is a layout result that needs a
+separate document-introspection design; this plan includes no page descriptor,
+deferred value, or layout query API.
+
+`spikes/presentation_api.pyi` sketches signatures against current semantic nodes.
+`spikes/typing_examples.py` checks inference, direct/callable bindings, class-level
+history references, custom factories, opaque mutation notification, event reads,
+and composition inside a Discord screen. Commented negative probes must fail.
+These are static examples, not an importable runtime implementation.
+
+The revised spike passes both checkers, and both reject all twelve negative
+probes. The whole-project Pyrefly check also passes.
+
+Validate with Pyrefly and BasedPyright. BasedPyright needs a merged workspace
+import tree, as in CI's installed-package approach, and the intentionally stub-only
+module needs its missing-source warning disabled. Runtime tests must cover
+factory membership, replacement, placement isolation, reader invalidation,
+mutation lookup, rollback, history exclusion/opt-in, removal, and snapshot recovery.
+Also check invalid option combinations and double history reservations.
+
+Implement the placement-owned backend and read/mutation integration first, then
+toggle/choices descriptors, history eligibility, and persistence adapters. Other
+control factories need equally precise signatures before inclusion.

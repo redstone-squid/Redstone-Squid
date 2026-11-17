@@ -1,9 +1,21 @@
 """Proposed signatures only; no runtime implementation."""
 
+from collections.abc import Callable
 from typing import Never, Protocol, overload
 
 from squid_ui.authoring.semantic import Choice, Choices, Toggle
 from squid_ui.factories._inputs import TextValue
+from squid_ui.runtime.histories import History
+
+class HistoryField:
+    @overload
+    def __get__(self, instance: None, owner: type | None = None) -> HistoryField: ...
+    @overload
+    def __get__(self, instance: object, owner: type | None = None) -> History: ...
+
+def history(*, limit: int = 20) -> HistoryField: ...
+
+type RecordTarget = HistoryField | History | None
 
 class PresentationReference[ValueT]:
     @property
@@ -43,8 +55,35 @@ class PresentationField[HandleT]:
     def __set__(self, instance: object, value: Never) -> None: ...
 
 class PresentationFactory:
-    def __call__[ValueT](self, initial: ValueT) -> PresentationField[ValueHandle[ValueT]]: ...
-    def toggle(self, label: TextValue, *, initial: bool = False) -> PresentationField[ToggleHandle]: ...
+    @overload
+    def __call__[ValueT](
+        self,
+        initial: ValueT,
+        *,
+        persist: bool = False,
+        opaque: bool = False,
+        record: RecordTarget = None,
+        record_label: TextValue | None = None,
+    ) -> PresentationField[ValueHandle[ValueT]]: ...
+    @overload
+    def __call__[ValueT](
+        self,
+        *,
+        factory: Callable[[], ValueT],
+        persist: bool = False,
+        opaque: bool = False,
+        record: RecordTarget = None,
+        record_label: TextValue | None = None,
+    ) -> PresentationField[ValueHandle[ValueT]]: ...
+    def toggle(
+        self,
+        label: TextValue,
+        *,
+        initial: bool = False,
+        persist: bool = False,
+        record: RecordTarget = None,
+        record_label: TextValue | None = None,
+    ) -> PresentationField[ToggleHandle]: ...
     @overload
     def choices(
         self,
@@ -54,6 +93,9 @@ class PresentationFactory:
         initial: tuple[str, ...] = (),
         minimum: int = 1,
         maximum: int = 1,
+        persist: bool = False,
+        record: RecordTarget = None,
+        record_label: TextValue | None = None,
     ) -> PresentationField[ChoicesHandle[ChoicesBinding]]: ...
     @overload
     def choices(
@@ -62,6 +104,9 @@ class PresentationFactory:
         initial: tuple[str, ...] = (),
         minimum: int = 1,
         maximum: int = 1,
+        persist: bool = False,
+        record: RecordTarget = None,
+        record_label: TextValue | None = None,
     ) -> PresentationField[ChoicesHandle[ChoicesBuilder]]: ...
 
 class EventReader(Protocol):
