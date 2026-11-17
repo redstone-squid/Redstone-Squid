@@ -34,6 +34,8 @@ CREATE INDEX record_recompute_queue_build_idx ON public.record_recompute_queue U
 
 CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (available_at) WHERE (claimed_at IS NULL);
 
+CREATE TRIGGER record_recompute_queue_enqueue_ranges AFTER INSERT OR UPDATE OF enqueued_at ON public.record_recompute_queue FOR EACH ROW EXECUTE FUNCTION public.enqueue_registered_door_ranges();
+
 ALTER TABLE ONLY public.record_recompute_queue
     ADD CONSTRAINT record_recompute_queue_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
 

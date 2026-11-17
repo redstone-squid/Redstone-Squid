@@ -476,6 +476,19 @@ class DoorRangeRegistration(Base, kw_only=True):
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
 
 
+class DoorRangeRecomputeQueueItem(QueueColumns, Base, kw_only=True):
+    """One independently retried refresh request per registered door range."""
+
+    __tablename__ = "door_range_recompute_queue"
+
+    query_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("door_range_registrations.id", ondelete="CASCADE"), primary_key=True
+    )
+    enqueued_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
 class DoorRangeRun(Base, kw_only=True):
     """A reserved attempt whose complete result can replace one registered query."""
 

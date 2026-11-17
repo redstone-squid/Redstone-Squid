@@ -193,6 +193,7 @@ class DatabaseWorker:
                 job("search-projections", event_interval, self._refresh_search),
                 job("search-embeddings", event_interval, self._process_search_embeddings),
                 job("record-maintenance", maintenance_interval, self._process_records),
+                job("record-ranges", maintenance_interval, self._process_record_ranges),
                 job("due-votes", maintenance_interval, self._close_due_votes),
                 job("stale-build-locks", max(maintenance_interval, 300), self._clean_stale_build_locks),
                 job(
@@ -291,6 +292,10 @@ class DatabaseWorker:
     async def _process_records(self) -> None:
         with trace_span("squid.worker.record_maintenance", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.records.process_queue()
+
+    async def _process_record_ranges(self) -> None:
+        with trace_span("squid.worker.record_ranges", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
+            await self._services.range_publication.process_queue()
 
     async def _close_due_votes(self) -> None:
         with trace_span("squid.worker.close_due_votes", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):

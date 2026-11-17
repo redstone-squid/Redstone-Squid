@@ -24,6 +24,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_computed_record_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_registered_door_ranges.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_starboard_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_submission_status.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_vote_session_sync.sql
@@ -76,6 +77,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/domain_event_deliveries.sql
 \ir public/TABLES/domain_events.sql
 \ir public/SEQUENCES/domain_events_id_seq.sql
+\ir public/TABLES/door_range_recompute_queue.sql
 \ir public/TABLES/door_range_registrations.sql
 \ir public/SEQUENCES/door_range_registrations_id_seq.sql
 \ir public/TABLES/door_range_runs.sql

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.events.infrastructure.repository import DOMAIN_EVENT_DELIVERY_SPEC
 from squid.observability import record_gauge
 from squid.persistence.queue import VISIBILITY_TIMEOUT, ClaimedRowQueue, QueueSpec
+from squid.records.infrastructure.range_publications import RANGE_RECOMPUTE_QUEUE_SPEC
 from squid.records.infrastructure.repository import RECORD_RECOMPUTE_QUEUE_SPEC
 from squid.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
 from squid.schematics.infrastructure.render_jobs import SCHEMATIC_RENDER_QUEUE_SPEC
@@ -26,6 +27,7 @@ QUEUE_SPECS: tuple[QueueSpec[Any], ...] = (
     DISCORD_SYNC_QUEUE_SPEC,
     DOMAIN_EVENT_DELIVERY_SPEC,
     RECORD_RECOMPUTE_QUEUE_SPEC,
+    RANGE_RECOMPUTE_QUEUE_SPEC,
     SCHEMATIC_JOB_SPEC,
     SCHEMATIC_RENDER_QUEUE_SPEC,
     SEARCH_EMBEDDING_QUEUE_SPEC,

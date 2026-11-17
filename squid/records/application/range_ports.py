@@ -1,14 +1,29 @@
 """Persistence boundaries for range snapshots and publication."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.records.application.ports import RecordUnitOfWork
 from squid.records.application.range_snapshots import RangeAttempt, RangePublication, RangeSnapshotDocument
 
 
+@dataclass(frozen=True, slots=True)
+class RangeRefreshClaim:
+    query_id: int
+    token: UUID
+    query: DoorRangeQuery
+
+
 class RangePublicationRepository(Protocol):
+    async def claim_refresh(self) -> RangeRefreshClaim | None: ...
+
+    async def complete_refresh(self, claim: RangeRefreshClaim) -> None: ...
+
+    async def fail_refresh(self, claim: RangeRefreshClaim, error: str) -> None: ...
+
     async def register(self, query: DoorRangeQuery) -> int: ...
 
     async def request_refresh(self, query_id: int) -> bool: ...

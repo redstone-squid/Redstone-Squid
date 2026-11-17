@@ -14,6 +14,7 @@ EXPECTED_QUEUES = {
     "domain_events.core",
     "domain_events.discord",
     "record_recomputation",
+    "door_range_recomputation",
     "schematic_jobs",
     "schematic_renders",
     "search_embeddings",

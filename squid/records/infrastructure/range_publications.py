@@ -12,29 +12,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
+from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
+from squid.records.application.range_ports import RangeRefreshClaim
 from squid.records.application.range_snapshots import (
     RangeAttempt,
     RangePublication,
     RangeSnapshotDocument,
     canonical_range_query,
 )
-from squid.records.domain import BuildKind
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.models import (
+    DoorRangeRecomputeQueueItem,
     DoorRangeRegistration,
     DoorRangeRun,
     DoorRangeSnapshot,
-    RecordRecomputeQueueItem,
     RulesRevision,
 )
 
 _RESULT = TypeAdapter(DoorRangeAnalysis)
 
 
+RANGE_RECOMPUTE_QUEUE_SPEC = QueueSpec(
+    name="door_range_recomputation",
+    model=DoorRangeRecomputeQueueItem,
+    key=(DoorRangeRecomputeQueueItem.query_id,),
+    available_at=DoorRangeRecomputeQueueItem.available_at,
+    enqueued_at=DoorRangeRecomputeQueueItem.enqueued_at,
+    claimed_at=DoorRangeRecomputeQueueItem.claimed_at,
+    claim_token=DoorRangeRecomputeQueueItem.claim_token,
+    attempts=DoorRangeRecomputeQueueItem.attempts,
+    last_error=DoorRangeRecomputeQueueItem.last_error,
+)
+
+
 class PostgresRangePublicationRepository:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
+        self._queue = ClaimedRowQueue(RANGE_RECOMPUTE_QUEUE_SPEC)
 
     async def register(self, query: DoorRangeQuery) -> int:
         session = self._session()
@@ -50,7 +65,7 @@ class PostgresRangePublicationRepository:
             return (
                 await session.execute(select(DoorRangeRegistration.id).where(DoorRangeRegistration.query_key == key))
             ).scalar_one()
-        await self._enqueue("range_registration")
+        await self._enqueue(query_id)
         return query_id
 
     async def request_refresh(self, query_id: int) -> bool:
@@ -59,26 +74,40 @@ class PostgresRangePublicationRepository:
         )
         if exists is None:
             return False
-        await self._enqueue("range_refresh")
+        await self._enqueue(query_id)
         return True
 
-    async def _enqueue(self, reason: str) -> None:
+    async def _enqueue(self, query_id: int) -> None:
         await self._session().execute(
-            insert(RecordRecomputeQueueItem)
-            .values(scope_key="door", build_kind=BuildKind.DOOR, reasons=[reason])
+            insert(DoorRangeRecomputeQueueItem)
+            .values(query_id=query_id)
             .on_conflict_do_update(
-                index_elements=[RecordRecomputeQueueItem.scope_key],
+                index_elements=[DoorRangeRecomputeQueueItem.query_id],
                 set_={
-                    "reasons": [reason],
                     "enqueued_at": Instant.now(),
                     "available_at": Instant.now(),
-                    "attempts": 0,
                     "claimed_at": None,
                     "claim_token": None,
-                    "last_error": None,
                 },
             )
         )
+
+    async def claim_refresh(self) -> RangeRefreshClaim | None:
+        rows = await self._queue.claim(limit=1, session=self._session())
+        if not rows:
+            return None
+        row = rows[0]
+        registration = await self._session().get(DoorRangeRegistration, row.query_id)
+        assert registration is not None
+        return RangeRefreshClaim(
+            row.query_id, self._queue.token_of(row), DoorRangeQuery.model_validate(registration.query)
+        )
+
+    async def complete_refresh(self, claim: RangeRefreshClaim) -> None:
+        await self._queue.complete_batch((claim.token,), session=self._session())
+
+    async def fail_refresh(self, claim: RangeRefreshClaim, error: str) -> None:
+        await self._queue.fail_batch((claim.token,), error=error, session=self._session())
 
     async def list_registered(self) -> Sequence[tuple[int, DoorRangeQuery]]:
         rows = await self._session().execute(select(DoorRangeRegistration).order_by(DoorRangeRegistration.id))

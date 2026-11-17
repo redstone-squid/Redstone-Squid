@@ -176,6 +176,7 @@ class WorkerServices:
     votes: VoteService
     ballot_recounter: BallotRecounter | None
     """Recounts a poll from its cards before the deadline closes it; None without a Discord token."""
+    range_publication: RangePublicationService
     records: RecordComputationService
     events: DomainEventService
     event_wake_listener: DomainEventWakeListener | None

@@ -416,9 +416,7 @@ class _ServiceGraph:
 
     @cached_property
     def record_computation(self) -> RecordComputationService:
-        return RecordComputationService(
-            uow_factory=self.uow_factory, refresh_ranges=self.range_publication.refresh_registered
-        )
+        return RecordComputationService(uow_factory=self.uow_factory)
 
     @cached_property
     def range_publication(self) -> RangePublicationService:
@@ -909,6 +907,7 @@ def create_worker_services(
         artifacts=graph.artifacts,
         votes=graph.votes,
         ballot_recounter=graph.rest_ballot_recounter,
+        range_publication=graph.range_publication,
         records=graph.record_computation,
         events=DomainEventService(uow_factory=graph.uow_factory),
         event_wake_listener=(

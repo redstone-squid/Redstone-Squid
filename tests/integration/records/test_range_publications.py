@@ -25,7 +25,7 @@ from squid.records.application.services import RecordComputationService
 from squid.records.domain.regions import RegionAnalysisStatus
 from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.records.infrastructure.range_wire import failed_analysis
-from squid.records.models import DoorRangeSnapshot, RecordRecomputeQueueItem, RulesRevision
+from squid.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnapshot, RulesRevision
 from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
 
@@ -199,8 +199,7 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         assert saved is not None
         assert saved.sources[0].expansion is not None
         assert saved.sources[0].expansion.branches[0].volume == "10n"
-    computation = RecordComputationService(uow_factory=factory, refresh_ranges=publisher.refresh_registered)
-    await computation.process_queue()
+    await publisher.process_queue()
     refreshed = await publisher.get(first.query_id)
     assert refreshed is not None
     assert refreshed.active is not None
@@ -298,22 +297,23 @@ async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
     )
     query_id = await publisher.register(query)
     async with factory() as uow:
-        lease = await uow.records.claim_recompute_kinds(limit=10)
+        lease = await uow.record_ranges.claim_refresh()
+        assert lease is not None
         await uow.commit()
     reordered = query.model_copy(update={"restriction_values": tuple(reversed(query.restriction_values))})
     assert await publisher.register(reordered) == query_id
     async with migrated_session_factory() as session:
-        token = await session.scalar(select(RecordRecomputeQueueItem.claim_token))
-        assert token in lease.claim_tokens
+        token = await session.scalar(select(DoorRangeRecomputeQueueItem.claim_token))
+        assert token == lease.token
     assert not await publisher.request_refresh(query_id + 999)
     assert await publisher.request_refresh(query_id)
     async with factory() as uow:
-        await uow.records.complete_recompute(lease)
+        await uow.record_ranges.complete_refresh(lease)
         await uow.commit()
     async with factory() as uow:
-        replacement = await uow.records.claim_recompute_kinds(limit=10)
-        assert replacement
-        assert set(replacement.claim_tokens).isdisjoint(lease.claim_tokens)
+        replacement = await uow.record_ranges.claim_refresh()
+        assert replacement is not None
+        assert replacement.token != lease.token
         await uow.commit()
     analyzer.analyze.assert_not_called()
 
@@ -335,8 +335,7 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
         return analyze_door_widths((), height=query.height)
 
     analyzer.analyze.side_effect = analyze
-    with pytest.raises(RuntimeError, match="worker unavailable"):
-        await publisher.refresh_registered()
+    assert await publisher.process_queue() == (1, 1)
     failed = await publisher.get(broken)
     refreshed = await publisher.get(healthy)
     assert failed is not None
@@ -377,3 +376,35 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
     analyzer.analyze.assert_not_called()
     async with sessions() as session:
         assert (await session.execute(select(DoorRangeSnapshot))).scalars().all() == []
+
+
+async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    analyzer.analyze.return_value = analyze_door_widths((), height=3)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    query_id = await publisher.register(DoorRangeQuery(height=3))
+    assert await publisher.process_queue() == (1, 0)
+    first = await publisher.get(query_id)
+    assert first is not None
+    assert first.active is not None
+
+    analyzer.analyze.return_value = failed_analysis(RegionAnalysisStatus.TIMED_OUT, "timeout")
+    await publisher.request_refresh(query_id)
+    assert await publisher.process_queue() == (0, 1)
+
+    current = await publisher.get(query_id)
+    assert current is not None
+    assert current.active is not None
+    assert current.active.id == first.active.id
+    async with migrated_session_factory() as session:
+        pending = await session.get(DoorRangeRecomputeQueueItem, query_id)
+        assert pending is not None
+        assert pending.attempts == 1
+        assert pending.last_error == RegionAnalysisStatus.TIMED_OUT.value
+        assert pending.claim_token is None
+    assert await publisher.process_queue() == (0, 0)

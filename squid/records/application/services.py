@@ -1,7 +1,7 @@
 """Record computation orchestration."""
 
 from collections import defaultdict
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -85,12 +85,10 @@ class RecordComputationService:
         uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
         formatter: TitleFormatter | None = None,
         category_limit: int = 8,
-        refresh_ranges: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._formatter = formatter or RulesTitleFormatter()
         self._category_limit = category_limit
-        self._refresh_ranges = refresh_ranges
         self._compute_limiter = anyio.CapacityLimiter(1)
 
     async def rebuild(
@@ -99,13 +97,11 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Publish concrete-title runs together, then refresh registered door ranges."""
+        """Publish concrete-title runs together; range work has its own queue."""
         async with self._uow_factory() as uow:
             await uow.record_candidates.begin_computation()
             result = await self.rebuild_in(uow, current_version_id=current_version_id, kinds=kinds)
             await uow.commit()
-        if BuildKind.DOOR in kinds and self._refresh_ranges is not None:
-            await self._refresh_ranges()
         return result
 
     async def rebuild_in(
