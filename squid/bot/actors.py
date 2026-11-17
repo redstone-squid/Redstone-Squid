@@ -93,7 +93,9 @@ class DiscordActorResolver:
             if memoize and isinstance(memoized := getattr(source, _ACTOR_ATTRIBUTE, None), Actor):
                 return memoized
 
-        member = user if isinstance(user, discord.Member) else None
+        member = user if isinstance(user, discord.Member) and guild is not None else None
+        if guild is not None and member is not None and member.guild.id != guild.id:
+            raise AuthorizationError
         if refresh:
             member = None
             if guild is not None:

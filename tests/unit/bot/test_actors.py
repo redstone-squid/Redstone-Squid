@@ -118,3 +118,25 @@ async def test_refresh_in_a_dm_preserves_owner_and_unlinked_identity(bot: Mock) 
     assert actor.discord_role_ids == frozenset()
     assert not actor.discord_guild_admin
     assert actor.is_bot_owner
+
+
+@pytest.mark.parametrize("kind", ["request", "context"])
+async def test_foreign_guild_membership_is_rejected(bot: Mock, member: Mock, kind: str) -> None:
+    guild = Mock(spec=discord.Guild, id=200)
+    source = (
+        Mock(spec=sd.Request, user=member, guild=guild)
+        if kind == "request"
+        else Mock(spec=Context, author=member, guild=guild)
+    )
+    with pytest.raises(AuthorizationError):
+        await bot.actors.resolve(source)
+    bot.services.accounts.get_account_by_identity.assert_not_awaited()
+
+
+async def test_dm_discards_carried_membership_but_preserves_owner(bot: Mock, member: Mock) -> None:
+    source = Mock(spec=sd.Request, user=member, guild=None)
+    actor = await bot.actors.resolve(source)
+    assert actor.guild_id is None
+    assert not actor.discord_role_ids
+    assert not actor.discord_guild_admin
+    assert actor.is_bot_owner
