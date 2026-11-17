@@ -153,6 +153,7 @@ from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.recalculation import RecalculationProposalService
+from squid.submissions.application.schematic_inference import SchematicSubmissionInference
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
@@ -568,6 +569,7 @@ class _ServiceGraph:
             self.artifacts,
             uow_factory=self.uow_factory,
             ingestor=self.schematics,
+            inference=SchematicSubmissionInference(self.submission_forms, self.version_service),
             max_bytes=self.config.schematics.max_upload_bytes,
         )
 

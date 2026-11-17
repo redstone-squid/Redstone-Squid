@@ -12,7 +12,8 @@ from squid.core.errors import ConflictError, DataIntegrityError, NotFoundError, 
 from squid.media.infrastructure.references import draft_keeps_file
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.schematics.application import IngestedSchematic
-from squid.schematics.infrastructure.wire import encode_analysis
+from squid.schematics.domain.models import SchematicAnalysis
+from squid.schematics.infrastructure.wire import decode_analysis, encode_analysis
 from squid.submissions.application.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.domain import DraftStatus
@@ -114,6 +115,19 @@ class PostgresDraftSchematics:
             .order_by(DraftSchematicSource.created_at, DraftSchematicSource.id)
         )
         return tuple(_snapshot(source, link) for source, link in rows)
+
+    async def analysis_for_draft(self, draft_id: UUID, upload_id: UUID) -> SchematicAnalysis | None:
+        payload = await self._session().scalar(
+            select(DraftSchematicSource.analysis)
+            .join(DraftSchematicLink, DraftSchematicLink.source_id == DraftSchematicSource.id)
+            .where(
+                DraftSchematicLink.draft_id == draft_id,
+                DraftSchematicLink.source_id == upload_id,
+                DraftSchematicLink.discarded.is_(False),
+                DraftSchematicSource.state == DraftSchematicState.READY,
+            )
+        )
+        return decode_analysis(payload) if payload is not None else None
 
     async def select_primary(self, draft: StoredDraft, upload_id: UUID) -> None:
         session = self._session()

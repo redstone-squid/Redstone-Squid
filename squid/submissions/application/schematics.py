@@ -16,7 +16,7 @@ from squid.artifacts import ArtifactStore
 from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError, NotFoundError, ValidationError
 from squid.schematics.application import IngestedSchematic, IngestRequest
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES, SchematicAnalysis
 from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError
 from squid.submissions.application.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.application.drafts import (
@@ -24,6 +24,10 @@ from squid.submissions.application.drafts import (
     StoredDraft,
     SubmissionDraftService,
     draft_actor_id,
+)
+from squid.submissions.application.schematic_inference import (
+    SchematicSubmissionInference,
+    SchematicSubmissionSuggestions,
 )
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from squid.unit_of_work import UnitOfWorkFactory
@@ -39,6 +43,8 @@ class DraftSchematicRepository(Protocol):
     """Persist source identity and draft references before accepting storage side effects."""
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
+
+    async def analysis_for_draft(self, draft_id: UUID, upload_id: UUID) -> SchematicAnalysis | None: ...
 
     async def pending(self, *, limit: int) -> tuple[DraftSchematic, ...]: ...
 
@@ -74,10 +80,12 @@ class DraftSchematicService:
         uow_factory: UnitOfWorkFactory[DraftSchematicUnitOfWork],
         max_bytes: int = SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
         ingestor: DraftSchematicIngestor | None = None,
+        inference: SchematicSubmissionInference | None = None,
     ) -> None:
         if not 0 < max_bytes <= SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
             message = "Schematic upload limit exceeds the supported range."
             raise InvalidStateError(message)
+        self._inference = inference
         self._ingestor = ingestor
         self._drafts = drafts
         self._uow_factory = uow_factory
@@ -153,6 +161,26 @@ class DraftSchematicService:
         async with self._uow_factory() as uow:
             await self._drafts.get_accessible_in(uow, draft_id, actor)
             return await uow.draft_schematics.list(draft_id)
+
+    async def suggestions(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> SchematicSubmissionSuggestions:
+        """Read private evidence for one retained file without changing the draft."""
+        async with self._uow_factory() as uow:
+            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+            source = next(
+                (
+                    item
+                    for item in await uow.draft_schematics.list(draft_id)
+                    if item.id == upload_id and not item.discarded
+                ),
+                None,
+            )
+            if source is None:
+                raise NotFoundError
+            analysis = await uow.draft_schematics.analysis_for_draft(draft_id, upload_id)
+        if self._inference is None:
+            message = "Schematic submission inference is unavailable."
+            raise InvalidStateError(message)
+        return await self._inference.suggest(draft, source.id, source.state, analysis)
 
     async def select_primary(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
         """Choose one retained source explicitly when several schematics are attached."""

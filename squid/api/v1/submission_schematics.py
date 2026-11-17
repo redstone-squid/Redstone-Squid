@@ -18,6 +18,7 @@ from squid.api.v1.submissions import AccountId, authenticated_account, get_submi
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
+from squid.submissions.application.schematic_inference import SchematicSubmissionSuggestions
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain.schematics import DraftSchematic
 
@@ -67,6 +68,24 @@ async def list_schematics(
 ) -> list[DraftSchematic]:
     """List retained sources, including failures and explicit discards."""
     return list(await schematics.list(draft_id, Actor(account_id=account_id)))
+
+
+@get(
+    "/{upload_id:uuid}/suggestions",
+    operation_id="submission_schematic_suggestions",
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=_READ,
+    return_dto=None,
+    dependencies={
+        "account_id": Provide(authenticated_account),
+        "schematics": Provide(schematic_service, sync_to_thread=False),
+    },
+)
+async def schematic_suggestions(
+    draft_id: FromPath[UUID], upload_id: FromPath[UUID], account_id: AccountId, schematics: Schematics
+) -> SchematicSubmissionSuggestions:
+    """Suggest reviewable answers from a retained upload; pending uploads have no suggestions."""
+    return await schematics.suggestions(draft_id, Actor(account_id=account_id), upload_id)
 
 
 @put(
@@ -207,5 +226,12 @@ router = Router(
     dependencies={"schematics": Provide(get_schematics, sync_to_thread=False)},
     path="/submissions/drafts/{draft_id:uuid}/schematics",
     tags=["submissions"],
-    route_handlers=[list_schematics, upload_schematic, select_primary, discard_schematic, attach_schematic],
+    route_handlers=[
+        schematic_suggestions,
+        list_schematics,
+        upload_schematic,
+        select_primary,
+        discard_schematic,
+        attach_schematic,
+    ],
 )
