@@ -28,7 +28,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.composition_input import prepare_composition
 from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
-from squid_ui.planning.identity import has_routed_page, stable_fingerprint
+from squid_ui.planning.identity import requires_live_preparation, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
@@ -380,8 +380,8 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         snapshot: PlanningSnapshot[BodyT] | None = None,
     ) -> PlanResult[BodyT]:
         request, options, document = self.request, self.options, self.document
-        # Route factories can change IDs without changing their callable identity.
-        if has_routed_page(rendered):
+        # Route and extension factories can change output behind stable identity.
+        if requires_live_preparation(rendered):
             cache = None
             snapshot = None
         key = request.exact_key()
@@ -417,7 +417,7 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     """Resolve planning policy, then reuse or execute the target's bound rules."""
     if snapshot is not None:
         request = replace(request, fingerprints=snapshot.fingerprints if snapshot.enabled else None)
-        # Routed inputs are never staged, so exact replay needs no tree traversal.
+        # Dynamic inputs are never staged, so exact replay needs no tree traversal.
         exact = snapshot.replay(rendered, request.exact_key(), request.presentation)
         if exact is not None:
             return exact

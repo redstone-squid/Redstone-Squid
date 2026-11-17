@@ -18,7 +18,7 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
-from squid_ui.planning.identity import has_routed_page, stable_fingerprint
+from squid_ui.planning.identity import requires_live_preparation, stable_fingerprint
 from squid_ui.planning.interaction_semantics import ItemSummary
 from squid_ui.planning.offers import region_cursor_key
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -102,9 +102,9 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         options: CompositionOptions,
     ) -> bool:
-        # Route factories may encode changed external state behind the same callable.
+        # Opaque factories may encode changed external state behind the same callable.
         return (
-            not has_routed_page(document)
+            not requires_live_preparation(document)
             and same_allocation_document(document, self.document)
             and request.allocation_key() == self.environment
             and isinstance(getattr(request.nav, "version", 0), int)

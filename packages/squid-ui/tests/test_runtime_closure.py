@@ -1,11 +1,14 @@
 """Closing a runtime ends rendering without preventing cleanup or inspection."""
 
+import gc
+import weakref
 from typing import override
 
 import pytest
 
 import squid_ui as ui
 from squid_ui.context import ContextKey
+from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.runtime import ComponentRuntime
 
 
@@ -98,3 +101,28 @@ async def test_service_waits_remain_available_after_closure() -> None:
     await runtime.wait_services()
     await runtime.wait_services(allow_reentry=True)
     assert runtime.closed
+
+
+def test_finish_releases_live_planning_generations() -> None:
+    class Receiver:
+        async def handle(self, event: ui.PressEvent) -> None:
+            pass
+
+    runtime = ComponentRuntime(Panel())
+    receiver = Receiver()
+    reference = weakref.ref(receiver)
+    document = ui.Document((ui.action_controls(ui.action_control("Run", receiver.handle, key="run"), key="actions"),))
+    result = ui.planning.plan(
+        document, target=DISCORD_V2_DPY27, session=runtime.presentation, snapshot=runtime.planning_snapshot
+    )
+    runtime.presentation.apply_updates(result.session_updates)
+    runtime.planning_snapshot.commit(result, runtime.presentation)
+    del result, document, receiver
+    gc.collect()
+    assert reference() is not None
+    runtime.finish()
+    gc.collect()
+    assert reference() is None
+    assert runtime.planning_snapshot.committed is None
+    assert runtime.presentation.retained_composition is None
+    assert runtime.planning_snapshot.fingerprints.snapshot().entries == 0

@@ -528,6 +528,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._cached_tree = None
         self._committed_tree = None
         self.planning_snapshot.clear()
+        self.presentation.retained_composition = None
         self.root._runtime = None
         self._raise_hook_errors()
 

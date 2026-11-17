@@ -12,12 +12,13 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.extensions import ExtensionKind
-from squid_ui.planning import AtomicContract, plan
+from squid_ui.planning import AtomicContract, PlanningSnapshot, plan
 from squid_ui.planning.adapter import AdapterProfile, PreparedExtension
 from squid_ui.planning.composition import Placement, PlanningContext, ResourceIdentity, SharedUse
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.native_extensions import NativeComposition, NativePlacement
 from squid_ui.planning.resources import Axis, ResourceCost
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives import nodes as native
 from squid_ui.primitives.constraints import Never
 from squid_ui.target_types import DiscordAdapter
@@ -147,3 +148,17 @@ def test_legacy_raw_cost_does_not_silently_become_a_composition_contract() -> No
     with pytest.raises(JointUnsupportedError) as error:
         plan(sl.region(native.RawItem(object), key="r", title="R"), target=components_v2_target(ADAPTER))
     assert "composition contract" in str(error.value.diagnostics.violations)
+
+
+def test_exact_snapshot_rechecks_an_opaque_factory_with_changed_external_state() -> None:
+    label = "Ready"
+    node = replace(badge(label), factory=lambda: label)
+    target = components_v2_target(ADAPTER)
+    session = PresentationState()
+    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    first = plan(node, target=target, session=session, snapshot=snapshot)
+    session.apply_updates(first.session_updates)
+    snapshot.commit(first, session)
+    label = "longer than the declared text"
+    with pytest.raises(DrawInvariantError, match="independent measurement"):
+        plan(node, target=target, session=session, snapshot=snapshot)

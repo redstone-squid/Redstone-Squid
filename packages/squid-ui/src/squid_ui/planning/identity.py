@@ -17,6 +17,7 @@ from string.templatelib import Template
 
 from squid_ui.content.text import Text
 from squid_ui.primitives.constraints import RoutedPage
+from squid_ui.primitives.nodes import Extension, RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,16 +165,25 @@ def _digest(value: object, consume: Callable[[], None] | None, cache: Fingerprin
     return result
 
 
+def requires_live_preparation(value: object) -> bool:
+    """Whether routes or opaque factories can change output behind stable identity."""
+    return _contains(value, (RoutedPage, Extension, RawItem))
+
+
 def has_routed_page(value: object) -> bool:
-    """Whether planning must regenerate IDs hidden behind a page's route factories."""
-    if isinstance(value, RoutedPage):
+    """Whether an authored tree contains external page-route factories."""
+    return _contains(value, (RoutedPage,))
+
+
+def _contains(value: object, kinds: tuple[type, ...]) -> bool:
+    if isinstance(value, kinds):
         return True
     if callable(value) or isinstance(value, str | bytes):
         return False
     if is_dataclass(value) and not isinstance(value, type):
-        return any(has_routed_page(getattr(value, item.name)) for item in fields(value))
+        return any(_contains(getattr(value, item.name), kinds) for item in fields(value))
     if isinstance(value, Mapping):
-        return any(has_routed_page(item) for item in value.values())
+        return any(_contains(item, kinds) for item in value.values())
     if isinstance(value, Sequence):
-        return any(has_routed_page(item) for item in value)
+        return any(_contains(item, kinds) for item in value)
     return False

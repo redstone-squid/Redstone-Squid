@@ -29,7 +29,10 @@ def run(scenario: str, enabled: bool, count: int = 60) -> tuple[float, int, int,
     evaluations = 0
     options = CompositionOptions(automatic=True, partitions={OccurrenceId(("root", "r")): (6, 12)})
     document = sl.Document(
-        (sl.region(*paragraphs, key="r", title="Region"), sl.action_control("Run", handler, key="run"))
+        (
+            sl.region(*paragraphs, key="r", title="Region"),
+            sl.action_controls(sl.action_control("Run", handler, key="run"), key="actions"),
+        )
     )
     for index in range(count + 1):
         if scenario == "cold-start":
@@ -42,7 +45,7 @@ def run(scenario: str, enabled: bool, count: int = 60) -> tuple[float, int, int,
             document = sl.Document(
                 (
                     sl.region(*children, key="r", title="Region"),
-                    sl.action_control("Run", Receiver(index).handle, key="run"),
+                    sl.action_controls(sl.action_control("Run", Receiver(index).handle, key="run"), key="actions"),
                 )
             )
         positions = {"$/r": PagePosition(page=index % 2)} if scenario == "page-turn" else None

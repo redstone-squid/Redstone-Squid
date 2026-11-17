@@ -108,3 +108,19 @@ def test_generated_edits_match_cold_planning(edits: list[tuple[int, bool, int, b
                 session.apply_updates(result.session_updates)
                 snapshot.commit(result, session)
         assert sessions[0].cursors == sessions[1].cursors
+
+
+@pytest.mark.parametrize(("strict", "budget"), [(True, 512), (False, 10_000)])
+def test_environment_changes_invalidate_exact_and_allocation_reuse(strict: bool, budget: int) -> None:
+    document = sl.Document((sl.paragraph("Hello"),))
+    session = PresentationState()
+    snapshot = PlanningSnapshot[scene.ComponentsV2]()
+    first = plan(document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot)
+    session.apply_updates(first.session_updates)
+    snapshot.commit(first, session)
+    second = plan(
+        document, target=DISCORD_V2_DPY27, session=session, snapshot=snapshot, strict=strict, search_budget=budget
+    )
+    assert second.metrics.target_evaluations > 0
+    assert snapshot.statistics().last_miss == "environment"
+    assert snapshot.statistics().hits == 0
