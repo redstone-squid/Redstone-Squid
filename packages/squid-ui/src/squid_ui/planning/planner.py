@@ -91,7 +91,9 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
     if isinstance(request.composition, CompositionOptions):
-        result = plan_composition(rendered, request, request.composition, cache=cache)
+        result = plan_composition(
+            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache
+        )
     elif request.composition is not None:
         result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
     else:

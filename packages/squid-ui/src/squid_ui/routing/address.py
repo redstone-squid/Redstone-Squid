@@ -33,7 +33,7 @@ def _parameter_type(annotation: object) -> tuple[object, bool]:
         if len(arguments) == 2 and type(None) in arguments:
             value_type = next(argument for argument in arguments if argument is not type(None))
             return _parameter_type(value_type)[0], True
-    elif annotation in (int, bool, UUID) or (
+    elif any(annotation is kind for kind in (int, bool, UUID)) or (
         get_origin(annotation) is Literal and all(isinstance(value, str) for value in get_args(annotation))
     ):
         return annotation, False

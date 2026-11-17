@@ -16,7 +16,7 @@ reader is using them. Messages merge again only when an anchor's child disappear
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from itertools import pairwise, product
-from typing import Any
+from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.authoring.document import Document, DocumentLike, PortableDocumentLike, as_document
@@ -294,7 +294,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
     if max_messages < 1:
         message = "max_messages must be at least 1"
         raise ValueError(message)
-    document = as_document(rendered)
+    document = as_document(cast(DocumentLike[RenderTargetT], rendered))
     search = _Search(document, request, cache)
     if max_messages > 1 and (cuts := search.retained(retained)) is not None:
         return search.spread(cuts)

@@ -1,6 +1,7 @@
 """Validate authored layout vocabulary and prepare it for shared composition."""
 
 from dataclasses import dataclass, replace
+from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.authoring import semantic as sem
@@ -37,7 +38,7 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
     variant_index = 0
     text_ladder = policy.text_ladder
 
-    def visit[NodeTargetT](node: Renderable[NodeTargetT]) -> Renderable[NodeTargetT]:
+    def visit(node: Renderable[Any]) -> Renderable[Any]:
         nonlocal combinations, shortening_depth, text_choices, card_depth, variant_index
         match node:
             case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
@@ -104,12 +105,27 @@ def prepare_composition[BodyT: scene.Body, RenderTargetT, AdapterT](
                     message = "native Components V2 layout on another target"
                     raise UnsupportedSemanticError(message)
                 if isinstance(node, primitive.Panel):
-                    return replace(node, children=tuple(map(visit, node.children)))
+                    return replace(node, children=cast(tuple[primitive.Node, ...], tuple(map(visit, node.children))))
                 if isinstance(node, primitive.Section):
                     if any(isinstance(text.overflow, Paginate) for text in node.texts):
                         message = "pagination cannot be nested in a Section; paginate its enclosing region"
                         raise UnsupportedSemanticError(message)
-                    return replace(node, texts=tuple(map(visit, node.texts)), accessory=visit(node.accessory))
+                    return replace(
+                        node,
+                        texts=cast(
+                            tuple[primitive.Text | primitive.Heading | primitive.Footer, ...],
+                            tuple(map(visit, node.texts)),
+                        ),
+                        accessory=cast(
+                            primitive.Button
+                            | primitive.RoutedButton
+                            | primitive.LinkButton
+                            | primitive.PremiumButton
+                            | primitive.RawItem
+                            | primitive.Thumbnail,
+                            visit(node.accessory),
+                        ),
+                    )
                 return node
             case primitive.Content():
                 if primitive.Card not in policy.native_types:

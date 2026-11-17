@@ -377,8 +377,8 @@ class FlipToggle[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
 
 
 @dataclass(frozen=True, slots=True)
-class ForwardSelection(GeneratedHandler[PressEvent]):
-    handler: Callable[[SelectionEvent], Awaitable[None]]
+class ForwardSelection[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+    handler: Callable[[SelectionEvent[ContextT]], Awaitable[None]]
     key: str
 
     @override
@@ -387,7 +387,7 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
         return replace(self, handler=handler) if handler is not self.handler else self
 
     @override
-    async def __call__(self, event: PressEvent) -> None:
+    async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.handler(
             SelectionEvent(
                 event.actor, event.responder, event.locale, event.metadata, (self.key,), context=event.context

@@ -181,7 +181,7 @@ class SemanticGraph[RenderTargetT, ContextT]:
         return frozenset(key for key, unit in self.units.items() if unit.atomic)
 
 
-def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | EmbeddedValue[ContextT]) -> str | None:
+def _key(value: object) -> str | None:
     match value:
         case (
             sem.Group()
@@ -236,16 +236,16 @@ def _key[RenderTargetT, ContextT](value: Renderable[RenderTargetT, ContextT] | E
             return None
 
 
-def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any]:
+def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any, Any]:
     """Expose native ladders through checked coverage and interaction declarations."""
-    choices: list[Alternative[Any]] = []
+    choices: list[Alternative[Any, Any]] = []
     for index, variant in enumerate(value.variants):
         if variant.fidelity is primitive.Fidelity.LOSSY and variant.contract is None:
             message = "lossy native Variants require an explicit Variant.contract"
             raise UnsupportedSemanticError(message)
         choices.append(
             Alternative(
-                sem.Group(variant.nodes, key="@content"),
+                sem.Group[Any, Any](variant.nodes, key="@content"),
                 key=f"rung-{index}",
                 fidelity=variant.contract or Fidelity(),
                 preference=index
@@ -262,7 +262,7 @@ def variant_alternatives(value: primitive.Variants[Any]) -> Alternatives[Any]:
             )
         )
     return Alternatives(
-        value.content or sem.Group(value.variants[0].nodes, key="@content"),
+        value.content or sem.Group[Any, Any](value.variants[0].nodes, key="@content"),
         tuple(choices),
         key=value.key or "@variants",
         priority=value.priority,
@@ -299,7 +299,7 @@ def semantic_graph[RenderTargetT, ContextT](
         return reference
 
     def visit(
-        value: Renderable[RenderTargetT, ContextT] | EmbeddedValue[ContextT],
+        value: Renderable[Any, ContextT] | EmbeddedValue[ContextT],
         parent: SemanticRef | None,
         index: int,
         *,
@@ -764,12 +764,12 @@ def check_alternative[RenderTargetT, ContextT](
                 msg = f"undeclared interaction change at {unit.keys!r}"
                 raise LayoutInvariantError(msg)
 
-    if applied_shortening != shortenings.keys():
+    if applied_shortening != set(shortenings):
         message = "shortening declarations require source-referenced text fragments"
         raise LayoutInvariantError(message)
     retained = frozenset(unit for covered in coverage.values() for unit in covered)
     missing = source.leaves - retained
-    if missing != omitted | (replaced - retained):
+    if missing != frozenset(omitted | (replaced - retained)):
         msg = f"declared omissions do not match missing semantic units: {missing ^ omitted}"
         raise LayoutInvariantError(msg)
     checked = CheckedAlternative(
@@ -924,22 +924,26 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
         ]
         preserved = False
         for target, other in matches:
-            match constraint, other:
-                case Budget(), Budget():
+            # Avoid expanding every pair of generic node types before matching concrete cases.
+            match cast(object, constraint), cast(object, other):
+                case Budget() as constraint, Budget() as other:
                     preserved = all(
                         axis in other.limits and other.limits[axis] <= cap for axis, cap in constraint.limits.items()
                     )
-                case (sem.Budgeted(), sem.Budgeted()) | (primitive.Budget(), primitive.Budget()):
+                case (sem.Budgeted() as constraint, sem.Budgeted() as other) | (
+                    primitive.Budget() as constraint,
+                    primitive.Budget() as other,
+                ):
                     preserved = (constraint.minimum, constraint.preferred, constraint.stretch) == (
                         other.minimum,
                         other.preferred,
                         other.stretch,
                     ) and budget_floor(checked.presentation, target) >= budget_floor(checked.source, reference)
-                case primitive.Break(), primitive.Break():
+                case primitive.Break() as constraint, primitive.Break() as other:
                     preserved = (not constraint.unbreakable or other.unbreakable) and (
                         not constraint.keep_with_next or other.keep_with_next
                     )
-                case sem.Paged(), sem.Paged():
+                case sem.Paged() as constraint, sem.Paged() as other:
                     preserved = (
                         constraint.key,
                         constraint.page,
@@ -948,24 +952,24 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         constraint.widows,
                         constraint.footer,
                     ) == (other.key, other.page, other.chars, other.min_fill, other.widows, other.footer)
-                case sem.Region(), sem.Region():
+                case sem.Region() as constraint, sem.Region() as other:
                     preserved = (constraint.key, constraint.page, constraint.header, constraint.footer) == (
                         other.key,
                         other.page,
                         other.header,
                         other.footer,
                     )
-                case sem.Items(), sem.Items():
+                case sem.Items() as constraint, sem.Items() as other:
                     preserved = (constraint.key, constraint.opened) == (other.key, other.opened)
-                case sem.Navigation(), sem.Navigation():
+                case sem.Navigation() as constraint, sem.Navigation() as other:
                     preserved = (constraint.key, constraint.current) == (other.key, other.current)
-                case sem.Grid(), sem.Grid():
+                case sem.Grid() as constraint, sem.Grid() as other:
                     preserved = (constraint.key, constraint.columns, tuple(cell.key for cell in constraint.cells)) == (
                         other.key,
                         other.columns,
                         tuple(cell.key for cell in other.cells),
                     )
-                case sem.List(), sem.List():
+                case sem.List() as constraint, sem.List() as other:
                     preserved = (constraint.key, constraint.page, constraint.page_size) == (
                         other.key,
                         other.page,
@@ -973,30 +977,37 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                     )
                 case (
                     (
-                        primitive.Lines()
-                        | primitive.Text()
-                        | primitive.Heading()
-                        | primitive.Footer()
-                        | primitive.Code()
+                        (
+                            primitive.Lines()
+                            | primitive.Text()
+                            | primitive.Heading()
+                            | primitive.Footer()
+                            | primitive.Code()
+                        ) as constraint
                     ),
                     (
-                        primitive.Lines()
-                        | primitive.Text()
-                        | primitive.Heading()
-                        | primitive.Footer()
-                        | primitive.Code()
+                        (
+                            primitive.Lines()
+                            | primitive.Text()
+                            | primitive.Heading()
+                            | primitive.Footer()
+                            | primitive.Code()
+                        ) as other
                     ),
                 ):
                     preserved = constraint.overflow == other.overflow
-                case (sem.Unbreakable(), sem.Unbreakable()) | (sem.KeepWithNext(), sem.KeepWithNext()):
+                case (sem.Unbreakable() as constraint, sem.Unbreakable() as other) | (
+                    sem.KeepWithNext() as constraint,
+                    sem.KeepWithNext() as other,
+                ):
                     preserved = True
-                case primitive.Row(), primitive.Row():
+                case primitive.Row() as constraint, primitive.Row() as other:
                     preserved = True
-                case primitive.Section(), primitive.Section():
+                case primitive.Section() as constraint, primitive.Section() as other:
                     preserved = len(constraint.texts) == len(other.texts)
-                case RosterSection(), RosterSection():
+                case RosterSection() as constraint, RosterSection() as other:
                     preserved = constraint == other
-                case primitive.Card(), primitive.Card():
+                case primitive.Card() as constraint, primitive.Card() as other:
                     preserved = (
                         constraint.url,
                         constraint.accent,
@@ -1016,11 +1027,11 @@ def _check_boundaries[RenderTargetT, ContextT](checked: CheckedAlternative[Rende
                         other.footer.icon_url if other.footer else None,
                         (other.author.url, other.author.icon_url) if other.author else None,
                     )
-                case primitive.Content(), primitive.Content():
+                case primitive.Content() as constraint, primitive.Content() as other:
                     preserved = True
-                case primitive.Gallery(), primitive.Gallery():
+                case primitive.Gallery() as constraint, primitive.Gallery() as other:
                     preserved = len(constraint.items) == len(other.items)
-                case primitive.Panel(), primitive.Panel():
+                case primitive.Panel() as constraint, primitive.Panel() as other:
                     preserved = (constraint.accent, constraint.spoiler) == (other.accent, other.spoiler)
             if preserved:
                 break

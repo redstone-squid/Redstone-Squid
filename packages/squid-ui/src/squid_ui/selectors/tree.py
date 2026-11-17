@@ -222,7 +222,7 @@ def _build_index(tree: object, *, children: Children) -> TreeIndex:
             parents.append(parent)
             ends.append(0)
             if isinstance(node, Component):
-                if rendered is None or placement not in rendered.authored_nodes:
+                if rendered is None or placement is None or placement not in rendered.authored_nodes:
                     msg = f"{path}: component requires an authored ComponentTree"
                     raise ValueError(msg)
                 edges = ((str(i), value) for i, value in enumerate(rendered.authored_nodes[placement]))

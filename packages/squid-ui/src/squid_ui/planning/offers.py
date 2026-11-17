@@ -177,7 +177,7 @@ class RegionNavigation[RenderTargetT, ContextT]:
                 fragment=FragmentCoverage(occurrence.identity, 0, 0, frozenset()),
             )
             footer = CandidateComposition(
-                RealizationOffer(
+                RealizationOffer[RenderTargetT, ContextT, Realization](
                     replace(placed, identity=OccurrenceId((*placed.identity.path, "footer"))),
                     "footer",
                     TextRealization(resolve_text(label, context.localization).nodes),
@@ -186,8 +186,9 @@ class RegionNavigation[RenderTargetT, ContextT]:
             navigation = context.navigation
             if navigation is None and self.default_controls:
                 navigation = PagerNav(default_nav, context.presentation, staged=True)
-            controls = (
-                () if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)
+            controls = cast(
+                tuple[primitive.Node[ContextT], ...],
+                (() if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)),
             )
             if not self.disabled_controls:
                 controls = tuple(
@@ -234,7 +235,13 @@ class RegionNavigation[RenderTargetT, ContextT]:
                 navigation = NavigationInput(
                     occurrence.identity, payload.route, int(payload.route.rsplit(".", 1)[1]), not payload.disabled
                 )
-            result.append(CandidateComposition(RealizationOffer(placed, "navigation", payload, navigation=navigation)))
+            result.append(
+                CandidateComposition(
+                    RealizationOffer[RenderTargetT, ContextT, Realization](
+                        placed, "navigation", payload, navigation=navigation
+                    )
+                )
+            )
         return tuple(result)
 
 
@@ -252,7 +259,7 @@ def navigation_candidate[RenderTargetT, ContextT](
         )
 
     binding = None
-    form = None
+    form: FormBinding[ContextT] | None = None
     children: tuple[CandidateComposition[RenderTargetT, ContextT, Realization], ...] = ()
     payload: Realization
     match node:
@@ -347,7 +354,7 @@ def navigation_candidate[RenderTargetT, ContextT](
             msg = f"navigation {type(node).__name__}"
             raise UnsupportedSemanticError(msg)
     return CandidateComposition(
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "navigation",
             payload,
@@ -601,7 +608,11 @@ def semantic_offers[RenderTargetT, ContextT](
                 palette=context.palette,
                 enclosing=occurrence.enclosing,
             )
-            return (RealizationOffer(occurrence, "extension-fallback", FlowRealization(), (child,), flow=True),)
+            return (
+                RealizationOffer[RenderTargetT, ContextT, Realization](
+                    occurrence, "extension-fallback", FlowRealization(), (child,), flow=True
+                ),
+            )
         if not isinstance(adapter, ComposableExtension):
             return OfferDiscovery((), DiscoveryCompletion.UNSUPPORTED, "extension adapter needs compose()")
         if any(
@@ -630,7 +641,7 @@ def semantic_offers[RenderTargetT, ContextT](
             native.contract, shared_costs={**native.contract.shared_costs, resource.identity: EMPTY_COST}
         )
         return (
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence, "native-extension", OpaqueRealization(node, resource, native), atomic=contract
             ),
         )
@@ -851,7 +862,7 @@ def _lines_offers[RenderTargetT, ContextT](
                 cursor_key=cursor_key,
                 required_ends=tuple(required),
             )
-        return RealizationOffer(
+        return RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             key,
             sequence if pagination is not None else line_payload(lines),
@@ -1004,7 +1015,11 @@ def _primitive_text_offers[RenderTargetT, ContextT](
         payload = replace(payload, role="heading", level=value.level)
     elif isinstance(value, primitive.Footer):
         if not any(tree.plain(node).strip() for node in payload.nodes):
-            return (RealizationOffer(occurrence, "empty-note", FlowRealization(), flow=True),)
+            return (
+                RealizationOffer[RenderTargetT, ContextT, Realization](
+                    occurrence, "empty-note", FlowRealization(), flow=True
+                ),
+            )
         payload = replace(payload, role="note")
     elif isinstance(value, primitive.Code):
         payload = replace(payload, role="code", language=value.lang)
@@ -1057,7 +1072,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
             literal=isinstance(value, primitive.Code),
         )
         return (
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "native-text-pages",
                 sequence,
@@ -1080,7 +1095,9 @@ def _primitive_text_offers[RenderTargetT, ContextT](
                 ),
             ),
         )
-    full = RealizationOffer(occurrence, "native-text", payload, preference_priority=value.priority)
+    full = RealizationOffer[RenderTargetT, ContextT, Realization](
+        occurrence, "native-text", payload, preference_priority=value.priority
+    )
     if isinstance(overflow, Drop):
         return (
             full,
@@ -1106,7 +1123,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
         )
         context.work.consume(len(replacements))
         last = replacements[-1]
-        shortened = scope.text_offers(last, last.payload, "head", value.priority)
+        shortened = scope.text_offers(last, cast(TextRealization, last.payload), "head", value.priority)
         if isinstance(shortened, OfferDiscovery):
             return replace(shortened, offers=(full, *replacements[:-1], *shortened.offers))
         return (
@@ -1145,7 +1162,7 @@ def _gallery_offers[RenderTargetT, ContextT](
     )
     refs = occurrence.graph.children.get(occurrence.reference, ())
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "native-gallery",
             gallery,
@@ -1164,7 +1181,7 @@ def _file_offers[RenderTargetT, ContextT](
     occurrence = scope.occurrence
     return (
         (
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "native-file",
                 FileRealization(scene.File(value.asset_key, value.name, value.media_type, value.spoiler)),
@@ -1184,7 +1201,7 @@ def _thumbnail_offers[RenderTargetT, ContextT](
         return ()
     description = resolve_text(value.description, context.localization).plain() if value.description else None
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence, "thumbnail", ThumbnailRealization(scene.Thumbnail(value.url, description, value.spoiler))
         ),
     )
@@ -1195,7 +1212,11 @@ def _separator_offers[RenderTargetT, ContextT](
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     return (
-        (RealizationOffer(occurrence, "separator", SeparatorRealization(scene.Separator(value.large, value.visible))),)
+        (
+            RealizationOffer[RenderTargetT, ContextT, Realization](
+                occurrence, "separator", SeparatorRealization(scene.Separator(value.large, value.visible))
+            ),
+        )
         if scope.policy.native_v2
         else ()
     )
@@ -1231,7 +1252,7 @@ def _primitive_container_offers[RenderTargetT, ContextT](
         for ref in occurrence.graph.children.get(occurrence.reference, ())
     )
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "native-layout",
             CardRealization(value)
@@ -1286,7 +1307,7 @@ def _fallback_content_offers[RenderTargetT, ContextT](
     context.work.consume(len(sources) + len(refs))
     effects = tuple(Replacement(source) for source in sorted(sources or {primary}, key=lambda ref: ref.keys))
     return tuple(
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             f"fallback-{index}",
             FlowRealization(),
@@ -1327,10 +1348,10 @@ def _optional_content_offers[RenderTargetT, ContextT](
     sources = sorted(occurrence.sources, key=lambda source: source.keys)
     context.work.consume(len(sources))
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence, "retain", FlowRealization(), (child,), flow=True, preference_priority=value.importance
         ),
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "omit",
             FlowRealization(),
@@ -1372,7 +1393,7 @@ def _alternatives_offers[RenderTargetT, ContextT](
             )
         )
         choices.append(
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 choice.key,
                 FlowRealization(),
@@ -1404,7 +1425,7 @@ def _roster_label_offers[RenderTargetT, ContextT](
             ).nodes,
         )
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "roster-label",
             TextRealization(label_nodes, role="paragraph" if value.full else "heading", level=3),
@@ -1471,7 +1492,7 @@ def _list_offers[RenderTargetT, ContextT](
         cursor_key=value.key,
         required_ends=tuple(required),
     )
-    complete = RealizationOffer(
+    complete = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "member-lines" if isinstance(value, RosterMembers) else "text-pages",
         payload,
@@ -1549,7 +1570,11 @@ def _text_presentation_offers[RenderTargetT, ContextT](
     )
     if isinstance(resolved, UnsupportedText):
         return ()
-    return (RealizationOffer(occurrence, "text", TextRealization(resolved.nodes, resolved)),)
+    return (
+        RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "text", TextRealization(resolved.nodes, resolved)
+        ),
+    )
 
 
 def _item_summary_offers[RenderTargetT, ContextT](
@@ -1558,7 +1583,7 @@ def _item_summary_offers[RenderTargetT, ContextT](
     occurrence = scope.occurrence
     context = scope.context
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "item-heading",
             TextRealization(
@@ -1576,7 +1601,7 @@ def _item_back_offers[RenderTargetT, ContextT](
     key = _control_key(occurrence, context)
     label = "".join(tree.plain(node) for node in resolve_text(context.chrome.back, context.localization).nodes)
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "item-back",
             ControlRealization(label, action=key),
@@ -1606,7 +1631,11 @@ def _item_branch_offers[RenderTargetT, ContextT](
         )
         for index, ref in enumerate(refs)
     )
-    return (RealizationOffer(occurrence, "item-detail", FlowRealization(), children, flow=True),)
+    return (
+        RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "item-detail", FlowRealization(), children, flow=True
+        ),
+    )
 
 
 def _items_offers[RenderTargetT, ContextT](
@@ -1633,7 +1662,7 @@ def _items_offers[RenderTargetT, ContextT](
         )
         cursor_key = f"{value.key}.{opened}.detail"
         return (
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "items.opened",
                 FlowRealization(),
@@ -1649,7 +1678,11 @@ def _items_offers[RenderTargetT, ContextT](
             ),
         )
     if not value.items:
-        return (RealizationOffer(occurrence, "items.empty", FlowRealization(), flow=True),)
+        return (
+            RealizationOffer[RenderTargetT, ContextT, Realization](
+                occurrence, "items.empty", FlowRealization(), flow=True
+            ),
+        )
     key = _control_key(occurrence, context)
     summaries: list[ReferencedText] = []
     item_options: list[scene.Option] = []
@@ -1663,7 +1696,7 @@ def _items_offers[RenderTargetT, ContextT](
     payload = SelectRealization(scene.Select(tuple(item_options), key, "Choose an item"), summaries=tuple(summaries))
     cursor_key = f"{value.key}.items"
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "items.overview",
             payload,
@@ -1695,7 +1728,7 @@ def _disclosure_toggle_offers[RenderTargetT, ContextT](
     key = _control_key(occurrence, context)
     label = "".join(tree.plain(node) for node in resolve_text(details.summary.content, context.localization).nodes)
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "disclosure-toggle",
             ControlRealization(label, action=key),
@@ -1726,7 +1759,11 @@ def _details_offers[RenderTargetT, ContextT](
         )
         for index, ref in enumerate(visible)
     )
-    return (RealizationOffer(occurrence, "disclosure", DisclosureRealization(open_), children, flow=True),)
+    return (
+        RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "disclosure", DisclosureRealization(open_), children, flow=True
+        ),
+    )
 
 
 def _navigation_choice_offers[RenderTargetT, ContextT](
@@ -1739,7 +1776,7 @@ def _navigation_choice_offers[RenderTargetT, ContextT](
     key = _control_key(occurrence, context)
     label = "".join(tree.plain(node) for node in resolve_text(option.label, context.localization).nodes)
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "destination",
             ControlRealization(
@@ -1772,7 +1809,7 @@ def _navigation_offers[RenderTargetT, ContextT](
         RegionNavigation(occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True),
         cursor_key=cursor_key,
     )
-    individual = RealizationOffer(
+    individual = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "navigation.individual",
         ActionsRealization(navigation=True),
@@ -1851,7 +1888,7 @@ def _grid_offers[RenderTargetT, ContextT](
         RegionNavigation(occurrence, scope.policy.disabled_controls, owner=FIRST_PAGE, cursor_key=value.key + ".cells"),
         cursor_key=value.key + ".cells",
     )
-    buttons = RealizationOffer(
+    buttons = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "grid.buttons",
         ActionsRealization(columns=value.columns, grid_key=value.key),
@@ -1878,7 +1915,7 @@ def _grid_offers[RenderTargetT, ContextT](
         payload = TextSequenceRealization(grid_summaries)
         return (
             *button_offers,
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 "grid.readonly",
                 payload,
@@ -1904,7 +1941,7 @@ def _grid_offers[RenderTargetT, ContextT](
             scene.Select(options[start:end], action), summaries=grid_summaries[boundaries[start] : boundaries[end]]
         )
 
-    select = RealizationOffer(
+    select = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "grid.coordinates",
         grid_fragment(0, len(available)),
@@ -1956,7 +1993,7 @@ def _entities_offers[RenderTargetT, ContextT](
         if value.placeholder is not None
         else None
     )
-    native = RealizationOffer(
+    native = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "entity",
         EntityRealization(
@@ -1978,7 +2015,7 @@ def _entities_offers[RenderTargetT, ContextT](
         return (native,)
     by_key = {choice.ref.encode(): choice.ref for choice in value.choices if choice.available}
     selected = tuple(ref.encode() for ref in previous if ref.encode() in by_key)
-    fallback = RealizationOffer(
+    fallback = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "entity-choices",
         SelectRealization(scene.Select(options, key, placeholder, value.minimum, value.maximum)),
@@ -2080,7 +2117,7 @@ def _action_control_offers[RenderTargetT, ContextT](
     key = _control_key(occurrence, context)
     label = "".join(tree.plain(node) for node in resolve_text(value.label, context.localization).nodes)
     binding = None
-    form = None
+    form: FormBinding[ContextT] | None = None
     match value:
         case sem.Toggle():
             on = toggle_state(value, context.presentation)
@@ -2142,7 +2179,7 @@ def _action_control_offers[RenderTargetT, ContextT](
         index = occurrence.graph.children[parent].index(occurrence.reference)
         keep_next = (index + 1) % grid.columns != 0 and index + 1 < len(grid.cells)
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence, "button", payload, interaction=True, binding=binding, form=form, keep_with_next=keep_next
         ),
     )
@@ -2159,7 +2196,11 @@ def _metric_offers[RenderTargetT, ContextT](
         tree.Node("strong", children=(*label, tree.literal(":")), tag="strong", markup="**"),
         tree.literal(" " + rendered),
     )
-    return (RealizationOffer(occurrence, "metric", MetricRealization(nodes, label=label, value=rendered)),)
+    return (
+        RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "metric", MetricRealization(nodes, label=label, value=rendered)
+        ),
+    )
 
 
 def _timestamp_offers[RenderTargetT, ContextT](
@@ -2197,7 +2238,7 @@ def _timestamp_offers[RenderTargetT, ContextT](
         prefix = resolve_text(value.prefix, context.localization).nodes
         label = prefix
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "time",
             TimeRealization(
@@ -2221,7 +2262,7 @@ def _status_offers[RenderTargetT, ContextT](
     context = scope.context
     nodes = (tree.literal(value.tone.status_marker), *resolve_text(value.content, context.localization).nodes)
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "status",
             StatusRealization(
@@ -2250,7 +2291,7 @@ def _progress_bar_offers[RenderTargetT, ContextT](
     filled = round(ratio * 10)
     text += f"{value.value}/{value.maximum} {'█' * filled}{'░' * (10 - filled)} {ratio:.0%}"
     return (
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "progress",
             ProgressRealization((tree.literal(text),), value=value.value, maximum=value.maximum, label=label),
@@ -2270,7 +2311,11 @@ def _text_block_offers[RenderTargetT, ContextT](
         # Empty localized notes have no visible content or layout cost. In particular,
         # they must not become a standalone Discord subtext marker.
         if not any(tree.plain(node).strip() for node in payload.nodes):
-            return (RealizationOffer(occurrence, "empty-note", FlowRealization(), flow=True),)
+            return (
+                RealizationOffer[RenderTargetT, ContextT, Realization](
+                    occurrence, "empty-note", FlowRealization(), flow=True
+                ),
+            )
         payload = replace(payload, role="note")
     elif isinstance(value, sem.Code):
         payload = replace(payload, role="code", language=value.language)
@@ -2286,7 +2331,7 @@ def _text_block_offers[RenderTargetT, ContextT](
             )
         payload = replace(payload, role="quote")
     return scope.text_offers(
-        RealizationOffer(occurrence, "text", payload),
+        RealizationOffer[RenderTargetT, ContextT, Realization](occurrence, "text", payload),
         payload,
         priority=value.importance if isinstance(value, sem.Heading | sem.Note) else sem.Importance.NORMAL,
     )
@@ -2301,7 +2346,7 @@ def _field_offers[RenderTargetT, ContextT](
     effects = occurrence.scope_effects((Replacement(SemanticRef((*occurrence.reference.keys, "value"))),))
     context.work.consume(1 + len(value.fallbacks))
     return tuple(
-        RealizationOffer(
+        RealizationOffer[RenderTargetT, ContextT, Realization](
             occurrence,
             "field" if index == 0 else f"field-fallback-{index}",
             FieldRealization((*label, tree.literal(": "), *nodes), label=label, value=nodes),
@@ -2333,7 +2378,9 @@ def _paragraph_offers[RenderTargetT, ContextT](
             continuations=True,
         )
     return scope.text_offers(
-        RealizationOffer(occurrence, "text", payload, fragments=fragments), payload, priority=value.importance
+        RealizationOffer[RenderTargetT, ContextT, Realization](occurrence, "text", payload, fragments=fragments),
+        payload,
+        priority=value.importance,
     )
 
 
@@ -2454,7 +2501,7 @@ def _container_offers[RenderTargetT, ContextT](
             value.page,
             cursor_key,
         )
-    container = RealizationOffer(
+    container = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
         "container",
         payload,
@@ -2612,7 +2659,7 @@ def _table_offers[RenderTargetT, ContextT](
             FragmentContract(units, tuple(range(1, len(rows) + 1)), payload.fragment, repeated) if rows else None
         )
         offers.append(
-            RealizationOffer(
+            RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
                 form.value,
                 payload,
@@ -2633,7 +2680,11 @@ def _media_item_offers[RenderTargetT, ContextT](
         if value.description is not None
         else ""
     )
-    return (RealizationOffer(occurrence, "image", ImageRealization(value.source, description, value.spoiler)),)
+    return (
+        RealizationOffer[RenderTargetT, ContextT, Realization](
+            occurrence, "image", ImageRealization(value.source, description, value.spoiler)
+        ),
+    )
 
 
 def _download_offers[RenderTargetT, ContextT](
@@ -2647,7 +2698,7 @@ def _download_offers[RenderTargetT, ContextT](
         resolve_text(value.description, context.localization).nodes if value.description is not None else (),
         value.spoiler,
     )
-    return (RealizationOffer(occurrence, "download", payload),)
+    return (RealizationOffer[RenderTargetT, ContextT, Realization](occurrence, "download", payload),)
 
 
 def select_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](

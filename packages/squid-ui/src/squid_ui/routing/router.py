@@ -3,7 +3,7 @@
 import inspect
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Concatenate, get_type_hints, overload
+from typing import Any, Concatenate, cast, get_type_hints, overload
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.routing.address import AddressParts, AddressRoute, InvalidAddress
@@ -162,6 +162,7 @@ class Router[Context]:
             message = "Endpoint belongs to another router"
             raise ValueError(message)
         function, owner, is_classmethod = endpoint.function, endpoint.owner, endpoint.is_classmethod
+        callback = cast(Callable[..., Awaitable[Any]], function)
         middleware = (*self._middleware, *(endpoint.group.middleware if endpoint.group is not None else ()))
 
         async def invoke(index: int) -> Any:
@@ -170,8 +171,8 @@ class Router[Context]:
                     if owner is None:
                         message = "Class endpoint has not been bound to its owner"
                         raise RuntimeError(message)
-                    return await function(owner, request, **match.arguments)
-                return await function(request, **match.arguments)
+                    return await callback(owner, request, **match.arguments)
+                return await callback(request, **match.arguments)
             called = False
             active = True
 
