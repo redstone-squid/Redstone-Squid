@@ -20,7 +20,6 @@ from squid_ui.planning.composition import (
     OccurrenceId,
     Placement,
     PlanningContext,
-    RegionContract,
 )
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
@@ -178,75 +177,6 @@ class AllocationSelection[OutputT](Protocol):
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]: ...
 
 
-@dataclass(frozen=True, slots=True)
-class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
-    """A request-local allocation identity and all certified visible page combinations.
-
-    Reuse this object for cursor movement. Content, target, localization, policy,
-    or resource changes require a new search. This is not a cross-request cache
-    key; shared caches store only partition hints and recertify current output.
-    """
-
-    family: PageFamily[RenderTargetT, ContextT, PayloadT]
-    pages: tuple[CertifiedPage[OutputT], ...]
-    selection: tuple[tuple[OccurrenceId, str], ...]
-    identity: str = field(init=False)
-    regions: Mapping[OccurrenceId, RegionPages] = field(init=False)
-
-    _page_index: Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]] = field(
-        init=False, repr=False, compare=False
-    )
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "_page_index", _index_pages(self.pages))
-        object.__setattr__(self, "identity", uuid4().hex)
-        object.__setattr__(
-            self,
-            "regions",
-            MappingProxyType(
-                {
-                    identity: RegionPages(
-                        region.key,
-                        region.cuts,
-                        region.anchors,
-                        region.allocation,
-                        tuple(
-                            tuple(
-                                child.offer.navigation for child in page.children if child.offer.navigation is not None
-                            )
-                            for page in region.pages
-                        ),
-                        region.source_order,
-                        self._contract(identity).owner,
-                        self._contract(identity).cursor_key or region.key,
-                        region.pages[0].offer.occurrence.page_source.keys,
-                    )
-                    for identity, region in self.family.regions.items()
-                }
-            ),
-        )
-
-    def _contract(self, identity: OccurrenceId) -> RegionContract[RenderTargetT, ContextT, PayloadT]:
-        pending = [self.family.root]
-        while pending:
-            part = pending.pop()
-            if part.offer.occurrence.identity == identity and part.offer.region is not None:
-                return part.offer.region
-            pending.extend(part.children)
-        msg = "allocation lost its region contract"
-        raise LayoutInvariantError(msg)
-
-    def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
-        return dict(self._page(coordinates).coordinates)
-
-    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT:
-        """Select clamped zero-based coordinates; hidden nested coordinates are ignored."""
-        return self._page(coordinates).output
-
-    def _page(self, coordinates: Mapping[OccurrenceId, int] | None) -> CertifiedPage[OutputT]:
-        return _select_page(self._page_index, self.regions, coordinates)
-
-
 def _index_pages[OutputT](
     pages: tuple[CertifiedPage[OutputT], ...],
 ) -> Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]]:
@@ -290,6 +220,7 @@ class AllocationSnapshot[OutputT]:
     identity: str
     regions: Mapping[OccurrenceId, RegionPages]
     pages: tuple[CertifiedPage[OutputT], ...]
+    selection: tuple[tuple[OccurrenceId, str], ...] = ()
     _page_index: Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]] = field(
         init=False, repr=False, compare=False
     )
@@ -299,9 +230,43 @@ class AllocationSnapshot[OutputT]:
         object.__setattr__(self, "_page_index", _index_pages(self.pages))
 
     @classmethod
-    def project[SourceT, RenderTargetT, ContextT, PayloadT](
+    def certify[RenderTargetT, ContextT, PayloadT](
         cls,
-        source: CertifiedAllocation[RenderTargetT, ContextT, PayloadT, SourceT] | AllocationSnapshot[SourceT],
+        family: PageFamily[RenderTargetT, ContextT, PayloadT],
+        pages: tuple[CertifiedPage[OutputT], ...],
+        selection: tuple[tuple[OccurrenceId, str], ...],
+    ) -> AllocationSnapshot[OutputT]:
+        """Capture a certified family's metadata without retaining its search graph."""
+        contracts = {}
+        pending = [family.root]
+        while pending:
+            part = pending.pop()
+            if part.offer.region is not None:
+                contracts[part.offer.occurrence.identity] = part.offer.region
+            pending.extend(part.children)
+        regions = {
+            identity: RegionPages(
+                region.key,
+                region.cuts,
+                region.anchors,
+                region.allocation,
+                tuple(
+                    tuple(child.offer.navigation for child in page.children if child.offer.navigation is not None)
+                    for page in region.pages
+                ),
+                region.source_order,
+                contracts[identity].owner,
+                contracts[identity].cursor_key or region.key,
+                region.pages[0].offer.occurrence.page_source.keys,
+            )
+            for identity, region in family.regions.items()
+        }
+        return cls(uuid4().hex, regions, pages, selection)
+
+    @classmethod
+    def project[SourceT](
+        cls,
+        source: AllocationSnapshot[SourceT],
         convert: Callable[[SourceT], OutputT],
         *,
         regions: Mapping[OccurrenceId, RegionPages] | None = None,
@@ -310,6 +275,7 @@ class AllocationSnapshot[OutputT]:
             source.identity,
             source.regions if regions is None else regions,
             tuple(CertifiedPage(page.coordinates, convert(page.output)) for page in source.pages),
+            source.selection,
         )
 
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:

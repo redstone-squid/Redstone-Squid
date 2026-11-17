@@ -55,14 +55,12 @@ def test_joint_sibling_pages_are_certified_and_cursor_independent() -> None:
     assert result.diagnostics.optimal
     allocation = result.allocation
     left, right = (OccurrenceId(("root", key)) for key in ("left", "right"))
-    assert len(allocation.family.regions[left].pages) >= 2
-    assert len(allocation.family.regions[right].pages) >= 2
-    for a, b in product(
-        range(len(allocation.family.regions[left].pages)), range(len(allocation.family.regions[right].pages))
-    ):
+    assert len(allocation.regions[left].cuts) >= 2
+    assert len(allocation.regions[right].cuts) >= 2
+    for a, b in product(range(len(allocation.regions[left].cuts)), range(len(allocation.regions[right].cuts))):
         built = allocation.select({left: a, right: b})
         assert built.evaluation.cost.within(limits.capacities)
-    assert allocation.select({left: 999}) == allocation.select({left: len(allocation.family.regions[left].pages) - 1})
+    assert allocation.select({left: 999}) == allocation.select({left: len(allocation.regions[left].cuts) - 1})
 
 
 def test_native_table_keeps_presentation_across_pages() -> None:
@@ -84,7 +82,7 @@ def test_native_table_keeps_presentation_across_pages() -> None:
     )
     assert result.diagnostics.optimal
     assert dict(result.allocation.selection)[OccurrenceId(("root", "table"))] == "table"
-    assert len(result.allocation.family.regions[OccurrenceId(("root",))].pages) == 2
+    assert len(result.allocation.regions[OccurrenceId(("root",))].cuts) == 2
     assert all(page.output.evaluation.cost.within(limits.capacities) for page in result.allocation.pages)
 
 
@@ -347,7 +345,7 @@ def test_partitions_match_exhaustive_multiaxis_oracle() -> None:
     assert observed == feasible
     expected = min(feasible, key=lambda cuts: (sum(len(ends) - 1 for ends in cuts), cuts))
     result = search_composition(occurrence(node), rules, PlanningContext(WorkBudget(100000)), finalize=finish)
-    assert tuple(result.allocation.family.regions[identity].cuts for identity in identities) == expected
+    assert tuple(result.allocation.regions[identity].cuts for identity in identities) == expected
     assert result.diagnostics.optimal
 
 
@@ -361,7 +359,7 @@ def test_character_hints_survive_wrappers_and_hard_budget_floors() -> None:
         PlanningContext(WorkBudget(100000)),
         finalize=finish,
     )
-    assert result.allocation.family.regions[OccurrenceId(("root", "r"))].cuts == (2, 4)
+    assert result.allocation.regions[OccurrenceId(("root", "r"))].cuts == (2, 4)
     assert not any(result.nondominated[0].break_shortfalls)
     budgeted = sl.stack(
         sl.paragraph("x").budget(min=9, prefer=10), sl.paragraph("y").budget(min=9, prefer=10), key="root"
@@ -387,7 +385,7 @@ def test_resource_conflicts_only_reject_pages_where_uses_coexist() -> None:
         finalize=finish,
     )
     assert result.diagnostics.optimal
-    assert result.allocation.family.regions[OccurrenceId(("root",))].cuts == (1, 2)
+    assert result.allocation.regions[OccurrenceId(("root",))].cuts == (1, 2)
     assets = [next(iter(page.output.evaluation.resources.uses.values())).value for page in result.allocation.pages]
     assert all(isinstance(asset, Asset) for asset in assets)
     assert [asset.name for asset in assets if isinstance(asset, Asset)] == ["first.schem", "second.schem"]

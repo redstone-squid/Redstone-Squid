@@ -17,7 +17,7 @@ from types import MappingProxyType
 from squid_ui.authoring.presentations import Budget, FidelityEffect
 from squid_ui.authoring.semantic import Budgeted
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.planning.allocation import CertifiedAllocation, CertifiedPage, PageFamily, allocate_family
+from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, PageFamily, allocate_family
 from squid_ui.planning.allocation_policy import (
     AllocationQuality,
     PreferenceTree,
@@ -79,8 +79,8 @@ class JointExhaustedError(LayoutSearchExhaustedError):
 
 
 @dataclass(frozen=True, slots=True)
-class JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
-    allocation: CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]
+class JointResult[OutputT]:
+    allocation: AllocationSnapshot[OutputT]
     diagnostics: SearchDiagnostics
     nondominated: tuple[AllocationQuality, ...]
 
@@ -307,9 +307,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 _Assignment[RenderTargetT, ContextT, PayloadT] | _Partitions[RenderTargetT, ContextT, PayloadT],
             ]
         ] = []
-        self.retained: list[
-            tuple[AllocationQuality, CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]]
-        ] = []
+        self.retained: list[tuple[AllocationQuality, AllocationSnapshot[OutputT]]] = []
         self.unsupported: set[OccurrenceId] = set()
         self.violations: list[CandidateViolation] = []
         self.generated = self.certified = 0
@@ -328,7 +326,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         self.discovery_owners: dict[int, SemanticOccurrence[RenderTargetT, ContextT]] = {}
         self.repair_started = False
 
-    def run(self) -> JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
+    def run(self) -> JointResult[OutputT]:
         try:
             self._push(_Assignment((self.root,)))
             while self.queue:
@@ -682,7 +680,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 ),
             )
             self.context.work.consume(sum(1 + len(page.coordinates) for page in pages))
-            allocation = CertifiedAllocation(
+            allocation = AllocationSnapshot.certify(
                 family,
                 tuple(pages),
                 tuple(
@@ -767,7 +765,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         # alternatives. Deferred expansion still explores every legal cut.
         self._push(replace(task, probe=False, expand_only=True))
 
-    def _result(self) -> JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
+    def _result(self) -> JointResult[OutputT]:
         """Return the best retained allocation, or raise why the search found none."""
 
         if not self.exhausted and (
@@ -816,7 +814,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     policies: Mapping[OccurrenceId, RegionPolicy] | None = None,
     partitions: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
     partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
-) -> JointResult[RenderTargetT, ContextT, PayloadT, OutputT]:
+) -> JointResult[OutputT]:
     """Certify a nondominated allocation without publishing bindings or state.
 
     Fixed selections/partitions constrain the domain for reproducible tests. The

@@ -17,7 +17,7 @@ from squid_ui.authoring.semantic import ActionControl, ActionControls, FallbackC
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.handlers import _HandlerBinder
-from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, CertifiedAllocation, RegionPages
+from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.display import DisplayPage, PageBindings
 from squid_ui.planning.identity_cache import CacheStats, IdentityCache
@@ -227,7 +227,7 @@ def prepare_action_allocation[BodyT: scene.Body](
         if allocation.controls == controls and allocation.frontend == frontend:
             return allocation
         return ActionAllocation(allocation.source, controls, frontend, allocation.live, allocation.region_bindings)
-    if not isinstance(allocation, CertifiedAllocation | AllocationSnapshot):
+    if not isinstance(allocation, AllocationSnapshot):
         return allocation
     live: dict[int, PageBindings] = {}
 

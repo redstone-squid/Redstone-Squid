@@ -15,7 +15,7 @@ from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui.planning import plan
-from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.allocation import AllocationSnapshot
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
 from squid_ui.planning.pagination.navigation import default_nav
 from squid_ui.planning.result import PlanResult
@@ -69,15 +69,8 @@ def _components(result: PlanResult[scene.ComponentsV2]) -> int:
 
 
 def _selected_rungs(result: PlanResult[scene.ComponentsV2]) -> list[int]:
-    assert isinstance(result.allocation, CertifiedAllocation)
-    pending = [result.allocation.family.root]
-    rungs = []
-    while pending:
-        part = pending.pop()
-        if part.offer.key.startswith("rung-"):
-            rungs.append(int(part.offer.key.removeprefix("rung-")))
-        pending.extend(reversed(part.children))
-    return rungs
+    assert isinstance(result.allocation, AllocationSnapshot)
+    return [int(key.removeprefix("rung-")) for _, key in result.allocation.selection if key.startswith("rung-")]
 
 
 def _under_pressure(entries: tuple[Alt | str, ...], *, spare: int) -> str:

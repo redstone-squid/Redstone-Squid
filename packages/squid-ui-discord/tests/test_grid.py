@@ -9,7 +9,7 @@ import squid_ui.ext.discord
 import squid_ui_widgets as sp
 from squid_ui import scene
 from squid_ui.errors import UnsolvableLayoutError
-from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.allocation import AllocationSnapshot
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.expansion import render_component_tree
@@ -37,7 +37,7 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
     assert "-+-" not in text
-    assert isinstance(result.allocation, CertifiedAllocation)
+    assert isinstance(result.allocation, AllocationSnapshot)
     assert any(selection == "matrix" for _, selection in result.allocation.selection)
 
 

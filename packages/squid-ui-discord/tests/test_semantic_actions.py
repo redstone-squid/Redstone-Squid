@@ -28,7 +28,7 @@ from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.action_projection import ActionAllocation
-from squid_ui.planning.allocation import AllocationSnapshot, CertifiedAllocation
+from squid_ui.planning.allocation import AllocationSnapshot
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.planning.result import PlanResult
@@ -56,7 +56,7 @@ def _text_variants(*nodes: Node, priority: int = 0) -> Variants[Any]:
 def _visible_action_keys(result: Any) -> set[str]:
     allocation = result.allocation
     source = allocation.source if isinstance(allocation, ActionAllocation) else allocation
-    assert isinstance(source, CertifiedAllocation | AllocationSnapshot)
+    assert isinstance(source, AllocationSnapshot)
     keys: set[str] = set()
     for page in source.pages:
         output = allocation.select(dict(page.coordinates))
@@ -333,7 +333,7 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
     rendered = _texts(result)
 
     assert result.report.search is not None
-    assert isinstance(result.allocation, CertifiedAllocation)
+    assert isinstance(result.allocation, AllocationSnapshot)
     assert not any("outer-actions" in identity.path for identity, _ in result.allocation.selection)
     assert "outer 0" not in rendered
     assert "inner primary 0" not in rendered
