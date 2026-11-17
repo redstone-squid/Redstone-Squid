@@ -50,6 +50,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
     The request retains the live presentation session so page callbacks resolve current
     cursors. Graph and fingerprint describe the authored snapshot, not that mutable state.
     Delivery installs this owner on the session; failed delivery leaves the old owner intact.
+    Use prepare() for a different document; replacing only the result preserves its graph and fingerprint.
     """
 
     document: Document[RenderTargetT]
@@ -57,14 +58,9 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
     navigation_version: int | None
     options: CompositionOptions
     result: PlanResult[BodyT]
-    graph: SemanticGraph[RenderTargetT, Any] = field(init=False, repr=False, compare=False)
-    fingerprint: str = field(init=False)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "fingerprint", stable_fingerprint((self.document,)))
-        object.__setattr__(
-            self, "graph", semantic_graph(Group(self.document.children, key=self.document.key or "@document"))
-        )
+    graph: SemanticGraph[RenderTargetT, Any] = field(repr=False, compare=False)
+    fingerprint: str
+    _cursor_fingerprints: dict[OccurrenceId, str] = field(default_factory=dict, repr=False, compare=False)
 
     @classmethod
     def prepare(
@@ -75,7 +71,13 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         result: PlanResult[BodyT],
     ) -> RetainedComposition[BodyT, RenderTargetT, AdapterT]:
         """Capture allocation inputs, excluding the transient page coordinates."""
-        return cls(document, request, _navigation_version(request.nav), replace(options, pages={}), result)
+        # Preparation belongs to the authored snapshot. Replacing its result must
+        # retain these values rather than traverse and fingerprint the tree again.
+        graph = semantic_graph(Group(document.children, key=document.key or "@document"))
+        fingerprint = stable_fingerprint((document,))
+        return cls(
+            document, request, _navigation_version(request.nav), replace(options, pages={}), result, graph, fingerprint
+        )
 
     def reuse(
         self,
@@ -190,7 +192,12 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 content = replace(authored.value, overflow=replace(authored.value.overflow, page=FIRST_PAGE))
             if authored is not None and isinstance(authored.value, Grid):
                 content = authored.value
-            cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
+            cursor_fingerprint = self._cursor_fingerprints.get(identity)
+            if cursor_fingerprint is None:
+                # Content and cuts belong to this retained snapshot; page coordinates
+                # and delivery state do not affect the cursor's content identity.
+                cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
+                self._cursor_fingerprints[identity] = cursor_fingerprint
             if not isinstance(owner, Controlled | RoutedPage):
                 stored = request.presentation.cursor(key)
                 if stored.fingerprint == cursor_fingerprint and 0 <= stored.position.page < len(region.cuts):

@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +12,7 @@ from squid_ui import scene, testing
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.interactions import PressHandler
 from squid_ui.interactions.handlers import FrontendHandler
-from squid_ui.planning import CompositionOptions, OccurrenceId, plan
+from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
 from squid_ui.planning.action_reuse import ReboundAllocation
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation import RegionPages
@@ -124,3 +125,31 @@ def test_failed_binding_does_not_cache_a_projection() -> None:
             allocation.select()
     assert allocation.cache_snapshot().entries == 0
     assert allocation.cache_snapshot().misses == 2
+
+
+def test_rebinding_prepares_the_authored_snapshot_once() -> None:
+    async def changed(event: sl.PressEvent) -> None:
+        pass
+
+    session = PresentationState()
+    first = plan(document(ignored), target=TARGET, session=session, composition=OPTIONS)
+    session.apply_updates(first.session_updates)
+    with (
+        patch.object(composition_state, "semantic_graph", wraps=composition_state.semantic_graph) as graph,
+        patch.object(
+            composition_state, "stable_fingerprint", wraps=composition_state.stable_fingerprint
+        ) as fingerprint,
+    ):
+        current_document = document(changed)
+        current = plan(current_document, target=TARGET, session=session, composition=OPTIONS)
+        assert graph.call_count == 1
+        assert fingerprint.call_count == 2  # One Document and one region content fingerprint.
+        session.apply_updates(current.session_updates)
+        retained = session.retained_composition
+        assert retained is not None
+        current.for_page({REGION: 1})
+        replay = plan(current_document, target=TARGET, session=session, composition=OPTIONS)
+        assert graph.call_count == 1
+        assert fingerprint.call_count == 2  # One Document and one region content fingerprint.
+        assert replay.allocation is current.allocation
+        assert session.retained_composition is retained

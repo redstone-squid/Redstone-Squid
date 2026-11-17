@@ -4,7 +4,7 @@ Status: incremental implementation started. Callback-independent allocation reus
 for ordinary semantic `ActionControl` handlers is implemented; the broader artifact
 and dependency model below remains proposed.
 
-## Implemented increment
+## Implemented increments
 
 A committed owner can reuse a certified allocation when only `on_trigger` changes.
 `ReboundAllocation` selects the existing page Scene and refreshes bindings through
@@ -16,13 +16,28 @@ All other control fields still participate in allocation comparison. Forms, nati
 controls, and actions inside alternative/fallback presentations remain conservative.
 This is owner-local reuse: the underlying certificate still contains its original
 callback-bearing outputs. It is not yet the callback-free shared artifact model below.
-Incremental fingerprints, bounded page-projection caching, and partial certification
-remain future work.
+Rebound page projections now have an owner-local LRU capped at 32 entries. It is
+keyed by the certified output identity, so clamped or hidden coordinates that select
+the same output reuse one projection. Controlled page turns keep the cache; changed
+callbacks get a fresh generation. Failed frontend binding stores no entry. Cache
+snapshots expose entry, hit, miss, and eviction counts without exposing callbacks.
+The cap bounds entry count, not the byte size of arbitrary captured application data.
+
+Prepared semantic graphs and Document fingerprints survive replacement of a retained
+result. Region content fingerprints are computed once per retained authored snapshot,
+then reused across page turns. These caches never retain cursor decisions or delivery
+outcomes: presentation still resolves current positions and stages updates each time.
+
+General incremental subtree fingerprints, callback-free shared artifacts, byte-based
+cache accounting, and partial certification remain future work.
 
 Tests cover callbacks on every page, isolation from the previous generation, repeated
 updates, frontend selection, shared callback identity, and invalidation by display or
-dispatch-policy changes. Existing composition and Discord cache tests exercise the
-surrounding planning and rendering paths.
+dispatch-policy changes. Projection tests cover LRU eviction, failed binding, coordinate
+clamping, generation isolation, and retention across controlled page turns. Work-count
+tests verify that page revisits do not rebuild the graph or rehash unchanged content.
+Existing composition and Discord cache tests exercise the surrounding planning and
+rendering paths.
 
 A local microbenchmark of 100 callback-only updates to a paragraph and one action
 measured median planning time of about 0.51 ms with a fresh presentation state versus
