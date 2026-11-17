@@ -20,6 +20,7 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 - In general im very suspicious of tiny helpers you write, think about whether they should be class methods, or extracted to a class. Also when you remove/refactor think about whether the functions should still exist.
 - We have littered too much into documentations. Try to write clear understandable English for engineers. Read docs/code-documentation-style.md when needed
 - Do NOT try to slap on everything that is added into docstrings. Having too much information makes it worse.
+- Do a task to its Coherent Extrapolated Volition
 
 ## Concurrency
 
