@@ -18,6 +18,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.presentation import PresentationState
+from squid_ui.primitives import nodes as primitive
 from squid_ui.target_types import DiscordAdapter, SlackAdapter
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))
@@ -114,6 +115,33 @@ def test_typo_in_a_selection_path_is_rejected() -> None:
         )
 
 
-def test_fixed_composition_shares_the_requested_work_limit() -> None:
+def test_fixed_composition_uses_options_work_limit() -> None:
     with pytest.raises(LayoutSearchExhaustedError):
-        sl.planning.plan(sl.paragraph("Body"), target=V2, composition=CompositionOptions(), search_budget=1)
+        sl.planning.plan(sl.paragraph("Body"), target=V2, composition=CompositionOptions(work_limit=1))
+
+
+def test_automatic_memo_replays_only_the_same_composition_options() -> None:
+    document = sl.paragraph("Body")
+    session = PresentationState()
+    memo = PlanMemo[scene.ComponentsV2]()
+    options = CompositionOptions(automatic=True)
+    first = sl.planning.plan(document, target=V2, composition=options, session=session, memo=memo)
+    replay = sl.planning.plan(document, target=V2, composition=options, session=session, memo=memo)
+    changed = sl.planning.plan(
+        document, target=V2, composition=replace(options, work_limit=options.work_limit + 1), session=session, memo=memo
+    )
+    assert not first.metrics.cache_hit
+    assert replay.metrics.cache_hit
+    assert not changed.metrics.cache_hit
+
+
+def test_explicit_automatic_prepares_supported_alternatives() -> None:
+    source = sl.paragraph("Portable", key="body")
+    document = sl.alternatives(
+        sl.alternative(primitive.RawItem(lambda: object()), key="native", fidelity=sl.equivalent()),
+        sl.alternative(source, key="portable", fidelity=sl.equivalent()),
+        content=source,
+        key="help",
+    )
+    result = sl.planning.plan(document, target=V2, composition=CompositionOptions(automatic=True))
+    assert "Portable" in scene.Codec.dumps(result.scene)

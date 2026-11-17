@@ -22,8 +22,7 @@ class CompositionOptions:
 
     Set automatic=True for joint search. Fixed selections and partitions then
     constrain its domain. Page coordinates only select certified output.
-    Automatic work_limit covers enumeration through scene assembly; fixed mode
-    retains PlanRequest.search_budget for compatibility.
+    Work_limit bounds both fixed evaluation and automatic search through scene assembly.
     """
 
     selections: Mapping[OccurrenceId, str] = field(default_factory=dict)

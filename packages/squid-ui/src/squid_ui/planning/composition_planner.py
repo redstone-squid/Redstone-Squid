@@ -72,7 +72,7 @@ class ResolvedComposition:
             or navigation is not None
             or request.positions is not None
         )
-        work_limit = options.work_limit if options is not None and options.automatic else request.search_budget
+        work_limit = options.work_limit if options is not None else request.search_budget
         return cls(automatic, work_limit, navigation, mounted)
 
 
@@ -327,15 +327,13 @@ class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, Pre
 class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
     """Prepared input and options for built-in fixed or automatic composition.
 
-    A default call prepares authoring input, derives a search allowance, and permits
-    exact replay. Explicit options retain authored occurrence identities and use
-    their chosen allowance. Automatic calls share allocation reuse and rule execution.
+    Automatic composition prepares authoring input before search. A default call
+    derives its search allowance from the input; explicit options supply one.
     """
 
     document: Document[RenderTargetT]
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
     options: CompositionOptions
-    exact_replay: bool
 
     @classmethod
     def prepare(
@@ -345,8 +343,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         options: CompositionOptions | None,
     ) -> CompositionPlan[RenderTargetT, AdapterT, BodyT]:
         document = as_document(rendered)
-        exact_replay = options is None
-        if options is None:
+        if options is None or options.automatic:
             prepared = prepare_composition(document, request)
             if prepared.limitation is not None:
                 identity = OccurrenceId(("root",))
@@ -355,21 +352,22 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
                         SearchCompletion.UNSUPPORTED,
                         optimal=False,
                         work_used=0,
-                        work_limit=request.search_budget,
+                        work_limit=options.work_limit if options is not None else request.search_budget,
                         violations=(UnsupportedCapability(identity, prepared.limitation),),
                         unsupported=(identity,),
                     )
                 )
             document = prepared.document
-            options = CompositionOptions(
-                automatic=True,
-                work_limit=(
-                    max(CompositionOptions().work_limit, min(2_000_000, prepared.combinations * 200))
-                    if request.search_budget == DEFAULT_SEARCH_BUDGET
-                    else request.search_budget
-                ),
-            )
-        return cls(document, request, options, exact_replay)
+            if options is None:
+                options = CompositionOptions(
+                    automatic=True,
+                    work_limit=(
+                        max(CompositionOptions().work_limit, min(2_000_000, prepared.combinations * 200))
+                        if request.search_budget == DEFAULT_SEARCH_BUDGET
+                        else request.search_budget
+                    ),
+                )
+        return cls(document, request, options)
 
     def execute(
         self,
@@ -382,8 +380,6 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         # Route factories can change IDs without changing their callable identity.
         if has_routed_page(rendered):
             cache = None
-            memo = None
-        if not self.exact_replay:
             memo = None
         key = request.exact_key()
         if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:

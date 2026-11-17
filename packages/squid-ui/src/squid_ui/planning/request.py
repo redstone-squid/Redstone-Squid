@@ -114,6 +114,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             Identity(self.positions),
             Identity(self.nav),
             getattr(self.nav, "version", 0),
+            Identity(self.composition),
             self.search_budget,
         )
 
