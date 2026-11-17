@@ -215,6 +215,24 @@ class TestClassicBody:
         assert encoded == scene.Codec.dumps(scene.Codec.loads(encoded))
         assert json.loads(encoded)["body"]["kind"] == "classic_message"
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("colour", True), ("colour", "42"), ("title", 42), ("fields", "not an array")],
+    )
+    def test_embed_decode_rejects_wrong_wire_types(self, field: str, value: object) -> None:
+        raw = scene.Codec.to_dict(_classic_scene())
+        raw["body"]["embeds"][0][field] = value
+
+        with pytest.raises(scene.CodecError):
+            scene.Codec.from_dict(raw)
+
+    def test_embed_decode_requires_the_wire_field_flag(self) -> None:
+        raw = scene.Codec.to_dict(_classic_scene())
+        del raw["body"]["embeds"][0]["fields"][0]["inline"]
+
+        with pytest.raises(scene.CodecError):
+            scene.Codec.from_dict(raw)
+
     def test_both_bodies_validate_against_the_published_schema(self) -> None:
         jsonschema.validate(scene.Codec.to_dict(_scene()), scene.Codec.schema())
         jsonschema.validate(scene.Codec.to_dict(_classic_scene()), scene.Codec.schema())

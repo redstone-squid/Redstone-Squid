@@ -6,6 +6,8 @@ import math
 from copy import deepcopy
 from typing import Any, cast
 
+from pydantic import TypeAdapter, ValidationError
+
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.emoji import Emoji
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
@@ -22,10 +24,6 @@ from squid_ui.scene.model import (
     ComponentsV2,
     Control,
     Embed,
-    EmbedAuthor,
-    EmbedField,
-    EmbedFooter,
-    EmbedMedia,
     EntitySelect,
     Extension,
     File,
@@ -73,6 +71,7 @@ class CodecError(SquidUiError, ValueError):
 
 
 _json = JsonReader(CodecError)
+_embed_adapter = TypeAdapter(Embed)
 
 
 class Codec:
@@ -387,28 +386,7 @@ def _row_from_dict(raw: JsonObject) -> ClassicRow:
 
 
 def _embed_to_dict(embed: Embed) -> dict[str, Any]:
-    return {
-        "title": embed.title,
-        "url": embed.url,
-        "description": embed.description,
-        "fields": [{"name": field.name, "value": field.value, "inline": field.inline} for field in embed.fields],
-        "footer": None if embed.footer is None else {"text": embed.footer.text, "icon_url": embed.footer.icon_url},
-        "author": (
-            None
-            if embed.author is None
-            else {"name": embed.author.name, "url": embed.author.url, "icon_url": embed.author.icon_url}
-        ),
-        "colour": embed.colour,
-        "image": _media_to_dict(embed.image),
-        "thumbnail": _media_to_dict(embed.thumbnail),
-        "timestamp": embed.timestamp,
-    }
-
-
-def _media_to_dict(media: EmbedMedia | None) -> dict[str, Any] | None:
-    return (
-        None if media is None else {"url": media.url, "description": media.description, "asset_name": media.asset_name}
-    )
+    return cast(dict[str, Any], _embed_adapter.dump_python(embed, mode="json"))
 
 
 def _embed_from_dict(raw: JsonObject) -> Embed:
@@ -416,56 +394,15 @@ def _embed_from_dict(raw: JsonObject) -> Embed:
     if not isinstance(fields, list):
         msg = "embed fields must be an array"
         raise CodecError(msg)
-    colour = raw.get("colour")
-    if not (colour is None or (isinstance(colour, int) and not isinstance(colour, bool))):
-        msg = "embed colour must be an integer or null"
+    if any(not isinstance(field, dict) or "inline" not in field for field in fields):
+        msg = "embed fields must be objects with an inline flag"
         raise CodecError(msg)
-    footer = raw.get("footer")
-    author = raw.get("author")
-    return Embed(
-        title=_json.optional_string(raw, "title"),
-        url=_json.optional_string(raw, "url"),
-        description=_json.optional_string(raw, "description"),
-        fields=tuple(
-            EmbedField(
-                name=_json.string(_json.require_object(field), "name"),
-                value=_json.string(_json.require_object(field), "value"),
-                inline=_json.boolean(_json.require_object(field), "inline"),
-            )
-            for field in fields
-        ),
-        footer=(
-            None
-            if footer is None
-            else EmbedFooter(
-                text=_json.string(_json.require_object(footer), "text"),
-                icon_url=_json.optional_string(_json.require_object(footer), "icon_url"),
-            )
-        ),
-        author=(
-            None
-            if author is None
-            else EmbedAuthor(
-                name=_json.string(_json.require_object(author), "name"),
-                url=_json.optional_string(_json.require_object(author), "url"),
-                icon_url=_json.optional_string(_json.require_object(author), "icon_url"),
-            )
-        ),
-        colour=colour,
-        image=_media_from_dict(raw.get("image")),
-        thumbnail=_media_from_dict(raw.get("thumbnail")),
-        timestamp=_json.optional_string(raw, "timestamp"),
-    )
-
-
-def _media_from_dict(raw: object) -> EmbedMedia | None:
-    if raw is None:
-        return None
-    return EmbedMedia(
-        url=_json.string(_json.require_object(raw), "url"),
-        description=_json.optional_string(_json.require_object(raw), "description"),
-        asset_name=_json.optional_string(_json.require_object(raw), "asset_name"),
-    )
+    try:
+        # Strict Python validation requires an Embed instance. JSON mode validates
+        # its nested dataclasses while preserving the wire protocol's scalar types.
+        return _embed_adapter.validate_json(json.dumps(raw), strict=True)
+    except (TypeError, ValueError, ValidationError) as error:
+        raise CodecError(str(error)) from error
 
 
 def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> dict[str, Any]:
