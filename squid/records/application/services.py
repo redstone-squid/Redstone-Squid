@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from itertools import combinations, groupby, product
+from itertools import combinations, product
 
 import anyio
 
@@ -14,6 +14,7 @@ from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.door_categories import door_category_lookup, family_at_category
 from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
+from squid.records.application.history import reconstruct_history
 from squid.records.application.live import (
     DoorRecordLookup,
     LiveDoorRecord,
@@ -27,7 +28,6 @@ from squid.records.application.models import (
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
-    HolderHistoryEntry,
     PublicRecordDetail,
     PublishedTitle,
     QueueProcessSummary,
@@ -220,7 +220,7 @@ class RecordComputationService:
                         resolution=resolution,
                         history=()
                         if evidence is not None
-                        else _reconstruct_history(base_title, kind, category.candidates),
+                        else reconstruct_history(base_title, _timing_methods(kind), category.candidates),
                         history_complete=evidence is None
                         and all(candidate.completion_at is not None for candidate in category.candidates),
                         door_evidence=evidence,
@@ -793,48 +793,3 @@ def _resolve_record(
     candidates: Iterable[Candidate],
 ) -> TitleResolution:
     return resolve_record(base_title, candidates, _timing_methods(kind))
-
-
-def _reconstruct_history(
-    base_title: BaseTitle,
-    kind: BuildKind,
-    candidates: Sequence[Candidate],
-) -> tuple[HolderHistoryEntry, ...]:
-    """Reconstruct holder changes from today's facts and known completion dates.
-
-    Builds completed at the same time enter together. Undated builds are omitted,
-    and an unresolved comparison closes the previous period. A later resolved
-    comparison starts a new period, leaving the uncertain interval uncovered. These intervals are reconstructed evidence, not an audit
-    log of previously published results.
-    """
-    dated = sorted(
-        (candidate for candidate in candidates if candidate.completion_at is not None),
-        key=_known_completion,
-    )
-    active: list[Candidate] = []
-    periods: list[HolderHistoryEntry] = []
-    for completion_at, group in groupby(dated, key=_known_completion):
-        active.extend(group)
-        resolution = _resolve_record(base_title, kind, active)
-        if resolution.status is not ResolutionStatus.RESOLVED:
-            if periods and periods[-1].held_until is None:
-                periods[-1] = replace(periods[-1], held_until=completion_at)
-            continue
-        if periods and periods[-1].held_until is None and periods[-1].build_ids == resolution.holder_ids:
-            continue
-        if periods and periods[-1].held_until is None:
-            previous = periods[-1]
-            periods[-1] = replace(previous, held_until=completion_at)
-        periods.append(
-            HolderHistoryEntry(
-                build_ids=resolution.holder_ids,
-                held_from=completion_at,
-                held_until=None,
-            )
-        )
-    return tuple(periods)
-
-
-def _known_completion(candidate: Candidate) -> datetime:
-    assert candidate.completion_at is not None
-    return candidate.completion_at

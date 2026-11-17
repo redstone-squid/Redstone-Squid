@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from squid.records.application.services import _reconstruct_history
-from squid.records.domain.models import BaseTitle, BuildKind, Candidate, TimingVariant
+from squid.records.application.history import reconstruct_history
+from squid.records.domain.models import DOOR_TIMING_METHODS, BaseTitle, Candidate, TimingVariant
 
 
 def test_unresolved_comparison_closes_previous_holder_period() -> None:
@@ -14,7 +14,7 @@ def test_unresolved_comparison_closes_previous_holder_period() -> None:
         Candidate(3, completion_at=resolved, timing_variants=(TimingVariant((9, 2)),)),
     )
 
-    history = _reconstruct_history(BaseTitle.FASTEST, BuildKind.DOOR, candidates)
+    history = reconstruct_history(BaseTitle.FASTEST, DOOR_TIMING_METHODS, candidates)
 
     assert [period.build_ids for period in history] == [(1,), (3,)]
     assert history[0].held_until == uncertain
@@ -25,9 +25,9 @@ def test_unresolved_comparison_closes_previous_holder_period() -> None:
 def test_unresolved_final_comparison_does_not_leave_a_current_holder() -> None:
     early = datetime(2020, 1, 1, tzinfo=UTC)
     uncertain = datetime(2021, 1, 1, tzinfo=UTC)
-    history = _reconstruct_history(
+    history = reconstruct_history(
         BaseTitle.FASTEST,
-        BuildKind.DOOR,
+        DOOR_TIMING_METHODS,
         (
             Candidate(1, completion_at=early, timing_variants=(TimingVariant((10, 2)),)),
             Candidate(2, completion_at=uncertain, timing_variants=(TimingVariant((10, None)),)),
