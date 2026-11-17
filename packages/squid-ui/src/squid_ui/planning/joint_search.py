@@ -96,30 +96,6 @@ class _Partitions[RenderTargetT, ContextT, PayloadT]:
     repair: bool = False
 
 
-def _candidate[RenderTargetT, ContextT, PayloadT](
-    occurrence: SemanticOccurrence[RenderTargetT, ContextT],
-    choices: Mapping[OccurrenceId, RealizationOffer[RenderTargetT, ContextT, PayloadT]],
-    context: PlanningContext,
-) -> CandidateComposition[RenderTargetT, ContextT, PayloadT]:
-    context.work.consume()
-    offer = choices[occurrence.identity]
-    return CandidateComposition(offer, tuple(_candidate(child, choices, context) for child in offer.children))
-
-
-def _region_trees[RenderTargetT, ContextT, PayloadT](
-    root: FragmentTree[RenderTargetT, ContextT, PayloadT], context: PlanningContext
-) -> tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]:
-    found: list[FragmentTree[RenderTargetT, ContextT, PayloadT]] = []
-    pending = [root]
-    while pending:
-        context.work.consume()
-        part = pending.pop()
-        if part.candidate.offer.region is not None:
-            found.append(part)
-        pending.extend(reversed(part.children))
-    return tuple(found)
-
-
 class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT, OutputT]:
     """One run of `search_composition`, with the queue and bookkeeping its phases share.
 
@@ -180,6 +156,28 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         ] = {}
         self.discovery_owners: dict[int, SemanticOccurrence[RenderTargetT, ContextT]] = {}
         self.repair_started = False
+
+    def _candidate(
+        self,
+        occurrence: SemanticOccurrence[RenderTargetT, ContextT],
+        choices: Mapping[OccurrenceId, RealizationOffer[RenderTargetT, ContextT, PayloadT]],
+    ) -> CandidateComposition[RenderTargetT, ContextT, PayloadT]:
+        self.context.work.consume()
+        offer = choices[occurrence.identity]
+        return CandidateComposition(offer, tuple(self._candidate(child, choices) for child in offer.children))
+
+    def _region_trees(
+        self, root: FragmentTree[RenderTargetT, ContextT, PayloadT]
+    ) -> tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]:
+        found: list[FragmentTree[RenderTargetT, ContextT, PayloadT]] = []
+        pending = [root]
+        while pending:
+            self.context.work.consume()
+            part = pending.pop()
+            if part.candidate.offer.region is not None:
+                found.append(part)
+            pending.extend(reversed(part.children))
+        return tuple(found)
 
     def run(self) -> JointResult[OutputT]:
         try:
@@ -334,8 +332,8 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         choices = {offer.occurrence.identity: offer for offer, _ in task.choices}
         if self.selected.keys() - choices.keys():
             return
-        candidate = _candidate(self.root, choices, self.context)
-        regions = _region_trees(fragment_tree(candidate, self.context), self.context)
+        candidate = self._candidate(self.root, choices)
+        regions = self._region_trees(fragment_tree(candidate, self.context))
         self.seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
         if self.fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
             return

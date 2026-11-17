@@ -111,15 +111,30 @@ class ActionPage[BodyT: scene.Body]:
             PageBindings(MappingProxyType(live), result.form_bindings, result.form_plans, result.resources),
         )
 
+    @staticmethod
+    def _bind_action(
+        slot: ActionSlot, controls: Mapping[str, ActionControl[Any]], *, key: str | None = None
+    ) -> ActionBinding:
+        control = controls[slot.key]
+        return ActionBinding(
+            slot.key if key is None else key,
+            control.on_trigger,
+            control.mode,
+            guard=control.guard,
+            busy=control.busy,
+            label=control.label,
+            record=control.record,
+        )
+
     def bind(self, controls: Mapping[str, ActionControl[Any]], frontend: str, live: PageBindings) -> PlanResult[BodyT]:
         bindings = dict(live.actions)
         for key, template in self.bindings.items():
             match template:
                 case ActionSlot():
-                    bindings[key] = _bind_action(template, controls)
+                    bindings[key] = self._bind_action(template, controls)
                 case ActionGroupSlot():
                     routes = MappingProxyType(
-                        {key: _bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
+                        {key: self._bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
                     )
                     bindings[key] = ActionBinding(template.key, RouteSelection(routes), template.mode, routes=routes)
         prepared = _HandlerBinder(frontend).actions(bindings)
@@ -134,38 +149,6 @@ class ActionPage[BodyT: scene.Body]:
             cost=self.cost,
             effects=self.effects,
         )
-
-
-def _bind_action(
-    slot: ActionSlot, controls: Mapping[str, ActionControl[Any]], *, key: str | None = None
-) -> ActionBinding:
-    control = controls[slot.key]
-    return ActionBinding(
-        slot.key if key is None else key,
-        control.on_trigger,
-        control.mode,
-        guard=control.guard,
-        busy=control.busy,
-        label=control.label,
-        record=control.record,
-    )
-
-
-def _projection_weight(result: PlanResult) -> int:
-    # Borrowed application objects behind handlers/providers belong to the owner.
-    def binding_weight(binding: ActionBinding) -> int:
-        return (
-            sys.getsizeof(binding)
-            + 128
-            + sum(len(key.encode()) + binding_weight(route) for key, route in binding.routes.items())
-        )
-
-    return (
-        len(scene.Codec.dumps(result.scene).encode())
-        + sys.getsizeof(result)
-        + 256
-        + sum(len(key.encode()) + binding_weight(binding) for key, binding in result.bindings.items())
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,13 +187,30 @@ class ActionAllocation[BodyT: scene.Body]:
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
         return self.source.visible(coordinates)
 
+    @staticmethod
+    def _projection_weight(result: PlanResult) -> int:
+        # Borrowed application objects behind handlers/providers belong to the owner.
+        def binding_weight(binding: ActionBinding) -> int:
+            return (
+                sys.getsizeof(binding)
+                + 128
+                + sum(len(key.encode()) + binding_weight(route) for key, route in binding.routes.items())
+            )
+
+        return (
+            len(scene.Codec.dumps(result.scene).encode())
+            + sys.getsizeof(result)
+            + 256
+            + sum(len(key.encode()) + binding_weight(binding) for key, binding in result.bindings.items())
+        )
+
     def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> PlanResult[BodyT]:
         result = self.source.select(coordinates)
         if (cached := self._cache.get(result)) is not None:
             return cached
         projected = result.bind(self.controls, self.frontend, self.live[result.slot])
         # Failed frontend binding must not publish a partially prepared projection.
-        self._cache.put(result, projected, weight=_projection_weight(projected))
+        self._cache.put(result, projected, weight=self._projection_weight(projected))
         return projected
 
 
