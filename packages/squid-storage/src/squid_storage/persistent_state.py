@@ -102,6 +102,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
                 msg = "reactive factory reused one object for different keys"
                 raise ValueError(msg)
             values = await self.store.get(self.slot, scope)
+            # Closing or cancellation can stop the worker while storage is awaited.
+            # Never publish a handle whose commits would have no persistence worker.
+            if self._closing or not self._running:
+                msg = "persisted pool stopped while loading a model"
+                raise RuntimeError(msg)
             if values is not None:
                 restore_state(created, values)
             # The load lock covers construction and hydration. Publish only a fully

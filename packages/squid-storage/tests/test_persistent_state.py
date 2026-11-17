@@ -464,3 +464,29 @@ async def test_reload_waits_for_retired_writes(retire_all: bool, slot: Slot[str,
             assert reloaded[0] is not original
             assert reloaded[0].theme == "light"
             await pool.close()
+
+
+async def test_shutdown_during_hydration_does_not_publish_a_handle(slot: Slot[str, Mapping[str, object]]) -> None:
+    entered, resume = asyncio.Event(), asyncio.Event()
+
+    class PausedStore(MemoryScopedStore):
+        @override
+        async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None:
+            entered.set()
+            await resume.wait()
+            return await super().get(slot, scope, touch=touch)
+
+    pool = PersistentStatePool(make_preferences, store=PausedStore(), slot=slot)
+
+    async def load() -> None:
+        with pytest.raises(RuntimeError, match="stopped while loading"):
+            await pool.load("guild")
+
+    with anyio.fail_after(2):
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(pool.run)
+            tasks.start_soon(load)
+            await entered.wait()
+            await pool.close()
+            resume.set()
+        assert pool.active() == {}
