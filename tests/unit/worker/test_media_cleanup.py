@@ -19,4 +19,4 @@ async def test_worker_schedules_media_cleanup_when_normalization_is_disabled() -
     assert cleanup_job.interval == 7
     await cleanup_job.operation()
     assert cleanup.processed == 1
-    assert all(job.name != "media-normalization" for job in supervisor.jobs)
+    assert all(job.name != "media-processing" for job in supervisor.jobs)

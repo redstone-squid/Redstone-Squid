@@ -1,4 +1,4 @@
-"""Media metadata, normalization reports, and submission resource limits."""
+"""Media metadata, processing reports, and submission resource limits."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -145,8 +145,8 @@ class MediaProbe:
         return self.audio_codec is not None
 
 
-class MediaNormalizationAction(StrEnum):
-    """Stable, non-sensitive actions included in normalization reports."""
+class MediaProcessingAction(StrEnum):
+    """Stable, non-sensitive actions included in processing reports."""
 
     # Historical actions remain readable in immutable reports.
     METADATA_REMOVED = "metadata_removed"
@@ -177,8 +177,8 @@ class MediaArtifact:
 
 
 @dataclass(frozen=True, slots=True)
-class MediaNormalizationReport:
-    """Input and output metadata, artifact checksums, and actions taken during normalization."""
+class MediaProcessingReport:
+    """Input and output metadata, artifact checksums, and actions taken during processing."""
 
     kind: MediaKind
     source_bytes: int
@@ -186,7 +186,7 @@ class MediaNormalizationReport:
     output_probe: MediaProbe
     output: MediaArtifact
     poster: MediaArtifact | None
-    actions: tuple[MediaNormalizationAction, ...]
+    actions: tuple[MediaProcessingAction, ...]
 
     def __post_init__(self) -> None:
         if self.source_bytes < 0:

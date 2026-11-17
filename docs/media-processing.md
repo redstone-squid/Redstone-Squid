@@ -7,8 +7,8 @@ Other image formats are rejected.
 Original videos can require a player that supports their source codec; processing does not guarantee browser playback.
 
 Submission media processing is optional and disabled by default. The API streams an owned draft upload into private
-object storage, and only the database worker claims the durable normalization job. Enabling the feature does not make
-raw or normalized object keys public.
+object storage, and only the database worker claims the durable processing job. Enabling the feature does not make
+raw or processed object keys public.
 
 ## Worker image contract
 
@@ -51,8 +51,8 @@ PATH-dependent executable choice. Enabling must reach both processes: the API ow
 worker owns FFmpeg execution. No media-specific secret is required.
 
 The worker retains the 60-second storage-cleanup loop even when `SQUID_MEDIA_ENABLED=false`, so disabling FFmpeg does
-not strand raw objects or previously discarded normalized artifacts. That dedicated loop is the sole cleanup owner;
-normalization batches never wait for object-store deletions during a storage incident.
+not strand raw objects or previously discarded processed artifacts. That dedicated loop is the sole cleanup owner;
+processing batches never wait for object-store deletions during a storage incident.
 
 Normalization workers heartbeat their queue claim while FFmpeg or object storage is busy. Publication leases are
 renewed with that heartbeat and retain a 48-hour crash-recovery envelope, covering all three sequential video objects
@@ -60,7 +60,7 @@ under the maximum configured S3 retry and timeout bounds. Cleanup revokes an exp
 partial objects, and periodically reconciles any committed artifact rows missing lifecycle metadata.
 
 The first deployment containing migration `f4a5b6c7d8e9` is not a rolling worker upgrade: stop every older media
-normalization worker before applying the migration, then start only lease-aware workers. Older binaries do not publish
+processing worker before applying the migration, then start only lease-aware workers. Older binaries do not publish
 leases, so no database cleanup design can fence a put they resume after its bytes were deleted. Media is default-off
 until the migration and new worker are both deployed; the 48-hour backfill grace protects rows committed before the
 quiesced upgrade, but it is not a substitute for quiescing an old in-flight publisher.
@@ -82,8 +82,8 @@ The image creates three non-root-owned locations:
 | Path | Purpose | Persistence |
 | --- | --- | --- |
 | `/var/lib/app/tmp` | API upload staging through `TMPDIR` | Ephemeral |
-| `/var/lib/app/media-tmp` | Worker input, normalized output, and poster staging | Ephemeral |
-| `/var/lib/app/objects` | Raw and normalized artifacts for the local backend | Durable shared volume |
+| `/var/lib/app/media-tmp` | Worker input, processed output, and poster staging | Ephemeral |
+| `/var/lib/app/objects` | Raw and processed artifacts for the local backend | Durable shared volume |
 
 Keep the two temporary directories private to one container. Do not share them between replicas. A terminated job can
 leave files only until its process-local temporary directory is cleaned up; durable retry state and raw input remain in
@@ -92,7 +92,7 @@ object storage.
 The hard source and output budgets are each 500 MiB per draft. During a single video job, the worker can transiently
 hold a 500 MiB source, a 500 MiB video, and a 500 MiB poster before the combined-output check rejects the excess.
 Provision at least 1.5 GiB of scratch disk per concurrent job, plus filesystem overhead. The local artifact volume can
-retain roughly 1 GiB per draft across raw and normalized objects, so size and monitor it independently.
+retain roughly 1 GiB per draft across raw and processed objects, so size and monitor it independently.
 
 ## CPU and memory limits
 
@@ -100,8 +100,8 @@ The defaults below are subprocess backstops, not a substitute for a container or
 
 | Setting | Default | Scope |
 | --- | ---: | --- |
-| `SQUID_WORKER_MEDIA_JOB_CONCURRENCY` | 1 | Simultaneous normalization jobs in one worker |
-| `SQUID_WORKER_MEDIA_CLEANUP_INTERVAL_SECONDS` | 60 s | Always-on raw and normalized object cleanup cadence |
+| `SQUID_WORKER_MEDIA_JOB_CONCURRENCY` | 1 | Simultaneous processing jobs in one worker |
+| `SQUID_WORKER_MEDIA_CLEANUP_INTERVAL_SECONDS` | 60 s | Always-on raw and processed object cleanup cadence |
 | `SQUID_MEDIA_THREADS` | 2 | FFmpeg threads per child process |
 | `SQUID_MEDIA_MEMORY_BYTES` | 2 GiB | Address-space limit per FFmpeg/ffprobe child |
 | `SQUID_MEDIA_CPU_SECONDS` | 540 s | CPU-time limit per child |
@@ -125,7 +125,7 @@ memory and time limits.
 The focused static contract test is:
 
 ```console
-uv run pytest tests/deployment/test_media_worker_image.py --no-cov
+uv run pytest tests/deployment/test_media_worker_image.py -m "not docker" --no-cov
 ```
 
 To exercise the actual package snapshot and final user locally:

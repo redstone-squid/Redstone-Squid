@@ -11,7 +11,7 @@ use crate::transport::{ApiClient, ApiMethod, ApiRequest, ApiResponse, TransportE
 
 const MAXIMUM_MEDIA_ITEMS_SAFETY_BOUND: usize = 1_000;
 
-/// Source kind accepted by the normalization pipeline.
+/// Source kind accepted by the processing pipeline.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaKind {
     Image,
@@ -28,7 +28,7 @@ impl MediaKind {
     }
 }
 
-/// Server-advertised source and normalization budgets.
+/// Server-advertised source and processing budgets.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MediaLimits {
     pub max_upload_bytes: u64,
@@ -37,7 +37,7 @@ pub struct MediaLimits {
     pub max_output_bytes: u64,
 }
 
-/// Dimensions and content type reported for a normalized media artifact.
+/// Dimensions and content type reported for a processed media artifact.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MediaArtifact {
     pub role: String,
@@ -170,7 +170,7 @@ impl<'a> SubmissionMediaApi<'a> {
     /// Stream a file using a caller-provided upload ID and the advertised source-byte limit.
     ///
     /// Keep the file unchanged until this call returns. The response describes a processing
-    /// job; it does not mean normalization has finished.
+    /// job; it does not mean processing has finished.
     #[allow(clippy::too_many_arguments)]
     pub fn upload(
         &self,

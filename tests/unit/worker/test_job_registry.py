@@ -6,13 +6,13 @@ from typing import override
 import pytest
 
 from squid.config import WorkerConfig
-from squid.media.application.jobs import MediaNormalizationJobRunner
+from squid.media.application.jobs import MediaProcessingJobRunner
 from squid.worker.app import WorkerJobSpec
 from squid.worker.rendering import SchematicPreviewWorker
 from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
 
 
-class MediaRunnerRecorder(MediaNormalizationJobRunner):
+class MediaRunnerRecorder(MediaProcessingJobRunner):
     """Record normalization batches captured during registry construction."""
 
     def __init__(self) -> None:
@@ -50,7 +50,7 @@ def test_worker_scheduling_and_readiness_derive_from_the_same_registry(media_ena
 
     registered_names = tuple(spec.name for spec in worker.job_specs)
     assert tuple(job.name for job in supervisor.jobs) == registered_names
-    assert ("media-normalization" in registered_names) is media_enabled
+    assert ("media-processing" in registered_names) is media_enabled
     assert supervisor.readiness_queries[-1] == frozenset(spec.name for spec in worker.job_specs if spec.critical)
     assert (
         supervisor.readiness_max_ages[-1]
@@ -75,7 +75,7 @@ async def test_media_job_captures_the_runner_registered_at_construction() -> Non
         services,
         config=WorkerConfig(media_job_concurrency=3),
     )
-    media_job = next(spec for spec in worker.job_specs if spec.name == "media-normalization")
+    media_job = next(spec for spec in worker.job_specs if spec.name == "media-processing")
 
     await media_job.run()
 

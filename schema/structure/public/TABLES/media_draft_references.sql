@@ -4,7 +4,7 @@ CREATE TABLE public.media_draft_references (
     discarded boolean DEFAULT false NOT NULL
 );
 
-COMMENT ON TABLE public.media_draft_references IS 'One independently discardable draft reference to a shared normalization job.';
+COMMENT ON TABLE public.media_draft_references IS 'One independently discardable draft reference to a shared processing job.';
 
 ALTER TABLE ONLY public.media_draft_references
     ADD CONSTRAINT media_draft_references_pkey PRIMARY KEY (draft_id, upload_id);

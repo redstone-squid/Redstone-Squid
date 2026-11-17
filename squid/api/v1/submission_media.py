@@ -1,7 +1,7 @@
 """Upload draft images and videos, then expose their processing status.
 
 The upload route checks draft ownership before streaming bytes to a private
-temporary file. Registration retains the source for background normalization;
+temporary file. Registration retains the source for background processing;
 the response reports the job's state, not a published media URL. These uploads
 enforce their own byte limits because they bypass the general body buffer.
 """
@@ -139,7 +139,7 @@ def _private_upload_directory() -> Iterator[Path]:
 async def list_draft_media(
     draft_id: FromPath[UUID], request: Request, attachments: DraftAttachments, account_id: AccountId
 ) -> Response[DraftMediaListResponse]:
-    """List all retained states and safe normalized facts for an owned draft."""
+    """List all retained states and safe processed facts for an owned draft."""
     response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")

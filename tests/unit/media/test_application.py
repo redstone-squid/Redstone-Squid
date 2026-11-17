@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 
 from squid.media.application import (
-    MediaNormalizationRequest,
-    MediaNormalizationResult,
-    MediaNormalizationService,
+    MediaProcessingRequest,
+    MediaProcessingResult,
+    MediaProcessingService,
 )
 from squid.media.domain import (
     MediaArtifact,
@@ -13,9 +13,9 @@ from squid.media.domain import (
     MediaKind,
     MediaLimitMeasure,
     MediaLimits,
-    MediaNormalizationAction,
-    MediaNormalizationReport,
     MediaProbe,
+    MediaProcessingAction,
+    MediaProcessingReport,
 )
 from squid.media.errors import InvalidMediaError, MediaFailureReason, MediaLimitExceededError
 
@@ -53,14 +53,14 @@ def artifact(
     )
 
 
-class FakeMediaNormalizer:
+class FakeMediaProcessor:
     """Return probe facts and reports without writing outputs; optionally mutate the source file."""
 
     def __init__(self, inspected: MediaProbe) -> None:
         self.inspected = inspected
         self.probe_calls: list[Path] = []
-        self.normalize_calls: list[tuple[MediaNormalizationRequest, int, MediaLimits]] = []
-        self.discard_calls: list[MediaNormalizationResult] = []
+        self.normalize_calls: list[tuple[MediaProcessingRequest, int, MediaLimits]] = []
+        self.discard_calls: list[MediaProcessingResult] = []
         self.closed = False
         self.change_on_probe = False
         self.change_on_normalize = False
@@ -72,28 +72,28 @@ class FakeMediaNormalizer:
             source_path.write_bytes(b"changed during probe")
         return self.inspected
 
-    async def normalize(
+    async def process(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
+    ) -> MediaProcessingResult:
         self.normalize_calls.append((request, source_bytes, limits))
         if self.change_on_normalize:
-            request.source_path.write_bytes(b"changed during normalization")
+            request.source_path.write_bytes(b"changed during processing")
         poster = artifact(content_type="image/jpeg", byte_size=10) if request.poster_path is not None else None
-        report = MediaNormalizationReport(
+        report = MediaProcessingReport(
             kind=request.kind,
             source_bytes=source_bytes,
             input_probe=probe,
             output_probe=probe,
             output=artifact(byte_size=self.output_bytes),
             poster=poster,
-            actions=(MediaNormalizationAction.METADATA_REMOVED,),
+            actions=(MediaProcessingAction.METADATA_REMOVED,),
         )
-        return MediaNormalizationResult(
+        return MediaProcessingResult(
             output_path=request.output_path,
             poster_path=request.poster_path,
             report=report,
@@ -102,14 +102,14 @@ class FakeMediaNormalizer:
     async def aclose(self) -> None:
         self.closed = True
 
-    async def discard(self, result: MediaNormalizationResult) -> None:
+    async def discard(self, result: MediaProcessingResult) -> None:
         self.discard_calls.append(result)
 
 
-def request(tmp_path: Path) -> MediaNormalizationRequest:
+def request(tmp_path: Path) -> MediaProcessingRequest:
     source = tmp_path / "source.mp4"
     source.write_bytes(b"video")
-    return MediaNormalizationRequest(
+    return MediaProcessingRequest(
         kind=MediaKind.VIDEO,
         source_path=source,
         output_path=tmp_path / "normalized.mp4",
@@ -117,57 +117,57 @@ def request(tmp_path: Path) -> MediaNormalizationRequest:
     )
 
 
-async def test_service_validates_then_delegates_to_the_normalizer(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
-    service = MediaNormalizationService(normalizer)
+async def test_service_validates_then_delegates_to_the_processor(tmp_path: Path) -> None:
+    processor = FakeMediaProcessor(video_probe())
+    service = MediaProcessingService(processor)
     command = request(tmp_path)
 
-    result = await service.normalize(command)
+    result = await service.process(command)
 
     assert result.report.source_bytes == len(b"video")
-    assert normalizer.probe_calls == [command.source_path]
-    assert normalizer.normalize_calls == [(command, len(b"video"), service.limits)]
+    assert processor.probe_calls == [command.source_path]
+    assert processor.normalize_calls == [(command, len(b"video"), service.limits)]
 
 
 async def test_source_byte_budget_is_checked_before_probe(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
-    service = MediaNormalizationService(normalizer, limits=MediaLimits(max_source_bytes=4))
+    processor = FakeMediaProcessor(video_probe())
+    service = MediaProcessingService(processor, limits=MediaLimits(max_source_bytes=4))
     command = request(tmp_path)
 
     with pytest.raises(MediaLimitExceededError) as raised:
-        await service.normalize(command)
+        await service.process(command)
 
     assert raised.value.violations[0].measure is MediaLimitMeasure.SOURCE_BYTES
-    assert normalizer.probe_calls == []
+    assert processor.probe_calls == []
 
 
 async def test_source_changes_between_probe_and_decode_are_rejected(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
-    normalizer.change_on_probe = True
-    service = MediaNormalizationService(normalizer)
+    processor = FakeMediaProcessor(video_probe())
+    processor.change_on_probe = True
+    service = MediaProcessingService(processor)
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(request(tmp_path))
+        await service.process(request(tmp_path))
 
     assert raised.value.reason is MediaFailureReason.SOURCE_CHANGED
-    assert normalizer.discard_calls == []
-    assert normalizer.normalize_calls == []
+    assert processor.discard_calls == []
+    assert processor.normalize_calls == []
 
 
 async def test_source_changes_during_decode_are_rejected(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
-    normalizer.change_on_normalize = True
-    service = MediaNormalizationService(normalizer)
+    processor = FakeMediaProcessor(video_probe())
+    processor.change_on_normalize = True
+    service = MediaProcessingService(processor)
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(request(tmp_path))
+        await service.process(request(tmp_path))
 
     assert raised.value.reason is MediaFailureReason.SOURCE_CHANGED
-    assert len(normalizer.discard_calls) == 1
+    assert len(processor.discard_calls) == 1
 
 
 def test_submission_wide_image_and_video_counts_are_enforced() -> None:
-    service = MediaNormalizationService(FakeMediaNormalizer(video_probe()))
+    service = MediaProcessingService(FakeMediaProcessor(video_probe()))
 
     with pytest.raises(MediaLimitExceededError) as raised:
         service.validate_batch(MediaBatchTotals(image_count=11, video_count=3))
@@ -175,16 +175,16 @@ def test_submission_wide_image_and_video_counts_are_enforced() -> None:
     assert raised.value.violations[0].measure is MediaLimitMeasure.IMAGE_COUNT
 
 
-async def test_normalizer_output_budget_is_checked_before_result_is_returned(tmp_path: Path) -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
-    normalizer.output_bytes = 101
-    service = MediaNormalizationService(normalizer, limits=MediaLimits(max_output_bytes=100))
+async def test_processor_output_budget_is_checked_before_result_is_returned(tmp_path: Path) -> None:
+    processor = FakeMediaProcessor(video_probe())
+    processor.output_bytes = 101
+    service = MediaProcessingService(processor, limits=MediaLimits(max_output_bytes=100))
 
     with pytest.raises(MediaLimitExceededError) as raised:
-        await service.normalize(request(tmp_path))
+        await service.process(request(tmp_path))
 
     assert raised.value.violations[0].measure is MediaLimitMeasure.OUTPUT_BYTES
-    assert len(normalizer.discard_calls) == 1
+    assert len(processor.discard_calls) == 1
 
 
 async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
@@ -196,9 +196,9 @@ async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
         source.symlink_to(target)
     except OSError as error:
         pytest.skip(f"creating symlinks is not permitted here: {error}")
-    normalizer = FakeMediaNormalizer(video_probe())
-    service = MediaNormalizationService(normalizer)
-    command = MediaNormalizationRequest(
+    processor = FakeMediaProcessor(video_probe())
+    service = MediaProcessingService(processor)
+    command = MediaProcessingRequest(
         kind=MediaKind.VIDEO,
         source_path=source,
         output_path=tmp_path / "normalized.mp4",
@@ -206,17 +206,17 @@ async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(command)
+        await service.process(command)
 
     assert raised.value.reason is MediaFailureReason.SOURCE_NOT_REGULAR
 
 
-async def test_service_closes_the_normalizer_port() -> None:
-    normalizer = FakeMediaNormalizer(video_probe())
+async def test_service_closes_the_processor_port() -> None:
+    processor = FakeMediaProcessor(video_probe())
 
-    await MediaNormalizationService(normalizer).aclose()
+    await MediaProcessingService(processor).aclose()
 
-    assert normalizer.closed
+    assert processor.closed
 
 
 @pytest.mark.parametrize(
@@ -229,6 +229,6 @@ async def test_service_closes_the_normalizer_port() -> None:
     ],
 )
 async def test_original_video_does_not_require_encoder_constraints(tmp_path: Path, inspected: MediaProbe) -> None:
-    normalizer = FakeMediaNormalizer(inspected)
-    await MediaNormalizationService(normalizer).normalize(request(tmp_path))
-    assert len(normalizer.normalize_calls) == 1
+    processor = FakeMediaProcessor(inspected)
+    await MediaProcessingService(processor).process(request(tmp_path))
+    assert len(processor.normalize_calls) == 1

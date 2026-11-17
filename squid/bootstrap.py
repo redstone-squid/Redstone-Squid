@@ -59,10 +59,10 @@ from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
 from squid.idempotency.infrastructure import IdempotencyResponseCipher
-from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService, MediaStorageCleanup
-from squid.media.application.services import MediaNormalizationService
+from squid.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
+from squid.media.application.services import MediaProcessingService
 from squid.media.domain import MediaLimits
-from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits
+from squid.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -444,9 +444,9 @@ class _ServiceGraph:
         return store
 
     @cached_property
-    def media_job_service(self) -> MediaNormalizationJobService:
-        """Build durable media metadata services even when normalization is disabled."""
-        return MediaNormalizationJobService(
+    def media_job_service(self) -> MediaProcessingJobService:
+        """Build durable media metadata services even when processing is disabled."""
+        return MediaProcessingJobService(
             self.artifacts,
             uow_factory=self.uow_factory,
             limits=MediaLimits(),
@@ -454,7 +454,7 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def media_jobs(self) -> MediaNormalizationJobService | None:
+    def media_jobs(self) -> MediaProcessingJobService | None:
         if not self.config.media.enabled:
             return None
         return self.media_job_service
@@ -464,13 +464,13 @@ class _ServiceGraph:
         return MediaStorageCleanup(self.media_job_service, self.artifacts)
 
     @cached_property
-    def media_runner(self) -> MediaNormalizationJobRunner | None:
+    def media_runner(self) -> MediaProcessingJobRunner | None:
         jobs = self.media_jobs
         if jobs is None:
             return None
         media = self.config.media
-        normalization = MediaNormalizationService(
-            FfmpegMediaNormalizer(
+        processing = MediaProcessingService(
+            FfmpegMediaProcessor(
                 ffmpeg=media.ffmpeg,
                 ffprobe=media.ffprobe,
                 process_limits=MediaProcessLimits(
@@ -484,11 +484,11 @@ class _ServiceGraph:
             ),
             limits=jobs.limits,
         )
-        self.resources.push_async_callback(normalization.aclose)
-        return MediaNormalizationJobRunner(
+        self.resources.push_async_callback(processing.aclose)
+        return MediaProcessingJobRunner(
             jobs,
             self.artifacts,
-            normalization,
+            processing,
             working_directory=media.working_directory,
         )
 

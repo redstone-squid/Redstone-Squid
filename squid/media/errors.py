@@ -165,7 +165,7 @@ class DraftMediaUnavailableError(ServiceUnavailableError):
 class InvalidMediaError(ValidationError):
     """The source file or requested transformation fails media validation."""
 
-    default_message = tr(t"media-file-normalization-failed = The media file cannot be normalized.")
+    default_message = tr(t"media-file-processing-failed = The media file cannot be normalized.")
     default_code = ErrorCode.INVALID_REQUEST
     default_resource = "media"
     default_end_user_action = tr(

@@ -1,6 +1,6 @@
-"""Upload, normalization, and object-retention records.
+"""Upload, processing, and object-retention records.
 
-Each upload has one normalization job and, after completion, artifact records
+Each upload has one processing job and, after completion, artifact records
 for its output files and report. Draft references let several drafts share that
 job and discard their attachments independently. Artifact object records track
 the stored bytes by key, while publication records protect ongoing writes from
@@ -189,8 +189,8 @@ class MediaArtifactPublicationRecord(Base, kw_only=True):
     )
 
 
-class MediaNormalizationJobRecord(QueueColumns, DeadLetterColumns, Base, kw_only=True):
-    """A normalization request retained after completion, failure, or discard for cleanup and retries."""
+class MediaProcessingJobRecord(QueueColumns, DeadLetterColumns, Base, kw_only=True):
+    """A processing request retained after completion, failure, or discard for cleanup and retries."""
 
     __tablename__ = "media_normalization_jobs"
     __table_args__ = (
@@ -239,7 +239,7 @@ class MediaNormalizationJobRecord(QueueColumns, DeadLetterColumns, Base, kw_only
 
 
 class MediaDraftReference(Base, kw_only=True):
-    """One independently discardable draft reference to a shared normalization job."""
+    """One independently discardable draft reference to a shared processing job."""
 
     __tablename__ = "media_draft_references"
     __table_args__ = (Index("media_draft_references_upload_idx", "upload_id"),)

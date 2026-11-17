@@ -1,1 +1,1 @@
-"""Bounded media inspection and normalization."""
+"""Bounded media inspection and processing."""

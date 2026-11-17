@@ -15,7 +15,7 @@ CREATE TABLE public.media_normalization_jobs (
     CONSTRAINT media_normalization_jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'claimed'::text, 'completed'::text, 'dead'::text, 'discarded'::text])))
 );
 
-COMMENT ON TABLE public.media_normalization_jobs IS 'A normalization request retained after completion, failure, or discard for cleanup and retries.';
+COMMENT ON TABLE public.media_normalization_jobs IS 'A processing request retained after completion, failure, or discard for cleanup and retries.';
 
 ALTER TABLE ONLY public.media_normalization_jobs
     ADD CONSTRAINT media_normalization_jobs_pkey PRIMARY KEY (upload_id);

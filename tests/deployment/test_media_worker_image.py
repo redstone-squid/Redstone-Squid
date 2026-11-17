@@ -192,7 +192,7 @@ def test_backend_build_context_excludes_independent_clients() -> None:
 
 
 def test_documented_media_settings_and_resource_arithmetic_are_complete() -> None:
-    documentation = _read("docs/media-normalization.md")
+    documentation = _read("docs/media-processing.md")
     example_environment = _read(".env.example")
     required_names = {
         "SQUID_MEDIA_ENABLED",

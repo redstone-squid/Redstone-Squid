@@ -29,10 +29,10 @@ from sqlalchemy import text
 from squid.artifacts import ArtifactStore
 from squid.artifacts.infrastructure import create_artifact_store
 from squid.config import load_bot_process_config
-from squid.media.application import MediaNormalizationRequest, MediaNormalizationService
+from squid.media.application import MediaProcessingRequest, MediaProcessingService
 from squid.media.application.jobs import _encode_report
 from squid.media.domain import MediaKind
-from squid.media.infrastructure import FfmpegMediaNormalizer
+from squid.media.infrastructure import FfmpegMediaProcessor
 from squid.persistence.engine import DatabaseEngine
 
 INVENTORY = """
@@ -228,7 +228,7 @@ async def run(arguments: argparse.Namespace) -> int:
     config = load_bot_process_config()
     db = DatabaseEngine(config.runtime.database)
     store = create_artifact_store(config.runtime.object_storage)
-    normalizer = MediaNormalizationService(FfmpegMediaNormalizer())
+    processor = MediaProcessingService(FfmpegMediaProcessor())
     failed = 0
     try:
         async with db.async_session() as session:
@@ -262,8 +262,8 @@ async def run(arguments: argparse.Namespace) -> int:
                         root = Path(directory)
                         source = root / "source"
                         await recover_source(row, source, store, client, channels=channels, messages=messages)
-                        result = await normalizer.normalize(
-                            MediaNormalizationRequest(
+                        result = await processor.process(
+                            MediaProcessingRequest(
                                 kind=MediaKind(row["kind"]),
                                 source_path=source,
                                 output_path=root / "output",
@@ -310,7 +310,7 @@ async def run(arguments: argparse.Namespace) -> int:
                     for row in rows[start : start + arguments.concurrency]:
                         tasks.start_soon(repair, row)
     finally:
-        await normalizer.aclose()
+        await processor.aclose()
         await store.aclose()
         await db.close()
     return int(failed > 0)

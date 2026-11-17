@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft
-from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaProcessingJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.schematics.application import SchematicPublication
 from squid.schematics.domain.models import SchematicLicense, SchematicVisibility
@@ -392,10 +392,10 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         rows = tuple(
             (
                 await session.execute(
-                    select(MediaUploadRecord.id, MediaNormalizationJobRecord.status)
+                    select(MediaUploadRecord.id, MediaProcessingJobRecord.status)
                     .outerjoin(
-                        MediaNormalizationJobRecord,
-                        MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                        MediaProcessingJobRecord,
+                        MediaProcessingJobRecord.upload_id == MediaUploadRecord.id,
                     )
                     .where(media_for_draft(draft_id))
                     .with_for_update(of=MediaUploadRecord)

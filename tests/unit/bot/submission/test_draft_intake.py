@@ -15,7 +15,7 @@ import pytest
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.media.application.jobs import MediaNormalizationJobService
+from squid.media.application.jobs import MediaProcessingJobService
 from squid.media.domain import MediaLimits
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
@@ -29,7 +29,7 @@ from tests.support.services import bot_services
 class Intake(SubmissionAttachmentIntake):
     def __init__(self) -> None:
         self._schematics = cast(DraftSchematicService, MagicMock(max_bytes=SCHEMATIC_FILE_SCHEMA_MAX_BYTES))
-        self._media = cast(MediaNormalizationJobService, MagicMock(limits=MediaLimits()))
+        self._media = cast(MediaProcessingJobService, MagicMock(limits=MediaLimits()))
         self.files: dict[UUID, SuppliedAttachment] = {}
         self.registered: list[bytes] = []
 
@@ -116,7 +116,7 @@ async def test_download_uses_limit_for_file_type(filename: str) -> None:
 @pytest.mark.parametrize("declared_size", [4, 9])
 async def test_retained_download_enforces_configured_limit(monkeypatch: pytest.MonkeyPatch, declared_size: int) -> None:
     intake = Intake()
-    intake._media = cast(MediaNormalizationJobService, MagicMock(limits=MediaLimits(max_source_bytes=8)))
+    intake._media = cast(MediaProcessingJobService, MagicMock(limits=MediaLimits(max_source_bytes=8)))
     source = SubmissionSourceFile(
         uuid4(), "clip.mp4", "video/mp4", "https://cdn.discordapp.com/clip.mp4", declared_size
     )

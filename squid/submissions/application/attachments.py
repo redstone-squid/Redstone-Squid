@@ -19,7 +19,7 @@ from squid.core.i18n import tr
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
-    MediaNormalizationJobService,
+    MediaProcessingJobService,
     StagedMediaUploadSubmission,
 )
 from squid.media.domain import MediaKind, MediaLimits
@@ -195,7 +195,7 @@ class DraftAttachmentService:
 
 def draft_attachment_service(
     drafts: SubmissionDraftService,
-    jobs: MediaNormalizationJobService | None,
+    jobs: MediaProcessingJobService | None,
 ) -> DraftAttachmentService | None:
     """Build the API attachment boundary only when media processing is enabled."""
     return None if jobs is None else DraftAttachmentService(drafts, jobs)

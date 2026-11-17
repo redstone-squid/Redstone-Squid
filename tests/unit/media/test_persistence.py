@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import dialect
 
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
-from squid.media.models import MediaArtifactRecord, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaArtifactRecord, MediaProcessingJobRecord, MediaUploadRecord
 from squid.persistence.types import StrEnumText
 from tests.support.schema import model_table
 
@@ -25,7 +25,7 @@ def _checked_values(table: Table, constraint_name: str) -> set[str]:
 def test_media_enum_mappings_match_database_checks() -> None:
     uploads = model_table(MediaUploadRecord)
     artifacts = model_table(MediaArtifactRecord)
-    jobs = model_table(MediaNormalizationJobRecord)
+    jobs = model_table(MediaProcessingJobRecord)
 
     assert _checked_values(uploads, "media_uploads_kind_check") == {kind.value for kind in MediaKind}
     assert _checked_values(artifacts, "media_artifacts_role_check") == {role.value for role in MediaArtifactRole}
@@ -35,7 +35,7 @@ def test_media_enum_mappings_match_database_checks() -> None:
 def test_media_checked_text_columns_round_trip_as_domain_enums() -> None:
     kind_type = cast(StrEnumText[MediaKind], MediaUploadRecord.kind.type)
     role_type = cast(StrEnumText[MediaArtifactRole], MediaArtifactRecord.role.type)
-    status_type = cast(StrEnumText[MediaJobStatus], MediaNormalizationJobRecord.status.type)
+    status_type = cast(StrEnumText[MediaJobStatus], MediaProcessingJobRecord.status.type)
     postgres = dialect()
 
     assert kind_type.process_result_value("video", postgres) is MediaKind.VIDEO

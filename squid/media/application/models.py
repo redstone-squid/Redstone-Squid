@@ -1,15 +1,15 @@
-"""Application-level media normalization results."""
+"""Application-level media processing results."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from squid.media.domain.models import MediaNormalizationReport
+from squid.media.domain.models import MediaProcessingReport
 
 
 @dataclass(frozen=True, slots=True)
-class MediaNormalizationResult:
+class MediaProcessingResult:
     """Normalized job-local files and their report, ready for verification and storage."""
 
     output_path: Path
     poster_path: Path | None
-    report: MediaNormalizationReport
+    report: MediaProcessingReport

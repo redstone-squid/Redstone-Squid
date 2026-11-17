@@ -16,7 +16,7 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
-from squid.media.application.jobs import MediaNormalizationJobRunner
+from squid.media.application.jobs import MediaProcessingJobRunner
 from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
 from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
@@ -173,7 +173,7 @@ class DatabaseWorker:
         if self._services.media_runner is not None:
             jobs.append(
                 job(
-                    "media-normalization",
+                    "media-processing",
                     self._config.media_job_interval_seconds,
                     partial(self._process_media_jobs, self._services.media_runner),
                 )
@@ -259,8 +259,8 @@ class DatabaseWorker:
         with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_renders.process_batch()
 
-    async def _process_media_jobs(self, runner: MediaNormalizationJobRunner) -> None:
-        with trace_span("squid.worker.media_normalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
+    async def _process_media_jobs(self, runner: MediaProcessingJobRunner) -> None:
+        with trace_span("squid.worker.media_processing", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
 
     async def _cleanup_media_storage(self) -> None:

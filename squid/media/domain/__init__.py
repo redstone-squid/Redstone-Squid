@@ -6,9 +6,9 @@ from squid.media.domain.models import (
     MediaKind,
     MediaLimitMeasure,
     MediaLimits,
-    MediaNormalizationAction,
-    MediaNormalizationReport,
     MediaProbe,
+    MediaProcessingAction,
+    MediaProcessingReport,
     MediaViolation,
 )
 
@@ -18,8 +18,8 @@ __all__ = [
     "MediaKind",
     "MediaLimitMeasure",
     "MediaLimits",
-    "MediaNormalizationAction",
-    "MediaNormalizationReport",
     "MediaProbe",
+    "MediaProcessingAction",
+    "MediaProcessingReport",
     "MediaViolation",
 ]

@@ -1,4 +1,4 @@
-"""Bounded FFmpeg/ffprobe media normalization adapter."""
+"""Bounded FFmpeg/ffprobe media processing adapter."""
 
 import asyncio
 import contextlib
@@ -24,16 +24,16 @@ try:
 except ImportError:  # pragma: no cover - Windows has no rlimits
     resource = None  # type: ignore[assignment]
 
-from squid.media.application.commands import MediaNormalizationRequest
-from squid.media.application.models import MediaNormalizationResult
+from squid.media.application.commands import MediaProcessingRequest
+from squid.media.application.models import MediaProcessingResult
 from squid.media.domain.models import (
     MediaArtifact,
     MediaKind,
     MediaLimitMeasure,
     MediaLimits,
-    MediaNormalizationAction,
-    MediaNormalizationReport,
     MediaProbe,
+    MediaProcessingAction,
+    MediaProcessingReport,
     MediaViolation,
 )
 from squid.media.errors import (
@@ -135,7 +135,7 @@ class MediaProcessLimits:
             raise ValueError(msg)
 
 
-class FfmpegMediaNormalizer:
+class FfmpegMediaProcessor:
     """Preserve raster images and videos, generating a JPEG thumbnail for videos.
 
     Each probe or encoding step runs in a separate subprocess. Outputs are staged
@@ -194,15 +194,15 @@ class FfmpegMediaNormalizer:
             raise InvalidMediaError(MediaFailureReason.PROBE_INVALID)
         return stdout
 
-    async def normalize(
+    async def process(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
-        """Produce normalized artifacts, committing them only after validation."""
+    ) -> MediaProcessingResult:
+        """Copy originals and generate video thumbnails, publishing after validation."""
         if request.kind is MediaKind.IMAGE:
             if probe.original_image_content_type is None:
                 raise InvalidMediaError(MediaFailureReason.FORMAT_UNSUPPORTED)
@@ -212,7 +212,7 @@ class FfmpegMediaNormalizer:
     async def aclose(self) -> None:
         """One-shot FFmpeg processes leave no reusable resources."""
 
-    async def discard(self, result: MediaNormalizationResult) -> None:
+    async def discard(self, result: MediaProcessingResult) -> None:
         """Remove job-local outputs after an application postflight failure."""
         try:
             result.output_path.unlink(missing_ok=True)
@@ -223,22 +223,22 @@ class FfmpegMediaNormalizer:
 
     async def _preserve_image(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
+    ) -> MediaProcessingResult:
         assert probe.original_image_content_type is not None
         with _staged_outputs((request.output_path, ".image")) as (temporary,):
             with CancelScope(shield=True):
                 await asyncio.to_thread(shutil.copyfile, request.source_path, temporary)
             size = _bounded_size(temporary, limits.max_output_bytes)
             artifact = _artifact(temporary, probe.original_image_content_type, probe, byte_size=size)
-        return MediaNormalizationResult(
+        return MediaProcessingResult(
             output_path=request.output_path,
             poster_path=None,
-            report=MediaNormalizationReport(
+            report=MediaProcessingReport(
                 kind=MediaKind.IMAGE,
                 source_bytes=source_bytes,
                 input_probe=probe,
@@ -251,12 +251,12 @@ class FfmpegMediaNormalizer:
 
     async def _preserve_video(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
+    ) -> MediaProcessingResult:
         assert request.poster_path is not None
         containers = set(probe.container_names)
         if "mp4" in containers:
@@ -286,13 +286,13 @@ class FfmpegMediaNormalizer:
             _validate_poster_output(poster_probe)
             output = _artifact(video, content_type, probe, byte_size=video_size)
             thumbnail = _artifact(poster, "image/jpeg", poster_probe, byte_size=poster_size)
-        actions = [MediaNormalizationAction.POSTER_GENERATED]
+        actions = [MediaProcessingAction.POSTER_GENERATED]
         if probe.has_audio:
-            actions.append(MediaNormalizationAction.AUDIO_PRESERVED)
-        return MediaNormalizationResult(
+            actions.append(MediaProcessingAction.AUDIO_PRESERVED)
+        return MediaProcessingResult(
             output_path=request.output_path,
             poster_path=request.poster_path,
-            report=MediaNormalizationReport(
+            report=MediaProcessingReport(
                 kind=MediaKind.VIDEO,
                 source_bytes=source_bytes,
                 input_probe=probe,
@@ -306,11 +306,16 @@ class FfmpegMediaNormalizer:
     async def _generate_poster(
         self, source_path: Path, poster_temporary: Path, probe: MediaProbe, limits: MediaLimits
     ) -> None:
-        color_arguments = await self._video_color_arguments(source_path, probe)
+        color_parameters = await self._thumbnail_color_parameters(source_path, probe)
         seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
         await self._run_ffmpeg(
-            self._input(source_path, color_arguments=color_arguments, seek=_format_milliseconds(seek_milliseconds))
+            self._input(source_path, seek=_format_milliseconds(seek_milliseconds))
             .video_stream(0)
+            .setparams(
+                colorspace=color_parameters.get("colorspace", -1),
+                color_primaries=color_parameters.get("color_primaries", -1),
+                color_trc=color_parameters.get("color_trc", -1),
+            )
             .scale(w="min(1920,iw)", h=-2)
             .output(
                 filename=poster_temporary,
@@ -334,33 +339,26 @@ class FfmpegMediaNormalizer:
             max_file_bytes=limits.max_output_bytes,
         )
 
-    async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> dict[str, str]:
+    async def _thumbnail_color_parameters(self, source_path: Path, probe: MediaProbe) -> dict[str, int]:
         if probe.video_codec != "h264":
             return {}
         data = _ColorProbeJson.model_validate_json(
             await self._probe_output(source_path, "stream=codec_type,color_space,color_primaries,color_transfer")
         )
         stream = next(stream for stream in data.streams if stream.codec_type == "video")
-        replacements = [
-            f"{option}=2"
+        # Reserved color tags can break thumbnail scaling. Mark only those decoded
+        # frame properties unspecified; the original bitstream stays untouched.
+        return {
+            option: 2
             for field, option in (
-                ("color_space", "matrix_coefficients"),
-                ("color_primaries", "colour_primaries"),
-                ("color_transfer", "transfer_characteristics"),
+                ("color_space", "colorspace"),
+                ("color_primaries", "color_primaries"),
+                ("color_transfer", "color_trc"),
             )
             if getattr(stream, field) == "reserved"
-        ]
-        # Reserved H.264 VUI values break FFmpeg's color conversion. Mark only
-        # those fields unspecified before decoding, preserving valid color tags.
-        # Remove padding before the metadata parser: some recorders emit filler
-        # packets without a trailing stop bit. Picture and timing data stay intact.
-        return (
-            {"bsf:v:0": "filter_units=remove_types=12,h264_metadata=" + ":".join(replacements)} if replacements else {}
-        )
+        }
 
-    def _input(
-        self, source_path: Path, *, color_arguments: dict[str, str] | None = None, seek: str | None = None
-    ) -> ffmpeg.AVStream:
+    def _input(self, source_path: Path, *, seek: str | None = None) -> ffmpeg.AVStream:
         return ffmpeg.input(
             source_path.absolute(),
             ss=seek,
@@ -368,7 +366,6 @@ class FfmpegMediaNormalizer:
             extra_options={
                 "protocol_whitelist": _INPUT_PROTOCOLS,
                 "protocol_blacklist": _NETWORK_PROTOCOLS,
-                **(color_arguments or {}),
             },
         )
 
@@ -547,7 +544,7 @@ def _temporary_destination(destination: Path, *, suffix: str) -> Path:
         raise InvalidMediaError(MediaFailureReason.OUTPUT_EXISTS)
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(prefix=".normalizing-", suffix=suffix, dir=destination.parent)
+        descriptor, name = tempfile.mkstemp(prefix=".processing-", suffix=suffix, dir=destination.parent)
         os.close(descriptor)
     except OSError as exc:
         raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="prepare_output") from exc

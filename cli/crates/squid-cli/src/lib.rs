@@ -104,7 +104,7 @@ enum Command {
         #[command(subcommand)]
         command: ErrorsCommand,
     },
-    /// Upload, inspect, wait for, and discard normalized draft media.
+    /// Upload, inspect, wait for, and discard processed draft media.
     Media {
         #[command(subcommand)]
         command: MediaCommand,
@@ -169,7 +169,7 @@ enum MediaCommand {
         /// Explicit image/* or video/* type when the file extension is unknown.
         #[arg(long)]
         content_type: Option<String>,
-        /// Wait for normalization to complete or fail.
+        /// Wait for processing to complete or fail.
         #[arg(long)]
         wait: bool,
         #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=3600))]

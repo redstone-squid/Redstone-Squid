@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from anyio import CancelScope, create_task_group, fail_after, sleep
 
-from squid.media.application.commands import MediaNormalizationRequest
+from squid.media.application.commands import MediaProcessingRequest
 from squid.media.domain.models import MediaKind, MediaLimits, MediaProbe
 from squid.media.errors import (
     InvalidMediaError,
@@ -19,7 +19,7 @@ from squid.media.errors import (
     MediaProcessingTimeoutError,
     MediaToolUnavailableError,
 )
-from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits, parse_ffprobe_output
+from squid.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits, parse_ffprobe_output
 from squid.media.infrastructure.ffmpeg import _staged_outputs
 
 
@@ -44,7 +44,7 @@ async def child_processes(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[list
 
 
 async def run_python_tool(script: str, *, timeout_seconds: float = 5) -> bytes:
-    return await FfmpegMediaNormalizer()._run(
+    return await FfmpegMediaProcessor()._run(
         sys.executable,
         ("-c", script),
         operation="test_tool",
@@ -204,10 +204,10 @@ def test_process_limits_reject_non_positive_guardrails() -> None:
 
 
 async def test_missing_ffprobe_has_a_stable_non_content_error() -> None:
-    normalizer = FfmpegMediaNormalizer(ffprobe="redstone-squid-missing-ffprobe")
+    processor = FfmpegMediaProcessor(ffprobe="redstone-squid-missing-ffprobe")
 
     with pytest.raises(MediaToolUnavailableError) as raised:
-        await normalizer.probe(Path("private-file-name.mp4"))
+        await processor.probe(Path("private-file-name.mp4"))
 
     assert raised.value.context == {
         "reason": "tool_unavailable",
@@ -216,12 +216,12 @@ async def test_missing_ffprobe_has_a_stable_non_content_error() -> None:
     assert "private-file-name" not in str(raised.value)
 
 
-async def test_cancelled_normalization_removes_every_staged_output(
+async def test_cancelled_processing_removes_every_staged_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    normalizer = FfmpegMediaNormalizer()
-    monkeypatch.setattr(normalizer, "_run", AsyncMock(side_effect=asyncio.CancelledError))
-    request = MediaNormalizationRequest(
+    processor = FfmpegMediaProcessor()
+    monkeypatch.setattr(processor, "_run", AsyncMock(side_effect=asyncio.CancelledError))
+    request = MediaProcessingRequest(
         kind=MediaKind.VIDEO,
         source_path=tmp_path / "source",
         output_path=tmp_path / "output",
@@ -239,7 +239,7 @@ async def test_cancelled_normalization_removes_every_staged_output(
 
     request.source_path.write_bytes(b"video")
     with pytest.raises(asyncio.CancelledError):
-        await normalizer.normalize(request, probe=probe, source_bytes=1, limits=MediaLimits())
+        await processor.process(request, probe=probe, source_bytes=1, limits=MediaLimits())
 
     assert list(tmp_path.iterdir()) == [request.source_path]
 
@@ -252,7 +252,7 @@ def test_failed_output_publication_rolls_back_only_owned_files(tmp_path: Path) -
         with _staged_outputs((output, ".mp4"), (poster, ".jpg")) as staged:
             for temporary in staged:
                 temporary.write_bytes(b"normalized")
-            # Another writer can claim the destination during normalization.
+            # Another writer can claim the destination during processing.
             poster.write_bytes(b"other writer")
 
     with pytest.raises(InvalidMediaError):
@@ -269,7 +269,7 @@ def test_failed_output_preparation_removes_earlier_staged_files(tmp_path: Path) 
     poster.write_bytes(b"existing")
 
     with pytest.raises(InvalidMediaError), _staged_outputs((output, ".mp4"), (poster, ".jpg")):
-        pytest.fail("An occupied destination must prevent normalization")
+        pytest.fail("An occupied destination must prevent processing")
 
     assert list(tmp_path.iterdir()) == [poster]
     assert poster.read_bytes() == b"existing"

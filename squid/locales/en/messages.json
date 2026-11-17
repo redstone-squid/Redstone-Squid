@@ -12208,8 +12208,8 @@
       "squid/media/domain/models.py:86"
     ]
   },
-  "media-file-normalization-failed": {
-    "fingerprint": "e827253de16028ad470e457189f513ccb50dad90f270928157c8f8c0e3309ecb",
+  "media-file-processing-failed": {
+    "fingerprint": "96ba54590f9c8c39b85aad1697658bfdf5a82d8fffa9890adfb1f9b1b35e5cfd",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -12223,7 +12223,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/application/commands.py:35"
+      "squid/media/application/commands.py:34"
     ]
   },
   "media-job-claim-expired": {
@@ -12278,7 +12278,7 @@
     ]
   },
   "media-media-attempts-positive": {
-    "fingerprint": "56f496d20ca08b8ff219460b03f8889b498cb5b6a40b7c87280ac59604002aa4",
+    "fingerprint": "c6989d59ab9a3d1e4080858052b35deb96e6a5d10fc8e568b1d1b994cc8e27c9",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -12400,8 +12400,8 @@
       "squid/media/errors.py:187"
     ]
   },
-  "media-media-queue-normalizer": {
-    "fingerprint": "0776a837680a0a94cc50165086a30c2c597e0eefaa5b9343a3c7fad839bf00af",
+  "media-media-queue-processor": {
+    "fingerprint": "30acf01d3b35f3dd0a9335ef2e7330dc4d5c0939810b82684eaa399d8e333096",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -12448,7 +12448,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/application/commands.py:30"
+      "squid/media/application/commands.py:29"
     ]
   },
   "media-media-upload-changed": {
@@ -12683,12 +12683,12 @@
     ]
   },
   "media-video-requires-poster": {
-    "fingerprint": "8787d052ad6ff4f9266ce42ae0c40a423c494aa834d8296b1da9a8a69140f943",
+    "fingerprint": "1dcdbf750063d1fdf62395927ba0f64fe58a19a6e86097dff83d7554a7e17316",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/media/application/commands.py:38"
+      "squid/media/application/commands.py:37"
     ]
   },
   "media-visual-media-artifacts": {

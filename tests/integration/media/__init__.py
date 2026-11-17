@@ -1,1 +1,1 @@
-"""Media normalization, shared draft references, and durable job persistence."""
+"""Media processing, shared draft references, and durable job persistence."""

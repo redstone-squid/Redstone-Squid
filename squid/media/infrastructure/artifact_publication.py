@@ -1,6 +1,6 @@
 """Keep normalized media objects while a worker writes or a completed job uses them.
 
-Publication here means writing bytes to object storage. Multiple normalization
+Publication here means writing bytes to object storage. Multiple processing
 jobs can produce the same content hash and therefore share an object key. A
 publication lease protects that key before a worker starts writing; a completed
 job's artifact reference keeps it afterwards, until the job is discarded. Cleanup
@@ -31,7 +31,7 @@ from squid.media.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
 )
 from squid.persistence.queue import retry_delay
 from squid.persistence.types import database_now
@@ -57,7 +57,7 @@ class PostgresArtifactPublicationRepository:
         """
         session = self._session()
         current_claim = await session.scalar(
-            select(MediaNormalizationJobRecord.upload_id).where(*_claim_filter(job)).with_for_update()
+            select(MediaProcessingJobRecord.upload_id).where(*_claim_filter(job)).with_for_update()
         )
         object_keys = tuple(sorted(artifact.object_key for artifact in artifacts))
         existing_objects = tuple(
@@ -181,12 +181,12 @@ class PostgresArtifactPublicationRepository:
         live_reference = exists(
             select(MediaArtifactRecord.id)
             .join(
-                MediaNormalizationJobRecord,
-                MediaNormalizationJobRecord.upload_id == MediaArtifactRecord.upload_id,
+                MediaProcessingJobRecord,
+                MediaProcessingJobRecord.upload_id == MediaArtifactRecord.upload_id,
             )
             .where(
                 MediaArtifactRecord.object_key == MediaArtifactObjectRecord.object_key,
-                MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED,
+                MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED,
             )
             .correlate(MediaArtifactObjectRecord)
         )
@@ -361,8 +361,8 @@ class PostgresArtifactPublicationRepository:
         )
         for upload_id, claim_token in identities:
             job = await session.scalar(
-                select(MediaNormalizationJobRecord)
-                .where(MediaNormalizationJobRecord.upload_id == upload_id)
+                select(MediaProcessingJobRecord)
+                .where(MediaProcessingJobRecord.upload_id == upload_id)
                 .with_for_update()
             )
             expired = await session.scalar(
@@ -401,7 +401,7 @@ def _publication_expiry() -> ColumnElement[Instant]:
 
 def _claim_filter(job: ClaimedMediaJob) -> tuple[Any, ...]:
     return (
-        MediaNormalizationJobRecord.upload_id == job.upload.id,
-        MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED,
-        MediaNormalizationJobRecord.claim_token == job.claim_token,
+        MediaProcessingJobRecord.upload_id == job.upload.id,
+        MediaProcessingJobRecord.status == MediaJobStatus.CLAIMED,
+        MediaProcessingJobRecord.claim_token == job.claim_token,
     )

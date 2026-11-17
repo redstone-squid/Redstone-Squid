@@ -19,7 +19,7 @@ from whenever import Instant
 
 import squid.media.application.jobs as media_jobs
 from squid.artifacts import ArtifactMetadata
-from squid.media.application.commands import MediaNormalizationRequest
+from squid.media.application.commands import MediaProcessingRequest
 from squid.media.application.jobs import (
     MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ArtifactCleanupClaim,
@@ -29,8 +29,8 @@ from squid.media.application.jobs import (
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
     MediaJobSnapshot,
-    MediaNormalizationJobRunner,
-    MediaNormalizationJobService,
+    MediaProcessingJobRunner,
+    MediaProcessingJobService,
     MediaStorageCleanup,
     MediaUploadConflictError,
     MediaUploadMetadata,
@@ -39,16 +39,16 @@ from squid.media.application.jobs import (
     StoredMediaArtifact,
     TerminalMediaSource,
 )
-from squid.media.application.models import MediaNormalizationResult
-from squid.media.application.services import MediaNormalizationService
+from squid.media.application.models import MediaProcessingResult
+from squid.media.application.services import MediaProcessingService
 from squid.media.domain import (
     MediaArtifact,
     MediaBatchTotals,
     MediaKind,
     MediaLimits,
-    MediaNormalizationAction,
-    MediaNormalizationReport,
     MediaProbe,
+    MediaProcessingAction,
+    MediaProcessingReport,
 )
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
@@ -417,7 +417,7 @@ class CleanupContendingMediaJobs(MemoryMediaJobs):
         return await super().track_artifacts(job, artifacts)
 
 
-class WritingNormalizer:
+class WritingProcessor:
     """Write predictable output and poster bytes so publication and cleanup use real local files."""
 
     def __init__(self, kind: MediaKind, *, failure: Exception | None = None) -> None:
@@ -433,14 +433,14 @@ class WritingNormalizer:
             return MediaProbe(("jpeg",), "mjpeg", 2, 2, 0, 1, None)
         return MediaProbe(("mp4",), "h264", 2, 2, 30, 1, 1_000, audio_codec="aac", frame_count=30)
 
-    async def normalize(
+    async def process(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
+    ) -> MediaProcessingResult:
         del limits
         output = b"normalized-video" if self.kind is MediaKind.VIDEO else b"normalized-image"
         request.output_path.write_bytes(output)
@@ -473,7 +473,7 @@ class WritingNormalizer:
                 2,
                 2,
             )
-        report = MediaNormalizationReport(
+        report = MediaProcessingReport(
             kind=self.kind,
             source_bytes=source_bytes,
             input_probe=probe,
@@ -481,14 +481,14 @@ class WritingNormalizer:
             output=output_artifact,
             poster=poster_artifact,
             actions=(
-                MediaNormalizationAction.VIDEO_TRANSCODED
+                MediaProcessingAction.VIDEO_TRANSCODED
                 if self.kind is MediaKind.VIDEO
-                else MediaNormalizationAction.IMAGE_REENCODED,
+                else MediaProcessingAction.IMAGE_REENCODED,
             ),
         )
-        return MediaNormalizationResult(request.output_path, request.poster_path, report)
+        return MediaProcessingResult(request.output_path, request.poster_path, report)
 
-    async def discard(self, result: MediaNormalizationResult) -> None:
+    async def discard(self, result: MediaProcessingResult) -> None:
         result.output_path.unlink(missing_ok=True)
         if result.poster_path is not None:
             result.poster_path.unlink(missing_ok=True)
@@ -498,46 +498,46 @@ class WritingNormalizer:
 
 
 def make_runner(
-    jobs: MediaNormalizationJobService,
+    jobs: MediaProcessingJobService,
     artifacts: MemoryArtifacts,
-    normalizer: WritingNormalizer,
+    processor: WritingProcessor,
     working_directory: Path,
     *,
     heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
-) -> MediaNormalizationJobRunner:
-    return MediaNormalizationJobRunner(
+) -> MediaProcessingJobRunner:
+    return MediaProcessingJobRunner(
         jobs,
         artifacts,
-        MediaNormalizationService(normalizer),
+        MediaProcessingService(processor),
         working_directory=working_directory,
         heartbeat_interval_seconds=heartbeat_interval_seconds,
     )
 
 
-class BlockingNormalizer(WritingNormalizer):
+class BlockingProcessor(WritingProcessor):
     def __init__(self, kind: MediaKind) -> None:
         super().__init__(kind)
         self.started = asyncio.Event()
         self.resume = asyncio.Event()
 
     @override
-    async def normalize(
+    async def process(
         self,
-        request: MediaNormalizationRequest,
+        request: MediaProcessingRequest,
         *,
         probe: MediaProbe,
         source_bytes: int,
         limits: MediaLimits,
-    ) -> MediaNormalizationResult:
+    ) -> MediaProcessingResult:
         self.started.set()
         await self.resume.wait()
-        return await super().normalize(request, probe=probe, source_bytes=source_bytes, limits=limits)
+        return await super().process(request, probe=probe, source_bytes=source_bytes, limits=limits)
 
 
 async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     submission = MediaUploadSubmission(
         draft_id=DRAFT_ID,
         kind=MediaKind.IMAGE,
@@ -562,7 +562,7 @@ async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() 
 async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     source = tmp_path / "source"
     source.write_bytes(b"image")
 
@@ -597,7 +597,7 @@ async def test_submit_staged_cancellation_settles_metadata_reader_before_returni
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    jobs = MediaNormalizationJobService(MemoryArtifacts(), uow_factory=partial(MediaScope, MemoryMediaJobs()))
+    jobs = MediaProcessingJobService(MemoryArtifacts(), uow_factory=partial(MediaScope, MemoryMediaJobs()))
     source = tmp_path / "source"
     source.write_bytes(b"image")
     # Hold the thread reader open so cancellation cannot safely release the caller's source file yet.
@@ -651,7 +651,7 @@ async def test_submit_removes_staged_source_when_draft_rejects_registration(
     error: MediaDraftNotFoundError | MediaDraftStateConflictError,
 ) -> None:
     artifacts = MemoryArtifacts()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, RejectingMediaJobs(error)))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, RejectingMediaJobs(error)))
 
     with pytest.raises(type(error)):
         await jobs.submit(
@@ -670,7 +670,7 @@ async def test_submit_removes_staged_source_when_draft_rejects_registration(
 async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(
+    jobs = MediaProcessingJobService(
         artifacts, limits=MediaLimits(max_images=1), uow_factory=partial(MediaScope, repository)
     )
     first_id = await jobs.submit(
@@ -711,7 +711,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
 async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     submission = MediaUploadSubmission(
         draft_id=DRAFT_ID,
         kind=MediaKind.VIDEO,
@@ -720,8 +720,8 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
         upload_id=UPLOAD_ID,
     )
     await jobs.submit(submission)
-    normalizer = WritingNormalizer(MediaKind.VIDEO)
-    runner = make_runner(jobs, artifacts, normalizer, tmp_path)
+    processor = WritingProcessor(MediaKind.VIDEO)
+    runner = make_runner(jobs, artifacts, processor, tmp_path)
 
     await runner.process_batch()
 
@@ -752,16 +752,16 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     thumbnail = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.VIDEO_THUMBNAIL)
     assert thumbnail.object_key.startswith("media/posters/")
     assert not any(tmp_path.iterdir())
-    assert all(not directory.exists() for directory in normalizer.seen_directories)
+    assert all(not directory.exists() for directory in processor.seen_directories)
 
     await jobs.submit(submission)
     assert snapshot.upload.source_object_key not in artifacts.objects
 
 
-async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: Path) -> None:
+async def test_runner_heartbeats_while_processing_is_still_running(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -771,16 +771,16 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
             upload_id=UPLOAD_ID,
         )
     )
-    normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
+    processor = BlockingProcessor(MediaKind.IMAGE)
+    runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
             tasks.start_soon(runner.process_batch)
-            await normalizer.started.wait()
+            await processor.started.wait()
             await sleep(0.035)
             assert repository.heartbeat_calls >= 2
-            normalizer.resume.set()
+            processor.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -790,7 +790,7 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
 async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -800,16 +800,16 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
             upload_id=UPLOAD_ID,
         )
     )
-    normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
+    processor = BlockingProcessor(MediaKind.IMAGE)
+    runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
             tasks.start_soon(runner.process_batch)
-            await normalizer.started.wait()
+            await processor.started.wait()
             assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
             await sleep(0.02)
-            normalizer.resume.set()
+            processor.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -822,7 +822,7 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
 async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -832,13 +832,13 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
             upload_id=UPLOAD_ID,
         )
     )
-    normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
+    processor = BlockingProcessor(MediaKind.IMAGE)
+    runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
             tasks.start_soon(runner.process_batch)
-            await normalizer.started.wait()
+            await processor.started.wait()
             await sleep(0.025)
             tasks.cancel_scope.cancel()
 
@@ -851,7 +851,7 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
 async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = CleanupContendingMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, max_attempts=1, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, max_attempts=1, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -861,7 +861,7 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
             upload_id=UPLOAD_ID,
         )
     )
-    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
+    runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch()
 
@@ -878,7 +878,7 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
 async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = DiscardingCompletionMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -888,7 +888,7 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
             upload_id=UPLOAD_ID,
         )
     )
-    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
+    runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch()
     cleanup = MediaStorageCleanup(jobs, artifacts)
@@ -907,7 +907,7 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
 async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metadata(tmp_path: Path) -> None:
     artifacts = FailingDeleteArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -917,7 +917,7 @@ async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metad
             upload_id=UPLOAD_ID,
         )
     )
-    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
+    runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
     await runner.process_batch()
     completed = await jobs.get(UPLOAD_ID)
     assert completed is not None
@@ -946,7 +946,7 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
     ):
         artifacts = MemoryArtifacts()
         repository = MemoryMediaJobs()
-        jobs = MediaNormalizationJobService(artifacts, max_attempts=2, uow_factory=partial(MediaScope, repository))
+        jobs = MediaProcessingJobService(artifacts, max_attempts=2, uow_factory=partial(MediaScope, repository))
         upload_id = uuid4()
         await jobs.submit(
             MediaUploadSubmission(
@@ -957,8 +957,8 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
                 upload_id=upload_id,
             )
         )
-        normalizer = WritingNormalizer(MediaKind.IMAGE, failure=failure)
-        runner = make_runner(jobs, artifacts, normalizer, tmp_path)
+        processor = WritingProcessor(MediaKind.IMAGE, failure=failure)
+        runner = make_runner(jobs, artifacts, processor, tmp_path)
 
         await runner.process_batch()
         cleanup = MediaStorageCleanup(jobs, artifacts)
@@ -977,7 +977,7 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
 ) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -988,7 +988,7 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
         )
     )
     failure = MediaProcessingError(MediaFailureReason.TOOL_FAILED, operation="normalize_image", exit_code=-9)
-    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE, failure=failure), tmp_path)
+    runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE, failure=failure), tmp_path)
 
     with caplog.at_level(logging.WARNING, logger="squid.media.application.jobs"):
         await runner.process_batch()
@@ -1025,7 +1025,7 @@ class BrokenFailurePathJobs(MemoryMediaJobs):
         return await super().fail(job, error, max_attempts=max_attempts, terminal=terminal)
 
 
-class SelectivelyFailingNormalizer(WritingNormalizer):
+class SelectivelyFailingNormalizer(WritingProcessor):
     """Fail one source immediately and delay the others so sibling cancellation would interrupt them."""
 
     def __init__(self, kind: MediaKind, *, failing_source: bytes) -> None:
@@ -1047,7 +1047,7 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
     sibling_id = uuid4()
     artifacts = MemoryArtifacts()
     repository = BrokenFailurePathJobs(broken_id)
-    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
+    jobs = MediaProcessingJobService(artifacts, uow_factory=partial(MediaScope, repository))
     for upload_id, source in ((broken_id, b"broken-image"), (sibling_id, b"raw-image")):
         await jobs.submit(
             MediaUploadSubmission(

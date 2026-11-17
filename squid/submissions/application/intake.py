@@ -10,7 +10,7 @@ from squid.core.actors import Actor
 from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
-    MediaNormalizationJobService,
+    MediaProcessingJobService,
     StagedMediaUploadSubmission,
 )
 from squid.media.domain import MediaKind
@@ -58,7 +58,7 @@ class SubmissionAttachmentIntake:
         self,
         drafts: SubmissionDraftService,
         schematics: DraftSchematicService,
-        media: MediaNormalizationJobService | None,
+        media: MediaProcessingJobService | None,
         *,
         uow_factory: UnitOfWorkFactory[AttachmentIntakeUnitOfWork],
     ) -> None:

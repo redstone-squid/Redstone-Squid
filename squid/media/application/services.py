@@ -1,15 +1,14 @@
-"""Media normalization orchestration and cheap preflight validation."""
+"""Media processing orchestration and cheap preflight validation."""
 
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from squid.media.application.commands import MediaNormalizationRequest
-from squid.media.application.models import MediaNormalizationResult
-from squid.media.application.ports import MediaNormalizer
+from squid.media.application.commands import MediaProcessingRequest
+from squid.media.application.models import MediaProcessingResult
+from squid.media.application.ports import MediaProcessor
 from squid.media.domain.models import (
     MediaBatchTotals,
-    MediaKind,
     MediaLimitMeasure,
     MediaLimits,
     MediaProbe,
@@ -26,11 +25,11 @@ class _SourceSnapshot:
     modified_nanoseconds: int
 
 
-class MediaNormalizationService:
-    """Check source metadata and resource limits before and after normalization."""
+class MediaProcessingService:
+    """Check source metadata and resource limits before and after processing."""
 
-    def __init__(self, normalizer: MediaNormalizer, *, limits: MediaLimits | None = None) -> None:
-        self._normalizer = normalizer
+    def __init__(self, processor: MediaProcessor, *, limits: MediaLimits | None = None) -> None:
+        self._processor = processor
         self._limits = limits or MediaLimits()
 
     @property
@@ -43,8 +42,8 @@ class MediaNormalizationService:
         if violations := self._limits.batch_violations(totals):
             raise MediaLimitExceededError(violations)
 
-    async def normalize(self, request: MediaNormalizationRequest) -> MediaNormalizationResult:
-        """Probe and normalize a regular file, then check the returned report.
+    async def process(self, request: MediaProcessingRequest) -> MediaProcessingResult:
+        """Probe and process a regular file, then check the returned report.
 
         The caller must keep the source private and unchanged for this operation.
         Metadata snapshots detect replacement and ordinary writes but do not lock
@@ -61,12 +60,10 @@ class MediaNormalizationService:
                 )
             )
 
-        probe = await self._normalizer.probe(request.source_path)
-        if request.kind is MediaKind.IMAGE and probe.original_image_content_type is None:
-            raise InvalidMediaError(MediaFailureReason.FORMAT_UNSUPPORTED)
+        probe = await self._processor.probe(request.source_path)
         _require_unchanged(request.source_path, source)
 
-        result = await self._normalizer.normalize(
+        result = await self._processor.process(
             request,
             probe=probe,
             source_bytes=source.byte_size,
@@ -76,18 +73,18 @@ class MediaNormalizationService:
             _require_unchanged(request.source_path, source)
             self._validate_result(request, result, probe=probe, source_bytes=source.byte_size)
         except Exception:
-            await self._normalizer.discard(result)
+            await self._processor.discard(result)
             raise
         return result
 
     async def aclose(self) -> None:
-        """Release normalizer resources."""
-        await self._normalizer.aclose()
+        """Release processor resources."""
+        await self._processor.aclose()
 
     def _validate_result(
         self,
-        request: MediaNormalizationRequest,
-        result: MediaNormalizationResult,
+        request: MediaProcessingRequest,
+        result: MediaProcessingResult,
         *,
         probe: MediaProbe,
         source_bytes: int,

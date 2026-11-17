@@ -1,5 +1,5 @@
-"""Media normalization infrastructure adapters."""
+"""Media processing infrastructure adapters."""
 
-from squid.media.infrastructure.ffmpeg import FfmpegMediaNormalizer, MediaProcessLimits, parse_ffprobe_output
+from squid.media.infrastructure.ffmpeg import FfmpegMediaProcessor, MediaProcessLimits, parse_ffprobe_output
 
-__all__ = ["FfmpegMediaNormalizer", "MediaProcessLimits", "parse_ffprobe_output"]
+__all__ = ["FfmpegMediaProcessor", "MediaProcessLimits", "parse_ffprobe_output"]

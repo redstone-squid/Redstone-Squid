@@ -43,7 +43,7 @@ from squid.idempotency.domain import StoredResponse, UnsafeHttpMethod
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
-    MediaNormalizationJobService,
+    MediaProcessingJobService,
     StagedMediaUploadSubmission,
 )
 from squid.media.domain import MediaLimits
@@ -448,7 +448,7 @@ class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
         raise InvalidChallengeError
 
 
-class MockMediaJobs(MediaNormalizationJobService):
+class MockMediaJobs(MediaProcessingJobService):
     """An empty media store: every lookup misses, which the routes report as a 404."""
 
     def __init__(self) -> None:

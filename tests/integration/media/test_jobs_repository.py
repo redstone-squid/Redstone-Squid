@@ -21,7 +21,7 @@ from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
-    MediaNormalizationJobService,
+    MediaProcessingJobService,
     MediaUploadConflictError,
     MediaUploadMetadata,
     StoredMediaArtifact,
@@ -35,7 +35,7 @@ from squid.media.models import (
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,
     MediaDraftReference,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
     MediaUploadRecord,
 )
 from squid.persistence.base import Base
@@ -58,7 +58,7 @@ _TABLES = model_tables(
     SubmissionDraft,
     SubmissionSuppliedAttachment,
     MediaUploadRecord,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
     MediaDraftReference,
     MediaArtifactRecord,
     MediaArtifactObjectRecord,
@@ -188,8 +188,8 @@ async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
 
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == UPLOAD_ID)
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
     (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
@@ -231,8 +231,8 @@ async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
     assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(first, artifacts), commit=True)
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == UPLOAD_ID)
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
 
@@ -245,8 +245,8 @@ async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
 
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == UPLOAD_ID)
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
     (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
@@ -520,8 +520,8 @@ async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_fli
     assert (await cleanup_task).deleted == 2
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == publisher.id)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == publisher.id)
             .values(available_at=func.now())
         )
     (retry,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
@@ -582,8 +582,8 @@ async def test_reconciliation_refreshes_tombstones_older_than_artifacts(
         await session.execute(sql_delete(MediaArtifactPublicationRecord))
         await session.execute(update(MediaArtifactObjectRecord).values(deleted_at=Instant.now().subtract(hours=1)))
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == UPLOAD_ID)
             .values(
                 status=MediaJobStatus.COMPLETED,
                 claimed_at=None,
@@ -643,8 +643,8 @@ async def test_retry_backoff_then_dead_state_and_raw_cleanup_acknowledgment(
 
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(MediaNormalizationJobRecord)
-            .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
+            update(MediaProcessingJobRecord)
+            .where(MediaProcessingJobRecord.upload_id == UPLOAD_ID)
             .values(available_at=func.now())
         )
     (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
@@ -862,5 +862,5 @@ async def cleanup_artifacts(
     factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork], delete: Callable[[str], Awaitable[None]], *, limit: int
 ) -> MediaArtifactCleanupOutcome:
     with TemporaryDirectory() as directory:
-        service = MediaNormalizationJobService(CleanupArtifacts(Path(directory), delete), uow_factory=factory)
+        service = MediaProcessingJobService(CleanupArtifacts(Path(directory), delete), uow_factory=factory)
         return await service.cleanup_artifacts(limit=limit)

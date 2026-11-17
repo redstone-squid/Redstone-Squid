@@ -1,4 +1,4 @@
-"""Shared normalization identity survives independent draft discard and expiry."""
+"""Shared processing identity survives independent draft discard and expiry."""
 
 from functools import partial
 from uuid import uuid4
@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.media.domain import MediaLimits
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError
-from squid.media.models import MediaNormalizationJobRecord
+from squid.media.models import MediaProcessingJobRecord
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus
 from squid.submissions.models.entities import SubmissionDraft
@@ -109,7 +109,7 @@ async def test_expiring_birth_draft_preserves_other_candidate(
         )
         assert (
             await session.scalar(
-                select(MediaNormalizationJobRecord.status).where(MediaNormalizationJobRecord.upload_id == source.id)
+                select(MediaProcessingJobRecord.status).where(MediaProcessingJobRecord.upload_id == source.id)
             )
             is MediaJobStatus.COMPLETED
         )

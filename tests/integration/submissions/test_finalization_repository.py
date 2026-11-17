@@ -16,7 +16,7 @@ from squid.builds.domain.credits import name_credits
 from squid.core.errors import DataIntegrityError
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
@@ -73,7 +73,7 @@ _TABLES = model_tables(
     DraftSchematicSource,
     DraftSchematicLink,
     MediaUploadRecord,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
     MediaDraftReference,
     SubmissionFinalizationJob,
     SubmissionFinalizationInput,
@@ -247,7 +247,7 @@ async def _store_media(
         await session.flush()
         if status is not None:
             session.add(
-                MediaNormalizationJobRecord(
+                MediaProcessingJobRecord(
                     upload_id=upload_id,
                     status=status,
                     completed_at=NOW if status is MediaJobStatus.COMPLETED else None,

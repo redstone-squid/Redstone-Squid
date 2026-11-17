@@ -15,7 +15,7 @@ from squid.accounts.models import Account
 from squid.edits.domain import OperationReuseError
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
 from squid.messages.domain import MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import StoredDraft
@@ -52,7 +52,7 @@ _TABLES = model_tables(
     SubmissionDraftChange,
     SubmissionFinalizationJob,
     MediaUploadRecord,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
     MediaDraftReference,
 )
 
@@ -404,7 +404,7 @@ async def test_expiry_fences_finalization_and_discards_media(
             )
         )
         await session.flush()
-        session.add(MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW))
+        session.add(MediaProcessingJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW))
 
     assert (
         await transact(repository, lambda uow: uow.submission_drafts.expire_due(now=NOW.add(seconds=2)), commit=True)
@@ -415,7 +415,7 @@ async def test_expiry_fences_finalization_and_discards_media(
         finalization = await session.scalar(
             select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
         )
-        media = await session.get(MediaNormalizationJobRecord, upload_id)
+        media = await session.get(MediaProcessingJobRecord, upload_id)
 
     assert draft is not None
     assert draft.status is DraftStatus.EXPIRED

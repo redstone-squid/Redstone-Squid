@@ -3745,9 +3745,9 @@ media-errors-reload-the-draft-before-trying-again = Reload the draft before tryi
 media-every-media-limit = Every media limit must be positive.
 
 # squid/media/errors.py:168
-media-file-normalization-failed = The media file cannot be normalized.
+media-file-processing-failed = The media file cannot be normalized.
 
-# squid/media/application/commands.py:35
+# squid/media/application/commands.py:34
 media-image-not-accept = Image processing does not accept a poster path.
 
 # squid/media/errors.py:285
@@ -3766,7 +3766,7 @@ media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 an
 media-media-artifact-dimensions = Media artifact dimensions must be positive.
 
 # squid/media/application/jobs.py:360
-media-media-attempts-positive = Media normalization attempts must be positive.
+media-media-attempts-positive = Media processing attempts must be positive.
 
 # squid/media/domain/models.py:62
 media-media-batch-totals = Media batch totals cannot be negative.
@@ -3805,7 +3805,7 @@ media-media-object-keys = Media object keys must be non-empty relative paths wit
 media-media-processing-temporarily = Media processing is temporarily unavailable.
 
 # squid/media/application/jobs.py:667
-media-media-queue-normalizer = Media queue and normalizer limits must match.
+media-media-queue-processor = Media queue and processor limits must match.
 
 # squid/media/application/jobs.py:988
 media-media-sha-lowercase = Media SHA-256 values must be lowercase hexadecimal.
@@ -3816,7 +3816,7 @@ media-media-source-byte = Media source byte size must be positive.
 # squid/media/application/jobs.py:554
 media-media-source-cleanup = Media source cleanup limit must be between 1 and { $maximum }.
 
-# squid/media/application/commands.py:30
+# squid/media/application/commands.py:29
 media-media-source-normalized = Media source, normalized output, and poster paths must be distinct.
 
 # squid/media/application/jobs.py:915
@@ -3891,8 +3891,8 @@ media-submission-draft-not-found = Submission draft not found.
 # squid/media/domain/models.py:212
 media-video-format-unsupported = Processed videos must contain a supported video and JPEG thumbnail.
 
-# squid/media/application/commands.py:38
-media-video-requires-poster = Video normalization requires a poster destination.
+# squid/media/application/commands.py:37
+media-video-requires-poster = Video processing requires a poster destination.
 
 # squid/media/application/jobs.py:193
 media-visual-media-artifacts = Visual media artifacts require pixel dimensions.

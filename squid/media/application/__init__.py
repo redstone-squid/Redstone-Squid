@@ -1,13 +1,13 @@
 """Public media application API."""
 
-from squid.media.application.commands import MediaNormalizationRequest
-from squid.media.application.models import MediaNormalizationResult
-from squid.media.application.ports import MediaNormalizer
-from squid.media.application.services import MediaNormalizationService
+from squid.media.application.commands import MediaProcessingRequest
+from squid.media.application.models import MediaProcessingResult
+from squid.media.application.ports import MediaProcessor
+from squid.media.application.services import MediaProcessingService
 
 __all__ = [
-    "MediaNormalizationRequest",
-    "MediaNormalizationResult",
-    "MediaNormalizationService",
-    "MediaNormalizer",
+    "MediaProcessingRequest",
+    "MediaProcessingResult",
+    "MediaProcessingService",
+    "MediaProcessor",
 ]

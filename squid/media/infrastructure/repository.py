@@ -1,4 +1,4 @@
-"""PostgreSQL metadata and claim-token queue for media normalization."""
+"""PostgreSQL metadata and claim-token queue for media processing."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -36,7 +36,7 @@ from squid.media.infrastructure.references import media_for_draft, retained_else
 from squid.media.models import (
     MediaArtifactRecord,
     MediaDraftReference,
-    MediaNormalizationJobRecord,
+    MediaProcessingJobRecord,
     MediaUploadRecord,
 )
 from squid.persistence.advisory_locks import (
@@ -80,9 +80,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
         )
         existing = await session.get(MediaUploadRecord, upload.id)
         if existing is not None:
-            existing_job = await session.get(MediaNormalizationJobRecord, upload.id)
+            existing_job = await session.get(MediaProcessingJobRecord, upload.id)
             if existing_job is None:
-                msg = "Persisted media upload is missing its normalization job."
+                msg = "Persisted media upload is missing its processing job."
                 raise RuntimeError(msg)
             existing_status = existing_job.status
             if not _same_upload(existing, upload):
@@ -121,7 +121,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             )
         )
         await session.flush()
-        session.add(MediaNormalizationJobRecord(upload_id=upload.id))
+        session.add(MediaProcessingJobRecord(upload_id=upload.id))
         session.add(
             MediaDraftReference(
                 draft_id=upload.draft_id, upload_id=upload.id, discarded=intent is not None and intent.discarded
@@ -136,9 +136,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
         session = self._session()
         row = (
             await session.execute(
-                select(MediaNormalizationJobRecord, MediaUploadRecord)
-                .join(MediaUploadRecord, MediaUploadRecord.id == MediaNormalizationJobRecord.upload_id)
-                .where(MediaNormalizationJobRecord.upload_id == upload_id)
+                select(MediaProcessingJobRecord, MediaUploadRecord)
+                .join(MediaUploadRecord, MediaUploadRecord.id == MediaProcessingJobRecord.upload_id)
+                .where(MediaProcessingJobRecord.upload_id == upload_id)
             )
         ).one_or_none()
         if row is None:
@@ -160,8 +160,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
         rows = tuple(
             (
                 await session.execute(
-                    select(MediaNormalizationJobRecord, MediaUploadRecord)
-                    .join(MediaUploadRecord, MediaUploadRecord.id == MediaNormalizationJobRecord.upload_id)
+                    select(MediaProcessingJobRecord, MediaUploadRecord)
+                    .join(MediaUploadRecord, MediaUploadRecord.id == MediaProcessingJobRecord.upload_id)
                     .where(media_for_draft(draft_id, include_discarded=True))
                     .order_by(MediaUploadRecord.created_at, MediaUploadRecord.id)
                 )
@@ -213,10 +213,10 @@ class PostgresMediaJobRepository(MediaJobRepository):
         await self._lock_mutable_submission_draft(draft_id)
         row = (
             await session.execute(
-                select(MediaNormalizationJobRecord, MediaUploadRecord)
-                .join(MediaUploadRecord, MediaUploadRecord.id == MediaNormalizationJobRecord.upload_id)
-                .where(MediaNormalizationJobRecord.upload_id == upload_id)
-                .with_for_update(of=MediaNormalizationJobRecord)
+                select(MediaProcessingJobRecord, MediaUploadRecord)
+                .join(MediaUploadRecord, MediaUploadRecord.id == MediaProcessingJobRecord.upload_id)
+                .where(MediaProcessingJobRecord.upload_id == upload_id)
+                .with_for_update(of=MediaProcessingJobRecord)
             )
         ).one_or_none()
         if row is None or not await session.scalar(
@@ -252,7 +252,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool:
-        """Share one normalization job, preserving per-draft capacity and discard authority."""
+        """Share one processing job, preserving per-draft capacity and discard authority."""
         session = self._session()
         for draft_id in sorted({source_id, target_id}):
             await self._lock_mutable_submission_draft(draft_id, require_editable=draft_id == target_id)
@@ -270,7 +270,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         )
         if upload is None:
             return False
-        job = await session.get(MediaNormalizationJobRecord, upload_id)
+        job = await session.get(MediaProcessingJobRecord, upload_id)
         if job is None or job.status is MediaJobStatus.DISCARDED:
             return False
         if await session.get(MediaDraftReference, (source_id, upload_id)) is None:
@@ -306,12 +306,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Lease ready or abandoned work with a fresh token per row."""
         ready = or_(
             and_(
-                MediaNormalizationJobRecord.status == MediaJobStatus.PENDING,
-                MediaNormalizationJobRecord.available_at <= func.now(),
+                MediaProcessingJobRecord.status == MediaJobStatus.PENDING,
+                MediaProcessingJobRecord.available_at <= func.now(),
             ),
             and_(
-                MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED,
-                MediaNormalizationJobRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
+                MediaProcessingJobRecord.status == MediaJobStatus.CLAIMED,
+                MediaProcessingJobRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
             ),
         )
         session = self._session()
@@ -321,12 +321,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
         rows = tuple(
             (
                 await session.execute(
-                    select(MediaNormalizationJobRecord, MediaUploadRecord)
-                    .join(MediaUploadRecord, MediaUploadRecord.id == MediaNormalizationJobRecord.upload_id)
+                    select(MediaProcessingJobRecord, MediaUploadRecord)
+                    .join(MediaUploadRecord, MediaUploadRecord.id == MediaProcessingJobRecord.upload_id)
                     .where(ready)
-                    .order_by(MediaNormalizationJobRecord.available_at, MediaNormalizationJobRecord.upload_id)
+                    .order_by(MediaProcessingJobRecord.available_at, MediaProcessingJobRecord.upload_id)
                     .limit(limit)
-                    .with_for_update(skip_locked=True, of=MediaNormalizationJobRecord)
+                    .with_for_update(skip_locked=True, of=MediaProcessingJobRecord)
                 )
             ).all()
         )
@@ -351,7 +351,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
     async def heartbeat(self, job: ClaimedMediaJob) -> bool:
         """Renew a current job claim and its crash-recovery publication leases."""
         session = self._session()
-        current = await session.scalar(select(MediaNormalizationJobRecord).where(*_claim_filter(job)).with_for_update())
+        current = await session.scalar(select(MediaProcessingJobRecord).where(*_claim_filter(job)).with_for_update())
         if current is None:
             return False
         current.claimed_at = database_now()
@@ -362,7 +362,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
     async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
         """Release a cleanup-blocked claim without charging a failed attempt."""
         statement = (
-            update(MediaNormalizationJobRecord)
+            update(MediaProcessingJobRecord)
             .where(*_claim_filter(job))
             .values(
                 status=MediaJobStatus.PENDING,
@@ -402,12 +402,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
             select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0))
             .join(MediaUploadRecord, MediaUploadRecord.id == MediaArtifactRecord.upload_id)
             .join(
-                MediaNormalizationJobRecord,
-                MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                MediaProcessingJobRecord,
+                MediaProcessingJobRecord.upload_id == MediaUploadRecord.id,
             )
             .where(
                 MediaUploadRecord.draft_id == job.upload.draft_id,
-                MediaNormalizationJobRecord.status == MediaJobStatus.COMPLETED,
+                MediaProcessingJobRecord.status == MediaJobStatus.COMPLETED,
                 MediaArtifactRecord.role.in_(
                     (
                         MediaArtifactRole.OUTPUT,
@@ -425,7 +425,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         if violations := limits.batch_violations(totals):
             raise MediaLimitExceededError(violations)
         statement = (
-            update(MediaNormalizationJobRecord)
+            update(MediaProcessingJobRecord)
             .where(*_claim_filter(job))
             .values(
                 status=MediaJobStatus.COMPLETED,
@@ -436,7 +436,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 discarded_at=None,
                 last_error=None,
             )
-            .returning(MediaNormalizationJobRecord.upload_id)
+            .returning(MediaProcessingJobRecord.upload_id)
         )
         applied = await session.scalar(statement)
         if applied is None:
@@ -517,7 +517,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 dead_at=None,
                 discarded_at=None,
             )
-        statement = update(MediaNormalizationJobRecord).where(*_claim_filter(job)).values(**values)
+        statement = update(MediaProcessingJobRecord).where(*_claim_filter(job)).values(**values)
         session = self._session()
         outcome = cast(CursorResult[Any], await session.execute(statement))
         applied = bool(outcome.rowcount)
@@ -532,12 +532,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
         )
         jobs = tuple(
             await session.scalars(
-                select(MediaNormalizationJobRecord)
+                select(MediaProcessingJobRecord)
                 .where(
-                    MediaNormalizationJobRecord.upload_id.in_(unreferenced),
-                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED,
+                    MediaProcessingJobRecord.upload_id.in_(unreferenced),
+                    MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED,
                 )
-                .order_by(MediaNormalizationJobRecord.upload_id)
+                .order_by(MediaProcessingJobRecord.upload_id)
                 .limit(limit)
                 .with_for_update(skip_locked=True)
             )
@@ -564,12 +564,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
             await session.execute(
                 select(MediaUploadRecord.id, MediaUploadRecord.source_object_key)
                 .join(
-                    MediaNormalizationJobRecord,
-                    MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                    MediaProcessingJobRecord,
+                    MediaProcessingJobRecord.upload_id == MediaUploadRecord.id,
                 )
                 .where(
                     MediaUploadRecord.raw_deleted_at.is_(None),
-                    MediaNormalizationJobRecord.status.in_(
+                    MediaProcessingJobRecord.status.in_(
                         (
                             MediaJobStatus.COMPLETED,
                             MediaJobStatus.DEAD,
@@ -587,9 +587,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
         """Confirm an idempotent raw-object deletion only while the job is terminal."""
         terminal_job = exists(
-            select(MediaNormalizationJobRecord.upload_id).where(
-                MediaNormalizationJobRecord.upload_id == source.upload_id,
-                MediaNormalizationJobRecord.status.in_(
+            select(MediaProcessingJobRecord.upload_id).where(
+                MediaProcessingJobRecord.upload_id == source.upload_id,
+                MediaProcessingJobRecord.status.in_(
                     (
                         MediaJobStatus.COMPLETED,
                         MediaJobStatus.DEAD,
@@ -670,22 +670,22 @@ class PostgresMediaJobRepository(MediaJobRepository):
                     func.coalesce(func.sum(MediaUploadRecord.source_byte_size), 0),
                 )
                 .join(
-                    MediaNormalizationJobRecord,
-                    MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
+                    MediaProcessingJobRecord,
+                    MediaProcessingJobRecord.upload_id == MediaUploadRecord.id,
                 )
                 .where(
                     media_for_draft(draft_id),
-                    MediaNormalizationJobRecord.status.in_(active),
+                    MediaProcessingJobRecord.status.in_(active),
                 )
             )
         ).one()
         output_bytes = await session.scalar(
             select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0))
             .join(MediaUploadRecord, MediaUploadRecord.id == MediaArtifactRecord.upload_id)
-            .join(MediaNormalizationJobRecord, MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id)
+            .join(MediaProcessingJobRecord, MediaProcessingJobRecord.upload_id == MediaUploadRecord.id)
             .where(
                 media_for_draft(draft_id),
-                MediaNormalizationJobRecord.status == MediaJobStatus.COMPLETED,
+                MediaProcessingJobRecord.status == MediaJobStatus.COMPLETED,
                 MediaArtifactRecord.role != MediaArtifactRole.REPORT,
             )
         )
@@ -699,9 +699,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
 def _claim_filter(job: ClaimedMediaJob) -> tuple[Any, ...]:
     return (
-        MediaNormalizationJobRecord.upload_id == job.upload.id,
-        MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED,
-        MediaNormalizationJobRecord.claim_token == job.claim_token,
+        MediaProcessingJobRecord.upload_id == job.upload.id,
+        MediaProcessingJobRecord.status == MediaJobStatus.CLAIMED,
+        MediaProcessingJobRecord.claim_token == job.claim_token,
     )
 
 
@@ -743,7 +743,7 @@ def _stored_artifact(record: MediaArtifactRecord) -> StoredMediaArtifact:
 
 
 def _snapshot(
-    job: MediaNormalizationJobRecord,
+    job: MediaProcessingJobRecord,
     upload: MediaUploadRecord,
     artifacts: Sequence[MediaArtifactRecord],
 ) -> MediaJobSnapshot:

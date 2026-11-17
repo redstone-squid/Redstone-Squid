@@ -11,7 +11,7 @@ from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import MediaLimitExceededError
 from squid.media.infrastructure.references import media_for_draft
-from squid.media.models import MediaArtifactRecord, MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaArtifactRecord, MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
 from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.domain.intake import IntakeStatus
@@ -133,8 +133,8 @@ class PostgresAttachmentEdits:
         selected = []
         for upload in uploads:
             job = await session.scalar(
-                select(MediaNormalizationJobRecord)
-                .where(MediaNormalizationJobRecord.upload_id == upload.id)
+                select(MediaProcessingJobRecord)
+                .where(MediaProcessingJobRecord.upload_id == upload.id)
                 .with_for_update()
             )
             if membership.get(upload.id, upload.id in current_media):

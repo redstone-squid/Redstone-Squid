@@ -3190,7 +3190,7 @@ CREATE TABLE public.media_draft_references (
 -- Name: TABLE media_draft_references; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.media_draft_references IS 'One independently discardable draft reference to a shared normalization job.';
+COMMENT ON TABLE public.media_draft_references IS 'One independently discardable draft reference to a shared processing job.';
 
 
 --
@@ -3219,7 +3219,7 @@ CREATE TABLE public.media_normalization_jobs (
 -- Name: TABLE media_normalization_jobs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.media_normalization_jobs IS 'A normalization request retained after completion, failure, or discard for cleanup and retries.';
+COMMENT ON TABLE public.media_normalization_jobs IS 'A processing request retained after completion, failure, or discard for cleanup and retries.';
 
 
 --

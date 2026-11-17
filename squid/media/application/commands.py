@@ -1,4 +1,4 @@
-"""Requests to normalize a staged media file."""
+"""Requests to process a staged media file."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,12 +9,11 @@ from squid.media.domain.models import MediaKind
 
 
 @dataclass(frozen=True, slots=True)
-class MediaNormalizationRequest:
-    """Source and job-local destinations for one normalization operation.
+class MediaProcessingRequest:
+    """Source and job-local destinations for one processing operation.
 
     Videos require a poster destination for their JPEG thumbnail. Images accept
-    no poster destination. Callers must provide
-    distinct files; validation compares paths without resolving aliases.
+    no poster destination. Paths must be distinct; validation does not resolve aliases.
     """
 
     kind: MediaKind
@@ -35,5 +34,5 @@ class MediaNormalizationRequest:
             msg = tr(t"media-image-not-accept = Image processing does not accept a poster path.")
             raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and self.poster_path is None:
-            msg = tr(t"media-video-requires-poster = Video normalization requires a poster destination.")
+            msg = tr(t"media-video-requires-poster = Video processing requires a poster destination.")
             raise ValidationError(msg)

@@ -500,12 +500,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         ) {
           throw new Error(`${file.name}: this draft has reached its ${kind} limit.`);
         }
-        const uploaded = await api.uploadMedia(
-          draft.id,
-          kind,
-          file,
-          crypto.randomUUID(),
-        );
+        const uploaded = await api.uploadMedia(draft.id, kind, file, crypto.randomUUID());
         setMedia((current) =>
           current
             ? {

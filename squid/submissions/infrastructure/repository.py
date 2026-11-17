@@ -14,7 +14,7 @@ from squid.core.errors import JSONValue
 from squid.edits.domain import OperationReuseError
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
-from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaProcessingJobRecord, MediaUploadRecord
 from squid.messages.domain import MessageSnapshot
 from squid.persistence.advisory_locks import (
     AdvisoryLockNamespace,
@@ -311,12 +311,12 @@ class PostgresDraftRepository(DraftRepository):
         # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
         # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
         await session.execute(
-            update(MediaNormalizationJobRecord)
+            update(MediaProcessingJobRecord)
             .where(
-                MediaNormalizationJobRecord.upload_id.in_(
+                MediaProcessingJobRecord.upload_id.in_(
                     select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                 ),
-                MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED.value,
             )
             .values(
                 status=MediaJobStatus.DISCARDED,
@@ -371,12 +371,12 @@ class PostgresDraftRepository(DraftRepository):
                 .values(status=DraftStatus.EXPIRED, updated_at=now, preparation_retry_at=None)
             )
             await session.execute(
-                update(MediaNormalizationJobRecord)
+                update(MediaProcessingJobRecord)
                 .where(
-                    MediaNormalizationJobRecord.upload_id.in_(
+                    MediaProcessingJobRecord.upload_id.in_(
                         select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                     ),
-                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                    MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED.value,
                 )
                 .values(
                     status=MediaJobStatus.DISCARDED,

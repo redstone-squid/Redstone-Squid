@@ -14567,7 +14567,7 @@
           "submissions"
         ],
         "summary": "ListDraftMedia",
-        "description": "List all retained states and safe normalized facts for an owned draft.",
+        "description": "List all retained states and safe processed facts for an owned draft.",
         "operationId": "submission_media_list",
         "parameters": [
           {
@@ -15239,6 +15239,100 @@
             "submission-media"
           ],
           "interaction": "direct"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/suggestions": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "SchematicSuggestions",
+        "description": "Suggest reviewable answers from a retained upload; pending uploads have no suggestions.",
+        "operationId": "submission_schematic_suggestions",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchematicSubmissionSuggestions"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -24870,6 +24964,215 @@
         "required": [],
         "title": "SanitizationCapabilities"
       },
+      "SchematicDetection": {
+        "properties": {
+          "field_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "not_detected",
+            "default": "not_detected"
+          },
+          "value": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JSONValue"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "default": "Detection is not implemented."
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_id"
+        ],
+        "title": "SchematicDetection"
+      },
+      "SchematicDimensions": {
+        "properties": {
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "length": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "height",
+          "length",
+          "width"
+        ],
+        "title": "SchematicDimensions"
+      },
+      "SchematicFieldSuggestion": {
+        "properties": {
+          "field_id": {
+            "type": "string"
+          },
+          "value": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JSONValue"
+              }
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evidence",
+          "field_id",
+          "value"
+        ],
+        "title": "SchematicFieldSuggestion"
+      },
+      "SchematicFormat": {
+        "type": "string",
+        "enum": [
+          "litematic",
+          "schem",
+          "schematic",
+          "nbt",
+          "mcstructure"
+        ],
+        "title": "SchematicFormat",
+        "description": "A schematic container format this application can read."
+      },
+      "SchematicMetrics": {
+        "properties": {
+          "source_format": {
+            "$ref": "#/components/schemas/SchematicFormat"
+          },
+          "byte_size": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "dimensions": {
+            "$ref": "#/components/schemas/SchematicDimensions"
+          },
+          "allocated_dimensions": {
+            "$ref": "#/components/schemas/SchematicDimensions"
+          },
+          "block_count": {
+            "type": "integer"
+          },
+          "bounding_volume": {
+            "type": "integer"
+          },
+          "entity_count": {
+            "type": "integer"
+          },
+          "palette_size": {
+            "type": "integer"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "default": []
+          },
+          "source_data_version": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_author": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signs": {
+            "items": {
+              "$ref": "#/components/schemas/SchematicSign"
+            },
+            "type": "array",
+            "default": []
+          },
+          "block_counts": {
+            "oneOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "allocated_dimensions",
+          "block_count",
+          "bounding_volume",
+          "byte_size",
+          "dimensions",
+          "entity_count",
+          "palette_size",
+          "sha256",
+          "source_format"
+        ],
+        "title": "SchematicMetrics"
+      },
+      "SchematicSign": {
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "z": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "SchematicSign"
+      },
       "SchematicSize": {
         "properties": {
           "width": {
@@ -24889,6 +25192,51 @@
           "width"
         ],
         "title": "SchematicSize"
+      },
+      "SchematicSubmissionSuggestions": {
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DraftSchematicState"
+          },
+          "draft_revision": {
+            "type": "integer"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/SchematicFieldSuggestion"
+            },
+            "type": "array",
+            "default": []
+          },
+          "detections": {
+            "items": {
+              "$ref": "#/components/schemas/SchematicDetection"
+            },
+            "type": "array",
+            "default": []
+          },
+          "measurements": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SchematicMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_revision",
+          "state",
+          "upload_id"
+        ],
+        "title": "SchematicSubmissionSuggestions"
       },
       "SchematicSummary": {
         "properties": {

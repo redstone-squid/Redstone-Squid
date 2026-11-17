@@ -16,7 +16,7 @@ from squid.core.actors import Actor
 from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.models import MediaProcessingJobRecord, MediaUploadRecord
 from squid.messages.domain import MessageRef, MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import Decision, PermissionCheck, Reason
@@ -81,7 +81,7 @@ async def claimed_submission(
             )
             await session.flush()
             session.add(
-                MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.COMPLETED, completed_at=now)
+                MediaProcessingJobRecord(upload_id=upload_id, status=MediaJobStatus.COMPLETED, completed_at=now)
             )
         payload = replace(payload, artifacts=replace(payload.artifacts, normalized_media_upload_ids=(upload_id,)))
     await transact(

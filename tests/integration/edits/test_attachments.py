@@ -15,7 +15,7 @@ from squid.edits.domain import EditCommand, LatestRevision, Revision, RevisionCo
 from squid.media.application.jobs import MediaUploadMetadata
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaNormalizationJobRecord
+from squid.media.models import MediaProcessingJobRecord
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application import IngestedSchematic
 from squid.submissions.application.attachment_edits import (
@@ -164,7 +164,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
     async with sessions() as session:
         assert (
             await session.scalar(
-                select(MediaNormalizationJobRecord.status).where(MediaNormalizationJobRecord.upload_id == source)
+                select(MediaProcessingJobRecord.status).where(MediaProcessingJobRecord.upload_id == source)
             )
             is MediaJobStatus.DISCARDED
         )

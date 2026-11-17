@@ -1,9 +1,9 @@
 """Retain uploaded images and videos until workers produce normalized files.
 
-MediaNormalizationJobService stores the original upload and queues a job.
-MediaNormalizationJobRunner retrieves those bytes, normalizes them in a private
+MediaProcessingJobService stores the original upload and queues a job.
+MediaProcessingJobRunner retrieves those bytes, normalizes them in a private
 temporary directory, and stores the output plus a processing report. Videos also
-produce a JPEG thumbnail, called a poster by the normalizer.
+produce a JPEG thumbnail, called a poster by the processor.
 
 Uploads are identified by UUID; normalized objects are keyed by their content
 hash and can be shared. MediaStorageCleanup deletes original uploads after their
@@ -34,14 +34,14 @@ from squid.artifacts import ArtifactStore
 from squid.core.concurrency import run_all_settled, task_group
 from squid.core.errors import InvalidStateError, SquidError, ValidationError
 from squid.core.i18n import tr
-from squid.media.application.commands import MediaNormalizationRequest
-from squid.media.application.services import MediaNormalizationService
+from squid.media.application.commands import MediaProcessingRequest
+from squid.media.application.services import MediaProcessingService
 from squid.media.domain import (
     MediaArtifact,
     MediaKind,
     MediaLimits,
-    MediaNormalizationAction,
-    MediaNormalizationReport,
+    MediaProcessingAction,
+    MediaProcessingReport,
 )
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
@@ -67,7 +67,7 @@ MAX_MEDIA_JOB_CLEANUP = 500
 DEFAULT_MEDIA_JOB_ATTEMPTS = 3
 MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
 MEDIA_ARTIFACT_PUBLICATION_LEASE = timedelta(hours=48)
-"""Crash-recovery lease covering the object-store publish phase after normalization.
+"""Crash-recovery lease covering the object-store publish phase after processing.
 
 Object storage allows at most ten retries with 60-second connect and one-hour read
 timeouts. A video publishes at most three sequential objects; conservatively counting
@@ -196,7 +196,7 @@ class StoredMediaArtifact:
 
 @dataclass(frozen=True, slots=True)
 class ClaimedMediaJob:
-    """A normalization request owned by one worker claim.
+    """A processing request owned by one worker claim.
 
     attempts counts recorded failures before this claim, not the number of claims.
     Every state change must match claim_token so a reclaimed job rejects old results.
@@ -340,7 +340,7 @@ class MediaJobRepository(Protocol):
     ) -> None: ...
 
 
-class MediaNormalizationJobService:
+class MediaProcessingJobService:
     """Stage raw uploads and commit each queue transition in its own unit of work.
 
     Object writes happen before registration. Reusing an upload UUID is idempotent
@@ -357,7 +357,7 @@ class MediaNormalizationJobService:
         max_attempts: int = DEFAULT_MEDIA_JOB_ATTEMPTS,
     ) -> None:
         if max_attempts < 1:
-            msg = tr(t"media-media-attempts-positive = Media normalization attempts must be positive.")
+            msg = tr(t"media-media-attempts-positive = Media processing attempts must be positive.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._artifacts = artifacts
@@ -515,7 +515,7 @@ class MediaNormalizationJobService:
             return result
 
     async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
-        """Release a current claim without consuming a normalization attempt."""
+        """Release a current claim without consuming a processing attempt."""
         async with self._uow_factory() as uow:
             result = await uow.media_jobs.defer(job, until=until)
             await uow.commit()
@@ -614,9 +614,9 @@ class MediaNormalizationJobService:
 
 
 class MediaStorageCleanup:
-    """Run raw and normalized object cleanup independently of the normalization worker."""
+    """Run raw and normalized object cleanup independently of the processing worker."""
 
-    def __init__(self, jobs: MediaNormalizationJobService, artifacts: ArtifactStore) -> None:
+    def __init__(self, jobs: MediaProcessingJobService, artifacts: ArtifactStore) -> None:
         self._jobs = jobs
         self._artifacts = artifacts
 
@@ -651,27 +651,27 @@ class MediaStorageCleanup:
             )
 
 
-class MediaNormalizationJobRunner:
+class MediaProcessingJobRunner:
     """Normalize claimed uploads in private directories and publish verified outputs."""
 
     def __init__(
         self,
-        jobs: MediaNormalizationJobService,
+        jobs: MediaProcessingJobService,
         artifacts: ArtifactStore,
-        normalization: MediaNormalizationService,
+        processing: MediaProcessingService,
         *,
         working_directory: Path | None = None,
         heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
-        if jobs.limits != normalization.limits:
-            msg = tr(t"media-media-queue-normalizer = Media queue and normalizer limits must match.")
+        if jobs.limits != processing.limits:
+            msg = tr(t"media-media-queue-processor = Media queue and processor limits must match.")
             raise InvalidStateError(msg)
         if heartbeat_interval_seconds <= 0:
             msg = tr(t"media-media-job-heartbeat = Media job heartbeat interval must be positive.")
             raise InvalidStateError(msg)
         self._jobs = jobs
         self._artifacts = artifacts
-        self._normalization = normalization
+        self._processing = processing
         self._working_directory = working_directory
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
@@ -700,7 +700,7 @@ class MediaNormalizationJobRunner:
             source_path = temporary / "source"
             try:
                 await self._load_source(job, source_path)
-                artifacts = await self._normalize_and_store(job, source_path, temporary, claim_lost)
+                artifacts = await self._process_and_store(job, source_path, temporary, claim_lost)
                 await self._require_claim(job, claim_lost)
                 try:
                     completed = await self._jobs.complete(job, artifacts)
@@ -725,7 +725,7 @@ class MediaNormalizationJobRunner:
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
     async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
-        """Renew the claim during normalization and block publication if renewal fails."""
+        """Renew the claim during processing and block publication if renewal fails."""
         while True:
             await asyncio.sleep(self._heartbeat_interval_seconds)
             try:
@@ -770,17 +770,17 @@ class MediaNormalizationJobRunner:
             msg = "The queued raw media object no longer matches its immutable metadata."
             raise MediaJobSourceError(msg)
 
-    async def _normalize_and_store(
+    async def _process_and_store(
         self,
         job: ClaimedMediaJob,
         source_path: Path,
         temporary: Path,
         claim_lost: asyncio.Event,
     ) -> tuple[StoredMediaArtifact, ...]:
-        output_path = temporary / ("normalized.png" if job.upload.kind is MediaKind.IMAGE else "normalized.mp4")
+        output_path = temporary / "original"
         poster_path = temporary / "poster.jpg" if job.upload.kind is MediaKind.VIDEO else None
-        result = await self._normalization.normalize(
-            MediaNormalizationRequest(
+        result = await self._processing.process(
+            MediaProcessingRequest(
                 kind=job.upload.kind,
                 source_path=source_path,
                 output_path=output_path,
@@ -791,7 +791,7 @@ class MediaNormalizationJobRunner:
         files = [(MediaArtifactRole.OUTPUT, result.output_path, result.report.output)]
         if result.report.poster is not None:
             if result.poster_path is None:
-                msg = "A video normalization result omitted its poster path."
+                msg = "A video processing result omitted its poster path."
                 raise MediaJobArtifactError(msg)
             files.append((MediaArtifactRole.VIDEO_THUMBNAIL, result.poster_path, result.report.poster))
         prepared: list[tuple[StoredMediaArtifact, bytes]] = []
@@ -975,10 +975,10 @@ class _MediaReportJson(BaseModel):
     output_probe: Probe
     output: Artifact
     poster: Artifact | None
-    actions: tuple[MediaNormalizationAction, ...]
+    actions: tuple[MediaProcessingAction, ...]
 
 
-def _encode_report(report: MediaNormalizationReport) -> bytes:
+def _encode_report(report: MediaProcessingReport) -> bytes:
     payload = _MediaReportJson.model_validate(asdict(report)).model_dump(mode="json")
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 

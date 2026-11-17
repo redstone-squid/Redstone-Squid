@@ -4,7 +4,7 @@ from enum import StrEnum
 
 
 class MediaJobStatus(StrEnum):
-    """Stable durable states for one normalization request."""
+    """Stable durable states for one processing request."""
 
     PENDING = "pending"
     CLAIMED = "claimed"
@@ -14,7 +14,7 @@ class MediaJobStatus(StrEnum):
 
 
 class MediaArtifactRole(StrEnum):
-    """The purpose of a durable artifact produced by normalization."""
+    """The purpose of a durable artifact produced by processing."""
 
     OUTPUT = "output"
     VIDEO_THUMBNAIL = "video_thumbnail"

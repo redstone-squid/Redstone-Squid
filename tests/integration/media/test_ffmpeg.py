@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from squid.media.application import MediaNormalizationRequest, MediaNormalizationService
-from squid.media.domain import MediaKind, MediaNormalizationAction
+from squid.media.application import MediaProcessingRequest, MediaProcessingService
+from squid.media.domain import MediaKind, MediaProcessingAction
 from squid.media.errors import InvalidMediaError, MediaFailureReason
-from squid.media.infrastructure import FfmpegMediaNormalizer
+from squid.media.infrastructure import FfmpegMediaProcessor
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -23,10 +23,10 @@ async def test_existing_destination_is_never_overwritten(tmp_path: Path) -> None
     )
     output = tmp_path / "normalized.png"
     output.write_bytes(b"keep-me")
-    service = MediaNormalizationService(FfmpegMediaNormalizer())
+    service = MediaProcessingService(FfmpegMediaProcessor())
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.normalize(MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output))
+        await service.process(MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output))
 
     assert raised.value.reason is MediaFailureReason.OUTPUT_EXISTS
     assert output.read_bytes() == b"keep-me"
@@ -39,10 +39,10 @@ async def test_video_preserves_original_bytes_and_audio(
     _generate_video(source)
     output = tmp_path / "normalized.mp4"
     poster = tmp_path / "poster.jpg"
-    service = MediaNormalizationService(FfmpegMediaNormalizer())
+    service = MediaProcessingService(FfmpegMediaProcessor())
 
-    result = await service.normalize(
-        MediaNormalizationRequest(
+    result = await service.process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=output,
@@ -57,7 +57,7 @@ async def test_video_preserves_original_bytes_and_audio(
     assert (report.output_probe.frame_rate_numerator, report.output_probe.frame_rate_denominator) == (24, 1)
     assert report.poster is not None
     assert poster.read_bytes().startswith(b"\xff\xd8")
-    assert MediaNormalizationAction.AUDIO_PRESERVED in report.actions
+    assert MediaProcessingAction.AUDIO_PRESERVED in report.actions
 
     assert FFPROBE is not None
     metadata = subprocess.run(
@@ -110,8 +110,8 @@ async def test_video_repairs_reserved_color_tags_and_preserves_valid_tags(
         capture_output=True,
     )
 
-    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-        MediaNormalizationRequest(
+    result = await MediaProcessingService(FfmpegMediaProcessor()).process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
@@ -197,8 +197,8 @@ async def test_video_color_repair_ignores_malformed_filler_packets(tmp_path: Pat
         capture_output=True,
     )
 
-    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-        MediaNormalizationRequest(
+    result = await MediaProcessingService(FfmpegMediaProcessor()).process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "out.mp4",
@@ -245,10 +245,10 @@ async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) ->
         check=True,
         capture_output=True,
     )
-    service = MediaNormalizationService(FfmpegMediaNormalizer())
+    service = MediaProcessingService(FfmpegMediaProcessor())
 
-    result = await service.normalize(
-        MediaNormalizationRequest(
+    result = await service.process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
@@ -268,9 +268,9 @@ async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) ->
 async def test_variable_rate_video_preserves_closely_spaced_frame_timestamps(tmp_path: Path) -> None:
     source = tmp_path / "variable.mp4"
     _generate_video(source, variable_timestamps=True)
-    service = MediaNormalizationService(FfmpegMediaNormalizer())
-    result = await service.normalize(
-        MediaNormalizationRequest(
+    service = MediaProcessingService(FfmpegMediaProcessor())
+    result = await service.process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
@@ -334,8 +334,8 @@ async def test_rotated_video_preserves_display_orientation(tmp_path: Path, rotat
         check=True,
         capture_output=True,
     )
-    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-        MediaNormalizationRequest(
+    result = await MediaProcessingService(FfmpegMediaProcessor()).process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
@@ -457,8 +457,8 @@ async def test_webm_is_preserved_with_odd_dimensions_and_unknown_duration(tmp_pa
         check=True,
         capture_output=True,
     )
-    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-        MediaNormalizationRequest(
+    result = await MediaProcessingService(FfmpegMediaProcessor()).process(
+        MediaProcessingRequest(
             kind=MediaKind.VIDEO,
             source_path=source,
             output_path=tmp_path / "output",
@@ -492,8 +492,8 @@ async def test_raster_originals_preserve_bytes_and_animation(tmp_path: Path, ext
         check=True,
         capture_output=True,
     )
-    result = await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-        MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output")
+    result = await MediaProcessingService(FfmpegMediaProcessor()).process(
+        MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output")
     )
     assert result.output_path.read_bytes() == source.read_bytes()
     assert result.report.actions == ()
@@ -505,8 +505,8 @@ async def test_unsupported_images_are_rejected_without_conversion(tmp_path: Path
     source.write_bytes(b"P6\n1 1\n255\n\xff\x00\x00")
     output = tmp_path / "output"
     with pytest.raises(InvalidMediaError) as raised:
-        await MediaNormalizationService(FfmpegMediaNormalizer()).normalize(
-            MediaNormalizationRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output)
+        await MediaProcessingService(FfmpegMediaProcessor()).process(
+            MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output)
         )
     assert raised.value.reason is MediaFailureReason.FORMAT_UNSUPPORTED
     assert not output.exists()
