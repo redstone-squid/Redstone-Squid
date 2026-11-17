@@ -86,6 +86,50 @@ def controls(stack: History) -> tuple[ActionControl, ActionControl]:
     return undo, redo
 
 
+async def test_nonhistorical_cells_still_commit_and_roll_back() -> None:
+    subject, workspace = panel()
+    subject._state_descriptors["page"].cell(subject).reversible = False
+    with transaction() as tx:
+        subject.history.record(tx, "select")
+        subject.page = 2
+        workspace.selected = 7
+    assert (await subject.history.undo()).applied
+    assert workspace.selected is None
+    assert subject.page == 2
+    with pytest.raises(ValueError), transaction():
+        subject.page = 3
+        raise ValueError
+    assert subject.page == 2
+
+
+def test_history_omits_nonhistorical_only_actions() -> None:
+    subject, _ = panel()
+    subject._state_descriptors["page"].cell(subject).reversible = False
+    with transaction() as tx:
+        subject.history.record(tx, "browse")
+        subject.page = 2
+    assert not subject.history.can_undo
+
+
+def test_opaque_mutation_does_not_claim_a_reversible_patch() -> None:
+    class Values:
+        def __init__(self) -> None:
+            self.items: list[int] = []
+
+    class Draft(Reactive):
+        values: Values = state(factory=Values, opaque=True)
+
+    draft = Draft()
+    values = draft.values
+    stack = History()
+    with transaction() as tx:
+        stack.record(tx, "mutate")
+        values.items.append(1)
+        draft.mutated(values)
+    assert not stack.can_undo
+    assert values.items == [1]
+
+
 def test_record_requires_an_active_handle_and_rejects_old_inverse_shape() -> None:
     subject, _ = panel()
     with transaction() as completed:

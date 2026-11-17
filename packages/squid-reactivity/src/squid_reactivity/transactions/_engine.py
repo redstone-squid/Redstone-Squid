@@ -136,6 +136,7 @@ class _Staged[ValueT]:
     cell: _Cell[ValueT]
     value: ValueT | _Missing
     version: int
+    reversible: bool
 
 
 class _Phase(Enum):
@@ -276,10 +277,11 @@ class _TransactionEngine:
             raise ReactiveWriteError(message)
         entry = self.staged(cell)
         if entry is None:
-            self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1)
+            self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1, cell.reversible)
         else:
             entry.value = value
             entry.version += 1
+            entry.reversible = entry.reversible and cell.reversible
         _, names = self.changed.setdefault(id(owner), (owner, set()))
         names.add(name)
         # The staged version is what a read inside this transaction reports, so a computed that
@@ -437,6 +439,7 @@ class _TransactionEngine:
                     SlotValue.from_raw(entry.value),
                     entry.cell.version,
                     max(entry.version, entry.cell.version + 1),
+                    reversible=entry.reversible,
                 )
                 for entry in self.writes.values()
             )

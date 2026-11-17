@@ -592,11 +592,14 @@ class History:
         def committed(commit: TransactionCommit) -> None:
             if commit.context.kind in {TransactionPurpose.UNDO, TransactionPurpose.REDO}:
                 return
+            plan = UndoPlan.from_commit(commit)
+            if not plan.cells and not plan.participants and compensate is None:
+                return
             self._push(
                 HistoryEntry(
                     label,
                     commit.context.transaction_id,
-                    UndoPlan.from_commit(commit),
+                    plan,
                     compensation=compensate,
                     original_commit=commit,
                 )

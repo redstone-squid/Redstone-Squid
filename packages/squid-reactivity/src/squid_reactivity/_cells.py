@@ -37,7 +37,7 @@ class _Cell[ValueT](_ReactiveSource):
     Topic handles also use cells, solely to track a version without a value.
     """
 
-    __slots__ = ("__weakref__", "_address", "identity", "value", "version")
+    __slots__ = ("__weakref__", "_address", "identity", "reversible", "value", "version")
 
     def __init__(
         self, value: ValueT | _Missing = _MISSING, version: int = 0, address: DependencyAddress | None = None
@@ -45,6 +45,7 @@ class _Cell[ValueT](_ReactiveSource):
         self.identity = uuid.uuid7()
         self.value: ValueT | _Missing = value
         self.version = version
+        self.reversible = True
         self._address = address
 
     @property

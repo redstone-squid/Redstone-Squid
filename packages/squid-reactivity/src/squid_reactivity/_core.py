@@ -242,7 +242,12 @@ class _State[ValueT]:
         held = cell.staged_value()
         if held is _MISSING:
             held = cell.value
-        _write(instance, self._name, cell, held)
+        reversible = cell.reversible
+        cell.reversible = False
+        try:
+            _write(instance, self._name, cell, held)
+        finally:
+            cell.reversible = reversible
 
     def _initial(self, instance: ReactiveStateOwner) -> ValueT:
         if self._factory is None:

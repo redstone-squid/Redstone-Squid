@@ -74,6 +74,7 @@ class CellPatch:
     after: SlotValue
     before_version: int
     after_version: int
+    reversible: bool = True
 
     def inverse(self) -> ConditionalCellPatch:
         return ConditionalCellPatch(self.target, self.before, self.after_version)
@@ -113,4 +114,4 @@ class CellPatchSet:
         return tuple(found)
 
     def inverse(self) -> tuple[ConditionalCellPatch, ...]:
-        return tuple(patch.inverse() for patch in reversed(self.patches))
+        return tuple(patch.inverse() for patch in reversed(self.patches) if patch.reversible)
