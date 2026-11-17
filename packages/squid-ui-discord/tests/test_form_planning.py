@@ -8,7 +8,6 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, LimitViolationError
 from squid_ui.ext.discord import Everyone, MessageRoot
 from squid_ui.ext.discord.actions import ActionResponder
@@ -155,7 +154,7 @@ async def test_dynamic_form_uses_current_values_instead_of_a_declared_plan_with_
 
 
 def test_cached_message_replans_forms_when_defaults_change() -> None:
-    cache: PlanCache[scene.ComponentsV2] = PlanCache()
+    cache: PlanCache = PlanCache()
     spec = FormSpec("Name", (TextField(key="name", label="Name", default="Ada"),))
     first = plan(sl.form("Open", spec, key="open", on_submit=_submit), target=DISCORD_V2_DPY27, cache=cache)
     second = plan(

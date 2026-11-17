@@ -1,22 +1,21 @@
-"""Planning cache stores share eviction rules but have independent retention."""
+"""Partition hints are immutable snapshots with bounded least-recently-used retention."""
 
 from collections.abc import Callable
 
 import pytest
 
-from squid_ui import scene
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import OccurrenceId
 
 
 @pytest.fixture
-def cache() -> PlanCache[scene.ComponentsV2]:
+def cache() -> PlanCache:
     return PlanCache(capacity=2)
 
 
 @pytest.fixture
 def store(
-    cache: PlanCache[scene.ComponentsV2],
+    cache: PlanCache,
 ) -> tuple[Callable[[str], None], Callable[[str], bool]]:
     return lambda key: cache.remember_partitions(key, {}), lambda key: cache.partition_hint(key) is not None
 
@@ -51,7 +50,7 @@ def test_misses_leave_eviction_order_unchanged(store: tuple[Callable[[str], None
 
 @pytest.mark.parametrize("capacity", [0, 1, 3])
 def test_capacity_changes_apply_on_the_next_write(
-    cache: PlanCache[scene.ComponentsV2], store: tuple[Callable[[str], None], Callable[[str], bool]], capacity: int
+    cache: PlanCache, store: tuple[Callable[[str], None], Callable[[str], bool]], capacity: int
 ) -> None:
     put, contains = store
     put("first")
@@ -65,7 +64,7 @@ def test_capacity_changes_apply_on_the_next_write(
     assert contains("third") is (capacity > 0)
 
 
-def test_length_counts_retained_partition_hints(cache: PlanCache[scene.ComponentsV2]) -> None:
+def test_length_counts_retained_partition_hints(cache: PlanCache) -> None:
     cache.remember_partitions("first", {})
     cache.remember_partitions("second", {})
     assert len(cache) == 2
@@ -76,7 +75,7 @@ def test_length_counts_retained_partition_hints(cache: PlanCache[scene.Component
     assert cache.partition_hint("third") == {}
 
 
-def test_partition_hints_are_copied_and_read_only(cache: PlanCache[scene.ComponentsV2]) -> None:
+def test_partition_hints_are_copied_and_read_only(cache: PlanCache) -> None:
     region = OccurrenceId(("root", "region"))
     cuts = {region: (2, 4)}
     cache.remember_partitions("plan", cuts)

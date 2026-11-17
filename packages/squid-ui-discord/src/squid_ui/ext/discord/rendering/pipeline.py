@@ -40,7 +40,7 @@ def plan_and_draw[BodyT: scene.Body, RenderTargetT](
     *,
     drawer: MountedRenderer[BodyT],
     wire: Wire | None = None,
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[BodyT] | None = None,
     profile: OperationRecorder | None = None,
 ) -> tuple[MessagePayload, PlanResult[BodyT]]:

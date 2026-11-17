@@ -82,7 +82,7 @@ class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
         self,
         document: Document[RenderTargetT, Any],
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
-        cache: PlanCache[BodyT] | None,
+        cache: PlanCache | None,
     ) -> None:
         self.document = document
         self.request = request
@@ -269,7 +269,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
     *,
     max_messages: int,
     retained: Sequence[str | None] = (),
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> MessageSpread[BodyT]:
     """Plan a document as one message, or as up to `max_messages` when one cannot hold it.

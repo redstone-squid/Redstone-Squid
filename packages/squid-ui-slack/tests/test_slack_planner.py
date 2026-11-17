@@ -250,7 +250,7 @@ def test_block_reservation_and_strict_degradation() -> None:
 def test_slack_planner_reuses_exact_and_structural_caches() -> None:
     document = sl.paragraph("Cached")
     session = PresentationState()
-    cache: PlanCache[scene.SlackMessage] = PlanCache()
+    cache: PlanCache = PlanCache()
     memo: PlanMemo[scene.SlackMessage] = PlanMemo()
 
     first = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, memo=memo)
@@ -313,7 +313,7 @@ def test_shared_slack_cache_rebuilds_handlers_and_preserves_document_assets() ->
         pass
 
     asset = sl.document.Asset("report", "report.txt", "text/plain", sl.document.InlineAsset(b"report"))
-    cache = PlanCache[scene.SlackMessage]()
+    cache = PlanCache()
     request = PlanRequest(target=MESSAGE)
     first = plan_request(
         sl.Document[SlackMessageTarget](

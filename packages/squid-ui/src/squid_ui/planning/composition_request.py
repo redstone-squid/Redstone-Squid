@@ -61,5 +61,5 @@ class TargetComposition[RenderTargetT, BodyT: scene.Body](Protocol):
         rendered: DocumentLike[RenderTargetT],
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         options: CompositionOptions,
-        cache: PlanCache[BodyT] | None = None,
+        cache: PlanCache | None = None,
     ) -> PlanResult[BodyT]: ...

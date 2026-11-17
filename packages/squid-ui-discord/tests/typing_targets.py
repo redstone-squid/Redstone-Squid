@@ -74,10 +74,10 @@ assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.Component
 assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
 plan(Text("primitive"), target=html.target())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
-html_cache = PlanCache[scene.HtmlBody]()
+shared_cache = PlanCache()
 html_memo = PlanMemo[scene.HtmlBody]()
-plan(Paragraph("html"), target=html.target(), cache=html_cache, memo=html_memo)
-plan(Paragraph("discord"), target=v2(), cache=html_cache)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+plan(Paragraph("html"), target=html.target(), cache=shared_cache, memo=html_memo)
+plan(Paragraph("discord"), target=v2(), cache=shared_cache)
 plan(Paragraph("discord"), target=v2(), memo=html_memo)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))

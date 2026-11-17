@@ -80,7 +80,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     rules: TargetRules[RenderTargetT, object, PayloadT, ResourceT, BodyT, PreparationT],
     selections: Mapping[OccurrenceId, str],
     options: CompositionOptions | None = None,
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
 ) -> PlanResult[BodyT]:
     automatic = options is not None and options.automatic
     context = _context(request, options.work_limit if options is not None and automatic else None)
@@ -295,7 +295,7 @@ class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, Pre
         rendered: DocumentLike[RenderTargetT],
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         options: CompositionOptions,
-        cache: PlanCache[BodyT] | None = None,
+        cache: PlanCache | None = None,
     ) -> PlanResult[BodyT]:
         return _plan(rendered, request, self.rules, options.selections, options, cache)
 
@@ -352,7 +352,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         self,
         rendered: DocumentLike[RenderTargetT],
         *,
-        cache: PlanCache[BodyT] | None = None,
+        cache: PlanCache | None = None,
         memo: PlanMemo[BodyT] | None = None,
     ) -> PlanResult[BodyT]:
         request, options, document = self.request, self.options, self.document
@@ -383,7 +383,7 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     options: CompositionOptions | None,
     *,
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Resolve planning policy, then reuse or execute the target's bound rules."""

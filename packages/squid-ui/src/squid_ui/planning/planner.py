@@ -34,7 +34,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     positions: Mapping[str, PagePosition] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[BodyT] | None = None,
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -81,7 +81,7 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
-    cache: PlanCache[BodyT] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""

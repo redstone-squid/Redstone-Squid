@@ -19,31 +19,7 @@ from squid_ui.planning.result import PlanResult, PlanReuse
 from squid_ui.presentation import PresentationState
 
 
-class _LruStore[ValueT]:
-    """Promote successful reads and writes; apply the owner's capacity only on writes."""
-
-    def __init__(self) -> None:
-        self._entries: OrderedDict[str, ValueT] = OrderedDict()
-
-    def get[DefaultT](self, key: str, default: DefaultT) -> ValueT | DefaultT:
-        try:
-            value = self._entries[key]
-        except KeyError:
-            return default
-        self._entries.move_to_end(key)
-        return value
-
-    def put(self, key: str, value: ValueT, *, capacity: int) -> None:
-        self._entries[key] = value
-        self._entries.move_to_end(key)
-        while len(self._entries) > capacity:
-            self._entries.popitem(last=False)
-
-    def __len__(self) -> int:
-        return len(self._entries)
-
-
-class PlanCache[BodyT: scene.Body = Any]:
+class PlanCache:
     """Retain bounded, callback-free partition hints for shared composition.
 
     A hint suggests page boundaries; the planner certifies them against current
@@ -55,14 +31,22 @@ class PlanCache[BodyT: scene.Body = Any]:
             message = "plan cache capacity must be positive"
             raise ValueError(message)
         self.capacity = capacity
-        self._partitions = _LruStore[Mapping[OccurrenceId, tuple[int, ...]]]()
+        self._partitions: OrderedDict[str, Mapping[OccurrenceId, tuple[int, ...]]] = OrderedDict()
 
     def partition_hint(self, key: str) -> Mapping[OccurrenceId, tuple[int, ...]] | None:
         """Return prior cuts as a search hint, never as a certificate of feasibility."""
-        return self._partitions.get(key, None)
+        try:
+            cuts = self._partitions[key]
+        except KeyError:
+            return None
+        self._partitions.move_to_end(key)
+        return cuts
 
     def remember_partitions(self, key: str, cuts: Mapping[OccurrenceId, tuple[int, ...]]) -> None:
-        self._partitions.put(key, MappingProxyType(dict(cuts)), capacity=self.capacity)
+        self._partitions[key] = MappingProxyType(dict(cuts))
+        self._partitions.move_to_end(key)
+        while len(self._partitions) > self.capacity:
+            self._partitions.popitem(last=False)
 
     def __len__(self) -> int:
         return len(self._partitions)
@@ -82,42 +66,25 @@ class PlanMemo[BodyT: scene.Body = Any]:
         self._session_revisions: set[int] = set()
         self._result: PlanResult[BodyT] | None = None
 
-    def get(
-        self, source: object, key: object, session: PresentationState, session_revision: int
-    ) -> PlanResult[BodyT] | None:
+    def replay(self, source: object, key: object, session: PresentationState) -> PlanResult[BodyT] | None:
+        """Return a matching retained result with metrics marking this call as an exact hit."""
         if (
             self._source is source
             and self._key == key
             and self._session is session
-            and session_revision in self._session_revisions
+            and session.revision in self._session_revisions
+            and self._result is not None
         ):
-            return self._result
+            return replace(self._result, metrics=replace(self._result.metrics, cache_hit=True, reuse=PlanReuse.EXACT))
         return None
-
-    def put(
-        self,
-        source: object,
-        key: object,
-        session: PresentationState,
-        session_revision: int,
-        result: PlanResult[BodyT],
-    ) -> None:
-        self._source = source
-        self._key = key
-        self._session = session
-        self._session_revisions = {session_revision}
-        self._result = result
-
-    def replay(self, source: object, key: object, session: PresentationState) -> PlanResult[BodyT] | None:
-        """Return a matching retained result with metrics marking this call as an exact hit."""
-        retained = self.get(source, key, session, session.revision)
-        if retained is None:
-            return None
-        return replace(retained, metrics=replace(retained.metrics, cache_hit=True, reuse=PlanReuse.EXACT))
 
     def store(self, source: object, key: object, session: PresentationState, result: PlanResult[BodyT]) -> None:
         """Retain one exact result against the session's current revision."""
-        self.put(source, key, session, session.revision, result)
+        self._source = source
+        self._key = key
+        self._session = session
+        self._session_revisions = {session.revision}
+        self._result = result
 
     def promote(self, session: PresentationState, session_revision: int) -> None:
         """Accept the post-commit revision of the session this result already describes."""

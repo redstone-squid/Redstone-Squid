@@ -91,7 +91,7 @@ def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> 
     async def second(event: sl.PressEvent[object]) -> None:
         pytest.fail("planning invoked second handler")
 
-    cache, memo = PlanCache[scene.HtmlBody](), PlanMemo[scene.HtmlBody]()
+    cache, memo = PlanCache(), PlanMemo[scene.HtmlBody]()
     session = PresentationState()
     for handler in (first, second):
         result = sl.planning.plan(

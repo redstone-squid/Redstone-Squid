@@ -151,7 +151,7 @@ def render_message(
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
-    cache: PlanCache[scene.ClassicMessage] | None = None,
+    cache: PlanCache | None = None,
     memo: PlanMemo[scene.ClassicMessage] | None = None,
     profile: OperationRecorder | None = None,
     **options: Unpack[PlanOptions],
