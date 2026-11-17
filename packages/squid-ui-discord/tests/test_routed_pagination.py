@@ -14,7 +14,7 @@ from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import interaction_harness, query
 from squid_ui.interactions.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
-from squid_ui.planning import PlanCache, PlanMemo, Target, plan
+from squid_ui.planning import PlanCache, PlanningSnapshot, Target, plan
 from squid_ui.planning.pagination.navigation import default_nav, page_jump_form, page_jump_nav, page_select_nav
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
@@ -148,7 +148,7 @@ def test_routed_pages_ignore_session_positions_and_round_trip(target: Target, pa
 
 def test_route_factories_are_re_evaluated_with_a_shared_cache() -> None:
     cache = PlanCache()
-    memo = PlanMemo()
+    snapshot = PlanningSnapshot()
 
     def document(prefix: str) -> Lines:
         return Lines(
@@ -157,7 +157,7 @@ def test_route_factories_are_re_evaluated_with_a_shared_cache() -> None:
         )
 
     for prefix in ("old", "new", "new"):
-        result = plan(document(prefix), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache, memo=memo)
+        result = plan(document(prefix), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache, snapshot=snapshot)
         assert all(button.route_id.startswith(prefix) for button in testing.find_all(result.scene, scene.RoutedButton))
         assert not result.metrics.cache_hit
 

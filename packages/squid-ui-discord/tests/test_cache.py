@@ -1,6 +1,6 @@
 """Reuse planned layouts while binding controls to the current callbacks and presentation state.
 
-Tests distinguish structural cache hits, exact memo reuse, and incremental replanning when text
+Tests distinguish structural cache hits, exact snapshot reuse, and incremental replanning when text
 grows within the available space. They also cover eviction and representative latency limits.
 """
 
@@ -32,7 +32,7 @@ from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_mess
 from squid_ui.ext.discord import testing as sd
 from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.planning import PlanCache, PlanMemo, plan
+from squid_ui.planning import PlanCache, PlanningSnapshot, plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.interaction_handlers import SelectChoices
 from squid_ui.planning.pagination.navigation import TurnPage, default_nav
@@ -309,12 +309,12 @@ def test_shared_pagination_stages_equivalent_cursors_with_or_without_a_cache() -
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
     document = ActionControls((ActionControl("run", "Run", _first),), key="tools")
     session = PresentationState()
-    memo = PlanMemo()
-    first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
+    snapshot = PlanningSnapshot()
+    first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), snapshot=snapshot)
 
     monkeypatch.setattr("squid_ui.planning.composition_planner.RuleComposition.plan", _never_measured)
     monkeypatch.setattr("squid_ui.planning.planner.prepare_bindings", _never_measured)
-    exact = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
+    exact = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), snapshot=snapshot)
 
     assert exact.scene is first.scene
     assert exact.bindings is first.bindings

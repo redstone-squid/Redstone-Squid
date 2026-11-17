@@ -21,7 +21,7 @@ from squid_ui.planning import (
     DiscordPy27Adapter,
     DiscordPyAdapter,
     PlanCache,
-    PlanMemo,
+    PlanningSnapshot,
     Renderable,
     Target,
     plan,
@@ -75,10 +75,10 @@ assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.Html
 plan(Text("primitive"), target=html.target())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 shared_cache = PlanCache()
-html_memo = PlanMemo[scene.HtmlBody]()
-plan(Paragraph("html"), target=html.target(), cache=shared_cache, memo=html_memo)
+html_memo = PlanningSnapshot[scene.HtmlBody]()
+plan(Paragraph("html"), target=html.target(), cache=shared_cache, snapshot=html_memo)
 plan(Paragraph("discord"), target=v2(), cache=shared_cache)
-plan(Paragraph("discord"), target=v2(), memo=html_memo)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+plan(Paragraph("discord"), target=v2(), snapshot=html_memo)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))

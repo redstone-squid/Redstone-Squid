@@ -22,10 +22,11 @@ from squid_ui import scene
 from squid_ui.authoring.document import Document, DocumentLike, PortableDocumentLike, as_document
 from squid_ui.authoring.semantic import KeepWithNext
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation import ActivePagers, RegionLayoutState, RegionLayoutUpdate, RetainedCompositionUpdate
 
 # Planning failures that a smaller document could avoid. An overflow can also come from
@@ -269,7 +270,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
     max_messages: int,
     retained: Sequence[str | None] = (),
     cache: PlanCache | None = None,
-    memo: PlanMemo[BodyT] | None = None,
+    snapshot: PlanningSnapshot[BodyT] | None = None,
 ) -> MessageSpread[BodyT]:
     """Plan a document as one message, or as up to `max_messages` when one cannot hold it.
 
@@ -284,7 +285,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
         max_messages: The most messages the caller can deliver; 1 plans exactly as
             plan_request does.
         retained: The anchors of the previous spread, or empty for a first plan.
-        memo: Used only for the single-message plan, as plan_request uses it.
+        snapshot: Used only for the single-message plan, as plan_request uses it.
 
     Raises:
         LayoutError: The error from the single-message plan, when no spread within
@@ -298,7 +299,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
     if max_messages > 1 and (cuts := search.retained(retained)) is not None:
         return search.spread(cuts)
     try:
-        return MessageSpread((plan_request(rendered, request, cache=cache, memo=memo),))
+        return MessageSpread((plan_request(rendered, request, cache=cache, snapshot=snapshot),))
     except _DOES_NOT_FIT:
         if max_messages == 1 or not search.legal:
             raise

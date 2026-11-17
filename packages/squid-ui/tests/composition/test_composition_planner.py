@@ -13,7 +13,7 @@ from squid_ui.authoring.presentations import budget
 from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.discord import components_v2_target
-from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanMemo
+from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanningSnapshot
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
@@ -92,7 +92,7 @@ def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> 
     async def second(event: sl.PressEvent[object]) -> None:
         pytest.fail("planning invoked second handler")
 
-    cache, memo = PlanCache(), PlanMemo[scene.HtmlBody]()
+    cache, snapshot = PlanCache(), PlanningSnapshot[scene.HtmlBody]()
     session = PresentationState()
     for handler in (first, second):
         result = sl.planning.plan(
@@ -100,7 +100,7 @@ def test_opt_in_does_not_replay_a_cached_callback_or_publish_session_state() -> 
             target=squid_ui.ext.html.target(),
             composition=CompositionOptions(),
             cache=cache,
-            memo=memo,
+            snapshot=snapshot,
             session=session,
         )
         assert next(iter(result.bindings.values())).handler is handler
@@ -123,12 +123,16 @@ def test_fixed_composition_uses_options_work_limit() -> None:
 def test_automatic_memo_replays_only_the_same_composition_options() -> None:
     document = sl.paragraph("Body")
     session = PresentationState()
-    memo = PlanMemo[scene.ComponentsV2]()
+    snapshot = PlanningSnapshot[scene.ComponentsV2]()
     options = CompositionOptions(automatic=True)
-    first = sl.planning.plan(document, target=V2, composition=options, session=session, memo=memo)
-    replay = sl.planning.plan(document, target=V2, composition=options, session=session, memo=memo)
+    first = sl.planning.plan(document, target=V2, composition=options, session=session, snapshot=snapshot)
+    replay = sl.planning.plan(document, target=V2, composition=options, session=session, snapshot=snapshot)
     changed = sl.planning.plan(
-        document, target=V2, composition=replace(options, work_limit=options.work_limit + 1), session=session, memo=memo
+        document,
+        target=V2,
+        composition=replace(options, work_limit=options.work_limit + 1),
+        session=session,
+        snapshot=snapshot,
     )
     assert not first.metrics.cache_hit
     assert replay.metrics.cache_hit

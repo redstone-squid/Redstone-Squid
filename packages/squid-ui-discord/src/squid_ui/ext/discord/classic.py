@@ -58,10 +58,11 @@ from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanReport, PlanResult
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Overflow
 from squid_ui.primitives.nodes import (
@@ -152,7 +153,7 @@ def render_message(
     renderer: ClassicRenderer | None = None,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     cache: PlanCache | None = None,
-    memo: PlanMemo[scene.ClassicMessage] | None = None,
+    snapshot: PlanningSnapshot[scene.ClassicMessage] | None = None,
     profile: OperationRecorder | None = None,
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.View | None, scene.ClassicMessage]:
@@ -164,7 +165,7 @@ def render_message(
         drawer=renderer if renderer is not None else ClassicRenderer(limits=target.limits, adapter=adapter),
         wire=wire,
         cache=cache,
-        memo=memo,
+        snapshot=snapshot,
         profile=profile,
     )
     return RenderedMessage(payload, result)

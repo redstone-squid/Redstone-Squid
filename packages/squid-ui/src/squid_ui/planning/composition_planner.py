@@ -13,7 +13,7 @@ from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
 from squid_ui.planning.binding_preparation import prepare_bindings
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
@@ -35,6 +35,7 @@ from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
+from squid_ui.planning.snapshot import PlanningSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -122,7 +123,9 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     try:
         if cache is not None and automatic:
             assert options is not None
-            cache_key = stable_fingerprint((document, replace(options, pages={})), consume=context.work.consume)
+            cache_key = stable_fingerprint(
+                (document, replace(options, pages={})), consume=context.work.consume, cache=request.fingerprints
+            )
             partition_hint = cache.partition_hint(cache_key)
         graph = semantic_graph(Group(document.children, key=document.key or "@document"), consume=context.work.consume)
     except LayoutSearchExhaustedError as error:
@@ -374,26 +377,32 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         rendered: DocumentLike[RenderTargetT],
         *,
         cache: PlanCache | None = None,
-        memo: PlanMemo[BodyT] | None = None,
+        snapshot: PlanningSnapshot[BodyT] | None = None,
     ) -> PlanResult[BodyT]:
         request, options, document = self.request, self.options, self.document
         # Route factories can change IDs without changing their callable identity.
         if has_routed_page(rendered):
             cache = None
-            memo = None
+            snapshot = None
         key = request.exact_key()
-        if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
-            return exact
         retained = request.presentation.retained_composition
-        if options.automatic and retained is not None and retained.matches(document, request, options):
+        if (
+            (snapshot is None or snapshot.enabled)
+            and options.automatic
+            and retained is not None
+            and retained.matches(document, request, options)
+        ):
             result = retained.reuse(document, request, options)
         else:
             effective = request.target.reserve(request.reservation)
             result = effective.dialect.composer(document, effective.limits).plan(
-                document, request, options, cache if options.automatic else None
+                document,
+                request,
+                options,
+                cache if options.automatic and (snapshot is None or snapshot.enabled) else None,
             )
-        if memo is not None:
-            memo.store(rendered, key, request.presentation, result)
+        if snapshot is not None:
+            snapshot.stage(rendered, key, request.presentation, result)
         return result
 
 
@@ -403,7 +412,13 @@ def plan_composition[RenderTargetT, AdapterT, BodyT: scene.Body](
     options: CompositionOptions | None,
     *,
     cache: PlanCache | None = None,
-    memo: PlanMemo[BodyT] | None = None,
+    snapshot: PlanningSnapshot[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Resolve planning policy, then reuse or execute the target's bound rules."""
-    return CompositionPlan.prepare(rendered, request, options).execute(rendered, cache=cache, memo=memo)
+    if snapshot is not None:
+        request = replace(request, fingerprints=snapshot.fingerprints if snapshot.enabled else None)
+        # Routed inputs are never staged, so exact replay needs no tree traversal.
+        exact = snapshot.replay(rendered, request.exact_key(), request.presentation)
+        if exact is not None:
+            return exact
+    return CompositionPlan.prepare(rendered, request, options).execute(rendered, cache=cache, snapshot=snapshot)

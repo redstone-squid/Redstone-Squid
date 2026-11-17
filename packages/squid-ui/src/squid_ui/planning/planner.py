@@ -10,13 +10,14 @@ from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.binding_preparation import prepare_bindings
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 
@@ -34,7 +35,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
     cache: PlanCache | None = None,
-    memo: PlanMemo[BodyT] | None = None,
+    snapshot: PlanningSnapshot[BodyT] | None = None,
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
@@ -57,7 +58,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     rejects declared losses, including shortening and omission.
 
     `cache` retains callback-free partition hints, which require current certification.
-    `memo` retains one owner's exact live result. Committed allocations support page
+    `snapshot` retains one owner's exact live result. Committed allocations support page
     turns without repeating search. An explicit search_budget bounds shared operations.
     """
     request = PlanRequest(
@@ -73,7 +74,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
         search_budget=search_budget,
         composition=composition,
     )
-    return plan_request(rendered, request, cache=cache, memo=memo)
+    return plan_request(rendered, request, cache=cache, snapshot=snapshot)
 
 
 def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
@@ -81,12 +82,12 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
     cache: PlanCache | None = None,
-    memo: PlanMemo[BodyT] | None = None,
+    snapshot: PlanningSnapshot[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
     if request.composition is None or isinstance(request.composition, CompositionOptions):
         result = plan_composition(
-            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache, memo=memo
+            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache, snapshot=snapshot
         )
     else:
         result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)

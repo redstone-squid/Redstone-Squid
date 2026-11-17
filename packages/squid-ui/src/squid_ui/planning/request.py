@@ -9,6 +9,7 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.identity import FingerprintCache
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.target import Target
@@ -22,7 +23,7 @@ DEFAULT_SEARCH_BUDGET = 512
 
 
 class Identity:
-    """Identity comparison that also keeps its value alive while an exact memo does."""
+    """Identity comparison that also keeps its value alive while a planning snapshot does."""
 
     __slots__ = ("value",)
 
@@ -86,9 +87,10 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     session: PresentationState | None = None
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET
+    fingerprints: FingerprintCache | None = field(default=None, compare=False, repr=False)
     presentation: PresentationState = field(init=False, compare=False, repr=False)
     """`session`, or the empty state standing in for it -- resolved once, so that a request
-    without a session still has one stable presentation identity to key a memo on."""
+    without a session still has one stable presentation identity for exact replay."""
 
     def __post_init__(self) -> None:
         if self.search_budget < 1:
@@ -96,14 +98,8 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             raise ValueError(message)
         object.__setattr__(self, "presentation", self.session if self.session is not None else PresentationState())
 
-    def exact_key(self) -> tuple[object, ...]:
-        """Build the exact memo key using identity for callback-bearing configuration.
-
-        The memo separately checks source identity and session revision. Callers
-        must replace mutable inputs such as `positions` when their contents change;
-        changing them in place does not change this key. Navigation factories may
-        instead expose a changing `version`.
-        """
+    def allocation_key(self) -> tuple[object, ...]:
+        """Capture the environment shared by exact replay and allocation reuse."""
         return (
             Identity(self.target),
             Identity(self.chrome),
@@ -111,11 +107,22 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             Identity(self.palette),
             self.reservation,
             self.strict,
-            Identity(self.positions),
             Identity(self.nav),
             getattr(self.nav, "version", 0),
-            Identity(self.composition),
+            self.composition is None,
             self.search_budget,
+        )
+
+    def exact_key(self) -> tuple[object, ...]:
+        """Include binding-bearing configuration and a copy of transient positions.
+
+        Source identity and presentation revision are checked by PlanningSnapshot.
+        Navigation factories can expose a changing integer version.
+        """
+        return (
+            *self.allocation_key(),
+            Identity(self.composition),
+            None if self.positions is None else tuple(sorted(self.positions.items())),
         )
 
 

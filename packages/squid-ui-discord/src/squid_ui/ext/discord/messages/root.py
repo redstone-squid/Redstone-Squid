@@ -875,7 +875,7 @@ class MessageRoot[
                         max_messages=self.max_messages,
                         retained=self._candidates.anchors,
                         cache=self.runtime.plan_cache,
-                        memo=self.runtime.plan_memo,
+                        snapshot=self.runtime.planning_snapshot,
                     )
                     result, *rest = spread.messages
                     later, anchors = tuple(rest), spread.anchors
@@ -898,7 +898,7 @@ class MessageRoot[
                         nav=self.nav,
                         session=self.presentation,
                         cache=self.runtime.plan_cache,
-                        memo=self.runtime.plan_memo,
+                        snapshot=self.runtime.planning_snapshot,
                     )
             except (UnsolvableLayoutError, LayoutSearchExhaustedError) as error:
                 error.context["screen"] = f"{type(self.component).__module__}.{type(self.component).__qualname__}"
@@ -1126,7 +1126,7 @@ class MessageRoot[
             nav=lambda state: (),
             session=self.presentation,
             cache=self.runtime.plan_cache,
-            memo=self.runtime.plan_memo,
+            snapshot=self.runtime.planning_snapshot,
             profile=profile,
         )
         view = rendered.payload.view

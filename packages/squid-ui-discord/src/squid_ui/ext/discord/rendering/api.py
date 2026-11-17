@@ -23,9 +23,10 @@ from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.definition import Component
@@ -42,7 +43,7 @@ def render_message(
     renderer: V2Renderer | None = None,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     cache: PlanCache | None = None,
-    memo: PlanMemo[scene.ComponentsV2] | None = None,
+    snapshot: PlanningSnapshot[scene.ComponentsV2] | None = None,
     profile: OperationRecorder | None = None,
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.LayoutView, scene.ComponentsV2]:
@@ -54,7 +55,7 @@ def render_message(
         drawer=renderer if renderer is not None else V2Renderer(limits=target.limits, adapter=adapter),
         wire=wire,
         cache=cache,
-        memo=memo,
+        snapshot=snapshot,
         profile=profile,
     )
     return RenderedMessage(payload, result)

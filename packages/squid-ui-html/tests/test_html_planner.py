@@ -34,7 +34,7 @@ from squid_ui.interactions.forms import (
     ZonedDateTimeField,
 )
 from squid_ui.pages import PagePosition
-from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
+from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState, SelectionState
@@ -331,12 +331,12 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
 def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> None:
     asset = sl.document.Asset("report", "report.txt", "text/plain", sl.document.InlineAsset(b"report"))
     cache = PlanCache()
-    memo = PlanMemo()
+    snapshot = PlanningSnapshot()
     first = sl.planning.plan(
         sl.download(asset, label="Report", key="report"),
         target=squid_ui.ext.html.target(),
         cache=cache,
-        memo=memo,
+        snapshot=snapshot,
     )
     exact = sl.planning.plan(
         sl.download(asset, label="Report", key="report"),

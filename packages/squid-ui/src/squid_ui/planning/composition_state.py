@@ -22,7 +22,6 @@ from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.interaction_semantics import ItemSummary
 from squid_ui.planning.offers import region_cursor_key
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.pagination.reuse import same_allocation_document
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
@@ -39,11 +38,6 @@ from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import FIRST_PAGE, Paginate, RoutedPage
 
 
-def _navigation_version(nav: PlannedNav | None) -> int | None:
-    version = getattr(nav, "version", 0)
-    return version if isinstance(version, int) else None
-
-
 @dataclass(frozen=True, slots=True)
 class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT = Any]:
     """One certified allocation and the authored structure needed to present its pages.
@@ -56,7 +50,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
 
     document: Document[RenderTargetT]
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
-    navigation_version: int | None
+    environment: tuple[object, ...]
     options: CompositionOptions
     result: PlanResult[BodyT]
     graph: SemanticGraph[RenderTargetT, Any] = field(repr=False, compare=False)
@@ -75,7 +69,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         # Preparation belongs to the authored snapshot. Replacing its result must
         # retain these values rather than traverse and fingerprint the tree again.
         graph = semantic_graph(Group(document.children, key=document.key or "@document"))
-        fingerprint = stable_fingerprint((document,))
+        fingerprint = stable_fingerprint((document,), cache=request.fingerprints)
         if request.session is not None and result.allocation is not None:
             frontend = request.target.adapter.frontend or request.target.adapter.name
             allocation = prepare_action_allocation(result.allocation, graph, frontend)
@@ -88,9 +82,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 resources=MappingProxyType({}),
                 allocation=allocation,
             )
-        return cls(
-            document, request, _navigation_version(request.nav), replace(options, pages={}), result, graph, fingerprint
-        )
+        return cls(document, request, request.allocation_key(), replace(options, pages={}), result, graph, fingerprint)
 
     def reuse(
         self,
@@ -114,17 +106,8 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         return (
             not has_routed_page(document)
             and same_allocation_document(document, self.document)
-            and request.target is self.request.target
-            and request.chrome is self.request.chrome
-            and request.localization is self.request.localization
-            and request.palette is self.request.palette
-            and request.reservation == self.request.reservation
-            and request.strict == self.request.strict
-            and request.nav is self.request.nav
-            and self.navigation_version is not None
-            and _navigation_version(request.nav) == self.navigation_version
-            and request.search_budget == self.request.search_budget
-            and (request.composition is None) == (self.request.composition is None)
+            and request.allocation_key() == self.environment
+            and isinstance(getattr(request.nav, "version", 0), int)
             and request.presentation is self.request.presentation
             and replace(options, pages={}) == self.options
         )
@@ -203,7 +186,11 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             if cursor_fingerprint is None:
                 # Content and cuts belong to this retained snapshot; page coordinates
                 # and delivery state do not affect the cursor's content identity.
-                cursor_fingerprint = stable_fingerprint((content, region.cuts)) if content is not None else fingerprint
+                cursor_fingerprint = (
+                    stable_fingerprint((content, region.cuts), cache=request.fingerprints)
+                    if content is not None
+                    else fingerprint
+                )
                 self._cursor_fingerprints[identity] = cursor_fingerprint
             if not isinstance(owner, Controlled | RoutedPage):
                 stored = request.presentation.cursor(key)

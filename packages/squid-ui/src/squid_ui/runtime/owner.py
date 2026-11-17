@@ -10,7 +10,8 @@ from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import BusAddress, DependencyAddress
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation import PresentationState
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
@@ -112,7 +113,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._context = dict(context or {})
         self._context_view = MappingProxyType(self._context)
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
-        self.plan_memo = PlanMemo()
+        self.planning_snapshot = PlanningSnapshot()
         self._components: dict[str, AnyComponent] = {}
         self._components_view = MappingProxyType(self._components)
         self._cache = RenderCache[RenderTargetT]()
@@ -526,7 +527,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._cache.clear()
         self._cached_tree = None
         self._committed_tree = None
-        self.plan_memo.clear()
+        self.planning_snapshot.clear()
         self.root._runtime = None
         self._raise_hook_errors()
 

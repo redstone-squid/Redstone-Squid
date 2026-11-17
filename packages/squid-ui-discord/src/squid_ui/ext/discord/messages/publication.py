@@ -147,7 +147,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self.behind = False
         presentation = self._runtime.presentation
         presentation.apply_updates(candidate.session_updates)
-        self._runtime.plan_memo.promote(presentation, presentation.revision)
+        self._runtime.planning_snapshot.commit(candidate.plan, presentation)
         # Component hooks can invalidate or raise after reconciling the delivered tree.
         # Settlement precedes them so cleanup never rolls back that committed work.
         candidate.render.commit()

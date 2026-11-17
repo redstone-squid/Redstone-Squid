@@ -10,7 +10,7 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
-from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
+from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.planner import plan_request
@@ -251,10 +251,10 @@ def test_slack_planner_reuses_exact_and_structural_caches() -> None:
     document = sl.paragraph("Cached")
     session = PresentationState()
     cache: PlanCache = PlanCache()
-    memo: PlanMemo[scene.SlackMessage] = PlanMemo()
+    snapshot: PlanningSnapshot[scene.SlackMessage] = PlanningSnapshot()
 
-    first = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, memo=memo)
-    exact = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, memo=memo)
+    first = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, snapshot=snapshot)
+    exact = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, snapshot=snapshot)
     structural = sl.planning.plan(sl.paragraph("Cached"), target=MESSAGE, session=session, cache=cache)
 
     assert first.metrics.reuse is PlanReuse.MISS

@@ -12,7 +12,7 @@ reservations tell the planner how much space that particular display can use.
 from squid_ui.pages import PagePosition, PagePositionPolicy, resolve_page_position
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation_policy import AllocationGoal, RegionPolicy, SearchCompletion, SearchDiagnostics
-from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import AtomicContract, OccurrenceId
 from squid_ui.planning.composition_planner import AutomaticComposition, CompositionRejectedError, FixedComposition
 from squid_ui.planning.composition_request import CompositionOptions
@@ -23,6 +23,7 @@ from squid_ui.planning.planner import plan
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
+from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.spread import MessageSpread, plan_spread
 from squid_ui.planning.target import PreparedExtension, Target
 from squid_ui.target_types import (
@@ -73,12 +74,12 @@ __all__ = [
     "PagePositionPolicy",
     "PlanCache",
     "PlanEvent",
-    "PlanMemo",
     "PlanMetrics",
     "PlanReport",
     "PlanResult",
     "PlanReuse",
     "PlanSeverity",
+    "PlanningSnapshot",
     "PreparedExtension",
     "RegionPolicy",
     "RenderTarget",
