@@ -329,5 +329,10 @@ def control_key[RenderTargetT, ContextT](
             and sum(ref.keys[-1] in (source_key, key) for ref in occurrence.graph.units) == 1
         ):
             return key
-    encoded = json.dumps(sorted(ref.keys for ref in sources), ensure_ascii=True)
+    return grouped_control_key(occurrence)
+
+
+def grouped_control_key[RenderTargetT, ContextT](occurrence: SemanticOccurrence[RenderTargetT, ContextT]) -> str:
+    """Identify a grouped control from its complete semantic source scope."""
+    encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
     return "composition." + sha256(encoded.encode()).hexdigest()[:32]

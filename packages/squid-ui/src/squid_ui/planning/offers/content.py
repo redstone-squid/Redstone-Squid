@@ -1,9 +1,7 @@
 """Offer realizations for semantic content and layout containers."""
 
-import json
 from dataclasses import replace
 from datetime import UTC
-from hashlib import sha256
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -30,7 +28,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.interaction_handlers import (
     RouteSelection,
 )
-from squid_ui.planning.offers.navigation import RegionNavigation, region_cursor_key
+from squid_ui.planning.offers.navigation import RegionNavigation, grouped_control_key, region_cursor_key
 from squid_ui.planning.offers.policy import Offers, _OfferScope
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.realizations import (
@@ -718,8 +716,7 @@ def _container_offers[RenderTargetT, ContextT](
             )
         )
         if eligible and (len(eligible) > 1 or value.display == sem.ControlDisplay.GROUPED):
-            encoded = json.dumps(sorted(ref.keys for ref in occurrence.sources), ensure_ascii=True)
-            key = "composition." + sha256(encoded.encode()).hexdigest()[:32]
+            key = grouped_control_key(occurrence)
             routes = {
                 item.key: ActionBinding(
                     item.key,

@@ -12,15 +12,17 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene, testing
 from squid_ui.ext.discord.planning.discord import components_v2_target
-from squid_ui.interactions import PressHandler
+from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler
+from squid_ui.interactions.guards import ADMIT, GuardDecision, GuardLedger
 from squid_ui.interactions.handlers import FrontendHandler
 from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
-from squid_ui.planning.action_projection import ActionAllocation
+from squid_ui.planning.action_projection import ActionAllocation, ActionPage, ActionSlot
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, RegionPages
 from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState
+from squid_ui.runtime.histories import History
 from squid_ui.target_types import DiscordAdapter
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "projection", ">=1"))
@@ -95,12 +97,13 @@ class Outputs:
     regions: Mapping[OccurrenceId, RegionPages] = {}
 
     def __init__(self, result: PlanResult[scene.ComponentsV2]) -> None:
-        self.outputs = tuple(replace(result) for _ in range(3))
+        controls = {"open": sl.action_control("Open", ignored, key="open")}
+        self.outputs = tuple(ActionPage.prepare(replace(result), controls) for _ in range(3))
 
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
         return {REGION: max(0, min(2, coordinates.get(REGION, 0)))}
 
-    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> PlanResult[scene.ComponentsV2]:
+    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> ActionPage[scene.ComponentsV2]:
         return self.outputs[self.visible(coordinates or {})[REGION]]
 
 
@@ -118,7 +121,8 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
     assert allocation.select({REGION: 1}) is not second
     assert allocation.cache_snapshot().entries == 2
     assert allocation.cache_snapshot().evictions == 2
-    assert source.select({REGION: 0}).bindings is original.bindings
+    assert source.select({REGION: 0}).bindings["open"] == ActionSlot("open")
+    assert not source.select({REGION: 0}).display.bindings
     assert "open" in allocation.controls
 
 
@@ -218,7 +222,10 @@ async def test_grouped_callbacks_with_repeated_local_keys_keep_their_scope() -> 
     for binding in current.bindings.values():
         assert "run" in binding.routes
         await binding.handler(testing.selection_event("run"))
-    assert sorted(called) == ["new:left", "new:right"]
+        routed = binding.routed(("run",))
+        assert routed is not None and routed.key == "run"
+        await routed.handler(testing.selection_event("run"))
+    assert sorted(called) == ["new:left", "new:left", "new:right", "new:right"]
 
 
 def test_detached_allocation_preserves_nested_coordinate_selection() -> None:
@@ -261,8 +268,10 @@ async def test_initial_live_templates_do_not_retain_action_receivers() -> None:
     del result, receiver, session
     gc.collect()
     assert reference() is None
-    with pytest.raises(sl.LayoutInvariantError, match="template must be bound"):
-        await templates.select({REGION: 0}).bindings["open"].handler(testing.press_event())
+    slot = templates.select({REGION: 0}).bindings["open"]
+    assert isinstance(slot, ActionSlot)
+    assert not callable(slot)
+    assert not hasattr(slot, "handler")
 
 
 async def test_live_templates_preserve_selected_fallback_handlers() -> None:
@@ -294,3 +303,36 @@ async def test_live_templates_preserve_selected_fallback_handlers() -> None:
     for binding in result.bindings.values():
         await binding.handler(testing.press_event())
     assert sorted(calls) == ["ordinary", "replacement"]
+
+
+@pytest.mark.parametrize("display", [sl.semantic.ControlDisplay.INDIVIDUAL, sl.semantic.ControlDisplay.GROUPED])
+async def test_action_templates_release_live_dispatch_policy(display: sl.semantic.ControlDisplay) -> None:
+    class Receiver:
+        async def handle(self, event: sl.PressEvent) -> None:
+            pass
+
+        async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
+            return ADMIT
+
+    receiver = Receiver()
+    history = History()
+    receiver_ref, history_ref = weakref.ref(receiver), weakref.ref(history)
+    busy = BusySpec(pending="Working")
+    control = sl.action_control(
+        "Run", receiver.handle, key="run", mode=ActionMode.REBASE, guard=receiver, record=history, busy=busy
+    )
+    session = PresentationState()
+    result = plan(sl.action_controls(control, key="actions", display=display), target=TARGET, session=session)
+    assert isinstance(result.allocation, ActionAllocation)
+    templates = result.allocation.source
+    root = next(iter(result.bindings.values()))
+    binding = root.routed(("run",))
+    assert binding is not None
+    assert binding.guard is receiver and binding.record is history and binding.busy is busy
+    assert binding.mode == ActionMode.REBASE and binding.label == control.label
+    await binding.handler(testing.press_event())
+    del result, receiver, history, session, control, root, binding
+    gc.collect()
+    assert receiver_ref() is None
+    assert history_ref() is None
+    assert not templates.select().display.bindings

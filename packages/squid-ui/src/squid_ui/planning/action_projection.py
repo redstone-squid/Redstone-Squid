@@ -6,40 +6,117 @@ retain their chosen bindings because their source correspondence can change keys
 """
 
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any, cast, override
+from typing import Any
 
 from squid_ui import scene
 from squid_ui.authoring.presentations import Alternatives
-from squid_ui.authoring.semantic import ActionControl, FallbackContent
+from squid_ui.authoring.semantic import ActionControl, ActionControls, FallbackContent
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.interactions import ActionBinding, ActionEvent, PressEvent
+from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.handlers import _HandlerBinder
 from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, CertifiedAllocation, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
-from squid_ui.planning.offers.navigation import control_key
+from squid_ui.planning.interaction_handlers import RouteSelection
+from squid_ui.planning.offers.navigation import control_key, grouped_control_key
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.semantic_index import SemanticGraph
 from squid_ui.primitives.nodes import Extension
 
 
-class _ActionBinder(_HandlerBinder):
-    def __init__(self, frontend: str, controls: Mapping[str, ActionControl[Any]]) -> None:
-        super().__init__(frontend)
-        self.controls = controls
+@dataclass(frozen=True, slots=True)
+class ActionSlot:
+    """A reference to an ordinary action in the owner's current control snapshot."""
 
-    @override
-    def action[EventT: ActionEvent[Any]](self, binding: ActionBinding[EventT]) -> ActionBinding[EventT]:
-        if (control := self.controls.get(binding.key)) is not None:
-            # The unchanged authored control kind guarantees this is a press binding.
-            handler = cast(Callable[[EventT], Awaitable[None]], control.on_trigger)
-            return self.cached(
-                binding,
-                lambda: replace(binding, handler=self.callback(handler), routes=self.actions(binding.routes)),
-            )
-        return super().action(binding)
+    key: str
+
+
+@dataclass(frozen=True, slots=True)
+class ActionGroupSlot:
+    key: str
+    mode: ActionMode
+    routes: Mapping[str, ActionSlot]
+
+
+type ActionTemplate = ActionSlot | ActionGroupSlot | ActionBinding
+
+
+@dataclass(frozen=True, slots=True)
+class ActionPage[BodyT: scene.Body]:
+    """Certified display data and action slots, separate from projected bindings.
+
+    Unsupported binding kinds remain live and owner-local. Ordinary slots contain
+    only keys; their handlers and dispatch policy come from the current controls.
+    """
+
+    display: PlanResult[BodyT]
+    bindings: Mapping[str, ActionTemplate]
+
+    @classmethod
+    def prepare(
+        cls,
+        result: PlanResult[BodyT],
+        controls: Mapping[str, ActionControl[Any]],
+        groups: Mapping[str, Mapping[str, str]] | None = None,
+    ) -> ActionPage[BodyT]:
+        bindings: dict[str, ActionTemplate] = {}
+        for key, binding in result.bindings.items():
+            if isinstance(binding.handler, RouteSelection):
+                aliases = (groups or {}).get(key)
+                if aliases is None or not all(aliases.get(route) in controls for route in binding.routes):
+                    bindings[key] = binding
+                    continue
+                # Framework grouped controls carry per-action policy in their routes.
+                if binding.guard is not None or binding.busy is not None or binding.record is not None or binding.label:
+                    message = "grouped action template has unexpected dispatch policy"
+                    raise LayoutInvariantError(message)
+                bindings[key] = ActionGroupSlot(
+                    key, binding.mode, MappingProxyType({route: ActionSlot(aliases[route]) for route in binding.routes})
+                )
+            elif key in controls:
+                bindings[key] = ActionSlot(key)
+            else:
+                bindings[key] = binding
+        display = replace(
+            result, bindings=MappingProxyType({}), allocation=None, page_selector=None, session_updates=()
+        )
+        return cls(display, MappingProxyType(bindings))
+
+
+def _bind_action(
+    slot: ActionSlot, controls: Mapping[str, ActionControl[Any]], *, key: str | None = None
+) -> ActionBinding:
+    control = controls[slot.key]
+    return ActionBinding(
+        slot.key if key is None else key,
+        control.on_trigger,
+        control.mode,
+        guard=control.guard,
+        busy=control.busy,
+        label=control.label,
+        record=control.record,
+    )
+
+
+def _bind_page[BodyT: scene.Body](
+    page: ActionPage[BodyT], controls: Mapping[str, ActionControl[Any]], frontend: str
+) -> PlanResult[BodyT]:
+    bindings: dict[str, ActionBinding] = {}
+    for key, template in page.bindings.items():
+        match template:
+            case ActionSlot():
+                bindings[key] = _bind_action(template, controls)
+            case ActionGroupSlot():
+                routes = MappingProxyType(
+                    {key: _bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
+                )
+                bindings[key] = ActionBinding(template.key, RouteSelection(routes), template.mode, routes=routes)
+            case ActionBinding():
+                bindings[key] = template
+    prepared = _HandlerBinder(frontend).actions(bindings)
+    return replace(page.display, bindings=MappingProxyType(dict(prepared)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,10 +135,10 @@ class _ProjectionCache[BodyT: scene.Body]:
             message = "projection cache capacity must be positive"
             raise ValueError(message)
         self.capacity = capacity
-        self.entries: OrderedDict[int, tuple[PlanResult[BodyT], PlanResult[BodyT]]] = OrderedDict()
+        self.entries: OrderedDict[int, tuple[ActionPage[BodyT], PlanResult[BodyT]]] = OrderedDict()
         self.hits = self.misses = self.evictions = 0
 
-    def get(self, source: PlanResult[BodyT]) -> PlanResult[BodyT] | None:
+    def get(self, source: ActionPage[BodyT]) -> PlanResult[BodyT] | None:
         entry = self.entries.get(id(source))
         if entry is None:
             self.misses += 1
@@ -71,7 +148,7 @@ class _ProjectionCache[BodyT: scene.Body]:
         self.hits += 1
         return entry[1]
 
-    def put(self, source: PlanResult[BodyT], result: PlanResult[BodyT]) -> None:
+    def put(self, source: ActionPage[BodyT], result: PlanResult[BodyT]) -> None:
         self.entries[id(source)] = (source, result)
         self.entries.move_to_end(id(source))
         while len(self.entries) > self.capacity:
@@ -90,7 +167,7 @@ class ActionAllocation[BodyT: scene.Body]:
     Page turns retain the view and its cache. Neither operation changes delivery state.
     """
 
-    source: AllocationSelection[PlanResult[BodyT]]
+    source: AllocationSelection[ActionPage[BodyT]]
     controls: Mapping[str, ActionControl[Any]]
     frontend: str
     capacity: int = 32
@@ -119,30 +196,10 @@ class ActionAllocation[BodyT: scene.Body]:
         result = self.source.select(coordinates)
         if (cached := self._cache.get(result)) is not None:
             return cached
-        binder = _ActionBinder(self.frontend, self.controls)
-        projected = replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
+        projected = _bind_page(result, self.controls, self.frontend)
         # Failed frontend binding must not publish a partially prepared projection.
         self._cache.put(result, projected)
         return projected
-
-
-async def _unbound_action(event: PressEvent[Any]) -> None:
-    message = "allocation action template must be bound before dispatch"
-    raise LayoutInvariantError(message)
-
-
-def _action_templates[BodyT: scene.Body](
-    source: CertifiedAllocation[Any, Any, Any, PlanResult[BodyT]] | AllocationSnapshot[PlanResult[BodyT]],
-    controls: Mapping[str, ActionControl[Any]],
-    frontend: str,
-) -> AllocationSnapshot[PlanResult[BodyT]]:
-    templates = {key: replace(control, on_trigger=_unbound_action) for key, control in controls.items()}
-
-    def detach(result: PlanResult[BodyT]) -> PlanResult[BodyT]:
-        binder = _ActionBinder(frontend, templates)
-        return replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
-
-    return AllocationSnapshot[PlanResult[BodyT]].project(source, detach)
 
 
 def prepare_action_allocation[BodyT: scene.Body](
@@ -152,6 +209,7 @@ def prepare_action_allocation[BodyT: scene.Body](
 ) -> AllocationSelection[PlanResult[BodyT]]:
     """Prepare slots once, then replace only the current callback snapshot on reuse."""
     controls: dict[str, ActionControl[Any]] = {}
+    groups: dict[str, dict[str, str]] = {}
     for reference, unit in graph.units.items():
         if not isinstance(unit.value, ActionControl):
             continue
@@ -164,10 +222,16 @@ def prepare_action_allocation[BodyT: scene.Body](
         else:
             key = control_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
             controls[key] = unit.value
+            if unit.parent is not None and isinstance(graph.units[unit.parent].value, ActionControls):
+                group = SemanticOccurrence(OccurrenceId(unit.parent.keys), graph, unit.parent)
+                groups.setdefault(grouped_control_key(group), {})[unit.value.key] = key
     if isinstance(allocation, ActionAllocation):
         if allocation.controls == controls and allocation.frontend == frontend:
             return allocation
         return ActionAllocation(allocation.source, controls, frontend)
     if not controls or not isinstance(allocation, CertifiedAllocation | AllocationSnapshot):
         return allocation
-    return ActionAllocation(_action_templates(allocation, controls, frontend), controls, frontend)
+    templates = AllocationSnapshot[ActionPage[BodyT]].project(
+        allocation, lambda result: ActionPage.prepare(result, controls, groups)
+    )
+    return ActionAllocation(templates, controls, frontend)
