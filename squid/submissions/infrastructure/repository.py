@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import cast, override
 from uuid import UUID
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -46,6 +46,17 @@ from squid.submissions.models.entities import (
 from squid.submissions.models.finalization import SubmissionFinalizationJob
 
 _ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION)
+
+
+class _FieldOperationJson(BaseModel):
+    """The durable JSONB shape used to detect replay of a draft edit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, from_attributes=True)
+
+    operation_id: UUID
+    field_id: str
+    kind: FieldOperationKind
+    value: JsonValue = None
 
 
 class PostgresDraftRepository(DraftRepository):
@@ -456,12 +467,9 @@ def _json_object(value: Mapping[str, JSONValue]) -> dict[str, object]:
 
 def _operations_to_json(operations: Sequence[FieldOperation]) -> list[dict[str, object]]:
     return [
-        {
-            "operation_id": str(operation.operation_id),
-            "field_id": operation.field_id,
-            "kind": operation.kind.value,
-            **({"value": operation.value} if operation.kind is FieldOperationKind.SET else {}),
-        }
+        _FieldOperationJson.model_validate(operation).model_dump(
+            mode="json", exclude={"value"} if operation.kind is FieldOperationKind.UNSET else None
+        )
         for operation in operations
     ]
 
