@@ -7,7 +7,7 @@ from layout_api import Contextual, ElementRef, FragmentLocation, LayoutContext, 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid_ui.authoring.semantic import Paragraph
-from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.ext.discord.target_types import ClassicTarget, ComponentsV2Target
 from squid_ui.selectors import Match, select
 from squid_ui.target_types import RenderTarget
 
@@ -60,6 +60,7 @@ assert_type(native, Contextual[ComponentsV2Target, object])
 assert_type(actions, Contextual[ComponentsV2Target, sd.Request])
 assert_type(build, ElementRef[Paragraph])
 sl.Document[ComponentsV2Target]((plain, native))
+sl.Document[ClassicTarget]((plain,))
 sl.Document[ComponentsV2Target, sd.Request]((actions,))
 
 # Negative probes: each should fail when uncommented.

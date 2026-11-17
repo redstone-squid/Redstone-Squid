@@ -143,11 +143,53 @@ These refine the agreed direction; the spike does not silently implement them:
   alternatives. Fail the document if none can be certified; retain rejected-branch
   diagnostics. Work exhaustion must not be reported as proof of infeasibility.
 
-## Experiment
+## Experiment results
 
-The executable spike will separate two questions: which facts the retained
-allocation already provides, and whether dependency-tracked iteration can handle
-page-count feedback, delayed facts, oscillation, and growth under a shared budget.
-A small row/character model can test resolution mechanics, but cannot prove that
-production offer/partition search is integrated or optimal. Record that boundary
-with the results before starting a production footer implementation.
+Eleven tests in `spikes/test_experiment.py` pass. Both Pyrefly and BasedPyright
+accept the signatures/examples and reject the six negative probes for the intended
+type errors. The whole-project Pyrefly check also passes. Nothing in the runtime
+or planner has changed.
+
+| Experiment | Result |
+| --- | --- |
+| Real HTML allocation: 83 keyed builds, 12 per page | Existing metadata reports 7 pages, selected index 1, 12 visible sources, and build 42 on page index 3 |
+| Synthetic footer changes its own available page space | Page counts 6, 13, then 15; stabilizes in 4 passes with 3 callback evaluations |
+| Turn the selected page with unchanged page count | Only the callback reading the selection reevaluates; a constant callback is reused |
+| A required fact appears after another block generates content | The dependent block suspends provisionally and resolves on a later pass |
+| A required fact remains absent | Quiescence fails with the context key and missing query |
+| Alternating output and unbounded growth | Repeated states fail as oscillation; nonrepeating growth reaches the iteration bound |
+| Candidate/snapshot changes and work exhaustion | Caches remain isolated and layout plus query operations share one allowance |
+
+The real allocator test reads `RegionPages`/`AllocationSelection` metadata and
+checks that the previously selected output remains the same object. It does not
+construct another page family. The source anchors can answer direct page
+membership but cannot distinguish exact split fragments from repeated chrome.
+Build the richer location index from `FragmentCoverage` and repeated-source
+metadata before certification discards that provenance. Nested addresses also
+need parent/child page-coordinate joins, which the simple membership adapter
+deliberately does not implement.
+
+`spikes/experiment.py` contains an isolated string/row model. Its deterministic
+layout is a function of generated text, so comparing text states is sufficient
+there; production equality must include graph, representation, and partition
+choices. It demonstrates mechanics, not production search integration, resource
+calibration, global optimality, lifecycle behavior, or target certification.
+Its eight-round default and synthetic work units are experimental parameters,
+not proposed production limits. Previously returned certificates remain immutable
+when a new attempt fails; actual delivery preservation remains the host's job.
+
+Run the executable experiment from the repository root:
+
+```sh
+PYTHONPATH=docs/plans/layout-introspection/spikes uv run --locked pytest docs/plans/layout-introspection/spikes/test_experiment.py -q
+```
+
+For explicit Pyrefly checking, add the spike directory with `--search-path` and
+pass its `.py`/`.pyi` files. BasedPyright needs an explicit spike include (docs are
+normally excluded), a merged workspace package tree as in CI's installed-package
+approach, and its missing-source warning disabled for the intentional stub module.
+
+The next implementation slice should connect contextual content to candidate
+construction and recertification, using a page footer as the first query consumer.
+It should preserve the general query boundary and produce a measured integration
+cost before adding a broader public vocabulary.
