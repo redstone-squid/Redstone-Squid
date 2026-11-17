@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal, Self, override
+from typing import TYPE_CHECKING, Any, Literal, Self, cast, override
 
 import anyio
 import discord
@@ -497,9 +497,9 @@ class AccountWorkspace(sd.Screen):
         form = _ClaimForm.from_submission(event)
         await self._submit_claim(event, form.name)
 
-    async def _choose_claim(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+    async def _choose_claim(self, event: sd.PressEvent) -> None:
         await pick(
-            event,
+            cast(sd.PressEvent[RedstoneSquid], event),
             "creators",
             tr(t"account-search-credit-names = Search credited names"),
             self._claim_picked,
