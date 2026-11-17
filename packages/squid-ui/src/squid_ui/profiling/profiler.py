@@ -483,7 +483,11 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
 
         if exc is not None:
             status = _status_for_exception(exc)
-            detail = None if status is not TraceStatus.FAILED else _exception_name(exc)
+            detail = (
+                None
+                if status is not TraceStatus.FAILED
+                else f"{type(exc).__module__}.{type(exc).__qualname__}"[:_MAX_DETAIL_LENGTH]
+            )
             dispatch = None if self._trace.result is None else self._trace.result.dispatch
             presentation = None if self._trace.result is None else self._trace.result.presentation
             result = TraceResult(status, detail, dispatch, presentation)
@@ -614,10 +618,6 @@ def _status_for_exception(error: BaseException | None) -> TraceStatus:
     ):
         return TraceStatus.CANCELLED
     return TraceStatus.FAILED
-
-
-def _exception_name(error: BaseException) -> str:
-    return f"{type(error).__module__}.{type(error).__qualname__}"[:_MAX_DETAIL_LENGTH]
 
 
 class MemoryProfiler:

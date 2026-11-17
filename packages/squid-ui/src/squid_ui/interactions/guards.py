@@ -28,10 +28,6 @@ if TYPE_CHECKING:
     from squid_ui.runtime.definition import Component
 
 
-def _monotonic() -> float:
-    return time.monotonic()
-
-
 @dataclass(frozen=True, slots=True)
 class GuardDecision:
     """One guard's answer, and the wording a denial is entitled to."""
@@ -136,7 +132,7 @@ class GuardLedger:
     """
 
     action: str = ""
-    now: Callable[[], float] = _monotonic
+    now: Callable[[], float] = time.monotonic
     _entries: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
     _staged: _Staged | None = field(default=None, repr=False, compare=False)
 

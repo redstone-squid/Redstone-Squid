@@ -24,47 +24,6 @@ class InvalidAddress(SquidUiError, ValueError):
     """A relative address or its arguments do not match the route contract."""
 
 
-def _parameter_type(annotation: object) -> tuple[object, bool]:
-    """Resolve aliases and optionality once when registering a parameter."""
-    if isinstance(annotation, TypeAliasType):
-        return _parameter_type(annotation.__value__)
-    if get_origin(annotation) is UnionType:
-        arguments = get_args(annotation)
-        if len(arguments) == 2 and type(None) in arguments:
-            value_type = next(argument for argument in arguments if argument is not type(None))
-            return _parameter_type(value_type)[0], True
-    elif any(annotation is kind for kind in (int, bool, UUID)) or (
-        get_origin(annotation) is Literal and all(isinstance(value, str) for value in get_args(annotation))
-    ):
-        return annotation, False
-    msg = "Unsupported route parameter type"
-    raise ValueError(msg)
-
-
-def _decode(value: str, annotation: object) -> object:
-    if annotation is int:
-        if not re.fullmatch(r"[0-9]+", value) or int(value) <= 0:
-            msg = "IDs must be positive integers"
-            raise InvalidAddress(msg)
-        return int(value)
-    if annotation is UUID:
-        try:
-            return UUID(value)
-        except ValueError as error:
-            msg = "Invalid UUID"
-            raise InvalidAddress(msg) from error
-    if annotation is bool and value in ("true", "false"):
-        return value == "true"
-    if get_origin(annotation) is Literal and value in get_args(annotation):
-        return value
-    msg = "Invalid parameter value"
-    raise InvalidAddress(msg)
-
-
-def _encode(value: object) -> str:
-    return str(value).lower() if isinstance(value, bool) else str(value)
-
-
 @dataclass(frozen=True, slots=True)
 class AddressParts:
     """A validated relative address before a route interprets its parameter values."""
@@ -101,6 +60,47 @@ class AddressParts:
 class AddressRoute:
     """Compile a callable's address parameters independently of its invocation."""
 
+    @classmethod
+    def _parameter_type(cls, annotation: object) -> tuple[object, bool]:
+        """Resolve aliases and optionality once when registering a parameter."""
+        if isinstance(annotation, TypeAliasType):
+            return cls._parameter_type(annotation.__value__)
+        if get_origin(annotation) is UnionType:
+            arguments = get_args(annotation)
+            if len(arguments) == 2 and type(None) in arguments:
+                value_type = next(argument for argument in arguments if argument is not type(None))
+                return cls._parameter_type(value_type)[0], True
+        elif any(annotation is kind for kind in (int, bool, UUID)) or (
+            get_origin(annotation) is Literal and all(isinstance(value, str) for value in get_args(annotation))
+        ):
+            return annotation, False
+        msg = "Unsupported route parameter type"
+        raise ValueError(msg)
+
+    @staticmethod
+    def _decode(value: str, annotation: object) -> object:
+        if annotation is int:
+            if not re.fullmatch(r"[0-9]+", value) or int(value) <= 0:
+                msg = "IDs must be positive integers"
+                raise InvalidAddress(msg)
+            return int(value)
+        if annotation is UUID:
+            try:
+                return UUID(value)
+            except ValueError as error:
+                msg = "Invalid UUID"
+                raise InvalidAddress(msg) from error
+        if annotation is bool and value in ("true", "false"):
+            return value == "true"
+        if get_origin(annotation) is Literal and value in get_args(annotation):
+            return value
+        msg = "Invalid parameter value"
+        raise InvalidAddress(msg)
+
+    @staticmethod
+    def _encode(value: object) -> str:
+        return str(value).lower() if isinstance(value, bool) else str(value)
+
     def __init__(
         self, path: str, signature: inspect.Signature, annotations: Mapping[str, Any], *, fragment: str | None = None
     ) -> None:
@@ -113,7 +113,7 @@ class AddressRoute:
         if len(set(parameters)) != len(parameters) or not set(parameters) <= declared.keys():
             msg = "Every path parameter must be a callable parameter, exactly once"
             raise ValueError(msg)
-        types = {name: _parameter_type(annotations.get(name)) for name in declared}
+        types = {name: self._parameter_type(annotations.get(name)) for name in declared}
         self.optional = frozenset(name for name, (_, optional) in types.items() if optional)
         if fragment is not None:
             parameter = declared.get(fragment)
@@ -142,7 +142,7 @@ class AddressRoute:
         self.defaults = defaults
         self.query = tuple(name for name in declared if name not in parameters and name != fragment)
         self.converters = {
-            name: Converter(name, r"[^/]+", partial(_decode, annotation=annotation), _encode)
+            name: Converter(name, r"[^/]+", partial(self._decode, annotation=annotation), self._encode)
             for name, (annotation, _) in types.items()
         }
         # Broad segment patterns preserve conservative ambiguity rejection: paths

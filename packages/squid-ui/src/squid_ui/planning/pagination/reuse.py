@@ -28,10 +28,6 @@ type AllocationNode = (
 )
 
 
-def _page_configuration(owner: PageOwnership) -> PageOwnership:
-    return replace(owner, value=0) if isinstance(owner, Controlled) else owner
-
-
 def same_allocation_document[RenderTargetT, ContextT](
     left: Document[RenderTargetT, ContextT], right: Document[RenderTargetT, ContextT]
 ) -> bool:
@@ -46,6 +42,10 @@ class _AllocationComparison:
     def __init__(self, *, rebind_actions: bool = True) -> None:
         self.rebind_actions = rebind_actions
 
+    @staticmethod
+    def _page_configuration(owner: PageOwnership) -> PageOwnership:
+        return replace(owner, value=0) if isinstance(owner, Controlled) else owner
+
     def same_children(
         self,
         left: tuple[AllocationNode, ...],
@@ -59,19 +59,19 @@ class _AllocationComparison:
         match left, right:
             case sem.Region(), sem.Region():
                 return (
-                    replace(left, children=(), header=(), footer=(), page=_page_configuration(left.page))
-                    == replace(right, children=(), header=(), footer=(), page=_page_configuration(right.page))
+                    replace(left, children=(), header=(), footer=(), page=self._page_configuration(left.page))
+                    == replace(right, children=(), header=(), footer=(), page=self._page_configuration(right.page))
                     and self.same_children(left.children, right.children)
                     and self.same_children(left.header, right.header)
                     and self.same_children(left.footer, right.footer)
                 )
             case sem.Paged(), sem.Paged():
-                return replace(left, node=sem.Group(()), page=_page_configuration(left.page)) == replace(
-                    right, node=sem.Group(()), page=_page_configuration(right.page)
+                return replace(left, node=sem.Group(()), page=self._page_configuration(left.page)) == replace(
+                    right, node=sem.Group(()), page=self._page_configuration(right.page)
                 ) and self.same_node(left.node, right.node)
             case ((sem.List()), (sem.List())):
-                return replace(left, page=_page_configuration(left.page)) == replace(
-                    right, page=_page_configuration(right.page)
+                return replace(left, page=self._page_configuration(left.page)) == replace(
+                    right, page=self._page_configuration(right.page)
                 )
             case (
                 (
@@ -249,8 +249,8 @@ class _AllocationComparison:
                     | primitive.Code(overflow=Paginate() as b)
                 ),
             ):
-                return replace(left, overflow=replace(a, page=_page_configuration(a.page))) == replace(
-                    right, overflow=replace(b, page=_page_configuration(b.page))
+                return replace(left, overflow=replace(a, page=self._page_configuration(a.page))) == replace(
+                    right, overflow=replace(b, page=self._page_configuration(b.page))
                 )
             case (
                 primitive.Content()

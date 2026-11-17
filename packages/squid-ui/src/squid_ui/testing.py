@@ -75,13 +75,9 @@ def _field_strings(tree: Tree, name: str) -> list[str]:
     found: list[str] = []
     for node in walk(tree):
         value = getattr(node, name, None)
-        if value is not None and _is_text(value):
+        if value is not None and (isinstance(value, str | Text | Template) or hasattr(value, "content")):
             found.append(resolve_text(value, NEUTRAL).content)
     return found
-
-
-def _is_text(value: object) -> bool:
-    return isinstance(value, str | Text | Template) or hasattr(value, "content")
 
 
 def texts(tree: Tree) -> list[str]:
