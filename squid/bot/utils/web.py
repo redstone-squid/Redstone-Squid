@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import aiohttp
 import anyio
 import bs4
+import ffmpeg
 
 logger = logging.getLogger(__name__)
 
@@ -127,29 +128,17 @@ async def extract_video_preview(video_data: bytes, *, timeout_seconds: float = 1
                 seek = min(duration / 2, 30.0) if math.isfinite(duration) and duration > 0 else 0.0
                 for offset in (seek, 0.0) if seek else (0.0,):
                     process = await anyio.run_process(
-                        [
-                            "ffmpeg",
-                            "-v",
-                            "error",
-                            "-nostdin",
-                            "-threads",
-                            "1",
-                            "-protocol_whitelist",
-                            "file,pipe",
-                            "-ss",
-                            str(offset),
-                            "-i",
+                        ffmpeg.input(
                             str(source),
-                            "-frames:v",
-                            "1",
-                            "-vf",
-                            "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease",
-                            "-f",
-                            "image2pipe",
-                            "-vcodec",
-                            "png",
-                            "pipe:1",
-                        ],
+                            ss=offset,
+                            codec_options=ffmpeg.options.codec.decoder_codec_context(threads=1),
+                            extra_options={"protocol_whitelist": "file,pipe"},
+                        )
+                        .video_stream(0)
+                        .scale(w="min(1920,iw)", h="min(1080,ih)", force_original_aspect_ratio="decrease")
+                        .output(filename="pipe:1", vframes=1, f="image2pipe", vcodec="png")
+                        .global_args(loglevel="error", stdin=False)
+                        .compile(),
                         check=False,
                     )
                     if process.returncode != 0 or process.stdout:

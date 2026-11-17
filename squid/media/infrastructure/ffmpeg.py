@@ -15,7 +15,11 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+import ffmpeg
 from anyio import CancelScope, fail_after
+from ffmpeg.codecs import encoders
+from ffmpeg.dag.nodes import OutputStream
+from ffmpeg.formats import muxers
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 try:
@@ -280,36 +284,25 @@ class FfmpegMediaNormalizer:
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
         with _staged_outputs((request.output_path, ".png")) as (temporary,):
-            await self._run(
-                self._ffmpeg,
-                (
-                    *_ffmpeg_input_arguments(request.source_path, self._process_limits),
-                    "-map",
-                    "0:v:0",
-                    "-frames:v",
-                    "1",
-                    "-an",
-                    "-sn",
-                    "-dn",
-                    "-map_metadata",
-                    "-1",
-                    "-map_chapters",
-                    "-1",
-                    "-c:v",
-                    "png",
-                    "-threads",
-                    str(self._process_limits.threads),
-                    "-pix_fmt",
-                    "rgba",
-                    "-fflags",
-                    "+bitexact",
-                    "-flags:v",
-                    "+bitexact",
-                    "-update",
-                    "1",
-                    "-f",
-                    "image2",
-                    str(temporary),
+            await self._run_ffmpeg(
+                self._input(request.source_path)
+                .video_stream(0)
+                .output(
+                    filename=temporary,
+                    vframes=1,
+                    an=True,
+                    sn=True,
+                    dn=True,
+                    map_metadata=-1,
+                    map_chapters=-1,
+                    vcodec="png",
+                    pix_fmt="rgba",
+                    codec_options=ffmpeg.options.codec.encoder_codec_context(
+                        threads=self._process_limits.threads, flags="+bitexact"
+                    ),
+                    format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
+                    f="image2",
+                    extra_options={"update": 1},
                 ),
                 operation="normalize_image",
                 timeout_seconds=self._process_limits.image_timeout_seconds,
@@ -393,65 +386,35 @@ class FfmpegMediaNormalizer:
     ) -> None:
         color_arguments = await self._video_color_arguments(source_path, probe)
         seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
-        await self._run(
-            self._ffmpeg,
-            (
-                "-y",
-                "-nostdin",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-xerror",
-                "-protocol_whitelist",
-                _INPUT_PROTOCOLS,
-                "-protocol_blacklist",
-                _NETWORK_PROTOCOLS,
-                "-threads",
-                str(self._process_limits.threads),
-                "-filter_threads",
-                str(self._process_limits.threads),
-                *color_arguments,
-                "-ss",
-                _format_milliseconds(seek_milliseconds),
-                "-i",
-                str(source_path),
-                "-map",
-                "0:v:0",
-                "-frames:v",
-                "1",
-                "-an",
-                "-sn",
-                "-dn",
-                "-vf",
-                "scale=w='min(1920,iw)':h=-2",
-                "-map_metadata",
-                "-1",
-                "-c:v",
-                "mjpeg",
-                "-threads",
-                str(self._process_limits.threads),
-                "-q:v",
-                "2",
-                "-pix_fmt",
-                "yuvj420p",
-                "-fflags",
-                "+bitexact",
-                "-flags:v",
-                "+bitexact",
-                "-update",
-                "1",
-                "-f",
-                "image2",
-                str(poster_temporary),
+        await self._run_ffmpeg(
+            self._input(source_path, color_arguments=color_arguments, seek=_format_milliseconds(seek_milliseconds))
+            .video_stream(0)
+            .scale(w="min(1920,iw)", h=-2)
+            .output(
+                filename=poster_temporary,
+                vframes=1,
+                an=True,
+                sn=True,
+                dn=True,
+                map_metadata=-1,
+                vcodec="mjpeg",
+                q=2,
+                pix_fmt="yuvj420p",
+                codec_options=ffmpeg.options.codec.encoder_codec_context(
+                    threads=self._process_limits.threads, flags="+bitexact"
+                ),
+                format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
+                f="image2",
+                extra_options={"update": 1},
             ),
             operation="generate_poster",
             timeout_seconds=self._process_limits.poster_timeout_seconds,
             max_file_bytes=limits.max_output_bytes,
         )
 
-    async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> tuple[str, ...]:
+    async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> dict[str, str]:
         if probe.video_codec != "h264":
-            return ()
+            return {}
         data = _ColorProbeJson.model_validate_json(
             await self._probe_output(source_path, "stream=codec_type,color_space,color_primaries,color_transfer")
         )
@@ -470,7 +433,7 @@ class FfmpegMediaNormalizer:
         # Remove padding before the metadata parser: some recorders emit filler
         # packets without a trailing stop bit. Picture and timing data stay intact.
         return (
-            ("-bsf:v:0", "filter_units=remove_types=12,h264_metadata=" + ":".join(replacements)) if replacements else ()
+            {"bsf:v:0": "filter_units=remove_types=12,h264_metadata=" + ":".join(replacements)} if replacements else {}
         )
 
     async def _normalize_video(
@@ -487,48 +450,39 @@ class FfmpegMediaNormalizer:
             video_temporary,
             poster_temporary,
         ):
-            audio_arguments = ("-an",) if request.strip_audio else ("-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k")
+            source = self._input(request.source_path, color_arguments=color_arguments)
+            streams: list[ffmpeg.VideoStream | ffmpeg.AudioStream] = [source.video_stream(0)]
+            if not request.strip_audio:
+                streams.append(source.audio_stream(0, optional=True))
             # A frame-rate-based encoder clock can merge closely spaced VFR timestamps.
             # Keep the demuxer's precision as well as passing each frame through.
-            await self._run(
-                self._ffmpeg,
-                (
-                    *_ffmpeg_input_arguments(request.source_path, self._process_limits, color_arguments),
-                    "-map",
-                    "0:v:0",
-                    *audio_arguments,
-                    "-sn",
-                    "-dn",
-                    "-map_metadata",
-                    "-1",
-                    "-map_chapters",
-                    "-1",
-                    "-c:v",
-                    "libx264",
-                    "-threads",
-                    str(self._process_limits.threads),
-                    "-preset",
-                    "medium",
-                    # Bound queued frames so 4K clips fit the process memory limit.
-                    "-rc-lookahead",
-                    "8",
-                    "-crf",
-                    "20",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-fps_mode",
-                    "passthrough",
-                    "-enc_time_base:v",
-                    "demux",
-                    "-movflags",
-                    "+faststart",
-                    "-fflags",
-                    "+bitexact",
-                    "-flags:v",
-                    "+bitexact",
-                    "-f",
-                    "mp4",
-                    str(video_temporary),
+            await self._run_ffmpeg(
+                ffmpeg.output(
+                    *streams,
+                    filename=video_temporary,
+                    an=request.strip_audio,
+                    acodec=None if request.strip_audio else "aac",
+                    ab=None if request.strip_audio else "192k",
+                    sn=True,
+                    dn=True,
+                    map_metadata=-1,
+                    map_chapters=-1,
+                    f="mp4",
+                    vcodec="libx264",
+                    encoder_options=encoders.libx264(
+                        preset="medium",
+                        # Bound queued frames so 4K clips fit the process memory limit.
+                        rc_lookahead=8,
+                        crf=20,
+                    ),
+                    codec_options=ffmpeg.options.codec.encoder_codec_context(
+                        threads=self._process_limits.threads, flags="+bitexact"
+                    ),
+                    pix_fmt="yuv420p",
+                    fps_mode="passthrough",
+                    enc_time_base="demux",
+                    muxer_options=muxers.mp4(movflags="+faststart"),
+                    format_options=ffmpeg.options.format.encoder_format_context(fflags="+bitexact"),
                 ),
                 operation="normalize_video",
                 timeout_seconds=self._process_limits.video_timeout_seconds,
@@ -675,6 +629,46 @@ class FfmpegMediaNormalizer:
             pass
         raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="count_frames")
 
+    def _input(
+        self, source_path: Path, *, color_arguments: dict[str, str] | None = None, seek: str | None = None
+    ) -> ffmpeg.AVStream:
+        return ffmpeg.input(
+            source_path.absolute(),
+            ss=seek,
+            codec_options=ffmpeg.options.codec.decoder_codec_context(threads=self._process_limits.threads),
+            extra_options={
+                "protocol_whitelist": _INPUT_PROTOCOLS,
+                "protocol_blacklist": _NETWORK_PROTOCOLS,
+                **(color_arguments or {}),
+            },
+        )
+
+    async def _run_ffmpeg(
+        self,
+        output: OutputStream,
+        *,
+        operation: str,
+        timeout_seconds: float,
+        max_file_bytes: int,
+    ) -> None:
+        # Compile only: our runner owns cancellation, process limits, and error translation.
+        command = output.global_args(
+            y=True,
+            stdin=False,
+            hide_banner=True,
+            loglevel="error",
+            xerror=True,
+            filter_threads=self._process_limits.threads,
+            filter_complex_threads=self._process_limits.threads,
+        ).compile(cmd=self._ffmpeg)
+        await self._run(
+            command[0],
+            command[1:],
+            operation=operation,
+            timeout_seconds=timeout_seconds,
+            max_file_bytes=max_file_bytes,
+        )
+
     async def _run(
         self,
         executable: str,
@@ -784,32 +778,6 @@ def _display_dimensions(video: _ProbeStreamJson) -> tuple[int, int]:
         msg = "Display rotation must be finite"
         raise ValueError(msg)
     return (height, width) if abs(rotation) % 180 == 90 else (width, height)
-
-
-def _ffmpeg_input_arguments(
-    source_path: Path, limits: MediaProcessLimits, stream_arguments: tuple[str, ...] = ()
-) -> tuple[str, ...]:
-    return (
-        "-y",
-        "-nostdin",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-xerror",
-        "-protocol_whitelist",
-        _INPUT_PROTOCOLS,
-        "-protocol_blacklist",
-        _NETWORK_PROTOCOLS,
-        "-threads",
-        str(limits.threads),
-        "-filter_threads",
-        str(limits.threads),
-        "-filter_complex_threads",
-        str(limits.threads),
-        *stream_arguments,
-        "-i",
-        str(source_path.absolute()),
-    )
 
 
 def _average_frame_rate_changed(source: MediaProbe, output: MediaProbe) -> bool:

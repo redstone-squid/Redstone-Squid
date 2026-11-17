@@ -336,7 +336,7 @@ async def test_video_header_mismatch_is_checked_against_decoded_frames(
         return b""
 
     monkeypatch.setattr(normalizer, "_run", write_output)
-    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value=()))
+    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value={}))
     monkeypatch.setattr(normalizer, "probe", AsyncMock(side_effect=[output, poster]))
     count_frames = AsyncMock(side_effect=[215, output_frames])
     monkeypatch.setattr(normalizer, "_decoded_frame_count", count_frames)
@@ -407,7 +407,7 @@ async def test_rate_metadata_fallback_requires_matching_frame_timestamps(
         return b""
 
     monkeypatch.setattr(normalizer, "_run", write_output)
-    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value=()))
+    monkeypatch.setattr(normalizer, "_video_color_arguments", AsyncMock(return_value={}))
     monkeypatch.setattr(normalizer, "probe", AsyncMock(side_effect=[output, poster]))
     timestamps = AsyncMock(side_effect=[source_timestamps, output_timestamps])
     monkeypatch.setattr(normalizer, "_frame_timestamps", timestamps)
