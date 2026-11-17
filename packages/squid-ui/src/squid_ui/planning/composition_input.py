@@ -11,6 +11,7 @@ from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentat
 from squid_ui.content.text import Localization, resolve_text
 from squid_ui.planning.adapter import ExtensionAdapter
 from squid_ui.planning.dialect import InputPolicy, NativeInput
+from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
@@ -56,11 +57,12 @@ class InputPreparation:
                         raise UnsupportedSemanticError(msg)
                     return replace(node, node=self.visit(node.node))
                 if isinstance(node, sem.Region):
+                    parts = layout_parts(node)
                     return replace(
                         node,
-                        children=tuple(map(self.visit, node.children)),
-                        header=tuple(map(self.visit, node.header)),
-                        footer=tuple(map(self.visit, node.footer)),
+                        children=tuple(map(self.visit, parts.children)),
+                        header=tuple(map(self.visit, parts.header)),
+                        footer=tuple(map(self.visit, parts.footer)),
                     )
                 if isinstance(node, sem.Grid):
                     self.combinations = max(self.combinations, len(node.cells))
@@ -80,17 +82,8 @@ class InputPreparation:
                 )
             case sem.Details():
                 return replace(node, children=tuple(map(self.visit, node.children)))
-            case (
-                sem.Group()
-                | sem.Stack()
-                | sem.Block()
-                | sem.Cluster()
-                | sem.Section()
-                | sem.Article()
-                | sem.Aside()
-                | sem.Themed()
-            ):
-                return replace(node, children=tuple(map(self.visit, node.children)))
+            case _ if isinstance(node, LAYOUT_CONTAINERS):
+                return replace(node, children=tuple(map(self.visit, layout_parts(node).children)))
             case sem.OptionalContent():
                 return replace(node, node=self.visit(node.node))
             case sem.Truncated() | sem.Spilled() | sem.BestEffort():

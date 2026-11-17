@@ -72,7 +72,8 @@ class ResolvedComposition:
             or navigation is not None
             or request.positions is not None
         )
-        return cls(automatic, options.work_limit if automatic else request.search_budget, navigation, mounted)
+        work_limit = options.work_limit if options is not None and options.automatic else request.search_budget
+        return cls(automatic, work_limit, navigation, mounted)
 
 
 def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
@@ -324,11 +325,11 @@ class RuleComposition[RenderTargetT, BodyT: scene.Body, PayloadT, ResourceT, Pre
 
 @dataclass(frozen=True, slots=True)
 class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
-    """Resolved built-in planning policy and its prepared input.
+    """Prepared input and options for built-in fixed or automatic composition.
 
-    Implicit plans validate and normalize authoring input, derive their search allowance,
-    and allow exact replay. Explicit options preserve authored occurrence identities and
-    their chosen allowance. Both modes share allocation reuse and rule execution.
+    A default call prepares authoring input, derives a search allowance, and permits
+    exact replay. Explicit options retain authored occurrence identities and use
+    their chosen allowance. Automatic calls share allocation reuse and rule execution.
     """
 
     document: Document[RenderTargetT]

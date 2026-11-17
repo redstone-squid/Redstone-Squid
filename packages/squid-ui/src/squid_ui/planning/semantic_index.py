@@ -26,6 +26,7 @@ from squid_ui.planning.interaction_semantics import (
     ItemSummary,
     NavigationChoice,
 )
+from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.primitives import nodes as primitive
 from squid_ui.primitives.constraints import Alt, Alts, Paginate
 from squid_ui.target_types import Renderable
@@ -535,26 +536,17 @@ def semantic_graph[RenderTargetT, ContextT](
                     add(sem.Paragraph(value.label), (*path, "@label"), root, atomic=True)
                 for i, control in enumerate(value.controls):
                     visit(control, root, i)
-            case (
-                sem.Group()
-                | sem.Stack()
-                | sem.Cluster()
-                | sem.Themed()
-                | sem.Block()
-                | sem.Section()
-                | sem.Article()
-                | sem.Aside()
-                | sem.Region()
-            ):
+            case _ if isinstance(value, LAYOUT_CONTAINERS):
                 root = add(value, path, parent, atomic=False)
-                if isinstance(value, sem.Section | sem.Article):
-                    visit(value.heading, root, 0, name="@heading")
-                for i, child in enumerate(value.children):
+                parts = layout_parts(value)
+                if parts.heading is not None:
+                    visit(parts.heading, root, 0, name="@heading")
+                for i, child in enumerate(parts.children):
                     visit(child, root, i)
                 if isinstance(value, sem.Region):
                     for part, children in (
-                        (StructuralGroup("header"), value.header),
-                        (StructuralGroup("footer"), value.footer),
+                        (StructuralGroup("header"), parts.header),
+                        (StructuralGroup("footer"), parts.footer),
                     ):
                         slot = add(part, (*path, f"@{part.part}"), root, atomic=False)
                         for i, child in enumerate(children):
