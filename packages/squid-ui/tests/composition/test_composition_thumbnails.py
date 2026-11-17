@@ -61,7 +61,7 @@ def test_thumbnail_repeats_with_its_heading_on_every_page(target: Target[Any, An
                 assert "Details" in heading.texts[0].content
             case scene.ClassicMessage(embeds=embeds):
                 assert len(embeds) == 1
-                assert embeds[0].thumbnail == scene.EmbedMedia(IMAGE)
+                assert embeds[0].thumbnail == scene.EmbedMedia(url=IMAGE)
             case scene.HtmlBody(children=children):
                 element = children[0]
                 assert isinstance(element, scene.HtmlElement)

@@ -6,7 +6,7 @@ import math
 from copy import deepcopy
 from typing import Any, cast
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
 from squid_ui.action_mode import ActionMode
 from squid_ui.content.emoji import Emoji
@@ -71,7 +71,6 @@ class CodecError(SquidUiError, ValueError):
 
 
 _json = JsonReader(CodecError)
-_embed_adapter = TypeAdapter(Embed)
 
 
 class Codec:
@@ -83,9 +82,9 @@ class Codec:
     a stable input for comparing planned displays.
 
     Decoding checks supported node shapes and selected model invariants, but does
-    not run the published JSON Schema or enforce every target limit. Unknown
-    object fields are ignored. Use `schema()` with a JSON Schema validator to
-    check the published structural contract as well.
+    not run the published JSON Schema or enforce every target limit. Embeds
+    reject unknown fields; other node decoders ignore them. Use `schema()` with
+    a JSON Schema validator to check the full structural contract.
 
     Classic rows containing `EntitySelect` can be encoded but are currently
     rejected during decoding, so those scenes cannot round-trip through this codec.
@@ -386,22 +385,13 @@ def _row_from_dict(raw: JsonObject) -> ClassicRow:
 
 
 def _embed_to_dict(embed: Embed) -> dict[str, Any]:
-    return cast(dict[str, Any], _embed_adapter.dump_python(embed, mode="json"))
+    return embed.model_dump(mode="json")
 
 
 def _embed_from_dict(raw: JsonObject) -> Embed:
-    fields = raw.get("fields")
-    if not isinstance(fields, list):
-        msg = "embed fields must be an array"
-        raise CodecError(msg)
-    if any(not isinstance(field, dict) or "inline" not in field for field in fields):
-        msg = "embed fields must be objects with an inline flag"
-        raise CodecError(msg)
     try:
-        # Strict Python validation requires an Embed instance. JSON mode validates
-        # its nested dataclasses while preserving the wire protocol's scalar types.
-        return _embed_adapter.validate_json(json.dumps(raw), strict=True)
-    except (TypeError, ValueError, ValidationError) as error:
+        return Embed.model_validate(raw)
+    except ValidationError as error:
         raise CodecError(str(error)) from error
 
 

@@ -32,10 +32,10 @@ def test_discord_scene_queries_reach_nested_controls_and_options() -> None:
 
 
 def test_classic_scene_queries_preserve_embed_and_row_structure() -> None:
-    field = s.EmbedField("Name", "Ada")
+    field = s.EmbedField(name="Name", value="Ada")
     body = s.ClassicMessage(
         "Message",
-        embeds=(s.Embed(fields=(field,), author=s.EmbedAuthor("Author"), footer=s.EmbedFooter("Footer")),),
+        embeds=(s.Embed(fields=(field,), author=s.EmbedAuthor(name="Author"), footer=s.EmbedFooter(text="Footer")),),
         rows=(s.ClassicRow((s.Button("Save", "save"),)),),
     )
     tree = index_tree(body, children=scene_children)

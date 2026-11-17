@@ -52,12 +52,14 @@ def test_card_metadata_and_attachment_cost_survive_shared_composition() -> None:
         title="Title",
         url=card.url,
         description="First\n\nSecond",
-        fields=(scene.EmbedField("Name", "Value", inline=True),),
-        footer=scene.EmbedFooter("Footer", "https://example.com/footer.png"),
-        author=scene.EmbedAuthor("Author", "https://example.com/author", "https://example.com/icon.png"),
+        fields=(scene.EmbedField(name="Name", value="Value", inline=True),),
+        footer=scene.EmbedFooter(text="Footer", icon_url="https://example.com/footer.png"),
+        author=scene.EmbedAuthor(
+            name="Author", url="https://example.com/author", icon_url="https://example.com/icon.png"
+        ),
         colour=0x123456,
-        image=scene.EmbedMedia(f"attachment://{asset.name}", "Image", asset.name),
-        thumbnail=scene.EmbedMedia(f"attachment://{asset.name}", "Thumb", asset.name),
+        image=scene.EmbedMedia(url=f"attachment://{asset.name}", description="Image", asset_name=asset.name),
+        thumbnail=scene.EmbedMedia(url=f"attachment://{asset.name}", description="Thumb", asset_name=asset.name),
         timestamp=instant.isoformat(),
     )
     assert result.cost.get(Axis.ATTACHMENTS) == 1

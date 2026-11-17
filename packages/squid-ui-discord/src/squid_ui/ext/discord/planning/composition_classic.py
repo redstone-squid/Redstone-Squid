@@ -1,6 +1,6 @@
 """Classic Discord realizes shared candidates into separate text and control pools."""
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 
 from squid_i18n import tree
 from squid_ui import scene
@@ -123,8 +123,8 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
             if fields and self.limits.embeds.fields == 0:
                 violations.append(ConstraintViolation(candidate.offer.occurrence.identity, "embed fields unavailable"))
             embeds.extend(
-                replace(
-                    base if start == 0 else scene.Embed(colour=base.colour), fields=tuple(fields[start : start + size])
+                (base if start == 0 else scene.Embed(colour=base.colour)).model_copy(
+                    update={"fields": tuple(fields[start : start + size])}
                 )
                 for start in range(0, max(1, len(fields)), size)
             )
@@ -178,7 +178,11 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     if len(embeds) != embed_start or len(rows) != row_start:
                         violations.append(ConstraintViolation(identity, "card descriptions must contain text blocks"))
                     entries = [
-                        scene.EmbedField(slots[f"@field-{index}-name"], slots[f"@field-{index}-value"], field.inline)
+                        scene.EmbedField(
+                            name=slots[f"@field-{index}-name"],
+                            value=slots[f"@field-{index}-value"],
+                            inline=field.inline,
+                        )
                         for index, field in enumerate(card.fields)
                     ]
                     for name, size, cap in (
@@ -220,7 +224,9 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             if item.description is not None
                             else None
                         )
-                        media[name] = scene.EmbedMedia(url, media_description, item.asset_name)
+                        media[name] = scene.EmbedMedia(
+                            url=url, description=media_description, asset_name=item.asset_name
+                        )
                     timestamp = card.timestamp.instant if isinstance(card.timestamp, ZonedDateTime) else card.timestamp
                     embeds.append(
                         scene.Embed(
@@ -228,10 +234,12 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             url=card.url,
                             description=slots.get("@description") or None,
                             fields=tuple(entries),
-                            footer=scene.EmbedFooter(slots.get("@footer", ""), card.footer.icon_url)
+                            footer=scene.EmbedFooter(text=slots.get("@footer", ""), icon_url=card.footer.icon_url)
                             if card.footer and slots.get("@footer")
                             else None,
-                            author=scene.EmbedAuthor(slots.get("@author", ""), card.author.url, card.author.icon_url)
+                            author=scene.EmbedAuthor(
+                                name=slots.get("@author", ""), url=card.author.url, icon_url=card.author.icon_url
+                            )
                             if card.author and slots.get("@author")
                             else None,
                             colour=card.accent,
@@ -246,7 +254,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     limit("embed.field_value", len(content), self.limits.embeds.field_value)
                     if not name or not content:
                         violations.append(ConstraintViolation(identity, "embed field needs a name and value"))
-                    entry = scene.EmbedField(name, content)
+                    entry = scene.EmbedField(name=name, value=content)
                     if len(field_stack) == 1:
                         cards([entry], scene.Embed())
                     else:
@@ -328,7 +336,9 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                                 title=heading or None,
                                 description=value or None,
                                 colour=panel.accent,
-                                thumbnail=scene.EmbedMedia(panel.thumbnail) if panel.thumbnail is not None else None,
+                                thumbnail=scene.EmbedMedia(url=panel.thumbnail)
+                                if panel.thumbnail is not None
+                                else None,
                             ),
                         )
 
@@ -439,7 +449,9 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                         scene.Embed(
                             description=image.description or None,
                             image=scene.EmbedMedia(
-                                url, image.description or None, asset.name if asset is not None else None
+                                url=url,
+                                description=image.description or None,
+                                asset_name=asset.name if asset is not None else None,
                             ),
                         )
                     )

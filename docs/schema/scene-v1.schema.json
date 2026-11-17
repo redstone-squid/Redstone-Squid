@@ -1,5 +1,137 @@
 {
   "$defs": {
+    "Color": {
+      "maximum": 16777215,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "EmbedAuthor": {
+      "additionalProperties": false,
+      "properties": {
+        "icon_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Url"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "EmbedAuthor",
+      "type": "object"
+    },
+    "EmbedField": {
+      "additionalProperties": false,
+      "properties": {
+        "inline": {
+          "default": false,
+          "title": "Inline",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "EmbedField",
+      "type": "object"
+    },
+    "EmbedFooter": {
+      "additionalProperties": false,
+      "properties": {
+        "icon_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Url"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "EmbedFooter",
+      "type": "object"
+    },
+    "EmbedMedia": {
+      "additionalProperties": false,
+      "description": "One embed image or thumbnail. The description is kept even where Discord drops it.",
+      "properties": {
+        "asset_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "EmbedMedia",
+      "type": "object"
+    },
     "body": {
       "oneOf": [
         {
@@ -167,177 +299,122 @@
     },
     "embed": {
       "additionalProperties": false,
+      "description": "One resolved embed after grouping and overflow decisions.\n\nOnly authored properties are represented. Provider details, video metadata,\nand other values Discord derives when unfurling a URL are outside the scene.",
       "properties": {
         "author": {
-          "oneOf": [
+          "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/EmbedAuthor"
             },
             {
-              "additionalProperties": false,
-              "properties": {
-                "icon_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "name",
-                "url",
-                "icon_url"
-              ],
-              "type": "object"
+              "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "colour": {
-          "maximum": 16777215,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
         },
         "fields": {
+          "default": [],
           "items": {
-            "$ref": "#/$defs/embed_field"
+            "$ref": "#/$defs/EmbedField"
           },
-          "maxItems": 25,
+          "title": "Fields",
           "type": "array"
         },
         "footer": {
-          "oneOf": [
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedFooter"
+            },
             {
               "type": "null"
-            },
-            {
-              "additionalProperties": false,
-              "properties": {
-                "icon_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "text",
-                "icon_url"
-              ],
-              "type": "object"
             }
-          ]
+          ],
+          "default": null
         },
         "image": {
-          "$ref": "#/$defs/embed_media"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedMedia"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "thumbnail": {
-          "$ref": "#/$defs/embed_media"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbedMedia"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "timestamp": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
         },
         "title": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
         },
         "url": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "title",
-        "url",
-        "description",
-        "fields",
-        "footer",
-        "author",
-        "colour",
-        "image",
-        "thumbnail",
-        "timestamp"
-      ],
-      "type": "object"
-    },
-    "embed_field": {
-      "additionalProperties": false,
-      "properties": {
-        "inline": {
-          "type": "boolean"
-        },
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "value",
-        "inline"
-      ],
-      "type": "object"
-    },
-    "embed_media": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "asset_name": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "description": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "url": {
+          "anyOf": [
+            {
               "type": "string"
+            },
+            {
+              "type": "null"
             }
-          },
-          "required": [
-            "url",
-            "description"
           ],
-          "type": "object"
+          "default": null,
+          "title": "Url"
         }
-      ]
+      },
+      "title": "Embed",
+      "type": "object"
     },
     "emoji": {
       "oneOf": [

@@ -1,8 +1,7 @@
-"""Hand-authored JSON Schema for resolved-scene protocol 1.
+"""JSON Schema for resolved-scene protocol 1.
 
-The documentation artifact is exported from `SCHEMA`; model docstrings do not
-supply schema descriptions. Runtime decoding performs its own checks and does
-not invoke this schema.
+Most scene shapes are declared here; the embed shape comes from its Pydantic
+model. Runtime decoding does not invoke this schema.
 """
 
 from typing import Any
@@ -13,6 +12,7 @@ from squid_ui.scene.model import (
     Button,
     ClassicMessage,
     ComponentsV2,
+    Embed,
     EntitySelect,
     Extension,
     File,
@@ -573,83 +573,6 @@ SCHEMA: dict[str, Any] = {
             },
             "required": ["controls"],
         },
-        "embed": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "title": {"type": ["string", "null"]},
-                "url": {"type": ["string", "null"]},
-                "description": {"type": ["string", "null"]},
-                "fields": {"type": "array", "items": {"$ref": "#/$defs/embed_field"}, "maxItems": 25},
-                "footer": {
-                    "oneOf": [
-                        {"type": "null"},
-                        {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {"text": {"type": "string"}, "icon_url": {"type": ["string", "null"]}},
-                            "required": ["text", "icon_url"],
-                        },
-                    ]
-                },
-                "author": {
-                    "oneOf": [
-                        {"type": "null"},
-                        {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                "name": {"type": "string"},
-                                "url": {"type": ["string", "null"]},
-                                "icon_url": {"type": ["string", "null"]},
-                            },
-                            "required": ["name", "url", "icon_url"],
-                        },
-                    ]
-                },
-                "colour": {"type": ["integer", "null"], "minimum": 0, "maximum": 16777215},
-                "image": {"$ref": "#/$defs/embed_media"},
-                "thumbnail": {"$ref": "#/$defs/embed_media"},
-                "timestamp": {"type": ["string", "null"]},
-            },
-            "required": [
-                "title",
-                "url",
-                "description",
-                "fields",
-                "footer",
-                "author",
-                "colour",
-                "image",
-                "thumbnail",
-                "timestamp",
-            ],
-        },
-        "embed_field": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "name": {"type": "string"},
-                "value": {"type": "string"},
-                "inline": {"type": "boolean"},
-            },
-            "required": ["name", "value", "inline"],
-        },
-        "embed_media": {
-            "oneOf": [
-                {"type": "null"},
-                {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "url": {"type": "string"},
-                        "description": {"type": ["string", "null"]},
-                        "asset_name": {"type": ["string", "null"]},
-                    },
-                    "required": ["url", "description"],
-                },
-            ]
-        },
         "node": {
             "oneOf": [
                 {"$ref": f"#/$defs/{kind}"}
@@ -978,3 +901,7 @@ SCHEMA: dict[str, Any] = {
         },
     },
 }
+
+_embed_schema = Embed.model_json_schema(ref_template="#/$defs/{model}")
+SCHEMA["$defs"].update(_embed_schema.pop("$defs", {}))
+SCHEMA["$defs"]["embed"] = _embed_schema

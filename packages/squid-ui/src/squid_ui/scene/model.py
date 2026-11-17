@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from squid_ui._dataclass import immutable
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.action_mode import ActionMode
@@ -512,28 +514,28 @@ class ComponentsV2:
     children: tuple[Node, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
-class EmbedField:
+class _EmbedModel(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class EmbedField(_EmbedModel):
     name: str
     value: str
-    inline: bool = False
+    inline: bool = Field(default=False, strict=True)
 
 
-@dataclass(frozen=True, slots=True)
-class EmbedAuthor:
+class EmbedAuthor(_EmbedModel):
     name: str
     url: str | None = None
     icon_url: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class EmbedFooter:
+class EmbedFooter(_EmbedModel):
     text: str
     icon_url: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class EmbedMedia:
+class EmbedMedia(_EmbedModel):
     """One embed image or thumbnail. The description is kept even where Discord drops it."""
 
     url: str
@@ -541,8 +543,7 @@ class EmbedMedia:
     asset_name: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class Embed:
+class Embed(_EmbedModel):
     """One resolved embed after grouping and overflow decisions.
 
     Only authored properties are represented. Provider details, video metadata,
@@ -552,10 +553,12 @@ class Embed:
     title: str | None = None
     url: str | None = None
     description: str | None = None
+    # The planner must be able to inspect an overfull candidate and report a
+    # layout violation, so Discord's field count limit is checked there.
     fields: tuple[EmbedField, ...] = ()
     footer: EmbedFooter | None = None
     author: EmbedAuthor | None = None
-    colour: Color | None = None
+    colour: Color | None = Field(default=None, strict=True, ge=0, le=0xFFFFFF)
     image: EmbedMedia | None = None
     thumbnail: EmbedMedia | None = None
     timestamp: str | None = None

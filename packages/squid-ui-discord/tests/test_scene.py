@@ -183,12 +183,15 @@ def _classic_scene() -> scene.Scene:
                     title="Piston door",
                     url="https://example.invalid/door",
                     description="A 2x2 flush door.",
-                    fields=(scene.EmbedField("Width", "2", inline=True), scene.EmbedField("Notes", "seamless")),
-                    footer=scene.EmbedFooter("Submitted by squid", "https://example.invalid/icon.png"),
-                    author=scene.EmbedAuthor("Redstone Squid", "https://example.invalid", None),
+                    fields=(
+                        scene.EmbedField(name="Width", value="2", inline=True),
+                        scene.EmbedField(name="Notes", value="seamless"),
+                    ),
+                    footer=scene.EmbedFooter(text="Submitted by squid", icon_url="https://example.invalid/icon.png"),
+                    author=scene.EmbedAuthor(name="Redstone Squid", url="https://example.invalid", icon_url=None),
                     colour=0x00FF00,
-                    image=scene.EmbedMedia("https://example.invalid/i.png", "the door"),
-                    thumbnail=scene.EmbedMedia("https://example.invalid/t.png"),
+                    image=scene.EmbedMedia(url="https://example.invalid/i.png", description="the door"),
+                    thumbnail=scene.EmbedMedia(url="https://example.invalid/t.png"),
                     timestamp="2026-08-22T14:30:00+00:00",
                 ),
             ),
@@ -217,7 +220,14 @@ class TestClassicBody:
 
     @pytest.mark.parametrize(
         ("field", "value"),
-        [("colour", True), ("colour", "42"), ("title", 42), ("fields", "not an array")],
+        [
+            ("colour", True),
+            ("colour", "42"),
+            ("colour", 0x1000000),
+            ("title", 42),
+            ("fields", "not an array"),
+            ("extra", "unexpected"),
+        ],
     )
     def test_embed_decode_rejects_wrong_wire_types(self, field: str, value: object) -> None:
         raw = scene.Codec.to_dict(_classic_scene())
@@ -226,12 +236,13 @@ class TestClassicBody:
         with pytest.raises(scene.CodecError):
             scene.Codec.from_dict(raw)
 
-    def test_embed_decode_requires_the_wire_field_flag(self) -> None:
+    def test_embed_decode_uses_model_defaults_for_omitted_fields(self) -> None:
         raw = scene.Codec.to_dict(_classic_scene())
         del raw["body"]["embeds"][0]["fields"][0]["inline"]
 
-        with pytest.raises(scene.CodecError):
-            scene.Codec.from_dict(raw)
+        decoded = scene.Codec.from_dict(raw)
+
+        assert decoded.body.embeds[0].fields[0].inline is False  # type: ignore[union-attr]
 
     def test_both_bodies_validate_against_the_published_schema(self) -> None:
         jsonschema.validate(scene.Codec.to_dict(_scene()), scene.Codec.schema())

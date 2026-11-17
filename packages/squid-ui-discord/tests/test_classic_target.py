@@ -63,7 +63,7 @@ class TestClassicShape:
 
         assert embed.title == "Piston door"
         assert embed.description == "first block\n\nsecond block"
-        assert embed.fields == (scene.EmbedField("Width", "2", inline=True),)
+        assert embed.fields == (scene.EmbedField(name="Width", value="2", inline=True),)
         assert embed.footer is not None and embed.footer.text == "by squid"
         assert embed.author is not None and embed.author.name == "Redstone Squid"
         assert embed.colour == 0x00FF00

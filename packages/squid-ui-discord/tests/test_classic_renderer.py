@@ -219,7 +219,9 @@ class TestRendererAudit:
         assert len(presentation.embeds) == 5
 
     def test_a_field_survives_the_trip_through_discord_py(self) -> None:
-        body = scene.ClassicMessage(embeds=(scene.Embed(fields=(scene.EmbedField("Width", "2", inline=True),)),))
+        body = scene.ClassicMessage(
+            embeds=(scene.Embed(fields=(scene.EmbedField(name="Width", value="2", inline=True),)),)
+        )
 
         embed = ClassicRenderer().draw(_document(body)).embeds[0]
 
