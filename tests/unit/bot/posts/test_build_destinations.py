@@ -3,7 +3,9 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast, override
+from unittest.mock import Mock
 
+import discord
 import pytest
 
 from squid.bot.posts.renderers import BuildCardRenderer
@@ -24,12 +26,6 @@ from tests.unit.bot.posts.test_vote_renderer import PostRecorder, VoteRecorder
 @dataclass(frozen=True)
 class Guild:
     id: int
-
-
-@dataclass(frozen=True)
-class Channel:
-    id: int
-    guild: Guild
 
 
 class BuildQueries(BuildQueryService):
@@ -60,7 +56,10 @@ async def test_review_destinations_follow_the_session(build_status: Status, vote
     build = OtherBuild(id=7, submission_status=build_status)
     snapshot = build_snapshot(status=vote_status, target=BuildVoteTarget(7))
     settings = Settings()
-    channels = {201: Channel(201, Guild(10)), 300: Channel(300, Guild(10))}
+    channels = {
+        201: Mock(spec=discord.TextChannel, id=201, guild=Guild(10)),
+        300: Mock(spec=discord.TextChannel, id=300, guild=Guild(10)),
+    }
     bot = make_layout_bot(
         guilds=[Guild(10), Guild(20), Guild(30)],
         get_channel=channels.get,
@@ -86,7 +85,10 @@ async def test_review_destinations_follow_the_session(build_status: Status, vote
 async def test_only_confirmed_builds_reach_build_channels(status: Status | None) -> None:
     build = OtherBuild(id=7, submission_status=status) if status is not None else None
     settings = Settings()
-    channels = {201: Channel(201, Guild(10)), 300: Channel(300, Guild(10))}
+    channels = {
+        201: Mock(spec=discord.TextChannel, id=201, guild=Guild(10)),
+        300: Mock(spec=discord.TextChannel, id=300, guild=Guild(10)),
+    }
     bot = make_layout_bot(
         guilds=[Guild(10), Guild(20), Guild(30)],
         get_channel=channels.get,

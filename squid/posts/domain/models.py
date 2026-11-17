@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Literal, override
 
+from squid.core.errors import ValidationError
+
 ResourceKind = Literal["build", "vote_session", "starboard_entry", "inference_run", "submission_draft"]
 """Resource types supported by the post renderers."""
 
@@ -20,7 +22,7 @@ class StarboardEntryKey:
     def __post_init__(self) -> None:
         if self.starboard_id <= 0 or self.origin_message_id <= 0:
             message = "Starboard entry IDs must be positive"
-            raise ValueError(message)
+            raise ValidationError(message)
 
     @classmethod
     def parse(cls, value: str) -> StarboardEntryKey:

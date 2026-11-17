@@ -1120,7 +1120,8 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
     """The sponsor downgrade is allowed only after every new provenance field is empty."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
-    command.upgrade(config, "head")
+    # This historical fixture uses retired schema 3, before the payload reset.
+    command.upgrade(config, "a7c1e5b9d304")
     engine = create_engine(migration_database_url)
     installation_id = "77777777-7777-4777-8777-777777777777"
     draft_id = "88888888-8888-4888-8888-888888888888"

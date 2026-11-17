@@ -187,6 +187,7 @@ AGENT_NOUNS = {
     "Picker": "pick",
     "Presenter": "present",
     "Profiler": "profile",
+    "Reader": "read",
     "Reconciler": "reconcile",
     "Recorder": "record",
     "Reporter": "report",

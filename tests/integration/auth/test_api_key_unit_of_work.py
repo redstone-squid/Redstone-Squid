@@ -14,6 +14,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService, SubjectRuleCache
 from squid.permissions.application.ports import AuditEntry
+from squid.permissions.domain.models import AuditAction, AuditSubjectKind
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -41,7 +42,9 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
             expires_at=None,
             granted_by_account_id=None,
             reason=None,
-            audit=AuditEntry(action="grant", subject_kind="account", subject_id=account_id, pattern=node),
+            audit=AuditEntry(
+                action=AuditAction.GRANT, subject_kind=AuditSubjectKind.ACCOUNT, subject_id=account_id, pattern=node
+            ),
         )
         await uow.commit()
     assert (await permissions.check(subject, node)).allowed
@@ -54,7 +57,9 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
             subject_account_id=account_id,
             subject_role_id=None,
             scope_guild_id=None,
-            audit=AuditEntry(action="revoke", subject_kind="account", subject_id=account_id, pattern=node),
+            audit=AuditEntry(
+                action=AuditAction.REVOKE, subject_kind=AuditSubjectKind.ACCOUNT, subject_id=account_id, pattern=node
+            ),
         )
         await uow.commit()
     # Keep the cache stale: key issuance must read authority inside its own transaction.
