@@ -42,6 +42,7 @@ from squid.records.domain import (
     reduce_timing_variants,
 )
 from squid.records.domain.door_evidence import LiveDoorConfiguration
+from squid.records.infrastructure.fingerprint import publication_fingerprint
 from squid.records.models import (
     ComputationRun,
     ComputationStatus,
@@ -63,7 +64,7 @@ from squid.tags.models import TagAssignment, TagDefinition, display_conversion_s
 from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "6"
+CALCULATOR_VERSION = "7"
 FORMATTER_VERSION = "2"
 
 RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
@@ -248,8 +249,9 @@ class PostgresRecordRepository:
         return (await session.execute(statement)).scalar_one_or_none()
 
     async def activate(self, batch: ComputationBatch) -> int:
-        """Stage a complete run, supersede the previous run, and enqueue its activation event.
+        """Publish changed results, or return the unchanged active run after recording a check.
 
+        Changed results supersede the previous run and enqueue an activation event.
         The advisory lock lets only one transaction replace the active run for
         this kind and version at a time. RecordComputationService commits the new
         results and activation event together, so readers cannot see a partial run.
@@ -264,14 +266,23 @@ class PostgresRecordRepository:
             if batch.version_id is None
             else ComputationRun.version_id == batch.version_id
         )
-        previous_run_id = await session.scalar(
-            select(ComputationRun.id).where(
+        previous_run = await session.scalar(
+            select(ComputationRun).where(
                 ComputationRun.build_kind == batch.kind,
                 version_predicate,
                 ComputationRun.is_active.is_(True),
             )
         )
+        fingerprint = publication_fingerprint(batch)
+        checked_at = Instant.now()
+        if previous_run is not None and previous_run.publication_fingerprint == fingerprint:
+            previous_run.last_checked_at = checked_at
+            await session.flush()
+            return previous_run.id
+        previous_run_id = None if previous_run is None else previous_run.id
         run = ComputationRun(
+            publication_fingerprint=fingerprint,
+            last_checked_at=checked_at,
             rules_revision_id=batch.rules_revision_id,
             build_kind=batch.kind,
             version_id=batch.version_id,

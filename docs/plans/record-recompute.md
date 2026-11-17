@@ -1,6 +1,16 @@
 # Record recomputation
 
-Status: engineering design; implementation has not started.
+Status: implementation in progress. Concrete computation now accepts a versioned,
+JSON-replayable snapshot with an injected evaluation time and runs in a bounded
+worker thread. Concrete publication compares semantic fingerprints, preserves
+unchanged runs, and stores last-checked time. The migration and record integration
+tests cover that behavior.
+
+The worker cutover is not implemented yet: snapshot persistence, explicit settings
+and scope identities, input generations, claims and heartbeats, short publication
+transactions, independent range scheduling, and public freshness metadata remain.
+Until that cutover, computation still runs within the existing rebuild transaction
+and concrete and range refresh still share the existing queue lifecycle.
 
 Records are derived from confirmed builds, taxonomy, comparison rules, and requested
 categories. Concrete door records already compare fixed builds with expandable

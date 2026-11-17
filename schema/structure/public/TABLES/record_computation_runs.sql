@@ -8,6 +8,8 @@ CREATE TABLE public.record_computation_runs (
     started_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
     error text,
+    publication_fingerprint text,
+    last_checked_at timestamp with time zone,
     CONSTRAINT record_computation_runs_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_computation_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
 );

@@ -251,6 +251,8 @@ class ComputationRun(Base, kw_only=True):
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     error: Mapped[str | None] = mapped_column(Text, default=None)
+    publication_fingerprint: Mapped[str | None] = mapped_column(Text, default=None)
+    last_checked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 
 class TitleResult(Base, kw_only=True):
