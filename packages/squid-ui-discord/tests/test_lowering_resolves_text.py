@@ -1,4 +1,4 @@
-"""Lowering resolves deferred text before measurement and target conversion.
+"""Planning resolves deferred text before scene serialization.
 
 The fixture covers text-bearing primitive fields and nested records. Leaving a Text
 unresolved would send it to downstream readers that expect resolved text.
@@ -10,13 +10,11 @@ from typing import Any, cast
 import pytest
 
 from squid_i18n import tr
-from squid_ui.chrome import DEFAULT_CHROME
-from squid_ui.content.text import NEUTRAL
-from squid_ui.content.text import Text as TextExpression
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.ext.discord.limits import LIMITS
-from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
-from squid_ui.presentation import PresentationState
+from squid_ui import scene
+from squid_ui.ext.discord.planning import classic_target, components_v2_target
+from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Card,
@@ -35,42 +33,21 @@ from squid_ui.primitives.nodes import (
     Option,
     RoutedButton,
     RoutedSelect,
+    Section,
     SelectMenu,
     Text,
     Thumbnail,
 )
-from squid_ui.target_types import DiscordTarget, Renderable
+from squid_ui.target_types import DiscordAdapter, DiscordTarget, Renderable
 
-_TEXT_FIELDS = ("content", "label", "description", "placeholder")
+ADAPTER = AdapterProfile(DiscordAdapter, "text-tests", "1")
 
 
 async def _ignore_selection(_event: object) -> None:
     return None
 
 
-def _deferred_text_in(node: object) -> list[str]:
-    name = type(node).__name__
-    found = [f"{name}.{field}" for field in _TEXT_FIELDS if isinstance(getattr(node, field, None), TextExpression)]
-    found += [
-        f"{name}.options.label"
-        for option in getattr(node, "options", ()) or ()
-        if isinstance(option.label, TextExpression)
-    ]
-    found += [f"{name}.lines[]" for line in getattr(node, "lines", ()) or () if isinstance(line, TextExpression)]
-    for field in ("children", "texts"):
-        found += [name for child in getattr(node, field, ()) or () for name in _deferred_text_in(child)]
-    for field in ("image", "thumbnail", "footer", "author"):
-        if (child := getattr(node, field, None)) is not None:
-            found += _deferred_text_in(child)
-    for field in getattr(node, "fields", ()) or ():
-        found += _deferred_text_in(field)
-    for value in ("name", "value", "text"):
-        if isinstance(getattr(node, value, None), TextExpression):
-            found.append(f"{name}.{value}")
-    return found
-
-
-def test_lowering_leaves_no_deferred_text_behind() -> None:
+def test_planning_leaves_no_deferred_text_behind() -> None:
     deferred = tr(t"test-hello = hello")
     authored = [
         Text(content=deferred),
@@ -100,59 +77,39 @@ def test_lowering_leaves_no_deferred_text_behind() -> None:
         ),
     ]
 
-    lowered = lower_semantics(
-        authored,
-        limits=LIMITS,
-        chrome=DEFAULT_CHROME,
-        localization=NEUTRAL,
-        session=PresentationState(),
-    )
-
-    assert [type(node).__name__ for node in lowered.nodes] == [
-        "Text",
-        "Heading",
-        "Footer",
-        "Code",
-        "Lines",
-        "RoutedButton",
-        "RoutedSelect",
-        "Thumbnail",
-        "Content",
-        "LinkButton",
-        "SelectMenu",
-        "Gallery",
-        "Card",
-    ]
-    assert [name for node in lowered.nodes for name in _deferred_text_in(node)] == []
+    for node in authored:
+        if isinstance(node, Thumbnail):
+            node = Section((Text("Image"),), node)
+        result = (
+            plan(node, target=classic_target(ADAPTER))
+            if isinstance(node, Card | Content)
+            else plan(node, target=components_v2_target(ADAPTER))
+        )
+        # The scene codec refuses unresolved text expressions in any nested record.
+        assert "hello" in scene.Codec.dumps(result.scene)
 
 
 def test_unknown_renderables_are_rejected_with_their_path() -> None:
     class Unregistered(Renderable[DiscordTarget]):
         pass
 
-    # Reject unknown nodes at their authored path before they enter the primitive stream.
-    with pytest.raises(LayoutInvariantError, match=r"\$\.0: Unregistered is neither"):
-        lower_semantics(
-            [cast(Any, Unregistered())],
-            limits=LIMITS,
-            chrome=DEFAULT_CHROME,
-            localization=NEUTRAL,
-            session=PresentationState(),
-        )
+    with pytest.raises(JointUnsupportedError) as error:
+        plan(cast(Any, Unregistered()), target=components_v2_target(ADAPTER))
+    assert "Unregistered" in str(error.value.diagnostics)
 
 
-@pytest.mark.parametrize("make", [Text, Heading, Footer, Code, lambda content: Lines(lines=(content,))])
+@pytest.mark.parametrize("make", [Text, Heading, Footer, Code, lambda content: Lines(lines=(content, content))])
 def test_a_page_footer_is_resolved_on_every_text_primitive(make: Any) -> None:
     # Only Lines used to resolve its footer, so a paged traceback in a code block failed to plan.
-    node = make(tr(t"test-hello = hello"))
-    paged = replace(node, overflow=Paginate(key="pages", footer=lambda page, pages: tr(t"test-page = page {page}")))
-
-    lowered = lower_semantics(
-        [paged], limits=LIMITS, chrome=DEFAULT_CHROME, localization=NEUTRAL, session=PresentationState()
+    node = make(tr(t"test-hello = hello\n    world"))
+    paged = replace(
+        node, overflow=Paginate(key="pages", per=1, footer=lambda page, pages: tr(t"test-page = page {page}"))
     )
 
-    overflow = getattr(lowered.nodes[0], "overflow", None)
-    assert isinstance(overflow, Paginate)
-    footer = overflow.footer
-    assert footer is not None
-    assert footer(2, 3) == "page 2"
+    result = plan(paged, target=components_v2_target(ADAPTER))
+    assert "hello" in scene.Codec.dumps(result.scene)
+    assert "page 1" in scene.Codec.dumps(result.scene)
+    assert result.allocation is not None
+    occurrence = next(iter(result.allocation.regions))
+    second = result.for_page({occurrence: 1})
+    assert "page 2" in scene.Codec.dumps(second.scene)

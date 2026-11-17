@@ -1,7 +1,7 @@
 # Squid UI removal candidates
 
-Audited against `45f14377a`. This is a candidate list, not an implementation plan
-or permission to delete every exported API. Evidence comes from source, import
+Audited against `45f14377a`. The removal pass is now authorized; the findings
+below record the original evidence. Evidence comes from source, import
 edges, callers, tests, and exports across the repository. “No caller” below means
 no in-repository caller found; it does not establish absence of external users.
 
@@ -201,3 +201,17 @@ length or small number of callers is not evidence that they are useless.
 This audit changes no runtime code. Removal work should verify public planning,
 page turns, strict-mode behavior, callbacks, and durable restoration at the affected
 boundaries, instead of relying solely on tests of the machinery being deleted.
+
+## Implementation progress
+
+- Removed the unused variant frontier, request cache context, redundant rule
+  factories, and dynamic target constructors in `ef63a650b` (2, 5, 9, 11).
+- Simplified partition-cache ownership and exact memo operations in
+  `46a6a9e70` (8). A partition cache can now be shared across body types;
+  callback-bearing memos remain typed and owner-specific.
+- Removed the obsolete Discord adaptation package (1). Regression coverage now
+  exercises the public planner for nested tables, deferred text, translated
+  page footers, and page budgets.
+- Remaining: strategy state/helpers (3), the measured API (4), obsolete
+  telemetry (6), duplicate degradation profiles (7), and the generated-handler
+  base (10). Each still needs implementation and boundary verification.

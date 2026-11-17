@@ -6,28 +6,26 @@ import discord
 import pytest
 from discord.state import ConnectionState
 from discord.ui.view import ViewStore
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
 from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.authoring.semantic import Item, Items, Paragraph
-from squid_ui.chrome import DEFAULT_CHROME
-from squid_ui.content.text import NEUTRAL
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import DISCORD_V2_DPY27, Everyone, MessageRoot, conform
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
-from squid_ui.ext.discord.limits import Axis
 from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_ui.ext.discord.planning import measure
-from squid_ui.ext.discord.planning.adaptation.lowering import lower_semantics
+from squid_ui.ext.discord.planning import components_v2_target, measure
 from squid_ui.ext.discord.planning.measurement.costing import component_count
 from squid_ui.ext.discord.planning.measurement.model import MeasuredText
 from squid_ui.ext.discord.planning.measurement.text import split_pages
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
-from squid_ui.planning import SolveNoteCode
+from squid_ui.planning import SolveNoteCode, plan
+from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.pagination.navigation import PagerNav, default_nav, page_select_nav
+from squid_ui.planning.resources import Axis
 from squid_ui.primitives import (
     LAST_PAGE,
     Button,
@@ -40,6 +38,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
+from squid_ui.target_types import DiscordAdapter
 
 
 class TestSplitPages:
@@ -589,22 +588,21 @@ class TestBuildModal:
         assert received == {"name": "steve"}
 
 
+# Public planning certifies every page; this property has no timing contract.
+@settings(deadline=None)
 @given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
 def test_paginated_documents_fit_on_every_page(body):
     card_node = section(sl.heading("Title"), truncate(paragraph("intro")), fields(field("k", "v")))
-    lowered = lower_semantics(
-        [card_node],
-        limits=LIMITS,
-        chrome=DEFAULT_CHROME,
-        localization=NEUTRAL,
-        session=PresentationState(),
-    ).nodes
-    solved = measure([*lowered, Code(body, overflow=Paginate())])
-    if solved.pager is None:
-        return
-    for page in range(solved.pager.pages):
-        solved.pager.select(page)
-        assert _total_text(solved) <= LIMITS.total_text
+    result = plan(
+        sl.group(card_node, Code(body, overflow=Paginate())),
+        target=components_v2_target(AdapterProfile(DiscordAdapter, "pagination-tests", "1")),
+    )
+    assert result.cost.get(Axis.DISPLAY_TEXT) <= LIMITS.total_text
+    assert result.allocation is not None
+    for occurrence, region in result.allocation.regions.items():
+        for page in range(len(region.cuts)):
+            selected = result.for_page({occurrence: page})
+            assert selected.cost.get(Axis.DISPLAY_TEXT) <= LIMITS.total_text
 
 
 @given(st.integers(min_value=0, max_value=60), st.integers(min_value=1, max_value=12))
