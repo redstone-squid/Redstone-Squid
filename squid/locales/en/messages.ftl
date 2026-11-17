@@ -742,25 +742,25 @@ admin-that-message-is-not-from-this-server = That message is not from this serve
 # squid/bot/admin_cog.py:332
 admin-to-the-current-guild = to the current guild
 
-# squid/api/errors.py:263
+# squid/api/errors.py:266
 api-errors-http-error = HTTP error
 
-# squid/api/errors.py:201, squid/api/errors.py:283
+# squid/api/errors.py:204, squid/api/errors.py:286
 api-errors-internal-server-error = Internal server error
 
-# squid/api/errors.py:238
+# squid/api/errors.py:241
 api-errors-invalid-request = Invalid request
 
-# squid/api/errors.py:199
+# squid/api/errors.py:202
 api-errors-service-unavailable = Service unavailable
 
-# squid/api/errors.py:40
+# squid/api/errors.py:43
 api-internal-server-error-occurred = An internal server error occurred.
 
-# squid/api/errors.py:239
+# squid/api/errors.py:242
 api-request-validation-failed = The request did not pass validation.
 
-# squid/api/errors.py:41
+# squid/api/errors.py:44
 api-service-unavailable = A required service is temporarily unavailable. Please try again later.
 
 # squid/artifacts/infrastructure.py:107, squid/artifacts/infrastructure.py:255
@@ -1294,10 +1294,10 @@ bot-submission-search-view-view-build = Expand
 # squid/bot/submission/message_intake.py:119
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/form.py:89
+# squid/bot/submission/form.py:90
 bot-submission-submit-check-build-size = Check the build size
 
-# squid/bot/submission/form.py:79
+# squid/bot/submission/form.py:80
 bot-submission-submit-check-door-size = Check the door size
 
 # squid/bot/submission/cog.py:212
@@ -3115,7 +3115,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:887
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/form.py:173
+# squid/bot/submission/form.py:175
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:740
@@ -4113,16 +4113,16 @@ notifications-invalid-exact-tag-value = invalid exact tag value
 # squid/notifications/domain.py:284, squid/notifications/domain.py:289
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/bot/notifications_cog.py:182
+# squid/bot/notifications_cog.py:183
 notifications-manage-hint = View your inbox and manage updates with `/notifications`.
 
 # squid/bot/notification_text.py:56
 notifications-more-records = …and { $remaining } more records.
 
-# squid/bot/notifications_cog.py:113, squid/bot/notifications_view.py:682
+# squid/bot/notifications_cog.py:119, squid/bot/notifications_view.py:682
 notifications-open-build = Open build
 
-# squid/bot/notifications_cog.py:174
+# squid/bot/notifications_cog.py:175
 notifications-open-in-discord = Open it in Discord with `/build browse id:{ $build_id }`.
 
 # squid/notifications/application.py:175
@@ -5732,7 +5732,7 @@ submissions-finalization-job-missing = processing draft has no active finalizati
 # squid/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:407
+# squid/submissions/domain/finalization.py:404
 submissions-finalized-build-identity = finalized build identity is invalid
 
 # squid/submissions/domain/forms.py:375
@@ -5750,10 +5750,10 @@ submissions-invalid-submission-attention = invalid submission attention field ID
 # squid/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:431
+# squid/submissions/domain/finalization.py:428
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:428
+# squid/submissions/domain/finalization.py:425
 submissions-keys-unique = { $label } keys must be unique
 
 # squid/submissions/domain/forms.py:162
@@ -5834,7 +5834,7 @@ submissions-public-schematic-rights-required = public schematics require a licen
 # squid/submissions/domain/finalization.py:226
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:419
+# squid/submissions/domain/finalization.py:416
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
 # squid/submissions/application/preparation.py:45
@@ -5870,7 +5870,7 @@ submissions-show-sponsoring-server = Show the sponsoring server on this build
 # squid/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:386
+# squid/submissions/domain/finalization.py:383
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
 # squid/submissions/application/attachments.py:102
@@ -5888,10 +5888,10 @@ submissions-submission-form-revisions = submission form revisions must be upgrad
 # squid/submissions/domain/finalization.py:368
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:392
+# squid/submissions/domain/finalization.py:389
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:439
+# squid/submissions/domain/finalization.py:436
 submissions-submission-timings-negative = submission timings cannot be negative
 
 # squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:704
@@ -5933,7 +5933,7 @@ submit-author-consent-required = The author of this message ({ $user_mention }) 
 # squid/bot/submission/message_intake.py:101
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/form.py:90
+# squid/bot/submission/form.py:91
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
 # squid/bot/submission/cog.py:191
@@ -5951,7 +5951,7 @@ submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`.
 # squid/bot/submission/form.py:61
 submit-door-options-only = Door size and orientation can only be supplied for doors.
 
-# squid/bot/submission/form.py:80
+# squid/bot/submission/form.py:81
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
 # squid/bot/submission/form.py:60, squid/bot/submission/form.py:65
