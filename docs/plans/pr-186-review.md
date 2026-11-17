@@ -46,32 +46,24 @@ session; publication attaches a Discord message and reconciliation owns its card
 `PollPublicationError` retains retry state so failed attachment reuses a returned
 message and never creates a second session. Publisher and wizard tests pass.
 
-P2 remains open. Actor-based suggestion identity is already shared; provider source
-ownership and the service/transport limit policy still need completion.
+P2 is satisfied: provider modules own source definitions; deployment composition
+selects provider groups and accepts additional sources without a central ID list.
+The service resolves a source, checks visibility and context, bounds provider work,
+and ranks candidates; composed providers preserve their ranking but cannot exceed
+the requested limit. `MAX_QUERY_SUGGESTIONS` is the shared bounded-query ceiling;
+full enumeration remains exempt. Discord separately enforces its own 25 choices.
 
-## Remaining work
+Suggestion requests reuse `Actor`; no separate viewer identity is needed.
+Commands already declare `autocomplete=suggests("source")` beside their parameters,
+which makes the binding readable where the parameter is defined. The unused
+`autocompletes` decorator was removed.
 
-### P2 Suggestion service and autocomplete API
-
-- [ ] Trace the suggestion service's ordinary request flow and simplify the parts
-  that make it hard to follow. Explain provider selection, ranking, visibility,
-  and limits where their responsibilities are defined.
-- [ ] Separate Discord's response limit from transport-neutral suggestion policy.
-  Decide whether `MAX_SUGGESTIONS` is a default or an enforced ceiling, then align
-  its name, documentation, and behavior with that decision.
-- [ ] Review whether `SuggestionViewer` needs a separate identity representation or
-  can reuse an existing user/account abstraction without coupling to Discord.
-- [ ] Move source declarations toward the modules that own them; decide how they
-  are composed without requiring every source to be registered centrally.
-- [ ] Revisit the autocomplete declaration API. Compare readable call sites with
-  the reviewed `@autocompletes(build_id="builds")` form before choosing a replacement.
-- [ ] Evaluate database ordering before Python taxonomy sorting. Measure the cost
-  and preserve the intended final order; the comment proposes an investigation,
-  not an unconditional extra sort.
-- [ ] Validate source registration, visibility, transport-specific limits, ranking,
-  and autocomplete bindings with focused tests after implementation.
-
-Comments: 2–7.
+Keep Python taxonomy ordering to make revisions independent of database collation.
+A deterministic 2,000-row benchmark took 0.517 ms unsorted and 0.276 ms after
+emulating database lexical ordering. Saving 0.241 ms on an occasional cached load
+does not justify an additional database sort that still cannot replace casefold
+ordering. Both inputs produced the same final order. Registry, ranking, visibility,
+service/Discord limits, form-option compatibility, and command binding tests pass.
 
 ## Validation
 

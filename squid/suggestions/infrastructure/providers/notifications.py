@@ -5,7 +5,8 @@ from typing import Protocol
 
 from squid.notifications.models import NotificationSubscription
 from squid.suggestions.application import Candidate
-from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SuggestionRequest, ValueType, Visibility
 
 
 class AccountSubscriptions(Protocol):
@@ -45,3 +46,17 @@ def _target(subscription: NotificationSubscription) -> str | None:
     if subscription.record_filter is None:
         return None
     return ", ".join(f"{name}={value}" for name, value in sorted(subscription.record_filter.as_dict().items()))
+
+
+def notification_sources(notifications: AccountSubscriptions | None) -> tuple[SuggestionSource, ...]:
+    if notifications is None:
+        return ()
+    return (
+        SuggestionSource(
+            id="notification_subscriptions",
+            provider=SubscriptionProvider(notifications),
+            visibility=Visibility.VIEWER_SCOPED,
+            value_type=ValueType.INTEGER,
+            kind_label="subscription",
+        ),
+    )

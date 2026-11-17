@@ -20,7 +20,6 @@ from squid.core.actors import Actor
 from squid.observability import trace_span
 from squid.suggestions.application import SuggestionSource
 from squid.suggestions.domain import (
-    MAX_SUGGESTIONS,
     ReplacementSpan,
     Suggestion,
     SuggestionRequest,
@@ -35,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 RESPONSE_BUDGET_SECONDS = 1.2
 """Well inside Discord's three-second autocomplete window, leaving room for the round trip."""
+
+AUTOCOMPLETE_CHOICE_LIMIT = 25
+"""Discord's response ceiling, independent of shared suggestion query policy."""
 
 CHOICE_NAME_LIMIT = 100
 """Discord's cap on a choice's display name."""
@@ -84,30 +86,6 @@ def suggests(
     return autocomplete
 
 
-def autocompletes(**params: str | AutocompleteCallback) -> Callable[[Any], Any]:
-    """Attach suggestion sources to several parameters of one command.
-
-    Applied above the command decorator, so it receives the built command:
-
-        @autocompletes(build_id="builds", restrictions=suggests("restriction_ids", multi=True))
-        @build_group.command(name="view")
-        async def view_build(self, ctx, build_id: int) -> None: ...
-
-    A parameter that needs no configuration is named by its source id; anything else passes a
-    `suggests(...)` callback directly. discord.py rejects an unknown parameter name or an
-    unsupported option type at decoration time, so a mismatch fails at import rather than in
-    production.
-    """
-
-    def decorator(command: Any) -> Any:
-        for parameter, source in params.items():
-            callback = suggests(source) if isinstance(source, str) else source
-            command.autocomplete(parameter)(callback)
-        return command
-
-    return decorator
-
-
 class _InteractionAuthorizer:
     """Answer permission questions for the user behind an autocomplete interaction."""
 
@@ -138,7 +116,7 @@ async def _choices(
         SuggestionRequest(
             source=source_id,
             query=query,
-            limit=MAX_SUGGESTIONS,
+            limit=AUTOCOMPLETE_CHOICE_LIMIT,
             context=dict(context(interaction)) if context is not None else {},
             locale=str(interaction.locale),
             viewer=await _viewer(interaction, source),
@@ -150,8 +128,11 @@ async def _choices(
     if result.replacement is not None:
         # A choice replaces the whole option value, so a source that completes part of the input
         # has to be spliced back into the rest of it here.
-        return [_spliced_choice(item, query, result.replacement, prefix) for item in result.items]
-    return [_choice(item, source, prefix, separator) for item in result.items]
+        return [
+            _spliced_choice(item, query, result.replacement, prefix)
+            for item in result.items[:AUTOCOMPLETE_CHOICE_LIMIT]
+        ]
+    return [_choice(item, source, prefix, separator) for item in result.items[:AUTOCOMPLETE_CHOICE_LIMIT]]
 
 
 def _spliced_choice(

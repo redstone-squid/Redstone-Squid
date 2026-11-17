@@ -12,8 +12,8 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
+from squid.bot.utils.autocomplete import AUTOCOMPLETE_CHOICE_LIMIT
 from squid.suggestions.application import Candidate, rank
-from squid.suggestions.domain import MAX_SUGGESTIONS
 from squid_i18n import md, md_tr
 from squid_ui.content.text import TextLike
 
@@ -241,12 +241,12 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 app_commands.Choice(name=command.qualified_name, value=command.qualified_name)
                 for command in public
                 if command.parent is None
-            ][:MAX_SUGGESTIONS]
+            ][:AUTOCOMPLETE_CHOICE_LIMIT]
 
         candidates = [Candidate.create(command.qualified_name) for command in public]
         return [
             app_commands.Choice(name=match.label, value=match.value)
-            for match in rank(needle, candidates, limit=MAX_SUGGESTIONS)
+            for match in rank(needle, candidates, limit=AUTOCOMPLETE_CHOICE_LIMIT)
         ]
 
 

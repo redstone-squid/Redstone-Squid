@@ -10,8 +10,8 @@ from enum import StrEnum
 
 from squid.core.actors import Actor
 
-MAX_SUGGESTIONS = 25
-"""Maximum for nonzero request limits, matching Discord's autocomplete response limit."""
+MAX_QUERY_SUGGESTIONS = 25
+"""Maximum results for a bounded query; full catalogue enumeration is exempt."""
 
 MAX_QUERY_LENGTH = 200
 """Maximum query length in Python characters; the service truncates longer input."""
@@ -82,7 +82,7 @@ class SuggestionRequest:
 
     source: str
     query: str = ""
-    limit: int = MAX_SUGGESTIONS
+    limit: int = MAX_QUERY_SUGGESTIONS
     """Maximum results; zero requests all values from a candidate provider."""
 
     context: Mapping[str, str] = field(default_factory=dict)

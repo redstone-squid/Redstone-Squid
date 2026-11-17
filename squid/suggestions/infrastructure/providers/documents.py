@@ -9,8 +9,17 @@ would only discard rows it cannot see a literal reason to keep.
 from collections.abc import Collection, Sequence
 from typing import Protocol
 
-from squid.suggestions.application.queries import DocumentEntry
-from squid.suggestions.domain import MAX_SUGGESTIONS, Suggestion, SuggestionRequest, SuggestionResult
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
+from squid.suggestions.application.queries import DocumentEntry, SuggestionRepository
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import (
+    MAX_QUERY_SUGGESTIONS,
+    Suggestion,
+    SuggestionRequest,
+    SuggestionResult,
+    ValueType,
+    Visibility,
+)
 
 
 class DocumentReader(Protocol):
@@ -49,7 +58,7 @@ class DocumentProvider:
             self._resource_kind,
             request.query,
             statuses=self._statuses,
-            limit=request.limit or MAX_SUGGESTIONS,
+            limit=request.limit or MAX_QUERY_SUGGESTIONS,
         )
         return SuggestionResult(
             items=tuple(
@@ -65,3 +74,42 @@ class DocumentProvider:
                 for entry in entries
             )
         )
+
+
+PUBLIC_BUILD_STATUSES = ("confirmed",)
+PENDING_BUILD_STATUSES = ("pending",)
+
+
+def document_sources(repository: SuggestionRepository) -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="builds",
+            provider=DocumentProvider(repository, "build", statuses=PUBLIC_BUILD_STATUSES, kind_label="build"),
+            value_type=ValueType.INTEGER,
+            kind_label="build",
+        ),
+        SuggestionSource(
+            id="builds_pending",
+            # Gated because unreviewed submissions are not public, and Discord does not run a
+            # command's permission checks before its autocomplete callback.
+            provider=DocumentProvider(repository, "build", statuses=PENDING_BUILD_STATUSES, kind_label="build"),
+            visibility=Visibility.REQUIRES_NODE,
+            required_node=BUILD_SUBMISSION_VIEW_PENDING.name,
+            value_type=ValueType.INTEGER,
+            kind_label="build",
+        ),
+        SuggestionSource(
+            # Titles rather than ids: this backs a free-text search box, where the answer is words
+            # to search for.
+            id="build_titles",
+            provider=DocumentProvider(
+                repository, "build", statuses=PUBLIC_BUILD_STATUSES, kind_label="build", by_title=True
+            ),
+            kind_label="build",
+        ),
+        SuggestionSource(
+            id="records",
+            provider=DocumentProvider(repository, "record", kind_label="record"),
+            kind_label="record",
+        ),
+    )

@@ -2,7 +2,7 @@
 
 from squid.suggestions.domain.models import (
     MAX_QUERY_LENGTH,
-    MAX_SUGGESTIONS,
+    MAX_QUERY_SUGGESTIONS,
     ReplacementSpan,
     SourceKind,
     Suggestion,
@@ -14,7 +14,7 @@ from squid.suggestions.domain.models import (
 
 __all__ = [
     "MAX_QUERY_LENGTH",
-    "MAX_SUGGESTIONS",
+    "MAX_QUERY_SUGGESTIONS",
     "ReplacementSpan",
     "SourceKind",
     "Suggestion",

@@ -5,9 +5,10 @@ from typing import Any, cast
 import pytest
 
 from squid.submissions.infrastructure.options import _SOURCES as FORM_OPTION_SOURCES
-from squid.suggestions.application import SuggestionRegistry
+from squid.suggestions.application import SuggestionRegistry, SuggestionSource
 from squid.suggestions.domain import SourceKind, Visibility
 from squid.suggestions.infrastructure.catalogue import build_registry
+from squid.suggestions.infrastructure.providers.static import StaticProvider
 
 
 def registry(*, discord: bool = False) -> SuggestionRegistry:
@@ -90,3 +91,10 @@ def test_enumerable_sources_are_not_viewer_scoped() -> None:
     for source in registry(discord=True).enumerable():
         assert source.visibility is not Visibility.VIEWER_SCOPED
         assert source.kind is SourceKind.ENUMERABLE
+
+
+def test_deployments_can_compose_additional_provider_owned_sources() -> None:
+    stub = cast(Any, object())
+    extra = SuggestionSource(id="extension", provider=StaticProvider.of(["value"]))
+    result = build_registry(repository=stub, search=stub, versions=stub, tags=stub, extra_sources=(extra,))
+    assert result.resolve("extension") is extra

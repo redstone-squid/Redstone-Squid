@@ -5,8 +5,11 @@ from typing import Protocol
 
 from squid.accounts.application.presentation import claimant_label
 from squid.accounts.models import AliasClaim
+from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_LIST
 from squid.suggestions.application import Candidate
-from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
+from squid.suggestions.application.queries import SuggestionRepository
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import MAX_QUERY_SUGGESTIONS, SuggestionRequest, ValueType, Visibility
 
 
 class RecordDefinitionReader(Protocol):
@@ -28,7 +31,7 @@ class RecordDefinitionProvider:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        rows = await self._reader.title_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        rows = await self._reader.title_definitions(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
         return tuple(
             Candidate.create(
                 str(definition_id),
@@ -60,7 +63,7 @@ class CreatorProfileProvider:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        profiles = await self._reader.creator_profiles(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        profiles = await self._reader.creator_profiles(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
         return tuple(
             Candidate.create(creator_id, label=name, kind="creator", terms=(name,)) for creator_id, name in profiles
         )
@@ -73,7 +76,7 @@ class RecordTitleProvider:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        record_titles = await self._reader.record_titles(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        record_titles = await self._reader.record_titles(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
         return tuple(
             Candidate.create(
                 public_id,
@@ -121,9 +124,50 @@ class CreatorProvider:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        creators = await self._reader.creators(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        creators = await self._reader.creators(request.query, limit=request.limit or MAX_QUERY_SUGGESTIONS)
         return tuple(
             # Show existing ownership before the user submits a claim request.
             Candidate.create(name, description="claimed" if claimed else None, kind="creator")
             for name, claimed in creators
         )
+
+
+def record_sources(
+    repository: SuggestionRepository, accounts: PendingAliasClaims | None
+) -> tuple[SuggestionSource, ...]:
+    sources = (
+        SuggestionSource(
+            id="title_definitions",
+            provider=RecordDefinitionProvider(repository),
+            kind_label="record_category",
+        ),
+        SuggestionSource(
+            id="creators",
+            provider=CreatorProvider(repository),
+            kind_label="creator",
+            multi_value=",",
+        ),
+        SuggestionSource(
+            id="creator_profiles",
+            provider=CreatorProfileProvider(repository),
+            kind_label="creator",
+        ),
+        SuggestionSource(
+            id="record_titles",
+            provider=RecordTitleProvider(repository),
+            kind_label="record_title",
+        ),
+    )
+    if accounts is None:
+        return sources
+    return (
+        *sources,
+        SuggestionSource(
+            id="alias_claims_pending",
+            provider=AliasClaimProvider(accounts),
+            visibility=Visibility.REQUIRES_NODE,
+            required_node=ACCOUNT_CLAIM_LIST.name,
+            value_type=ValueType.INTEGER,
+            kind_label="claim",
+        ),
+    )

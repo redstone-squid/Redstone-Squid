@@ -15,7 +15,7 @@ from squid.suggestions.application import (
 )
 from squid.suggestions.domain import (
     MAX_QUERY_LENGTH,
-    MAX_SUGGESTIONS,
+    MAX_QUERY_SUGGESTIONS,
     SourceKind,
     Suggestion,
     SuggestionRequest,
@@ -92,10 +92,10 @@ async def test_a_hanging_provider_is_bounded_and_returns_empty() -> None:
     assert result.items == ()
 
 
-async def test_limit_is_clamped_to_discords_ceiling() -> None:
+async def test_query_limit_is_clamped_to_service_ceiling() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES)))
     result = await service.suggest(SuggestionRequest(source="restrictions", limit=500))
-    assert len(result.items) == MAX_SUGGESTIONS
+    assert len(result.items) == MAX_QUERY_SUGGESTIONS
 
 
 async def test_query_is_truncated_and_cursor_is_clamped_before_the_provider() -> None:
@@ -124,7 +124,7 @@ async def test_gated_source_is_served_when_the_authorizer_allows() -> None:
     source = gated_source()
     authorizer = AllowingAuthorizer(allowed=True)
     result = await service_for(source).suggest(SuggestionRequest(source="restrictions"), authorizer=authorizer)
-    assert len(result.items) == MAX_SUGGESTIONS
+    assert len(result.items) == MAX_QUERY_SUGGESTIONS
 
 
 async def test_viewer_scoped_source_is_refused_for_an_anonymous_caller() -> None:
@@ -227,3 +227,14 @@ async def test_persistent_lookup_can_retry_a_timeout() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=HangingProvider()), timeout_seconds=0.01)
     with pytest.raises(TimeoutError):
         await service.suggest(SuggestionRequest(source="restrictions"), raise_on_failure=True)
+
+
+class OversizedComposedProvider:
+    async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
+        return SuggestionResult(items=tuple(Suggestion(str(i), str(i)) for i in range(100)))
+
+
+async def test_composed_results_cannot_exceed_the_requested_limit() -> None:
+    service = service_for(SuggestionSource(id="composed", provider=OversizedComposedProvider()))
+    result = await service.suggest(SuggestionRequest(source="composed", limit=3))
+    assert [item.value for item in result.items] == ["0", "1", "2"]

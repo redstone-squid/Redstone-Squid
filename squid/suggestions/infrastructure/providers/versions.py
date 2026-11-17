@@ -4,7 +4,9 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from squid.suggestions.application import Candidate
-from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.application.queries import SuggestionRepository
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SourceKind, SuggestionRequest, ValueType
 from squid.suggestions.infrastructure.cache import TtlCache
 from squid.versions.domain import MinecraftVersion
 
@@ -78,3 +80,29 @@ class ConversionVersionProvider:
             Candidate.create(name, label=name, kind="version")
             for _number, name in await self._reader.conversion_versions()
         )
+
+
+def version_sources(
+    versions: CanonicalMinecraftVersions, repository: SuggestionRepository
+) -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="approved_source_versions",
+            provider=VersionProvider(versions),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="version",
+        ),
+        SuggestionSource(
+            id="conversion_versions",
+            provider=ConversionVersionProvider(repository),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="version",
+        ),
+        SuggestionSource(
+            id="version_ids",
+            provider=VersionIdProvider(repository),
+            kind=SourceKind.ENUMERABLE,
+            value_type=ValueType.INTEGER,
+            kind_label="version",
+        ),
+    )

@@ -2,6 +2,9 @@
 
 from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import Candidate
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SourceKind
+from squid.suggestions.infrastructure.providers.static import StaticProvider
 
 WILDCARD = "**"
 
@@ -27,4 +30,21 @@ def permission_pattern_candidates() -> tuple[Candidate, ...]:
     return tuple(
         Candidate.create(pattern, description=description, kind="permission_pattern")
         for pattern, description in sorted(patterns.items())
+    )
+
+
+def permission_sources() -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="permission_nodes",
+            provider=StaticProvider(permission_node_candidates()),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="permission_node",
+        ),
+        SuggestionSource(
+            id="permission_patterns",
+            provider=StaticProvider(permission_pattern_candidates()),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="permission_pattern",
+        ),
     )

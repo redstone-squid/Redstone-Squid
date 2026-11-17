@@ -11,7 +11,7 @@ from squid.suggestions.application import (
     UnknownSuggestionSourceError,
 )
 from squid.suggestions.domain import (
-    MAX_SUGGESTIONS,
+    MAX_QUERY_SUGGESTIONS,
     ReplacementSpan,
     SourceKind,
     Suggestion,
@@ -22,7 +22,7 @@ from squid.suggestions.domain import (
 )
 
 __all__ = [
-    "MAX_SUGGESTIONS",
+    "MAX_QUERY_SUGGESTIONS",
     "ReplacementSpan",
     "SourceKind",
     "Suggestion",

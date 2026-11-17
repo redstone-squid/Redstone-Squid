@@ -12,7 +12,9 @@ from squid.permissions.models import PermissionRole
 from squid.starboard.domain import EDITABLE_SETTINGS
 from squid.starboard.models import StarboardConfig
 from squid.suggestions.application import Candidate
-from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SourceKind, SuggestionRequest, ValueType
+from squid.suggestions.infrastructure.providers.static import StaticProvider
 
 
 class GuildStarboards(Protocol):
@@ -82,3 +84,46 @@ def _setting_hint(kind: str) -> str:
         "integer": "a whole number",
         "text": "free text",
     }[kind]
+
+
+def guild_sources(
+    starboards: GuildStarboards | None,
+    permission_roles: PermissionRoles | None,
+) -> tuple[SuggestionSource, ...]:
+    sources: list[SuggestionSource] = [
+        SuggestionSource(
+            id="starboard_settings",
+            provider=StaticProvider(starboard_setting_candidates()),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="starboard_setting",
+        )
+    ]
+    if starboards is not None:
+        sources.append(
+            SuggestionSource(
+                id="starboard_names",
+                provider=StarboardNameProvider(starboards),
+                context_keys=frozenset({"guild_id"}),
+                kind_label="starboard",
+            )
+        )
+    if permission_roles is not None:
+        sources.append(
+            SuggestionSource(
+                id="permission_roles",
+                provider=PermissionRoleProvider(permission_roles),
+                context_keys=frozenset({"guild_id"}),
+                kind_label="permission_role",
+            )
+        )
+        sources.append(
+            SuggestionSource(
+                id="permission_role_ids",
+                provider=PermissionRoleProvider(permission_roles, identities=True),
+                context_keys=frozenset({"guild_id"}),
+                kind=SourceKind.ENUMERABLE,
+                value_type=ValueType.INTEGER,
+                kind_label="permission_role",
+            )
+        )
+    return tuple(sources)

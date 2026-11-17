@@ -17,13 +17,17 @@ from squid.search.application.completion import (
 from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.application.ports import SearchFields
+from squid.suggestions.application.queries import SuggestionRepository
+from squid.suggestions.application.registry import SuggestionSource
 from squid.suggestions.domain import (
-    MAX_SUGGESTIONS,
+    MAX_QUERY_SUGGESTIONS,
     ReplacementSpan,
+    SourceKind,
     Suggestion,
     SuggestionRequest,
     SuggestionResult,
 )
+from squid.suggestions.infrastructure.providers.search_fields import SearchFieldProvider, SearchSortProvider
 
 
 class FacetReader(Protocol):
@@ -46,7 +50,7 @@ class SearchQueryProvider:
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
         registry = await self._search.fields()
         context = analyze(request.query, request.cursor, registry)
-        limit = request.limit or MAX_SUGGESTIONS
+        limit = request.limit or MAX_QUERY_SUGGESTIONS
         span = ReplacementSpan(context.start, context.end)
 
         match context.kind:
@@ -99,3 +103,28 @@ def _terms(context: CompletionContext, registry: FieldRegistry, limit: int) -> t
             Candidate.create(keyword, description="combine terms", kind="operator") for keyword in BOOLEAN_KEYWORDS
         )
     return rank(context.prefix, candidates, limit=limit)
+
+
+def search_sources(
+    search: SearchFields,
+    repository: SuggestionRepository,
+) -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="search_query",
+            provider=SearchQueryProvider(search, repository),
+            kind_label="query",
+        ),
+        SuggestionSource(
+            id="search_fields",
+            provider=SearchFieldProvider(search),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="field",
+        ),
+        SuggestionSource(
+            id="search_sorts",
+            provider=SearchSortProvider(search),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="sort",
+        ),
+    )

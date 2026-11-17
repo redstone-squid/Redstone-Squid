@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Sequence
+from dataclasses import replace
 
 import anyio
 
@@ -20,7 +21,7 @@ from squid.suggestions.application.ports import ComposedSuggestionProvider, Sugg
 from squid.suggestions.application.registry import SuggestionRegistry, SuggestionSource
 from squid.suggestions.domain import (
     MAX_QUERY_LENGTH,
-    MAX_SUGGESTIONS,
+    MAX_QUERY_SUGGESTIONS,
     SourceKind,
     Suggestion,
     SuggestionRequest,
@@ -74,7 +75,7 @@ class SuggestionService:
         pickers use `raise_on_failure` to distinguish provider failures from no matches.
 
         Queries are truncated to `MAX_QUERY_LENGTH`. Nonzero limits are clamped
-        to 1..MAX_SUGGESTIONS; zero asks a candidate provider for its full set.
+        to 1..MAX_QUERY_SUGGESTIONS; zero asks a candidate provider for its full set.
         Composed providers apply their own ranking and limits.
         """
         source = self._registry.resolve(request.source)
@@ -139,7 +140,10 @@ class SuggestionService:
         # A composed provider has already decided its own order and span — typically because a
         # database ranked it — so it is passed through rather than re-ranked here.
         if isinstance(provider, ComposedSuggestionProvider):
-            return _labelled(await provider.suggest(request), source)
+            result = await provider.suggest(request)
+            if request.limit:
+                result = replace(result, items=result.items[: request.limit])
+            return _labelled(result, source)
         candidates = await provider.candidates(request)
         # `limit=0` means enumerate: keep the provider's full ordered set rather than ranking it.
         items = (
@@ -184,7 +188,7 @@ def content_revision(items: Sequence[Suggestion]) -> int:
 
 
 def _normalize(request: SuggestionRequest) -> SuggestionRequest:
-    limit = request.limit if request.limit == 0 else max(1, min(request.limit, MAX_SUGGESTIONS))
+    limit = request.limit if request.limit == 0 else max(1, min(request.limit, MAX_QUERY_SUGGESTIONS))
     query = request.query[:MAX_QUERY_LENGTH]
     if limit == request.limit and query == request.query:
         return request

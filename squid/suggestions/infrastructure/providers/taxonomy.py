@@ -7,10 +7,13 @@ restriction picked in Discord, on the web form, and in-game is spelled identical
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.permissions.domain.catalogue import TAG_PROPOSAL_LIST
 from squid.suggestions.application import Candidate
 from squid.suggestions.application.queries import TaxonomyEntry
-from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SourceKind, SuggestionRequest, ValueType, Visibility
 from squid.suggestions.infrastructure.cache import TtlCache
+from squid.tags.domain import TagSemanticKind
 from squid.tags.models import TagDefinition
 
 
@@ -109,3 +112,61 @@ def _alias_hint(entry: TaxonomyEntry) -> str | None:
     if not entry.aliases:
         return None
     return "also " + ", ".join(entry.aliases[:3])
+
+
+def taxonomy_sources(repository: TaxonomyReader, tags: PendingTagDefinitions) -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="tags_pending",
+            provider=PendingTagProvider(tags),
+            visibility=Visibility.REQUIRES_NODE,
+            required_node=TAG_PROPOSAL_LIST.name,
+            value_type=ValueType.INTEGER,
+            kind_label="tag",
+        ),
+        SuggestionSource(
+            id="approved_restrictions",
+            provider=TaxonomyProvider(repository, TagSemanticKind.RESTRICTION.value),
+            kind=SourceKind.ENUMERABLE,
+            multi_value=",",
+            kind_label="restriction",
+        ),
+        SuggestionSource(
+            id="approved_patterns",
+            provider=TaxonomyProvider(repository, TagSemanticKind.PATTERN.value),
+            kind=SourceKind.ENUMERABLE,
+            multi_value=",",
+            kind_label="pattern",
+        ),
+        SuggestionSource(
+            # Showcase tags are proposed by users, so unlike restrictions and patterns they are
+            # never `official` and must not be filtered on authority.
+            id="approved_showcase_tags",
+            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
+            kind=SourceKind.ENUMERABLE,
+            multi_value=",",
+            kind_label="showcase",
+        ),
+        SuggestionSource(
+            id="showcase_tag_ids",
+            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None, by_id=True),
+            kind=SourceKind.ENUMERABLE,
+            value_type=ValueType.INTEGER,
+            kind_label="showcase",
+        ),
+        SuggestionSource(
+            id="restriction_ids",
+            provider=TaxonomyProvider(repository, TagSemanticKind.RESTRICTION.value, by_id=True),
+            kind=SourceKind.ENUMERABLE,
+            value_type=ValueType.INTEGER,
+            multi_value=",",
+            kind_label="restriction",
+        ),
+        SuggestionSource(
+            id="door_types",
+            # Door types are patterns declared applicable to doors, not a separate taxonomy.
+            provider=TaxonomyProvider(repository, TagSemanticKind.PATTERN.value, build_kind="Door"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="pattern",
+        ),
+    )

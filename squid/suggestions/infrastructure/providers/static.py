@@ -2,8 +2,12 @@
 
 from collections.abc import Callable, Iterable, Sequence
 
+from squid.core.i18n import SUPPORTED_LOCALES
+from squid.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.suggestions.application import Candidate
-from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.application.registry import SuggestionSource
+from squid.suggestions.domain import SourceKind, SuggestionRequest
 
 
 class StaticProvider:
@@ -38,3 +42,53 @@ class CallableProvider:
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         return tuple(self._produce(request))
+
+
+def static_sources() -> tuple[SuggestionSource, ...]:
+    return (
+        SuggestionSource(
+            id="runtime_setting_names",
+            kind=SourceKind.ENUMERABLE,
+            kind_label="setting",
+            provider=StaticProvider(
+                Candidate.create(
+                    name,
+                    name.replace("_", " ").title(),
+                    description=(
+                        "Boolean: true or false"
+                        if field.annotation is bool
+                        else "Whole number"
+                        if field.annotation is int
+                        else "Decimal number"
+                        if field.annotation is float
+                        else "JSON array of channel IDs"
+                    ),
+                )
+                for name, field in RuntimeSettings.model_fields.items()
+            ),
+        ),
+        SuggestionSource(
+            id="build_kinds",
+            provider=StaticProvider.of([kind.value for kind in BuildKind], kind="build_kind"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="build_kind",
+        ),
+        SuggestionSource(
+            id="base_titles",
+            provider=StaticProvider.of([item.value for item in BaseTitle], kind="base_title"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="base_title",
+        ),
+        SuggestionSource(
+            id="version_scopes",
+            provider=StaticProvider.of([item.value for item in VersionScope], kind="version_scope"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="version_scope",
+        ),
+        SuggestionSource(
+            id="locales",
+            provider=StaticProvider.of(sorted(SUPPORTED_LOCALES), kind="locale"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="locale",
+        ),
+    )

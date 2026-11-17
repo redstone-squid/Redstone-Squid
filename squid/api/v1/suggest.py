@@ -19,7 +19,7 @@ from squid.core.actors import Actor
 from squid.core.i18n import negotiate_locale
 from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import SuggestionService
-from squid.suggestions.domain import MAX_SUGGESTIONS, SourceKind, SuggestionRequest
+from squid.suggestions.domain import MAX_QUERY_SUGGESTIONS, SourceKind, SuggestionRequest
 
 SourceId = Annotated[str, PathParameter(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 CACHE_SECONDS = 30
@@ -51,7 +51,7 @@ async def suggest(
     suggestions: Suggestions,
     caller: CurrentCaller,
     q: Annotated[str, QueryParameter(max_length=200)] = "",
-    limit: Annotated[int, QueryParameter(ge=1, le=MAX_SUGGESTIONS)] = 10,
+    limit: Annotated[int, QueryParameter(ge=1, le=MAX_QUERY_SUGGESTIONS)] = 10,
     cursor: Annotated[int | None, QueryParameter(ge=0)] = None,
     category: Annotated[str | None, QueryParameter(pattern=r"^[a-z][a-z0-9_]{0,63}$")] = None,
 ) -> Response[SuggestionPage]:
