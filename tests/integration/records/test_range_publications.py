@@ -83,13 +83,18 @@ async def test_snapshots_are_immutable_and_old_workers_cannot_replace_newer_atte
             with pytest.raises(IntegrityError, match="immutable"):
                 await session.execute(statement)
             await session.rollback()
-    # Replacement activation and its results become visible in one commit.
+    # Changed source evidence and results become visible in one commit.
+    replacement_sources = (family(branch(volume="20n")),)
+    replacement_document = document.model_copy(
+        update={"sources": tuple(RangeSource.from_candidate(s) for s in replacement_sources)}
+    )
+    replacement_result = analyze_door_widths(replacement_sources, height=3)
     async with factory() as uow:
         replacement = await uow.record_ranges.begin(query_id, revision)
-        await uow.record_ranges.save_snapshot(replacement.id, document)
+        await uow.record_ranges.save_snapshot(replacement.id, replacement_document)
         await uow.commit()
     async with factory() as writer:
-        await writer.record_ranges.finish(replacement.id, result)
+        await writer.record_ranges.finish(replacement.id, replacement_result)
         async with factory() as reader:
             before_commit = await reader.record_ranges.get(query_id)
             assert before_commit is not None
@@ -101,7 +106,7 @@ async def test_snapshots_are_immutable_and_old_workers_cannot_replace_newer_atte
         assert published is not None
         assert published.active is not None
         assert published.active.id == replacement.id
-        assert published.active.result == result
+        assert published.active.result == replacement_result
         snapshots = await reader.record_ranges.get_snapshot(first.id)
         assert snapshots == document
 
@@ -253,7 +258,10 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
     analyzer.analyze.side_effect = None
     replacement = await publisher.publish(query)
     assert replacement.active is not None
-    assert replacement.active.id != first.active.id
+    assert replacement.active.id == first.active.id
+    assert replacement.latest is not None
+    assert replacement.latest.id != first.active.id
+    assert replacement.latest.error is None
 
 
 async def test_new_rules_revision_prevents_old_attempt_activation(
@@ -408,3 +416,38 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
         assert pending.last_error == RegionAnalysisStatus.TIMED_OUT.value
         assert pending.claim_token is None
     assert await publisher.process_queue() == (0, 0)
+
+
+async def test_unchanged_range_keeps_publication_and_advances_last_checked(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
+    analyzer.analyze.return_value = analyze_door_widths((), height=3)
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+    )
+    query_id = await publisher.register(DoorRangeQuery(height=3))
+    assert await publisher.process_queue() == (1, 0)
+    first = await publisher.get(query_id)
+    assert first is not None
+    assert first.active is not None
+    assert first.last_checked_at is not None
+    assert not first.refresh_pending
+
+    await publisher.request_refresh(query_id)
+    pending = await publisher.get(query_id)
+    assert pending is not None
+    assert pending.refresh_pending
+    assert await publisher.process_queue() == (1, 0)
+
+    checked = await publisher.get(query_id)
+    assert checked is not None
+    assert checked.active is not None
+    assert checked.latest is not None
+    assert checked.active.id == first.active.id
+    assert checked.active.snapshot_hash == first.active.snapshot_hash
+    assert checked.latest.id != checked.active.id
+    assert checked.last_checked_at is not None
+    assert checked.last_checked_at >= first.last_checked_at
+    assert not checked.refresh_pending

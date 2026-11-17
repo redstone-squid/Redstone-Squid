@@ -45,6 +45,8 @@ _RECORD = PublishedTitle(
     status=ResolutionStatus.RESOLVED,
     holder_build_ids=(42,),
     computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
+    last_checked_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+    refresh_pending=True,
 )
 _RECORD_JSON = {
     "id": 7,
@@ -58,6 +60,9 @@ _RECORD_JSON = {
     "status": ResolutionStatus.RESOLVED.value,
     "holder_build_ids": [42],
     "computed_at": "2026-08-10T12:00:00Z",
+    "last_checked_at": "2026-08-11T12:00:00Z",
+    "refresh_pending": True,
+    "version_id": None,
 }
 
 

@@ -1562,6 +1562,9 @@ export type PublicRecordDetail = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+    last_checked_at?: string | null;
+    refresh_pending?: boolean;
+    version_id?: number | null;
     door_evidence?: DoorRecordEvidence | null;
     holder_builds: Array<PublicBuildSummary>;
 };
@@ -1582,6 +1585,8 @@ export type PublishedDoorPoint = {
     latest: RangeAttemptSummary | null;
     region: SmallestRecordRegion | null;
     configurations: Array<DoorRegionConfiguration>;
+    last_checked_at?: string | null;
+    refresh_pending?: boolean;
 };
 
 /**
@@ -1604,6 +1609,9 @@ export type PublishedTitle = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+    last_checked_at?: string | null;
+    refresh_pending?: boolean;
+    version_id?: number | null;
 };
 
 /**
@@ -1648,6 +1656,8 @@ export type RangePublication = {
     query: DoorRangeQuery;
     active: RangeAttempt | null;
     latest: RangeAttempt | null;
+    last_checked_at?: string | null;
+    refresh_pending?: boolean;
 };
 
 /**

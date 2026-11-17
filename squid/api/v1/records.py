@@ -56,6 +56,9 @@ class PublicRecordDTO(DataclassDTO[PublishedTitle]):
             "status",
             "holder_build_ids",
             "computed_at",
+            "last_checked_at",
+            "refresh_pending",
+            "version_id",
         }
     )
 

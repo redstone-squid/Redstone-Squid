@@ -82,10 +82,15 @@ def record_browser(
 
     def detail(record: PublishedTitle) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         computed_at = format_dt(record.computed_at, style="R")
+        checked_at = format_dt(record.last_checked_at, style="R") if record.last_checked_at is not None else None
         return sl.section(
             sl.heading(record.title),
             sl.paragraph(_comparison_rule(record.base_title)),
             sl.note(md_tr(t"record-browse-computed = Computed {computed_at}")),
+            sl.note(md_tr(t"record-browse-checked = Last checked {checked_at}")) if checked_at is not None else None,
+            sl.note(tr(t"record-browse-pending = Newer inputs are waiting to be checked."))
+            if record.refresh_pending
+            else None,
             record.subtitle and sl.paragraph(record.subtitle),
             sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
             sl.action_controls(follow_control(SubscriptionKind.RECORD, record.title_id), key="record-follow"),

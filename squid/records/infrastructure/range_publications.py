@@ -202,6 +202,24 @@ class PostgresRangePublicationRepository:
             )
             is not None
         ):
+            registration.last_checked_at = run.completed_at
+            previous = await session.scalar(
+                select(DoorRangeRun).where(DoorRangeRun.query_id == run.query_id, DoorRangeRun.is_active)
+            )
+            if (
+                previous is not None
+                and previous.rules_revision_id == run.rules_revision_id
+                and previous.result == run.result
+            ):
+                previous_snapshot = await session.get(DoorRangeSnapshot, previous.id)
+                assert document is not None
+                if (
+                    previous_snapshot is not None
+                    and RangeSnapshotDocument.model_validate(previous_snapshot.document).semantic_digest()
+                    == document.semantic_digest()
+                ):
+                    await session.flush()
+                    return
             await session.execute(
                 update(DoorRangeRun)
                 .where(DoorRangeRun.query_id == run.query_id, DoorRangeRun.is_active)
@@ -214,7 +232,7 @@ class PostgresRangePublicationRepository:
         # One statement prevents activation between reading active and latest.
         rows = (
             await self._session().execute(
-                select(DoorRangeRegistration, DoorRangeRun, DoorRangeSnapshot)
+                select(DoorRangeRegistration, DoorRangeRun, DoorRangeSnapshot, DoorRangeRecomputeQueueItem.query_id)
                 .outerjoin(
                     DoorRangeRun,
                     and_(
@@ -223,6 +241,9 @@ class PostgresRangePublicationRepository:
                     ),
                 )
                 .outerjoin(DoorRangeSnapshot, DoorRangeSnapshot.run_id == DoorRangeRun.id)
+                .outerjoin(
+                    DoorRangeRecomputeQueueItem, DoorRangeRecomputeQueueItem.query_id == DoorRangeRegistration.id
+                )
                 .where(DoorRangeRegistration.id == query_id)
                 .order_by(DoorRangeRun.generation.desc())
             )
@@ -232,7 +253,7 @@ class PostgresRangePublicationRepository:
         registration = rows[0][0]
         attempts = tuple(
             _attempt(matched_run, snapshot)
-            for _, run, snapshot in rows
+            for _, run, snapshot, _pending in rows
             if (matched_run := cast(DoorRangeRun | None, run)) is not None
         )
         return RangePublication(
@@ -240,6 +261,8 @@ class PostgresRangePublicationRepository:
             DoorRangeQuery.model_validate(registration.query),
             next((a for a in attempts if a.is_active), None),
             attempts[0] if attempts else None,
+            last_checked_at=None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
+            refresh_pending=rows[0][3] is not None,
         )
 
 

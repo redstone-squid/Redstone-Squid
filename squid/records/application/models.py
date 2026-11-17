@@ -178,6 +178,9 @@ class PublishedTitle:
     status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
+    last_checked_at: datetime | None = field(default=None, kw_only=True)
+    refresh_pending: bool = field(default=False, kw_only=True)
+    version_id: int | None = field(default=None, kw_only=True)
     door_evidence: DoorRecordEvidence | None = field(default=None, kw_only=True)
 
     @property

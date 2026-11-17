@@ -3,6 +3,7 @@ CREATE TABLE public.door_range_registrations (
     query_key text NOT NULL,
     query jsonb NOT NULL,
     generation bigint DEFAULT 0 NOT NULL,
+    last_checked_at timestamp with time zone,
     CONSTRAINT door_range_registrations_generation_check CHECK ((generation >= 0))
 );
 

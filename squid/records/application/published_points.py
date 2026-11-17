@@ -64,6 +64,8 @@ class PublishedDoorPoint:
     latest: RangeAttemptSummary | None
     region: SmallestRecordRegion | None
     configurations: tuple[DoorRegionConfiguration, ...]
+    last_checked_at: datetime | None = field(default=None, kw_only=True)
+    refresh_pending: bool = field(default=False, kw_only=True)
 
     @classmethod
     def from_publication(cls, publication: RangePublication, width: int) -> PublishedDoorPoint:
@@ -99,4 +101,6 @@ class PublishedDoorPoint:
             None if publication.latest is None else RangeAttemptSummary.from_attempt(publication.latest),
             region,
             configurations,
+            last_checked_at=publication.last_checked_at,
+            refresh_pending=publication.refresh_pending,
         )

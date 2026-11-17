@@ -82,6 +82,14 @@ class RangeSnapshotDocument(BaseModel):
         payload["query"] = json.loads(canonical_range_query(self.query))
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
+    def semantic_digest(self) -> str:
+        """Compare source evidence and resolved scope without the capture clock."""
+        payload = self.model_dump(mode="json", exclude={"captured_at"})
+        payload["query"] = json.loads(canonical_range_query(self.query))
+        payload["resolved_version_id"] = self.effective_version_id
+        payload["sources"].sort(key=lambda source: source["build_id"])
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
 
 @dataclass(frozen=True, slots=True)
 class RangeAttempt:
@@ -105,3 +113,5 @@ class RangePublication:
     query: DoorRangeQuery
     active: RangeAttempt | None
     latest: RangeAttempt | None
+    last_checked_at: datetime | None = field(default=None, kw_only=True)
+    refresh_pending: bool = field(default=False, kw_only=True)

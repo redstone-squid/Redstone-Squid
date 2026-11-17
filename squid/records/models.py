@@ -524,6 +524,7 @@ class DoorRangeRegistration(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     query_key: Mapped[str] = mapped_column(Text, nullable=False)
     query: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    last_checked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
 
 

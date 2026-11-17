@@ -578,10 +578,16 @@ class PostgresRecordRepository:
     ) -> tuple[PublishedTitle, ...]:
         session = self._session()
         statement = (
-            select(TitleResult, TitleDefinition)
+            select(
+                TitleResult,
+                TitleDefinition,
+                ComputationRun.last_checked_at,
+                func.coalesce(ComputationRun.checked_generation < RecordInputGeneration.generation, True),
+            )
             .options(selectinload(TitleDefinition.record_title))
             .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+            .outerjoin(RecordInputGeneration, RecordInputGeneration.build_kind == ComputationRun.build_kind)
             .where(ComputationRun.is_active.is_(True))
         )
         if result_id is None:
@@ -607,7 +613,7 @@ class PostgresRecordRepository:
             rows = list(reversed(rows))
         if not rows:
             return ()
-        result_ids = [result.id for result, _definition in rows]
+        result_ids = [result.id for result, _definition, _checked_at, _pending in rows]
         holder_rows = (
             await session.execute(
                 select(TitleHolder.result_id, TitleHolder.build_id)
@@ -631,9 +637,12 @@ class PostgresRecordRepository:
                 status=result.status,
                 holder_build_ids=tuple(holders.get(result.id, ())),
                 computed_at=result.computed_at.to_stdlib(),
+                last_checked_at=None if checked_at is None else checked_at.to_stdlib(),
+                refresh_pending=pending,
+                version_id=definition.version_id,
                 door_evidence=result.door_evidence if result_id is not None else None,
             )
-            for result, definition in rows
+            for result, definition, checked_at, pending in rows
         )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
