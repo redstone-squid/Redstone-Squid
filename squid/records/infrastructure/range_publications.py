@@ -27,6 +27,7 @@ from squid.records.models import (
     DoorRangeRegistration,
     DoorRangeRun,
     DoorRangeSnapshot,
+    RecordSettings,
     RulesRevision,
 )
 
@@ -138,6 +139,7 @@ class PostgresRangePublicationRepository:
         if (
             run.completed_at is not None
             or registration is None
+            or (document.query.follow_current_version and document.resolved_version_id is None)
             or canonical_range_query(document.query)
             != canonical_range_query(DoorRangeQuery.model_validate(registration.query))
         ):
@@ -158,6 +160,7 @@ class PostgresRangePublicationRepository:
             select(func.pg_advisory_xact_lock(func.hashtextextended("record-rules-revision-activation", 0)))
         )
         run = (await session.execute(select(DoorRangeRun).where(DoorRangeRun.id == run_id))).scalar_one()
+        settings = await session.scalar(select(RecordSettings).where(RecordSettings.id == 1).with_for_update(read=True))
         # All activation writers lock the registration first, including stale
         # workers. Finishing an older attempt cannot regress the active result.
         registration = (
@@ -175,9 +178,17 @@ class PostgresRangePublicationRepository:
         if (result is None) == (error is None):
             msg = "Supply one range result or failure."
             raise InvalidStateError(msg)
-        if result is not None and await session.get(DoorRangeSnapshot, run_id) is None:
+        snapshot = await session.get(DoorRangeSnapshot, run_id)
+        if result is not None and snapshot is None:
             msg = "Range results require a saved candidate snapshot."
             raise InvalidStateError(msg)
+        document = None if snapshot is None else RangeSnapshotDocument.model_validate(snapshot.document)
+        current_version_matches = not DoorRangeQuery.model_validate(registration.query).follow_current_version or (
+            settings is not None
+            and document is not None
+            and document.effective_version_id is not None
+            and document.effective_version_id == settings.current_version_id
+        )
         run.result = None if result is None else _RESULT.dump_python(result, mode="json")
         run.error = error
         run.completed_at = Instant.now()
@@ -185,6 +196,7 @@ class PostgresRangePublicationRepository:
             result is not None
             and result.analysis.status is RegionAnalysisStatus.EXACT
             and run.generation == registration.generation
+            and current_version_matches
             and await session.scalar(
                 select(RulesRevision.activated_at).where(RulesRevision.id == run.rules_revision_id)
             )
@@ -245,4 +257,5 @@ def _attempt(run: DoorRangeRun, snapshot: DoorRangeSnapshot | None) -> RangeAtte
         run.error,
         None if snapshot is None else snapshot.content_hash,
         None if document is None else document.captured_at,
+        resolved_version_id=None if document is None else document.effective_version_id,
     )

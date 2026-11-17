@@ -19862,6 +19862,10 @@
               }
             ]
           },
+          "follow_current_version": {
+            "type": "boolean",
+            "default": false
+          },
           "axis": {
             "type": "string",
             "const": "width",
@@ -23857,6 +23861,16 @@
                 "type": "null"
               }
             ]
+          },
+          "resolved_version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -23936,6 +23950,16 @@
             "oneOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
               },
               {
                 "type": "null"

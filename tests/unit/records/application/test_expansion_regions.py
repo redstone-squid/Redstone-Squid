@@ -238,3 +238,8 @@ def test_nonintegral_modulo_operand_remains_unknown_without_a_short_circuit() ->
 def test_width_request_validates_dimensions_bounds_and_taxonomy(data: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         DoorRangeQuery.model_validate(data)
+
+
+def test_current_range_cannot_also_pin_a_fixed_version() -> None:
+    with pytest.raises(ValueError, match="fixed version or follow current"):
+        DoorRangeQuery(height=3, version_id=1, follow_current_version=True)

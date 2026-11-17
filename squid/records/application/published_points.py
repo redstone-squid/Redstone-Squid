@@ -1,6 +1,6 @@
 """Select one opening from saved regions without re-evaluating live source formulas."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -30,6 +30,7 @@ class RangeAttemptSummary:
     snapshot_hash: str | None
     analysis_status: RegionAnalysisStatus | None
     error: str | None
+    resolved_version_id: int | None = field(default=None, kw_only=True)
 
     @classmethod
     def from_attempt(cls, attempt: RangeAttempt) -> RangeAttemptSummary:
@@ -43,6 +44,7 @@ class RangeAttemptSummary:
             attempt.snapshot_hash,
             None if attempt.result is None else attempt.result.analysis.status,
             attempt.error,
+            resolved_version_id=attempt.resolved_version_id,
         )
 
 

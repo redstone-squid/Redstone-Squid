@@ -106,15 +106,21 @@ class RangePublicationService:
             async with self._uow_factory() as uow:
                 revision = await uow.records.active_rules_revision_id()
                 query_id = await uow.record_ranges.register(query)
+                version_id = (
+                    await uow.records.active_current_version_id() if query.follow_current_version else query.version_id
+                )
                 attempt = await uow.record_ranges.begin(query_id, revision)
                 await uow.commit()
             try:
+                if query.follow_current_version and version_id is None:
+                    await self._fail(attempt.id, "current_version_unset")
+                    return await self._published(query_id)
                 async with self._uow_factory() as uow:
                     sources = await uow.record_candidates.list_for_door_widths(
                         query.height,
                         query.depth,
                         query.orientation,
-                        query.version_id,
+                        version_id,
                         minimum=query.minimum,
                         maximum=query.maximum,
                     )
@@ -129,6 +135,7 @@ class RangePublicationService:
                     query=query,
                     sources=tuple(RangeSource.from_candidate(s) for s in candidates),
                     captured_at=captured_at,
+                    resolved_version_id=version_id,
                 )
                 async with self._uow_factory() as uow:
                     await uow.record_ranges.save_snapshot(attempt.id, snapshot)

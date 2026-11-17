@@ -61,8 +61,13 @@ _WIDTH = Polynomial.create(_VARIABLES, {(1,): Fraction(1)})
 
 
 class DoorRangeQuery(DoorRecordCategory):
-    """A smallest-record query varying width at fixed opening height and depth."""
+    """A smallest-record query varying width at fixed opening height and depth.
 
+    Set version_id to fix the Minecraft version, or follow_current_version to
+    resolve the shared pin on each refresh. Leave both unset to include all versions.
+    """
+
+    follow_current_version: bool = False
     axis: Literal["width"] = "width"
     base_title: Literal[BaseTitle.SMALLEST] = BaseTitle.SMALLEST
     height: LookupDimension
@@ -80,6 +85,9 @@ class DoorRangeQuery(DoorRecordCategory):
 
     @model_validator(mode="after")
     def validate_width_bounds(self) -> Self:
+        if self.follow_current_version and self.version_id is not None:
+            msg = "Choose a fixed version or follow current, not both."
+            raise ValueError(msg)
         if self.maximum is not None and self.maximum < self.minimum:
             msg = "The maximum width cannot be smaller than the minimum width."
             raise ValueError(msg)

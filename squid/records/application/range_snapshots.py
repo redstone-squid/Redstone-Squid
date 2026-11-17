@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -52,6 +52,9 @@ class RangeSource(BaseModel):
 
 def canonical_range_query(query: DoorRangeQuery) -> str:
     value = query.model_dump(mode="json")
+    # Preserve existing fixed/all-time registration keys across this addition.
+    if not query.follow_current_version:
+        value.pop("follow_current_version")
     for key in ("type_ids", "restriction_ids", "restriction_values"):
         value[key] = sorted(value[key])
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
@@ -68,6 +71,11 @@ class RangeSnapshotDocument(BaseModel):
     query: DoorRangeQuery
     sources: tuple[RangeSource, ...]
     captured_at: datetime
+    resolved_version_id: int | None = None
+
+    @property
+    def effective_version_id(self) -> int | None:
+        return self.resolved_version_id if self.query.follow_current_version else self.query.version_id
 
     def digest(self) -> str:
         payload = self.model_dump(mode="json")
@@ -88,6 +96,7 @@ class RangeAttempt:
     error: str | None
     snapshot_hash: str | None
     captured_at: datetime | None
+    resolved_version_id: int | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)

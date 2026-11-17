@@ -474,6 +474,12 @@ class RecordService:
         except anyio.WouldBlock as error:
             raise ServiceUnavailableError(context={"reason": "range_capacity"}) from error
         try:
+            if request.follow_current_version:
+                async with self._uow_factory() as uow:
+                    version_id = await uow.records.active_current_version_id()
+                if version_id is None:
+                    raise ServiceUnavailableError(context={"reason": "current_version_unset"})
+                request = request.model_copy(update={"version_id": version_id, "follow_current_version": False})
             async with self._uow_factory() as uow:
                 sources = tuple(
                     await uow.record_candidates.list_for_door_widths(

@@ -494,6 +494,7 @@ export type DoorRangeQuery = {
         string
     ] | unknown>;
     version_id?: number | null;
+    follow_current_version?: boolean;
     axis?: 'width';
     base_title?: 'smallest';
     height: number;
@@ -1620,6 +1621,7 @@ export type RangeAttempt = {
     error: string | null;
     snapshot_hash: string | null;
     captured_at: string | null;
+    resolved_version_id?: number | null;
 };
 
 /**
@@ -1635,6 +1637,7 @@ export type RangeAttemptSummary = {
     snapshot_hash: string | null;
     analysis_status: RegionAnalysisStatus | null;
     error: string | null;
+    resolved_version_id?: number | null;
 };
 
 /**
