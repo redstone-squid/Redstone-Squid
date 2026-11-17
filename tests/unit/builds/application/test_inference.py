@@ -17,8 +17,9 @@ from squid.builds.application import (
     InferredBuild,
     InlineImage,
 )
-from squid.builds.domain import RestrictionTypeLiteral
+from squid.builds.domain import GeneralDraftDetails, RestrictionTypeLiteral
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
+from squid.builds.domain.models import DoorDraftDetails, ExtenderDraftDetails
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
 from squid.submissions.domain import SubmissionOrigin
@@ -139,7 +140,8 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert str(build.source_messages[0].created_at) == "2026-01-01T00:00:00Z"
     assert build.category is not None
     assert build.category.value == "Door"
-    assert build.door_dimensions == (3, 4, 1)
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.door_dimensions == (3, 4, 1)
     assert build.dimensions == (8, 9, 10)
     assert build.component_restrictions == ["No Observers"]
     unknown_restrictions = build.extra_info.get("unknown_restrictions")
@@ -150,8 +152,8 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert build.version_spec == "1.20+"
     assert build.versions == ["Java 1.20.0", "Java 1.21.0"]
     assert build.description is None
-    assert build.normal_opening_time == 20
-    assert build.normal_closing_time == 10
+    assert build.details.normal_opening_time == 20
+    assert build.details.normal_closing_time == 10
 
 
 async def test_infer_returns_multiple_or_no_builds() -> None:
@@ -280,7 +282,8 @@ async def test_unparseable_timings_preserve_source_facts_without_model_review_co
 
     (build,) = await service.infer(source(), model="model")
 
-    assert build.normal_opening_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time is None
     assert build.description is not None
     assert "Opening: between 1 and 2 seconds" in build.description
     assert "Needs review:" not in build.description
@@ -342,7 +345,7 @@ async def test_utility_does_not_acquire_a_door_orientation() -> None:
 
     (build,) = await service.infer(source(), model="model")
 
-    assert build.door_orientation is None
+    assert isinstance(build.details, GeneralDraftDetails)
 
 
 async def test_author_notes_reject_comparisons_inferred_from_an_outdated_post() -> None:
@@ -590,8 +593,9 @@ async def test_visible_and_true_timings_are_kept_separately_through_prefill() ->
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
     )
     [build] = await service.infer(source(), model="test")
-    assert (build.normal_opening_time, build.normal_closing_time) == (27, 27)
-    assert (build.visible_opening_time, build.visible_closing_time) == (25, 25)
+    assert isinstance(build.details, DoorDraftDetails)
+    assert (build.details.normal_opening_time, build.details.normal_closing_time) == (27, 27)
+    assert (build.details.visible_opening_time, build.details.visible_closing_time) == (25, 25)
     projected = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
     assert [
         projected.answers[field]
@@ -607,7 +611,8 @@ async def test_approximate_minutes_keep_both_ticks_and_the_qualification() -> No
         "system",
     )
     [build] = await service.infer(source(), model="test")
-    assert build.normal_opening_time == 50400
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time == 50400
     assert build.description is not None
     assert "~42 minutes" in build.description
 
@@ -665,14 +670,15 @@ async def test_expandable_source_facts_survive_inference_without_sample_dimensio
     )
     service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "system prompt")
     builds = await service.infer(inputs, model="test-model")
-    actual = builds[0].door_expansion
+    assert isinstance(builds[0].details, DoorDraftDetails)
+    actual = builds[0].details.door_expansion
     assert actual is not None
     assert actual.parameters == document.parameters
     assert actual.raw_description == document.raw_description
     assert [branch.model_dump(exclude={"evidence"}) for branch in actual.branches] == [
         branch.model_dump(exclude={"evidence"}) for branch in document.branches
     ]
-    assert builds[0].door_dimensions == (None, None, None)
+    assert builds[0].details.door_dimensions == (None, None, None)
 
 
 @pytest.mark.parametrize(
@@ -818,8 +824,9 @@ async def test_seamless_and_reset_measurements_remain_separate_from_the_duration
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
     )
     [build] = await service.infer(source(), model="test")
-    assert build.normal_opening_time == 2
-    assert build.visible_opening_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time == 2
+    assert build.details.visible_opening_time is None
     assert build.description == "Opening: 0.1s; 0.25s seamless, 0.05s reset"
 
 
@@ -892,8 +899,9 @@ async def test_unassigned_timing_pair_is_quoted_without_guessing_its_direction()
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
-    assert build.extension_time == 0
-    assert build.retraction_time is None
+    assert isinstance(build.details, ExtenderDraftDetails)
+    assert build.details.extension_time == 0
+    assert build.details.retraction_time is None
     assert build.description == "instant/0.25"
 
 
@@ -941,7 +949,8 @@ async def test_a_source_quote_already_covering_an_unparseable_timing_is_not_repe
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
-    assert build.normal_opening_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time is None
     assert build.description == excerpt
 
 
@@ -996,8 +1005,9 @@ async def test_equal_pair_values_are_not_both_covered_by_one_assigned_measuremen
         "system",
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
-    assert build.normal_opening_time == 5
-    assert build.normal_closing_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time == 5
+    assert build.details.normal_closing_time is None
     assert build.description == "0.25/0.25s"
 
 
@@ -1017,9 +1027,10 @@ async def test_incomplete_expansion_bounds_do_not_discard_a_message_group() -> N
     )
     builds = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert len(builds) == 2
-    assert builds[0].door_expansion is not None
-    assert builds[0].door_expansion.parameters[0].maximum_kind == "unknown"
-    assert builds[0].door_expansion.branches[0].domain == "x=1-14 wide"
+    assert isinstance(builds[0].details, DoorDraftDetails)
+    assert builds[0].details.door_expansion is not None
+    assert builds[0].details.door_expansion.parameters[0].maximum_kind == "unknown"
+    assert builds[0].details.door_expansion.branches[0].domain == "x=1-14 wide"
 
 
 async def test_inference_keeps_explicit_version_exclusions() -> None:
@@ -1053,7 +1064,8 @@ async def test_numeric_edge_shorthand_is_seconds_without_combining_reset(value: 
 
     (build,) = await service.infer(source(), model="test")
 
-    assert build.normal_opening_time == expected
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time == expected
 
 
 async def test_reset_only_qualification_does_not_become_a_movement_duration() -> None:
@@ -1068,7 +1080,8 @@ async def test_reset_only_qualification_does_not_become_a_movement_duration() ->
 
     (build,) = await service.infer(source(), model="test")
 
-    assert build.normal_closing_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_closing_time is None
     assert "10s reset on closing" in (build.description or "")
 
 
@@ -1196,7 +1209,8 @@ async def test_instant_edge_labels_keep_zero_durations_and_separate_reset_qualif
 
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
 
-    assert (build.normal_opening_time, build.normal_closing_time) == (0, 0)
+    assert isinstance(build.details, DoorDraftDetails)
+    assert (build.details.normal_opening_time, build.details.normal_closing_time) == (0, 0)
     assert build.description is not None
     assert "0.15s seamless, 0.35s reset" in build.description
     assert "6.5s reset" in build.description
@@ -1213,4 +1227,5 @@ async def test_instant_prose_does_not_establish_zero_opening_time(value: str) ->
 
     [build] = await service.infer(source(), model="test")
 
-    assert build.normal_opening_time is None
+    assert isinstance(build.details, DoorDraftDetails)
+    assert build.details.normal_opening_time is None

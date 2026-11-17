@@ -16,7 +16,7 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.ui import error_node
-from squid.builds.domain import BuildCategory, BuildDraft, DoorOrientationLiteral
+from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, DoorOrientationLiteral
 from squid.builds.domain.models import BuildCategoryLiteral
 from squid.submissions.application.credit_text import parse_credit_lines
 from squid.submissions.application.prefill import prefill_submission
@@ -73,7 +73,8 @@ async def open_submission_form(
     )
     if door_size is not None:
         try:
-            draft.door_dimensions = parse_hallway_dimensions(door_size)
+            assert isinstance(draft.details, DoorDraftDetails)
+            draft.details.door_dimensions = parse_hallway_dimensions(door_size)
         except ValueError:
             return error_node(
                 tr(t"bot-submission-submit-check-door-size = Check the door size"),
@@ -92,7 +93,8 @@ async def open_submission_form(
                 ),
             )
     if door_type is not None:
-        draft.door_orientation = door_type
+        assert isinstance(draft.details, DoorDraftDetails)
+        draft.details.door_orientation = door_type
     if patterns is not None:
         draft.patterns = split_values(patterns)
     if versions is not None:

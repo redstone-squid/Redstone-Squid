@@ -3,13 +3,16 @@
 import uuid
 from dataclasses import dataclass, field, fields
 from decimal import Decimal
+from typing import Any
 
 from whenever import Instant
 
 from squid.builds.domain import (
     BuildCategory,
     BuildDraft,
+    DoorDraftDetails,
     DoorOrientationLiteral,
+    ExtenderDraftDetails,
     Info,
     MediaTypeLiteral,
     Status,
@@ -107,7 +110,7 @@ class BuildDraftPayload:
 
     ai_generated: bool | None = None
 
-    # Category-specific facts, staged flat until the category is known.
+    # The durable wire shape remains flat; conversion owns category discrimination.
     door_orientation: DoorOrientationLiteral | None = None
     door_expansion: DoorExpansion | None = None
     door_width: int | None = None
@@ -126,7 +129,13 @@ class BuildDraftPayload:
     @classmethod
     def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:
         """Capture inferred values without storing SQLAlchemy state."""
-        values = {item.name: getattr(draft, item.name) for item in fields(cls)}
+        detail_names = {item.name for kind in (DoorDraftDetails, ExtenderDraftDetails) for item in fields(kind)}
+        values: dict[str, Any] = {
+            item.name: getattr(draft.details, item.name, None)
+            if item.name in detail_names
+            else getattr(draft, item.name)
+            for item in fields(cls)
+        }
         values["creators_ign"] = []
         values["links"] = [
             BuildLinkPayload(link.url, link.media_type) for link in draft.links if link.media_type is not None
@@ -165,4 +174,21 @@ class BuildDraftPayload:
             )
             for tag in self.tags
         ]
+        door_values = {item.name: values.pop(item.name) for item in fields(DoorDraftDetails)}
+        extender_values = {item.name: values.pop(item.name) for item in fields(ExtenderDraftDetails)}
+        match self.category:
+            case BuildCategory.DOOR:
+                values["details"] = DoorDraftDetails(**door_values)
+            case BuildCategory.EXTENDER:
+                values["details"] = ExtenderDraftDetails(**extender_values)
+            case None:
+                has_door = any(value is not None for value in door_values.values())
+                has_extender = any(value is not None for value in extender_values.values())
+                if has_door and has_extender:
+                    message = "An undecided draft cannot contain both door and extender details."
+                    raise ValueError(message)
+                if has_door:
+                    values["details"] = DoorDraftDetails(**door_values)
+                elif has_extender:
+                    values["details"] = ExtenderDraftDetails(**extender_values)
         return BuildDraft(**values)

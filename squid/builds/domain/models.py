@@ -302,6 +302,45 @@ class StagedTaxonomy:
 
 
 @dataclass(kw_only=True)
+class DoorDraftDetails:
+    """Door facts retained while a category is selected or inferred."""
+
+    door_orientation: DoorOrientationLiteral | None = None
+    door_expansion: DoorExpansion | None = None
+    door_width: int | None = None
+    door_height: int | None = None
+    door_depth: int | None = None
+    normal_opening_time: int | None = None
+    normal_closing_time: int | None = None
+    visible_opening_time: int | None = None
+    visible_closing_time: int | None = None
+
+    @property
+    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
+        return self.door_width, self.door_height, self.door_depth
+
+    @door_dimensions.setter
+    def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
+        self.door_width, self.door_height, self.door_depth = dimensions
+
+
+@dataclass(kw_only=True)
+class ExtenderDraftDetails:
+    """Extender movement facts collected before finalization."""
+
+    extender_orientation: str | None = None
+    extension_length: int | None = None
+    extender_type: str | None = None
+    extension_time: int | None = None
+    retraction_time: int | None = None
+
+
+@dataclass(kw_only=True)
+class GeneralDraftDetails:
+    """Details for categories with only common build fields."""
+
+
+@dataclass(kw_only=True)
 class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
     """Build details collected before the category and required fields are known.
 
@@ -347,21 +386,38 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
 
     ai_generated: bool | None = None
 
-    # Category-specific facts, staged flat until the category is known.
-    door_orientation: DoorOrientationLiteral | None = None
-    door_expansion: DoorExpansion | None = None
-    door_width: int | None = None
-    door_height: int | None = None
-    door_depth: int | None = None
-    normal_opening_time: int | None = None
-    normal_closing_time: int | None = None
-    visible_opening_time: int | None = None
-    visible_closing_time: int | None = None
-    extender_orientation: str | None = None
-    extension_length: int | None = None
-    extender_type: str | None = None
-    extension_time: int | None = None
-    retraction_time: int | None = None
+    details: DoorDraftDetails | ExtenderDraftDetails | GeneralDraftDetails | None = None
+
+    def __post_init__(self) -> None:
+        if self.category is not None:
+            expected = self._details_type(self.category)
+            if self.details is None:
+                self.details = expected()
+            elif not isinstance(self.details, expected):
+                message = "Draft details do not match the selected category."
+                raise InvalidBuildError(message)
+
+    @staticmethod
+    def _details_type(
+        category: BuildCategory,
+    ) -> type[DoorDraftDetails] | type[ExtenderDraftDetails] | type[GeneralDraftDetails]:
+        match category:
+            case BuildCategory.DOOR:
+                return DoorDraftDetails
+            case BuildCategory.EXTENDER:
+                return ExtenderDraftDetails
+            case _:
+                return GeneralDraftDetails
+
+    def select_category(self, category: BuildCategory | None) -> None:
+        """Preserve compatible facts; discard category details when switching kinds.
+
+        An undecided category retains its candidate details until a kind is selected.
+        Common fields always survive category changes.
+        """
+        if category is not None and not isinstance(self.details, self._details_type(category)):
+            self.details = self._details_type(category)()
+        self.category = category
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:
@@ -370,14 +426,6 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
     @dimensions.setter
     def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
         self.width, self.height, self.depth = dimensions
-
-    @property
-    def door_dimensions(self) -> tuple[int | None, int | None, int | None]:
-        return self.door_width, self.door_height, self.door_depth
-
-    @door_dimensions.setter
-    def door_dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
-        self.door_width, self.door_height, self.door_depth = dimensions
 
     def finalize(self) -> Build:
         """Create an unsaved category entity from the staged facts.
@@ -393,6 +441,9 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
         if self.category is None:
             msg = "A build draft cannot be finalized before its category is known."
             raise InvalidBuildError(msg, context={"category": None})
+        if not isinstance(self.details, self._details_type(self.category)):
+            message = "Draft details do not match the selected category."
+            raise InvalidBuildError(message)
         common: dict[str, Any] = {
             "submission_status": self.submission_status,
             "versions": list(self.versions),
@@ -422,26 +473,28 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
         }
         match self.category:
             case BuildCategory.DOOR:
+                assert isinstance(self.details, DoorDraftDetails)
                 return DoorBuild(
                     **common,
-                    orientation=self.door_orientation,
-                    expansion=self.door_expansion,
-                    door_width=self.door_width,
-                    door_height=self.door_height,
-                    door_depth=self.door_depth,
-                    normal_opening_time=self.normal_opening_time,
-                    normal_closing_time=self.normal_closing_time,
-                    visible_opening_time=self.visible_opening_time,
-                    visible_closing_time=self.visible_closing_time,
+                    orientation=self.details.door_orientation,
+                    expansion=self.details.door_expansion,
+                    door_width=self.details.door_width,
+                    door_height=self.details.door_height,
+                    door_depth=self.details.door_depth,
+                    normal_opening_time=self.details.normal_opening_time,
+                    normal_closing_time=self.details.normal_closing_time,
+                    visible_opening_time=self.details.visible_opening_time,
+                    visible_closing_time=self.details.visible_closing_time,
                 )
             case BuildCategory.EXTENDER:
+                assert isinstance(self.details, ExtenderDraftDetails)
                 return ExtenderBuild(
                     **common,
-                    orientation=self.extender_orientation,
-                    extension_length=self.extension_length,
-                    extender_type=self.extender_type,
-                    extension_time=self.extension_time,
-                    retraction_time=self.retraction_time,
+                    orientation=self.details.extender_orientation,
+                    extension_length=self.details.extension_length,
+                    extender_type=self.details.extender_type,
+                    extension_time=self.details.extension_time,
+                    retraction_time=self.details.retraction_time,
                 )
             case BuildCategory.UTILITY:
                 return UtilityBuild(**common)

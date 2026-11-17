@@ -9,7 +9,13 @@ reported for review, while the original BuildDraft remains available to callers.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from squid.builds.domain import RESTRICTION_FIELDS, BuildDraft, UnresolvedTaxonomy
+from squid.builds.domain import (
+    RESTRICTION_FIELDS,
+    BuildDraft,
+    DoorDraftDetails,
+    ExtenderDraftDetails,
+    UnresolvedTaxonomy,
+)
 from squid.core.errors import JSONValue
 from squid.submissions.application.forms import SubmissionFormService
 from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin, match_choice
@@ -81,28 +87,32 @@ def project_submission(
             }
         )
     if category == "door":
+        assert isinstance(source.details, DoorDraftDetails)
         values.update(
             {
-                "opening_width": source.door_width,
-                "opening_height": source.door_height,
-                "opening_depth": source.door_depth,
-                "door_orientation": source.door_orientation.lower() if source.door_orientation else None,
-                "opening_time": source.normal_opening_time,
-                "closing_time": source.normal_closing_time,
-                "visible_opening_time": source.visible_opening_time,
-                "visible_closing_time": source.visible_closing_time,
+                "opening_width": source.details.door_width,
+                "opening_height": source.details.door_height,
+                "opening_depth": source.details.door_depth,
+                "door_orientation": source.details.door_orientation.lower()
+                if source.details.door_orientation
+                else None,
+                "opening_time": source.details.normal_opening_time,
+                "closing_time": source.details.normal_closing_time,
+                "visible_opening_time": source.details.visible_opening_time,
+                "visible_closing_time": source.details.visible_closing_time,
             }
         )
     elif category == "extender":
+        assert isinstance(source.details, ExtenderDraftDetails)
         orientation = {"Horizontal": "horizontal", "Upward": "vertical_up", "Downward": "vertical_down"}.get(
-            source.extender_orientation or ""
+            source.details.extender_orientation or ""
         )
         values.update(
             {
                 "movement_orientation": orientation,
-                "extension_length": source.extension_length,
-                "extension_time": source.extension_time,
-                "retraction_time": source.retraction_time,
+                "extension_length": source.details.extension_length,
+                "extension_time": source.details.extension_time,
+                "retraction_time": source.details.retraction_time,
             }
         )
     answers.update({key: value for key, value in values.items() if value is not None and value != []})

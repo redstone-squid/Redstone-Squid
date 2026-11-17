@@ -3,7 +3,7 @@
 from dataclasses import replace
 from uuid import uuid4
 
-from squid.builds.domain import BuildCategory
+from squid.builds.domain import BuildCategory, DoorDraftDetails
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
@@ -43,7 +43,9 @@ async def materialize_candidate(
         category=prefill.category,
         origin=SubmissionOrigin.DISCORD,
         inferred=True,
-        door_expansion=source.door_expansion if selected is BuildCategory.DOOR else None,
+        door_expansion=source.details.door_expansion
+        if selected is BuildCategory.DOOR and isinstance(source.details, DoorDraftDetails)
+        else None,
         source_messages=source.source_messages,
         source_files=candidate.source_files,
         source_issues=prefill.unresolved,

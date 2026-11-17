@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.builds.models import BuildLink
 from squid.submissions.application.forms import build_submission_manifest
 from squid.submissions.application.prefill import project_submission
@@ -59,7 +59,12 @@ def test_discord_drafts_do_not_keep_an_exported_version() -> None:
 
 
 def test_compatibility_range_is_not_an_exact_source_version() -> None:
-    draft = BuildDraft(category=BuildCategory.DOOR, version_spec="1.20+", versions=["Java 1.21.0"], door_width=2)
+    draft = BuildDraft(
+        category=BuildCategory.DOOR,
+        version_spec="1.20+",
+        versions=["Java 1.21.0"],
+        details=DoorDraftDetails(door_width=2),
+    )
     result = project_submission(
         draft,
         build_submission_manifest(),

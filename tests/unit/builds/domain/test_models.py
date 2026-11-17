@@ -4,7 +4,14 @@ import json
 
 import pytest
 
-from squid.builds.domain import BuildCategory, BuildDraft, Status
+from squid.builds.domain import (
+    BuildCategory,
+    BuildDraft,
+    DoorDraftDetails,
+    ExtenderDraftDetails,
+    GeneralDraftDetails,
+    Status,
+)
 from squid.builds.domain.credits import name_credits
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
@@ -217,3 +224,26 @@ def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
     for name, value in changes.items():
         setattr(copied, name, value)
     return copied
+
+
+def test_draft_category_changes_preserve_common_facts_and_clear_incompatible_details() -> None:
+    details = DoorDraftDetails(door_width=3)
+    draft = BuildDraft(width=9, details=details)
+    draft.select_category(BuildCategory.DOOR)
+    assert draft.details is details
+    draft.select_category(None)
+    assert draft.details is details
+    draft.select_category(BuildCategory.EXTENDER)
+    assert isinstance(draft.details, ExtenderDraftDetails)
+    assert draft.width == 9
+    draft.select_category(BuildCategory.OTHER)
+    assert isinstance(draft.details, GeneralDraftDetails)
+
+
+def test_draft_rejects_mismatched_category_details_at_creation_and_finalization() -> None:
+    with pytest.raises(InvalidBuildError, match="details do not match"):
+        BuildDraft(category=BuildCategory.DOOR, details=ExtenderDraftDetails(extension_length=2))
+    draft = BuildDraft(category=BuildCategory.DOOR)
+    draft.details = ExtenderDraftDetails()
+    with pytest.raises(InvalidBuildError, match="details do not match"):
+        draft.finalize()

@@ -16,7 +16,9 @@ from squid.builds.application.inference_expansion import InferredDoorExpansion
 from squid.builds.domain import (
     BuildCategory,
     BuildDraft,
+    DoorDraftDetails,
     DoorOrientationLiteral,
+    ExtenderDraftDetails,
     RestrictionField,
     RestrictionTypeLiteral,
     UnresolvedTaxonomy,
@@ -594,17 +596,21 @@ class BuildInferenceService:
             "Piston Extender": BuildCategory.EXTENDER,
             "Utility": BuildCategory.UTILITY,
         }
-        build.category = categories[inferred.build_category] if inferred.build_category is not None else None
-        orientation = inferred.door_orientation
-        build.door_orientation = "Door" if orientation == "Normal" else cast(DoorOrientationLiteral | None, orientation)
-        build.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
+        build.select_category(categories[inferred.build_category] if inferred.build_category is not None else None)
+        details = build.details
         build.dimensions = (inferred.build_width, inferred.build_height, inferred.build_depth)
-        if build.category is BuildCategory.EXTENDER:
-            build.extender_orientation = inferred.extender_orientation
-            build.extension_length = inferred.extension_length
         sources = {message.id: " ".join((message.content or "").split()) for message in build.source_messages}
-        if build.category is BuildCategory.DOOR and inferred.door_expansion is not None:
-            build.door_expansion = inferred.door_expansion.to_domain(sources)
+        if isinstance(details, DoorDraftDetails):
+            orientation = inferred.door_orientation
+            details.door_orientation = (
+                "Door" if orientation == "Normal" else cast(DoorOrientationLiteral | None, orientation)
+            )
+            details.door_dimensions = (inferred.door_width, inferred.door_height, inferred.door_depth)
+            if inferred.door_expansion is not None:
+                details.door_expansion = inferred.door_expansion.to_domain(sources)
+        elif isinstance(details, ExtenderDraftDetails):
+            details.extender_orientation = inferred.extender_orientation
+            details.extension_length = inferred.extension_length
         notes: list[str] = []
         for note in inferred.author_notes:
             excerpt = _source_excerpt(note.text, sources.get(note.source_message_id, ""))
@@ -626,7 +632,9 @@ class BuildInferenceService:
             if timing is None:
                 continue
             parsed = _inferred_ticks(timing.value)
-            setattr(build, attribute, parsed)
+            target = ExtenderDraftDetails if attribute in {"extension_time", "retraction_time"} else DoorDraftDetails
+            if isinstance(details, target):
+                setattr(details, attribute, parsed)
             if parsed is not None:
                 represented_ticks[parsed] += 1
             approximate = timing.value is not None and re.match(r"\s*[~≈]", timing.value) is not None

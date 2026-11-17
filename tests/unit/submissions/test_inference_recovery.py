@@ -11,7 +11,7 @@ import pytest
 
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
-from squid.builds.domain import BuildDraft
+from squid.builds.domain import BuildDraft, DoorDraftDetails
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.permissions.application.ports import PermissionRepository
@@ -89,7 +89,7 @@ class RecoveringInference(BuildInferenceService):
     ) -> list[BuildDraft]:
         if self.infer_calls.await_count == 1:
             raise RuntimeError("model unavailable")
-        return [BuildDraft(door_width=3)]
+        return [BuildDraft(details=DoorDraftDetails(door_width=3))]
 
 
 @dataclass
@@ -138,7 +138,8 @@ async def test_retry_recovers_original_inputs_and_replays_candidates_without_pri
 
     assert candidates is not None
     assert len(candidates) == 1
-    assert candidates[0].facts.door_width == 3
+    assert isinstance(candidates[0].facts.details, DoorDraftDetails)
+    assert candidates[0].facts.details.door_width == 3
     assert candidates[0].owner_account_id == recovery.repository.owner
     assert candidates[0].run_id == recovery.repository.id
     expected = CallRecord((recovery.bundle,), {"model": "original-model", "reasoning_effort": "low"})

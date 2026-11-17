@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.expansion import expansion_document
@@ -35,7 +35,10 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
             claim_token,
             (
                 BuildDraft(category=None),
-                BuildDraft(category=BuildCategory.DOOR, door_width=3, door_expansion=expansion_document()),
+                BuildDraft(
+                    category=BuildCategory.DOOR,
+                    details=DoorDraftDetails(door_width=3, door_expansion=expansion_document()),
+                ),
             ),
         ),
         commit=True,
@@ -46,8 +49,9 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
     assert replay.token is None
     assert replay.candidates == candidates
     assert candidates[0].facts.category is None
-    assert candidates[1].facts.door_width == 3
-    assert candidates[1].facts.door_expansion == expansion_document()
+    assert isinstance(candidates[1].facts.details, DoorDraftDetails)
+    assert candidates[1].facts.details.door_width == 3
+    assert candidates[1].facts.details.door_expansion == expansion_document()
     with pytest.raises(ConflictError):
         await transact(
             repository,

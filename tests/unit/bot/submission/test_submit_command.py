@@ -1,6 +1,5 @@
 """`/build submit` as one request: the private defer is completed by the workspace."""
 
-from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any, cast, override
 from unittest.mock import AsyncMock, Mock
@@ -370,11 +369,11 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
         pattern="build.submission.edit", effect=int(Effect.ALLOW), subject_role_id=789, subject_guild_id=456
     )
 
-    async def records(
-        *, account_id: int | None, discord_role_ids: Iterable[int], guild_id: int | None
-    ) -> SubjectRecords:
+    async def records(subject: Actor) -> SubjectRecords:
         return SubjectRecords(
-            subject=Actor(), epoch=1, grants=(grant,) if guild_id == 456 and 789 in discord_role_ids else ()
+            subject=subject,
+            epoch=1,
+            grants=(grant,) if subject.guild_id == 456 and 789 in subject.discord_role_ids else (),
         )
 
     # Only persistence is mocked: the draft service and permission resolver enforce access.

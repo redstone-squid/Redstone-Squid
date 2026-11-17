@@ -7,7 +7,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.builds.domain.credits import Credit
 from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.models import Build, DoorBuild
@@ -42,19 +42,20 @@ class RecalculationFacts:
     @classmethod
     def from_draft(cls, draft: BuildDraft) -> RecalculationFacts:
         """Copy inference facts without finalizing or applying category defaults."""
+        details = draft.details if isinstance(draft.details, DoorDraftDetails) else DoorDraftDetails()
         return cls(
             category=draft.category,
             version_spec=draft.version_spec,
             width=draft.width,
             height=draft.height,
             depth=draft.depth,
-            door_width=draft.door_width,
-            door_height=draft.door_height,
-            door_depth=draft.door_depth,
-            door_orientation=draft.door_orientation,
-            door_expansion=draft.door_expansion,
-            normal_opening_time=draft.normal_opening_time,
-            normal_closing_time=draft.normal_closing_time,
+            door_width=details.door_width,
+            door_height=details.door_height,
+            door_depth=details.door_depth,
+            door_orientation=details.door_orientation,
+            door_expansion=details.door_expansion,
+            normal_opening_time=details.normal_opening_time,
+            normal_closing_time=details.normal_closing_time,
             patterns=tuple(draft.patterns),
             credits=tuple(draft.credits),
             wiring_placement_restrictions=tuple(draft.wiring_placement_restrictions),
