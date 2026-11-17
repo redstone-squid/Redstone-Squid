@@ -4,6 +4,7 @@ import json
 import signal
 import subprocess
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -16,6 +17,7 @@ from tests.fuzz.api.schemathesis import (
     FORCE_KILL_SIGNAL,
     LOCAL_SMOKE,
     CampaignPaths,
+    CampaignStage,
     CampaignState,
     EventSummary,
     InvalidCampaignArtifactError,
@@ -25,6 +27,7 @@ from tests.fuzz.api.schemathesis import (
     command_for,
     config_text_for,
     read_event_summary,
+    run_campaign,
     subprocess_environment,
     supervise,
     verify_live_contract,
@@ -203,7 +206,7 @@ def test_event_reader_distinguishes_findings_from_transport_errors(tmp_path: Pat
 
 def test_event_reader_refuses_malformed_ndjson(tmp_path: Path) -> None:
     event_path = tmp_path / "events.ndjson"
-    event_path.write_text('{"Initialize": {}}\n{"EngineFinished":', encoding="utf-8")
+    event_path.write_text('{"Initialize": {"schemathesis_version": "4.24.2"}}\n{"EngineFinished":', encoding="utf-8")
 
     with pytest.raises(InvalidCampaignArtifactError, match="malformed"):
         read_event_summary(event_path)
@@ -273,4 +276,112 @@ def _unused_running_api() -> RunningApi:
             SeededIds(1, 2, 3, 4, 1, "alice", "bob", "alice", "bob", "pending", "admin", "api"),
             "unused",
         ),
+    )
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"FutureEvent": {}},
+        {"ScenarioFinished": {"status": "future"}},
+        {"PhaseFinished": {}},
+        {"FatalError": {"value": {"type": "ReadTimeout", "message": "wrong key"}}},
+        {"NonFatalError": {"exception": {"type": "ReadTimeout", "message": "wrong key"}}},
+    ],
+)
+def test_event_reader_rejects_unknown_events_and_invalid_fields(tmp_path: Path, record: dict) -> None:
+    event_path = tmp_path / "events.ndjson"
+    event_path.write_text(json.dumps(record))
+    with pytest.raises(InvalidCampaignArtifactError):
+        read_event_summary(event_path)
+
+
+@pytest.mark.parametrize(("kind", "key"), [("FatalError", "exception"), ("NonFatalError", "value")])
+def test_event_reader_decodes_each_pinned_error_envelope(tmp_path: Path, kind: str, key: str) -> None:
+    event_path = tmp_path / "events.ndjson"
+    event_path.write_text(json.dumps({kind: {key: {"type": "ReadTimeout", "message": "timed out"}}}))
+    assert read_event_summary(event_path).infrastructure_error
+
+
+@pytest.mark.parametrize("stage", list(CampaignStage))
+async def test_campaign_failure_retains_redacted_stage_and_cause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: CampaignStage
+) -> None:
+    running = _unused_running_api()
+    credential = "Bearer secret-diagnostic-canary"
+    persona = Persona(name="service", authorization=credential)
+    cause = ValueError(f"credential={credential}")
+    error = RuntimeError(f"failed with {running.identity.sentinel} and {credential}")
+    error.__cause__ = cause
+    target = "tests.fuzz.api.schemathesis."
+    monkeypatch.setattr(
+        RunningApi, "attest", AsyncMock(side_effect=error if stage is CampaignStage.ATTESTATION else None)
+    )
+    monkeypatch.setattr(RunningApi, "reset", AsyncMock(side_effect=error if stage is CampaignStage.RESET else None))
+    monkeypatch.setattr(
+        target + "verify_live_contract", AsyncMock(side_effect=error if stage is CampaignStage.CONTRACT else None)
+    )
+
+    def launch(*args):
+        if stage is CampaignStage.LAUNCH:
+            raise error
+        return SupervisionResult(returncode=0, timed_out=False, forced_kill=False)
+
+    monkeypatch.setattr(target + "_launch_and_supervise", launch)
+    # Use the parser's declared failure, with the chained underlying exception.
+    malformed = InvalidCampaignArtifactError(str(error))
+    malformed.__cause__ = cause
+
+    def events(path):
+        raise malformed
+
+    monkeypatch.setattr(target + "read_event_summary", events)
+    outcome = await run_campaign(
+        running, artifact_root=tmp_path, committed_contract_path=tmp_path / "openapi.json", persona=persona
+    )
+    assert outcome.state is CampaignState.HARNESS_ERROR
+    raw = (outcome.paths.root / "diagnostic.json").read_text()
+    diagnostic = json.loads(raw)
+    assert diagnostic["stage"] == stage.value
+    assert diagnostic["cause"].startswith("ValueError:")
+    assert diagnostic["traceback"]
+    assert "secret-diagnostic-canary" not in raw
+    assert running.identity.sentinel not in raw
+
+
+def test_diagnostic_artifacts_are_bounded_for_multibyte_and_control_input(tmp_path: Path) -> None:
+    campaign_paths = paths(tmp_path)
+    error = RuntimeError("\x00界" * 100_000)
+    campaign_paths.record_failure(CampaignStage.LAUNCH, error, secrets=())
+    raw = (campaign_paths.root / "diagnostic.json").read_bytes()
+    assert len(raw) <= 32_768
+    assert json.loads(raw)["type"] == "RuntimeError"
+
+
+def test_event_reader_enforces_report_and_event_size_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    event_path = tmp_path / "events.ndjson"
+    event_path.write_text(json.dumps({"LoadingFinished": {"padding": "x" * 100}}))
+    monkeypatch.setattr("tests.fuzz.api.schemathesis.MAX_NDJSON_BYTES", 20)
+    with pytest.raises(InvalidCampaignArtifactError, match="size limit"):
+        read_event_summary(event_path)
+    monkeypatch.setattr("tests.fuzz.api.schemathesis.MAX_NDJSON_BYTES", 1000)
+    monkeypatch.setattr("tests.fuzz.api.schemathesis.MAX_NDJSON_LINE_BYTES", 20)
+    with pytest.raises(InvalidCampaignArtifactError, match="oversized"):
+        read_event_summary(event_path)
+
+
+def test_failure_limit_completion_retains_product_findings(tmp_path: Path) -> None:
+    event_path = tmp_path / "events.ndjson"
+    records = [
+        {"Initialize": {"schemathesis_version": "4.24.2"}},
+        {"LoadingFinished": {}},
+        {"ScenarioFinished": {"status": "failure"}},
+        {"EngineFinished": {"stop_reason": "failure_limit"}},
+    ]
+    event_path.write_text("\n".join(map(json.dumps, records)))
+    assert (
+        classify_campaign(
+            SupervisionResult(returncode=1, timed_out=False, forced_kill=False), read_event_summary(event_path)
+        )
+        is CampaignState.PRODUCT_FINDING
     )

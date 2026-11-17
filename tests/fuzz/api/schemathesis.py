@@ -14,6 +14,7 @@ import signal
 import subprocess
 import sys
 import threading
+import traceback
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -56,6 +57,99 @@ TRANSPORT_ERROR_TYPES = frozenset(
     }
 )
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_-]{0,47}")
+
+
+class CampaignStage(StrEnum):
+    ATTESTATION = "attestation"
+    RESET = "reset"
+    CONTRACT = "contract"
+    LAUNCH = "launch"
+    EVENTS = "events"
+
+
+class EventKind(StrEnum):
+    INITIALIZE = "Initialize"
+    LOADING_STARTED = "LoadingStarted"
+    LOADING_FINISHED = "LoadingFinished"
+    ENGINE_STARTED = "EngineStarted"
+    PHASE_STARTED = "PhaseStarted"
+    PHASE_FINISHED = "PhaseFinished"
+    SCHEMA_ANALYSIS_WARNINGS = "SchemaAnalysisWarnings"
+    SUITE_STARTED = "SuiteStarted"
+    SUITE_FINISHED = "SuiteFinished"
+    SCENARIO_STARTED = "ScenarioStarted"
+    SCENARIO_FINISHED = "ScenarioFinished"
+    FUZZ_SCENARIO_STARTED = "FuzzScenarioStarted"
+    FUZZ_SCENARIO_FINISHED = "FuzzScenarioFinished"
+    INTERRUPTED = "Interrupted"
+    NON_FATAL_ERROR = "NonFatalError"
+    FATAL_ERROR = "FatalError"
+    ENGINE_FINISHED = "EngineFinished"
+    RATE_LIMIT_RETRY = "RateLimitRetry"
+
+
+class EventStatus(StrEnum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    ERROR = "error"
+    INTERRUPTED = "interrupted"
+    SKIP = "skip"
+
+
+class StopReason(StrEnum):
+    COMPLETED = "completed"
+    INTERRUPTED = "interrupted"
+    FAILURE_LIMIT = "failure_limit"
+    MAX_TIME = "max_time"
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignEvent:
+    """Only the pinned report fields used to classify a campaign."""
+
+    kind: EventKind
+    status: EventStatus | None = None
+    stop_reason: StopReason | None = None
+    version: str | None = None
+    error_type: str | None = None
+    has_failures: bool = False
+
+    @classmethod
+    def decode(cls, name: str, payload: dict[str, object]) -> CampaignEvent:
+        """Decode Schemathesis 4.24.2 reporting.ndjson.serialize output.
+
+        FatalError uses exception; NonFatalError uses value. Both serialize an
+        exception as {type, message}; these are distinct event contracts.
+        """
+        message = "Schemathesis NDJSON contains an unknown event or invalid event fields."
+        try:
+            kind = EventKind(name)
+            status = EventStatus(payload["status"]) if "status" in payload else None
+            stop = StopReason(payload["stop_reason"]) if kind is EventKind.ENGINE_FINISHED else None
+        except (ValueError, TypeError, KeyError) as error:
+            raise InvalidCampaignArtifactError(message) from error
+        if (
+            kind in {EventKind.SCENARIO_FINISHED, EventKind.FUZZ_SCENARIO_FINISHED, EventKind.PHASE_FINISHED}
+            and status is None
+        ):
+            raise InvalidCampaignArtifactError(message)
+        version = payload.get("schemathesis_version")
+        if kind is EventKind.INITIALIZE and not isinstance(version, str):
+            raise InvalidCampaignArtifactError(message)
+        error_type = None
+        if kind in {EventKind.FATAL_ERROR, EventKind.NON_FATAL_ERROR}:
+            envelope = payload.get("exception" if kind is EventKind.FATAL_ERROR else "value")
+            if (
+                not isinstance(envelope, dict)
+                or not isinstance(envelope.get("type"), str)
+                or not isinstance(envelope.get("message"), str)
+            ):
+                raise InvalidCampaignArtifactError(message)
+            error_type = envelope["type"]
+        failures = payload.get("failures", [])
+        if not isinstance(failures, list):
+            raise InvalidCampaignArtifactError(message)
+        return cls(kind, status, stop, version if isinstance(version, str) else None, error_type, bool(failures))
 
 
 class CampaignState(StrEnum):
@@ -157,6 +251,37 @@ class CampaignPaths:
             events=root / "events.ndjson",
             console=root / "console.log",
         )
+
+    def record_failure(self, stage: CampaignStage, error: Exception, *, secrets: Sequence[str]) -> None:
+        """Write a bounded diagnostic without credentials or traceback locals."""
+
+        def redacted(value: str, limit: int) -> str:
+            for secret in sorted((secret for secret in secrets if secret), key=len, reverse=True):
+                value = value.replace(secret, "[redacted]")
+            value = re.sub(r"(?i)(bearer\s+|authorization[:=]\s*|cookie[:=]\s*)[^\s,;]+", r"\1[redacted]", value)
+            value = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[redacted]@", value)
+            value = re.sub(r"(?i)(token|secret|password|nonce|key)=([^&\s]+)", r"\1=[redacted]", value)
+            return value[:limit]
+
+        diagnostic = {
+            "stage": stage.value,
+            "type": type(error).__name__,
+            "message": redacted(str(error), 2048),
+            "cause": None
+            if error.__cause__ is None
+            else redacted(f"{type(error.__cause__).__name__}: {error.__cause__}", 2048),
+            "traceback": redacted("".join(traceback.format_exception(error)), 16_384),
+        }
+        encoded = json.dumps(diagnostic, ensure_ascii=False).encode("utf-8")
+        # Escaping control characters or multibyte input can expand the text.
+        while len(encoded) > 32_768:
+            for key in ("message", "cause", "traceback"):
+                if isinstance(diagnostic[key], str):
+                    value = diagnostic[key]
+                    assert isinstance(value, str)
+                    diagnostic[key] = value[: len(value) // 2]
+            encoded = json.dumps(diagnostic, ensure_ascii=False).encode("utf-8")
+        (self.root / "diagnostic.json").write_bytes(encoded)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -361,7 +486,7 @@ def read_event_summary(path: Path) -> EventSummary:
             if not isinstance(payload, dict):
                 msg = "Schemathesis NDJSON event payloads must be objects."
                 raise InvalidCampaignArtifactError(msg)
-            state = _record_event(state, name, payload)
+            state = _record_event(state, CampaignEvent.decode(name, payload))
     return state
 
 
@@ -433,18 +558,32 @@ async def run_campaign(
     artifact creation, configuration writes, and invalid command arguments can raise.
     """
     paths = CampaignPaths.create(artifact_root, run_id=running.identity.run_id, persona=persona, profile=profile)
+    seeded = running.reset_hooks.seeded_ids
+    secrets = (
+        persona.authorization or "",
+        (persona.authorization or "").removeprefix("Bearer "),
+        running.identity.sentinel,
+        seeded.alice_web_session,
+        seeded.bob_web_session,
+        seeded.consent_pending_web_session,
+        seeded.administrator_web_session,
+        seeded.service_api_token,
+    )
+    stage = CampaignStage.ATTESTATION
     try:
         await running.attest()
+        stage = CampaignStage.RESET
         await running.reset()
+        stage = CampaignStage.CONTRACT
         await verify_live_contract(running, committed_contract_path)
-    except UnsafeEnvironmentError:
-        return CampaignOutcome(CampaignState.INFRASTRUCTURE_ERROR, paths)
-    except httpx.HTTPError:
-        return CampaignOutcome(CampaignState.INFRASTRUCTURE_ERROR, paths)
-    except ContractDriftError:
-        return CampaignOutcome(CampaignState.HARNESS_ERROR, paths)
-    except Exception:
-        return CampaignOutcome(CampaignState.HARNESS_ERROR, paths)
+    except Exception as error:
+        paths.record_failure(stage, error, secrets=secrets)
+        state = (
+            CampaignState.INFRASTRUCTURE_ERROR
+            if isinstance(error, UnsafeEnvironmentError | httpx.HTTPError)
+            else CampaignState.HARNESS_ERROR
+        )
+        return CampaignOutcome(state, paths)
 
     paths.config.write_text(config_text_for(paths, persona), encoding="utf-8")
     command = command_for(
@@ -462,14 +601,17 @@ async def run_campaign(
             paths,
             profile,
         )
-    except OSError:
-        return CampaignOutcome(CampaignState.INFRASTRUCTURE_ERROR, paths)
+    except Exception as error:
+        paths.record_failure(CampaignStage.LAUNCH, error, secrets=secrets)
+        state = CampaignState.INFRASTRUCTURE_ERROR if isinstance(error, OSError) else CampaignState.HARNESS_ERROR
+        return CampaignOutcome(state, paths)
     if supervision.timed_out:
         state = CampaignState.BUDGET_EXHAUSTED
     else:
         try:
             events = read_event_summary(paths.events)
-        except InvalidCampaignArtifactError:
+        except (InvalidCampaignArtifactError, OSError) as error:
+            paths.record_failure(CampaignStage.EVENTS, error, secrets=secrets)
             events = None
         state = classify_campaign(supervision, events)
     return CampaignOutcome(state, paths, supervision.returncode, supervision.forced_kill)
@@ -506,44 +648,29 @@ def _launch_and_supervise(
         return result
 
 
-def _record_event(state: EventSummary, name: str, payload: dict[str, object]) -> EventSummary:
-    initialized = state.initialized or (
-        name == "Initialize" and payload.get("schemathesis_version") == SCHEMATHESIS_VERSION
-    )
-    loaded = state.loaded or name == "LoadingFinished"
-    terminal = state.terminal or name == "EngineFinished"
-    completed = state.completed or (name == "EngineFinished" and payload.get("stop_reason") == "completed")
-    status = payload.get("status")
-    finding = state.finding or (name in {"ScenarioFinished", "FuzzScenarioFinished"} and status == "failure")
-    failures = payload.get("failures")
-    if name == "EngineFinished" and isinstance(failures, list) and failures:
-        finding = True
-    error_type = _error_type(payload)
-    error_event = name in {"FatalError", "NonFatalError"} or (
-        name in {"ScenarioFinished", "FuzzScenarioFinished", "PhaseFinished"} and status == "error"
-    )
-    infrastructure_error = state.infrastructure_error or (error_event and error_type in TRANSPORT_ERROR_TYPES)
-    wrong_version = name == "Initialize" and payload.get("schemathesis_version") != SCHEMATHESIS_VERSION
-    harness_error = state.harness_error or wrong_version or (error_event and error_type not in TRANSPORT_ERROR_TYPES)
+def _record_event(state: EventSummary, event: CampaignEvent) -> EventSummary:
+    kind = event.kind
+    error_event = kind in {EventKind.FATAL_ERROR, EventKind.NON_FATAL_ERROR} or event.status is EventStatus.ERROR
+    infrastructure = error_event and event.error_type in TRANSPORT_ERROR_TYPES
     return EventSummary(
-        initialized=initialized,
-        loaded=loaded,
-        terminal=terminal,
-        completed=completed,
-        finding=finding,
-        harness_error=harness_error,
-        infrastructure_error=infrastructure_error,
+        initialized=state.initialized or (kind is EventKind.INITIALIZE and event.version == SCHEMATHESIS_VERSION),
+        loaded=state.loaded or kind is EventKind.LOADING_FINISHED,
+        terminal=state.terminal or kind is EventKind.ENGINE_FINISHED,
+        completed=state.completed
+        or (
+            kind is EventKind.ENGINE_FINISHED and event.stop_reason in {StopReason.COMPLETED, StopReason.FAILURE_LIMIT}
+        ),
+        finding=state.finding
+        or (
+            kind in {EventKind.SCENARIO_FINISHED, EventKind.FUZZ_SCENARIO_FINISHED}
+            and event.status is EventStatus.FAILURE
+        )
+        or (kind is EventKind.ENGINE_FINISHED and event.has_failures),
+        infrastructure_error=state.infrastructure_error or infrastructure,
+        harness_error=state.harness_error
+        or (kind is EventKind.INITIALIZE and event.version != SCHEMATHESIS_VERSION)
+        or (error_event and not infrastructure),
     )
-
-
-def _error_type(payload: dict[str, object]) -> str | None:
-    for key in ("value", "exception"):
-        error = payload.get(key)
-        if isinstance(error, dict):
-            name = error.get("type")
-            if isinstance(name, str):
-                return name
-    return None
 
 
 def _capture_bounded_output(source: BinaryIO, destination: BinaryIO) -> None:
