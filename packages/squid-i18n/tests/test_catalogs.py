@@ -3,9 +3,10 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from squid_i18n import CatalogError, DeclarationError, md_tr, tr
-from squid_i18n.catalogs import artifacts, extract, validate
+from squid_i18n.catalogs import CATALOG_MANIFEST, SOURCE_REVISIONS, artifacts, extract, validate
 from squid_i18n.cli import run
 
 
@@ -15,6 +16,16 @@ def test_extraction_never_evaluates_python() -> None:
     assert "hello = Hello { $name }" in source
     assert "sample.py:2" in manifest
     assert found[0].declaration.slots[0].name == "name"
+
+
+def test_catalog_json_contract_rejects_wrong_field_types() -> None:
+    with pytest.raises(ValidationError):
+        CATALOG_MANIFEST.validate_json(
+            '{"hello":{"fingerprint":"hash","attributes":[],"has_value":"yes","arguments":[],"locations":[]}}',
+            strict=True,
+        )
+    with pytest.raises(ValidationError):
+        SOURCE_REVISIONS.validate_json('{"hello":42}', strict=True)
 
 
 def test_attribute_only_and_options_extract() -> None:

@@ -21,6 +21,7 @@ dependencies = [
     "mdformat>=1,<2",
     "mdformat-gfm>=1,<2",
     "markdown-it-py>=4,<5",
+    "pydantic>=2.14,<3",
 ]
 
 [project.urls]

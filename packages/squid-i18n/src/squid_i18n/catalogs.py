@@ -6,15 +6,15 @@ then uses English. Supplied entries must compile and may only read captured valu
 """
 
 import ast as python
-import json
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from fluent.syntax import ast
 from fluent.syntax.visitor import Visitor
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from squid_i18n.compiler import Declaration, compile_template, parse_resource
+from squid_i18n.compiler import Declaration, Slot, compile_template, parse_resource
 from squid_i18n.errors import CatalogError, DeclarationError
 from squid_i18n.expressions import DEVELOPER_OPTIONS
 from squid_i18n.runtime import compile_catalog
@@ -24,6 +24,22 @@ from squid_i18n.runtime import compile_catalog
 class LocatedDeclaration:
     declaration: Declaration
     location: str
+
+
+class CatalogEntry(BaseModel):
+    """Generated binding metadata for one Fluent message."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    fingerprint: str
+    attributes: list[str]
+    has_value: bool
+    arguments: list[Slot]
+    locations: list[str]
+
+
+CATALOG_MANIFEST = TypeAdapter(dict[str, CatalogEntry])
+SOURCE_REVISIONS = TypeAdapter(dict[str, str])
 
 
 def extract(source: str, filename: str = "<source>") -> list[LocatedDeclaration]:
@@ -108,17 +124,17 @@ def artifacts(found: Iterable[LocatedDeclaration], supplemental: tuple[str, ...]
     )
     source = "\n".join(line if line.strip() else "" for line in source.splitlines()).rstrip() + "\n" if source else ""
     metadata = {
-        key: {
-            "fingerprint": value.fingerprint,
-            "attributes": sorted(value.attributes),
-            "has_value": value.has_value,
-            "arguments": [asdict(slot) for slot in dict.fromkeys(value.slots)],
-            "locations": sorted(locations[key]),
-        }
+        key: CatalogEntry(
+            fingerprint=value.fingerprint,
+            attributes=sorted(value.attributes),
+            has_value=value.has_value,
+            arguments=list(dict.fromkeys(value.slots)),
+            locations=sorted(locations[key]),
+        )
         for key, value in sorted(entries.items())
     }
     validate("en", (source, *supplemental), entries.values())
-    return source, json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
+    return source, CATALOG_MANIFEST.dump_json(metadata, indent=2).decode() + "\n"
 
 
 class _Dependencies(Visitor):

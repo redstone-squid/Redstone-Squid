@@ -2767,6 +2767,7 @@ dependencies = [
     { name = "markdown-it-py" },
     { name = "mdformat" },
     { name = "mdformat-gfm" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
@@ -2777,6 +2778,7 @@ requires-dist = [
     { name = "markdown-it-py", specifier = ">=4,<5" },
     { name = "mdformat", specifier = ">=1,<2" },
     { name = "mdformat-gfm", specifier = ">=1,<2" },
+    { name = "pydantic", specifier = ">=2.14,<3" },
 ]
 
 [[package]]

@@ -1,13 +1,12 @@
 """Maintain each distribution's Fluent resources and source revision manifest."""
 
 import argparse
-import json
 import tomllib
 from pathlib import Path
 
 from fluent.syntax import ast
 
-from squid_i18n.catalogs import artifacts, collect, validate
+from squid_i18n.catalogs import CATALOG_MANIFEST, SOURCE_REVISIONS, artifacts, collect, validate
 from squid_i18n.compiler import parse_resource
 from squid_i18n.errors import CatalogError
 
@@ -36,11 +35,11 @@ def catalog_matches(english: Path, source: str, metadata: str) -> bool:
     # Extraction writes source locations as top-level Fluent comments.
     stored_source = "\n".join(line for line in source_path.read_text().splitlines() if not line.startswith("#"))
     expected_source = "\n".join(line for line in source.splitlines() if not line.startswith("#"))
-    stored_metadata = json.loads(metadata_path.read_text())
-    expected_metadata = json.loads(metadata)
+    stored_metadata = CATALOG_MANIFEST.validate_json(metadata_path.read_bytes(), strict=True)
+    expected_metadata = CATALOG_MANIFEST.validate_json(metadata, strict=True)
     for manifest in (stored_metadata, expected_metadata):
-        for entry in manifest.values():
-            entry.pop("locations", None)
+        for key, entry in manifest.items():
+            manifest[key] = entry.model_copy(update={"locations": []})
     return stored_source == expected_source and stored_metadata == expected_metadata
 
 
@@ -60,7 +59,7 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
         elif not catalog_matches(english, source, metadata):
             msg = f"{english}: generated catalog is stale; run squid-i18n extract"
             raise CatalogError(msg)
-        revisions = {key: entry["fingerprint"] for key, entry in json.loads(metadata).items()}
+        revisions = {key: entry.fingerprint for key, entry in CATALOG_MANIFEST.validate_json(metadata).items()}
         if command == "init":
             if locale is None or locale == "en":
                 msg = "Choose a translation locale other than en"
@@ -83,14 +82,21 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
                 if isinstance(entry, (ast.Message, ast.Term))
             }
             revision_path = directory / "source-revisions.json"
-            previous = json.loads(revision_path.read_text()) if revision_path.exists() else {}
+            previous = (
+                SOURCE_REVISIONS.validate_json(revision_path.read_bytes(), strict=True)
+                if revision_path.exists()
+                else {}
+            )
             changed = sorted(key for key in ids & revisions.keys() if previous.get(key) != revisions[key])
             removed = sorted(previous.keys() - revisions.keys())
             reports.extend(f"{directory}: review {key}" for key in changed)
             reports.extend(f"{directory}: obsolete {key}" for key in removed)
             if command == "review" and (locale is None or locale == directory.name):
                 revision_path.write_text(
-                    json.dumps({key: revisions[key] for key in sorted(ids & revisions.keys())}, indent=2) + "\n"
+                    SOURCE_REVISIONS.dump_json(
+                        {key: revisions[key] for key in sorted(ids & revisions.keys())}, indent=2
+                    ).decode()
+                    + "\n"
                 )
     return reports
 
