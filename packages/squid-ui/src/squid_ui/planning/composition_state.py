@@ -15,7 +15,7 @@ from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navig
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
-from squid_ui.planning.action_reuse import rebind_allocation
+from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.identity import has_routed_page, stable_fingerprint
@@ -76,6 +76,11 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         # retain these values rather than traverse and fingerprint the tree again.
         graph = semantic_graph(Group(document.children, key=document.key or "@document"))
         fingerprint = stable_fingerprint((document,))
+        if request.session is not None and result.allocation is not None:
+            frontend = request.target.adapter.frontend or request.target.adapter.name
+            allocation = prepare_action_allocation(result.allocation, graph, frontend)
+            # The envelope supplies diagnostics; selected pages supply live bindings.
+            result = replace(result, bindings=MappingProxyType({}), allocation=allocation)
         return cls(
             document, request, _navigation_version(request.nav), replace(options, pages={}), result, graph, fingerprint
         )
@@ -90,14 +95,6 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         # Controlled coordinates do not invalidate cuts, but their new values must
         # participate in cursor resolution. Unchanged snapshots keep the prepared graph.
         owner = self if document == self.document else self.prepare(document, request, options, self.result)
-        if owner is not self:
-            allocation = self.result.allocation
-            assert allocation is not None
-            frontend = request.target.adapter.frontend or request.target.adapter.name
-            allocation = rebind_allocation(allocation, self.graph, owner.graph, frontend)
-            # The envelope supplies diagnostics; selected pages supply bindings.
-            # Keeping the first page's old handlers here would retain retired owners.
-            owner = replace(owner, result=replace(self.result, bindings=MappingProxyType({}), allocation=allocation))
         return owner.present(options.pages, request=request, options=options)
 
     def matches(

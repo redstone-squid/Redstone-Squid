@@ -6,33 +6,36 @@ and dependency model below remains proposed.
 
 ## Implemented increments
 
-A committed owner can reuse a certified allocation when only `on_trigger` changes.
-`ReboundAllocation` selects the existing page Scene and refreshes bindings through
-explicit framework handler edges, preserving frontend selection and grouped routes.
-It retains allocation identity, does not mutate the committed generation, and flattens
-successive wrappers so callback updates cannot form an unbounded chain.
+Live plans now separate ordinary semantic action templates from current callbacks
+when the first allocation is prepared. `ActionAllocation` projects those templates
+through explicit framework handler edges, preserving frontend selection and grouped
+routes. A committed owner can reuse the templates when only `on_trigger` changes.
+Controlled page turns retain the same allocation view and its projection cache.
+
+This replaces the transitional `ReboundAllocation` path. The old implementation
+compared previous/current graphs, detached newly changed handlers, and flattened a
+wrapper on each generation. The new path prepares all supported slots once and
+replaces only the current callback snapshot. The old `action_reuse` module and its
+incremental detachment bookkeeping have been removed.
 
 All other control fields still participate in allocation comparison. Forms, native
 controls, and actions inside alternative/fallback presentations remain conservative.
-On the first callback replacement, built-in allocations detach their page outputs
-and navigation metadata from the search graph. Replaced actions become unbound slots
-in those templates; current handlers live in the owner-local projection. The retained
-diagnostic envelope also drops its obsolete page bindings. After the new generation
-commits and callers release the previous result, superseded action receivers can be
-collected. An undelivered candidate leaves the displayed generation intact.
+Live template preparation excludes alternate source branches, so a selected alternate
+keeps its actual handler rather than acquiring the canonical content's callback.
+Static plans and custom selectors retain their existing output contracts.
 
-Detachment visits the certified outputs when a new action needs a slot. Later changes
-to the same actions reuse that snapshot. No new layout search or certificate is needed.
-Custom selectors retain their existing ownership contract because the framework cannot
-enumerate their outputs. Forms, unchanged handlers, resources, and region owners may
-still hold live objects: these snapshots remain owner-local, not generally shareable
-callback-free artifacts.
-Rebound page projections now have an owner-local LRU capped at 32 entries. It is
-keyed by the certified output identity, so clamped or hidden coordinates that select
-the same output reuse one projection. Controlled page turns keep the cache; changed
-callbacks get a fresh generation. Failed frontend binding stores no entry. Cache
-snapshots expose entry, hit, miss, and eviction counts without exposing callbacks.
-The cap bounds entry count, not the byte size of arbitrary captured application data.
+Template snapshots contain certified page outputs and navigation metadata without the
+search graph. The retained diagnostic envelope has no obsolete page bindings. Once
+callers release a live generation, its ordinary action receivers can be collected even
+if its template snapshot remains cached. Undelivered candidates leave the displayed
+generation intact. Forms, resources, region owners, and unsupported action kinds may
+still hold live objects: snapshots remain owner-local, not generally shareable artifacts.
+
+Page projections have an owner-local LRU capped at 32 entries. It is keyed by certified
+output identity, so clamped or hidden coordinates selecting the same output reuse one
+projection. Changed callbacks get a fresh generation. Failed frontend binding stores
+no entry. Cache snapshots expose entry, hit, miss, and eviction counts without exposing
+callbacks. The cap bounds entry count, not the byte size of captured application data.
 
 Prepared semantic graphs and Document fingerprints survive replacement of a retained
 result. Region content fingerprints are computed once per retained authored snapshot,

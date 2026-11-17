@@ -15,7 +15,7 @@ from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.interactions import PressHandler
 from squid_ui.interactions.handlers import FrontendHandler
 from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
-from squid_ui.planning.action_reuse import ReboundAllocation
+from squid_ui.planning.action_projection import ActionAllocation
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, RegionPages
 from squid_ui.planning.resources import EMPTY_COST
@@ -67,7 +67,7 @@ async def test_page_revisits_keep_projection_but_new_handlers_start_a_fresh_cach
     current = plan(document(first), target=TARGET, session=session, composition=OPTIONS)
     session.apply_updates(current.session_updates)
     allocation = current.allocation
-    assert isinstance(allocation, ReboundAllocation)
+    assert isinstance(allocation, ActionAllocation)
     page = allocation.select({REGION: 0})
     allocation.select({REGION: 1})
     assert allocation.select({REGION: -1}) is page  # Clamping selects the same certified output.
@@ -78,7 +78,7 @@ async def test_page_revisits_keep_projection_but_new_handlers_start_a_fresh_cach
     assert turned.allocation is allocation
     session.apply_updates(turned.session_updates)
     updated = plan(document(second), target=TARGET, session=session, composition=OPTIONS)
-    assert isinstance(updated.allocation, ReboundAllocation)
+    assert isinstance(updated.allocation, ActionAllocation)
     assert updated.allocation is not allocation
     assert updated.allocation.identity == allocation.identity
     assert updated.allocation.source is allocation.source  # Existing slots need no further detachment.
@@ -108,7 +108,7 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
     original = plan(sl.action_controls(sl.action_control("Open", ignored, key="open"), key="actions"), target=TARGET)
     controls: dict[str, sl.semantic.ActionControl[Any]] = {"open": sl.action_control("Open", ignored, key="open")}
     source = Outputs(original)
-    allocation = ReboundAllocation(source, controls, "projection", capacity=2)
+    allocation = ActionAllocation(source, controls, "projection", capacity=2)
     controls.clear()
     first = allocation.select({REGION: 0})
     second = allocation.select({REGION: 1})
@@ -125,7 +125,7 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
 def test_failed_binding_does_not_cache_a_projection() -> None:
     original = plan(sl.action_controls(sl.action_control("Open", ignored, key="open"), key="actions"), target=TARGET)
     controls = {"open": sl.action_control("Open", FrontendHandler("different", ignored), key="open")}
-    allocation = ReboundAllocation(Outputs(original), controls, "projection")
+    allocation = ActionAllocation(Outputs(original), controls, "projection")
     for _ in range(2):
         with pytest.raises(TypeError, match="cannot be bound"):
             allocation.select()
@@ -244,3 +244,53 @@ def test_detached_allocation_preserves_nested_coordinate_selection() -> None:
     assert snapshot.visible({outer: 99, inner: 99}) == {outer: 1, inner: 1}
     with pytest.raises(sl.LayoutInvariantError, match="unknown region"):
         snapshot.select({OccurrenceId(("unknown",)): 0})
+
+
+async def test_initial_live_templates_do_not_retain_action_receivers() -> None:
+    class Receiver:
+        async def handle(self, event: sl.PressEvent) -> None:
+            pass
+
+    receiver = Receiver()
+    reference = weakref.ref(receiver)
+    session = PresentationState()
+    result = plan(document(receiver.handle), target=TARGET, session=session, composition=OPTIONS)
+    assert isinstance(result.allocation, ActionAllocation)
+    templates = result.allocation.source
+    assert isinstance(templates, AllocationSnapshot)
+    del result, receiver, session
+    gc.collect()
+    assert reference() is None
+    with pytest.raises(sl.LayoutInvariantError, match="template must be bound"):
+        await templates.select({REGION: 0}).bindings["open"].handler(testing.press_event())
+
+
+async def test_live_templates_preserve_selected_fallback_handlers() -> None:
+    calls: list[str] = []
+
+    async def primary(event: sl.PressEvent) -> None:
+        calls.append("primary")
+
+    async def replacement(event: sl.PressEvent) -> None:
+        calls.append("replacement")
+
+    async def ordinary(event: sl.PressEvent) -> None:
+        calls.append("ordinary")
+
+    node = sl.Document(
+        (
+            sl.fallback(
+                sl.action_controls(sl.action_control("Primary", primary, key="action"), key="actions"),
+                sl.action_controls(sl.action_control("Alternate", replacement, key="action"), key="actions"),
+            ),
+            sl.action_controls(sl.action_control("Other", ordinary, key="other"), key="other-actions"),
+        )
+    )
+    options = CompositionOptions(automatic=True, selections={OccurrenceId(("root", "@0")): "fallback-1"})
+    session = PresentationState()
+    result = plan(node, target=TARGET, session=session, composition=options)
+    assert isinstance(result.allocation, ActionAllocation)
+    assert set(result.allocation.controls) == {"other"}
+    for binding in result.bindings.values():
+        await binding.handler(testing.press_event())
+    assert sorted(calls) == ["ordinary", "replacement"]

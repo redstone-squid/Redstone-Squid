@@ -1,9 +1,8 @@
-"""Refresh semantic action callbacks without changing a certified layout.
+"""Separate a live allocation's action templates from its current callbacks.
 
-Only ActionControl.on_trigger is excluded from allocation comparison. All layout
-and dispatch policy fields still participate, and alternate presentations remain
-conservative. Rebinding follows explicit framework handler edges, including grouped
-select routes, rather than traversing arbitrary application objects.
+Ordinary semantic actions become slots when a live allocation is prepared. Each
+owner projects those templates with its current handlers. Alternate presentations
+retain their chosen bindings because their source correspondence can change keys.
 """
 
 from collections import OrderedDict
@@ -13,7 +12,8 @@ from types import MappingProxyType
 from typing import Any, cast, override
 
 from squid_ui import scene
-from squid_ui.authoring.semantic import ActionControl
+from squid_ui.authoring.presentations import Alternatives
+from squid_ui.authoring.semantic import ActionControl, FallbackContent
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionEvent, PressEvent
 from squid_ui.interactions.handlers import _HandlerBinder
@@ -22,9 +22,10 @@ from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.offers.navigation import control_key
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.semantic_index import SemanticGraph
+from squid_ui.primitives.nodes import Extension
 
 
-class _ActionRebinder(_HandlerBinder):
+class _ActionBinder(_HandlerBinder):
     def __init__(self, frontend: str, controls: Mapping[str, ActionControl[Any]]) -> None:
         super().__init__(frontend)
         self.controls = controls
@@ -82,13 +83,11 @@ class _ProjectionCache[BodyT: scene.Body]:
 
 
 @dataclass(frozen=True, slots=True)
-class ReboundAllocation[BodyT: scene.Body]:
-    """Owner-local projection of current handlers over an existing certificate.
+class ActionAllocation[BodyT: scene.Body]:
+    """One owner's current callbacks and bounded projections of certified templates.
 
-    Wrappers are flattened on the next render so page navigation cannot accumulate
-    callback generations. The underlying allocation is never mutated or shared with
-    another owner by this operation. Revisited pages reuse their rebound bindings;
-    the bounded cache belongs to this callback generation, never to delivery state.
+    A new callback generation replaces this view while retaining its source templates.
+    Page turns retain the view and its cache. Neither operation changes delivery state.
     """
 
     source: AllocationSelection[PlanResult[BodyT]]
@@ -120,7 +119,7 @@ class ReboundAllocation[BodyT: scene.Body]:
         result = self.source.select(coordinates)
         if (cached := self._cache.get(result)) is not None:
             return cached
-        binder = _ActionRebinder(self.frontend, self.controls)
+        binder = _ActionBinder(self.frontend, self.controls)
         projected = replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
         # Failed frontend binding must not publish a partially prepared projection.
         self._cache.put(result, projected)
@@ -132,48 +131,43 @@ async def _unbound_action(event: PressEvent[Any]) -> None:
     raise LayoutInvariantError(message)
 
 
-def _detach_actions[BodyT: scene.Body](
-    source: AllocationSelection[PlanResult[BodyT]],
+def _action_templates[BodyT: scene.Body](
+    source: CertifiedAllocation[Any, Any, Any, PlanResult[BodyT]] | AllocationSnapshot[PlanResult[BodyT]],
     controls: Mapping[str, ActionControl[Any]],
     frontend: str,
-) -> AllocationSelection[PlanResult[BodyT]]:
-    if not isinstance(source, CertifiedAllocation | AllocationSnapshot):
-        # Custom selectors have no enumerable certified outputs. Keep their existing
-        # ownership contract rather than introspecting application-owned state.
-        return source
+) -> AllocationSnapshot[PlanResult[BodyT]]:
     templates = {key: replace(control, on_trigger=_unbound_action) for key, control in controls.items()}
 
     def detach(result: PlanResult[BodyT]) -> PlanResult[BodyT]:
-        binder = _ActionRebinder(frontend, templates)
+        binder = _ActionBinder(frontend, templates)
         return replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
 
     return AllocationSnapshot[PlanResult[BodyT]].project(source, detach)
 
 
-def rebind_allocation[BodyT: scene.Body](
+def prepare_action_allocation[BodyT: scene.Body](
     allocation: AllocationSelection[PlanResult[BodyT]],
-    previous: SemanticGraph[Any, Any],
-    current: SemanticGraph[Any, Any],
+    graph: SemanticGraph[Any, Any],
     frontend: str,
 ) -> AllocationSelection[PlanResult[BodyT]]:
-    source = allocation.source if isinstance(allocation, ReboundAllocation) else allocation
-    controls = dict(allocation.controls) if isinstance(allocation, ReboundAllocation) else {}
-    previous_keys = controls.keys() | set()
-    changed = False
-    for reference, unit in current.units.items():
-        old = previous.units.get(reference)
-        if (
-            isinstance(unit.value, ActionControl)
-            and old is not None
-            and isinstance(old.value, ActionControl)
-            and unit.value.on_trigger is not old.value.on_trigger
-        ):
-            changed = True
-            key = control_key(SemanticOccurrence(OccurrenceId(reference.keys), current, reference))
+    """Prepare slots once, then replace only the current callback snapshot on reuse."""
+    controls: dict[str, ActionControl[Any]] = {}
+    for reference, unit in graph.units.items():
+        if not isinstance(unit.value, ActionControl):
+            continue
+        parent = unit.parent
+        while parent is not None:
+            ancestor = graph.units[parent]
+            if isinstance(ancestor.value, Alternatives | FallbackContent | Extension):
+                break
+            parent = ancestor.parent
+        else:
+            key = control_key(SemanticOccurrence(OccurrenceId(reference.keys), graph, reference))
             controls[key] = unit.value
-    if not changed and (not isinstance(allocation, ReboundAllocation) or allocation.frontend == frontend):
+    if isinstance(allocation, ActionAllocation):
+        if allocation.controls == controls and allocation.frontend == frontend:
+            return allocation
+        return ActionAllocation(allocation.source, controls, frontend)
+    if not controls or not isinstance(allocation, CertifiedAllocation | AllocationSnapshot):
         return allocation
-    new_slots = {key: control for key, control in controls.items() if key not in previous_keys}
-    if new_slots:
-        source = _detach_actions(source, new_slots, frontend)
-    return ReboundAllocation(source, controls, frontend) if controls else source
+    return ActionAllocation(_action_templates(allocation, controls, frontend), controls, frontend)

@@ -27,7 +27,8 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
-from squid_ui.planning.allocation import CertifiedAllocation
+from squid_ui.planning.action_projection import ActionAllocation
+from squid_ui.planning.allocation import AllocationSnapshot, CertifiedAllocation
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.planning.result import PlanResult
@@ -53,17 +54,20 @@ def _text_variants(*nodes: Node, priority: int = 0) -> Variants[Any]:
 
 
 def _visible_action_keys(result: Any) -> set[str]:
-    assert isinstance(result.allocation, CertifiedAllocation)
+    allocation = result.allocation
+    source = allocation.source if isinstance(allocation, ActionAllocation) else allocation
+    assert isinstance(source, CertifiedAllocation | AllocationSnapshot)
     keys: set[str] = set()
-    for page in result.allocation.pages:
-        for match in query(page.output.scene, select(scene.Button).union(select(scene.Select))).all():
+    for page in source.pages:
+        output = allocation.select(dict(page.coordinates))
+        for match in query(output.scene, select(scene.Button).union(select(scene.Select))).all():
             node = match.node
             if isinstance(node, scene.Button) and node.action.startswith("action."):
                 keys.add(node.action)
-                assert node.action in page.output.bindings
+                assert node.action in output.bindings
             elif isinstance(node, scene.Select):
                 keys.update(option.value for option in node.options if option.value.startswith("action."))
-                assert node.action in page.output.bindings
+                assert node.action in output.bindings
     return keys
 
 
