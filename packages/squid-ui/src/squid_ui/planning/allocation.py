@@ -6,7 +6,7 @@ contains them. Certification stores the built output for each combination, so a
 cursor change can select output without rerunning search or changing a sibling.
 """
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Protocol
@@ -198,12 +198,7 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
     )
 
     def __post_init__(self) -> None:
-        index: dict[tuple[OccurrenceId, ...], dict[tuple[int, ...], CertifiedPage[OutputT]]] = {}
-        for page in self.pages:
-            identities = tuple(identity for identity, _ in page.coordinates)
-            positions = tuple(position for _, position in page.coordinates)
-            index.setdefault(identities, {})[positions] = page
-        object.__setattr__(self, "_page_index", MappingProxyType({k: MappingProxyType(v) for k, v in index.items()}))
+        object.__setattr__(self, "_page_index", _index_pages(self.pages))
         object.__setattr__(self, "identity", uuid4().hex)
         object.__setattr__(
             self,
@@ -249,18 +244,74 @@ class CertifiedAllocation[RenderTargetT, ContextT, PayloadT, OutputT]:
         return self._page(coordinates).output
 
     def _page(self, coordinates: Mapping[OccurrenceId, int] | None) -> CertifiedPage[OutputT]:
-        positions = coordinates or {}
-        if positions.keys() - self.family.regions.keys():
-            message = "page coordinates contain an unknown region occurrence"
-            raise LayoutInvariantError(message)
-        # Nested pages have different visible-region sets. Index each set separately
-        # so sibling Cartesian products do not make every cursor turn a linear scan.
-        for identities, pages in self._page_index.items():
-            key = tuple(
-                max(0, min(positions.get(identity, 0), len(self.family.regions[identity].pages) - 1))
-                for identity in identities
-            )
-            if page := pages.get(key):
-                return page
-        message = "certified allocation lost a reachable page combination"
+        return _select_page(self._page_index, self.regions, coordinates)
+
+
+def _index_pages[OutputT](
+    pages: tuple[CertifiedPage[OutputT], ...],
+) -> Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]]:
+    index: dict[tuple[OccurrenceId, ...], dict[tuple[int, ...], CertifiedPage[OutputT]]] = {}
+    for page in pages:
+        identities = tuple(identity for identity, _ in page.coordinates)
+        positions = tuple(position for _, position in page.coordinates)
+        index.setdefault(identities, {})[positions] = page
+    return MappingProxyType({key: MappingProxyType(value) for key, value in index.items()})
+
+
+def _select_page[OutputT](
+    index: Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]],
+    regions: Mapping[OccurrenceId, RegionPages],
+    coordinates: Mapping[OccurrenceId, int] | None,
+) -> CertifiedPage[OutputT]:
+    positions = coordinates or {}
+    if positions.keys() - regions.keys():
+        message = "page coordinates contain an unknown region occurrence"
         raise LayoutInvariantError(message)
+    # Nested pages have different visible-region sets. Index each set separately
+    # so sibling Cartesian products do not make every cursor turn a linear scan.
+    for identities, pages in index.items():
+        key = tuple(max(0, min(positions.get(identity, 0), len(regions[identity].cuts) - 1)) for identity in identities)
+        if page := pages.get(key):
+            return page
+    message = "certified allocation lost a reachable page combination"
+    raise LayoutInvariantError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationSnapshot[OutputT]:
+    """Certified outputs and navigation metadata without the search's authored graph.
+
+    Output conversion preserves coordinates and allocation identity. It must not
+    change layout or resource costs; this operation does not recertify the pages.
+    Outputs and region owners may still contain live bindings, so snapshots remain
+    owner-local unless their producer explicitly removes those references.
+    """
+
+    identity: str
+    regions: Mapping[OccurrenceId, RegionPages]
+    pages: tuple[CertifiedPage[OutputT], ...]
+    _page_index: Mapping[tuple[OccurrenceId, ...], Mapping[tuple[int, ...], CertifiedPage[OutputT]]] = field(
+        init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "regions", MappingProxyType(dict(self.regions)))
+        object.__setattr__(self, "_page_index", _index_pages(self.pages))
+
+    @classmethod
+    def project[SourceT, RenderTargetT, ContextT, PayloadT](
+        cls,
+        source: CertifiedAllocation[RenderTargetT, ContextT, PayloadT, SourceT] | AllocationSnapshot[SourceT],
+        convert: Callable[[SourceT], OutputT],
+    ) -> AllocationSnapshot[OutputT]:
+        return cls(
+            source.identity,
+            source.regions,
+            tuple(CertifiedPage(page.coordinates, convert(page.output)) for page in source.pages),
+        )
+
+    def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
+        return dict(_select_page(self._page_index, self.regions, coordinates).coordinates)
+
+    def select(self, coordinates: Mapping[OccurrenceId, int] | None = None) -> OutputT:
+        return _select_page(self._page_index, self.regions, coordinates).output

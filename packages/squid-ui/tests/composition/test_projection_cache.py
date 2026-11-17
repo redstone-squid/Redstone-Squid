@@ -1,5 +1,7 @@
 """Page projections reuse work only within the same callback generation."""
 
+import gc
+import weakref
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
@@ -153,3 +155,32 @@ def test_rebinding_prepares_the_authored_snapshot_once() -> None:
         assert fingerprint.call_count == 2  # One Document and one region content fingerprint.
         assert replay.allocation is current.allocation
         assert session.retained_composition is retained
+
+
+async def test_reused_layout_releases_superseded_callback_receivers() -> None:
+    class Receiver:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def handle(self, event: sl.PressEvent) -> None:
+            calls.append(self.name)
+
+    calls: list[str] = []
+    session = PresentationState()
+    original = Receiver("old")
+    reference = weakref.ref(original)
+    initial = plan(document(original.handle), target=TARGET, session=session, composition=OPTIONS)
+    session.apply_updates(initial.session_updates)
+    replacement = Receiver("new")
+    candidate = plan(document(replacement.handle), target=TARGET, session=session, composition=OPTIONS)
+    # An undelivered candidate cannot retire the displayed generation.
+    del original
+    gc.collect()
+    assert reference() is not None
+    await initial.bindings["open"].handler(testing.press_event())
+    session.apply_updates(candidate.session_updates)
+    del initial
+    gc.collect()
+    assert reference() is None
+    await candidate.bindings["open"].handler(testing.press_event())
+    assert calls == ["old", "new"]

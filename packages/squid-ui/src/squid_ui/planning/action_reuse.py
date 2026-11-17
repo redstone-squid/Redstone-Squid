@@ -14,9 +14,10 @@ from typing import Any, cast, override
 
 from squid_ui import scene
 from squid_ui.authoring.semantic import ActionControl
-from squid_ui.interactions import ActionBinding, ActionEvent
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.interactions import ActionBinding, ActionEvent, PressEvent
 from squid_ui.interactions.handlers import _HandlerBinder
-from squid_ui.planning.allocation import AllocationSelection, RegionPages
+from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, CertifiedAllocation, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.offers.navigation import control_key
 from squid_ui.planning.result import PlanResult
@@ -126,6 +127,29 @@ class ReboundAllocation[BodyT: scene.Body]:
         return projected
 
 
+async def _unbound_action(event: PressEvent[Any]) -> None:
+    message = "allocation action template must be bound before dispatch"
+    raise LayoutInvariantError(message)
+
+
+def _detach_actions[BodyT: scene.Body](
+    source: AllocationSelection[PlanResult[BodyT]],
+    controls: Mapping[str, ActionControl[Any]],
+    frontend: str,
+) -> AllocationSelection[PlanResult[BodyT]]:
+    if not isinstance(source, CertifiedAllocation | AllocationSnapshot):
+        # Custom selectors have no enumerable certified outputs. Keep their existing
+        # ownership contract rather than introspecting application-owned state.
+        return source
+    templates = {key: replace(control, on_trigger=_unbound_action) for key, control in controls.items()}
+
+    def detach(result: PlanResult[BodyT]) -> PlanResult[BodyT]:
+        binder = _ActionRebinder(frontend, templates)
+        return replace(result, bindings=MappingProxyType(dict(binder.actions(result.bindings))))
+
+    return AllocationSnapshot[PlanResult[BodyT]].project(source, detach)
+
+
 def rebind_allocation[BodyT: scene.Body](
     allocation: AllocationSelection[PlanResult[BodyT]],
     previous: SemanticGraph[Any, Any],
@@ -134,6 +158,7 @@ def rebind_allocation[BodyT: scene.Body](
 ) -> AllocationSelection[PlanResult[BodyT]]:
     source = allocation.source if isinstance(allocation, ReboundAllocation) else allocation
     controls = dict(allocation.controls) if isinstance(allocation, ReboundAllocation) else {}
+    previous_keys = controls.keys() | set()
     changed = False
     for reference, unit in current.units.items():
         old = previous.units.get(reference)
@@ -148,4 +173,7 @@ def rebind_allocation[BodyT: scene.Body](
             controls[key] = unit.value
     if not changed and (not isinstance(allocation, ReboundAllocation) or allocation.frontend == frontend):
         return allocation
+    new_slots = {key: control for key, control in controls.items() if key not in previous_keys}
+    if new_slots:
+        source = _detach_actions(source, new_slots, frontend)
     return ReboundAllocation(source, controls, frontend) if controls else source

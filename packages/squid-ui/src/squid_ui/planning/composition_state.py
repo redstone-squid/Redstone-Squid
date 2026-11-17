@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from functools import partial
 from hashlib import sha256
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import quote
 
@@ -94,7 +95,9 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             assert allocation is not None
             frontend = request.target.adapter.frontend or request.target.adapter.name
             allocation = rebind_allocation(allocation, self.graph, owner.graph, frontend)
-            owner = replace(owner, result=replace(self.result, allocation=allocation))
+            # The envelope supplies diagnostics; selected pages supply bindings.
+            # Keeping the first page's old handlers here would retain retired owners.
+            owner = replace(owner, result=replace(self.result, bindings=MappingProxyType({}), allocation=allocation))
         return owner.present(options.pages, request=request, options=options)
 
     def matches(
