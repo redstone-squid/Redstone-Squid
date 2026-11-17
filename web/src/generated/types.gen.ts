@@ -1833,12 +1833,92 @@ export type SanitizationCapabilities = {
 };
 
 /**
+ * SchematicDetection
+ */
+export type SchematicDetection = {
+    field_id: string;
+    status?: 'not_detected';
+    value?: JsonValue;
+    reason?: string;
+};
+
+/**
+ * SchematicDimensions
+ */
+export type SchematicDimensions = {
+    width: number;
+    height: number;
+    length: number;
+};
+
+/**
+ * SchematicFieldSuggestion
+ */
+export type SchematicFieldSuggestion = {
+    field_id: string;
+    value: JsonValue;
+    evidence: string;
+};
+
+/**
+ * SchematicFormat
+ *
+ * A schematic container format this application can read.
+ */
+export type SchematicFormat = 'litematic' | 'schem' | 'schematic' | 'nbt' | 'mcstructure';
+
+/**
+ * SchematicMetrics
+ */
+export type SchematicMetrics = {
+    source_format: SchematicFormat;
+    byte_size: number;
+    sha256: string;
+    dimensions: SchematicDimensions;
+    allocated_dimensions: SchematicDimensions;
+    block_count: number;
+    bounding_volume: number;
+    entity_count: number;
+    palette_size: number;
+    region_names?: Array<string>;
+    source_data_version?: number | null;
+    declared_name?: string | null;
+    declared_author?: string | null;
+    signs?: Array<SchematicSign>;
+    block_counts?: {
+        [key: string]: number;
+    } | null;
+};
+
+/**
+ * SchematicSign
+ */
+export type SchematicSign = {
+    x: number;
+    y: number;
+    z: number;
+    text: string;
+};
+
+/**
  * SchematicSize
  */
 export type SchematicSize = {
     width: number;
     height: number;
     depth: number;
+};
+
+/**
+ * SchematicSubmissionSuggestions
+ */
+export type SchematicSubmissionSuggestions = {
+    upload_id: string;
+    state: DraftSchematicState;
+    draft_revision: number;
+    suggestions?: Array<SchematicFieldSuggestion>;
+    detections?: Array<SchematicDetection>;
+    measurements?: SchematicMetrics | null;
 };
 
 /**
@@ -7135,6 +7215,38 @@ export type SubmissionMediaAttachResponses = {
 };
 
 export type SubmissionMediaAttachResponse = SubmissionMediaAttachResponses[keyof SubmissionMediaAttachResponses];
+
+export type SubmissionSchematicSuggestionsData = {
+    body?: never;
+    path: {
+        draft_id: string;
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/suggestions';
+};
+
+export type SubmissionSchematicSuggestionsErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicSuggestionsError = SubmissionSchematicSuggestionsErrors[keyof SubmissionSchematicSuggestionsErrors];
+
+export type SubmissionSchematicSuggestionsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SchematicSubmissionSuggestions;
+};
+
+export type SubmissionSchematicSuggestionsResponse = SubmissionSchematicSuggestionsResponses[keyof SubmissionSchematicSuggestionsResponses];
 
 export type SubmissionSchematicListData = {
     body?: never;

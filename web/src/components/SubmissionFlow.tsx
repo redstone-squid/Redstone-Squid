@@ -1,3 +1,4 @@
+import SchematicSubmissionSection from "./SchematicSubmissionSection";
 import { CreditEditor } from "./CreditEditor";
 import type { CreditAnswer } from "../lib/submission-form";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -218,6 +219,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [schematicBusy, setSchematicBusy] = useState(false);
   const [blockingError, setBlockingError] = useState<{ title: string; message: string }>();
   const [actionError, setActionError] = useState<SubmissionApiError>();
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
@@ -655,7 +657,10 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   );
   const draftEditable = draft.status === "editing" || draft.status === "needs_attention";
   const locked =
-    !draftEditable || finalization?.status === "pending" || finalization?.status === "claimed";
+    schematicBusy ||
+    !draftEditable ||
+    finalization?.status === "pending" ||
+    finalization?.status === "claimed";
 
   return (
     <div className="submission-flow">
@@ -681,6 +686,42 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
       </div>
 
       {actionError && <ActionError error={actionError} copy={copy} signInUrl={signInUrl} />}
+
+      <SchematicSubmissionSection
+        api={api}
+        draftId={draft.id}
+        locale={locale}
+        disabled={locked || busy || uploading || pendingFields.size > 0}
+        labels={fieldLabels}
+        choices={Object.fromEntries(
+          sections.flatMap((section) =>
+            section.fields.map((field) => [
+              field.id,
+              (field.option_source ? options[field.option_source] : field.options) ?? [],
+            ]),
+          ),
+        )}
+        onMutation={async (operation) => {
+          setSchematicBusy(true);
+          try {
+            await saveQueue.current;
+            await operation();
+          } finally {
+            try {
+              installDraft(await api.getDraft(draft.id));
+              setFinalization(undefined);
+            } finally {
+              setSchematicBusy(false);
+            }
+          }
+        }}
+        onAccept={(suggestion) => {
+          const field = sections
+            .flatMap((section) => section.fields)
+            .find((field) => field.id === suggestion.field_id);
+          if (field) commitField(field, draftValue(suggestion.value));
+        }}
+      />
 
       {sections.map((section) => {
         const visibleFields = section.fields.filter((field) =>

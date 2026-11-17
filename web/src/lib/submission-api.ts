@@ -26,6 +26,11 @@ import {
   submissionMediaDiscard,
   submissionMediaList,
   submissionMediaUpload,
+  submissionSchematicList,
+  submissionSchematicUpload,
+  submissionSchematicSuggestions,
+  submissionSchematicPrimary,
+  submissionSchematicDiscard,
 } from "../generated/sdk.gen";
 import { createClient, type Client } from "../generated/client";
 import type {
@@ -35,6 +40,8 @@ import type {
   DraftChangeResponse,
   DraftMediaListResponse,
   DraftMediaResponse,
+  DraftSchematicResponse,
+  SchematicSubmissionSuggestions,
   FormManifestResponse,
   FormOptionSetResponse,
   MediaKind,
@@ -90,6 +97,18 @@ export type SubmissionApi = {
   getDraft: (draftId: string) => Promise<StoredDraftResponse>;
   changeDraft: (draftId: string, change: DraftChangeRequest) => Promise<DraftChangeResponse>;
   deleteDraft: (draftId: string) => Promise<void>;
+  listSchematics: (draftId: string) => Promise<DraftSchematicResponse[]>;
+  uploadSchematic: (
+    draftId: string,
+    file: File,
+    uploadId: string,
+  ) => Promise<DraftSchematicResponse>;
+  selectPrimarySchematic: (draftId: string, uploadId: string) => Promise<unknown>;
+  discardSchematic: (draftId: string, uploadId: string) => Promise<unknown>;
+  schematicSuggestions: (
+    draftId: string,
+    uploadId: string,
+  ) => Promise<SchematicSubmissionSuggestions>;
   listMedia: (draftId: string) => Promise<DraftMediaListResponse>;
   uploadMedia: (
     draftId: string,
@@ -317,6 +336,47 @@ export function createSubmissionApi(
         if (result.data === undefined && result.response?.status !== 204) throw apiError(result);
       });
     },
+    listSchematics: async (draftId) =>
+      unwrap(await submissionSchematicList({ client, path: { draft_id: draftId } })),
+    uploadSchematic: async (draftId, file, uploadId) =>
+      mutations.execute(undefined, async (headers) =>
+        unwrap(
+          await submissionSchematicUpload({
+            client,
+            path: { draft_id: draftId, upload_id: uploadId },
+            query: { filename: file.name },
+            body: file,
+            headers: { ...headers, "Content-Type": "application/octet-stream" },
+          }),
+        ),
+      ),
+    selectPrimarySchematic: async (draftId, uploadId) =>
+      mutations.execute(crypto.randomUUID(), async (headers) =>
+        unwrap(
+          await submissionSchematicPrimary({
+            client,
+            path: { draft_id: draftId, upload_id: uploadId },
+            headers,
+          }),
+        ),
+      ),
+    discardSchematic: async (draftId, uploadId) =>
+      mutations.execute(crypto.randomUUID(), async (headers) =>
+        unwrap(
+          await submissionSchematicDiscard({
+            client,
+            path: { draft_id: draftId, upload_id: uploadId },
+            headers,
+          }),
+        ),
+      ),
+    schematicSuggestions: async (draftId, uploadId) =>
+      unwrap(
+        await submissionSchematicSuggestions({
+          client,
+          path: { draft_id: draftId, upload_id: uploadId },
+        }),
+      ),
     listMedia: async (draftId) =>
       unwrap(
         await submissionMediaList({

@@ -82,6 +82,8 @@ _DURABLE_REQUEST_PAYLOAD_ARITY: Mapping[Operation, tuple[int, ...]] = {
 }
 MAX_FRAME_PARTS = max(_REQUEST_PAYLOAD_ARITY.values())
 
+# Wire models reject malformed JSON before values reach the native engine; domain
+# dataclasses remain the types used by the application after decoding.
 type _FiniteFloat = Annotated[float, Field(strict=True, allow_inf_nan=False)]
 type _UnitFloat = Annotated[float, Field(strict=True, allow_inf_nan=False, ge=0.0, le=1.0)]
 type _NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]

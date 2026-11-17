@@ -234,7 +234,7 @@ submitFlow-completed = Build #{ $id } was created in pending state and queued fo
 submitFlow-dead = Finalization could not complete. The stable issue below explains the next action.
 submitFlow-deleteDraft = Delete draft
 submitFlow-deleteConfirm = Delete this draft and discard its uploaded media? This cannot be undone.
-submitFlow-schematicNote = This browser flow does not attach or claim to sanitize schematics. If a schematic is required, continue the draft from a supported in-game client.
+submitFlow-schematicNote = Review the schematic suggestions and fill in any missing details before submitting.
 submitFlow-saveBeforeSubmit = Fix or retry the unsaved fields before submitting.
 taxonomy-confirmed = Confirmed
 taxonomy-pending = Pending
@@ -427,3 +427,13 @@ search-moreFilters = More filters
 
 record-lastChecked = Last checked { $date }
 record-refreshPending = Refresh pending
+
+submitFlow-schematicTitle = Start with a schematic
+submitFlow-schematicHelp = Upload a schematic, then review and apply the suggested answers. You can edit every answer before submitting.
+submitFlow-schematicUpload = Upload schematic
+submitFlow-schematicRefresh = Refresh analysis
+submitFlow-schematicPrimary = Use as primary
+submitFlow-schematicDiscard = Discard
+submitFlow-schematicBounds = occupied bounds, X × Y × Z
+submitFlow-schematicAccept = Use this suggestion
+submitFlow-schematicUndetected = Category, opening size, orientation, and opening/closing times could not be detected. Fill these in yourself.

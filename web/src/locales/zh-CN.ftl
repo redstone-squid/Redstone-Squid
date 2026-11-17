@@ -234,7 +234,7 @@ submitFlow-completed = 作品 #{ $id } 已创建为待处理状态，并已排�
 submitFlow-dead = 无法完成投稿。下方的稳定问题代码说明了下一步。
 submitFlow-deleteDraft = 删除草稿
 submitFlow-deleteConfirm = 删除此草稿并丢弃其上传媒体？此操作无法撤销。
-submitFlow-schematicNote = 此网页流程不会附加或声称已清理原理图。如需原理图，请从受支持的游戏内客户端继续草稿。
+submitFlow-schematicNote = 提交前请检查原理图建议并补充缺失信息。
 submitFlow-saveBeforeSubmit = 提交前请修复或重试未保存的字段。
 taxonomy-confirmed = 已确认
 taxonomy-pending = 待审核
@@ -424,3 +424,13 @@ search-moreFilters = 更多筛选
 
 record-lastChecked = 上次检查：{ $date }
 record-refreshPending = 等待刷新
+
+submitFlow-schematicTitle = 从原理图开始
+submitFlow-schematicHelp = 上传原理图，然后检查并应用建议。提交前可以修改所有答案。
+submitFlow-schematicUpload = 上传原理图
+submitFlow-schematicRefresh = 刷新分析
+submitFlow-schematicPrimary = 设为主要原理图
+submitFlow-schematicDiscard = 移除
+submitFlow-schematicBounds = 占用范围，X × Y × Z
+submitFlow-schematicAccept = 使用此建议
+submitFlow-schematicUndetected = 未能检测类别、开口尺寸、方向或开启和关闭时间，请手动填写。

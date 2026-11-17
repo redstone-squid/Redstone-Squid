@@ -232,6 +232,11 @@ function fakeApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
       return Promise.resolve({ draft: serverDraft, replayed: false });
     }),
     deleteDraft: vi.fn(() => Promise.resolve()),
+    listSchematics: vi.fn(() => Promise.resolve([])),
+    uploadSchematic: vi.fn(),
+    schematicSuggestions: vi.fn(),
+    selectPrimarySchematic: vi.fn(),
+    discardSchematic: vi.fn(),
     listMedia: vi.fn(() => Promise.resolve(emptyMedia)),
     uploadMedia: vi.fn<SubmissionApi["uploadMedia"]>((_draftId, kind, file, uploadId) =>
       Promise.resolve({
@@ -388,6 +393,11 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
     localStorage.setItem("squid:submission-draft:v1", retained.id);
     const api = fakeApi({
       getDraft: vi.fn(() => Promise.resolve(retained)),
+      listSchematics: vi.fn(() => Promise.resolve([])),
+      uploadSchematic: vi.fn(),
+      schematicSuggestions: vi.fn(),
+      selectPrimarySchematic: vi.fn(),
+      discardSchematic: vi.fn(),
       listMedia: vi.fn(() => Promise.reject(new SubmissionApiError(503))),
       submissionStatus: vi.fn<SubmissionApi["submissionStatus"]>(() =>
         Promise.resolve({
