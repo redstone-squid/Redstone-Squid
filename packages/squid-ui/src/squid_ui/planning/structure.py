@@ -1,54 +1,9 @@
-"""Shared semantic paths, fallback selection, and state lookup.
-
-These helpers keep branch names and action keys consistent across traversals that
-read state or select a representation for the same semantic occurrence.
-"""
-
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
-from typing import Protocol
+"""Resolve authored palette and control state for semantic occurrences."""
 
 from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.styles import Color
-
-
-def indexed_children[T](children: Sequence[T], path: str) -> Iterator[tuple[T, str]]:
-    """Pair each child with its position-derived path under the parent's."""
-    for index, child in enumerate(children):
-        yield child, f"{path}.{index}"
-
-
-def branch_paths(path: str, branches: int) -> tuple[str, ...]:
-    """Give each semantic fallback branch a stable path."""
-    return (f"{path}.primary", *(f"{path}.alternate.{index}" for index in range(branches - 1)))
-
-
-def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
-    """Return one validated selected fallback rung."""
-    rung = selected.get(path, 0)
-    if not 0 <= rung < branches:
-        message = f"{path}: planner selected unavailable fallback branch {rung}"
-        raise ValueError(message)
-    return rung
-
-
-class PaletteHolder(Protocol):
-    """Traversal state whose active palette a Themed region rescopes."""
-
-    palette: Palette
-
-
-@contextmanager
-def scoped_palette(holder: PaletteHolder, palette: Palette) -> Iterator[None]:
-    """Make ``palette`` the holder's active palette for the scope, then restore the previous one."""
-    previous = holder.palette
-    holder.palette = palette
-    try:
-        yield
-    finally:
-        holder.palette = previous
 
 
 def resolve_accent(accent: Accent, palette: Palette) -> Color | None:
@@ -129,25 +84,10 @@ def navigation_current[ContextT](node: Navigation[ContextT], session: Presentati
     return current
 
 
-def toggle_action_key(key: str) -> str:
-    """Spell the action key for a disclosure's toggle control.
-
-    Both planners bind the control under this key, and rebinding after a replan only finds
-    the handler again because every target agrees on the spelling.
-    """
-    return f"{key}.toggle"
-
-
 __all__ = [
-    "PaletteHolder",
-    "branch_paths",
     "disclosure_state",
-    "fallback_rung",
-    "indexed_children",
     "item_state",
     "navigation_current",
     "resolve_accent",
-    "scoped_palette",
-    "toggle_action_key",
     "toggle_state",
 ]

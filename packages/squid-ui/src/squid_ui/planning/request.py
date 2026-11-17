@@ -11,12 +11,14 @@ from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 
 if TYPE_CHECKING:
     from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
+
+
+DEFAULT_SEARCH_BUDGET = 512
 
 
 class Identity:

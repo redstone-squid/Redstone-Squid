@@ -205,6 +205,29 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert encoded == MessageRootStateCodec.dumps(MessageRootStateCodec.loads(encoded))
 
 
+def test_old_strategy_memory_is_ignored_when_restoring_a_snapshot() -> None:
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    message_root.presentation.move_cursor("child.items", PagePosition(page=1))
+    snapshot = _registry().capture(message_root, "counter")
+    raw = json.loads(MessageRootStateCodec.dumps(snapshot))
+    raw["presentation"]["strategies"] = {
+        "old-actions": {
+            "node_key": "old-actions",
+            "adapter_id": "discord.actions",
+            "adapter_version": 1,
+            "strategy_id": "individual",
+        }
+    }
+
+    decoded = MessageRootStateCodec.loads(json.dumps(raw))
+    assert decoded.presentation == snapshot.presentation
+    assert "strategies" not in json.loads(MessageRootStateCodec.dumps(decoded))["presentation"]
+    restored = _registry().restore(decoded, access=Everyone(), timeout=None)
+    commit_render(restored)
+    assert restored.presentation.cursor("child.items").position.page == 1
+
+
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
     class Invalid(Component[sl.ComponentsV2Target]):
         value: object = state(factory=object, persist=True)

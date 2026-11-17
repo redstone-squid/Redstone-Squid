@@ -949,7 +949,7 @@ pending, stale, or failed states the component can render. `on_load` remains the
 hook for initialization that must finish before the component can render at all.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
-`DisclosureState`, and `StrategyState`. It is per message rooted message/viewer session and separate
+`DisclosureState`, and `ToggleState`. It belongs to a message/viewer session and stays separate
 from domain state. Materialized cursors therefore do not leak into component fields, while apps
 cannot store arbitrary operational objects in presentation snapshots. Resource state is likewise
 runtime-only: it is an input to synchronous rendering, not durable domain or generic presentation

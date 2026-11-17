@@ -33,7 +33,7 @@ from squid_ui.ext.discord.sessions import SessionKey
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_ui.pages import PagePosition
-from squid_ui.presentation import CursorState, DisclosureState, PresentationState, SelectionState, StrategyState
+from squid_ui.presentation import CursorState, DisclosureState, PresentationState, SelectionState
 from squid_ui.runtime.definition import AnyComponent
 from squid_ui.runtime.expansion import render_component_tree
 
@@ -111,12 +111,11 @@ class ComponentState:
 
 @dataclass(frozen=True, slots=True)
 class PresentationSnapshot:
-    """Saved pagination, selection, disclosure, and strategy state for a message root."""
+    """Saved pagination, selection, and disclosure state for a message root."""
 
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
-    strategies: Mapping[str, StrategyState]
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,15 +393,6 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
         },
         "selections": {key: {"selected": list(selection.selected)} for key, selection in state.selections.items()},
         "disclosures": {key: {"open": disclosure.open} for key, disclosure in state.disclosures.items()},
-        "strategies": {
-            key: {
-                "node_key": strategy.node_key,
-                "adapter_id": strategy.adapter_id,
-                "adapter_version": strategy.adapter_version,
-                "strategy_id": strategy.strategy_id,
-            }
-            for key, strategy in state.strategies.items()
-        },
     }
 
 
@@ -410,7 +400,7 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
     cursors = require_object(raw.get("cursors"), "presentation cursors")
     selections = require_object(raw.get("selections"), "presentation selections")
     disclosures = require_object(raw.get("disclosures"), "presentation disclosures")
-    strategies = require_object(raw.get("strategies"), "presentation strategies")
+    # Older snapshots contain strategies from the retired planner; ignore that field.
     return PresentationSnapshot(
         cursors={
             key: CursorState(
@@ -441,17 +431,6 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
                 require_boolean(require_object(value, "disclosure state"), "open", description="disclosure field")
             )
             for key, value in disclosures.items()
-        },
-        strategies={
-            key: StrategyState(
-                require_string(
-                    item := require_object(value, "strategy state"), "node_key", description="strategy field"
-                ),
-                require_string(item, "adapter_id", description="strategy field"),
-                require_integer(item, "adapter_version", description="strategy field"),
-                require_string(item, "strategy_id", description="strategy field"),
-            )
-            for key, value in strategies.items()
         },
     )
 
@@ -548,7 +527,6 @@ class ComponentRegistry:
                 dict(message_root.presentation.cursors),
                 dict(message_root.presentation.selections),
                 dict(message_root.presentation.disclosures),
-                dict(message_root.presentation.strategies),
             ),
             message_root.target.triple,
             message_root.target.version,
@@ -627,7 +605,6 @@ class ComponentRegistry:
             cursors=dict(state.presentation.cursors),
             selections=dict(state.presentation.selections),
             disclosures=dict(state.presentation.disclosures),
-            strategies=dict(state.presentation.strategies),
         )
         return message_root
 

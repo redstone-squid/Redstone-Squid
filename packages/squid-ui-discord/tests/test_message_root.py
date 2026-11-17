@@ -2028,7 +2028,6 @@ class TestDeliveryAtomicity:
         live_generation = message_root.generation
         # Compare mapping identity: snapshot handler keys would miss a premature replacement.
         live_handlers = message_root._candidates.handlers
-        live_strategies = dict(message_root.presentation.strategies)
         panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
 
@@ -2042,7 +2041,6 @@ class TestDeliveryAtomicity:
         assert mounted == []
         assert message_root.presentation.cursor("entries").position.page == 1
         # Discarded planning updates must leave strategy state unchanged along with cursors.
-        assert message_root.presentation.strategies == live_strategies
 
     async def test_a_press_after_a_refused_page_turn_shows_the_page_it_asked_for(self, monkeypatch):
         message_root = MessageRoot(Panel([]), access=Everyone(), timeout=None)

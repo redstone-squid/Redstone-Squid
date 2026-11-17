@@ -198,7 +198,7 @@ semantics during splicing. Chrome's small default functions are injected callbac
 and the query-index owner keeps derived data out of serialization. Their short
 length or small number of callers is not evidence that they are useless.
 
-This audit changes no runtime code. Removal work should verify public planning,
+The original audit changed no runtime code. Removal work must verify public planning,
 page turns, strict-mode behavior, callbacks, and durable restoration at the affected
 boundaries, instead of relying solely on tests of the machinery being deleted.
 
@@ -212,6 +212,8 @@ boundaries, instead of relying solely on tests of the machinery being deleted.
 - Removed the obsolete Discord adaptation package (1). Regression coverage now
   exercises the public planner for nested tables, deferred text, translated
   page footers, and page budgets.
-- Remaining: strategy state/helpers (3), the measured API (4), obsolete
+- Removed strategy axes, remembered strategy choices, and their traversal helpers
+  (3). Durable restoration ignores the retired field in older snapshots.
+- Remaining: the measured API (4), obsolete
   telemetry (6), duplicate degradation profiles (7), and the generated-handler
   base (10). Each still needs implementation and boundary verification.

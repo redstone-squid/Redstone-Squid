@@ -43,14 +43,6 @@ class ToggleState:
 
 
 @dataclass(frozen=True, slots=True)
-class StrategyState:
-    node_key: str
-    adapter_id: str
-    adapter_version: int
-    strategy_id: str
-
-
-@dataclass(frozen=True, slots=True)
 class RegionAllocation:
     key: str
     costs: tuple[tuple[str, int], ...]
@@ -85,7 +77,6 @@ class PresentationState:
     selections: dict[str, SelectionState] = field(default_factory=dict)
     disclosures: dict[str, DisclosureState] = field(default_factory=dict)
     toggles: dict[str, ToggleState] = field(default_factory=dict)
-    strategies: dict[str, StrategyState] = field(default_factory=dict)
     _revision: int = field(default=0, init=False, repr=False, compare=False, metadata={"stable_identity": False})
 
     @property
@@ -164,24 +155,6 @@ class PresentationState:
             self.toggles[key] = value
             self._touch()
 
-    def strategy(self, key: str, adapter_id: str, adapter_version: int) -> str | None:
-        """The remembered choice, or None when it was made by a different adapter.
-
-        A miss leaves the stale entry alone: whoever asked is about to choose again and
-        overwrite it, and reading is not a good enough reason to mutate a session the
-        caller may yet decide to throw away.
-        """
-        state = self.strategies.get(key)
-        if state is None or state.adapter_id != adapter_id or state.adapter_version != adapter_version:
-            return None
-        return state.strategy_id
-
-    def remember_strategy(self, key: str, adapter_id: str, adapter_version: int, strategy_id: str) -> None:
-        value = StrategyState(key, adapter_id, adapter_version, strategy_id)
-        if self.strategies.get(key) != value:
-            self.strategies[key] = value
-            self._touch()
-
     def apply_updates(self, updates: Sequence[SessionUpdate]) -> None:
         """Apply staged writes in order and increment revision once if any stored value changes."""
         changed = False
@@ -201,10 +174,6 @@ class PresentationState:
                         changed = True
                     if self.cursors.get(key) != cursor:
                         self.cursors[key] = cursor
-                        changed = True
-                case StrategyUpdate(key=key, state=strategy):
-                    if self.strategies.get(key) != strategy:
-                        self.strategies[key] = strategy
                         changed = True
                 case ToggleUpdate(key=key, state=toggle):
                     if self.toggles.get(key) != toggle:
@@ -234,12 +203,6 @@ class CursorUpdate:
 
 
 @dataclass(frozen=True, slots=True)
-class StrategyUpdate:
-    key: str
-    state: StrategyState
-
-
-@dataclass(frozen=True, slots=True)
 class ToggleUpdate:
     key: str
     state: ToggleState
@@ -262,9 +225,7 @@ class RetainedCompositionUpdate:
     state: RetainedComposition | None
 
 
-type SessionUpdate = (
-    RetainedCompositionUpdate | CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
-)
+type SessionUpdate = RetainedCompositionUpdate | CursorUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend

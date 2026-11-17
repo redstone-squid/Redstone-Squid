@@ -26,16 +26,9 @@ from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.native_extensions import ComposableExtension, NativeComposition
 from squid_ui.planning.planner import plan
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
-from squid_ui.planning.search import (
-    DEFAULT_SEARCH_BUDGET,
-    StrategyAssignment,
-    StrategyAxis,
-    StrategyCandidate,
-    choose_strategy,
-    iter_assignments,
-)
 from squid_ui.planning.spread import MessageSpread, plan_spread
 from squid_ui.planning.target import PreparedExtension, Target
 from squid_ui.target_types import (
@@ -110,13 +103,8 @@ __all__ = [
     "SolveNote",
     "SolveNoteCode",
     "SolveNoteSeverity",
-    "StrategyAssignment",
-    "StrategyAxis",
-    "StrategyCandidate",
     "Target",
     "TargetDialect",
-    "choose_strategy",
-    "iter_assignments",
     "plan",
     "plan_spread",
     "resolve_page_position",

@@ -33,9 +33,8 @@ from squid_ui.planning.identity import has_routed_page, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav
-from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
-from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantics import UnsupportedSemanticError, semantic_graph
 
 _logger = logging.getLogger(__name__)

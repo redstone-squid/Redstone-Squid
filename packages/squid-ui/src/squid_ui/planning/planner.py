@@ -14,10 +14,9 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.composition_planner import plan_composition
 from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.pagination.navigation import PlannedNav
-from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
-from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 

@@ -77,8 +77,6 @@ from squid_ui.presentation import (
     PresentationState,
     SelectionState,
     SessionUpdate,
-    StrategyState,
-    StrategyUpdate,
     ToggleState,
     ToggleUpdate,
 )
@@ -180,8 +178,6 @@ __all__ = [
     "ServiceRunStatus",
     "SessionUpdate",
     "StaleReactiveContextError",
-    "StrategyState",
-    "StrategyUpdate",
     "Subscriber",
     "SubscriptionStats",
     "Subscriptions",

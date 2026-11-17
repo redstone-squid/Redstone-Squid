@@ -31,7 +31,6 @@ from squid_ui.planning.allocation import CertifiedAllocation
 from squid_ui.planning.allocation_policy import SearchCompletion
 from squid_ui.planning.joint_search import JointExhaustedError
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentation import StrategyState
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.primitives.nodes import Node
 from squid_ui.runtime import PresentationState
@@ -156,7 +155,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
 
 
 def test_inactive_fallbacks_do_not_replace_the_primary_or_publish_effects() -> None:
-    session = PresentationState(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
+    session = PresentationState()
     inactive = Stack(tuple(ActionControls(_actions(1), key=f"inactive-{index}") for index in range(9)))
     document = (
         *(Paragraph(f"component {index}") for index in range(35)),
@@ -230,12 +229,6 @@ def test_reordering_actions_preserves_every_control() -> None:
     first = plan(ActionControls(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
     result = plan(ActionControls(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    assert _visible_action_keys(result) == {f"action.{index}" for index in range(36)}
-
-
-def test_old_strategy_state_does_not_override_shared_allocation() -> None:
-    session = PresentationState(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
-    result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     assert _visible_action_keys(result) == {f"action.{index}" for index in range(36)}
 
 
