@@ -105,22 +105,23 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             try:
                 with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
                     user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
-                    view = discord.ui.View(timeout=None)
                     build_id = notification_build_id(delivery.payload)
-                    if build_id is not None:
-                        view.add_item(
-                            discord.ui.Button(
-                                label=tr(t"notifications-open-build = Open build").resolve(),
-                                custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
-                            )
-                        )
                     content = render_delivery(delivery, self.bot.notification_site_url)
                     nonce = str(delivery.nonce.int & ((1 << 63) - 1))
                     if build_id is None:
                         await user.send(content, allowed_mentions=discord.AllowedMentions.none(), nonce=nonce)
                     else:
+                        view = discord.ui.LayoutView(timeout=None)
+                        view.add_item(discord.ui.TextDisplay(content))
+                        view.add_item(
+                            discord.ui.ActionRow(
+                                discord.ui.Button(
+                                    label=tr(t"notifications-open-build = Open build").resolve(),
+                                    custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+                                )
+                            )
+                        )
                         await user.send(
-                            content,
                             view=view,
                             allowed_mentions=discord.AllowedMentions.none(),
                             nonce=nonce,

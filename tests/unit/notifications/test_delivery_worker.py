@@ -113,9 +113,14 @@ async def test_delivery_disables_mentions_and_completes_the_claim_once(worker: D
 
     worker.send.assert_awaited_once()
     assert worker.send.await_args is not None
-    assert worker.send.await_args.args == (
+    assert worker.send.await_args.args == ()
+    view = worker.send.await_args.kwargs["view"]
+    assert isinstance(view, discord.ui.LayoutView)
+    text = view.children[0]
+    assert isinstance(text, discord.ui.TextDisplay)
+    assert text.content == (
         "Build #42 was confirmed.\nhttps://example.test/builds/42\n\n"
-        "View your inbox and manage updates with `/notifications`.",
+        "View your inbox and manage updates with `/notifications`."
     )
     assert worker.send.await_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
     assert worker.send.await_args.kwargs["nonce"] == "1229782938247303441"
@@ -230,6 +235,15 @@ async def test_staff_delivery_carries_build_into_routed_button(worker: DeliveryW
     await worker.cog.process_deliveries()
     assert worker.send.await_args is not None
     view = worker.send.await_args.kwargs["view"]
-    button = view.children[0]
+    assert isinstance(view, discord.ui.LayoutView)
+    text = view.children[0]
+    assert isinstance(text, discord.ui.TextDisplay)
+    assert text.content == notification_module.render_delivery(
+        worker.repository.delivery, worker.cog.bot.notification_site_url
+    )
+    row = view.children[1]
+    assert isinstance(row, discord.ui.ActionRow)
+    button = row.children[0]
+    assert isinstance(button, discord.ui.Button)
     assert button.label == "Open build"
     assert button.custom_id == notification_module.BuildBrowseScreen.open_detail.custom_id(build_id=42)
