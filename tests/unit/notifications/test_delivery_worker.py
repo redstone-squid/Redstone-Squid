@@ -1,7 +1,7 @@
 """Discord delivery boundary behavior for durable notifications."""
 
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -223,3 +223,13 @@ async def test_shutdown_does_not_count_as_delivery_failure(worker: DeliveryWorke
     assert scope.cancelled_caught
     assert worker.repository.status == "claimed"
     assert worker.repository.error is None
+
+
+async def test_staff_delivery_carries_build_into_routed_button(worker: DeliveryWorker) -> None:
+    worker.repository.delivery = replace(worker.repository.delivery, kind=NotificationKind.STAFF_BUILD_SUBMITTED)
+    await worker.cog.process_deliveries()
+    assert worker.send.await_args is not None
+    view = worker.send.await_args.kwargs["view"]
+    button = view.children[0]
+    assert button.label == "Open build"
+    assert button.custom_id == notification_module.BuildBrowseScreen.open_detail.custom_id(build_id=42)

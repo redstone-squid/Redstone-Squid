@@ -8,6 +8,7 @@ import discord
 
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.i18n import to_locale_str
 from squid.bot.notification_text import notification_build_id, notification_details
 from squid.bot.notifications_view import NotificationScreen
@@ -104,8 +105,18 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             try:
                 with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
                     user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
+                    view = discord.ui.View(timeout=None)
+                    build_id = notification_build_id(delivery.payload)
+                    if build_id is not None:
+                        view.add_item(
+                            discord.ui.Button(
+                                label=tr(t"notifications-open-build = Open build").resolve(),
+                                custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+                            )
+                        )
                     await user.send(
                         render_delivery(delivery, self.bot.notification_site_url),
+                        view=view if build_id is not None else None,
                         allowed_mentions=discord.AllowedMentions.none(),
                         nonce=str(delivery.nonce.int & ((1 << 63) - 1)),
                     )
