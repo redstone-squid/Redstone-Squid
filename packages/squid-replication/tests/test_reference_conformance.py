@@ -494,6 +494,25 @@ def test_corrupted_wrong_backend_and_wrong_schema_updates_are_rejected(payload: 
         document.import_update(payload)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("id", "not-an-operation-id"),
+        ("value", True),
+        ("tags", [42]),
+        ("undoes", "a:2"),
+    ],
+)
+def test_reference_wire_rejects_invalid_operation_fields(field: str, value: object) -> None:
+    engine = ReferenceEngine("a")
+    encoded = engine.encode_update((engine.operation("increment", "votes", 1),))
+    payload = json.loads(encoded)
+    payload["operations"][0][field] = value
+
+    with pytest.raises(ValueError):
+        engine.prepare_remote(json.dumps(payload).encode())
+
+
 def test_oversized_updates_are_rejected_before_decoding() -> None:
     document = Replica("a").open("project")
 

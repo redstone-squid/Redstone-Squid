@@ -3,13 +3,14 @@
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, cast
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from squid_reactivity.transactions import ConflictDetail
 
 _MAX_UPDATE_BYTES = 1_048_576
 _MAX_OPERATIONS = 10_000
-_KINDS = frozenset({"increment", "add", "remove", "restore"})
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -35,6 +36,75 @@ class ReferenceOperation:
     tags: tuple[OperationId, ...] = ()
     undoes: OperationId | None = None
     """The removal a ``restore`` reverses. Set on that kind alone."""
+
+
+class _OperationWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    id: str
+    kind: Literal["increment", "add", "remove", "restore"]
+    path: str
+    value: int | str
+    tags: list[str]
+    undoes: str | None
+
+    @field_validator("id", "undoes")
+    @classmethod
+    def valid_id(cls, value: str | None) -> str | None:
+        if value is not None:
+            OperationId.decode(value)
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def valid_tags(cls, values: list[str]) -> list[str]:
+        for value in values:
+            OperationId.decode(value)
+        return values
+
+    @model_validator(mode="after")
+    def matching_kind(self) -> _OperationWire:
+        if (self.kind == "increment" and not isinstance(self.value, int)) or (
+            self.kind != "increment" and not isinstance(self.value, str)
+        ):
+            message = "replicated operation value does not match its kind"
+            raise ValueError(message)
+        # Only a restore can name the removal it reverses; this prevents a different
+        # operation kind from cancelling an otherwise unrelated removal.
+        if (self.kind == "restore") != (self.undoes is not None):
+            message = "replicated operation names a reversed removal it does not match"
+            raise ValueError(message)
+        return self
+
+    def to_operation(self) -> ReferenceOperation:
+        return ReferenceOperation(
+            OperationId.decode(self.id),
+            self.kind,
+            self.path,
+            self.value,
+            tuple(OperationId.decode(tag) for tag in self.tags),
+            None if self.undoes is None else OperationId.decode(self.undoes),
+        )
+
+    @classmethod
+    def from_operation(cls, operation: ReferenceOperation) -> _OperationWire:
+        return cls(
+            id=operation.identity.encode(),
+            kind=cast(Literal["increment", "add", "remove", "restore"], operation.kind),
+            path=operation.path,
+            value=operation.value,
+            tags=[tag.encode() for tag in operation.tags],
+            undoes=None if operation.undoes is None else operation.undoes.encode(),
+        )
+
+
+class _EnvelopeWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    backend: Literal["squid-reference-v1"]
+    version: Literal[1] = Field(default=1, alias="schema")
+    kind: Literal["update", "history-token"]
+    operations: list[_OperationWire] = Field(max_length=_MAX_OPERATIONS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,24 +346,18 @@ class ReferenceEngine:
         if len(data) > _MAX_UPDATE_BYTES:
             message = "replicated update exceeds the maximum encoded size"
             raise ValueError(message)
-        payload: Any = json.loads(data)
-        if not isinstance(payload, dict):
-            message = "replicated update must be an object"
-            raise TypeError(message)
-        if payload.get("backend") != self.backend_id or payload.get("schema") != 1 or payload.get("kind") != kind:
+        try:
+            envelope = _EnvelopeWire.model_validate_json(data)
+        except ValidationError as error:
+            message = "replicated update has invalid fields or schema"
+            raise ValueError(message) from error
+        if envelope.kind != kind:
             message = "replicated update has the wrong backend or schema"
-            raise ValueError(message)
-        encoded = payload.get("operations")
-        if not isinstance(encoded, list) or len(encoded) > _MAX_OPERATIONS:
-            message = "replicated update has an invalid operation collection"
             raise ValueError(message)
         operations: list[ReferenceOperation] = []
         identities: dict[OperationId, ReferenceOperation] = {}
-        for item in encoded:
-            if not isinstance(item, dict):
-                message = "replicated operation must be an object"
-                raise TypeError(message)
-            operation = self._decode_operation(item)
+        for item in envelope.operations:
+            operation = item.to_operation()
             existing = identities.get(operation.identity) or self._operations.get(operation.identity)
             if existing is not None and existing != operation:
                 message = f"replicated operation identity {operation.identity.encode()!r} was reused"
@@ -302,58 +366,17 @@ class ReferenceEngine:
             operations.append(operation)
         return tuple(operations)
 
-    def _decode_operation(self, item: dict[str, Any]) -> ReferenceOperation:
-        identity = OperationId.decode(item["id"])
-        kind = item["kind"]
-        path = item["path"]
-        value = item["value"]
-        tags = item.get("tags", ())
-        undoes = item.get("undoes")
-        if (
-            kind not in _KINDS
-            or not isinstance(path, str)
-            or not isinstance(tags, list)
-            or not isinstance(undoes, str | None)
-        ):
-            message = "replicated operation has invalid fields"
-            raise ValueError(message)
-        if (kind == "increment" and not isinstance(value, int)) or (
-            kind in {"add", "remove", "restore"} and not isinstance(value, str)
-        ):
-            message = "replicated operation value does not match its kind"
-            raise ValueError(message)
-        # Naming a reversed removal from any other kind would cancel a removal that nothing
-        # claims to be undoing, so the field and the kind have to agree in both directions.
-        if (kind == "restore") != (undoes is not None):
-            message = "replicated operation names a reversed removal it does not match"
-            raise ValueError(message)
-        return ReferenceOperation(
-            identity,
-            kind,
-            path,
-            value,
-            tuple(OperationId.decode(tag) for tag in tags),
-            None if undoes is None else OperationId.decode(undoes),
+    def _encode_envelope(
+        self, kind: Literal["update", "history-token"], operations: tuple[ReferenceOperation, ...]
+    ) -> bytes:
+        envelope = _EnvelopeWire(
+            backend=cast(Literal["squid-reference-v1"], self.backend_id),
+            kind=kind,
+            operations=[_OperationWire.from_operation(operation) for operation in operations],
         )
-
-    def _encode_envelope(self, kind: str, operations: tuple[ReferenceOperation, ...]) -> bytes:
-        payload = {
-            "backend": self.backend_id,
-            "schema": 1,
-            "kind": kind,
-            "operations": [
-                {
-                    "id": operation.identity.encode(),
-                    "kind": operation.kind,
-                    "path": operation.path,
-                    "value": operation.value,
-                    "tags": [tag.encode() for tag in operation.tags],
-                    "undoes": None if operation.undoes is None else operation.undoes.encode(),
-                }
-                for operation in operations
-            ],
-        }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        return json.dumps(
+            envelope.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":")
+        ).encode()
 
 
 @dataclass(frozen=True, slots=True)

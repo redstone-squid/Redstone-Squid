@@ -10,6 +10,7 @@ LoroTextEngine is a separate, standalone adapter used for backend comparison tes
 """
 
 import base64
+import binascii
 import json
 import secrets
 import uuid
@@ -17,7 +18,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import version as distribution_version
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
+
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, field_validator
 
 from squid_reactivity.transactions import ConflictDetail
 
@@ -227,6 +230,62 @@ class LoroDocumentToken:
     operations: tuple[LoroOperation, ...]
     shallow_root: bytes
     backend_version: str
+
+
+class _LoroOperationWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    id: str
+    kind: str
+    path: str
+    data: dict[str, JsonValue]
+
+    @field_validator("id")
+    @classmethod
+    def valid_identity(cls, value: str) -> str:
+        uuid.UUID(value)
+        return value
+
+    @field_validator("path")
+    @classmethod
+    def bounded_path(cls, value: str) -> str:
+        if len(value.encode()) > _MAX_PATH_BYTES:
+            message = "Loro token operation path exceeds the encoded limit"
+            raise ValueError(message)
+        return value
+
+    @classmethod
+    def from_operation(cls, operation: LoroOperation) -> _LoroOperationWire:
+        return cls(
+            id=operation.identity,
+            kind=operation.kind,
+            path=operation.path,
+            data={key: _json_value(item) for key, item in operation.data.items()},
+        )
+
+    def to_operation(self) -> LoroOperation:
+        return LoroOperation(self.id, self.kind, self.path, _immutable_json_object(self.data))
+
+
+class _LoroTokenWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    after: str
+    before: str
+    operations: list[_LoroOperationWire] = Field(max_length=_MAX_OPERATIONS)
+    backend_version: str
+    version: Literal[1] = Field(default=1, alias="schema")
+    shallow_root: str
+
+    @field_validator("after", "before", "shallow_root")
+    @classmethod
+    def valid_frontier(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except binascii.Error as error:
+            message = "Loro token contains corrupt frontier data"
+            raise ValueError(message) from error
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -1228,23 +1287,16 @@ class LoroEngine:
         if not isinstance(token, LoroDocumentToken):
             message = "Loro token has the wrong backend type"
             raise TypeError(message)
-        payload = {
-            "after": base64.b64encode(token.after).decode(),
-            "before": base64.b64encode(token.before).decode(),
-            "operations": [
-                {
-                    "data": {key: _json_value(item) for key, item in operation.data.items()},
-                    "id": operation.identity,
-                    "kind": operation.kind,
-                    "path": operation.path,
-                }
-                for operation in token.operations
-            ],
-            "backend_version": token.backend_version,
-            "schema": 1,
-            "shallow_root": base64.b64encode(token.shallow_root).decode(),
-        }
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        envelope = _LoroTokenWire(
+            after=base64.b64encode(token.after).decode(),
+            before=base64.b64encode(token.before).decode(),
+            operations=[_LoroOperationWire.from_operation(operation) for operation in token.operations],
+            backend_version=token.backend_version,
+            shallow_root=base64.b64encode(token.shallow_root).decode(),
+        )
+        encoded = json.dumps(
+            envelope.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":")
+        ).encode()
         if len(encoded) > _MAX_UPDATE_BYTES:
             message = "Loro history token exceeds the maximum encoded size"
             raise ValueError(message)
@@ -1255,49 +1307,20 @@ class LoroEngine:
             message = "Loro history token exceeds the maximum encoded size"
             raise ValueError(message)
         try:
-            payload: Any = json.loads(token)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            message = "Loro token is corrupt"
+            envelope = _LoroTokenWire.model_validate_json(token)
+        except ValidationError as error:
+            message = "Loro token has an unsupported or corrupt schema"
             raise ReplicationCorruptUpdateError(message) from error
-        if not isinstance(payload, dict) or payload.get("schema") != 1:
-            message = "Loro token has an unsupported schema"
-            raise ValueError(message)
-        if not isinstance(payload.get("backend_version"), str):
-            message = "Loro token has an invalid backend version"
-            raise TypeError(message)
-        for field in ("before", "after", "shallow_root"):
-            if not isinstance(payload.get(field), str):
-                message = f"Loro token has an invalid {field} frontier"
-                raise TypeError(message)
-        operations = payload.get("operations")
-        if not isinstance(operations, list) or len(operations) > _MAX_OPERATIONS:
-            message = "Loro token has invalid operations"
-            raise TypeError(message)
-        decoded: list[LoroOperation] = []
-        for item in operations:
-            if not isinstance(item, dict) or not isinstance(item.get("data"), dict):
-                message = "Loro token has an invalid operation"
-                raise TypeError(message)
-            identity = item.get("id")
-            kind = item.get("kind")
-            path = item.get("path")
-            if not isinstance(identity, str) or not isinstance(kind, str) or not isinstance(path, str):
-                message = "Loro token operation fields have invalid types"
-                raise TypeError(message)
-            uuid.UUID(identity)
-            if len(path.encode()) > _MAX_PATH_BYTES:
-                message = "Loro token operation path exceeds the encoded limit"
-                raise ValueError(message)
-            decoded.append(LoroOperation(identity, kind, path, _immutable_json_object(item["data"])))
+        decoded = tuple(operation.to_operation() for operation in envelope.operations)
         try:
             decoded_token = LoroDocumentToken(
-                base64.b64decode(payload["before"], validate=True),
-                base64.b64decode(payload["after"], validate=True),
-                tuple(decoded),
-                base64.b64decode(payload["shallow_root"], validate=True),
-                payload["backend_version"],
+                base64.b64decode(envelope.before, validate=True),
+                base64.b64decode(envelope.after, validate=True),
+                decoded,
+                base64.b64decode(envelope.shallow_root, validate=True),
+                envelope.backend_version,
             )
-        except (ValueError, TypeError) as error:
+        except (ValueError, TypeError, binascii.Error) as error:
             message = "Loro token contains corrupt frontier data"
             raise ReplicationCorruptUpdateError(message) from error
         if not _token_operations_valid(decoded_token.operations):

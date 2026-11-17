@@ -1,5 +1,6 @@
 """Production-adapter coverage over the pinned Loro binding."""
 
+import json
 import uuid
 from collections.abc import Callable
 from typing import Any, cast
@@ -16,6 +17,7 @@ from squid_replication import (
     ReplicationChangeToken,
     ReplicationCorruptUpdateError,
 )
+from squid_replication.backends.loro import LoroDocumentToken
 from squid_ui.runtime import History, HistoryResultStatus
 
 
@@ -46,6 +48,26 @@ def _mutate_outer(value: Any) -> None:
 
 def _mutate_inner(value: Any) -> None:
     value["items"][1]["enabled"] = False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schema", 2),
+        ("backend_version", 1),
+        ("before", "not-base64!"),
+        ("operations", [{}]),
+    ],
+)
+def test_loro_history_token_rejects_malformed_wire_fields(field: str, value: object) -> None:
+    engine = LoroBackend(peer_id=1).open_engine("a", "project")
+    frontier = engine.version()
+    token = LoroDocumentToken(frontier, frontier, (), frontier, engine.backend_version)
+    payload = json.loads(engine.encode_token(token))
+    payload[field] = value
+
+    with pytest.raises(ReplicationCorruptUpdateError):
+        engine.decode_token(json.dumps(payload).encode())
 
 
 def test_one_action_spans_every_public_container_and_undoes_exactly() -> None:
