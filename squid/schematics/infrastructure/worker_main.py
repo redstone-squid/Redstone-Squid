@@ -8,7 +8,6 @@ apply POSIX resource limits; unsupported or rejected limits do not prevent start
 """
 
 import faulthandler
-import json
 import logging
 import os
 import sys
@@ -34,6 +33,7 @@ from squid.schematics.errors import (
 )
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import ErrorKind, Frame, Operation
+from squid.schematics.infrastructure.worker_contracts import WorkerLimits
 
 logger = logging.getLogger(__name__)
 
@@ -296,14 +296,8 @@ def main() -> None:
     stderr_handler = logging.getHandlerByName("stderr")
     if stderr_handler is not None:
         stderr_handler.addFilter(_request_context)
-    limits = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-    apply_guardrails(
-        {
-            "memory_bytes": int(limits.get("memory_bytes", 4 * 1024 * 1024 * 1024)),
-            "cpu_seconds": int(limits.get("cpu_seconds", 900)),
-            "file_size_bytes": int(limits.get("file_size_bytes", 256 * 1024 * 1024)),
-        }
-    )
+    limits = WorkerLimits.model_validate_json(sys.argv[1]) if len(sys.argv) > 1 else WorkerLimits()
+    apply_guardrails(limits.model_dump())
     # Not "worker": that is the supervising database worker, and sharing a service.name makes
     # a schematic child's spans and metrics indistinguishable from its parent's.
     observability = configure_observability(load_worker_observability_config(), service_name="schematic-worker")

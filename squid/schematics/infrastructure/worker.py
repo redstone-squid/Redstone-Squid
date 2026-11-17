@@ -20,7 +20,6 @@ import base64
 import contextlib
 import dataclasses
 import functools
-import json
 import logging
 import os
 import signal
@@ -34,6 +33,7 @@ from typing import Any, Self, cast
 
 import anyio
 from anyio.abc import TaskGroup
+from pydantic import ValidationError
 
 from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
@@ -61,6 +61,7 @@ from squid.schematics.errors import (
 )
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed, Operation
+from squid.schematics.infrastructure.worker_contracts import WorkerLimits, WorkerLogRecord
 
 logger = logging.getLogger(__name__)
 
@@ -168,13 +169,11 @@ class _Worker:
         if restart_delay > 0:
             await asyncio.sleep(restart_delay)
 
-        limits = json.dumps(
-            {
-                "memory_bytes": self._config.worker_memory_limit_bytes,
-                "cpu_seconds": self._config.worker_cpu_seconds,
-                "file_size_bytes": self._config.worker_file_size_limit_bytes,
-            }
-        )
+        limits = WorkerLimits(
+            memory_bytes=self._config.worker_memory_limit_bytes,
+            cpu_seconds=self._config.worker_cpu_seconds,
+            file_size_bytes=self._config.worker_file_size_limit_bytes,
+        ).model_dump_json()
         # A new session makes the child a process-group leader, so a timeout can reap the
         # engine's own thread pools and helper processes along with it.
         self._process = await asyncio.create_subprocess_exec(
@@ -312,44 +311,32 @@ def _emit_child_record(record: logging.LogRecord) -> None:
 def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
     """Rebuild one structured child log record, or reject an unstructured line."""
     try:
-        payload = json.loads(line)
-    except json.JSONDecodeError:
+        payload = WorkerLogRecord.model_validate_json(line)
+    except ValidationError:
         return None
-    if not isinstance(payload, dict):
-        return None
-
-    name = payload.get("name")
-    level_name = payload.get("levelname")
-    message = payload.get("message")
-    if not isinstance(name, str) or not isinstance(level_name, str) or not isinstance(message, str):
-        return None
-    level = logging.getLevelNamesMapping().get(level_name.upper())
+    level = logging.getLevelNamesMapping().get(payload.levelname.upper())
     if level is None:
         return None
 
-    pathname = payload.get("pathname")
-    lineno = payload.get("lineno")
     record = logging.LogRecord(
-        name=name,
+        name=payload.name,
         level=level,
-        pathname=pathname if isinstance(pathname, str) else "",
-        lineno=lineno if isinstance(lineno, int) else 0,
-        msg=message,
+        pathname=payload.pathname,
+        lineno=payload.lineno,
+        msg=payload.message,
         args=(),
         exc_info=None,
     )
-    created = payload.get("created")
-    if isinstance(created, int | float):
-        record.created = float(created)
+    if payload.created is not None:
+        record.created = float(payload.created)
         record.msecs = (record.created - int(record.created)) * 1000
 
-    exception_text = payload.get("exc_info")
-    if isinstance(exception_text, str):
-        record.exc_text = exception_text
+    if payload.exc_info is not None:
+        record.exc_text = payload.exc_info
 
     reserved = record.__dict__.keys()
-    for key, value in payload.items():
-        if key not in reserved and key != "exc_info":
+    for key, value in (payload.model_extra or {}).items():
+        if key not in reserved:
             setattr(record, key, value)
     record.worker_pid = process_id
     return record

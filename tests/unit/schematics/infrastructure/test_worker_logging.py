@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import anyio
 import pytest
+from pydantic import ValidationError
 from pytest_mock import MockerFixture
 from pythonjsonlogger.json import JsonFormatter
 
@@ -36,6 +37,7 @@ from squid.schematics.infrastructure.worker import (
     _worker_log_record,
     current_schematic_job_id,
 )
+from squid.schematics.infrastructure.worker_contracts import WorkerLimits
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import unconfigured
 
@@ -80,6 +82,15 @@ def test_worker_log_record_rejects_native_and_malformed_output() -> None:
     assert _worker_log_record("thread 'rayon-1' panicked at src/lib.rs:42", 2718) is None
     assert _worker_log_record(json.dumps(["not", "a", "record"]), 2718) is None
     assert _worker_log_record(json.dumps({"message": "missing identity"}), 2718) is None
+    assert _worker_log_record(json.dumps({"name": "child", "levelname": 20, "message": "bad level"}), 2718) is None
+
+
+def test_worker_limits_require_positive_integer_ceiling_fields() -> None:
+    limits = WorkerLimits(memory_bytes=1024, cpu_seconds=10, file_size_bytes=2048)
+    assert WorkerLimits.model_validate_json(limits.model_dump_json()) == limits
+
+    with pytest.raises(ValidationError):
+        WorkerLimits.model_validate_json('{"memory_bytes":true,"cpu_seconds":10,"file_size_bytes":2048}')
 
 
 def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) -> None:
