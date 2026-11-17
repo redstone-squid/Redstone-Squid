@@ -19949,8 +19949,11 @@
           },
           "calculator_version": {
             "type": "string",
-            "const": "door-point-1",
-            "default": "door-point-1"
+            "enum": [
+              "door-point-1",
+              "door-point-2"
+            ],
+            "default": "door-point-2"
           },
           "evaluation": {
             "$ref": "#/components/schemas/LiveDoorRecord"
@@ -22967,7 +22970,7 @@
           "unmapped"
         ],
         "title": "PointStatus",
-        "description": "Whether one configuration exists at the evaluated opening.\n\nUNRESOLVED means the source makes a claim that does not settle this size:\nthe size lies beyond an unknown bound, or the opening expressions use syntax\nthe normalizer cannot invert. UNMAPPED means the opening width or height is absent,\nso the source never says which sizes the configuration has. An unresolved\nconfiguration might hold a record and blocks an official result; an unmapped\none makes no claim and cannot compete anywhere.\n"
+        "description": "Whether one configuration exists at the evaluated opening.\n\nUNRESOLVED means the source makes a claim that does not settle this size:\nthe size lies beyond an unknown bound, or the opening expressions use syntax\nthe normalizer cannot invert. UNMAPPED means the opening width or height is absent,\nso the source never says which sizes the configuration has. Only SUPPORTED\nproves membership at this opening; callers decide how to handle uncertainty.\n"
       },
       "PollScope": {
         "type": "string",
