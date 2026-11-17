@@ -3,6 +3,7 @@
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from hashlib import sha256
 from types import MappingProxyType
 
@@ -47,16 +48,47 @@ class CompositionRejectedError(LayoutError):
         super().__init__(f"explicit composition rejected: {violations!r}")
 
 
+class CompositionMode(StrEnum):
+    IMPLICIT = "implicit"
+    AUTOMATIC = "automatic"
+    FIXED = "fixed"
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedComposition:
+    """The execution mode and work allowance after input preparation."""
+
+    mode: CompositionMode
+    work_limit: int
+
+    @classmethod
+    def for_options[BodyT: scene.Body, RenderTargetT, AdapterT](
+        cls,
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions | None,
+    ) -> ResolvedComposition:
+        if options is None:
+            return cls(CompositionMode.FIXED, request.search_budget)
+        if options.automatic:
+            mode = CompositionMode.IMPLICIT if request.composition is None else CompositionMode.AUTOMATIC
+            return cls(mode, options.work_limit)
+        return cls(CompositionMode.FIXED, request.search_budget)
+
+    @property
+    def automatic(self) -> bool:
+        return self.mode is not CompositionMode.FIXED
+
+
 def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
-    work_limit: int | None = None,
+    resolved: ResolvedComposition,
 ) -> PlanningContext:
     effective = request.target.reserve(request.reservation)
     nav = request.nav
-    if nav is None and request.composition is None:
+    if nav is None and resolved.mode is CompositionMode.IMPLICIT:
         nav = request.target.dialect.navigation
     return PlanningContext(
-        WorkBudget(request.search_budget if work_limit is None else work_limit),
+        WorkBudget(resolved.work_limit),
         request.localization,
         request.strict,
         request.palette,
@@ -64,7 +96,10 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         effective.capacities,
         request.chrome,
         PagerNav(nav, request.presentation, staged=True) if nav is not None else None,
-        request.composition is None or request.session is not None or nav is not None or request.positions is not None,
+        resolved.mode is CompositionMode.IMPLICIT
+        or request.session is not None
+        or nav is not None
+        or request.positions is not None,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
         extensions=request.target.extensions,
@@ -80,8 +115,9 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     options: CompositionOptions | None = None,
     cache: PlanCache | None = None,
 ) -> PlanResult[BodyT]:
-    automatic = options is not None and options.automatic
-    context = _context(request, options.work_limit if options is not None and automatic else None)
+    resolved = ResolvedComposition.for_options(request, options)
+    automatic = resolved.automatic
+    context = _context(request, resolved)
     document = as_document(rendered)
     context = replace(context, assets=document.assets)
     if not automatic and (document.assets or request.positions or request.nav is not None):
@@ -308,7 +344,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
     document: Document[RenderTargetT]
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
     options: CompositionOptions
-    exact_replay: bool
+    resolved: ResolvedComposition
 
     @classmethod
     def prepare(
@@ -318,7 +354,6 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         options: CompositionOptions | None,
     ) -> CompositionPlan[RenderTargetT, AdapterT, BodyT]:
         document = as_document(rendered)
-        implicit = options is None
         if options is None:
             prepared = prepare_composition(document, request)
             if prepared.limitation is not None:
@@ -342,7 +377,8 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
                     else request.search_budget
                 ),
             )
-        return cls(document, request, options, implicit)
+        resolved = ResolvedComposition.for_options(request, options)
+        return cls(document, request, options, resolved)
 
     def execute(
         self,
@@ -356,7 +392,7 @@ class CompositionPlan[RenderTargetT, AdapterT, BodyT: scene.Body]:
         if has_routed_page(rendered):
             cache = None
             memo = None
-        if not self.exact_replay:
+        if self.resolved.mode is not CompositionMode.IMPLICIT:
             memo = None
         key = request.exact_key()
         if memo is not None and (exact := memo.replay(rendered, key, request.presentation)) is not None:
