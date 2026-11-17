@@ -4,23 +4,24 @@ Script discord.py HTTP responses to check how interactive lookups and background
 weight refreshes distinguish absent members from unavailable membership information.
 """
 
+import asyncio
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import aiohttp
+import anyio
 import pytest
 from aiohttp import ClientResponse
 from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFound, RateLimited
 from discord.http import HTTPClient, Route
 
 from squid.core.actors import Actor
+from squid.discord_rest import RestOnlyClient, rebased_url, rest_client
 from squid.permissions.domain import Decision, PermissionCheck, Reason
 from squid.voting.domain import VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 from squid.voting.infrastructure.discord_rest import (
     DiscordRestActorResolver,
-    RestOnlyClient,
-    rebased_url,
-    rest_client,
 )
 
 
@@ -58,8 +59,11 @@ class StubHTTPClient:
 class FakePermissions:
     """Grants the delete-log node to holders of role 11, as a role grant would."""
 
+    def __init__(self) -> None:
+        self.allowed = True
+
     async def check(self, actor: Actor, *nodes: str) -> PermissionCheck:
-        held = "vote.log_delete.cast" if 11 in actor.discord_role_ids else ""
+        held = "vote.log_delete.cast" if self.allowed and 11 in actor.discord_role_ids else ""
         return PermissionCheck(tuple(Decision(node, allowed=node == held, reason=Reason.DEFAULT) for node in nodes))
 
 
@@ -295,3 +299,72 @@ async def test_resolve_reports_an_account_without_discord_as_weightless() -> Non
 
     assert actor is not None
     assert actor.discord_role_ids == frozenset()
+
+
+async def test_concurrent_first_requests_wait_for_completed_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    second_started = asyncio.Event()
+    logins = 0
+    members: list[str] = []
+
+    async def request(http: HTTPClient, route: Route, **kwargs: Any) -> Any:
+        nonlocal logins
+        if route.path == "/users/@me":
+            logins += 1
+            started.set()
+            await release.wait()
+            return {"id": "99"}
+        members.append(route.url)
+        return {"roles": []}
+
+    monkeypatch.setattr(HTTPClient, "request", request)
+    client = rest_client("token")
+
+    async def fetch(index: int) -> None:
+        if index == 2:
+            second_started.set()
+        await client.http.get_member(10, 7)
+
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(fetch, 1)
+            await started.wait()
+            tasks.start_soon(fetch, 2)
+            await second_started.wait()
+            assert not members
+            release.set()
+        assert logins == 1
+        assert len(members) == 2
+    finally:
+        await client.close()
+
+
+async def test_cancelled_login_can_be_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests = RecordedRequests(asyncio.CancelledError())
+    monkeypatch.setattr(HTTPClient, "request", requests.request)
+    client = rest_client("token")
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await client.http.get_member(10, 7)
+        assert await client.http.get_member(10, 7) == {"roles": []}
+    finally:
+        await client.close()
+
+
+async def test_cached_membership_does_not_cache_account_or_permission_decisions() -> None:
+    http = StubHTTPClient({"roles": ["11"]})
+    permissions = FakePermissions()
+    identities = FakeDiscordIds()
+    identities.discord_id_for = AsyncMock(return_value=7)
+    resolver = resolver_for(http, permissions=permissions, discord_ids=identities)
+    first = await resolver.member(1, 10, VoteKind.BUILD)
+    permissions.allowed = False
+    second = await resolver.member(2, 10, VoteKind.BUILD)
+    assert first is not None
+    assert first.account_id == 1
+    assert first.capabilities
+    assert second is not None
+    assert second.account_id == 2
+    assert not second.capabilities
+    assert http.calls == [(10, 7)]

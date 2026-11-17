@@ -54,6 +54,7 @@ from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
+from squid.discord_rest import RestOnlyClient, rest_client
 from squid.edits.application import EditExecutor
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
@@ -179,7 +180,7 @@ from squid.voting.application import VoteService
 from squid.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
 from squid.voting.application.recount import BallotRecounter
 from squid.voting.infrastructure.discord_cards import DiscordVoteCards
-from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver, RestOnlyClient, rest_client
+from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
