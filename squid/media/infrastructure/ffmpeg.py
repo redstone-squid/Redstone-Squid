@@ -3,20 +3,20 @@
 import asyncio
 import contextlib
 import hashlib
-import json
 import os
 import shutil
 import signal
 import tempfile
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from anyio import CancelScope, fail_after
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 try:
     import resource
@@ -48,6 +48,76 @@ _NETWORK_PROTOCOLS = "http,https,tcp,tls,udp,rtmp,rtmps,rtp,rtsp,sftp,ftp"
 _INPUT_PROTOCOLS = "file,pipe"
 _MAX_PROBE_OUTPUT_BYTES = 1024 * 1024
 _TIMESTAMP_TOLERANCE = Decimal("0.001")
+
+
+class _FfprobeJson(BaseModel):
+    # ffprobe owns these shapes and may add fields in later releases.
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+
+class _ProbeSideDataJson(_FfprobeJson):
+    rotation: str | int | float | None = None
+
+
+class _ProbeStreamJson(_FfprobeJson):
+    codec_type: str
+    codec_name: str | None = None
+    width: int | str | None = None
+    height: int | str | None = None
+    avg_frame_rate: str | None = None
+    r_frame_rate: str | None = None
+    duration: str | None = None
+    nb_frames: str | int | None = None
+    side_data_list: tuple[_ProbeSideDataJson, ...] = ()
+
+
+class _ProbeFormatJson(_FfprobeJson):
+    format_name: str = "unknown"
+    duration: str | None = None
+
+
+class _ProbeJson(_FfprobeJson):
+    streams: tuple[_ProbeStreamJson, ...]
+    format: _ProbeFormatJson = _ProbeFormatJson()
+
+
+class _BrandTagsJson(_FfprobeJson):
+    major_brand: str = ""
+
+
+class _BrandFormatJson(_FfprobeJson):
+    tags: _BrandTagsJson = _BrandTagsJson()
+
+
+class _BrandProbeJson(_FfprobeJson):
+    format: _BrandFormatJson = _BrandFormatJson()
+
+
+class _ColorStreamJson(_FfprobeJson):
+    codec_type: str
+    color_space: str | None = None
+    color_primaries: str | None = None
+    color_transfer: str | None = None
+
+
+class _ColorProbeJson(_FfprobeJson):
+    streams: tuple[_ColorStreamJson, ...]
+
+
+class _FrameTimestampJson(_FfprobeJson):
+    best_effort_timestamp_time: str
+
+
+class _FrameTimestampsJson(_FfprobeJson):
+    frames: tuple[_FrameTimestampJson, ...]
+
+
+class _FrameCountStreamJson(_FfprobeJson):
+    nb_read_frames: str | int | None = None
+
+
+class _FrameCountJson(_FfprobeJson):
+    streams: tuple[_FrameCountStreamJson, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,8 +345,10 @@ class FfmpegMediaNormalizer:
         assert request.poster_path is not None
         containers = set(probe.container_names)
         if "mp4" in containers:
-            metadata = json.loads(await self._probe_output(request.source_path, "format_tags=major_brand"))
-            brand = metadata.get("format", {}).get("tags", {}).get("major_brand", "")
+            metadata = _BrandProbeJson.model_validate_json(
+                await self._probe_output(request.source_path, "format_tags=major_brand")
+            )
+            brand = metadata.format.tags.major_brand
             content_type = "video/quicktime" if brand.strip() == "qt" else "video/mp4"
         elif "webm" in containers:
             content_type = "video/webm" if probe.video_codec in {"vp8", "vp9", "av1"} else "video/x-matroska"
@@ -380,10 +452,10 @@ class FfmpegMediaNormalizer:
     async def _video_color_arguments(self, source_path: Path, probe: MediaProbe) -> tuple[str, ...]:
         if probe.video_codec != "h264":
             return ()
-        data = json.loads(
+        data = _ColorProbeJson.model_validate_json(
             await self._probe_output(source_path, "stream=codec_type,color_space,color_primaries,color_transfer")
         )
-        stream = next(stream for stream in data["streams"] if stream["codec_type"] == "video")
+        stream = next(stream for stream in data.streams if stream.codec_type == "video")
         replacements = [
             f"{option}=2"
             for field, option in (
@@ -391,7 +463,7 @@ class FfmpegMediaNormalizer:
                 ("color_primaries", "colour_primaries"),
                 ("color_transfer", "transfer_characteristics"),
             )
-            if stream.get(field) == "reserved"
+            if getattr(stream, field) == "reserved"
         ]
         # Reserved H.264 VUI values break FFmpeg's color conversion. Mark only
         # those fields unspecified before decoding, preserving valid color tags.
@@ -553,7 +625,8 @@ class FfmpegMediaNormalizer:
             capture_stdout=True,
         )
         try:
-            timestamps = tuple(Decimal(frame["best_effort_timestamp_time"]) for frame in json.loads(stdout)["frames"])
+            payload = _FrameTimestampsJson.model_validate_json(stdout)
+            timestamps = tuple(Decimal(frame.best_effort_timestamp_time) for frame in payload.frames)
             if (
                 timestamps
                 and all(value.is_finite() for value in timestamps)
@@ -562,7 +635,7 @@ class FfmpegMediaNormalizer:
                 and all(later >= earlier - _TIMESTAMP_TOLERANCE for earlier, later in pairwise(timestamps))
             ):
                 return timestamps
-        except KeyError, TypeError, ValueError, InvalidOperation, json.JSONDecodeError:
+        except TypeError, ValueError, InvalidOperation, ValidationError:
             pass
         raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="frame_timestamps")
 
@@ -594,10 +667,11 @@ class FfmpegMediaNormalizer:
             capture_stdout=True,
         )
         try:
-            frame_count = _optional_non_negative_int(json.loads(stdout)["streams"][0]["nb_read_frames"])
+            payload = _FrameCountJson.model_validate_json(stdout)
+            frame_count = _optional_non_negative_int(payload.streams[0].nb_read_frames)
             if frame_count is not None and frame_count > 0:
                 return frame_count
-        except KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError:
+        except IndexError, TypeError, ValueError, ValidationError:
             pass
         raise MediaProcessingError(MediaFailureReason.OUTPUT_INVALID, operation="count_frames")
 
@@ -664,21 +738,19 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
     required metadata raises InvalidMediaError; the caller bounds the input size.
     """
     try:
-        payload = cast(Mapping[str, Any], json.loads(data))
-        streams = cast(list[Mapping[str, Any]], payload["streams"])
-        format_data = cast(Mapping[str, Any], payload.get("format", {}))
-        video = next(stream for stream in streams if stream.get("codec_type") == "video")
-        audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
+        payload = _ProbeJson.model_validate_json(data)
+        video = next(stream for stream in payload.streams if stream.codec_type == "video")
+        audio = next((stream for stream in payload.streams if stream.codec_type == "audio"), None)
         width, height = _display_dimensions(video)
         frame_rate = _frame_rate(video)
-        duration_raw = video.get("duration")
+        duration_raw = video.duration
         if duration_raw in {None, "N/A"}:
-            duration_raw = format_data.get("duration")
+            duration_raw = payload.format.duration
         duration = _duration_milliseconds(duration_raw)
-        frame_count = _optional_non_negative_int(video.get("nb_frames"))
-        video_codec = _short_string(video["codec_name"])
-        audio_codec = _short_string(audio["codec_name"]) if audio is not None else None
-        container = _short_string(format_data.get("format_name", "unknown"))
+        frame_count = _optional_non_negative_int(video.nb_frames)
+        video_codec = _short_string(video.codec_name)
+        audio_codec = _short_string(audio.codec_name) if audio is not None else None
+        container = _short_string(payload.format.format_name)
     except (
         AttributeError,
         KeyError,
@@ -686,7 +758,7 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
         TypeError,
         ValueError,
         InvalidOperation,
-        json.JSONDecodeError,
+        ValidationError,
     ) as exc:
         raise InvalidMediaError(MediaFailureReason.PROBE_INVALID) from exc
     return MediaProbe(
@@ -702,10 +774,10 @@ def parse_ffprobe_output(data: bytes) -> MediaProbe:
     )
 
 
-def _display_dimensions(video: Mapping[str, Any]) -> tuple[int, int]:
-    width, height = _positive_int(video["width"]), _positive_int(video["height"])
+def _display_dimensions(video: _ProbeStreamJson) -> tuple[int, int]:
+    width, height = _positive_int(video.width), _positive_int(video.height)
     rotation = next(
-        (Decimal(str(side["rotation"])) for side in video.get("side_data_list", []) if "rotation" in side),
+        (Decimal(str(side.rotation)) for side in video.side_data_list if side.rotation is not None),
         Decimal(0),
     )
     if not rotation.is_finite():
@@ -876,9 +948,9 @@ def _artifact(path: Path, content_type: str, probe: MediaProbe, *, byte_size: in
     )
 
 
-def _frame_rate(stream: Mapping[str, Any]) -> Fraction:
+def _frame_rate(stream: _ProbeStreamJson) -> Fraction:
     for key in ("avg_frame_rate", "r_frame_rate"):
-        raw = stream.get(key)
+        raw = getattr(stream, key)
         if not isinstance(raw, str) or len(raw) > 32:
             continue
         try:

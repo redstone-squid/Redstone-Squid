@@ -19,14 +19,15 @@ import os
 import stat
 import tempfile
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import timedelta
 from functools import partial
 from pathlib import Path, PurePosixPath
-from typing import Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID, uuid4
 
 import anyio.to_thread
+from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -39,8 +40,8 @@ from squid.media.domain import (
     MediaArtifact,
     MediaKind,
     MediaLimits,
+    MediaNormalizationAction,
     MediaNormalizationReport,
-    MediaProbe,
 )
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
@@ -947,42 +948,50 @@ def _read_verified(path: Path, expected: MediaArtifact, limit: int) -> bytes:
     return data
 
 
+type _NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
+type _PositiveInt = Annotated[int, Field(strict=True, ge=1)]
+
+
+class _MediaReportJson(BaseModel):
+    """Versioned JSON stored alongside normalized media artifacts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    class Probe(BaseModel):
+        model_config = ConfigDict(extra="forbid", frozen=True)
+
+        container_names: tuple[str, ...]
+        video_codec: str
+        width: _PositiveInt
+        height: _PositiveInt
+        frame_rate_numerator: _NonnegativeInt
+        frame_rate_denominator: _PositiveInt
+        duration_milliseconds: _NonnegativeInt | None
+        audio_codec: str | None
+        frame_count: _NonnegativeInt | None
+
+    class Artifact(BaseModel):
+        model_config = ConfigDict(extra="forbid", frozen=True)
+
+        content_type: str
+        byte_size: _PositiveInt
+        sha256: str
+        width: _PositiveInt
+        height: _PositiveInt
+
+    schema_version: Literal[1] = 1
+    kind: MediaKind
+    source_bytes: _NonnegativeInt
+    input_probe: Probe
+    output_probe: Probe
+    output: Artifact
+    poster: Artifact | None
+    actions: tuple[MediaNormalizationAction, ...]
+
+
 def _encode_report(report: MediaNormalizationReport) -> bytes:
-    payload = {
-        "schema_version": 1,
-        "kind": report.kind.value,
-        "source_bytes": report.source_bytes,
-        "input_probe": _probe_payload(report.input_probe),
-        "output_probe": _probe_payload(report.output_probe),
-        "output": _artifact_payload(report.output),
-        "poster": None if report.poster is None else _artifact_payload(report.poster),
-        "actions": [action.value for action in report.actions],
-    }
+    payload = _MediaReportJson.model_validate(asdict(report)).model_dump(mode="json")
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
-
-
-def _probe_payload(probe: MediaProbe) -> dict[str, object]:
-    return {
-        "container_names": list(probe.container_names),
-        "video_codec": probe.video_codec,
-        "width": probe.width,
-        "height": probe.height,
-        "frame_rate_numerator": probe.frame_rate_numerator,
-        "frame_rate_denominator": probe.frame_rate_denominator,
-        "duration_milliseconds": probe.duration_milliseconds,
-        "audio_codec": probe.audio_codec,
-        "frame_count": probe.frame_count,
-    }
-
-
-def _artifact_payload(artifact: MediaArtifact) -> dict[str, object]:
-    return {
-        "content_type": artifact.content_type,
-        "byte_size": artifact.byte_size,
-        "sha256": artifact.sha256,
-        "width": artifact.width,
-        "height": artifact.height,
-    }
 
 
 def _require_sha256(value: str) -> None:
