@@ -386,12 +386,13 @@ def classify_campaign(supervision: SupervisionResult, events: EventSummary | Non
 
 async def verify_live_contract(
     running: RunningApi,
-    canonical_path: Path,
+    committed_contract_path: Path,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
     """Compare the live and committed schemas as parsed JSON.
 
+    Matching the committed contract ensures generated cases exercise the reviewed API.
     The caller must attest the stack first. This validates the loopback URL but
     does not repeat ownership checks; formatting and object-key order may differ.
     """
@@ -407,7 +408,7 @@ async def verify_live_contract(
         raise ContractDriftError(msg)
     try:
         live = response.json()
-        canonical = json.loads(canonical_path.read_bytes())
+        canonical = json.loads(committed_contract_path.read_bytes())
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         msg = "OpenAPI preflight could not parse the live and canonical documents."
         raise ContractDriftError(msg) from error
@@ -420,7 +421,7 @@ async def run_campaign(
     running: RunningApi,
     *,
     artifact_root: Path,
-    canonical_path: Path,
+    committed_contract_path: Path,
     profile: CampaignProfile = LOCAL_SMOKE,
     persona: Persona = ANONYMOUS,
     seed: int = 0,
@@ -435,7 +436,7 @@ async def run_campaign(
     try:
         await running.attest()
         await running.reset()
-        await verify_live_contract(running, canonical_path)
+        await verify_live_contract(running, committed_contract_path)
     except UnsafeEnvironmentError:
         return CampaignOutcome(CampaignState.INFRASTRUCTURE_ERROR, paths)
     except httpx.HTTPError:

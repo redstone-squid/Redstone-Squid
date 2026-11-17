@@ -10,7 +10,7 @@ from tests.fuzz.api.docker_stack import docker_api_environment
 from tests.fuzz.api.schemathesis import LOCAL_SMOKE, CampaignOutcome, CampaignState, run_campaign
 
 _ROOT = Path(__file__).resolve().parents[1]
-_CANONICAL_CONTRACT = _ROOT / "contracts" / "openapi.json"
+_COMMITTED_CONTRACT = _ROOT / "contracts" / "openapi.json"
 _ARTIFACT_ROOT = _ROOT / ".fuzz" / "api"
 
 
@@ -29,7 +29,7 @@ async def run_smoke(*, seed: int) -> CampaignOutcome:
         return await run_campaign(
             running,
             artifact_root=_ARTIFACT_ROOT,
-            canonical_path=_CANONICAL_CONTRACT,
+            committed_contract_path=_COMMITTED_CONTRACT,
             profile=LOCAL_SMOKE,
             seed=seed,
         )

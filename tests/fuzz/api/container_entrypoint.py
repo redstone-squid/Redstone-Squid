@@ -24,8 +24,10 @@ def api_environment(source: Mapping[str, str]) -> dict[str, str]:
 def fake_proxy(source: Mapping[str, str]) -> LoopbackTcpProxy:
     """Create the API-container loopback proxy to the isolated fake-upstream container."""
     target_host = source.get(FAKE_HOST_ENV, "")
+    if FAKE_PORT_ENV not in source:
+        raise SystemExit(f"{FAKE_PORT_ENV} is required")
     try:
-        port = int(source.get(FAKE_PORT_ENV, "8101"))
+        port = int(source[FAKE_PORT_ENV])
     except ValueError:
         raise SystemExit(f"{FAKE_PORT_ENV} must be an integer") from None
     if not 1 <= port <= 65535:

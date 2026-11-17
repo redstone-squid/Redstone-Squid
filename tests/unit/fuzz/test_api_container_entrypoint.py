@@ -28,6 +28,7 @@ def test_api_child_receives_only_squid_and_python_runtime_settings() -> None:
 @pytest.mark.parametrize(
     ("source", "message"),
     [
+        ({FAKE_HOST_ENV: "172.18.0.5"}, "is required"),
         ({FAKE_HOST_ENV: "172.18.0.5", FAKE_PORT_ENV: "not-a-port"}, "must be an integer"),
         ({FAKE_HOST_ENV: "172.18.0.5", FAKE_PORT_ENV: "0"}, "between 1 and 65535"),
     ],
