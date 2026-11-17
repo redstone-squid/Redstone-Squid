@@ -414,10 +414,7 @@ class ClassicDialect:
     def composer[R](
         self, document: DocumentLike[R], limits: ClassicLimits
     ) -> TargetComposition[R, scene.ClassicMessage]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](self, document: DocumentLike[R], limits: ClassicLimits) -> ClassicCompositionRules[R, object]:
-        return ClassicCompositionRules[R, object](limits)
+        return RuleComposition(ClassicCompositionRules[R, object](limits))
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]

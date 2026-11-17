@@ -77,12 +77,7 @@ class SlackMessageDialect:
     def composer[R](
         self, document: DocumentLike[R], limits: SlackMessageLimits
     ) -> TargetComposition[R, scene.SlackMessage]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](
-        self, document: DocumentLike[R], limits: SlackMessageLimits
-    ) -> SlackCompositionRules[R, object, scene.SlackMessage]:
-        return SlackCompositionRules[R, object, scene.SlackMessage](limits)
+        return RuleComposition(SlackCompositionRules[R, object, scene.SlackMessage](limits))
 
 
 class SlackModalDialect:
@@ -106,12 +101,7 @@ class SlackModalDialect:
     def composer[R](
         self, document: DocumentLike[R], limits: SlackModalLimits
     ) -> TargetComposition[R, scene.SlackModalView]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](
-        self, document: DocumentLike[R], limits: SlackModalLimits
-    ) -> SlackCompositionRules[R, object, scene.SlackModalView]:
-        return SlackCompositionRules[R, object, scene.SlackModalView](limits, modal_form(document))
+        return RuleComposition(SlackCompositionRules[R, object, scene.SlackModalView](limits, modal_form(document)))
 
 
 class SlackHomeDialect:
@@ -137,12 +127,7 @@ class SlackHomeDialect:
     def composer[R](
         self, document: DocumentLike[R], limits: SlackHomeLimits
     ) -> TargetComposition[R, scene.SlackHomeView]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](
-        self, document: DocumentLike[R], limits: SlackHomeLimits
-    ) -> SlackCompositionRules[R, object, scene.SlackHomeView]:
-        return SlackCompositionRules[R, object, scene.SlackHomeView](limits)
+        return RuleComposition(SlackCompositionRules[R, object, scene.SlackHomeView](limits))
 
 
 SLACK_MESSAGE_DIALECT = SlackMessageDialect()

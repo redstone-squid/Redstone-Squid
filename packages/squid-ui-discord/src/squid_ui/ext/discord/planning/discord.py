@@ -1,7 +1,5 @@
 """Dependency-neutral Discord protocol target construction."""
 
-from typing import Any
-
 from squid_ui import scene
 from squid_ui.ext.discord.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_ui.ext.discord.planning.classic import CLASSIC_DIALECT
@@ -33,17 +31,3 @@ def classic_target[AdapterT: DiscordAdapter](
 ) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, AdapterT]:
     """Build a classic-message protocol target from an adapter's verified behavior."""
     return Target(dialect=CLASSIC_DIALECT, adapter=adapter, limits=limits)
-
-
-def dynamic_components_v2_target(
-    adapter: AdapterProfile[DiscordAdapter], *, limits: V2Limits = LIMITS
-) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]:
-    """Explicit gradual-typing escape hatch for runtime-selected adapters."""
-    return components_v2_target(adapter, limits=limits)
-
-
-def dynamic_classic_target(
-    adapter: AdapterProfile[DiscordAdapter], *, limits: ClassicLimits = CLASSIC_LIMITS
-) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]:
-    """Explicit gradual-typing escape hatch for runtime-selected adapters."""
-    return classic_target(adapter, limits=limits)

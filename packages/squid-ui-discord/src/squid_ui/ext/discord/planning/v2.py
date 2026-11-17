@@ -400,10 +400,7 @@ class V2Dialect:
         return InputPolicy(limits.total_text, character_axis=True, native=V2Input)
 
     def composer[R](self, document: DocumentLike[R], limits: V2Limits) -> TargetComposition[R, scene.ComponentsV2]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](self, document: DocumentLike[R], limits: V2Limits) -> V2CompositionRules[R, object]:
-        return V2CompositionRules[R, object](limits)
+        return RuleComposition(V2CompositionRules[R, object](limits))
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]

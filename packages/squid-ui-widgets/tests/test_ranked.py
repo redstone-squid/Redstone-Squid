@@ -8,14 +8,14 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.content.text import source_text
-from squid_ui.ext.discord.planning import dynamic_components_v2_target
+from squid_ui.ext.discord.planning import components_v2_target
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.primitives import Alt, Lines, Paginate
 from squid_ui.target_types import DiscordAdapter
 from squid_ui_widgets import testing as wt
 
-ROUTED_TARGET = dynamic_components_v2_target(AdapterProfile(DiscordAdapter, "widget-tests", "1"))
+ROUTED_TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "widget-tests", "1"))
 
 
 class _LimitKwargs(TypedDict, total=False):

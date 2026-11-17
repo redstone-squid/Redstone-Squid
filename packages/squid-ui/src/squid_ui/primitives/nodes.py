@@ -306,8 +306,7 @@ class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
 # These are as exact as `Row` and `Section` are, and gated the same way: a target that lacks
 # `message.content` or `layout.embed` rejects them during validation. They live in the shared
 # node union rather than a parallel IR so that one `Variants` ladder can offer a V2 rung and a
-# classic rung for the same region, and so `resolve_variants` and measurement stay single
-# implementations.
+# classic rung for the same region.
 
 
 @immutable

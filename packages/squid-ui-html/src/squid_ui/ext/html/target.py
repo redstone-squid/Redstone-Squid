@@ -68,10 +68,7 @@ class HtmlDialect:
         return InputPolicy(character_axis=True, budget_ladder=True)
 
     def composer[R](self, document: DocumentLike[R], limits: HtmlLimits) -> TargetComposition[R, scene.HtmlBody]:
-        return RuleComposition(self.rules(document, limits))
-
-    def rules[R](self, document: DocumentLike[R], limits: HtmlLimits) -> HtmlCompositionRules[R, object]:
-        return HtmlCompositionRules[R, object]()
+        return RuleComposition(HtmlCompositionRules[R, object]())
 
 
 HTML_DIALECT = HtmlDialect()

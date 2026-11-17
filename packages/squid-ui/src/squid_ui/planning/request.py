@@ -1,4 +1,4 @@
-"""One plan's inputs, and the two cache keys derived from them."""
+"""One plan's inputs and exact replay identity."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -9,11 +9,10 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.identity import stable_value
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
-from squid_ui.planning.target import Target, TargetIdentity
+from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
 
 if TYPE_CHECKING:
@@ -70,10 +69,8 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     reservation or resolve framework labels into the requested language without
     replacing values in this request.
 
-    Cache keys distinguish those two stages: exact_key identifies the original
-    objects for replaying one owner's live result, while cache_context describes
-    the effective inputs used to build reusable structure. Caches themselves are
-    supplied separately because their contents outlive this planning call.
+    exact_key identifies the original objects for replaying one owner's live result.
+    Caches are supplied separately because their contents outlive this call.
     """
 
     target: Target[Any, BodyT, RenderTargetT, AdapterT]
@@ -117,43 +114,6 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             getattr(self.nav, "version", 0),
             self.search_budget,
         )
-
-    def cache_context(self, *, target: TargetIdentity, chrome: Chrome) -> Mapping[str, object]:
-        """Key the structural cache, by value, against what was actually compiled against.
-
-        `target` and `chrome` are passed rather than read off `self` because a backend
-        reserves and localizes them first; a plan compiled against a reduced budget must not
-        be served to one that asked for the full target.
-        """
-        return {
-            "target": target.fingerprint,
-            "presentation": stable_value(self.presentation),
-            "chrome": (
-                chrome.previous,
-                chrome.next,
-                chrome.back,
-                chrome.home,
-                chrome.close,
-                chrome.cancel,
-                chrome.page_footer(1, 2),
-                chrome.and_n_more(2),
-            ),
-            "locale": self.localization.locale,
-            "palette": stable_value(self.palette),
-            "reservation": stable_value(self.reservation),
-            "strict": self.strict,
-            "positions": stable_value(self.positions),
-            "search_budget": self.search_budget,
-            "nav": (
-                None
-                if self.nav is None
-                else (
-                    getattr(self.nav, "__module__", ""),
-                    getattr(self.nav, "__qualname__", type(self.nav).__qualname__),
-                    getattr(self.nav, "version", 0),
-                )
-            ),
-        }
 
 
 __all__ = ["Identity", "PlanOptions", "PlanRequest", "StaticPlanOptions"]

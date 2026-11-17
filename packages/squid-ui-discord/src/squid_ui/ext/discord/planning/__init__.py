@@ -5,8 +5,6 @@ from squid_ui.ext.discord.planning.discord import (
     V2_PROTOCOL_CAPABILITIES,
     classic_target,
     components_v2_target,
-    dynamic_classic_target,
-    dynamic_components_v2_target,
 )
 from squid_ui.ext.discord.planning.measurement.solver import MeasuredLayout, measure
 
@@ -16,7 +14,5 @@ __all__ = [
     "MeasuredLayout",
     "classic_target",
     "components_v2_target",
-    "dynamic_classic_target",
-    "dynamic_components_v2_target",
     "measure",
 ]

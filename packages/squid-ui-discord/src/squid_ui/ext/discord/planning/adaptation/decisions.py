@@ -262,7 +262,7 @@ def nominate_decisions(
             ):
                 # Exact primitives carry no semantic decision axes; `Panel` alone is claimed
                 # above because its children may hold semantic nodes, and `Variants` ladders
-                # belong to frontier.py, not to semantic nomination.
+                # belong to composition search, not to semantic nomination.
                 return
             case Region():
                 message = "regions must be planned through the joint region planner"
