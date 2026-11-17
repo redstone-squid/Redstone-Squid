@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal, Self, override
+from typing import TYPE_CHECKING, Any, Literal, Self, override
 
 import anyio
 import discord
@@ -35,6 +35,10 @@ from squid.permissions.domain.catalogue import (
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
+
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type AccountTab = Literal["overview", "identity", "claims", "merge", "review"]
@@ -493,7 +497,7 @@ class AccountWorkspace(sd.Screen):
         form = _ClaimForm.from_submission(event)
         await self._submit_claim(event, form.name)
 
-    async def _choose_claim(self, event: sd.PressEvent) -> None:
+    async def _choose_claim(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await pick(
             event,
             "creators",

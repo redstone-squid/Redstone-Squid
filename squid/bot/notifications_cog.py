@@ -114,12 +114,17 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
                                 custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
                             )
                         )
-                    await user.send(
-                        render_delivery(delivery, self.bot.notification_site_url),
-                        view=view if build_id is not None else None,
-                        allowed_mentions=discord.AllowedMentions.none(),
-                        nonce=str(delivery.nonce.int & ((1 << 63) - 1)),
-                    )
+                    content = render_delivery(delivery, self.bot.notification_site_url)
+                    nonce = str(delivery.nonce.int & ((1 << 63) - 1))
+                    if build_id is None:
+                        await user.send(content, allowed_mentions=discord.AllowedMentions.none(), nonce=nonce)
+                    else:
+                        await user.send(
+                            content,
+                            view=view,
+                            allowed_mentions=discord.AllowedMentions.none(),
+                            nonce=nonce,
+                        )
             except discord.Forbidden as error:
                 await self.bot.services.notifications.suspend_dm(delivery, error)
             except Exception as error:

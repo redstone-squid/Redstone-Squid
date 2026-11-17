@@ -29,7 +29,12 @@ from tests.support.edits import bound_revisions
 
 class Submission:
     def __init__(self) -> None:
-        self.values = {"operation": "allow", "pattern": "squid.perm.node.view", "scope": "guild", "reason": ""}
+        self.values: dict[str, object] = {
+            "operation": "allow",
+            "pattern": "squid.perm.node.view",
+            "scope": "guild",
+            "reason": "",
+        }
         self.errors: tuple[sl.forms.FormIssue, ...] = ()
         self.notice = AsyncMock()
 
