@@ -780,6 +780,7 @@ pydantic==2.14.3 \
     #   openai
     #   pydantic-settings
     #   redstone-squid
+    #   squid-replication
     #   squid-ui
     #   squid-ui-discord
 pydantic-core==2.50.4 \

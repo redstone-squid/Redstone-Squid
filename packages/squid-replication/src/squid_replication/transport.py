@@ -1,14 +1,30 @@
 """Transport-neutral envelopes for committed replicated updates."""
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 _MAX_ENVELOPE_BYTES = 1_500_000
+
+
+class _UpdateEnvelope(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    backend: str
+    document: str
+    hash: str
+    origin_action: uuid.UUID | None
+    payload: str
+    version: Literal[1] = Field(default=1, alias="schema")
+    source_replica: str
+    update_id: uuid.UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,17 +58,21 @@ class ReplicationUpdate:
 
     def encode(self) -> bytes:
         """Encode the envelope without interpreting the backend payload."""
-        body = {
-            "backend": self.backend_id,
-            "document": self.document_id,
-            "hash": hashlib.sha256(self.payload).hexdigest(),
-            "origin_action": None if self.origin_transaction_id is None else str(self.origin_transaction_id),
-            "payload": base64.b64encode(self.payload).decode("ascii"),
-            "schema": self.schema,
-            "source_replica": self.source_replica_id,
-            "update_id": str(self.update_id),
-        }
-        encoded = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+        if self.schema != 1:
+            message = "replicated envelope has an unsupported schema"
+            raise ValueError(message)
+        envelope = _UpdateEnvelope(
+            backend=self.backend_id,
+            document=self.document_id,
+            hash=hashlib.sha256(self.payload).hexdigest(),
+            origin_action=self.origin_transaction_id,
+            payload=base64.b64encode(self.payload).decode("ascii"),
+            source_replica=self.source_replica_id,
+            update_id=self.update_id,
+        )
+        encoded = json.dumps(
+            envelope.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":")
+        ).encode()
         if len(encoded) > _MAX_ENVELOPE_BYTES:
             message = "replicated envelope exceeds the maximum encoded size"
             raise ValueError(message)
@@ -65,28 +85,36 @@ class ReplicationUpdate:
             message = "replicated envelope exceeds the maximum encoded size"
             raise ValueError(message)
         try:
-            body: Any = json.loads(encoded)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            message = "replicated envelope is not valid JSON"
+            envelope = _UpdateEnvelope.model_validate_json(encoded, strict=True)
+        except ValidationError as error:
+            try:
+                body = json.loads(encoded)
+            except UnicodeDecodeError, json.JSONDecodeError:
+                message = "replicated envelope is not valid JSON"
+                raise ValueError(message) from error
+            if not isinstance(body, dict) or body.get("schema") != 1:
+                message = "replicated envelope has an unsupported schema"
+            elif any(item["loc"] and item["loc"][0] in ("update_id", "origin_action") for item in error.errors()):
+                message = "replicated envelope has invalid encoded identifiers or payload"
+            else:
+                message = "replicated envelope has invalid routing fields"
             raise ValueError(message) from error
-        if not isinstance(body, dict) or body.get("schema") != 1:
-            message = "replicated envelope has an unsupported schema"
-            raise ValueError(message)
-        required = ("backend", "document", "source_replica", "update_id", "payload", "hash")
-        if any(not isinstance(body.get(name), str) for name in required):
-            message = "replicated envelope has invalid routing fields"
-            raise ValueError(message)
         try:
-            payload = base64.b64decode(body["payload"], validate=True)
-            update_id = uuid.UUID(body["update_id"])
-            origin = None if body.get("origin_action") is None else uuid.UUID(body["origin_action"])
-        except (ValueError, TypeError) as error:
+            payload = base64.b64decode(envelope.payload, validate=True)
+        except (binascii.Error, ValueError, TypeError) as error:
             message = "replicated envelope has invalid encoded identifiers or payload"
             raise ValueError(message) from error
-        if not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), body["hash"]):
+        if not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), envelope.hash):
             message = "replicated envelope payload hash does not match"
             raise ValueError(message)
-        return cls(body["document"], body["backend"], body["source_replica"], update_id, payload, origin)
+        return cls(
+            envelope.document,
+            envelope.backend,
+            envelope.source_replica,
+            envelope.update_id,
+            payload,
+            envelope.origin_action,
+        )
 
 
 __all__ = ["ReplicationUpdate"]

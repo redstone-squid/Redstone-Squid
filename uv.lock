@@ -2789,6 +2789,7 @@ name = "squid-replication"
 version = "0.1.0a1"
 source = { editable = "packages/squid-replication" }
 dependencies = [
+    { name = "pydantic" },
     { name = "squid-reactivity" },
 ]
 
@@ -2804,6 +2805,7 @@ pycrdt = [
 requires-dist = [
     { name = "loro", marker = "extra == 'loro'", specifier = "==1.17.1" },
     { name = "pycrdt", marker = "extra == 'pycrdt'", specifier = "==0.14.13" },
+    { name = "pydantic", specifier = ">=2.14,<3" },
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
 provides-extras = ["loro", "pycrdt"]
