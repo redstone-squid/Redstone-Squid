@@ -7,6 +7,12 @@ does not send the display: a renderer builds the native payload and a frontend d
 A Target combines a dialect, which defines a scene format and its planner, with an
 adapter profile describing the renderer library's supported behavior. Limits and
 reservations tell the planner how much space that particular display can use.
+
+Shared planning composes authored nodes into candidate representations, allocates
+region pages, and searches the legal choices and page cuts. Certification checks
+every reachable page combination against target and allocation constraints before
+search can retain the resulting layout. Allocation scoring compares certified
+families using preferences, fidelity, soft goals, and page turns.
 """
 
 from squid_ui.pages import PagePosition, PagePositionPolicy, resolve_page_position

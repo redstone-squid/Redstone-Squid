@@ -14,19 +14,18 @@ from heapq import heappop, heappush
 from itertools import count
 from types import MappingProxyType
 
-from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError, UnsolvableLayoutError
-from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, PageFamily, allocate_family
+from squid_ui.planning.allocation import AllocationSnapshot, PageFamily, allocate_family
 from squid_ui.planning.allocation_policy import (
     AllocationQuality,
-    PreferenceTree,
     RegionPolicy,
     SearchCompletion,
     SearchDiagnostics,
     compare_quality,
     dense_ranks,
 )
-from squid_ui.planning.certification import FamilyCertifier, FamilyRejection
+from squid_ui.planning.allocation_scoring import preference_tree, score_family
+from squid_ui.planning.certification import FamilyCertificate, FamilyCertifier, FamilyRejection
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -41,7 +40,7 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
-from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+from squid_ui.planning.resources import EMPTY_COST
 
 
 class JointInfeasibleError(UnsolvableLayoutError):
@@ -95,31 +94,6 @@ class _Partitions[RenderTargetT, ContextT, PayloadT]:
     probe: bool = False
     expand_only: bool = False
     repair: bool = False
-
-
-def _preferences[RenderTargetT, ContextT, PayloadT](
-    candidate: CandidateComposition[RenderTargetT, ContextT, PayloadT],
-    ranks: Mapping[OccurrenceId, int],
-    policies: Mapping[OccurrenceId, RegionPolicy],
-    context: PlanningContext,
-) -> PreferenceTree:
-    own: list[int] = []
-    children: list[tuple[int, PreferenceTree]] = []
-
-    def visit(part: CandidateComposition[RenderTargetT, ContextT, PayloadT]) -> None:
-        context.work.consume()
-        own.append(ranks[part.offer.occurrence.identity])
-        for child in part.children:
-            if child.offer.region is not None or child.offer.preference_priority is not None:
-                priority = policies.get(
-                    child.offer.occurrence.identity, RegionPolicy(priority=child.offer.preference_priority or 0)
-                ).priority
-                children.append((priority, _preferences(child, ranks, policies, context)))
-            else:
-                visit(child)
-
-    visit(candidate)
-    return PreferenceTree(tuple(sorted(own, reverse=True)), tuple(children))
 
 
 def _candidate[RenderTargetT, ContextT, PayloadT](
@@ -372,7 +346,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             self.context.work.consume(len(task.choices) + len(self.retained))
             optimistic = AllocationQuality(
                 (),
-                _preferences(
+                preference_tree(
                     candidate,
                     {offer.occurrence.identity: rank for offer, rank in task.choices},
                     self.policy,
@@ -440,9 +414,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 if isinstance(violation, UnsupportedCapability)
             )
             return False, False
-        satisfied = self._retain(
-            task, family, region_map, certificate.peaks, certificate.break_shortfalls, certificate.pages
-        )
+        satisfied = self._retain(task, family, region_map, certificate)
         return True, satisfied
 
     def _retain(
@@ -450,9 +422,7 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
         task: _Partitions[RenderTargetT, ContextT, PayloadT],
         family: PageFamily[RenderTargetT, ContextT, PayloadT],
         region_map: Mapping[OccurrenceId, FragmentTree[RenderTargetT, ContextT, PayloadT]],
-        peaks: Mapping[OccurrenceId, ResourceCost],
-        page_violations: Mapping[tuple[OccurrenceId, int], int],
-        pages: tuple[CertifiedPage[OutputT], ...],
+        certificate: FamilyCertificate[OutputT],
     ) -> bool:
         """Score a feasible allocation and keep it unless a retained one is at least as good.
 
@@ -460,47 +430,13 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
             Whether the allocation meets every soft goal and break.
         """
         self.context.work.consume(1 + len(task.choices) + len(region_map) + len(self.policy) + len(self.retained))
-        ranks = {offer.occurrence.identity: rank for offer, rank in task.choices}
-        preferences = _preferences(task.candidate, ranks, self.policy, self.context)
-        minimums: list[int] = []
-        for axis in Axis:
-            self.context.work.consume(1 + sum(len(value.goals) for value in self.policy.values()))
-            deficits = [
-                max(0, goal.minimum - peaks.get(identity, EMPTY_COST).get(axis)) if identity in region_map else 0
-                for identity, region_policy in self.policy.items()
-                for goal in region_policy.goals
-                if goal.axis == axis and not goal.hard
-            ]
-            minimums.extend(sorted(deficits, reverse=True))
-        effects: frozenset[FidelityEffect] = frozenset(effect for offer, _ in task.choices for effect in offer.effects)
-        tie = tuple(
-            sorted(
-                (
-                    offer.occurrence.identity.path,
-                    offer.key,
-                    family.regions[offer.occurrence.identity].cuts
-                    if offer.occurrence.identity in family.regions
-                    else (),
-                )
-                for offer, _ in task.choices
-            )
-        )
-        break_shortfalls = tuple(sorted(page_violations.values(), reverse=True))
-        quality = AllocationQuality(
-            tuple(minimums),
-            preferences,
-            effects,
-            break_shortfalls,
-            sum(len(cuts) - 1 for cuts in task.cuts),
-            tie,
-        )
-        satisfied = not any(minimums) and not any(break_shortfalls)
+        quality, satisfied = score_family(family, task.choices, region_map, certificate, self.policy, self.context)
         if not any(
             compare_quality(previous, quality) == -1
             or (compare_quality(previous, quality) == 0 and previous.tie <= quality.tie)
             for previous, _ in self.retained
         ):
-            self.context.work.consume(len(self.retained) + len(pages) + len(region_map) + len(task.choices))
+            self.context.work.consume(len(self.retained) + len(certificate.pages) + len(region_map) + len(task.choices))
             self.retained = [
                 (previous, allocation)
                 for previous, allocation in self.retained
@@ -510,15 +446,15 @@ class _JointSearch[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparat
                 family,
                 regions=MappingProxyType(
                     {
-                        identity: replace(region, allocation=peaks.get(identity, EMPTY_COST))
+                        identity: replace(region, allocation=certificate.peaks.get(identity, EMPTY_COST))
                         for identity, region in family.regions.items()
                     }
                 ),
             )
-            self.context.work.consume(sum(1 + len(page.coordinates) for page in pages))
+            self.context.work.consume(sum(1 + len(page.coordinates) for page in certificate.pages))
             allocation = AllocationSnapshot.certify(
                 family,
-                tuple(pages),
+                certificate.pages,
                 tuple(
                     sorted(
                         ((offer.occurrence.identity, offer.key) for offer, _ in task.choices),
