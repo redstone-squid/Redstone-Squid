@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, RoleSpec
+from squid.permissions.domain.matching import Pattern
 from squid.permissions.models import PermissionRole
 
 
@@ -15,8 +16,8 @@ def role_specs(roles: Iterable[PermissionRole]) -> dict[str, RoleSpec]:
     """
     specs: dict[str, RoleSpec] = {}
     for role in roles:
-        includes = list(role.includes)
-        excludes = list(role.excludes)
+        includes = [Pattern.parse(pattern) for pattern in role.includes]
+        excludes = [Pattern.parse(pattern) for pattern in role.excludes]
         builtin = BUILTIN_ROLES_BY_KEY.get(role.builtin_key or "")
         if builtin is not None:
             includes = [*builtin.includes, *includes]

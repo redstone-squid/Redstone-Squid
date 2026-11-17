@@ -8,6 +8,7 @@ such as `build.*.view` to select related capabilities. The builder rejects
 duplicate or structurally invalid declarations when this module is imported.
 """
 
+from collections import OrderedDict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -34,6 +35,7 @@ class Catalogue(Mapping[str, PermissionNode]):
 
     def __init__(self, nodes: Iterable[PermissionNode]):
         self._nodes = {node.name: node for node in nodes}
+        self._expansions: OrderedDict[Pattern, frozenset[PermissionNode]] = OrderedDict()
 
     def __getitem__(self, name: str) -> PermissionNode:
         try:
@@ -64,7 +66,14 @@ class Catalogue(Mapping[str, PermissionNode]):
         it automatically.
         """
         parsed = Pattern.parse(pattern) if isinstance(pattern, str) else pattern
-        return frozenset(node for node in self.values() if parsed.matches(node))
+        if parsed in self._expansions:
+            self._expansions.move_to_end(parsed)
+            return self._expansions[parsed]
+        result = frozenset(node for node in self.values() if parsed.matches(node))
+        self._expansions[parsed] = result
+        if len(self._expansions) > 1024:
+            self._expansions.popitem(last=False)
+        return result
 
     def scopes_reached(self, pattern: Pattern | str) -> frozenset[NodeScope]:
         """The distinct scopes of the nodes `pattern` selects.
@@ -505,7 +514,7 @@ CATALOGUE = _b.build()
 """Every permission node the application defines."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class RoleDefinition:
     """A built-in role's identity and pattern lists.
 
@@ -518,9 +527,28 @@ class RoleDefinition:
     name: str
     description: str
     rank: int
-    includes: tuple[str, ...]
-    excludes: tuple[str, ...] = ()
-    protected: bool = True
+    includes: tuple[Pattern, ...]
+    excludes: tuple[Pattern, ...]
+    protected: bool
+
+    def __init__(
+        self,
+        key: str,
+        name: str,
+        description: str,
+        rank: int,
+        includes: Iterable[Pattern | str],
+        excludes: Iterable[Pattern | str] = (),
+        *,
+        protected: bool = True,
+    ) -> None:
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "description", description)
+        object.__setattr__(self, "rank", rank)
+        object.__setattr__(self, "includes", tuple(Pattern.parse(p) if isinstance(p, str) else p for p in includes))
+        object.__setattr__(self, "excludes", tuple(Pattern.parse(p) if isinstance(p, str) else p for p in excludes))
+        object.__setattr__(self, "protected", protected)
 
 
 OWNER = RoleDefinition(

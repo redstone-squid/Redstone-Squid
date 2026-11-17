@@ -136,7 +136,7 @@ class TestRoleExpansion:
         }
         expansion = expand_role("moderator", roles)
 
-        assert "build.**" in expansion.includes
+        assert Pattern.parse("build.**") in expansion.includes
         assert expansion.excluded == {node.name for node in CATALOGUE.expand("@diagnostic")}
 
     def test_a_childs_subtraction_survives_into_the_parent(self) -> None:
@@ -348,5 +348,5 @@ def test_diamond_reuses_shared_expansion(mocker: MockerFixture) -> None:
     expand = mocker.spy(CATALOGUE, "expand")
     graph = RoleGraph(roles)
     assert expand.call_count == 1
-    assert graph.expand("root").includes == {"build.**"}
+    assert graph.expand("root").includes == {Pattern.parse("build.**")}
     assert graph.expand("leaf") is graph.expand("leaf")

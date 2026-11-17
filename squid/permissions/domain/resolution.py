@@ -197,7 +197,7 @@ class PermissionCheck:
         return frozenset(item.node for item in self.decisions if item.allowed)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class RoleSpec:
     """A permission role's own patterns and the other permission roles it includes.
 
@@ -207,16 +207,28 @@ class RoleSpec:
     """
 
     key: str
-    includes: tuple[str, ...] = ()
-    excludes: tuple[str, ...] = ()
-    includes_roles: tuple[str, ...] = ()
+    includes: tuple[Pattern, ...]
+    excludes: tuple[Pattern, ...]
+    includes_roles: tuple[str, ...]
+
+    def __init__(
+        self,
+        key: str,
+        includes: Iterable[Pattern | str] = (),
+        excludes: Iterable[Pattern | str] = (),
+        includes_roles: tuple[str, ...] = (),
+    ) -> None:
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "includes", tuple(Pattern.parse(p) if isinstance(p, str) else p for p in includes))
+        object.__setattr__(self, "excludes", tuple(Pattern.parse(p) if isinstance(p, str) else p for p in excludes))
+        object.__setattr__(self, "includes_roles", includes_roles)
 
 
 @dataclass(frozen=True, slots=True)
 class RoleExpansion:
     """What a role contributes once composition and subtraction are applied."""
 
-    includes: frozenset[str]
+    includes: frozenset[Pattern]
     excluded: frozenset[str]
 
 
@@ -309,7 +321,7 @@ def rules_from_role(
     """Turn a role expansion into the allow rules it contributes."""
     return tuple(
         Rule(
-            pattern=Pattern.parse(pattern),
+            pattern=pattern,
             effect=Effect.ALLOW,
             subject_kind=subject_kind,
             origin=origin,
@@ -319,7 +331,7 @@ def rules_from_role(
             source=source,
             via=via,
         )
-        for pattern in sorted(expansion.includes)
+        for pattern in sorted(expansion.includes, key=lambda pattern: pattern.raw)
     )
 
 

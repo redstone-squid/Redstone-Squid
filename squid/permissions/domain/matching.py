@@ -19,6 +19,7 @@ Wildcards occupy whole segments; partial segments such as `build.re*` are invali
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Self, override
 
 from squid.permissions.domain.models import InvalidPatternError, PermissionNode, Tag
@@ -55,6 +56,7 @@ class Pattern:
         return self.raw
 
     @classmethod
+    @lru_cache(maxsize=4096)
     def parse(cls, raw: str) -> Self:
         """Parse a pattern, raising `InvalidPatternError` if it is malformed."""
         text = raw.strip()
@@ -93,6 +95,7 @@ class Pattern:
         """Whether this pattern selects by tag rather than by tree position."""
         return self.tag is not None
 
+    @lru_cache(maxsize=8192)  # noqa: B019 -- Bounded immutable values, not lifecycle owners.
     def matches(self, node: PermissionNode) -> bool:
         """Whether this pattern selects `node`."""
         if self.tag is not None:

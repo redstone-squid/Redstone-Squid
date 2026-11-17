@@ -77,7 +77,7 @@ class TestBuilder:
 
 class TestBuiltinRoles:
     def test_owner_holds_everything_via_the_root_pattern(self) -> None:
-        assert BUILTIN_ROLES_BY_KEY["owner"].includes == ("**",)
+        assert tuple(pattern.raw for pattern in BUILTIN_ROLES_BY_KEY["owner"].includes) == ("**",)
         assert BUILTIN_ROLES_BY_KEY["owner"].excludes == ()
         assert builtin_leaves("owner") == frozenset(CATALOGUE.names)
 
