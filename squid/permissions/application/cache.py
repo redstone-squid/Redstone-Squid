@@ -109,16 +109,16 @@ class SubjectRuleCache:
         while len(self._entries) > self._max_entries:
             self._entries.popitem(last=False)
 
-    def observe_epoch(self, version: int) -> bool:
+    def observe_epoch(self, epoch: int) -> bool:
         """Adopt an epoch seen elsewhere, clearing everything if it moved.
 
         Epoch `0` means "not yet known", so the watcher's first successful read
         adopts silently rather than reporting an invalidation nobody caused.
         """
-        if version == self._epoch:
+        if epoch == self._epoch:
             return False
         first_reading = self._epoch == 0
-        self._epoch = version
+        self._epoch = epoch
         self.clear(counted=not first_reading)
         return not first_reading
 

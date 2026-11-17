@@ -18,7 +18,7 @@ from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.media.application.jobs import MediaProcessingJobRunner
 from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
-from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
+from squid.runtime import BackgroundTaskSupervisor, RuntimeJob, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
@@ -413,7 +413,7 @@ async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event 
         async with worker.running():
             worker.start()
             if topic_bridge is not None:
-                worker.supervisor.start(topic_bridge.run(), name="layout-topic-bridge")
+                worker.supervisor.start(topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
             start_log_capture(
                 worker.supervisor,
                 runtime.services.error_reports,

@@ -10,7 +10,6 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from typing import cast
 
 import asyncpg
 from pydantic import SecretStr
@@ -56,7 +55,7 @@ class PostgresWakeListener:
                 _wake.set()
 
             try:
-                active_connection = cast(asyncpg.Connection, await asyncpg.connect(self._url))
+                active_connection = await asyncpg.connect(self._url, connection_class=asyncpg.Connection)
                 connection = active_connection
                 await active_connection.add_listener(self._channel, notified)
                 active_connection.add_termination_listener(terminated)

@@ -11,6 +11,7 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Collection, Coroutine
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from enum import StrEnum
 from types import TracebackType
 from typing import Any, Self
 
@@ -79,7 +80,19 @@ from squid.voting.application.recount import BallotRecounter, VoteCardReactions
 
 logger = logging.getLogger(__name__)
 
-PERMISSION_EPOCH_JOB = "permission-epoch"
+
+class RuntimeJob(StrEnum):
+    """Stable process job names; resource-specific jobs may use dynamic names."""
+
+    PERMISSION_EPOCH = "permission-epoch"
+    PERMISSION_LISTENER = "permission-epoch-listener"
+    LOG_CAPTURE = "error-log-capture"
+    LAYOUT = "layout-runtime"
+    INTERACTION_METRICS = "interaction-metrics"
+    TOPIC_BRIDGE = "layout-topic-bridge"
+
+
+PERMISSION_EPOCH_JOB = RuntimeJob.PERMISSION_EPOCH
 """Name of the job every process runs to keep its permission cache current."""
 
 
@@ -231,7 +244,7 @@ class ApplicationRuntime[ServicesT]:
         await self.close()
 
 
-LOG_CAPTURE_JOB = "error-log-capture"
+LOG_CAPTURE_JOB = RuntimeJob.LOG_CAPTURE
 """Name of the job that stores logged exceptions as error reports."""
 
 
@@ -269,7 +282,7 @@ def start_permission_epoch_watch(
         interval=PERMISSION_POLL_INTERVAL_SECONDS,
     )
     if watcher.listener is not None:
-        supervisor.start(watcher.listen(), name=f"{PERMISSION_EPOCH_JOB}-listener")
+        supervisor.start(watcher.listen(), name=RuntimeJob.PERMISSION_LISTENER)
 
 
 @dataclass(eq=False, slots=True)

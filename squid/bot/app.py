@@ -50,6 +50,7 @@ from squid.posts.domain import ResourceKind
 from squid.runtime import (
     BackgroundTaskSupervisor,
     BotServices,
+    RuntimeJob,
     start_log_capture,
     start_permission_epoch_watch,
 )
@@ -347,13 +348,13 @@ class RedstoneSquid(Bot):
         await self.tree.set_translator(SquidAppCommandTranslator())
         # Permission cache invalidation is needed regardless of which cogs are enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.ui.run(), name="layout-runtime")
-        self.background_tasks.start(self.interaction_metrics.run(), name="interaction-metrics")
+        self.background_tasks.start(self.ui.run(), name=RuntimeJob.LAYOUT)
+        self.background_tasks.start(self.interaction_metrics.run(), name=RuntimeJob.INTERACTION_METRICS)
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:
             self.topic_publisher = self.topic_bridge
-            self.background_tasks.start(self.topic_bridge.run(), name="layout-topic-bridge")
+            self.background_tasks.start(self.topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
 
         extensions = [*EXTENSIONS]
         if self.development_mode:
