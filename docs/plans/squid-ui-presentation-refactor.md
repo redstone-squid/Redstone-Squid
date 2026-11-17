@@ -66,22 +66,38 @@ fingerprint describe the authored snapshot; they do not snapshot mutable cursor
 state. Delivery stages the owner as a session update, so failed delivery does not
 replace the committed owner.
 
-## Assessment and deferred API proposal
+## Completed follow-up boundaries
 
-The complete initial-plan, delivery-update, retained-turn, and direct-selection
-flow now has one presentation owner. Existing tests cover staged writes, hidden
-pagers, controlled coordinates, native wrappers, explicit page coordinates, and
-allocation reuse. A retained-turn regression check additionally rejects semantic
-graph rebuilding for unchanged content. The focused composition suite passes.
+Built-in execution now belongs to `CompositionPlan`. It resolves implicit versus
+explicit policy, prepares input when required, controls exact memo eligibility,
+and owns allocation reuse and target execution. The public dispatcher selects
+built-in or custom planning and performs the common final binding step.
 
-The remaining findings concern different boundaries and do not require parallel
-presentation pipelines. They remain explicit follow-up work, rather than claims
-that this pass redesigned every planning mode or target contract.
+The mode differences are deliberate: implicit planning normalizes portable and
+native authoring input and derives a search allowance; explicit options preserve
+authored occurrence IDs and the requested allowance. Exact memo replay remains
+implicit-only because its key does not include explicit composition options.
+Custom planners retain control of their vocabulary and planning strategy.
 
-`PresentationState.retained_composition` and `RetainedCompositionUpdate` currently
-expose cache implementation details. A concrete future breaking change would make
-that retention private and have successful delivery apply an opaque planning
-commit operation. Ordinary callers would still request pages and apply delivered
-updates, without constructing cache records. The public field is preserved in
-this pass pending a compatibility decision; changing it is not necessary to give
-presentation behavior and its prepared state the same owner.
+Native input preparation now belongs to the target. `InputPolicy.native` creates
+a visitor for each traversal. Discord owns embed, component, extension, and
+overflow checks; that visitor delegates portable children back to the shared
+`InputPreparation`. Adding a native vocabulary no longer requires adding cases
+to the shared input walker. The portable conditional-variant form still uses its
+existing shared normalization. Unsupported nodes on targets without a native
+visitor are reported by node type.
+
+The dialect contract returns a `TargetComposition` through `composer`, rather
+than returning rules with erased payload, resource, and preparation types.
+`RuleComposition` binds those types while they are still known and carries them
+through search and output construction. Concrete dialects retain their typed
+`rules` factories for direct use.
+
+For custom dialects, replace the `InputPolicy.native_types` list with a native
+visitor factory, and implement `composer(document, limits)` by returning
+`RuleComposition` around the concrete rules. Built-in targets and their callers
+have been migrated.
+
+The retained composition still holds the live presentation session intentionally:
+page selection reads current cursors, while the graph and fingerprint describe
+authored content. Delivery remains the point at which staged state is committed.

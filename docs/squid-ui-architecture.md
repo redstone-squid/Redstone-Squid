@@ -1879,7 +1879,7 @@ to describe, and saying so is noise.
   routing and authentication belong to the host. Action and form callbacks remain only in
   `PlanResult.bindings` and never enter a scene.
 - Platform rules, limits, and renderers live in `squid-ui-discord`, `squid-ui-slack`,
-  and `squid-ui-html`. The core calls the target dialect's `rules`, `input_policy`,
+  and `squid-ui-html`. The core calls the target dialect's `composer`, `input_policy`,
   and `navigation` contract without importing those implementations. Shared document
   vocabulary, scene values and codecs, allocation, and component runtime remain in
   `squid-ui`. Discord's browser preview uses HTML rendering helpers; Slack and HTML
