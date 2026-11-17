@@ -1,7 +1,6 @@
 """Application services for build submission and editing."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from uuid import UUID
 
 from whenever import Instant
@@ -25,14 +24,6 @@ from squid.core.sentinel import UNSET
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.unit_of_work import UnitOfWorkFactory
-
-
-@dataclass(frozen=True, slots=True)
-class BuildEditor:
-    """The permission subject requesting a build edit."""
-
-    subject: Actor
-    source: str = "build_edit"
 
 
 class BuildService:
@@ -159,14 +150,15 @@ class BuildService:
 
     async def apply_edit(
         self,
-        actor: BuildEditor,
+        actor: Actor,
         build_id: int,
         patch: BuildEditPatch,
         *,
         expected_revision: int | None = None,
+        source: str = "build_edit",
     ) -> Build:
         """Prepare an edit, then recheck current authority and revision before writing."""
-        if actor.subject.account_id is None:
+        if actor.account_id is None:
             raise AccountRequiredError
         build = await self._get_required(build_id)
         await self.authorize_edit(actor, build)
@@ -175,7 +167,7 @@ class BuildService:
         await self._persist_prepared(
             build,
             actor=actor,
-            context=BuildEditContext(operation="edit", source=actor.source, actor_account_id=actor.subject.account_id),
+            context=BuildEditContext(operation="edit", source=source, actor_account_id=actor.account_id),
         )
         return build
 
@@ -193,33 +185,33 @@ class BuildService:
                 build.id, expected_revision=expected_revision, current_revision=build.revision
             )
 
-    async def authorize_edit(self, actor: BuildEditor, build: Build) -> None:
+    async def authorize_edit(self, actor: Actor, build: Build) -> None:
         """Require edit permission unless the actor owns this pending submission."""
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
         owns = (
             build.submission_status is Status.PENDING
-            and actor.subject.account_id is not None
-            and build.submitter_account_id == actor.subject.account_id
+            and actor.account_id is not None
+            and build.submitter_account_id == actor.account_id
         )
         if not owns:
-            await self._permissions.require(actor.subject, BUILD_SUBMISSION_EDIT)
+            await self._permissions.require(actor, BUILD_SUBMISSION_EDIT)
 
-    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: BuildEditor, build: Build) -> None:
+    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: Actor, build: Build) -> None:
         """Check edit permission using the caller's transaction and current build state."""
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
         owns = (
             build.submission_status is Status.PENDING
-            and actor.subject.account_id is not None
-            and build.submitter_account_id == actor.subject.account_id
+            and actor.account_id is not None
+            and build.submitter_account_id == actor.account_id
         )
         if not owns:
-            await self._permissions.require(actor.subject, BUILD_SUBMISSION_EDIT, uow=uow)
+            await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
-    async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
+    async def prepare_edit(self, actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
         """Apply an authorized patch and prepare derived values without saving.
 
         The caller must recheck permissions and the revision when it later writes
@@ -310,9 +302,7 @@ class BuildService:
         await self._prepare_for_persistence(build)
         await self._persist_prepared(build, context=context)
 
-    async def _persist_prepared(
-        self, build: Build, *, context: BuildEditContext, actor: BuildEditor | None = None
-    ) -> None:
+    async def _persist_prepared(self, build: Build, *, context: BuildEditContext, actor: Actor | None = None) -> None:
         """Save prepared values within a short write scope.
 
         For existing builds, the application lease covers this scope, and

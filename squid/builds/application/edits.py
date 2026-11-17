@@ -14,7 +14,7 @@ from typing import Protocol, cast
 from squid.builds.application.edit_schema import BuildPatch
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.ports import BuildUnitOfWork
-from squid.builds.application.services import BuildEditor, BuildService
+from squid.builds.application.services import BuildService
 from squid.builds.domain import Info, Status, UnresolvedTaxonomy
 from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
@@ -179,13 +179,12 @@ class BuildFieldsEdit:
             for name in RESTRICTION_FIELDS:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
-        editor = BuildEditor(actor, source="versioned_editor")
-        await self._builds.prepare_edit(editor, build, BuildEditPatch.from_attributes(attributes))
+        await self._builds.prepare_edit(actor, build, BuildEditPatch.from_attributes(attributes))
         current = await uow.builds.get_for_update(build_id)
         if current is None:
             raise BuildNotFoundError(build_id)
         require_revision(expected, current.revision)
-        await self._builds.authorize_edit_in(uow, editor, current)
+        await self._builds.authorize_edit_in(uow, actor, current)
         return PreparedBuildEdit(before, build_values(build), build=build, revisions=(expected,))
 
     async def apply(

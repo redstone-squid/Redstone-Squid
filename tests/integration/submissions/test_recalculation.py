@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account
-from squid.builds.application import BuildEditor, BuildService
+from squid.builds.application import BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
@@ -41,14 +41,14 @@ class EditPolicy(BuildService):
         self.allowed = True
 
     @override
-    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: BuildEditor, build: Build) -> None:
+    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: Actor, build: Build) -> None:
         if not self.allowed:
             raise AuthorizationError
 
 
 async def prepared_proposal(
     sessions: async_sessionmaker[AsyncSession],
-) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RecalculationProposal, Build, BuildEditor, EditPolicy]:
+) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RecalculationProposal, Build, Actor, EditPolicy]:
     owner = await seed_account_and_version(sessions)
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     build = submission_build(BuildCategory.DOOR, owner)
@@ -78,7 +78,7 @@ async def prepared_proposal(
     policy = EditPolicy()
     repository = partial(SqlAlchemyUnitOfWork, sessions)
     await transact(repository, lambda uow: uow.recalculation_proposals.create(proposal), commit=True)
-    return repository, proposal, build, BuildEditor(Actor(account_id=owner)), policy
+    return repository, proposal, build, Actor(account_id=owner), policy
 
 
 async def test_approval_commits_once_and_preserves_build_identity(
@@ -88,7 +88,7 @@ async def test_approval_commits_once_and_preserves_build_identity(
     result = await revision_service(repository, policy)._approve_prepared(proposal, build, actor)
     assert proposal.expected_revision is not None
     assert result.applied_revision == proposal.expected_revision + 1
-    assert result.approved_by_account_id == actor.subject.account_id
+    assert result.approved_by_account_id == actor.account_id
     replay = await revision_service(repository, policy)._approve_prepared(proposal, build, actor)
     assert replay == result
     saved = await transact(

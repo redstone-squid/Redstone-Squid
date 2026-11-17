@@ -24,7 +24,6 @@ from squid.builds.application.queries import (
 )
 from squid.builds.application.restrictions import RestrictionDefinition, RestrictionService
 from squid.builds.application.services import (
-    BuildEditor,
     BuildService,
 )
 
@@ -32,7 +31,6 @@ __all__ = [
     "BUILD_SORT_FIELDS",
     "DEFAULT_BUILD_LIST_SORT",
     "BuildEditPatch",
-    "BuildEditor",
     "BuildEmbeddingService",
     "BuildInferenceInput",
     "BuildInferenceService",

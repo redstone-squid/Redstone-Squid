@@ -7,7 +7,7 @@ from uuid import UUID, uuid4, uuid5
 
 from whenever import Instant
 
-from squid.builds.application import BuildEditor, BuildService
+from squid.builds.application import BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
@@ -132,14 +132,14 @@ class RecalculationProposalService:
         build = await self._builds.get(build_id)
         if build is None:
             raise BuildNotFoundError(build_id)
-        await self._builds.authorize_edit(BuildEditor(actor), build)
+        await self._builds.authorize_edit(actor, build)
         if build.submitter_account_id != proposal.owner_account_id:
             raise OwnershipRequiredError
         if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
             message = "Choose a build linked to this source message."
             raise ValidationError(message)
         before = recalculation_values(build)
-        await self._builds.prepare_edit(BuildEditor(actor), build, proposal.facts.patch(build))
+        await self._builds.prepare_edit(actor, build, proposal.facts.patch(build))
         matched = replace(
             proposal,
             build_id=build_id,
@@ -149,7 +149,7 @@ class RecalculationProposalService:
         )
         async with self._uow_factory() as uow:
             await self._require_read_access(uow, (proposal,), actor)
-            await self._builds.authorize_edit_in(uow, BuildEditor(actor), build)
+            await self._builds.authorize_edit_in(uow, actor, build)
             if renew:
                 matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
                 result = await uow.recalculation_proposals.create(matched)
@@ -183,23 +183,21 @@ class RecalculationProposalService:
                 expected_revision=proposal.expected_revision,
                 current_revision=build.revision,
             )
-        prepared = await self._builds.prepare_edit(
-            BuildEditor(actor), build.copy_for_edit(), proposal.facts.patch(build)
-        )
+        prepared = await self._builds.prepare_edit(actor, build.copy_for_edit(), proposal.facts.patch(build))
         if recalculation_values(prepared) != proposal.after:
             message = "Resolved build facts changed since review; renew the proposal before approving. "
             raise ConflictError(message)
-        return await self._approve_prepared(proposal, prepared, BuildEditor(actor))
+        return await self._approve_prepared(proposal, prepared, actor)
 
     async def _approve_prepared(
-        self, proposal: RecalculationProposal, build: Build, actor: BuildEditor
+        self, proposal: RecalculationProposal, build: Build, actor: Actor
     ) -> RecalculationProposal:
-        if actor.subject.account_id is None:
+        if actor.account_id is None:
             raise AccountRequiredError
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=actor.subject.account_id,
+                actor=actor.account_id,
                 operation="recalculation",
                 # Build history stores these values, so they keep the proposal's original name.
                 source="revision_proposal",
@@ -214,7 +212,7 @@ class RecalculationProposalService:
             retained = await uow.recalculation_proposals.get_for_update(proposal.id)
             if retained is None:
                 raise NotFoundError
-            await self._require_read_access(uow, (retained,), actor.subject)
+            await self._require_read_access(uow, (retained,), actor)
             if retained.applied_revision is not None:
                 return retained
             if retained.expires_at <= Instant.now() or (retained.build_id, retained.expected_revision) != (
@@ -239,7 +237,7 @@ class RecalculationProposalService:
                 build,
             )
             result = await uow.recalculation_proposals.mark_approved(
-                proposal.id, account_id=actor.subject.account_id, revision=build.revision
+                proposal.id, account_id=actor.account_id, revision=build.revision
             )
             await uow.commit()
             return result

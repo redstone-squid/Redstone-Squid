@@ -14,7 +14,6 @@ from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, RestrictionDefinition
 from squid.builds.application.services import (
-    BuildEditor,
     BuildService,
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
@@ -503,8 +502,8 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
 class TestAuthorizedEditing:
     """Pending submission owners can edit; other edits require the shared permission."""
 
-    OWNER = BuildEditor(subject=Actor(account_id=1))
-    STRANGER = BuildEditor(subject=Actor(account_id=2))
+    OWNER = Actor(account_id=1)
+    STRANGER = Actor(account_id=2)
 
     @staticmethod
     def _permissions(*held: str) -> PermissionStore:
@@ -595,7 +594,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
 
     service._embeddings = RevokeDuringPreparation()
     with pytest.raises(AuthorizationError):
-        await service.apply_edit(BuildEditor(Actor(account_id=2)), 42, BuildEditPatch(extra_user_info="denied"))
+        await service.apply_edit(Actor(account_id=2), 42, BuildEditPatch(extra_user_info="denied"))
     assert repository.saved == []
 
 
