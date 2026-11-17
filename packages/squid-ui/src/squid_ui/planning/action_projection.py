@@ -12,18 +12,19 @@ from types import MappingProxyType
 from typing import Any
 
 from squid_ui import scene
-from squid_ui.authoring.presentations import Alternatives
+from squid_ui.authoring.presentations import Alternatives, FidelityEffect
 from squid_ui.authoring.semantic import ActionControl, ActionControls, FallbackContent
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.handlers import _HandlerBinder
 from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, RegionPages
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
-from squid_ui.planning.display import DisplayPage, PageBindings
 from squid_ui.planning.identity_cache import CacheStats, IdentityCache
 from squid_ui.planning.interaction_handlers import RouteSelection
 from squid_ui.planning.offers.navigation import control_key, grouped_control_key
-from squid_ui.planning.result import PlanResult
+from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.result import PlanMetrics, PlanReport, PlanResult
 from squid_ui.planning.semantic_index import SemanticGraph
 from squid_ui.primitives.constraints import FIRST_PAGE
 from squid_ui.primitives.nodes import Extension
@@ -44,11 +45,13 @@ class ActionGroupSlot:
 
 
 @dataclass(frozen=True, slots=True)
-class LiveActionSlot:
-    key: str
+class PageBindings:
+    """Live values for one certified page, kept outside its reusable display data."""
 
-
-type ActionTemplate = ActionSlot | ActionGroupSlot | LiveActionSlot
+    actions: Mapping[str, ActionBinding]
+    forms: Mapping[str, FormBinding]
+    form_plans: Mapping[str, object]
+    resources: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +62,12 @@ class ActionPage[BodyT: scene.Body]:
     only keys; their handlers and dispatch policy come from the current controls.
     """
 
-    display: DisplayPage[BodyT]
-    bindings: Mapping[str, ActionTemplate]
+    scene: scene.Scene[BodyT]
+    report: PlanReport
+    metrics: PlanMetrics
+    cost: ResourceCost
+    effects: tuple[FidelityEffect, ...]
+    bindings: Mapping[str, ActionSlot | ActionGroupSlot]
     slot: int
 
     @classmethod
@@ -72,13 +79,12 @@ class ActionPage[BodyT: scene.Body]:
         *,
         slot: int = 0,
     ) -> tuple[ActionPage[BodyT], PageBindings]:
-        bindings: dict[str, ActionTemplate] = {}
+        bindings: dict[str, ActionSlot | ActionGroupSlot] = {}
         live: dict[str, ActionBinding] = {}
         for key, binding in result.bindings.items():
             if isinstance(binding.handler, RouteSelection):
                 aliases = (groups or {}).get(key)
                 if aliases is None or not all(aliases.get(route) in controls for route in binding.routes):
-                    bindings[key] = LiveActionSlot(key)
                     live[key] = binding
                     continue
                 # Framework grouped controls carry per-action policy in their routes.
@@ -91,11 +97,42 @@ class ActionPage[BodyT: scene.Body]:
             elif key in controls:
                 bindings[key] = ActionSlot(key)
             else:
-                bindings[key] = LiveActionSlot(key)
                 live[key] = binding
         return (
-            cls(DisplayPage.from_result(result), MappingProxyType(bindings), slot),
+            cls(
+                result.scene,
+                result.report,
+                result.metrics,
+                result.cost,
+                result.effects,
+                MappingProxyType(bindings),
+                slot,
+            ),
             PageBindings(MappingProxyType(live), result.form_bindings, result.form_plans, result.resources),
+        )
+
+    def bind(self, controls: Mapping[str, ActionControl[Any]], frontend: str, live: PageBindings) -> PlanResult[BodyT]:
+        bindings = dict(live.actions)
+        for key, template in self.bindings.items():
+            match template:
+                case ActionSlot():
+                    bindings[key] = _bind_action(template, controls)
+                case ActionGroupSlot():
+                    routes = MappingProxyType(
+                        {key: _bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
+                    )
+                    bindings[key] = ActionBinding(template.key, RouteSelection(routes), template.mode, routes=routes)
+        prepared = _HandlerBinder(frontend).actions(bindings)
+        return PlanResult(
+            self.scene,
+            MappingProxyType(dict(prepared)),
+            self.report,
+            form_bindings=live.forms,
+            form_plans=live.form_plans,
+            resources=live.resources,
+            metrics=self.metrics,
+            cost=self.cost,
+            effects=self.effects,
         )
 
 
@@ -112,25 +149,6 @@ def _bind_action(
         label=control.label,
         record=control.record,
     )
-
-
-def _bind_page[BodyT: scene.Body](
-    page: ActionPage[BodyT], controls: Mapping[str, ActionControl[Any]], frontend: str, live: PageBindings
-) -> PlanResult[BodyT]:
-    bindings: dict[str, ActionBinding] = {}
-    for key, template in page.bindings.items():
-        match template:
-            case ActionSlot():
-                bindings[key] = _bind_action(template, controls)
-            case ActionGroupSlot():
-                routes = MappingProxyType(
-                    {key: _bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
-                )
-                bindings[key] = ActionBinding(template.key, RouteSelection(routes), template.mode, routes=routes)
-            case LiveActionSlot():
-                bindings[key] = live.actions[template.key]
-    prepared = _HandlerBinder(frontend).actions(bindings)
-    return page.display.bind(MappingProxyType(dict(prepared)), live)
 
 
 def _projection_weight(result: PlanResult) -> int:
@@ -162,7 +180,7 @@ class ActionAllocation[BodyT: scene.Body]:
     controls: Mapping[str, ActionControl[Any]]
     frontend: str
     live: Mapping[int, PageBindings]
-    region_bindings: Mapping[OccurrenceId, RegionPages]
+    regions: Mapping[OccurrenceId, RegionPages]
     capacity: int = 32
     max_bytes: int = 1024 * 1024
     _cache: IdentityCache[PlanResult[BodyT]] = field(init=False, repr=False, compare=False)
@@ -170,7 +188,7 @@ class ActionAllocation[BodyT: scene.Body]:
     def __post_init__(self) -> None:
         object.__setattr__(self, "controls", MappingProxyType(dict(self.controls)))
         object.__setattr__(self, "live", MappingProxyType(dict(self.live)))
-        object.__setattr__(self, "region_bindings", MappingProxyType(dict(self.region_bindings)))
+        object.__setattr__(self, "regions", MappingProxyType(dict(self.regions)))
         object.__setattr__(
             self, "_cache", IdentityCache[PlanResult[BodyT]](capacity=self.capacity, max_bytes=self.max_bytes)
         )
@@ -183,10 +201,6 @@ class ActionAllocation[BodyT: scene.Body]:
     def identity(self) -> str:
         return self.source.identity
 
-    @property
-    def regions(self) -> Mapping[OccurrenceId, RegionPages]:
-        return self.region_bindings
-
     def visible(self, coordinates: Mapping[OccurrenceId, int]) -> Mapping[OccurrenceId, int]:
         return self.source.visible(coordinates)
 
@@ -194,7 +208,7 @@ class ActionAllocation[BodyT: scene.Body]:
         result = self.source.select(coordinates)
         if (cached := self._cache.get(result)) is not None:
             return cached
-        projected = _bind_page(result, self.controls, self.frontend, self.live[result.slot])
+        projected = result.bind(self.controls, self.frontend, self.live[result.slot])
         # Failed frontend binding must not publish a partially prepared projection.
         self._cache.put(result, projected, weight=_projection_weight(projected))
         return projected
@@ -226,7 +240,7 @@ def prepare_action_allocation[BodyT: scene.Body](
     if isinstance(allocation, ActionAllocation):
         if allocation.controls == controls and allocation.frontend == frontend:
             return allocation
-        return ActionAllocation(allocation.source, controls, frontend, allocation.live, allocation.region_bindings)
+        return ActionAllocation(allocation.source, controls, frontend, allocation.live, allocation.regions)
     if not isinstance(allocation, AllocationSnapshot):
         return allocation
     live: dict[int, PageBindings] = {}

@@ -17,7 +17,7 @@ from squid_ui.interactions.forms import FormBinding, FormSpec, SubmitEvent, Text
 from squid_ui.interactions.guards import ADMIT, GuardDecision, GuardLedger
 from squid_ui.interactions.handlers import FrontendHandler
 from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
-from squid_ui.planning.action_projection import ActionAllocation, ActionPage, ActionSlot
+from squid_ui.planning.action_projection import ActionAllocation, ActionGroupSlot, ActionPage, ActionSlot
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, RegionPages
 from squid_ui.planning.resources import EMPTY_COST
@@ -125,7 +125,7 @@ def test_projection_lru_evicts_and_recomputes_without_mutating_source() -> None:
     assert allocation.cache_snapshot().entries == 2
     assert allocation.cache_snapshot().evictions == 2
     assert source.select({REGION: 0}).bindings["open"] == ActionSlot("open")
-    assert not hasattr(source.select({REGION: 0}).display, "bindings")
+    assert not hasattr(source.select({REGION: 0}), "form_bindings")
     assert "open" in allocation.controls
 
 
@@ -339,7 +339,7 @@ async def test_action_templates_release_live_dispatch_policy(display: sl.semanti
     gc.collect()
     assert receiver_ref() is None
     assert history_ref() is None
-    assert not hasattr(templates.select().display, "bindings")
+    assert all(isinstance(slot, ActionSlot | ActionGroupSlot) for slot in templates.select().bindings.values())
 
 
 def test_projection_byte_limit_skips_oversized_entries() -> None:
@@ -381,10 +381,10 @@ def test_display_template_releases_forms_providers_and_unsupported_actions() -> 
         resources={"resource": owner},
     )
     template, live = ActionPage.prepare(original, {})
-    projected = template.display.bind(original.bindings, live)
+    projected = template.bind({}, "projection", live)
     assert projected.form_bindings["form"] is form
     assert projected.resources["resource"] is owner
     del projected, original, live, form, owner
     gc.collect()
     assert reference() is None
-    assert template.display.scene is not None
+    assert template.scene is not None

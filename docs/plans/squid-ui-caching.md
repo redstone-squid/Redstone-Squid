@@ -30,10 +30,14 @@ supports callers that use `plan()` without a runtime or snapshot.
 
 ## Display and live behavior
 
-Built-in live allocations prepare `ActionPage` templates. A page contains a
-`DisplayPage` (Scene, cost, effects and diagnostics), action slots and a page slot.
+Built-in live allocations prepare `ActionPage` templates. Each page stores its Scene,
+cost, effects, diagnostics, action slots and page slot directly.
 It contains no `PlanResult`, handlers, form schemas, file providers or presentation
 updates. Navigation geometry retains neutral page ownership rather than owner callbacks.
+
+`AllocationSnapshot` stores certified pages, navigation metadata and selected choices.
+Search constructs it directly and releases the search graph; callback rebinding maps its
+pages to templates without introducing another allocation type.
 
 The live `ActionAllocation` supplies current ordinary controls, region ownership and
 `PageBindings` tables for forms, resources and unsupported actions. Projection resolves
@@ -94,6 +98,8 @@ live state. Cold and cached traversal produce the same digest.
 
 Fingerprint retention is limited to 4,096 entries and 4 MiB of accounted subtree weight.
 The accounting includes descendants and deliberately overcounts shared subtrees.
+Fingerprints and page projections share `IdentityCache` for retention, LRU eviction and
+statistics; each caller supplies its own admission rules and byte estimates.
 Page projections are limited to 32 entries and 1 MiB of accounted display/binding weight.
 Oversized entries are returned without caching. Projection accounting charges serialized
 Scene size and binding bookkeeping, not the application object graph behind borrowed
