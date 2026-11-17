@@ -24,7 +24,6 @@ from squid_ui.interactions.forms import FormBinding, FormSpec, IntField
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
 from squid_ui.pages import PagePosition
-from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.primitives.nodes import (
@@ -88,7 +87,7 @@ class PageCommit(_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class TurnPage(GeneratedHandler[PressEvent]):
+class TurnPage(_HandlerComposition):
     """Move to a page fixed when the button was drawn.
 
     Previous and Next step from the page on screen, not from the stored cursor, so a
@@ -103,13 +102,12 @@ class TurnPage(GeneratedHandler[PressEvent]):
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit(event, self.page)
 
 
 @dataclass(frozen=True, slots=True)
-class _SeekSelection(GeneratedHandler[SelectionEvent]):
+class _SeekSelection(_HandlerComposition):
     seek: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -121,14 +119,13 @@ class _SeekSelection(GeneratedHandler[SelectionEvent]):
             return replace(self, seek=seek) if seek is not self.seek else self
         return self
 
-    @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.seek(event, int(event.values[0]))
 
 
 @dataclass(frozen=True, slots=True)
-class _JumpSubmit(GeneratedHandler[SubmitEvent]):
+class _JumpSubmit(_HandlerComposition):
     seek: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -138,13 +135,12 @@ class _JumpSubmit(GeneratedHandler[SubmitEvent]):
             return replace(self, seek=seek) if seek is not self.seek else self
         return self
 
-    @override
     async def __call__(self, event: SubmitEvent) -> None:
         await self.seek(event, cast(int, event.values["page"]) - 1)
 
 
 @dataclass(frozen=True, slots=True)
-class _PresentJump(GeneratedHandler[PressEvent]):
+class _PresentJump(_HandlerComposition):
     form: FormBinding
 
     @override
@@ -152,7 +148,6 @@ class _PresentJump(GeneratedHandler[PressEvent]):
         form = binder.form(self.form)
         return replace(self, form=form) if form is not self.form else self
 
-    @override
     async def __call__(self, event: PressEvent) -> None:
         await event.present_form(
             self.form.spec,
@@ -336,7 +331,7 @@ def page_jump_form(
 
 
 @dataclass(frozen=True, slots=True)
-class _PageSizeSubmit(GeneratedHandler[SubmitEvent]):
+class _PageSizeSubmit(_HandlerComposition):
     change: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -346,7 +341,6 @@ class _PageSizeSubmit(GeneratedHandler[SubmitEvent]):
             return replace(self, change=change) if change is not self.change else self
         return self
 
-    @override
     async def __call__(self, event: SubmitEvent) -> None:
         await self.change(event, cast(int, event.values["page_size"]))
 

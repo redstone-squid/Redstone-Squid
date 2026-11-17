@@ -38,7 +38,6 @@ from squid_ui.interactions import (
 from squid_ui.interactions.forms import FormSpec, SubmitHandler
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import bind_ownership
-from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 
 if TYPE_CHECKING:
@@ -46,7 +45,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class PresentForm[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class PresentForm[ContextT = object](_HandlerComposition):
     spec: FormSpec[ContextT]
     key: str
     on_submit: SubmitHandler[ContextT]
@@ -64,7 +63,6 @@ class PresentForm[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
             else self
         )
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         # The responder API erases invocation context at the frontend boundary.
         await event.present_form(
@@ -111,7 +109,7 @@ class ChoiceCommit[ContextT = object](_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class ChooseChoice[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class ChooseChoice[ContextT = object](_HandlerComposition):
     commit: ChoiceCommit[ContextT]
     key: str
 
@@ -120,13 +118,12 @@ class ChooseChoice[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, (self.key,))
 
 
 @dataclass(frozen=True, slots=True)
-class SelectChoices[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+class SelectChoices[ContextT = object](_HandlerComposition):
     commit: ChoiceCommit[ContextT]
 
     @override
@@ -134,7 +131,6 @@ class SelectChoices[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values)
 
@@ -173,7 +169,7 @@ class EntityCommit[ContextT = object](_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class SelectEntities[ContextT = object](GeneratedHandler[EntitySelectionEvent[ContextT]]):
+class SelectEntities[ContextT = object](_HandlerComposition):
     commit: EntityCommit[ContextT]
 
     @override
@@ -181,13 +177,12 @@ class SelectEntities[ContextT = object](GeneratedHandler[EntitySelectionEvent[Co
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: EntitySelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values)
 
 
 @dataclass(frozen=True, slots=True)
-class SelectEntityFallback[ContextT = object](GeneratedHandler[ChoiceEvent[ContextT]]):
+class SelectEntityFallback[ContextT = object](_HandlerComposition):
     commit: EntityCommit[ContextT]
     by_key: Mapping[str, EntityRef]
 
@@ -196,7 +191,6 @@ class SelectEntityFallback[ContextT = object](GeneratedHandler[ChoiceEvent[Conte
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: ChoiceEvent[ContextT]) -> None:
         await self.commit.commit(event, tuple(self.by_key[key] for key in event.selected if key in self.by_key))
 
@@ -227,7 +221,7 @@ class ItemCommit[ContextT = object](_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class CloseItem[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class CloseItem[ContextT = object](_HandlerComposition):
     commit: ItemCommit[ContextT]
 
     @override
@@ -235,13 +229,12 @@ class CloseItem[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, None)
 
 
 @dataclass(frozen=True, slots=True)
-class FocusItem[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+class FocusItem[ContextT = object](_HandlerComposition):
     commit: ItemCommit[ContextT]
 
     @override
@@ -249,7 +242,6 @@ class FocusItem[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         await self.commit.commit(event, event.values[0] if event.values else None)
 
@@ -280,7 +272,7 @@ class NavigationCommit[ContextT = object](_HandlerComposition):
 
 
 @dataclass(frozen=True, slots=True)
-class SelectDestination[ContextT = object](GeneratedHandler[SelectionEvent[ContextT]]):
+class SelectDestination[ContextT = object](_HandlerComposition):
     commit: NavigationCommit[ContextT]
 
     @override
@@ -288,14 +280,13 @@ class SelectDestination[ContextT = object](GeneratedHandler[SelectionEvent[Conte
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: SelectionEvent[ContextT]) -> None:
         if event.values:
             await self.commit.commit(event, event.values[0])
 
 
 @dataclass(frozen=True, slots=True)
-class GoToDestination[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class GoToDestination[ContextT = object](_HandlerComposition):
     commit: NavigationCommit[ContextT]
     key: str
 
@@ -304,13 +295,12 @@ class GoToDestination[ContextT = object](GeneratedHandler[PressEvent[ContextT]])
         commit = binder.composition(self.commit)
         return replace(self, commit=commit) if commit is not self.commit else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.commit.commit(event, self.key)
 
 
 @dataclass(frozen=True, slots=True)
-class ToggleDetails[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class ToggleDetails[ContextT = object](_HandlerComposition):
     node: Details[Any, ContextT]
     open: bool
     session: PresentationState
@@ -324,7 +314,6 @@ class ToggleDetails[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
         node = binder.cached(self.node, bind_node)
         return replace(self, node=node) if node is not self.node else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         match self.node.open:
             case Controlled(on_change=on_change):
@@ -346,7 +335,7 @@ class ToggleDetails[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
 
 
 @dataclass(frozen=True, slots=True)
-class FlipToggle[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class FlipToggle[ContextT = object](_HandlerComposition):
     node: Toggle[ContextT]
     on: bool
     session: PresentationState
@@ -360,7 +349,6 @@ class FlipToggle[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
         node = binder.cached(self.node, bind_node)
         return replace(self, node=node) if node is not self.node else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
@@ -377,7 +365,7 @@ class FlipToggle[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
 
 
 @dataclass(frozen=True, slots=True)
-class ForwardSelection[ContextT = object](GeneratedHandler[PressEvent[ContextT]]):
+class ForwardSelection[ContextT = object](_HandlerComposition):
     handler: Callable[[SelectionEvent[ContextT]], Awaitable[None]]
     key: str
 
@@ -386,7 +374,6 @@ class ForwardSelection[ContextT = object](GeneratedHandler[PressEvent[ContextT]]
         handler = binder.callback(self.handler)
         return replace(self, handler=handler) if handler is not self.handler else self
 
-    @override
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.handler(
             SelectionEvent(
@@ -396,7 +383,7 @@ class ForwardSelection[ContextT = object](GeneratedHandler[PressEvent[ContextT]]
 
 
 @dataclass(frozen=True, slots=True)
-class RouteSelection(GeneratedHandler[SelectionEvent]):
+class RouteSelection(_HandlerComposition):
     routes: Mapping[str, ActionBinding]
 
     @override
@@ -404,7 +391,6 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
         routes = binder.actions(self.routes)
         return replace(self, routes=routes) if routes is not self.routes else self
 
-    @override
     async def __call__(self, event: SelectionEvent) -> None:
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:

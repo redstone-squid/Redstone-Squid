@@ -1254,8 +1254,8 @@ program — is a closed PEP 695 union of behaviour-free frozen dataclasses, and 
 a `match` proven exhaustive by an `assert_never` terminal arm where the walked union is closed, or
 closing with a structured raise where it is not. Nodes carry no `accept` method and there is no
 type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
-the open node set through `target.extensions`, and attach per-case behaviour through
-`GeneratedHandler`.
+the open node set through `target.extensions`. Framework handlers declare their callback
+children through `_HandlerComposition`; frontend binding follows only those explicit edges.
 
 ## Durable sessions
 

@@ -1,16 +1,15 @@
 """Frontend selection follows declared framework edges and leaves application values alone."""
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, override
+from typing import Any
 
 import pytest
 
 from squid_ui.authoring.semantic import Controlled, Details, Summary, Toggle
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, PressEvent
 from squid_ui.interactions.forms import FormBinding, FormSpec, TextField
-from squid_ui.interactions.handlers import FrontendHandler, HandlerSet, bind_handlers, handlers
-from squid_ui.planning.generated import GeneratedHandler
+from squid_ui.interactions.handlers import FrontendHandler, HandlerSet, _HandlerComposition, bind_handlers, handlers
 from squid_ui.planning.interaction_handlers import (
     ChoiceCommit,
     ChooseChoice,
@@ -132,7 +131,7 @@ def test_shared_semantic_nodes_remain_shared(details: bool) -> None:
     assert one.node is not node
 
 
-def generated_adapters(callback: HandlerSet) -> tuple[GeneratedHandler[Any], ...]:
+def generated_adapters(callback: HandlerSet) -> tuple[Callable[[Any], Awaitable[None]], ...]:
     session = PresentationState()
     choices = ChoiceCommit(Controlled((), callback), "choices", (), session)
     entities = EntityCommit(Controlled((), callback), "entities", (), session)
@@ -193,8 +192,7 @@ def test_component_seek_callback_is_opaque() -> None:
 
 
 def test_generated_adapters_must_declare_binding_behavior() -> None:
-    class Incomplete(GeneratedHandler[PressEvent]):
-        @override
+    class Incomplete(_HandlerComposition):
         async def __call__(self, event: PressEvent) -> None:
             pass
 
