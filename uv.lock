@@ -658,6 +658,15 @@ wheels = [
 ]
 
 [[package]]
+name = "ffmpeg-core"
+version = "4.6.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/c3/f170774b896cc5fb52b7cdf56ae6832a9575e355517b03de9dfb979b30d5/ffmpeg_core-4.6.2.tar.gz", hash = "sha256:f83b1a095f29ba1d61d42710ef371c70932535b45f5b6ced865affc4edf756cc", size = 47333, upload-time = "2026-10-21T03:17:52.734Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/35/139f8a9ed3889e647fc2e1bfd549cc781da0c547a81150b76053c339972a/ffmpeg_core-4.6.2-py3-none-any.whl", hash = "sha256:1e7978aa8b671ec8ecf657faad80d0293b8f6e822bd5eee27223b4b03e07fac1", size = 57120, upload-time = "2026-10-21T03:17:51.61Z" },
+]
+
+[[package]]
 name = "fluent-compiler"
 version = "1.1"
 source = { git = "https://github.com/redstone-squid/fluent-compiler.git?rev=5d1646977f9eb4e606c13f703d59a92799ca29c2#5d1646977f9eb4e606c13f703d59a92799ca29c2" }
@@ -2373,6 +2382,7 @@ dependencies = [
     { name = "squid-ui" },
     { name = "squid-ui-discord" },
     { name = "squid-ui-widgets" },
+    { name = "typed-ffmpeg" },
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "whenever" },
@@ -2459,6 +2469,7 @@ requires-dist = [
     { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-ui-discord", editable = "packages/squid-ui-discord" },
     { name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" },
+    { name = "typed-ffmpeg", specifier = ">=4.6.2" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
     { name = "whenever", specifier = ">=0.10.3" },
@@ -3033,6 +3044,30 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ee/9f/c5201d42a484c061e528825fc8e2d565f5abd50a4ced6fb7d29c4ec99b2b/truststore-0.10.5.tar.gz", hash = "sha256:30d36967ccaded5cbb38d602c433f53600036c79d502f4533a49b60a03bbefcd", size = 28091, upload-time = "2026-10-12T22:27:31.808Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/e9/3a7820be2bb0fe53b6bc9c3be26d3d1158004e4c3ab953aa6840b955b1e9/truststore-0.10.5-py3-none-any.whl", hash = "sha256:9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c", size = 19017, upload-time = "2026-10-12T22:27:30.377Z" },
+]
+
+[[package]]
+name = "typed-ffmpeg"
+version = "4.6.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typed-ffmpeg-v9" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/e5/c880c8d3a1c4abd2588cd6e8df44340e1795bdbe154705665c4f2a7cab92/typed_ffmpeg-4.6.2.tar.gz", hash = "sha256:59aeb33605213a22cacf5bead3430b647e714a14422b97c44c568a5ef225aebf", size = 2069, upload-time = "2026-10-21T03:20:15.353Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/7f/ed05bb237ed6eb477c6bfbd3b9a71ef38ae95efb5e9d789c4f60bb62eb07/typed_ffmpeg-4.6.2-py3-none-any.whl", hash = "sha256:9fd1caa1cadfe6bd0b40411f9212c4291e9ff6fd7e5b77991be3b588ec0a1088", size = 1850, upload-time = "2026-10-21T03:20:14.424Z" },
+]
+
+[[package]]
+name = "typed-ffmpeg-v9"
+version = "4.6.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ffmpeg-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d8/b7/a2ed1b41741f0ba6324fa0212241d76c9d6d0147fa6271e577cb6a3675c1/typed_ffmpeg_v9-4.6.2.tar.gz", hash = "sha256:167e7aa44daad2eb3ee3ad47ccc04a9933aad59fd0ea3b698bb3b82422924cdd", size = 361253, upload-time = "2026-10-21T03:20:03.09Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/5b/590ecf81a0e0df4593af951b129488a5b7af38ee7f649c37f93f4ee7880d/typed_ffmpeg_v9-4.6.2-py3-none-any.whl", hash = "sha256:d32a1e539b2cd436cde74481f3a57652af54b282714154043169efa5a9353b5e", size = 382514, upload-time = "2026-10-21T03:20:01.863Z" },
 ]
 
 [[package]]

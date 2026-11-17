@@ -45,6 +45,7 @@ dependencies = [
     "litestar>=2.24,<3",
     # Litestar 2.25 Headers subclasses CIMultiDictProxy, whose constructor changed in multidict 7.
     "multidict<7",
+    "typed-ffmpeg>=4.6.2",
 ]
 
 [project.optional-dependencies]

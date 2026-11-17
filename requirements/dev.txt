@@ -440,6 +440,10 @@ faker==40.44.0 \
     --hash=sha256:97245a3756dcaf35418b89bea9f03ae6881557db0032bf048744c2aaee2a9108 \
     --hash=sha256:db808a3ec33fe9ce5caf40b9fb61f85f46e429a56966f765209272adec83e4c6
     # via polyfactory
+ffmpeg-core==4.6.2 \
+    --hash=sha256:1e7978aa8b671ec8ecf657faad80d0293b8f6e822bd5eee27223b4b03e07fac1 \
+    --hash=sha256:f83b1a095f29ba1d61d42710ef371c70932535b45f5b6ced865affc4edf756cc
+    # via typed-ffmpeg-v9
 fluent-compiler @ git+https://github.com/redstone-squid/fluent-compiler.git@5d1646977f9eb4e606c13f703d59a92799ca29c2
     # via squid-i18n
 fluent-syntax==0.19.0 \
@@ -1121,6 +1125,7 @@ pydantic==2.14.3 \
     #   openai
     #   pydantic-settings
     #   redstone-squid
+    #   squid-i18n
     #   squid-replication
     #   squid-ui
     #   squid-ui-discord
@@ -1439,6 +1444,14 @@ truststore==0.10.5 ; sys_platform != 'emscripten' \
     # via
     #   httpcore2
     #   httpx2
+typed-ffmpeg==4.6.2 \
+    --hash=sha256:59aeb33605213a22cacf5bead3430b647e714a14422b97c44c568a5ef225aebf \
+    --hash=sha256:9fd1caa1cadfe6bd0b40411f9212c4291e9ff6fd7e5b77991be3b588ec0a1088
+    # via redstone-squid
+typed-ffmpeg-v9==4.6.2 \
+    --hash=sha256:167e7aa44daad2eb3ee3ad47ccc04a9933aad59fd0ea3b698bb3b82422924cdd \
+    --hash=sha256:d32a1e539b2cd436cde74481f3a57652af54b282714154043169efa5a9353b5e
+    # via typed-ffmpeg
 types-docker==7.2.0.20261102 \
     --hash=sha256:a5fda816dfc909be4a65892c87983ca007e461cb6fb46aba6481547304de0ebe \
     --hash=sha256:af141295dfc2760f2452fed89988ecfd86e2a66411206eb7c190aadc41d10e12
