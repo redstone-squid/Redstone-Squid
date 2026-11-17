@@ -6,7 +6,7 @@ import pytest
 
 import squid_ui as ui
 from squid_ui import testing
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.ext.discord.primitives.nodes import Boundary
 from squid_ui.runtime import ComponentRuntime
 

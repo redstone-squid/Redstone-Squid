@@ -2,7 +2,7 @@
 
 from typing import assert_type
 
-from layout_api import Contextual, ElementRef, FragmentLocation, LayoutContext, contextual, element_ref, region_ref
+from layout_api import Contextual, ElementRef, FragmentLocation, LayoutContext, context, element_ref, region_ref
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -52,9 +52,9 @@ def interactive(ctx: LayoutContext) -> sl.LayoutNode[ComponentsV2Target, sd.Requ
     return sl.action_controls(sl.action_control("Open", press, key="open"), key="actions")
 
 
-plain = contextual(footer, key="footer")
-native = contextual(native_footer, key="native")
-actions = contextual(interactive, key="interactive")
+plain = context(footer, key="footer")
+native = context(native_footer, key="native")
+actions = context(interactive, key="interactive")
 assert_type(plain, Contextual[RenderTarget, object])
 assert_type(native, Contextual[ComponentsV2Target, object])
 assert_type(actions, Contextual[ComponentsV2Target, sd.Request])
@@ -67,6 +67,6 @@ sl.Document[ComponentsV2Target, sd.Request]((actions,))
 # sl.Document[ClassicTarget]((native,))
 # sl.Document[ComponentsV2Target, object]((actions,))
 # footer(42)
-# contextual(lambda ctx: 42, key="bad-output")
+# context(lambda ctx: 42, key="bad-output")
 # LayoutContext().region(build)
 # LayoutContext().locate(results)

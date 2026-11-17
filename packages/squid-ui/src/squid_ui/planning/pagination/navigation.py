@@ -19,7 +19,7 @@ from typing import Any, Self, cast, override
 from squid_ui.authoring import semantic as sem
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import TextLike
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent, SelectionEvent, SubmitEvent
 from squid_ui.interactions.forms import FormBinding, FormSpec, IntField
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition

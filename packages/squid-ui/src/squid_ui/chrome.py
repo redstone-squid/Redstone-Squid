@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from math import ceil
 
 from squid_ui.content.text import Localization, TextLike, md, resolve_text
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 
 
 def _default_and_n_more(count: int) -> TextLike:

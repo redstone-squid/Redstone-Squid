@@ -9,7 +9,7 @@ from squid_reactivity import Subscriptions
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import BusAddress, DependencyAddress
 from squid_ui._presentation import PresentationCells
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.snapshot import PlanningSnapshot

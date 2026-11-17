@@ -68,7 +68,7 @@ from squid_reactivity.transactions import (
     strong_read,
     transaction,
 )
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.presentation_state import (
     ActivePagers,
     CursorState,

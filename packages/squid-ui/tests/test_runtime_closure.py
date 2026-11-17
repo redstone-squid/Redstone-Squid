@@ -7,7 +7,7 @@ from typing import override
 import pytest
 
 import squid_ui as ui
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.runtime import ComponentRuntime
 

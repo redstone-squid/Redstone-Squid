@@ -14,10 +14,10 @@ callbacks receive ordinary typed values once the contextual boundary is entered.
 
 ## Proposed authoring boundary
 
-`contextual(callback, key=..., initial=())` returns a layout node. `initial` is
+`sl.context(callback, key=..., initial=())` returns a layout node. `initial` is
 bootstrap content, not a user-visible fallback. Its output preserves the callback's
-render-target and interaction-context types. The spelling avoids colliding with
-the existing `squid_ui.context` module. Names remain provisional.
+render-target and interaction-context types. `ContextKey` lives in
+`squid_ui.context_keys`, leaving the public `sl.context` name available.
 
 ```python
 results = region_ref("results")
@@ -32,7 +32,7 @@ def footer(ctx: LayoutContext) -> sl.LayoutNode:
 
 
 # Inside the ordinary component render:
-contextual(footer, key="results-footer")
+sl.context(footer, key="results-footer")
 ```
 
 A callback runs per contextual occurrence and reachable view coordinate. With no

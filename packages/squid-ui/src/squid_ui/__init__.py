@@ -110,7 +110,7 @@ from squid_ui.content.text import (
     text_link,
     tr,
 )
-from squid_ui.context import ContextKey
+from squid_ui.context_keys import ContextKey
 from squid_ui.errors import (
     DrawInvariantError,
     ExistingLayoutError,

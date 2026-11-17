@@ -70,7 +70,7 @@ class Contextual[RenderTargetT = RenderTarget, ContextT = object](Renderable[Ren
 
 def region_ref(*keys: str) -> RegionRef: ...
 def element_ref[NodeT](kind: type[NodeT], *keys: str) -> ElementRef[NodeT]: ...
-def contextual[RenderTargetT, ContextT](
+def context[RenderTargetT, ContextT](
     callback: Callable[[LayoutContext], DocumentLike[RenderTargetT, ContextT]],
     *,
     key: str,
