@@ -19,6 +19,7 @@ dependencies = [
     "httpx>=0.28,<1",
     "uvicorn>=0.34.0",
     "pydantic-settings>=2.14,<3",
+    "pydantic>=2.14,<3",
     "pgvector>=0.5,<1",
     "openai>=1.58.1",
     "async-lru>=2.0.4",

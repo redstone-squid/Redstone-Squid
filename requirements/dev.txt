@@ -1120,7 +1120,9 @@ pydantic==2.14.3 \
     #   bump-my-version
     #   openai
     #   pydantic-settings
+    #   redstone-squid
     #   squid-ui
+    #   squid-ui-discord
 pydantic-core==2.50.4 \
     --hash=sha256:1de7be9a66fc8536770481ab64a05aae5067c725f2b29a09543af00e6a417b97 \
     --hash=sha256:26cb012c4b8ca9f847bd0ac15978bd3d0f55b050bfbe6c47355edfc7e945029b \

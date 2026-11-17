@@ -19,7 +19,9 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Protocol, Self, overload
+from typing import Any, Literal, Protocol, Self, overload
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from squid_reactivity import (
     FrameworkIntegrityError,
@@ -345,6 +347,23 @@ class _CompensationIntentParticipant:
         return None
 
 
+class _CompensationRecordWire(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: Literal[1] = Field(default=1, alias="schema")
+    execution_id: uuid.UUID
+    cause: CausalRef | None
+    root_action_id: uuid.UUID | None
+    name: str
+    original_action_id: uuid.UUID
+    idempotency_key: str
+    started_at: datetime
+    status: CompensationStatus
+    attempts: int
+    updated_at: datetime
+    error: ExceptionReport | None
+
+
 class CompensationRecordCodec:
     """JSON schema 1 codec for application-owned durable compensation records."""
 
@@ -354,69 +373,55 @@ class CompensationRecordCodec:
 
     def encode(self, record: CompensationRecord) -> bytes:
         context = record.intent.context
-        payload = {
-            "schema": self.schema_version,
-            "execution_id": str(context.execution_id),
-            "cause": None
-            if context.cause is None
-            else {"kind": context.cause.kind, "identity": context.cause.identity},
-            "root_action_id": None if context.root_transaction_id is None else str(context.root_transaction_id),
-            "name": context.name,
-            "original_action_id": str(record.intent.original_transaction_id),
-            "idempotency_key": record.intent.idempotency_key,
-            "started_at": record.intent.started_at.isoformat(),
-            "status": record.status.value,
-            "attempts": record.attempts,
-            "updated_at": record.updated_at.isoformat(),
-            "error": None
-            if record.error is None
-            else {"type_name": record.error.type_name, "message": record.error.message},
-        }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        wire = _CompensationRecordWire(
+            execution_id=context.execution_id,
+            cause=context.cause,
+            root_action_id=context.root_transaction_id,
+            name=context.name,
+            original_action_id=record.intent.original_transaction_id,
+            idempotency_key=record.intent.idempotency_key,
+            started_at=record.intent.started_at,
+            status=record.status,
+            attempts=record.attempts,
+            updated_at=record.updated_at,
+            error=record.error,
+        )
+        return json.dumps(wire.model_dump(mode="json", by_alias=True), sort_keys=True, separators=(",", ":")).encode()
 
     def decode(self, data: bytes) -> CompensationRecord:
         if len(data) > self.max_encoded_bytes:
             message = "compensation record exceeds the maximum encoded size"
             raise ValueError(message)
         try:
-            return self._decode(data)
-        except (KeyError, TypeError, AttributeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            wire = _CompensationRecordWire.model_validate_json(data, strict=True)
+        except ValidationError as error:
+            try:
+                payload = json.loads(data)
+            except UnicodeDecodeError, json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict) and payload.get("schema") != self.schema_version:
+                message = f"unsupported compensation record schema {payload.get('schema')!r}"
+                raise ValueError(message) from error
             message = "compensation record has a corrupt schema"
             raise ValueError(message) from error
-        except ValueError as error:
-            if str(error).startswith("unsupported compensation record schema"):
-                raise
-            message = "compensation record has a corrupt schema"
-            raise ValueError(message) from error
-
-    def _decode(self, data: bytes) -> CompensationRecord:
-        payload = json.loads(data)
-        if not isinstance(payload, dict):
-            message = "compensation record has a corrupt schema"
-            raise TypeError(message)
-        if payload.get("schema") != self.schema_version:
-            message = f"unsupported compensation record schema {payload.get('schema')!r}"
-            raise ValueError(message)
-        cause = payload["cause"]
         context = OperationContext(
-            uuid.UUID(payload["execution_id"]),
-            None if cause is None else CausalRef(cause["kind"], cause["identity"]),
-            None if payload["root_action_id"] is None else uuid.UUID(payload["root_action_id"]),
-            payload["name"],
+            wire.execution_id,
+            wire.cause,
+            wire.root_action_id,
+            wire.name,
         )
         intent = CompensationIntent(
             context,
-            uuid.UUID(payload["original_action_id"]),
-            payload["idempotency_key"],
-            datetime.fromisoformat(payload["started_at"]),
+            wire.original_action_id,
+            wire.idempotency_key,
+            wire.started_at,
         )
-        error = payload["error"]
         return CompensationRecord(
             intent,
-            CompensationStatus(payload["status"]),
-            payload["attempts"],
-            datetime.fromisoformat(payload["updated_at"]),
-            None if error is None else ExceptionReport(error["type_name"], error["message"]),
+            wire.status,
+            wire.attempts,
+            wire.updated_at,
+            wire.error,
         )
 
 

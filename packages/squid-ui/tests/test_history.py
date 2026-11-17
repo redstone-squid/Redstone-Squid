@@ -567,6 +567,9 @@ async def test_compensation_record_round_trips_and_recovers_after_restart() -> N
     assert payload["schema"] == 1
     assert payload["root_action_id"] == str(root)
     assert payload["original_action_id"] == str(original)
+    malformed = payload | {"attempts": True}
+    with pytest.raises(ValueError, match="corrupt schema"):
+        codec.decode(json.dumps(malformed).encode())
     restored = MemoryCompensationOutbox(records=(codec.decode(encoded),))
     retry_context = OperationContext(uuid.uuid7(), context.causal_ref(), root, context.name)
     retry_intent = CompensationIntent(retry_context, original, intent.idempotency_key, datetime.now(UTC))
