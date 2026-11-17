@@ -1,6 +1,33 @@
 # Dependency-based caching for squid-ui
 
-Status: proposed design; no runtime changes implemented.
+Status: incremental implementation started. Callback-independent allocation reuse
+for ordinary semantic `ActionControl` handlers is implemented; the broader artifact
+and dependency model below remains proposed.
+
+## Implemented increment
+
+A committed owner can reuse a certified allocation when only `on_trigger` changes.
+`ReboundAllocation` selects the existing page Scene and refreshes bindings through
+explicit framework handler edges, preserving frontend selection and grouped routes.
+It retains allocation identity, does not mutate the committed generation, and flattens
+successive wrappers so callback updates cannot form an unbounded chain.
+
+All other control fields still participate in allocation comparison. Forms, native
+controls, and actions inside alternative/fallback presentations remain conservative.
+This is owner-local reuse: the underlying certificate still contains its original
+callback-bearing outputs. It is not yet the callback-free shared artifact model below.
+Incremental fingerprints, bounded page-projection caching, and partial certification
+remain future work.
+
+Tests cover callbacks on every page, isolation from the previous generation, repeated
+updates, frontend selection, shared callback identity, and invalidation by display or
+dispatch-policy changes. Existing composition and Discord cache tests exercise the
+surrounding planning and rendering paths.
+
+A local microbenchmark of 100 callback-only updates to a paragraph and one action
+measured median planning time of about 0.51 ms with a fresh presentation state versus
+0.21 ms with the retained allocation. Target evaluations fell from 100 to zero.
+This is illustrative planning-only evidence, not an end-to-end latency guarantee.
 
 ## Objective
 
