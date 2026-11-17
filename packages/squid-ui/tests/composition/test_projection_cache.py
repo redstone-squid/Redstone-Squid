@@ -12,7 +12,8 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene, testing
 from squid_ui.ext.discord.planning.discord import components_v2_target
-from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler
+from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec, PressHandler
+from squid_ui.interactions.forms import FormBinding, FormSpec, SubmitEvent, TextField
 from squid_ui.interactions.guards import ADMIT, GuardDecision, GuardLedger
 from squid_ui.interactions.handlers import FrontendHandler
 from squid_ui.planning import CompositionOptions, OccurrenceId, composition_state, plan
@@ -339,3 +340,51 @@ async def test_action_templates_release_live_dispatch_policy(display: sl.semanti
     assert receiver_ref() is None
     assert history_ref() is None
     assert not hasattr(templates.select().display, "bindings")
+
+
+def test_projection_byte_limit_skips_oversized_entries() -> None:
+    original = plan(sl.action_controls(sl.action_control("Open", ignored, key="open"), key="actions"), target=TARGET)
+    controls = {"open": sl.action_control("Open", ignored, key="open")}
+    source = Outputs(original)
+    allocation = ActionAllocation(source, controls, "projection", source.live, source.regions, max_bytes=1)
+    first = allocation.select()
+    assert allocation.select() is not first
+    assert allocation.cache_snapshot().entries == allocation.cache_snapshot().retained_bytes == 0
+    measured = ActionAllocation(source, controls, "projection", source.live, source.regions)
+    measured.select()
+    size = measured.cache_snapshot().retained_bytes
+    bounded = ActionAllocation(source, controls, "projection", source.live, source.regions, max_bytes=size)
+    bounded.select({REGION: 0})
+    bounded.select({REGION: 1})
+    assert bounded.cache_snapshot().entries == 1
+    assert bounded.cache_snapshot().evictions == 1
+    assert bounded.cache_snapshot().retained_bytes <= size
+
+
+def test_display_template_releases_forms_providers_and_unsupported_actions() -> None:
+    class Owner:
+        async def press(self, event: sl.PressEvent) -> None:
+            pass
+
+        async def submit(self, event: SubmitEvent) -> None:
+            pass
+
+    owner = Owner()
+    reference = weakref.ref(owner)
+    form = FormBinding("form", FormSpec("Name", (TextField(key="name", label="Name"),)), owner.submit)
+    original = plan(sl.paragraph("Hello"), target=TARGET)
+    original = replace(
+        original,
+        bindings={"unsupported": ActionBinding("unsupported", owner.press)},
+        form_bindings={"form": form},
+        form_plans={"form": owner},
+        resources={"resource": owner},
+    )
+    template, live = ActionPage.prepare(original, {})
+    projected = template.display.bind(original.bindings, live)
+    assert projected.form_bindings["form"] is form
+    assert projected.resources["resource"] is owner
+    del projected, original, live, form, owner
+    gc.collect()
+    assert reference() is None
+    assert template.display.scene is not None
