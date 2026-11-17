@@ -378,7 +378,9 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
         }),
       ),
     );
-    expect(screen.getByText(/does not attach or claim to sanitize schematics/i)).toBeVisible();
+    expect(
+      screen.getByText(/Review the schematic suggestions and fill in any missing details/i),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Submit draft" }));
     expect(await screen.findAllByText("Display name is required.")).toHaveLength(2);
     expect(screen.getByText(/needs attention/)).toBeVisible();
@@ -438,6 +440,19 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("between 1 byte and");
     expect(api.uploadMedia).not.toHaveBeenCalled();
+  });
+
+  it("preserves an unsaved field by disabling schematic mutations after a save failure", async () => {
+    const api = fakeApi({ changeDraft: vi.fn().mockRejectedValue(new SubmissionApiError(503)) });
+    render(<SubmissionFlow locale="en" config={config} api={api} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start draft" }));
+    const name = await screen.findByLabelText(/Display name/);
+    fireEvent.change(name, { target: { value: "Unsaved title" } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(screen.getByLabelText("Upload schematic")).toBeDisabled());
+    await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
+    expect(name).toHaveValue("Unsaved title");
+    expect(api.uploadSchematic).not.toHaveBeenCalled();
   });
 
   it("lets the latest rapid edit own a field's pending and error state", async () => {

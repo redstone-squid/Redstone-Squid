@@ -691,7 +691,13 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         api={api}
         draftId={draft.id}
         locale={locale}
-        disabled={locked || busy || uploading || pendingFields.size > 0}
+        disabled={
+          locked ||
+          busy ||
+          uploading ||
+          pendingFields.size > 0 ||
+          Object.keys(saveErrors).length > 0
+        }
         labels={fieldLabels}
         choices={Object.fromEntries(
           sections.flatMap((section) =>
@@ -705,14 +711,15 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
           setSchematicBusy(true);
           try {
             await saveQueue.current;
-            await operation();
-          } finally {
+            if (saveErrorsRef.current.size > 0) throw new Error(copy.saveBeforeSubmit);
             try {
+              await operation();
+            } finally {
               installDraft(await api.getDraft(draft.id));
               setFinalization(undefined);
-            } finally {
-              setSchematicBusy(false);
             }
+          } finally {
+            setSchematicBusy(false);
           }
         }}
         onAccept={(suggestion) => {

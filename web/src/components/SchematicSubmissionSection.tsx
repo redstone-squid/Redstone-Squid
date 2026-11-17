@@ -6,7 +6,7 @@ import type {
   SchematicSubmissionSuggestions,
 } from "../generated/types.gen";
 import type { SubmissionApi } from "../lib/submission-api";
-import { translate, type Locale } from "../lib/i18n";
+import { translate, type StaticMessageKey, type Locale } from "../lib/i18n";
 
 type Props = {
   api: SubmissionApi;
@@ -33,7 +33,7 @@ export default function SchematicSubmissionSection({
   const [result, setResult] = useState<SchematicSubmissionSuggestions>();
   const [error, setError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
-  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
+  const t = (key: StaticMessageKey) => translate(locale, key);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,8 +133,8 @@ export default function SchematicSubmissionSection({
             <strong>{labels[suggestion.field_id] ?? suggestion.field_id}</strong>:{" "}
             {(Array.isArray(suggestion.value) ? suggestion.value : [suggestion.value])
               .map((value) => {
-                if (value && typeof value === "object" && "name" in value)
-                  return String(value.name);
+                if (value && typeof value === "object")
+                  return "name" in value && typeof value.name === "string" ? value.name : "";
                 return (
                   choices[suggestion.field_id]?.find((choice) => choice.value === value)?.label ??
                   String(value ?? "")
