@@ -387,12 +387,14 @@ class PollScreen(sd.Screen[str]):
         draft: PollDraft | None = None,
     ) -> None:
         self.option_editor = sp.CollectionEditor(
-            "Poll choices",
+            tr(t"poll-choice-rows-title = Poll choices"),
             create=sl.forms.FormSpec(
-                "Poll choice",
+                tr(t"poll-choice-row-title = Poll choice"),
                 (
-                    sl.forms.TextField(key="label", label="Label", maximum=100),
-                    sl.forms.TextField(key="emoji", label="Emoji (optional)", required=False, maximum=100),
+                    sl.forms.TextField(key="label", label=tr(t"poll-choice-row-label = Label"), maximum=100),
+                    sl.forms.TextField(
+                        key="emoji", label=tr(t"poll-choice-row-emoji = Emoji (optional)"), required=False, maximum=100
+                    ),
                 ),
             ),
             label=lambda value: f"{value.get('emoji') or ''} {value['label']}",
@@ -464,12 +466,14 @@ class PollScreen(sd.Screen[str]):
                 self.option_driver,
                 sl.action_controls(
                     sl.action_control(
-                        "Use choices",
+                        tr(t"poll-choice-rows-save = Use choices"),
                         self._save_options,
                         key="save-options",
                         available=not self.option_editor.errors(self.option_driver.machine_state),
                     ),
-                    sl.action_control("Cancel", self._cancel_options, key="cancel-options"),
+                    sl.action_control(
+                        tr(t"poll-choice-rows-cancel = Cancel"), self._cancel_options, key="cancel-options"
+                    ),
                     key="option-actions",
                 ),
             )
@@ -479,7 +483,7 @@ class PollScreen(sd.Screen[str]):
         return (
             *history_actions(self.history),
             sl.action_control(
-                "Edit choice rows",
+                tr(t"poll-choice-rows-edit = Edit choice rows"),
                 self._edit_options,
                 key="option-rows",
                 available=any(answer.step == "content" for answer in self.driver.machine_state.answers),
