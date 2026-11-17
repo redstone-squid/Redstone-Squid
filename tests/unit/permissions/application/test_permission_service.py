@@ -1,12 +1,12 @@
 """PermissionService: assembling stored rows into resolver rules."""
 
-from collections.abc import Iterable
 from dataclasses import replace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from squid.core.actors import Actor
+from squid.core.errors import InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.cache import SubjectRuleCache
 from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
@@ -39,15 +39,9 @@ class FakeStore:
         self.records = records
         self.loads = 0
 
-    async def load_for_subject(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-    ) -> SubjectRecords:
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
         self.loads += 1
-        return self.records
+        return replace(self.records, subject=subject)
 
     async def epoch(self) -> int:
         return self.records.epoch
@@ -59,7 +53,7 @@ def service(
     grants: tuple[PermissionGrant, ...] = (),
     assignments: tuple[PermissionRoleAssignment, ...] = (),
 ) -> tuple[PermissionService, FakeStore]:
-    store = FakeStore(SubjectRecords(epoch=1, roles=roles, grants=grants, assignments=assignments))
+    store = FakeStore(SubjectRecords(subject=Actor(), epoch=1, roles=roles, grants=grants, assignments=assignments))
     return PermissionService(uow_factory=permission_uow_factory(store)), store
 
 
@@ -335,3 +329,10 @@ async def test_uncommitted_grants_do_not_enter_the_rule_cache() -> None:
         assert (await permissions.check(actor, "build.submission.edit", uow=uow)).allowed
     assert not (await permissions.check(actor, "build.submission.edit")).allowed
     assert committed.loads == uncommitted.loads == 1
+
+
+async def test_loaded_inputs_cannot_be_paired_with_another_identity() -> None:
+    permissions, store = service()
+    store.load_for_subject = AsyncMock(return_value=SubjectRecords(epoch=1, subject=Actor(account_id=99)))
+    with pytest.raises(InvalidStateError, match="different identity or context"):
+        await permissions.check(Actor(account_id=7), "build.submission.edit")

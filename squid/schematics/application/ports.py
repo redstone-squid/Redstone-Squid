@@ -75,7 +75,7 @@ class SchematicAnalyzer(Protocol):
         ...
 
 
-class SchematicStore(Protocol):
+class SchematicRepository(Protocol):
     """Persistence operations required by the schematic service."""
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:

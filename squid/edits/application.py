@@ -38,7 +38,7 @@ class EditRunner(Protocol):
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult: ...
 
 
-class EditStore(Protocol):
+class EditRepository(Protocol):
     """Operation locks last until the transaction ends, so a retry waits for the original."""
 
     async def lock_operation(self, operation_id: UUID) -> None: ...
@@ -50,7 +50,7 @@ class EditStore(Protocol):
 
 class EditUnitOfWork(UnitOfWork, Protocol):
     @property
-    def edits(self) -> EditStore: ...
+    def edits(self) -> EditRepository: ...
 
 
 class EditHandler[UowT: EditUnitOfWork](Protocol):

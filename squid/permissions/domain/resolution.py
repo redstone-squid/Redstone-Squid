@@ -39,15 +39,25 @@ one implementation.
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Protocol
 
 from whenever import Instant
 
-from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.permissions.domain.catalogue import CATALOGUE, Catalogue
 from squid.permissions.domain.matching import Pattern
 from squid.permissions.domain.models import Default, Effect, NodeScope, PermissionNode
+
+
+class PermissionContext(Protocol):
+    """Context supplied alongside already selected account/external-principal rules."""
+
+    @property
+    def guild_id(self) -> int | None: ...
+
+    @property
+    def is_bot_owner(self) -> bool: ...
+
 
 type CheckMode = Literal["all", "any"]
 
@@ -338,7 +348,7 @@ def rules_from_role(
 def _applicable(
     rule: Rule,
     node: PermissionNode,
-    subject: Actor,
+    subject: PermissionContext,
     now: Instant,
 ) -> bool:
     if rule.expires_at is not None and rule.expires_at <= now:
@@ -379,7 +389,7 @@ def _lost_on(winner: Rank, loser: Rank) -> LossReason:
 
 def resolve(
     node: PermissionNode | str,
-    subject: Actor,
+    subject: PermissionContext,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,
@@ -429,7 +439,7 @@ def resolve(
 
 def resolve_many(
     nodes: Iterable[PermissionNode | str],
-    subject: Actor,
+    subject: PermissionContext,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,

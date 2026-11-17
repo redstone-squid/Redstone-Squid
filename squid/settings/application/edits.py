@@ -11,7 +11,7 @@ from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
-from squid.settings.application.ports import GuildSettingsUnitOfWork, SettingsStore
+from squid.settings.application.ports import GuildSettingsUnitOfWork, SettingsRepository
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSetting, ServerSetting
@@ -21,7 +21,7 @@ RUNTIME_TARGET = EditTarget("runtime-settings", "1")
 RUNTIME_EDIT = "settings.runtime"
 
 
-class SettingsEditStore(SettingsStore, Protocol):
+class SettingsEditRepository(SettingsRepository, Protocol):
     async def flush_guild_revision(self, row: ServerSetting, expected: Revision) -> Revision: ...
 
     async def flush_runtime_revision(self, row: RuntimeSetting, expected: Revision) -> Revision: ...
@@ -30,7 +30,7 @@ class SettingsEditStore(SettingsStore, Protocol):
 class SettingsEditUnitOfWork(EditUnitOfWork, PermissionUnitOfWork, GuildSettingsUnitOfWork, Protocol):
     @property
     @override
-    def settings(self) -> SettingsEditStore: ...
+    def settings(self) -> SettingsEditRepository: ...
 
 
 class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, RuntimeSettings]):

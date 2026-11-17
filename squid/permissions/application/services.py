@@ -15,6 +15,7 @@ from contextlib import nullcontext
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.errors import InvalidStateError
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
 from squid.permissions.application.roles import role_specs
@@ -108,23 +109,22 @@ class PermissionService:
         if cache is not None and (cached := cache.get(key)) is not None:
             return cached
         async with self._uow_factory() if uow is None else nullcontext(uow) as scope:
-            records = await scope.permissions.load_for_subject(
-                account_id=subject.account_id,
-                discord_role_ids=subject.discord_role_ids,
-                guild_id=subject.guild_id,
-            )
-        rules = self._assemble(records, subject)
+            records = await scope.permissions.load_for_subject(subject)
+        if records.subject != subject:
+            message = "Permission inputs belong to a different identity or context"
+            raise InvalidStateError(message)
+        rules = self._assemble(records)
         if cache is not None:
             cache.put(key, rules, epoch=records.epoch)
         return rules
 
-    def _assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
+    def _assemble(self, records: SubjectRecords) -> tuple[Rule, ...]:
         """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
         graph = RoleGraph(role_specs(records.roles), catalogue=self._catalogue)
         rules = [_grant_rule(grant) for grant in records.grants]
         rules.extend(self._assignment_rules(records, graph))
 
-        bridge = self._bridge_rules(records, graph, subject)
+        bridge = self._bridge_rules(records, graph, records.subject)
         rules.extend(bridge)
         return tuple(rules)
 

@@ -1,14 +1,17 @@
 """PostgreSQL persistence for permissions."""
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 
-from sqlalchemy import delete, exists, or_, select, text, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete, exists, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.permissions.application.ports import AuditEntry, SubjectRecords
+from squid.permissions.domain.models import PatternMode
 from squid.permissions.models import (
     PermissionAuditEntry,
     PermissionEpoch,
@@ -19,14 +22,42 @@ from squid.permissions.models import (
     PermissionRolePattern,
 )
 
-INCLUDE_MODE = 1
-EXCLUDE_MODE = -1
+_ROLE_PATTERNS = (
+    select(
+        PermissionRolePattern.role_id,
+        func.array_agg(aggregate_order_by(PermissionRolePattern.pattern, PermissionRolePattern.pattern))
+        .filter(PermissionRolePattern.mode == PatternMode.INCLUDE)
+        .label("includes"),
+        func.array_agg(aggregate_order_by(PermissionRolePattern.pattern, PermissionRolePattern.pattern))
+        .filter(PermissionRolePattern.mode == PatternMode.EXCLUDE)
+        .label("excludes"),
+    )
+    .group_by(PermissionRolePattern.role_id)
+    .subquery()
+)
+_ROLE_EDGES = (
+    select(
+        PermissionRoleInclude.role_id,
+        func.array_agg(
+            aggregate_order_by(PermissionRoleInclude.included_role_id, PermissionRoleInclude.included_role_id)
+        ).label("edges"),
+    )
+    .group_by(PermissionRoleInclude.role_id)
+    .subquery()
+)
+_ROLE_DEFINITIONS = (
+    select(PermissionRole, _ROLE_PATTERNS.c.includes, _ROLE_PATTERNS.c.excludes, _ROLE_EDGES.c.edges)
+    .outerjoin(_ROLE_PATTERNS, PermissionRole.id == _ROLE_PATTERNS.c.role_id)
+    .outerjoin(_ROLE_EDGES, PermissionRole.id == _ROLE_EDGES.c.role_id)
+    .where(PermissionRole.withdrawn.is_(False))
+    .order_by(PermissionRole.id)
+)
 
 EPOCH_CHANNEL = "squid_permissions"
 """The channel `bump_permission_epoch()` notifies after any permission write."""
 
 
-class PermissionRepository:
+class PostgresPermissionRepository:
     """Load permission rule sources and the epoch they were read at."""
 
     def __init__(self, session: Callable[[], AsyncSession]):
@@ -37,19 +68,14 @@ class PermissionRepository:
         version = await session.scalar(select(PermissionEpoch.version).where(PermissionEpoch.id == 1))
         return version or 0
 
-    async def load_for_subject(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-    ) -> SubjectRecords:
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
         """Load the epoch, all role definitions, and grants and assignments for one subject.
 
         Loading all roles allows composition to be resolved without recursive database
         queries. Expiry and permission scope are checked by the resolver, not this query.
         """
-        role_ids = tuple(dict.fromkeys(discord_role_ids))
+        account_id, guild_id = subject.account_id, subject.guild_id
+        role_ids = tuple(sorted(subject.discord_role_ids))
 
         session = self._session()
         # Read the epoch first so a concurrent write leaves an older stamp.
@@ -60,14 +86,10 @@ class PermissionRepository:
         grants = await self._load_grants(session, account_id, role_ids, guild_id)
         assignments = await self._load_assignments(session, account_id, role_ids, guild_id)
 
-        return SubjectRecords(epoch=epoch, roles=roles, grants=grants, assignments=assignments)
+        return SubjectRecords(subject=subject, epoch=epoch, roles=roles, grants=grants, assignments=assignments)
 
     async def _load_roles(self, session: AsyncSession) -> tuple[PermissionRole, ...]:
-        rows = (await session.scalars(select(PermissionRole).where(PermissionRole.withdrawn.is_(False)))).all()
-        patterns = (await session.scalars(select(PermissionRolePattern))).all()
-        includes = (await session.scalars(select(PermissionRoleInclude))).all()
-
-        return _role_records(rows, patterns, includes)
+        return _role_records((await session.execute(_ROLE_DEFINITIONS)).all())
 
     async def _load_grants(
         self,
@@ -111,7 +133,7 @@ class PermissionRepository:
         return tuple(row for row in rows)
 
 
-class PermissionAdminRepository:
+class PostgresPermissionAdminRepository:
     """Write permissions and audit entries in the caller's transaction.
 
     Methods flush changes but leave commit and rollback to the unit of work.
@@ -123,9 +145,9 @@ class PermissionAdminRepository:
     @staticmethod
     def _audit(entry: AuditEntry) -> PermissionAuditEntry:
         return PermissionAuditEntry(
-            action=entry.action,
+            action=entry.action.value,
             actor_account_id=entry.actor_account_id,
-            subject_kind=entry.subject_kind,
+            subject_kind=None if entry.subject_kind is None else entry.subject_kind.value,
             subject_id=entry.subject_id,
             subject_guild_id=entry.subject_guild_id,
             pattern=entry.pattern,
@@ -272,14 +294,11 @@ class PermissionAdminRepository:
         return tuple(assignment for assignment, _ in rows)
 
     async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
-        statement = select(PermissionRole).where(PermissionRole.withdrawn.is_(False))
+        statement = _ROLE_DEFINITIONS
         if guild_id is not None:
             statement = statement.where(or_(PermissionRole.guild_id.is_(None), PermissionRole.guild_id == guild_id))
         session = self._session()
-        roles = (await session.scalars(statement)).all()
-        patterns = (await session.scalars(select(PermissionRolePattern))).all()
-        includes = (await session.scalars(select(PermissionRoleInclude))).all()
-        return _role_records(roles, patterns, includes)
+        return _role_records((await session.execute(statement)).all())
 
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
         # A guild's own role shadows a global one of the same slug, which is what
@@ -522,23 +541,13 @@ class PermissionAdminRepository:
 
 
 def _role_records(
-    roles: Sequence[PermissionRole],
-    patterns: Sequence[PermissionRolePattern],
-    includes: Sequence[PermissionRoleInclude],
+    rows: Sequence[Row[tuple[PermissionRole, list[str] | None, list[str] | None, list[int] | None]]],
 ) -> tuple[PermissionRole, ...]:
-    """Fold pattern and composition rows into the role records they belong to."""
-    by_includes: dict[int, list[str]] = {}
-    by_excludes: dict[int, list[str]] = {}
-    for pattern in patterns:
-        target = by_includes if pattern.mode == INCLUDE_MODE else by_excludes
-        target.setdefault(pattern.role_id, []).append(pattern.pattern)
-
-    by_edges: dict[int, list[int]] = {}
-    for edge in includes:
-        by_edges.setdefault(edge.role_id, []).append(edge.included_role_id)
-
-    for role in roles:
-        role.includes = tuple(sorted(by_includes.get(role.id, ())))
-        role.excludes = tuple(sorted(by_excludes.get(role.id, ())))
-        role.includes_roles = tuple(sorted(by_edges.get(role.id, ())))
+    """Attach separately aggregated patterns and edges to each loaded role."""
+    roles: list[PermissionRole] = []
+    for role, includes, excludes, edges in rows:
+        role.includes = tuple(includes or ())
+        role.excludes = tuple(excludes or ())
+        role.includes_roles = tuple(edges or ())
+        roles.append(role)
     return tuple(roles)

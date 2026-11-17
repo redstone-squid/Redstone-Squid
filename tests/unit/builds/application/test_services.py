@@ -23,7 +23,7 @@ from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionStore, SubjectRecords
+from squid.permissions.application.ports import PermissionRepository, SubjectRecords
 from squid.permissions.models import PermissionGrant
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -84,8 +84,8 @@ class FakeRestrictionRepository:
 
 
 class EmptyPermissions:
-    async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
-        return SubjectRecords(epoch=1)
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        return SubjectRecords(epoch=1, subject=subject)
 
     async def epoch(self) -> int:
         return 1
@@ -101,7 +101,7 @@ def copy_repository(repository: FakeBuildRepository) -> FakeBuildRepository:
 
 
 class BuildScope(PublishingFakeUnitOfWork[FakeBuildRepository]):
-    def __init__(self, repository: FakeBuildRepository, permissions: PermissionStore | None = None) -> None:
+    def __init__(self, repository: FakeBuildRepository, permissions: PermissionRepository | None = None) -> None:
         super().__init__(repository, clone=copy_repository)
         self.permissions = permissions or EmptyPermissions()
 
@@ -275,7 +275,7 @@ def build_service(
     repository: FakeBuildRepository,
     locks: FakeBuildLocks | None = None,
     *,
-    permissions: PermissionStore | None = None,
+    permissions: PermissionRepository | None = None,
 ) -> BuildService:
     return BuildService(
         locks or FakeBuildLocks(),
@@ -506,12 +506,13 @@ class TestAuthorizedEditing:
     STRANGER = Actor(account_id=2)
 
     @staticmethod
-    def _permissions(*held: str) -> PermissionStore:
+    def _permissions(*held: str) -> PermissionRepository:
         class Store:
-            async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+            async def load_for_subject(self, subject: Actor) -> SubjectRecords:
                 return SubjectRecords(
                     epoch=1,
                     grants=tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=2) for node in held),
+                    subject=subject,
                 )
 
             async def epoch(self) -> int:
@@ -575,12 +576,13 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
         held = True
 
         @override
-        async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+        async def load_for_subject(self, subject: Actor) -> SubjectRecords:
             return SubjectRecords(
                 epoch=1,
                 grants=(PermissionGrant(pattern="build.submission.edit", effect=1, subject_account_id=2),)
                 if self.held
                 else (),
+                subject=subject,
             )
 
     permissions = Permissions()

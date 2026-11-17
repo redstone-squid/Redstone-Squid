@@ -14,8 +14,8 @@ from squid.schematics.application.duplicates import DuplicateCandidate, Duplicat
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
     SchematicPreviewPublisher,
+    SchematicRepository,
     SchematicResourcePackProvider,
-    SchematicStore,
     SchematicVersionResolver,
 )
 from squid.schematics.application.preview_service import SchematicPreviewService
@@ -79,7 +79,7 @@ class SchematicService:
     def __init__(
         self,
         analyzer: SchematicAnalyzer,
-        store: SchematicStore,
+        store: SchematicRepository,
         previews: SchematicPreviewPublisher,
         versions: SchematicVersionResolver,
         *,

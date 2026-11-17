@@ -600,8 +600,8 @@ class MockNotifications(NotificationService):
 class EmptyPermissionStore:
     """No stored rules, and a fixed epoch."""
 
-    async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
-        return SubjectRecords(epoch=1)
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        return SubjectRecords(epoch=1, subject=subject)
 
     async def epoch(self) -> int:
         return 1

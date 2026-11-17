@@ -14,7 +14,7 @@ from squid.builds.application.inference import BuildInferenceInput, BuildInferen
 from squid.builds.domain import BuildDraft
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
-from squid.permissions.application.ports import PermissionStore
+from squid.permissions.application.ports import PermissionRepository
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
@@ -174,5 +174,5 @@ class InferenceScope(PublishingFakeUnitOfWork[RetainedRun]):
         return cast(InferenceRunRepository, self.state)
 
     @property
-    def permissions(self) -> PermissionStore:
+    def permissions(self) -> PermissionRepository:
         raise AssertionError("Inference recovery tests use owner authority.")

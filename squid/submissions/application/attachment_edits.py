@@ -34,7 +34,7 @@ class AttachmentValues(BaseModel):
         return EditValues(self.model_dump_json())
 
 
-class AttachmentEditStore(Protocol):
+class AttachmentEditRepository(Protocol):
     async def lock(self, draft_id: UUID) -> None: ...
 
     async def stage(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> None: ...
@@ -48,7 +48,7 @@ class AttachmentEditStore(Protocol):
 
 class AttachmentEditUnitOfWork(DraftUnitOfWork, EditUnitOfWork, Protocol):
     @property
-    def attachment_edits(self) -> AttachmentEditStore: ...
+    def attachment_edits(self) -> AttachmentEditRepository: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

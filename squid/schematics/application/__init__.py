@@ -14,7 +14,7 @@ from squid.schematics.application.jobs import (
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
     SchematicPreviewPublisher,
-    SchematicStore,
+    SchematicRepository,
     SchematicVersionResolver,
 )
 from squid.schematics.application.preview_service import SchematicPreviewService
@@ -58,8 +58,8 @@ __all__ = [
     "SchematicPreviewService",
     "SchematicPublication",
     "SchematicRenderJobService",
+    "SchematicRepository",
     "SchematicService",
-    "SchematicStore",
     "SchematicVersionResolver",
     "SimulationRequest",
     "SkippedRender",

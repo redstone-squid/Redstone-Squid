@@ -1,6 +1,5 @@
 """Application ports for permissions."""
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -8,6 +7,7 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionCheck
+from squid.permissions.domain.models import AuditAction, AuditSubjectKind
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.unit_of_work import UnitOfWork
 
@@ -23,22 +23,17 @@ class SubjectRecords:
     """
 
     epoch: int
+    subject: Actor
     roles: tuple[PermissionRole, ...] = ()
     grants: tuple[PermissionGrant, ...] = ()
     assignments: tuple[PermissionRoleAssignment, ...] = ()
 
 
-class PermissionStore(Protocol):
+class PermissionRepository(Protocol):
     """Persistence operations required by :class:`PermissionService`."""
 
-    async def load_for_subject(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-    ) -> SubjectRecords:
-        """Load every rule source that could apply to one subject, plus the epoch."""
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        """Load and bind rule sources to exactly this identity and context."""
         ...
 
     async def epoch(self) -> int:
@@ -56,9 +51,9 @@ class ActorPermissionChecker(Protocol):
 class AuditEntry:
     """Audit details to append in the same transaction as a permission change."""
 
-    action: str
+    action: AuditAction
     actor_account_id: int | None = None
-    subject_kind: str | None = None
+    subject_kind: AuditSubjectKind | None = None
     subject_id: int | None = None
     subject_guild_id: int | None = None
     pattern: str | None = None
@@ -70,7 +65,7 @@ class AuditEntry:
     details: dict[str, object] | None = None
 
 
-class PermissionAdminStore(Protocol):
+class PermissionAdminRepository(Protocol):
     """Permission mutations and administrative queries.
 
     Each mutation adds its supplied audit entry to the caller's transaction;
@@ -192,9 +187,9 @@ class PermissionAdminStore(Protocol):
 
 class PermissionUnitOfWork(UnitOfWork, Protocol):
     @property
-    def permissions(self) -> PermissionStore: ...
+    def permissions(self) -> PermissionRepository: ...
 
 
 class PermissionAdminUnitOfWork(PermissionUnitOfWork, Protocol):
     @property
-    def permission_admin(self) -> PermissionAdminStore: ...
+    def permission_admin(self) -> PermissionAdminRepository: ...

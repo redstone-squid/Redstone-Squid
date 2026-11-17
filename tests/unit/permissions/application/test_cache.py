@@ -1,7 +1,5 @@
 """The rule-set cache and the epoch watcher that invalidates it."""
 
-from collections.abc import Iterable
-
 from whenever import Instant
 
 from squid.core.actors import Actor
@@ -27,18 +25,14 @@ class CountingStore:
         self.epoch_version = epoch
         self.loads = 0
 
-    async def load_for_subject(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-    ) -> SubjectRecords:
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        account_id = subject.account_id
         self.loads += 1
         return SubjectRecords(
             epoch=self.epoch_version,
             roles=BUILTIN_ROWS,
             assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=account_id),),
+            subject=subject,
         )
 
     async def epoch(self) -> int:

@@ -10,7 +10,7 @@ from squid.artifacts import ArtifactStore
 from squid.core.errors import AuthorizationError, ConflictError, InfrastructureError, NotFoundError
 from squid.schematics.application.attachments import StoredSchematic
 from squid.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
-from squid.schematics.application.ports import SchematicResourcePackProvider, SchematicStore
+from squid.schematics.application.ports import SchematicRepository, SchematicResourcePackProvider
 from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.errors import SchematicSupportUnavailableError, SchematicTooLargeError
 
@@ -36,7 +36,7 @@ class SchematicVideoService:
         self,
         jobs: SchematicJobService,
         artifacts: ArtifactStore,
-        store: SchematicStore,
+        store: SchematicRepository,
         resources: SchematicResourcePackProvider | None,
         *,
         enabled: bool,

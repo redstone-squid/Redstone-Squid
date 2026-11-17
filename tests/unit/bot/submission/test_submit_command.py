@@ -373,7 +373,9 @@ async def test_staff_inbox_item_reopens_with_real_permission_checks(bot_owner: b
     async def records(
         *, account_id: int | None, discord_role_ids: Iterable[int], guild_id: int | None
     ) -> SubjectRecords:
-        return SubjectRecords(epoch=1, grants=(grant,) if guild_id == 456 and 789 in discord_role_ids else ())
+        return SubjectRecords(
+            subject=Actor(), epoch=1, grants=(grant,) if guild_id == 456 and 789 in discord_role_ids else ()
+        )
 
     # Only persistence is mocked: the draft service and permission resolver enforce access.
     uow = AsyncMock()

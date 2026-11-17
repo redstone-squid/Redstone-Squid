@@ -98,3 +98,33 @@ class UnknownPermissionNodeError(InvalidStateError):
 
 class CatalogueError(ConfigurationError):
     """The permission catalogue is inconsistent and cannot be built."""
+
+
+class PatternMode(IntEnum):
+    """How a stored pattern contributes to a role."""
+
+    INCLUDE = 1
+    EXCLUDE = -1
+
+
+class AuditAction(StrEnum):
+    """Permission mutations recorded transactionally with their effects."""
+
+    GRANT = "grant"
+    REVOKE = "revoke"
+    ROLE_CREATE = "role_create"
+    ROLE_DELETE = "role_delete"
+    ROLE_WITHDRAW = "role_withdraw"
+    ROLE_RANK = "role_rank"
+    ROLE_INCLUDE = "role_include"
+    ROLE_EXCLUDE = "role_exclude"
+    ROLE_PATTERN_REMOVE = "role_pattern_remove"
+    ROLE_COMPOSE = "role_compose"
+    ROLE_DECOMPOSE = "role_decompose"
+    ROLE_ASSIGN = "role_assign"
+    ROLE_UNASSIGN = "role_unassign"
+
+
+class AuditSubjectKind(StrEnum):
+    ACCOUNT = "account"
+    DISCORD_ROLE = "discord_role"

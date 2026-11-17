@@ -15,13 +15,7 @@ from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.permissions.application.administration import (
-    EXCLUDE_MODE,
-    INCLUDE_MODE,
-    PermissionAdministrationService,
-    effect_label,
-    scope_label,
-)
+from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
 from squid.permissions.application.edits import (
     ASSIGNMENT_EDIT,
     GRANT_EDIT,
@@ -50,6 +44,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid.permissions.domain.models import PatternMode
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.suggestions.domain import Suggestion
 from squid_i18n import md_tr
@@ -357,7 +352,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             PatternValues(
                 role_id=role_id,
                 pattern=form.pattern,
-                mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(form.operation),
+                mode={"include": PatternMode.INCLUDE, "exclude": PatternMode.EXCLUDE}.get(form.operation),
             ),
             revision,
             tr(t"access-view-internal-role-updated = Internal role updated."),
@@ -402,7 +397,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                     PatternValues(
                         role_id=role.id,
                         pattern=item.value,
-                        mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(operation),
+                        mode={"include": PatternMode.INCLUDE, "exclude": PatternMode.EXCLUDE}.get(operation),
                     ),
                     revision,
                     label,

@@ -11,6 +11,7 @@ from squid.core.actors import Actor
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
 from squid.permissions.application.administration import PermissionAdministrationService
 from squid.permissions.application.ports import AuditEntry
+from squid.permissions.domain.models import AuditAction, AuditSubjectKind, PatternMode
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -42,7 +43,9 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
             expires_at=None,
             granted_by_account_id=None,
             reason=None,
-            audit=AuditEntry(action="grant", subject_kind="account", subject_id=account_id, pattern=node),
+            audit=AuditEntry(
+                action=AuditAction.GRANT, subject_kind=AuditSubjectKind.ACCOUNT, subject_id=account_id, pattern=node
+            ),
         )
         assert (await permissions.check(subject, *[node], uow=uow)).allowed_nodes == frozenset({node})
         assert len(await uow.permission_admin.list_audit()) == 1
@@ -81,8 +84,30 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
                 rank=0,
                 created_by_account_id=None,
                 # The missing audit actor fails after role insertion, testing rollback of both writes.
-                audit=AuditEntry(action="role_create", actor_account_id=-1),
+                audit=AuditEntry(action=AuditAction.ROLE_CREATE, actor_account_id=-1),
             )
     async with factory() as uow:
         assert await uow.permission_admin.get_role("abandoned") is None
         assert len(await uow.permission_admin.list_audit()) == 1
+
+
+async def test_role_aggregation_preserves_empty_roles_and_independent_pattern_edge_lists(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    admin = PermissionAdministrationService(PermissionService(uow_factory=factory), uow_factory=factory)
+    actor = await admin.resolve_actor(Actor(is_bot_owner=True))
+    empty = await admin.create_role(actor, slug="empty", name="Empty", rank=1)
+    child = await admin.create_role(actor, slug="child", name="Child", rank=1)
+    parent = await admin.create_role(actor, slug="parent", name="Parent", rank=2)
+    await admin.add_pattern(actor, parent, "build.**")
+    await admin.add_pattern(actor, parent, "vote.**")
+    await admin.add_pattern(actor, parent, "@destructive", mode=PatternMode.EXCLUDE)
+    await admin.add_include(actor, parent, empty)
+    await admin.add_include(actor, parent, child)
+    roles = {role.id: role for role in await admin.roles()}
+    assert roles[empty.id].includes == ()
+    assert roles[empty.id].includes_roles == ()
+    assert roles[parent.id].includes == ("build.**", "vote.**")
+    assert roles[parent.id].excludes == ("@destructive",)
+    assert roles[parent.id].includes_roles == tuple(sorted((empty.id, child.id)))

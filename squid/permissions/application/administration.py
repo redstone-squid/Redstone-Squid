@@ -44,11 +44,9 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid.permissions.domain.models import AuditAction, AuditSubjectKind, PatternMode
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.unit_of_work import UnitOfWorkFactory
-
-INCLUDE_MODE = 1
-EXCLUDE_MODE = -1
 
 MAX_ROLE_RANK = 999
 """Below `owner`, so no created role can ever be unmanageable by the owner."""
@@ -294,7 +292,7 @@ class PermissionAdministrationService:
         Pattern.parse(pattern)
         self._reached(pattern)
         self._require_role_management(actor, role)
-        if mode == INCLUDE_MODE:
+        if mode == PatternMode.INCLUDE:
             self._require_authority(actor, (pattern,))
             if role.guild_id is not None and not self._is_delegable_by_guild_admin(pattern):
                 msg = f"{pattern} reaches permissions outside this server's scope."
@@ -399,9 +397,9 @@ class PermissionAdministrationService:
                 granted_by_account_id=actor.account_id,
                 reason=reason,
                 audit=AuditEntry(
-                    action="grant",
+                    action=AuditAction.GRANT,
                     actor_account_id=actor.account_id,
-                    subject_kind="account" if account_id is not None else "discord_role",
+                    subject_kind=AuditSubjectKind.ACCOUNT if account_id is not None else AuditSubjectKind.DISCORD_ROLE,
                     subject_id=account_id if account_id is not None else discord_role_id,
                     subject_guild_id=guild_id,
                     pattern=pattern,
@@ -434,9 +432,9 @@ class PermissionAdministrationService:
                 subject_role_id=discord_role_id,
                 scope_guild_id=scope_guild_id,
                 audit=AuditEntry(
-                    action="revoke",
+                    action=AuditAction.REVOKE,
                     actor_account_id=actor.account_id,
-                    subject_kind="account" if account_id is not None else "discord_role",
+                    subject_kind=AuditSubjectKind.ACCOUNT if account_id is not None else AuditSubjectKind.DISCORD_ROLE,
                     subject_id=account_id if account_id is not None else discord_role_id,
                     pattern=pattern,
                     scope_guild_id=scope_guild_id,
@@ -581,7 +579,7 @@ class PermissionAdministrationService:
                 rank=rank,
                 created_by_account_id=actor.account_id,
                 audit=AuditEntry(
-                    action="role_create",
+                    action=AuditAction.ROLE_CREATE,
                     actor_account_id=actor.account_id,
                     subject_guild_id=guild_id,
                     reason=description,
@@ -595,7 +593,7 @@ class PermissionAdministrationService:
             return await uow.permission_admin.delete_role(
                 role.id,
                 audit=AuditEntry(
-                    action="role_delete",
+                    action=AuditAction.ROLE_DELETE,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     subject_guild_id=role.guild_id,
@@ -610,14 +608,16 @@ class PermissionAdministrationService:
                 role.id,
                 rank,
                 audit=AuditEntry(
-                    action="role_rank",
+                    action=AuditAction.ROLE_RANK,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "rank": rank},
                 ),
             )
 
-    async def add_pattern(self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
+    async def add_pattern(
+        self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = PatternMode.INCLUDE
+    ) -> None:
         """Include or exclude a pattern from a role.
 
         Includes require the actor to hold every selected node. Exclusions only narrow
@@ -631,7 +631,7 @@ class PermissionAdministrationService:
                 mode,
                 added_by_account_id=actor.account_id,
                 audit=AuditEntry(
-                    action="role_include" if mode == INCLUDE_MODE else "role_exclude",
+                    action=AuditAction.ROLE_INCLUDE if mode == PatternMode.INCLUDE else AuditAction.ROLE_EXCLUDE,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     pattern=pattern,
@@ -646,7 +646,7 @@ class PermissionAdministrationService:
                 role.id,
                 pattern,
                 audit=AuditEntry(
-                    action="role_pattern_remove",
+                    action=AuditAction.ROLE_PATTERN_REMOVE,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     pattern=pattern,
@@ -666,7 +666,7 @@ class PermissionAdministrationService:
                 included.id,
                 added_by_account_id=actor.account_id,
                 audit=AuditEntry(
-                    action="role_compose",
+                    action=AuditAction.ROLE_COMPOSE,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "included": included.slug},
@@ -695,7 +695,7 @@ class PermissionAdministrationService:
                 role.id,
                 included.id,
                 audit=AuditEntry(
-                    action="role_decompose",
+                    action=AuditAction.ROLE_DECOMPOSE,
                     actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "included": included.slug},
@@ -735,9 +735,9 @@ class PermissionAdministrationService:
                 granted_by_account_id=actor.account_id,
                 reason=reason,
                 audit=AuditEntry(
-                    action="role_assign",
+                    action=AuditAction.ROLE_ASSIGN,
                     actor_account_id=actor.account_id,
-                    subject_kind="account" if account_id is not None else "discord_role",
+                    subject_kind=AuditSubjectKind.ACCOUNT if account_id is not None else AuditSubjectKind.DISCORD_ROLE,
                     subject_id=account_id if account_id is not None else discord_role_id,
                     subject_guild_id=guild_id,
                     role_id=role.id,
@@ -765,9 +765,9 @@ class PermissionAdministrationService:
                 subject_role_id=discord_role_id,
                 scope_guild_id=scope_guild_id,
                 audit=AuditEntry(
-                    action="role_unassign",
+                    action=AuditAction.ROLE_UNASSIGN,
                     actor_account_id=actor.account_id,
-                    subject_kind="account" if account_id is not None else "discord_role",
+                    subject_kind=AuditSubjectKind.ACCOUNT if account_id is not None else AuditSubjectKind.DISCORD_ROLE,
                     subject_id=account_id if account_id is not None else discord_role_id,
                     role_id=role.id,
                     scope_guild_id=scope_guild_id,

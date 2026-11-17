@@ -12,7 +12,7 @@ from squid.edits.domain import EditOutcome, EditTarget, Revision
 from squid.edits.models import EditOperation
 
 
-class PostgresEditStore:
+class PostgresEditRepository:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 

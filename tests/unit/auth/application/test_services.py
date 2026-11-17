@@ -9,9 +9,10 @@ from whenever import Instant
 
 from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
 from squid.auth.models.entities import ApiKey
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionStore, SubjectRecords
+from squid.permissions.application.ports import PermissionRepository, SubjectRecords
 from squid.permissions.domain import InvalidPatternError, Pattern
 from squid.permissions.models import PermissionGrant
 from tests.support.permissions import permission_uow_factory
@@ -74,7 +75,7 @@ class FakeApiKeyRepository:
 
 class FakeApiKeyUnitOfWork(FakeUnitOfWork[FakeApiKeyRepository]):
     def __init__(
-        self, committed: CommittedState[FakeApiKeyRepository], permissions: PermissionStore | None = None
+        self, committed: CommittedState[FakeApiKeyRepository], permissions: PermissionRepository | None = None
     ) -> None:
         super().__init__(committed)
         self._permissions = permissions
@@ -84,7 +85,7 @@ class FakeApiKeyUnitOfWork(FakeUnitOfWork[FakeApiKeyRepository]):
         return self.state
 
     @property
-    def permissions(self) -> PermissionStore:
+    def permissions(self) -> PermissionRepository:
         assert self._permissions is not None
         return self._permissions
 
@@ -291,10 +292,11 @@ class TestIssuanceBoundary:
     @staticmethod
     def _authorized_service(repository: CommittedState[FakeApiKeyRepository], *held: str) -> ApiKeyService:
         class Store:
-            async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+            async def load_for_subject(self, subject: Actor) -> SubjectRecords:
                 return SubjectRecords(
                     epoch=1,
                     grants=tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=4) for node in held),
+                    subject=subject,
                 )
 
             async def epoch(self) -> int:

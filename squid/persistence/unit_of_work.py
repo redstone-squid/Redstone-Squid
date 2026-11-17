@@ -20,7 +20,7 @@ from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.edits.domain import ConcurrentEditError
-from squid.edits.infrastructure import PostgresEditStore
+from squid.edits.infrastructure import PostgresEditRepository
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency.infrastructure.crypto import IdempotencyResponseCipher
 from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
@@ -28,7 +28,7 @@ from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
-from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
+from squid.permissions.infrastructure.repository import PostgresPermissionAdminRepository, PostgresPermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.records.infrastructure.range_publications import PostgresRangePublicationRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
@@ -40,7 +40,7 @@ from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import PostgresSearchProjection
 from squid.search.infrastructure.repository import PostgresSearchBackend
-from squid.settings.infrastructure.repository import SettingsRepository
+from squid.settings.infrastructure.repository import PostgresSettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.submissions.infrastructure.attachment_edits import PostgresAttachmentEdits
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
@@ -78,7 +78,7 @@ class SqlAlchemyUnitOfWork:
         self._sessions = sessions
         self._session: AsyncSession | None = None
         self._state: Literal["new", "active", "finished"] = "new"
-        self._edits = PostgresEditStore(self._active_session)
+        self._edits = PostgresEditRepository(self._active_session)
         self._domain_events = PostgresDomainEventRepository(self._active_session)
         self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
         self._notifications = PostgresNotificationRepository(self._active_session)
@@ -117,21 +117,21 @@ class SqlAlchemyUnitOfWork:
         self._api_keys = PostgresApiKeyRepository(self._active_session)
         self._error_reports = PostgresErrorReportRepository(self._active_session)
         self._messages = MessageRepository(self._active_session)
-        self._permission_admin = PermissionAdminRepository(self._active_session)
-        self._permissions = PermissionRepository(self._active_session)
+        self._permission_admin = PostgresPermissionAdminRepository(self._active_session)
+        self._permissions = PostgresPermissionRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
-        self._settings = SettingsRepository(self._active_session)
+        self._settings = PostgresSettingsRepository(self._active_session)
         self._starboards = PostgresStarboardRepository(self._active_session)
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._versions = VersionRepository(self._active_session)
 
     @property
-    def edits(self) -> PostgresEditStore:
+    def edits(self) -> PostgresEditRepository:
         self._active_session()
         return self._edits
 
     @property
-    def settings(self) -> SettingsRepository:
+    def settings(self) -> PostgresSettingsRepository:
         self._active_session()
         return self._settings
 
@@ -166,12 +166,12 @@ class SqlAlchemyUnitOfWork:
         return self._starboards
 
     @property
-    def permissions(self) -> PermissionRepository:
+    def permissions(self) -> PostgresPermissionRepository:
         self._active_session()
         return self._permissions
 
     @property
-    def permission_admin(self) -> PermissionAdminRepository:
+    def permission_admin(self) -> PostgresPermissionAdminRepository:
         self._active_session()
         return self._permission_admin
 

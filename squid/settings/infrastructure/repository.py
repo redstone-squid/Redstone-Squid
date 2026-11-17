@@ -42,7 +42,7 @@ async def ensure_server_settings(session: AsyncSession, server_ids: Iterable[int
     return inserted.all()
 
 
-class SettingsRepository:
+class PostgresSettingsRepository:
     """Load settings within the caller's unit of work."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:

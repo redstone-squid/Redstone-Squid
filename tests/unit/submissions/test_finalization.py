@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, JSONValue
-from squid.permissions.application.ports import PermissionStore
+from squid.permissions.application.ports import PermissionRepository
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
@@ -777,7 +777,7 @@ class FinalizationScope(PublishingFakeUnitOfWork[FakeFinalizationJobs]):
         return self._drafts
 
     @property
-    def permissions(self) -> PermissionStore:
+    def permissions(self) -> PermissionRepository:
         raise AssertionError("These finalization tests use owner authority.")
 
 

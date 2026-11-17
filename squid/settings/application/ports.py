@@ -9,7 +9,7 @@ from squid.unit_of_work import UnitOfWork
 from squid.voting.application.ports import VoteRepository
 
 
-class SettingsStore(Protocol):
+class SettingsRepository(Protocol):
     """Settings entities attached to the caller's transaction."""
 
     async def runtime(self, defaults: RuntimeSettings, *, for_update: bool = False) -> RuntimeSetting: ...
@@ -31,7 +31,7 @@ class SettingsUnitOfWork(UnitOfWork, Protocol):
     """Transaction and repositories used by SettingsService."""
 
     @property
-    def settings(self) -> SettingsStore: ...
+    def settings(self) -> SettingsRepository: ...
 
 
 class GuildSettingsUnitOfWork(SettingsUnitOfWork, Protocol):

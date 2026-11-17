@@ -57,7 +57,7 @@ class AccountEditorSnapshot:
     profile: AccountProfile
 
 
-class AccountEditStore(AccountRepository, Protocol):
+class AccountEditRepository(AccountRepository, Protocol):
     async def record_profile_clear(
         self, account_id: int, actor_account_id: int, operation_id: UUID, revision: int
     ) -> None: ...
@@ -73,7 +73,7 @@ class AccountEditStore(AccountRepository, Protocol):
 class AccountEditUnitOfWork(AccountUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
     @property
     @override
-    def accounts(self) -> AccountEditStore: ...
+    def accounts(self) -> AccountEditRepository: ...
 
 
 class AccountEdits:

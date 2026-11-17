@@ -15,8 +15,8 @@ from squid.schematics.application.commands import RenderRequest
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
     SchematicPreviewPublisher,
+    SchematicRepository,
     SchematicResourcePackProvider,
-    SchematicStore,
 )
 from squid.schematics.application.previews import (
     CachedRender,
@@ -59,7 +59,7 @@ class SchematicPreviewService:
     def __init__(
         self,
         analyzer: SchematicAnalyzer,
-        store: SchematicStore,
+        store: SchematicRepository,
         publisher: SchematicPreviewPublisher,
         *,
         engine_installed: bool,

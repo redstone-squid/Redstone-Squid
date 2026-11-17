@@ -49,7 +49,7 @@ class ShowcaseValues(BaseModel):
         return EditValues(self.model_dump_json())
 
 
-class TagEditStore(TagDefinitionRepository, Protocol):
+class TagEditRepository(TagDefinitionRepository, Protocol):
     async def proposal_for_update(self, tag_id: int) -> TagDefinition | None: ...
 
     async def create_reserved(self, definition: TagDefinition) -> None: ...
@@ -67,7 +67,7 @@ class TagEditStore(TagDefinitionRepository, Protocol):
 
 class TagEditUnitOfWork(BuildUnitOfWork, AccountEditUnitOfWork, EditUnitOfWork, Protocol):
     @property
-    def tags(self) -> TagEditStore: ...
+    def tags(self) -> TagEditRepository: ...
 
 
 @dataclass(slots=True)

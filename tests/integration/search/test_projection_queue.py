@@ -6,7 +6,7 @@ Read the committed queue row to verify backoff and rejection of stale claim toke
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.search.infrastructure.projection import SearchProjectionStore
+from squid.search.infrastructure.projection import SearchProjectionRepository
 
 
 async def _enqueue(session: AsyncSession, source_key: str = "42", *, attempts: int = 0) -> None:
@@ -24,7 +24,7 @@ async def test_a_failed_projection_backs_off_instead_of_rerunning_every_poll(
 ) -> None:
     async with migrated_session_factory() as session, session.begin():
         await _enqueue(session)
-        store = SearchProjectionStore(session)
+        store = SearchProjectionRepository(session)
         (item,) = await store.claim(limit=10)
 
         dead_lettered = await store.retry(item.id, store.token_of(item), item.attempts, RuntimeError("temporary"))
@@ -48,7 +48,7 @@ async def test_a_projection_at_the_attempt_limit_is_retained_as_a_dead_letter(
 ) -> None:
     async with migrated_session_factory() as session, session.begin():
         await _enqueue(session, attempts=4)
-        store = SearchProjectionStore(session)
+        store = SearchProjectionRepository(session)
         (item,) = await store.claim(limit=10)
 
         dead_lettered = await store.retry(
@@ -76,7 +76,7 @@ async def test_a_reclaimed_projection_cannot_be_completed_by_the_previous_holder
     """Reclaiming changes the token; completion with the previous token must leave the row."""
     async with migrated_session_factory() as session, session.begin():
         await _enqueue(session)
-        stale_store = SearchProjectionStore(session)
+        stale_store = SearchProjectionRepository(session)
         (stale,) = await stale_store.claim(limit=10)
         stale_token = stale_store.token_of(stale)
 
@@ -84,7 +84,7 @@ async def test_a_reclaimed_projection_cannot_be_completed_by_the_previous_holder
         await session.execute(text("UPDATE search_projection_queue SET claimed_at = now() - interval '6 minutes'"))
 
     async with migrated_session_factory() as session, session.begin():
-        fresh_store = SearchProjectionStore(session)
+        fresh_store = SearchProjectionRepository(session)
         (fresh,) = await fresh_store.claim(limit=10)
         assert fresh_store.token_of(fresh) != stale_token
 
@@ -103,7 +103,7 @@ async def test_a_caller_owned_projection_claim_is_not_committed(
         await _enqueue(session)
 
     async with migrated_session_factory() as session:
-        assert len(await SearchProjectionStore(session).claim(limit=10)) == 1
+        assert len(await SearchProjectionRepository(session).claim(limit=10)) == 1
         await session.rollback()
 
     async with migrated_session_factory() as session:

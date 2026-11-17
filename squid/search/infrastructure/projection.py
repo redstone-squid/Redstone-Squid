@@ -137,7 +137,7 @@ class TagProjectionSource:
     aliases: tuple[str, ...] = ()
 
 
-class SearchProjectionStore:
+class SearchProjectionRepository:
     """Claim projection work and atomically replace indexed documents."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -579,7 +579,7 @@ class SearchProjectionWorker:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._store = SearchProjectionStore(session)
+        self._store = SearchProjectionRepository(session)
         self._loader = SearchProjectionLoader(session)
 
     async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:

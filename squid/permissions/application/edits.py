@@ -11,14 +11,10 @@ from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, Revision
 from squid.edits.fields import Aggregate, FieldCommand, PreparedFields
-from squid.permissions.application.administration import (
-    EXCLUDE_MODE,
-    INCLUDE_MODE,
-    MAX_ROLE_RANK,
-    PermissionAdministrationService,
-)
-from squid.permissions.application.ports import AuditEntry, PermissionAdminStore, PermissionAdminUnitOfWork
+from squid.permissions.application.administration import MAX_ROLE_RANK, PermissionAdministrationService
+from squid.permissions.application.ports import AuditEntry, PermissionAdminRepository, PermissionAdminUnitOfWork
 from squid.permissions.domain import Effect
+from squid.permissions.domain.models import AuditAction, PatternMode
 from squid.permissions.models import PermissionRole
 
 PERMISSION_GRAPH = EditTarget("permission-graph", "1")
@@ -29,7 +25,7 @@ PATTERN_EDIT = "permissions.pattern"
 INCLUDE_EDIT = "permissions.include"
 
 
-class PermissionEditStore(PermissionAdminStore, Protocol):
+class PermissionEditRepository(PermissionAdminRepository, Protocol):
     async def lock_graph(self) -> int: ...
 
     async def role_identity(self, role_id: int) -> PermissionRole | None: ...
@@ -44,7 +40,7 @@ class PermissionEditStore(PermissionAdminStore, Protocol):
 class PermissionEditUnitOfWork(PermissionAdminUnitOfWork, EditUnitOfWork, Protocol):
     @property
     @override
-    def permission_admin(self) -> PermissionEditStore: ...
+    def permission_admin(self) -> PermissionEditRepository: ...
 
 
 class PermissionValues(BaseModel):
@@ -97,7 +93,7 @@ class PatternValues(PermissionValues):
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
-        if self.mode not in {None, INCLUDE_MODE, EXCLUDE_MODE}:
+        if self.mode not in {None, PatternMode.INCLUDE, PatternMode.EXCLUDE}:
             raise ValidationError
         return self
 
@@ -333,9 +329,9 @@ class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
         values = PatternValues.model_validate_json(command.values.encoded)
         role = root.role(values.role_id)
         mode = (
-            INCLUDE_MODE
+            PatternMode.INCLUDE
             if values.pattern in role.includes
-            else EXCLUDE_MODE
+            else PatternMode.EXCLUDE
             if values.pattern in role.excludes
             else None
         )
@@ -497,7 +493,7 @@ class PermissionRoleCreation(PermissionFieldCommand[RolePresenceValues]):
         await uow.permission_admin.save_role_presence(
             row,
             audit=AuditEntry(
-                action="role_create" if after.present else "role_withdraw",
+                action=AuditAction.ROLE_CREATE if after.present else AuditAction.ROLE_WITHDRAW,
                 actor_account_id=root.current_actor.account_id,
                 role_id=row.id,
                 subject_guild_id=row.guild_id,

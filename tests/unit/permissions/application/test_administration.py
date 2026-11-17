@@ -16,8 +16,6 @@ from squid.core.actors import Actor
 from squid.core.errors import ConflictError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.administration import (
-    EXCLUDE_MODE,
-    INCLUDE_MODE,
     PermissionAdministrationService,
     PermissionAuthorityError,
     PermissionRankError,
@@ -25,6 +23,7 @@ from squid.permissions.application.administration import (
 )
 from squid.permissions.application.ports import AuditEntry, SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
+from squid.permissions.domain.models import PatternMode
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
@@ -60,7 +59,8 @@ class FakeStore:
         self._next_id = 100
 
     # read side ---------------------------------------------------------
-    async def load_for_subject(self, *, account_id, discord_role_ids, guild_id) -> SubjectRecords:
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        account_id = subject.account_id
         return SubjectRecords(
             epoch=1,
             roles=tuple(self.roles.values()),
@@ -83,6 +83,7 @@ class FakeStore:
                 for assignment in self.assignments
                 if assignment.subject_account_id == account_id
             ),
+            subject=subject,
         )
 
     async def epoch(self) -> int:
@@ -161,8 +162,8 @@ class FakeStore:
 
     async def set_role_pattern(self, role_id, pattern, mode, *, added_by_account_id, audit) -> None:
         role = self.roles[role_id]
-        includes = (*role.includes, pattern) if mode == INCLUDE_MODE else role.includes
-        excludes = (*role.excludes, pattern) if mode == EXCLUDE_MODE else role.excludes
+        includes = (*role.includes, pattern) if mode == PatternMode.INCLUDE else role.includes
+        excludes = (*role.excludes, pattern) if mode == PatternMode.EXCLUDE else role.excludes
         self.roles[role_id] = PermissionRole(
             id=role.id,
             slug=role.slug,
@@ -429,7 +430,7 @@ class TestRoles:
         service = admin(store)
         actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
 
-        await service.add_pattern(actor, await service.role("helper"), "bot.**", mode=EXCLUDE_MODE)
+        await service.add_pattern(actor, await service.role("helper"), "bot.**", mode=PatternMode.EXCLUDE)
 
         assert "bot.**" in (await service.role("helper")).excludes
 
@@ -499,7 +500,7 @@ REJECTIONS = (PermissionAuthorityError, PermissionRankError, ProtectedRoleError,
 class _IncludeOp:
     slug: str
     pattern: str
-    mode: int = INCLUDE_MODE
+    mode: int = PatternMode.INCLUDE
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -537,8 +538,8 @@ def _p11_operations() -> st.SearchStrategy[_P11Op]:
     slugs = st.sampled_from((CUSTOM_A, CUSTOM_B))
     compose_targets = st.sampled_from((CUSTOM_A, CUSTOM_B, "trusted", "guild-admin", "global-admin", "owner"))
     return st.one_of(
-        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(INCLUDE_MODE)),
-        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(EXCLUDE_MODE)),
+        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(PatternMode.INCLUDE)),
+        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(PatternMode.EXCLUDE)),
         st.builds(_ComposeOp, slug=slugs, included_slug=compose_targets),
         st.builds(_AssignOp, slug=slugs),
         st.builds(_RankOp, slug=slugs, rank=st.integers(min_value=0, max_value=999)),
