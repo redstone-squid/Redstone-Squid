@@ -76,6 +76,7 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
+from squid.submissions.domain.schematics import DraftSchematicState
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
@@ -375,6 +376,50 @@ class DraftWorkspace(sl.Reactive):
             )
         await self.reload()
 
+    async def infer_schematic(self, transaction: sl.runtime.Transaction) -> None:
+        """Fill empty answers from the main schematic, retaining the revision reviewed."""
+        try:
+            await self.reload()
+            actor = await self.resolve_actor()
+            sources = tuple(
+                source
+                for source in await self.services.submission_schematics.list(self._draft_id, actor)
+                if not source.discarded
+            )
+            primary = next((source for source in sources if source.primary or len(sources) == 1), None)
+            if primary is None:
+                self.notice = tr(
+                    t"draft-inference-choose-source = Add a schematic under Files and choose the main schematic first."
+                )
+                return
+            result = await self.services.submission_schematics.suggestions(self._draft_id, actor, primary.id)
+            if result.state is not DraftSchematicState.READY:
+                self.notice = tr(
+                    t"draft-inference-not-ready = The schematic is not ready for inference. "
+                    t"Check its status under Files, then try again after processing finishes."
+                )
+                return
+            values = {
+                suggestion.field_id: suggestion.value
+                for suggestion in result.suggestions
+                if is_empty(self.draft.snapshot.answers.get(suggestion.field_id))
+            }
+            self.notice = ""
+            await self.save_values(transaction, values, base_revision=result.draft_revision)
+            if self.notice:
+                return
+            self.notice = (
+                tr(
+                    t"draft-inference-review = Schematic suggestions filled empty answers. "
+                    t"Review the build size, width/depth orientation, name, credits, and restrictions below. "
+                    t"Category, opening size, orientation, and opening/closing times were not detected."
+                )
+                if values
+                else tr(t"draft-inference-no-values = No new answers could be inferred from this schematic.")
+            )
+        except SquidError as error:
+            self.notice = error.public_text()
+
     async def make_main_schematic(self, file_id: UUID) -> None:
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
             AttachmentValues(primary=file_id, select_primary=True).edit_values(),
@@ -539,6 +584,17 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 ),
             )
         )
+        if any(file.kind == "schematic" for file in ws.attachments):
+            children.append(
+                sl.action_controls(
+                    sl.action_control(
+                        tr(t"draft-inference-action = Infer from schematic"),
+                        self._infer_schematic,
+                        key="infer_schematic",
+                    ),
+                    key="draft-inference-actions",
+                )
+            )
         children.append(sd.v2.separator())
         preview = ws.render_card is not None and sl.action_control(
             tr(t"draft-editor-preview = Preview"), self._preview, key="preview"
@@ -625,6 +681,10 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     async def _preview(self, event: sd.PressEvent) -> None:
         await self.open_child(event, BuildPreviewScreen(self.workspace), on_result=self._child_closed)
+
+    async def _infer_schematic(self, event: sd.PressEvent) -> None:
+        await event.acknowledge()
+        await self.workspace.infer_schematic(event.transaction)
 
     async def _refresh(self, event: sd.PressEvent) -> None:
         await self.workspace.reload()
