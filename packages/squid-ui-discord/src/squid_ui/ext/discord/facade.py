@@ -34,7 +34,6 @@ from squid_ui.ext.discord.response import (
     ResolvedResponse,
     ResponseOverrides,
     ResponseResult,
-    ResponseSpec,
     Sent,
 )
 from squid_ui.ext.discord.screen import Screen
@@ -88,9 +87,8 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         self, content: FacadeContent[ClientT], overrides: ResponseOverrides, actor_id: int | None = None
     ) -> ResolvedResponse:
         policy = self._runtime.response_defaults
-        screen_spec = getattr(type(content), "__response_spec__", None)
-        if isinstance(screen_spec, ResponseSpec):
-            policy = policy.overlay(screen_spec)
+        if isinstance(content, Screen):
+            policy = policy.overlay(content.__response_spec__)
         return policy.overlay(None, **overrides).resolve(actor_id)
 
     async def request(self, source: RequestOrigin) -> Request[OwnerT, ClientT]:
@@ -111,16 +109,17 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
         """
         defaults = self._runtime.defaults
         selected = defaults.localization if localization is None else localization
-        if isinstance(content, MessagePayload):
-            return content
-        if isinstance(content, str):
-            return MessagePayload.classic(content=content)
-        if isinstance(content, discord.Embed):
-            return MessagePayload.classic(embeds=(content,))
-        if isinstance(content, discord.ui.LayoutView):
-            return MessagePayload.components_v2(content)
-        if isinstance(content, discord.ui.View):
-            return MessagePayload.classic(view=content)
+        match content:
+            case MessagePayload():
+                return content
+            case str():
+                return MessagePayload.classic(content=content)
+            case discord.Embed():
+                return MessagePayload.classic(embeds=(content,))
+            case discord.ui.LayoutView():
+                return MessagePayload.components_v2(content)
+            case discord.ui.View():
+                return MessagePayload.classic(view=content)
         rendered = content.render() if isinstance(content, Component) else content
         return render_static(
             cast(DocumentContent[ClientT], rendered),

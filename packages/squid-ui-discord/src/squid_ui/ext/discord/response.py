@@ -11,7 +11,7 @@ Rejected and Abandoned recording admission refusal and deliberate non-delivery.
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any, TypedDict, Unpack, cast, override
+from typing import Any, TypedDict, Unpack, override
 
 import discord
 from squid_ui.chrome import Chrome
@@ -109,14 +109,14 @@ class ResponseSpec:
         """Resolve inheritance and actor access once before constructing a presentation."""
 
         def value[T](setting: Setting[T], *, fallback: T) -> T:
-            return fallback if setting is UNSET else cast(T, setting)
+            return fallback if isinstance(setting, _Unset) else setting
 
         access = value(self.access, fallback=None)
-        if access is None or access is invoker_only:
+        if access is None or isinstance(access, _InvokerOnly):
             access = None if actor_id is None else Owner(actor_id)
         return ResolvedResponse(
             audience=value(self.audience, fallback="public"),
-            access=cast(AccessPolicy | None, access),
+            access=access,
             timeout=value(self.timeout, fallback=180),
             expiry=value(self.expiry, fallback=None),
             live_updates=value(self.live_updates, fallback=False),
