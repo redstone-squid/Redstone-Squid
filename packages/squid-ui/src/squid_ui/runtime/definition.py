@@ -9,7 +9,9 @@ from contextvars import ContextVar
 from itertools import count
 from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overload, override
 
-from squid_reactivity import Reactive
+from squid_reactivity import Reactive, untracked
+from squid_reactivity.internals import State
+from squid_ui._presentation import PresentationCells, presentation_mutations
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.boundary import Boundary
 from squid_ui.context import ContextKey
@@ -28,6 +30,9 @@ same spirit as `AnyTarget`.
 
 
 class RuntimeOwner(Protocol):
+    @property
+    def presentation_cells(self) -> PresentationCells: ...
+
     def claim(self, component: AnyComponent) -> None: ...
 
     def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None: ...
@@ -106,6 +111,24 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
 
     event_frontend: ClassVar[str | None] = None
     """An explicit dispatch requirement; None leaves the component portable."""
+
+    @override
+    def mutated(self, collaborator: object) -> None:
+        with untracked():
+            holders: list[tuple[State[Any], Reactive]] = [
+                (descriptor, self)
+                for _, descriptor in type(self)._opaque_state
+                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
+            ]
+            holders.extend(presentation_mutations(self, collaborator))
+        if not holders:
+            msg = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
+            raise TypeError(msg)
+        if len(holders) > 1:
+            msg = f"{type(self).__name__} holds this object in more than one field (state or presentation)"
+            raise TypeError(msg)
+        descriptor, owner = holders[0]
+        descriptor.mutated(owner)
 
     @abstractmethod
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:

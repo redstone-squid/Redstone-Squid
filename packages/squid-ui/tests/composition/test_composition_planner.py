@@ -23,7 +23,7 @@ from squid_ui.planning import CompositionOptions, CompositionRejectedError, Plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import CapacityExceeded, OccurrenceId
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "composition.discord", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "composition.slack", ">=1"))

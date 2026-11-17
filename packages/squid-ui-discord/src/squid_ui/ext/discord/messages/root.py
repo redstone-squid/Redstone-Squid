@@ -138,7 +138,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult, PlanSeverity
 from squid_ui.planning.spread import plan_spread
 from squid_ui.planning.target import AnyTarget, Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.profiling import (
     ActionStatus,
     DispatchDisposition,

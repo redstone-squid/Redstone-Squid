@@ -19,7 +19,7 @@ from squid_ui.interactions.ownership import Controlled
 from squid_ui.overflow import FIRST_PAGE, PageOwnership, RoutedPage, resolve_page
 from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
 from squid_ui.planning.pagination.navigation import PagerNav
-from squid_ui.presentation import (
+from squid_ui.presentation_state import (
     ActivePagers,
     CursorState,
     CursorUpdate,

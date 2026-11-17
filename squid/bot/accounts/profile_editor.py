@@ -34,7 +34,7 @@ class ProfileEditor(sl.Component[ComponentsV2Target, sd.Request]):
     """Own a profile draft and its local history until save or cancel."""
 
     _active: bool = sl.state(True)
-    history: sl.runtime.History = sl.runtime.history(limit=20)
+    history = sl.runtime.history(limit=20)
 
     def __init__(
         self,

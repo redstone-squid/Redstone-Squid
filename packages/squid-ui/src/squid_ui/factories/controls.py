@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from squid_i18n import Text
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.semantic import (
     FIRST_OPTION,
     NO_ENTITIES,
@@ -320,7 +321,7 @@ def rating[ContextT = object](
         selection: ChoiceOwnership[ContextT] = Uncontrolled(() if value.initial is None else (str(value.initial),))
     else:
         chosen = value.value
-        on_change = value.on_change
+        on_change = _RatingCommit(value) if isinstance(value, ValueBinding) else value.on_change
 
         rate = _RatingSelection(on_change)
 
@@ -400,3 +401,11 @@ class _RatingSelection[ContextT]:
                     context=event.context,
                 )
             )
+
+
+@dataclass(frozen=True, slots=True)
+class _RatingCommit[ContextT]:
+    binding: ValueBinding[int | None]
+
+    async def __call__(self, event: ScaleEvent[ContextT]) -> None:
+        await self.binding.commit(event, event.value)

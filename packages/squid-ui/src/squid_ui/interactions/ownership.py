@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 
 from squid_ui._dataclass import immutable
+from squid_ui._presentation import ValueBinding
 from squid_ui.interactions.handlers import _HandlerBinder
 
 
@@ -38,7 +39,7 @@ class Uncontrolled[ValueT]:
     initial: ValueT
 
 
-type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT]
+type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT] | ValueBinding[ValueT]
 """Explicitly choose author-owned values or state stored in the presentation session."""
 
 

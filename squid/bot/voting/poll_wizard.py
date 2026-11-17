@@ -373,7 +373,7 @@ class PollScreen(sd.Screen[str]):
         session=sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD),
     )
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
+    history = sl.runtime.history(limit=20)
 
     published_url: str | None = sl.state(None)
     cancelled: bool = sl.state(False)

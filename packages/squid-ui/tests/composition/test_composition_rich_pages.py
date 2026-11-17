@@ -19,7 +19,7 @@ from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_presentations import join_text, text_fragments
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 ADAPTER = AdapterProfile(DiscordAdapter, "rich-pages", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [components_v2_target(ADAPTER), classic_target(ADAPTER)]

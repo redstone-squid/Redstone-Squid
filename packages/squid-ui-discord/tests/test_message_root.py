@@ -1423,7 +1423,7 @@ class TestActionPolicy:
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
         class Editor(Component[ComponentsV2Target]):
-            history: sl.runtime.History = sl.runtime.history()
+            history = sl.runtime.history()
             name: str = state("old")
 
             @override

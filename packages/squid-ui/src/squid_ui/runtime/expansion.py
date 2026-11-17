@@ -192,11 +192,15 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
             return cached
 
         local_context = dict(inherited_context)
+        cells = self.runtime.presentation_cells if self.runtime is not None else incremental.presentations
+        scope = cells.placement(component, path)
         token = _CURRENT_CONTEXT.set(local_context)
         try:
-            with read_only(), capture_reads() as observation, observe_async_bindings() as bindings:
-                value = component.render()
-                own_nodes, own_assets, own_key = _items(value, path)
+            with scope.activate(render=True), read_only():
+                scope.prepare()
+                with capture_reads() as observation, observe_async_bindings() as bindings:
+                    value = component.render()
+                    own_nodes, own_assets, own_key = _items(value, path)
         finally:
             _CURRENT_CONTEXT.reset(token)
         snapshot = _ComponentRender[RenderTargetT, ContextT](
@@ -366,6 +370,10 @@ def render_component_tree[RenderTargetT: RenderTarget, ContextT = object](
         defer=defer,
         incremental=incremental,
     ).run()
+    if not tree.deferred and not tree.suspended:
+        cells = runtime.presentation_cells if runtime is not None else incremental.presentations
+        cells.validate_paths(tree.components)
+        cells.select(tree.components)
     return replace(
         tree,
         authored_nodes=MappingProxyType(

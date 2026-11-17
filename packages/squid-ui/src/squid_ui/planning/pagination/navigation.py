@@ -26,7 +26,7 @@ from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
 from squid_ui.overflow import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.pages import PagePosition
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.sources import CountPrecision
 from squid_ui.target_types import Renderable
 

@@ -35,6 +35,7 @@ from squid_ui import (
     scene,
     sources,
 )
+from squid_ui._presentation import PresentationField, PresentationReference, ValueBinding
 from squid_ui.authoring import (
     document,
     semantic,
@@ -182,6 +183,7 @@ from squid_ui.factories import (
     uncontrolled,
     zoned_timestamp,
 )
+from squid_ui.factories.presentation import ChoicesHandle, ToggleHandle, ValueHandle, presentation
 from squid_ui.focus import Focusable
 from squid_ui.interactions import (
     ActionEvent,
@@ -210,6 +212,7 @@ __all__ = [
     "AtomicNode",
     "ChildLike",
     "ChoiceEvent",
+    "ChoicesHandle",
     "Component",
     "Conditional",
     "ContextKey",
@@ -235,6 +238,8 @@ __all__ = [
     "PageEvent",
     "Palette",
     "PaletteRegistry",
+    "PresentationField",
+    "PresentationReference",
     "PressEvent",
     "Reactive",
     "RenderTarget",
@@ -250,8 +255,11 @@ __all__ = [
     "TextPresentation",
     "TextValue",
     "ToggleEvent",
+    "ToggleHandle",
     "Tone",
     "UnsolvableLayoutError",
+    "ValueBinding",
+    "ValueHandle",
     "action_control",
     "action_controls",
     "alternative",
@@ -326,6 +334,7 @@ __all__ = [
     "plain",
     "planning",
     "present_text",
+    "presentation",
     "profiling",
     "progress",
     "quote",

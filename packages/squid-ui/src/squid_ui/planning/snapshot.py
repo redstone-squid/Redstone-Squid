@@ -6,7 +6,7 @@ from typing import Any
 from squid_ui import scene
 from squid_ui.planning.identity import FingerprintCache
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 @dataclass(frozen=True, slots=True)

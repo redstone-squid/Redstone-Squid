@@ -12,6 +12,7 @@ from typing import Any, Generic
 from squid_reactivity import Dependencies
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import DependencyAddress
+from squid_ui._presentation import PresentationCells
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring.document import Asset
 from squid_ui.authoring.semantic import LayoutNode
@@ -122,6 +123,7 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget, ContextT = o
     can also construct an independent view.
     """
 
+    presentations: PresentationCells = field(default_factory=PresentationCells)
     render_cache: dict[tuple[AnyComponent, str], _ComponentRender[RenderTargetT, ContextT]] = field(
         default_factory=dict
     )

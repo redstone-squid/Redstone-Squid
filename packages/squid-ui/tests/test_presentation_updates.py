@@ -1,7 +1,14 @@
 """Delivered planner updates advance presentation state as one revision."""
 
 from squid_ui.pages import PagePosition
-from squid_ui.presentation import ActivePagers, CursorState, CursorUpdate, PresentationState, ToggleState, ToggleUpdate
+from squid_ui.presentation_state import (
+    ActivePagers,
+    CursorState,
+    CursorUpdate,
+    PresentationState,
+    ToggleState,
+    ToggleUpdate,
+)
 
 
 def test_delivered_updates_advance_one_revision_and_replay_is_unchanged() -> None:

@@ -19,7 +19,7 @@ from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](

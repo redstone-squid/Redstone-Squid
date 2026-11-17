@@ -27,7 +27,7 @@ from squid_ui.interactions.forms import FormBinding, FormSpec
 from squid_ui.palette import Palette
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import AnyTarget
-from squid_ui.presentation import SessionUpdate
+from squid_ui.presentation_state import SessionUpdate
 from squid_ui.profiling import (
     ActionStatus,
     DetachedSpanRecorder,

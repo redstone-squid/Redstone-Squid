@@ -45,7 +45,7 @@ class Workspace(Reactive):
 
 
 class Panel(Component[DiscordTarget]):
-    history: History = history(limit=3)
+    history = history(limit=3)
     page: int = state(1)
     open: bool = state(False)
 
@@ -64,7 +64,7 @@ class UnassignedPanel(Component[DiscordTarget]):
     to be assigned during construction and could not exercise this case.
     """
 
-    history: History = history()
+    history = history()
     value: int = state(0)
 
     @override

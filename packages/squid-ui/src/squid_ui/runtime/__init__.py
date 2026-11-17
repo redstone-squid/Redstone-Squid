@@ -69,7 +69,7 @@ from squid_reactivity.transactions import (
     transaction,
 )
 from squid_ui.context import ContextKey
-from squid_ui.presentation import (
+from squid_ui.presentation_state import (
     ActivePagers,
     CursorState,
     CursorUpdate,
@@ -97,6 +97,7 @@ from squid_ui.runtime.histories import (
     HistoryEntrySnapshot,
     HistoryEntryState,
     HistoryError,
+    HistoryField,
     HistoryResult,
     HistoryResultStatus,
     HistorySnapshot,
@@ -151,6 +152,7 @@ __all__ = [
     "HistoryEntrySnapshot",
     "HistoryEntryState",
     "HistoryError",
+    "HistoryField",
     "HistoryResult",
     "HistoryResultStatus",
     "HistorySnapshot",

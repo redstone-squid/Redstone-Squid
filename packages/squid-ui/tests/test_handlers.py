@@ -30,7 +30,7 @@ from squid_ui.planning.interaction_handlers import (
     ToggleDetails,
 )
 from squid_ui.planning.pagination.navigation import SeekPageSelection
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 async def portable(event: ActionEvent) -> None:

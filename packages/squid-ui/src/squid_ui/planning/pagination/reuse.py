@@ -9,6 +9,7 @@ when presenting a reused allocation. Unknown extensions prevent reuse until they
 from dataclasses import replace
 from typing import Any
 
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
@@ -134,20 +135,20 @@ class _AllocationComparison:
                     left.controls, right.controls
                 )
             case ((sem.Choices() | sem.Entities()), (sem.Choices() | sem.Entities())):
-                return isinstance(left.selection, Controlled) and left == right
+                return isinstance(left.selection, Controlled | ValueBinding) and left == right
             case sem.Items(), sem.Items():
-                return isinstance(left.opened, Controlled) and left == right
+                return isinstance(left.opened, Controlled | ValueBinding) and left == right
             case sem.Details(), sem.Details():
                 return (
-                    isinstance(left.open, Controlled)
+                    isinstance(left.open, Controlled | ValueBinding)
                     and replace(left, children=()) == replace(right, children=())
                     and self.same_children(left.children, right.children)
                 )
             case sem.Navigation(), sem.Navigation():
-                return isinstance(left.current, Controlled) and left == right
+                return isinstance(left.current, Controlled | ValueBinding) and left == right
             case sem.Toggle(), sem.Toggle():
                 # Session-owned values can change without changing the authored node.
-                return isinstance(left.on, Controlled) and left == right
+                return isinstance(left.on, Controlled | ValueBinding) and left == right
             case Alternatives(), Alternatives():
                 # Alternate realizations can remap source identities. Until rebinding
                 # carries that correspondence, their handlers remain allocation inputs.

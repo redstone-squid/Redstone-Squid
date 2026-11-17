@@ -5,7 +5,7 @@ import pytest
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.pages import PagePosition
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest, recover_anchor
-from squid_ui.presentation import CursorState, PresentationState
+from squid_ui.presentation_state import CursorState, PresentationState
 
 
 @pytest.mark.parametrize(

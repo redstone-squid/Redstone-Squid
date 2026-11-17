@@ -18,7 +18,7 @@ from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.result import PlanReuse
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "reuse", ">=1"))
 REGION = OccurrenceId(("root", "r"))

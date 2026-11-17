@@ -12,7 +12,7 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, PlanningSnapshot, plan
 from squid_ui.planning.result import PlanReuse
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 async def ignored(event: sl.PressEvent) -> None:

@@ -18,7 +18,7 @@ def prepare_bindings[BodyT: scene.Body, RenderTargetT, AdapterT](
     if consume is not None:
         consume(1 + len(result.bindings) + len(result.form_bindings))
     frontend = request.target.adapter.frontend or request.target.adapter.name
-    bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
+    bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend, request.presentation.declared)
     result = (
         replace(result, bindings=bindings, form_bindings=forms)
         if bindings is not result.bindings or forms is not result.form_bindings

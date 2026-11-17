@@ -305,6 +305,7 @@ def presentation_state(session: sl.runtime.PresentationState) -> dict[str, objec
         "cursors": dict(session.cursors),
         "selections": dict(session.selections),
         "disclosures": dict(session.disclosures),
+        "declared": session.declared.inspect(),
     }
 
 

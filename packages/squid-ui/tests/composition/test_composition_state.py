@@ -22,7 +22,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.resources import Axis, TargetLimits
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "test", ">=1"))
 REGION = OccurrenceId(("root", "r"))

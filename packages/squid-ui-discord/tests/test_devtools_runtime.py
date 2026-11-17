@@ -25,7 +25,7 @@ from squid_ui.runtime import TopicBusStats
 
 
 class Panel(sl.Component[ComponentsV2Target]):
-    history: sl.runtime.History = sl.runtime.history(limit=4)
+    history = sl.runtime.history(limit=4)
     count: int = sl.state(0)
 
     @override

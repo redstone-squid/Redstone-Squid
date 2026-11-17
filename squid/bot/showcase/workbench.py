@@ -178,7 +178,7 @@ class BuildForm(sl.forms.Form[sd.Request[Any, Any]]):
 class Workbench(InspectablePanel):
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-workbench")))
 
-    history: sl.runtime.History = sl.runtime.history(limit=10)
+    history = sl.runtime.history(limit=10)
     notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.")
     fail_next: bool = sl.state(False)
 
@@ -302,7 +302,7 @@ class Workbench(InspectablePanel):
 
 
 class BuildPreview(InspectablePanel):
-    history: sl.runtime.History = sl.runtime.history(limit=20)
+    history = sl.runtime.history(limit=20)
 
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-preview")))
 

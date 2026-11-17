@@ -40,7 +40,7 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentation import PresentationState, SelectionState
+from squid_ui.presentation_state import PresentationState, SelectionState
 from squid_ui.target_types import Renderable
 
 

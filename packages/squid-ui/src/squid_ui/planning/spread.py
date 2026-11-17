@@ -27,7 +27,7 @@ from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.snapshot import PlanningSnapshot
-from squid_ui.presentation import ActivePagers, RegionLayoutState, RegionLayoutUpdate, RetainedCompositionUpdate
+from squid_ui.presentation_state import ActivePagers, RegionLayoutState, RegionLayoutUpdate, RetainedCompositionUpdate
 
 # Planning failures that a smaller document could avoid. An overflow can also come from
 # one oversized child; cutting cannot help then, and the original error is raised.

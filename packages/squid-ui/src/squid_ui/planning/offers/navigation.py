@@ -7,6 +7,7 @@ from hashlib import sha256
 from urllib.parse import quote
 
 from squid_i18n import tree
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
     Budget,
@@ -178,7 +179,7 @@ def navigation_candidate[R, C](
             node.selected
             if isinstance(node, sem.RoutedChoices)
             else node.selection.value
-            if isinstance(node.selection, Controlled)
+            if isinstance(node.selection, Controlled | ValueBinding)
             else ()
         )
         options = tuple(

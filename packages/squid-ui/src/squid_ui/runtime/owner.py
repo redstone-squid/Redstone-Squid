@@ -8,11 +8,12 @@ from typing import Any
 from squid_reactivity import Subscriptions
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import BusAddress, DependencyAddress
+from squid_ui._presentation import PresentationCells
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.snapshot import PlanningSnapshot
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.render_cache import RenderCache
@@ -61,6 +62,8 @@ class RenderCandidate[RenderTargetT: RenderTarget = RenderTarget]:
         self._runtime._staged = None
         self._runtime.subscriptions.discard()
         if release:
+            if self._runtime.presentation_cells.retain(self._runtime.components, committed=False):
+                self._runtime._cache.require_full_render()
             self._runtime._release_unused_claims(set(self._runtime.components.values()))
         if self._runtime._cached_tree is self.tree:
             self._runtime._cached_tree = None
@@ -127,6 +130,10 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         commit could invalidate moves it, including a shared cell another owner wrote."""
         self.dirty = True
         """Whether the committed tree is behind the inputs a fresh render would read."""
+
+    @property
+    def presentation_cells(self) -> PresentationCells:
+        return self.presentation.declared
 
     @property
     def closed(self) -> bool:
@@ -382,6 +389,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         else:
             self._reconcile_components(tree)
         self._committed_tree = tree
+        self.presentation_cells.retain(tree.components)
         if self.revision == rendered_revision:
             self._cached_tree = tree
             self._cached_revision = self.revision
@@ -507,6 +515,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self._closed:
             return
         self._closed = True
+        self.presentation_cells.retain({})
         self.discard()
         self.subscriptions.clear()
         visited: set[AnyComponent] = set()

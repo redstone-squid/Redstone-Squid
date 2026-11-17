@@ -27,7 +27,7 @@ from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLi
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantic_correspondence import SourceScope, budget_floor
 from squid_ui.planning.semantic_index import SemanticGraph, SemanticValue
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
     from squid_ui.planning.adapter import ExtensionAdapter

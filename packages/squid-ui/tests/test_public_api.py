@@ -68,6 +68,12 @@ def test_promoted_value_modules_do_not_shadow_their_factories() -> None:
     assert callable(sl.grid) and callable(sl.roster) and callable(sl.tally)
 
 
+def test_presentation_state_module_does_not_shadow_the_declaration_factory() -> None:
+    import_module("squid_ui.presentation_state")
+    assert callable(sl.presentation)
+    assert callable(sl.presentation.toggle)
+
+
 def test_engine_imports_without_transport_or_store_dependencies() -> None:
     """Core imports must work without optional execution, frontend, widget, or storage packages."""
     testing.assert_imports_without(

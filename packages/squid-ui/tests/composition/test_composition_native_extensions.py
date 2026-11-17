@@ -22,7 +22,7 @@ from squid_ui.planning.adapter import AdapterProfile, PreparedExtension
 from squid_ui.planning.composition import Placement, PlanningContext, ResourceIdentity, SharedUse
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 ADAPTER = AdapterProfile(DiscordAdapter, "composition.extensions", "1")
 KIND = ExtensionKind[str, object]("test.badge")

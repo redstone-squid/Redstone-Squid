@@ -16,7 +16,7 @@ from squid_ui.planning.allocation import AllocationSelection
 from squid_ui.planning.allocation_policy import SearchDiagnostics
 from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.presentation import SessionUpdate
+from squid_ui.presentation_state import SessionUpdate
 from squid_ui.scene.model import Body, Scene
 
 

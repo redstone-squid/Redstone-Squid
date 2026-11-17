@@ -20,7 +20,7 @@ from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUns
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 DISCORD = AdapterProfile(DiscordAdapter, "thumbnails.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "thumbnails.slack", "1")

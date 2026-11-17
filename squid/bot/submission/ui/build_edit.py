@@ -67,7 +67,7 @@ class BuildEditWorkspace(sl.Reactive):
     option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({})
     revision: int = sl.state(0)
     """Counts changes; a section modal compares it to notice that it was opened before an undo."""
-    history: sl.runtime.History = sl.runtime.history(limit=20)
+    history = sl.runtime.history(limit=20)
 
     def __init__(
         self,

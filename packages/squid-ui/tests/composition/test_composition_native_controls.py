@@ -23,7 +23,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.selectors import query, select
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-controls.discord", "1")

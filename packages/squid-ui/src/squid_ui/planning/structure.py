@@ -1,8 +1,9 @@
 """Resolve authored palette and control state for semantic occurrences."""
 
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.styles import Color
 
 
@@ -20,7 +21,7 @@ def disclosure_state[RenderTargetT, ContextT](
 ) -> bool:
     """Whether a disclosure is open: the author's word when controlled, session memory otherwise."""
     match node.open:
-        case Controlled(value=value):
+        case Controlled(value=value) | ValueBinding(value=value):
             return value
         case Uncontrolled(initial=initial):
             return session.disclosure(node.key, initial=initial).open
@@ -29,7 +30,7 @@ def disclosure_state[RenderTargetT, ContextT](
 def toggle_state[ContextT](node: Toggle[ContextT], session: PresentationState) -> bool:
     """Whether a toggle is on: the author's word when controlled, session memory otherwise."""
     match node.on:
-        case Controlled(value=value):
+        case Controlled(value=value) | ValueBinding(value=value):
             return value
         case Uncontrolled(initial=initial):
             return session.toggle(node.key, initial=initial).on
@@ -45,7 +46,7 @@ def item_state[RenderTargetT, ContextT](
     """
     keys = {item.key for item in node.items}
     match node.opened:
-        case Controlled(value=value):
+        case Controlled(value=value) | ValueBinding(value=value):
             return (value if value in keys else None), True
         case Uncontrolled(initial=initial):
             seed = () if initial is None else (initial,)
@@ -72,7 +73,7 @@ def navigation_current[ContextT](node: Navigation[ContextT], session: Presentati
     """
     available = tuple(destination for destination in node.options if destination.available)
     match node.current:
-        case Controlled(value=value):
+        case Controlled(value=value) | ValueBinding(value=value):
             current = value
         case Uncontrolled(initial=initial):
             keys = {destination.key for destination in available}

@@ -10,6 +10,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from squid_ui._presentation import PresentationCells
+
 if TYPE_CHECKING:
     from squid_ui.planning.composition_state import RetainedComposition
 
@@ -68,6 +70,9 @@ class PresentationState:
     bypasses the check and can leave a previous plan reusable.
     """
 
+    declared: PresentationCells = field(
+        default_factory=PresentationCells, kw_only=True, repr=False, compare=False, metadata={"stable_identity": False}
+    )
     retained_composition: RetainedComposition | None = field(
         default=None, kw_only=True, repr=False, compare=False, metadata={"stable_identity": False}
     )
@@ -78,6 +83,9 @@ class PresentationState:
     disclosures: dict[str, DisclosureState] = field(default_factory=dict)
     toggles: dict[str, ToggleState] = field(default_factory=dict)
     _revision: int = field(default=0, init=False, repr=False, compare=False, metadata={"stable_identity": False})
+
+    def __post_init__(self) -> None:
+        self.declared.on_change = self._touch
 
     @property
     def revision(self) -> int:

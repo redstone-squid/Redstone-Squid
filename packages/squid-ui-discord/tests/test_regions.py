@@ -22,7 +22,7 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 def target(components: int) -> Target:

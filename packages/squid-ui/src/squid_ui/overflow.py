@@ -10,7 +10,7 @@ from typing import Literal
 
 from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
-from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled
+from squid_ui.interactions.ownership import Controlled, Uncontrolled
 
 # --- Who keeps a pager's page ---------------------------------------------------------
 
@@ -47,7 +47,7 @@ class RoutedPage:
     """
 
 
-type PageOwnership[ContextT = object] = Ownership[int, PageEvent[ContextT]] | RoutedPage
+type PageOwnership[ContextT = object] = Controlled[int, PageEvent[ContextT]] | Uncontrolled[int] | RoutedPage
 """Who keeps a pager's zero-based page.
 
 A negative page counts from the end, as Python indexing does: `-1` is the last page. The

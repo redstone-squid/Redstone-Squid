@@ -4,6 +4,7 @@ from dataclasses import replace
 from itertools import pairwise
 
 from squid_i18n import tree
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.grids import coordinate
 from squid_ui.authoring.presentations import (
@@ -453,7 +454,7 @@ def _entities_offers[RenderTargetT, ContextT](
     context = scope.context
     previous = (
         value.selection.value
-        if isinstance(value.selection, Controlled)
+        if isinstance(value.selection, Controlled | ValueBinding)
         else tuple(
             EntityRef.decode(key)
             for key in context.presentation.selection(
@@ -533,7 +534,7 @@ def _choices_offers[RenderTargetT, ContextT](
         value.selected
         if isinstance(value, sem.RoutedChoices)
         else value.selection.value
-        if isinstance(value.selection, Controlled)
+        if isinstance(value.selection, Controlled | ValueBinding)
         else context.presentation.selection(value.key, initial=value.selection.initial).selected
     )
     options = tuple(

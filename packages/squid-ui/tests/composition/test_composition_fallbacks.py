@@ -20,7 +20,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 DISCORD = AdapterProfile(DiscordAdapter, "fallback.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "fallback.slack", "1")

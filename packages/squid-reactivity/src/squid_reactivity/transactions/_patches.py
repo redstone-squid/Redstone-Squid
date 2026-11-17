@@ -55,7 +55,7 @@ class CellTarget:
         """Return the live slot or report an expired conditional inverse."""
         owner = self._owner()
         cell = self._cell()
-        if owner is None or cell is None:
+        if owner is None or cell is None or not cell.active:
             detail = ConflictDetail(self.identity, expected_version, -1)
             raise ReactiveConflictError(detail, f"{self.identity} no longer exists; nothing was published")
         return owner, cell

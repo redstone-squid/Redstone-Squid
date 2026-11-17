@@ -11,7 +11,7 @@ from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 
 def region(key: str, count: int) -> sl.semantic.Region:

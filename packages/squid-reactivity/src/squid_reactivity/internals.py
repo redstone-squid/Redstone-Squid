@@ -11,12 +11,14 @@ to reactive storage, subscriptions, and resource loading.
 from squid_reactivity._addresses import SubscriberRegistry, publish
 from squid_reactivity._async_values import _Execution as Execution
 from squid_reactivity._cells import _Cell as Cell
+from squid_reactivity._core import _State as State
 from squid_reactivity.resources import _AtomicResourcePending as AtomicResourcePending
 
 __all__ = [
     "AtomicResourcePending",
     "Cell",
     "Execution",
+    "State",
     "SubscriberRegistry",
     "publish",
 ]

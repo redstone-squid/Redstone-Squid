@@ -20,7 +20,7 @@ from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 DISCORD = AdapterProfile(DiscordAdapter, "conformance.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "conformance.slack", "1")

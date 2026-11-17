@@ -12,12 +12,13 @@ from types import MappingProxyType
 from typing import Any
 
 from squid_ui import scene
+from squid_ui._presentation import PresentationCells
 from squid_ui.authoring.presentations import Alternatives, FidelityEffect
 from squid_ui.authoring.semantic import ActionControl, ActionControls, FallbackContent
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
-from squid_ui.interactions.handlers import _HandlerBinder
+from squid_ui.interactions.handlers import _HandlerBinder, _ScopedHandler
 from squid_ui.native import NativeTraits
 from squid_ui.overflow import FIRST_PAGE
 from squid_ui.planning.allocation import AllocationSelection, AllocationSnapshot, RegionPages
@@ -113,12 +114,19 @@ class ActionPage[BodyT: scene.Body]:
 
     @staticmethod
     def _bind_action(
-        slot: ActionSlot, controls: Mapping[str, ActionControl[Any]], *, key: str | None = None
+        slot: ActionSlot,
+        controls: Mapping[str, ActionControl[Any]],
+        *,
+        key: str | None = None,
+        presentations: PresentationCells | None = None,
     ) -> ActionBinding:
         control = controls[slot.key]
+        handler = control.on_trigger
+        if presentations is not None and (scope := presentations.for_key(slot.key)) is not None:
+            handler = _ScopedHandler(handler, scope)
         return ActionBinding(
             slot.key if key is None else key,
-            control.on_trigger,
+            handler,
             control.mode,
             guard=control.guard,
             busy=control.busy,
@@ -126,18 +134,27 @@ class ActionPage[BodyT: scene.Body]:
             record=control.record,
         )
 
-    def bind(self, controls: Mapping[str, ActionControl[Any]], frontend: str, live: PageBindings) -> PlanResult[BodyT]:
+    def bind(
+        self,
+        controls: Mapping[str, ActionControl[Any]],
+        frontend: str,
+        live: PageBindings,
+        presentations: PresentationCells | None = None,
+    ) -> PlanResult[BodyT]:
         bindings = dict(live.actions)
         for key, template in self.bindings.items():
             match template:
                 case ActionSlot():
-                    bindings[key] = self._bind_action(template, controls)
+                    bindings[key] = self._bind_action(template, controls, presentations=presentations)
                 case ActionGroupSlot():
                     routes = MappingProxyType(
-                        {key: self._bind_action(slot, controls, key=key) for key, slot in template.routes.items()}
+                        {
+                            key: self._bind_action(slot, controls, key=key, presentations=presentations)
+                            for key, slot in template.routes.items()
+                        }
                     )
                     bindings[key] = ActionBinding(template.key, RouteSelection(routes), template.mode, routes=routes)
-        prepared = _HandlerBinder(frontend).actions(bindings)
+        prepared = _HandlerBinder(frontend, presentations).actions(bindings)
         return PlanResult(
             self.scene,
             MappingProxyType(dict(prepared)),
@@ -164,6 +181,7 @@ class ActionAllocation[BodyT: scene.Body]:
     frontend: str
     live: Mapping[int, PageBindings]
     regions: Mapping[OccurrenceId, RegionPages]
+    presentations: PresentationCells | None = None
     capacity: int = 32
     max_bytes: int = 1024 * 1024
     _cache: IdentityCache[PlanResult[BodyT]] = field(init=False, repr=False, compare=False)
@@ -208,7 +226,7 @@ class ActionAllocation[BodyT: scene.Body]:
         result = self.source.select(coordinates)
         if (cached := self._cache.get(result)) is not None:
             return cached
-        projected = result.bind(self.controls, self.frontend, self.live[result.slot])
+        projected = result.bind(self.controls, self.frontend, self.live[result.slot], self.presentations)
         # Failed frontend binding must not publish a partially prepared projection.
         self._cache.put(result, projected, weight=self._projection_weight(projected))
         return projected
@@ -218,6 +236,7 @@ def prepare_action_allocation[BodyT: scene.Body](
     allocation: AllocationSelection[PlanResult[BodyT]],
     graph: SemanticGraph[Any, Any],
     frontend: str,
+    presentations: PresentationCells | None = None,
 ) -> AllocationSelection[PlanResult[BodyT]]:
     """Prepare slots once, then replace only the current callback snapshot on reuse."""
     controls: dict[str, ActionControl[Any]] = {}
@@ -243,7 +262,9 @@ def prepare_action_allocation[BodyT: scene.Body](
     if isinstance(allocation, ActionAllocation):
         if allocation.controls == controls and allocation.frontend == frontend:
             return allocation
-        return ActionAllocation(allocation.source, controls, frontend, allocation.live, allocation.regions)
+        return ActionAllocation(
+            allocation.source, controls, frontend, allocation.live, allocation.regions, presentations
+        )
     if not isinstance(allocation, AllocationSnapshot):
         return allocation
     live: dict[int, PageBindings] = {}
@@ -259,4 +280,4 @@ def prepare_action_allocation[BodyT: scene.Body](
         prepare,
         regions={key: replace(region, owner=FIRST_PAGE) for key, region in allocation.regions.items()},
     )
-    return ActionAllocation(templates, controls, frontend, live, allocation.regions)
+    return ActionAllocation(templates, controls, frontend, live, allocation.regions, presentations)

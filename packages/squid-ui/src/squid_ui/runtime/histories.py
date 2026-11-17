@@ -679,6 +679,22 @@ class History:
         if selected:
             self._signal.notify()
 
+    def discard_cells(self, identities: frozenset[str]) -> None:
+        """Expire local entries for removed presentation cells, retaining external receipts."""
+        for stack in (self._undone, self._redoable):
+            for entry in tuple(stack):
+                plans = (entry.undo_plan, entry.redo_plan)
+                if (
+                    entry.operation is None
+                    and entry.compensation is None
+                    and any(
+                        plan is not None and any(p.target.identity in identities for p in plan.cells) for plan in plans
+                    )
+                ):
+                    self._remove_identity(stack, entry)
+                    self._release_entry(entry)
+        self._signal.notify()
+
     async def _reverse_operation(self, entry: HistoryEntry, *, redo: bool) -> HistoryResult:
         assert entry.operation is not None
         if entry.state is HistoryEntryState.NEEDS_RECONCILIATION:
@@ -1116,7 +1132,7 @@ class History:
                 return
 
 
-class _HistoryField:
+class HistoryField:
     def __init__(self, limit: int, compensation_outbox: CompensationOutbox | None) -> None:
         self._limit = limit
         self._compensation_outbox = compensation_outbox
@@ -1143,14 +1159,14 @@ class _HistoryField:
         return stack
 
 
-def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None = None) -> History:
+def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None = None) -> HistoryField:
     """Declare a separate undo/redo stack for each instance.
 
-    Assign this at class scope, for example ``edits: History = history(limit=20)``.
+    Assign this at class scope, for example ``edits = history(limit=20)``.
     The stack is created on first access. Clear it when its retained backend undo
     resources are no longer needed.
     """
-    return _HistoryField(limit, compensation_outbox)  # type: ignore[bad-return]
+    return HistoryField(limit, compensation_outbox)
 
 
 def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DEFAULT_CHROME) -> ControlGroup:
@@ -1174,7 +1190,7 @@ def inspect_histories(owner: object) -> tuple[HistorySnapshot, ...]:
     snapshots: list[HistorySnapshot] = []
     for klass in reversed(type(owner).__mro__):
         for name, descriptor in vars(klass).items():
-            if isinstance(descriptor, _HistoryField):
+            if isinstance(descriptor, HistoryField):
                 snapshots.append(getattr(owner, name).snapshot(name))
     return tuple(snapshots)
 

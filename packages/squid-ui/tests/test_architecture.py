@@ -11,7 +11,7 @@ from squid_ui.action_mode import ActionMode
 from squid_ui.context import ContextKey
 from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentation import PresentationState, SessionUpdate
+from squid_ui.presentation_state import PresentationState, SessionUpdate
 
 SOURCE = Path(sl.__file__).parent
 
@@ -38,7 +38,7 @@ def runtime_imports(path: Path) -> set[str]:
 
 
 def test_shared_contracts_and_planning_do_not_import_runtime() -> None:
-    paths = [SOURCE / name for name in ("context.py", "presentation.py", "chrome.py", "sources.py")]
+    paths = [SOURCE / name for name in ("context.py", "presentation_state.py", "chrome.py", "sources.py")]
     paths.extend((SOURCE / "planning").rglob("*.py"))
     violations = {
         str(path.relative_to(SOURCE)): sorted(
@@ -83,7 +83,7 @@ def test_existing_contract_imports_preserve_identity() -> None:
         "squid_ui.context",
         "squid_ui.interactions.forms",
         "squid_ui.interactions.handlers",
-        "squid_ui.presentation",
+        "squid_ui.presentation_state",
         "squid_ui.scene",
         "squid_ui.planning",
         "squid_ui.runtime",
@@ -106,7 +106,7 @@ def test_scene_sources_do_not_depend_on_live_execution() -> None:
     forbidden = (
         "squid_ui.runtime",
         "squid_ui.planning",
-        "squid_ui.presentation",
+        "squid_ui.presentation_state",
         "squid_ui.interactions.forms",
         "squid_ui.interactions",
     )

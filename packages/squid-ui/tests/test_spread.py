@@ -12,7 +12,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.spread import plan_spread
-from squid_ui.presentation import ActivePagers, RegionLayoutUpdate, RetainedCompositionUpdate
+from squid_ui.presentation_state import ActivePagers, RegionLayoutUpdate, RetainedCompositionUpdate
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "spread.discord", ">=1"))
 # Each paragraph costs one component, so four fit in a message.

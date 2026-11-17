@@ -27,7 +27,6 @@ from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, A
 from squid_ui.runtime import (
     ActionDiscardedError,
     Discarded,
-    History,
     PostCommitOperation,
     UIExecutionHost,
     history,
@@ -37,7 +36,7 @@ from squid_ui.runtime import (
 
 class Panel(Component[ComponentsV2Target]):
     value: int = state(0)
-    history: History = history()
+    history = history()
 
     def __init__(self, handler: Callable[[Panel, ActionEvent], Awaitable[None]]) -> None:
         self._handler = handler

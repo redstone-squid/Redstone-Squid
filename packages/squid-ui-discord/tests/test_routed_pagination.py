@@ -20,7 +20,7 @@ from squid_ui.overflow import RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanningSnapshot, Target, plan
 from squid_ui.planning.pagination.navigation import page_jump_form
-from squid_ui.presentation import CursorUpdate, PresentationState
+from squid_ui.presentation_state import CursorUpdate, PresentationState
 from squid_ui.selectors import select as select_node
 from squid_ui_widgets import testing as wt
 

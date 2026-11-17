@@ -88,7 +88,7 @@ class ReviewForm(sl.forms.Form[sd.Request[Any, Any]]):
 class ReviewerPanel(InspectablePanel):
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-reviewer")))
 
-    history: sl.runtime.History = sl.runtime.history(limit=10)
+    history = sl.runtime.history(limit=10)
     notice: str = sl.state("Submit a review, then undo it. The other reviewer's contribution stays.")
 
     def __init__(self, room: ReviewRoom, seat: Reviewer, *, simulated: bool) -> None:

@@ -87,7 +87,7 @@ async def test_operation_progress_updates_every_reader_including_computed_values
 async def test_model_history_updates_readers_without_a_component_owner() -> None:
     class Model(sl.Reactive):
         count: int = sl.state(0)
-        edits: History = history()
+        edits = history()
 
         @sl.computed
         def label(self) -> str:

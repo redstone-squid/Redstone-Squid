@@ -17,7 +17,7 @@ from squid_ui.palette import Palette
 from squid_ui.planning import CompositionOptions, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.selectors import query, select
 
 ADAPTER = AdapterProfile(DiscordAdapter, "themes", "1")

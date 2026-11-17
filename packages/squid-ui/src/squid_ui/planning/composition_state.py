@@ -29,7 +29,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
 from squid_ui.planning.semantic_index import ItemBranch, SemanticGraph, semantic_graph
 from squid_ui.planning.structure import disclosure_state, opened_item
-from squid_ui.presentation import (
+from squid_ui.presentation_state import (
     ActivePagers,
     RegionAllocation,
     RegionLayoutState,
@@ -72,7 +72,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         fingerprint = stable_fingerprint((document,), cache=request.fingerprints)
         if request.session is not None and result.allocation is not None:
             frontend = request.target.adapter.frontend or request.target.adapter.name
-            allocation = prepare_action_allocation(result.allocation, graph, frontend)
+            allocation = prepare_action_allocation(result.allocation, graph, frontend, request.presentation.declared)
             # The envelope supplies diagnostics; selected pages supply live bindings.
             result = replace(
                 result,

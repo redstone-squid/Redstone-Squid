@@ -19,7 +19,7 @@ from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupporte
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.target import Target
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 
 ADAPTER = AdapterProfile(DiscordAdapter, "native-layout.discord", "1")
 TARGET = components_v2_target(ADAPTER)

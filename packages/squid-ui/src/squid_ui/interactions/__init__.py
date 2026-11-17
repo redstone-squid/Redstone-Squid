@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.transactions import Transaction, TransactionContext
 from squid_ui._dataclass import immutable, immutable_kw_only
+from squid_ui._presentation import PresentationReference, presentation_scope
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import TextLike
@@ -121,6 +122,14 @@ class ActionEvent[ContextT = object]:
             raise RuntimeError(message)
         return self._transaction
 
+    def read[ValueT](self, reference: PresentationReference[ValueT]) -> ValueT:
+        """Read a presentation value from the active interaction's placement."""
+        scope = presentation_scope()
+        if scope is None:
+            msg = "event.read() requires an active presentation interaction"
+            raise RuntimeError(msg)
+        return reference.read(scope)
+
     async def acknowledge(self) -> None:
         await self.responder.acknowledge()
 
@@ -166,6 +175,9 @@ class ActionEvent[ContextT = object]:
         record: History | None = None,
     ) -> None:
         """Present a portable form through the dispatching frontend."""
+        scope = presentation_scope()
+        if scope is not None and on_submit is not None:
+            on_submit = scope.bind(on_submit)
         await self.responder.present_form(
             form,
             key=key,

@@ -43,7 +43,7 @@ from squid_ui.ext.discord.sessions import SessionKey
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_ui.pages import PagePosition
-from squid_ui.presentation import CursorState, DisclosureState, PresentationState, SelectionState
+from squid_ui.presentation_state import CursorState, DisclosureState, PresentationState, SelectionState
 from squid_ui.runtime.definition import AnyComponent
 from squid_ui.runtime.expansion import render_component_tree
 

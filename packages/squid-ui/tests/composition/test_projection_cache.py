@@ -24,7 +24,7 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.allocation import AllocationSnapshot, CertifiedPage, RegionPages
 from squid_ui.planning.resources import EMPTY_COST
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentation import PresentationState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.runtime.histories import History
 
 TARGET = components_v2_target(AdapterProfile(DiscordAdapter, "projection", ">=1"))

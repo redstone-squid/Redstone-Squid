@@ -3,9 +3,10 @@
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self, cast, override
 
 from squid_ui._dataclass import immutable
+from squid_ui._presentation import PresentationCells, PresentationScope
 from squid_ui.interactions import ActionBinding, ActionEvent
 
 if TYPE_CHECKING:
@@ -74,6 +75,21 @@ class _HandlerComposition(ABC):
     def _bind_handlers(self, binder: _HandlerBinder) -> Self: ...
 
 
+@immutable
+class _ScopedHandler[EventT: ActionEvent[Any]](_HandlerComposition):
+    callback: Callable[[EventT], Awaitable[None]]
+    scope: PresentationScope
+
+    async def __call__(self, event: EventT) -> None:
+        with self.scope.activate():
+            await self.callback(event)
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        callback = binder.callback(self.callback)
+        return replace(self, callback=callback) if callback is not self.callback else self
+
+
 class _HandlerBinder:
     """Select one frontend across a plan's explicit callback graph.
 
@@ -81,8 +97,9 @@ class _HandlerBinder:
     action and form bindings; backreferences retain the original object as before.
     """
 
-    def __init__(self, frontend: str) -> None:
+    def __init__(self, frontend: str, presentations: PresentationCells | None = None) -> None:
         self.frontend = frontend
+        self.presentations = presentations
         self._visited: dict[int, object] = {}
 
     def cached[T](self, source: T, resolve: Callable[[], T]) -> T:
@@ -130,6 +147,13 @@ class _HandlerBinder:
     def action[EventT: ActionEvent[Any]](self, binding: ActionBinding[EventT]) -> ActionBinding[EventT]:
         def resolve() -> ActionBinding[EventT]:
             handler = self.callback(binding.handler)
+            if (
+                self.presentations is not None
+                and not binding.routes
+                and (scope := self.presentations.for_key(binding.key)) is not None
+                and not isinstance(handler, _ScopedHandler)
+            ):
+                handler = _ScopedHandler(handler, scope)
             routes = self.actions(binding.routes)
             return (
                 replace(binding, handler=handler, routes=routes)
@@ -152,6 +176,11 @@ class _HandlerBinder:
         def resolve() -> FormBinding[ContextT]:
             submit = self.callback(binding.on_submit)
             spec = self.form_spec(binding.spec)
+            if self.presentations is not None and (scope := self.presentations.for_key(binding.key)) is not None:
+                if not isinstance(submit, _ScopedHandler) or submit.scope is not scope:
+                    submit = _ScopedHandler(submit, scope)
+                if spec.on_invalid is not None:
+                    spec = replace(spec, on_invalid=_ScopedHandler(spec.on_invalid, scope))
             return (
                 replace(binding, on_submit=submit, spec=spec)
                 if submit is not binding.on_submit or spec is not binding.spec
@@ -165,12 +194,15 @@ class _HandlerBinder:
 
 
 def bind_handlers(
-    actions: Mapping[str, ActionBinding], forms: Mapping[str, FormBinding], frontend: str
+    actions: Mapping[str, ActionBinding],
+    forms: Mapping[str, FormBinding],
+    frontend: str,
+    presentations: PresentationCells | None = None,
 ) -> tuple[Mapping[str, ActionBinding], Mapping[str, FormBinding]]:
     """Resolve frontend registrations along framework-declared callback edges.
 
     Application callback objects and their data remain opaque. Generated adapters
     explicitly declare their children rather than exposing every dataclass field.
     """
-    binder = _HandlerBinder(frontend)
+    binder = _HandlerBinder(frontend, presentations)
     return binder.actions(actions), binder.forms(forms)
