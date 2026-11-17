@@ -13,6 +13,7 @@ from squid.core.errors import AuthorizationError
 from squid.edits.domain import EditValues, LatestRevision, Revision
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
 from squid.settings.application.edits import RUNTIME_TARGET
+from squid.settings.domain.runtime import RuntimeSettings
 
 
 @pytest.mark.parametrize("revision", [None, 1])
@@ -72,3 +73,20 @@ async def test_runtime_command_checks_permission_before_reading_settings(
     with pytest.raises(AuthorizationError):
         await callback(SimpleNamespace(), request, "welcome_enabled", value=value)
     authorize.assert_awaited_once_with(request, node)
+
+
+async def test_runtime_inspection_includes_json_type_constraints_and_example(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("squid.bot.admin_cog.enforce", AsyncMock())
+    settings = RuntimeSettings()
+    owner = SimpleNamespace(
+        bot=SimpleNamespace(
+            services=SimpleNamespace(settings=SimpleNamespace(runtime_snapshot=AsyncMock(return_value=(settings, 7))))
+        )
+    )
+    result = await cast(Any, Admin)._runtime_settings(owner, SimpleNamespace(), "welcome_forward_chance")
+    rendered = str(result)
+    assert '"type": "number"' in rendered
+    assert '"minimum": 0' in rendered
+    assert '"maximum": 1' in rendered
+    assert '"default": 0.1' in rendered
+    assert "revision 7" in rendered

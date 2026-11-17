@@ -275,8 +275,10 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             settings, current_revision = await service.runtime_snapshot()
             if setting not in type(settings).model_fields:
                 return text_node("Unknown runtime setting. Run runtime-settings to list available names.")
+            schema = type(settings).model_json_schema()["properties"][setting]
             return text_node(
-                f"{setting}: {json.dumps(settings.model_dump(mode='json')[setting])} (revision {current_revision})"
+                f"{setting}: {json.dumps(settings.model_dump(mode='json')[setting])} (revision {current_revision})\n"
+                f"JSON value schema (default is an example):\n{json.dumps(schema, indent=2)}"
             )
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD,
@@ -309,7 +311,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()
     async def sync(self, request: sd.Request[Self, BotT], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> sd.CommandResult:  # fmt: skip
-        """Syncs the slash commands with the discord API."""
+        """Sync application commands; see docs/operator-commands.md for scope flags."""
         tree = self.bot.tree
         if not guilds:
             if spec == "~":
