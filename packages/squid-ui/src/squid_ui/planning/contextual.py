@@ -217,13 +217,15 @@ class ContextualResolution[R, BodyT: scene.Body]:
             self.work.consume()
             query_document = self._document(logical=True)
             try:
-                result = plan(self._document(), pages, self.work, self.partial)
+                with self.work.allowance(max(1, self.work.limit // 4)):
+                    result = plan(self._document(), pages, self.work, self.partial)
             except JointInfeasibleError:
                 if self.partial:
                     raise
                 # A closed-family failure does not disprove the demanded view.
                 self.partial = True
-                result = plan(self._document(), pages, self.work, self.partial)
+                with self.work.allowance(max(1, self.work.limit // 4)):
+                    result = plan(self._document(), pages, self.work, self.partial)
             self.last_choices = result._choices
             layout = result.layout
             if layout is None:

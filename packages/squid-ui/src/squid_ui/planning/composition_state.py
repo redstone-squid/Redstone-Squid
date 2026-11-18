@@ -211,7 +211,20 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 if len(matches) > 1:
                     message = f"ambiguous reveal reference: {reference.keys!r}"
                     raise LayoutInvariantError(message)
-                owner = replace(owner, anchor=anchor(matches[0].keys) if matches else "")
+                resolved = anchor(matches[0].keys) if matches else ""
+                if matches:
+                    prefix = matches[0].keys
+                    first_page = next(
+                        (
+                            page
+                            for page, sources in enumerate(region.anchors)
+                            if any(source.keys[: len(prefix)] == prefix for source in sources)
+                        ),
+                        None,
+                    )
+                    if first_page is not None:
+                        anchors[resolved] = first_page
+                owner = replace(owner, anchor=resolved)
             cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
             position = coordinator.grant(cursor)
             if identity in options.pages:

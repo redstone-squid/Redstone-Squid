@@ -117,6 +117,6 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     page: PageOwnership = FIRST_PAGE,
     page_size: int | None = None,
 ) -> Region[RenderTargetT, ContextT]:
-    """Let the planner allocate space jointly with sibling and nested regions."""
+    """Allocate space jointly; page_size caps content units, including unbreakable rows."""
     title = Text(title)
     return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page, page_size)

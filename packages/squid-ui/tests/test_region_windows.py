@@ -34,7 +34,10 @@ def test_region_window_size_is_positive() -> None:
         sl.region(key="windows", title="", page_size=0)
 
 
-async def test_typed_reveal_uses_namespaced_content_and_is_consumed_after_delivery() -> None:
+@pytest.mark.parametrize("kind,key", [(sl.semantic.ActionControl, "row-2"), (sl.semantic.ActionControls, "actions-2")])
+async def test_typed_reveal_uses_namespaced_content_and_is_consumed_after_delivery(
+    kind: type[object], key: str
+) -> None:
     class Rows(sl.Component):
         @override
         def render(self) -> sl.LayoutNode:
@@ -51,7 +54,7 @@ async def test_typed_reveal_uses_namespaced_content_and_is_consumed_after_delive
                 key="rows",
                 title="",
                 page_size=1,
-                page=RevealPage(anchor=sl.element_ref(sl.semantic.ActionControl, "row-2"), request="added"),
+                page=RevealPage(anchor=sl.element_ref(kind, key), request="added"),
             )
 
     class Screen(sl.Component):

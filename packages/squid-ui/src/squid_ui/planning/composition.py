@@ -5,6 +5,7 @@ certifying all reachable page combinations belongs to the joint solver.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import field, replace
 from enum import StrEnum
 from types import MappingProxyType
@@ -290,6 +291,19 @@ class WorkBudget:
     @property
     def remaining(self) -> int:
         return self._limit - self._spent
+
+    @contextmanager
+    def allowance(self, limit: int) -> Iterator[None]:
+        """Bound one phase without spending the allowance reserved for later phases."""
+        if limit < 0:
+            message = "phase work limit cannot be negative"
+            raise LayoutInvariantError(message)
+        previous = self._limit
+        self._limit = min(previous, self._spent + limit)
+        try:
+            yield
+        finally:
+            self._limit = previous
 
     def consume(self, amount: int = 1) -> None:
         if amount < 0:
