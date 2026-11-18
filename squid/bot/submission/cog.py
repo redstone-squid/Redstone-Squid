@@ -114,11 +114,10 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         query: str,
     ) -> BuildBrowseScreen | SearchScreen | None:
         """Search records, builds, patterns, and restrictions using text and field filters."""
-        if scope is None and (interaction := request.interaction) is not None:
-            searches = request.client.contextual_searches
-            if (search := searches.active(interaction)) is not None:
-                await searches.present(request, search, query)
-                return None
+        if request.interaction is not None and await request.client.contextual_searches.handle_command(
+            request, query, scoped=scope is not None
+        ):
+            return None
         await request.defer("public")
         return await open_search(
             request,

@@ -102,19 +102,23 @@ async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_r
         assert launch.deferrals[0].kwargs["ephemeral"] is True
         assert "</search:2>" in launch.edits[0].kwargs["content"]
 
-        for user_id, channel_id, expected in ((1, 5, "full_lamp"), (2, 5, "width:"), (1, 6, "width:")):
+        autocomplete = make_command_interaction(client, name="search", user_id=1, channel_id=5, autocomplete=True)
+        (pattern,) = await search_autocomplete(cast(BotInteraction, autocomplete), "")
+        assert pattern.name == "Full Lamp"
+        assert isinstance(pattern.value, str)
+        for user_id, channel_id in ((2, 5), (1, 6)):
             autocomplete = make_command_interaction(
                 client, name="search", user_id=user_id, channel_id=channel_id, autocomplete=True
             )
             assert [choice.value for choice in await search_autocomplete(cast(BotInteraction, autocomplete), "")] == [
-                expected
+                "width:"
             ]
 
         invocation = InteractionHarness(client=client, message_id=100)
         # A slash command is owned by its cog, which can differ from the editor's owner.
         request = await client.ui.scope(object()).request(invocation.source)
         cog = BuildCommands.__new__(BuildCommands)
-        await unwrap(cog.search_records.callback)(cog, request, query="lamp")
+        await unwrap(cog.search_records.callback)(cog, request, query=pattern.value)
         assert invocation.deferrals[0].kwargs["ephemeral"] is True
         key = sd.SessionKey.custom("contextual-search", (1, 5))
         (session,) = client.ui.sessions.get(key)
@@ -130,6 +134,12 @@ async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_r
         assert client.contextual_searches.active(invocation.source) is None
         await screen.workspace.history.undo()
         assert screen.workspace.answers["patterns"] == ["regular"]
+
+        stale = InteractionHarness(client=client, message_id=101)
+        request = await client.ui.scope(object()).request(stale.source)
+        assert await unwrap(cog.search_records.callback)(cog, request, query=pattern.value) is None
+        assert stale.sends[0].kwargs["ephemeral"] is True
+        assert "This search ended" in str(stale.sends[0].kwargs["view"].to_components())
 
 
 def test_editor_derivations_share_normalization_without_sharing_answer_dicts() -> None:
