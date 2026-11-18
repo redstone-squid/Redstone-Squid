@@ -1102,10 +1102,10 @@ bot-starboard-screen-up = Up
 # squid/bot/catalogue/browse.py:282, squid/bot/catalogue/browse.py:333
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/catalogue/browse.py:480
+# squid/bot/catalogue/browse.py:481
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1009
+# squid/bot/catalogue/browse.py:1023
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/catalogue/browse.py:341
@@ -1129,10 +1129,10 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/catalogue/browse.py:239
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1007
+# squid/bot/catalogue/browse.py:1021
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/catalogue/browse.py:643
+# squid/bot/catalogue/browse.py:644
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/catalogue/schematics/tools.py:362
@@ -1216,7 +1216,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/catalogue/schematics/presentation.py:108
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/cog.py:136
+# squid/bot/submission/cog.py:142
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/catalogue/search/results.py:545
@@ -1289,40 +1289,40 @@ bot-submission-submit-check-build-size = Check the build size
 # squid/bot/submission/form.py:80
 bot-submission-submit-check-door-size = Check the door size
 
-# squid/bot/submission/cog.py:217
+# squid/bot/submission/cog.py:223
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
 # squid/bot/submission/message_intake.py:101
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/cog.py:226
+# squid/bot/submission/cog.py:232
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/opening.py:93
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/build_edit.py:417
+# squid/bot/submission/ui/build_edit.py:421
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/build_edit.py:422
+# squid/bot/submission/ui/build_edit.py:426
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/build_edit.py:442
+# squid/bot/submission/ui/build_edit.py:454
 bot-submission-ui-views-cancel = Cancel
 
-# squid/bot/submission/ui/build_edit.py:326
+# squid/bot/submission/ui/build_edit.py:330
 bot-submission-ui-views-edit-build = Edit build
 
-# squid/bot/submission/ui/build_edit.py:298
+# squid/bot/submission/ui/build_edit.py:302
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/build_edit.py:463
+# squid/bot/submission/ui/build_edit.py:505
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/build_edit.py:439
+# squid/bot/submission/ui/build_edit.py:451
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/build_edit.py:428
+# squid/bot/submission/ui/build_edit.py:432
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:343, squid/bot/tags_view.py:542
@@ -1709,13 +1709,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:139
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:976
+# squid/bot/catalogue/browse.py:990
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:974
+# squid/bot/catalogue/browse.py:988
 browse-query-all-standings = All standings
 
-# squid/bot/catalogue/browse.py:693
+# squid/bot/catalogue/browse.py:698
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1724,22 +1724,22 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/catalogue/browse.py:620
+# squid/bot/catalogue/browse.py:621
 build-browse-all-builds = Builds
 
-# squid/bot/catalogue/browse.py:636
+# squid/bot/catalogue/browse.py:637
 build-browse-record-tools = Record tools
 
-# squid/bot/catalogue/browse.py:628
+# squid/bot/catalogue/browse.py:629
 build-browse-records = Records
 
 # squid/bot/catalogue/browse.py:262
 build-browse-tags = Build tags
 
-# squid/bot/catalogue/browse.py:695
+# squid/bot/catalogue/browse.py:700
 build-browser-close-search = Done
 
-# squid/bot/catalogue/browse.py:697
+# squid/bot/catalogue/browse.py:702
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/ui/saved_drafts.py:55
@@ -1802,13 +1802,13 @@ build-edit-form-videos = Video links
 # squid/submissions/application/forms.py:678
 build-edit-form-world-downloads = World download links
 
-# squid/bot/submission/ui/build_edit.py:160
+# squid/bot/submission/ui/build_edit.py:164
 build-edit-history-fields = Edit build fields
 
-# squid/bot/submission/ui/build_edit.py:479
+# squid/bot/submission/ui/build_edit.py:521
 build-edit-history-save = Save build changes
 
-# squid/bot/submission/ui/build_edit.py:190
+# squid/bot/submission/ui/build_edit.py:194
 build-edit-history-unlisted = Remove names not in the catalogue
 
 # squid/bot/submission/ui/build_edit.py:475
@@ -1823,43 +1823,43 @@ build-edit-search-unavailable = Return to the editor before adding a pattern.
 # squid/bot/submission/ui/controls.py:74
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/build_edit.py:312
+# squid/bot/submission/ui/build_edit.py:316
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
 # squid/bot/submission/ui/opening.py:94
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:520
+# squid/bot/submission/ui/build_edit.py:562
 build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:359
+# squid/bot/submission/ui/build_edit.py:363
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
-# squid/bot/submission/ui/build_edit.py:364
+# squid/bot/submission/ui/build_edit.py:368
 build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/build_edit.py:304
+# squid/bot/submission/ui/build_edit.py:308
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/build_edit.py:337
+# squid/bot/submission/ui/build_edit.py:341
 build-editor-remove-unlisted = Remove names not in the catalogue…
 
-# squid/bot/submission/ui/build_edit.py:404
+# squid/bot/submission/ui/build_edit.py:408
 build-editor-removed-unlisted = Removed: { $names }
 
-# squid/bot/submission/ui/build_edit.py:320
+# squid/bot/submission/ui/build_edit.py:324
 build-editor-review-hint = Review the changed values below, then apply them.
 
-# squid/bot/submission/ui/build_edit.py:322
+# squid/bot/submission/ui/build_edit.py:326
 build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.
 
-# squid/bot/submission/ui/build_edit.py:152
+# squid/bot/submission/ui/build_edit.py:156
 build-editor-stale-form = These answers changed while the form was open. Open it again.
 
-# squid/bot/submission/ui/build_edit.py:384
+# squid/bot/submission/ui/build_edit.py:388
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/catalogue/browse.py:685, squid/bot/catalogue/browse.py:818
+# squid/bot/catalogue/browse.py:690, squid/bot/catalogue/browse.py:823
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1874,7 +1874,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/catalogue/browse.py:481
+# squid/bot/catalogue/browse.py:482
 build-list-empty = No builds are available.
 
 # squid/bot/catalogue/browse.py:385
@@ -1997,10 +1997,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:746, squid/bot/catalogue/search/help.py:185
+# squid/bot/catalogue/browse.py:751, squid/bot/catalogue/search/help.py:185
 catalogue-search-help = Search help
 
-# squid/bot/catalogue/browse.py:604
+# squid/bot/catalogue/browse.py:605
 catalogue-search-help-close = Close help
 
 # squid/catalogue/domain/titles.py:67
@@ -2138,103 +2138,103 @@ command-bug-message-name = message
 # squid/bot/feedback_cog.py:40
 command-bug-name = bug
 
-# squid/bot/submission/cog.py:135
+# squid/bot/submission/cog.py:141
 command-build-browse-build-id-name = id
 
-# squid/bot/submission/cog.py:131
+# squid/bot/submission/cog.py:137
 command-build-browse-help = Browse builds and record holders.
 
-# squid/bot/submission/cog.py:130
+# squid/bot/submission/cog.py:136
 command-build-browse-name = browse
 
-# squid/bot/submission/cog.py:321
+# squid/bot/submission/cog.py:327
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
-# squid/bot/submission/cog.py:325
+# squid/bot/submission/cog.py:331
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
-# squid/bot/submission/cog.py:324
+# squid/bot/submission/cog.py:330
 command-build-drafts-inbox-name = inbox
 
-# squid/bot/submission/cog.py:319
+# squid/bot/submission/cog.py:325
 command-build-drafts-name = drafts
 
-# squid/bot/submission/cog.py:46
+# squid/bot/submission/cog.py:47
 command-build-help = Browse and submit redstone builds
 
-# squid/bot/submission/cog.py:45
+# squid/bot/submission/cog.py:46
 command-build-name = build
 
-# squid/bot/submission/cog.py:225
+# squid/bot/submission/cog.py:231
 command-build-submit-build-size-name = build_size
 
-# squid/bot/submission/cog.py:195
+# squid/bot/submission/cog.py:201
 command-build-submit-category-name = category
 
-# squid/bot/submission/cog.py:198
+# squid/bot/submission/cog.py:204
 command-build-submit-choice-category-door = Door
 
-# squid/bot/submission/cog.py:201
+# squid/bot/submission/cog.py:207
 command-build-submit-choice-category-entrance = Entrance
 
-# squid/bot/submission/cog.py:199
+# squid/bot/submission/cog.py:205
 command-build-submit-choice-category-extender = Extender
 
-# squid/bot/submission/cog.py:202
+# squid/bot/submission/cog.py:208
 command-build-submit-choice-category-other = Other
 
-# squid/bot/submission/cog.py:200
+# squid/bot/submission/cog.py:206
 command-build-submit-choice-category-utility = Utility
 
-# squid/bot/submission/cog.py:219
+# squid/bot/submission/cog.py:225
 command-build-submit-choice-door-type-door = Door
 
-# squid/bot/submission/cog.py:220
+# squid/bot/submission/cog.py:226
 command-build-submit-choice-door-type-skydoor = Skydoor
 
-# squid/bot/submission/cog.py:221
+# squid/bot/submission/cog.py:227
 command-build-submit-choice-door-type-trapdoor = Trapdoor
 
-# squid/bot/submission/cog.py:231
+# squid/bot/submission/cog.py:237
 command-build-submit-creators-name = creators
 
-# squid/bot/submission/cog.py:259
+# squid/bot/submission/cog.py:265
 command-build-submit-description-name = description
 
-# squid/bot/submission/cog.py:210
+# squid/bot/submission/cog.py:216
 command-build-submit-door-size-name = door_size
 
-# squid/bot/submission/cog.py:216
+# squid/bot/submission/cog.py:222
 command-build-submit-door-type-name = door_type
 
-# squid/bot/submission/cog.py:267
+# squid/bot/submission/cog.py:273
 command-build-submit-file-2-name = file_2
 
-# squid/bot/submission/cog.py:271
+# squid/bot/submission/cog.py:277
 command-build-submit-file-3-name = file_3
 
-# squid/bot/submission/cog.py:275
+# squid/bot/submission/cog.py:281
 command-build-submit-file-4-name = file_4
 
-# squid/bot/submission/cog.py:263
+# squid/bot/submission/cog.py:269
 command-build-submit-file-name = file
 
-# squid/bot/submission/cog.py:190
+# squid/bot/submission/cog.py:196
 command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens.
 
-# squid/bot/submission/cog.py:188
+# squid/bot/submission/cog.py:194
 command-build-submit-name = submit
 
-# squid/bot/submission/cog.py:206
+# squid/bot/submission/cog.py:212
 command-build-submit-name-name = name
 
-# squid/bot/submission/cog.py:245
+# squid/bot/submission/cog.py:251
 command-build-submit-patterns-name = patterns
 
-# squid/bot/submission/cog.py:252
+# squid/bot/submission/cog.py:258
 command-build-submit-restrictions-name = restrictions
 
-# squid/bot/submission/cog.py:238
+# squid/bot/submission/cog.py:244
 command-build-submit-versions-name = versions
 
 # squid/bot/diagnostics/cog.py:26
@@ -2363,16 +2363,16 @@ command-poll-help = Create a poll from options or open the poll editor.
 # squid/bot/voting/cog.py:57
 command-poll-name = poll
 
-# squid/bot/submission/cog.py:62
+# squid/bot/submission/cog.py:63
 command-recalculate-build-name = Scan Build Message
 
-# squid/bot/submission/cog.py:149
+# squid/bot/submission/cog.py:155
 command-records-browse-help = Browse records and their holder builds
 
-# squid/bot/submission/cog.py:148
+# squid/bot/submission/cog.py:154
 command-records-name = records
 
-# squid/bot/submission/cog.py:152
+# squid/bot/submission/cog.py:158
 command-records-query-name = query
 
 # squid/bot/recount_cog.py:80
@@ -2441,13 +2441,13 @@ command-search-choice-scope-records = records
 # squid/bot/submission/cog.py:81
 command-search-choice-scope-restrictions = restrictions
 
-# squid/bot/submission/cog.py:69
+# squid/bot/submission/cog.py:70
 command-search-help = Search builds, records, and taxonomy metadata
 
 # squid/bot/submission/cog.py:91
 command-search-mode-name = mode
 
-# squid/bot/submission/cog.py:68
+# squid/bot/submission/cog.py:69
 command-search-name = search
 
 # squid/bot/submission/cog.py:101
@@ -2585,19 +2585,19 @@ context-follow-record = Follow record
 # squid/bot/follows.py:64
 context-follow-saved = Following. Manage your follows in /notifications.
 
-# squid/bot/catalogue/search/contextual.py:179
+# squid/bot/catalogue/search/contextual.py:177
 contextual-search-cancel = Cancel search
 
-# squid/bot/catalogue/search/contextual.py:120
+# squid/bot/catalogue/search/contextual.py:127
 contextual-search-empty = No matches. Try another /search query.
 
-# squid/bot/catalogue/search/contextual.py:115
+# squid/bot/catalogue/search/contextual.py:122
 contextual-search-expired = This search ended. Use Search in the editor to start again.
 
-# squid/bot/catalogue/search/contextual.py:176
+# squid/bot/catalogue/search/contextual.py:174
 contextual-search-pick = Select a match to add it
 
-# squid/bot/catalogue/search/contextual.py:69
+# squid/bot/catalogue/search/contextual.py:76
 contextual-search-prompt = Use /search here within two minutes. Leave scope empty.
 
 # squid/core/errors.py:226
@@ -2861,7 +2861,7 @@ draft-editor-choose = Choose…
 # squid/bot/submission/ui/drafts.py:733
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:542, squid/bot/submission/ui/sections.py:347
+# squid/bot/submission/ui/build_edit.py:584, squid/bot/submission/ui/sections.py:347
 draft-editor-done = Done
 
 # squid/bot/submission/ui/sections.py:86
@@ -2984,7 +2984,7 @@ draft-editor-picker-other-pages = Choices on other pages are kept.
 # squid/bot/submission/ui/sections.py:223
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/build_edit.py:435, squid/bot/submission/ui/drafts.py:601
+# squid/bot/submission/ui/build_edit.py:447, squid/bot/submission/ui/drafts.py:601
 draft-editor-preview = Preview
 
 # squid/bot/submission/ui/drafts.py:864, squid/bot/submission/ui/drafts.py:866
@@ -3326,43 +3326,43 @@ guided-search-change-field = Choose another field
 # squid/bot/catalogue/search/filters.py:158
 guided-search-close-filters = Close filters
 
-# squid/bot/catalogue/search/filters.py:296
+# squid/bot/catalogue/search/filters.py:286
 guided-search-comparison = Comparison
 
 # squid/bot/catalogue/search/filters.py:152
 guided-search-edit-query = Type a query
 
-# squid/bot/catalogue/search/filters.py:343
+# squid/bot/catalogue/search/filters.py:333
 guided-search-edit-text = Edit keywords
 
 # squid/bot/catalogue/search/filters.py:185
 guided-search-filter-heading = Filter by { $name }
 
-# squid/bot/catalogue/search/filters.py:346
+# squid/bot/catalogue/search/filters.py:336
 guided-search-keywords = Keywords
 
-# squid/bot/catalogue/search/filters.py:332, squid/bot/catalogue/search/filters.py:349
+# squid/bot/catalogue/search/filters.py:322, squid/bot/catalogue/search/filters.py:339
 guided-search-negated = Exclude matches
 
-# squid/bot/catalogue/search/filters.py:520
+# squid/bot/catalogue/search/filters.py:510
 guided-search-no = No
 
-# squid/bot/catalogue/search/filters.py:290
+# squid/bot/catalogue/search/filters.py:280
 guided-search-operator-at-least = at least
 
-# squid/bot/catalogue/search/filters.py:288
+# squid/bot/catalogue/search/filters.py:278
 guided-search-operator-at-most = at most
 
-# squid/bot/catalogue/search/filters.py:291
+# squid/bot/catalogue/search/filters.py:281
 guided-search-operator-between = between
 
-# squid/bot/catalogue/search/filters.py:286
+# squid/bot/catalogue/search/filters.py:276
 guided-search-operator-equal = is
 
-# squid/bot/catalogue/search/filters.py:289
+# squid/bot/catalogue/search/filters.py:279
 guided-search-operator-greater = more than
 
-# squid/bot/catalogue/search/filters.py:287
+# squid/bot/catalogue/search/filters.py:277
 guided-search-operator-less = less than
 
 # squid/bot/catalogue/search/filters.py:244
@@ -3374,16 +3374,16 @@ guided-search-query-title = Search query
 # squid/bot/catalogue/search/filters.py:230
 guided-search-remove-clause = Remove
 
-# squid/bot/catalogue/browse.py:752
+# squid/bot/catalogue/browse.py:757
 guided-search-reset = Reset
 
-# squid/bot/catalogue/search/filters.py:440
+# squid/bot/catalogue/search/filters.py:430
 guided-search-search-filter = Search fields
 
-# squid/bot/catalogue/search/filters.py:454
+# squid/bot/catalogue/search/filters.py:444
 guided-search-search-options = Search sort orders
 
-# squid/bot/catalogue/search/filters.py:478
+# squid/bot/catalogue/search/filters.py:468
 guided-search-search-values = Search { $name }
 
 # squid/bot/catalogue/search/filters.py:206
@@ -3395,10 +3395,10 @@ guided-search-sort = Sort by
 # squid/bot/catalogue/search/filters.py:166
 guided-search-sorting = Sort
 
-# squid/bot/catalogue/search/filters.py:323
+# squid/bot/catalogue/search/filters.py:313
 guided-search-upper = And (only for between)
 
-# squid/bot/catalogue/search/filters.py:520
+# squid/bot/catalogue/search/filters.py:510
 guided-search-yes = Yes
 
 # squid/bot/help_cog.py:27
@@ -3976,7 +3976,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/catalogue/browse.py:585
+# squid/bot/catalogue/browse.py:586
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:537
@@ -4619,16 +4619,16 @@ record-browse-pending = Newer inputs are waiting to be checked.
 # squid/bot/catalogue/record_browser.py:124
 record-browse-title = Records
 
-# squid/bot/catalogue/browse.py:730
+# squid/bot/catalogue/browse.py:735
 record-browser-all = All types
 
-# squid/bot/catalogue/browse.py:725
+# squid/bot/catalogue/browse.py:730
 record-browser-fastest = Fastest
 
-# squid/bot/catalogue/browse.py:726
+# squid/bot/catalogue/browse.py:731
 record-browser-first = First
 
-# squid/bot/catalogue/browse.py:724
+# squid/bot/catalogue/browse.py:729
 record-browser-smallest = Smallest
 
 # squid/bot/catalogue/record_browser.py:71
@@ -4646,7 +4646,7 @@ record-rule-smallest = Lowest volume; earliest completion breaks a tie.
 # squid/bot/catalogue/record_browser.py:75
 record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.
 
-# squid/bot/submission/cog.py:153
+# squid/bot/submission/cog.py:159
 record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
 
 # squid/bot/catalogue/records.py:255
@@ -5022,16 +5022,16 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/search/application/fields.py:156
+# squid/search/application/fields.py:225
 search-align-increments = { $field_name } must align to increments of { $step }
 
-# squid/search/domain/query.py:80
+# squid/search/domain/query.py:95
 search-boolean-minimum-operands = Boolean expressions require at least two operands
 
 # squid/search/application/ranking.py:69
 search-branch-limit-positive = branch_limit must be positive
 
-# squid/search/application/fields.py:32
+# squid/search/application/fields.py:49
 search-duplicate-search-field = duplicate search field or alias: { $name }
 
 # squid/search/application/embeddings.py:114
@@ -5061,13 +5061,13 @@ search-example-extenders = Current smallest extenders
 # squid/bot/catalogue/search/help.py:24
 search-example-fastest = All-time fastest doors
 
-# squid/search/application/fields.py:83
+# squid/search/application/fields.py:129
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/search/application/fields.py:73
+# squid/search/application/fields.py:119
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/search/application/fields.py:65
+# squid/search/application/fields.py:111
 search-expects-number = { $field_name } expects a number
 
 # squid/bot/catalogue/search/labels.py:61
@@ -5271,10 +5271,10 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:63
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/search/application/fields.py:151
+# squid/search/application/fields.py:220
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/search/application/services.py:67
+# squid/search/application/services.py:71
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
 # squid/bot/catalogue/search/labels.py:145
@@ -5907,10 +5907,10 @@ submissions-visible-closing-time = Visible closing time
 # squid/submissions/application/forms.py:565
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/cog.py:268, squid/bot/submission/cog.py:272, squid/bot/submission/cog.py:276
+# squid/bot/submission/cog.py:274, squid/bot/submission/cog.py:278, squid/bot/submission/cog.py:282
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/cog.py:264
+# squid/bot/submission/cog.py:270
 submit-attachment-types-help = Your schematic, an image, or a video.
 
 # squid/bot/submission/message_intake.py:121
@@ -5922,16 +5922,16 @@ submit-build-log-channel-required = Builds are only read out of messages posted 
 # squid/bot/submission/form.py:91
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/cog.py:196
+# squid/bot/submission/cog.py:202
 submit-category-help = The kind of build to submit.
 
-# squid/bot/submission/cog.py:253
+# squid/bot/submission/cog.py:259
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/cog.py:232
+# squid/bot/submission/cog.py:238
 submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, java:IGN, bedrock:Name.
 
-# squid/bot/submission/cog.py:211
+# squid/bot/submission/cog.py:217
 submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
 # squid/bot/submission/form.py:61
@@ -5943,19 +5943,19 @@ submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or
 # squid/bot/submission/form.py:60, squid/bot/submission/form.py:65
 submit-inapplicable-options = Options do not apply
 
-# squid/bot/submission/cog.py:207
+# squid/bot/submission/cog.py:213
 submit-name-help = An optional name for the build.
 
 # squid/bot/submission/form.py:66
 submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
 
-# squid/bot/submission/cog.py:246
+# squid/bot/submission/cog.py:252
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/cog.py:260
+# squid/bot/submission/cog.py:266
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/cog.py:239
+# squid/bot/submission/cog.py:245
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:82
