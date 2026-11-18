@@ -16,6 +16,7 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
 from squid.builds.application import BuildEditPatch
 from squid.builds.domain import Status
@@ -79,9 +80,8 @@ class AttachmentReview(sd.Screen[None]):
         ]
         if failures:
             item = failures[self.index]
-            nodes.extend(
-                (sl.paragraph(f"{self.index + 1}/{len(failures)} · {item['filename']}"), sl.note(item["detail"]))
-            )
+            issue = attachment_issue_line(item)
+            nodes.append(sl.paragraph(f"{self.index + 1}/{len(failures)} · {issue}").truncate())
             links = [
                 sl.link(f"Source {message.id}", message.link, key=f"source-{message.id}")
                 for message in build.source_messages
@@ -112,9 +112,10 @@ class AttachmentReview(sd.Screen[None]):
         decisions = build.extra_info.get("attachment_resolutions", [])
         if decisions:
             last = decisions[-1]
+            decision = attachment_issue_line(last["issue"], resolution=last["reason"])
             nodes.extend(
                 (
-                    sl.note(f"Last decision · {last['issue']['filename']} · {last['reason']}"),
+                    sl.note(f"Last decision · {decision}"),
                     sl.action_controls(
                         sl.action_control(
                             "Reopen last decision", partial(self._review, build, -1, "reopen", ""), key="reopen"

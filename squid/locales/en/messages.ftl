@@ -1183,95 +1183,95 @@ bot-submission-records-records = Record tools
 # squid/bot/catalogue/records.py:219
 bot-submission-records-title-issues = Unrecognised titles
 
-# squid/bot/catalogue/schematics/presentation.py:95
+# squid/bot/catalogue/schematics/presentation.py:113
 bot-submission-schematics-and-more-not-listed = -# …and { $count } more not listed.
 
-# squid/bot/catalogue/schematics/presentation.py:39
+# squid/bot/catalogue/schematics/presentation.py:57
 bot-submission-schematics-data-version = **Data version**: { $version }
 
-# squid/bot/catalogue/schematics/presentation.py:42
+# squid/bot/catalogue/schematics/presentation.py:60
 bot-submission-schematics-declared-author = **Declared author**: { $author }
 
-# squid/bot/catalogue/schematics/presentation.py:120
+# squid/bot/catalogue/schematics/presentation.py:138
 bot-submission-schematics-inconclusive = inconclusive
 
-# squid/bot/catalogue/schematics/presentation.py:113
+# squid/bot/catalogue/schematics/presentation.py:131
 bot-submission-schematics-no = no
 
-# squid/bot/catalogue/schematics/presentation.py:56
+# squid/bot/catalogue/schematics/presentation.py:74
 bot-submission-schematics-no-preview = **No preview**: { $reason }
 
-# squid/bot/catalogue/schematics/presentation.py:112
+# squid/bot/catalogue/schematics/presentation.py:130
 bot-submission-schematics-none-observed = none observed
 
-# squid/bot/catalogue/schematics/presentation.py:118
+# squid/bot/catalogue/schematics/presentation.py:136
 bot-submission-schematics-passed = passed
 
-# squid/bot/catalogue/schematics/presentation.py:53
+# squid/bot/catalogue/schematics/presentation.py:71
 bot-submission-schematics-signs = **Signs**: { $text }
 
-# squid/bot/catalogue/schematics/presentation.py:108
+# squid/bot/catalogue/schematics/presentation.py:126
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
 # squid/bot/submission/cog.py:136
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/catalogue/search/results.py:545
+# squid/bot/catalogue/search/results.py:524
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Base title**
     { $base_title } · { $version_scope }
 
-# squid/bot/catalogue/search/results.py:452
+# squid/bot/catalogue/search/results.py:435
 bot-submission-search-view-creator = Creator
 
-# squid/bot/catalogue/search/results.py:579
+# squid/bot/catalogue/search/results.py:558
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/catalogue/search/results.py:556
+# squid/bot/catalogue/search/results.py:535
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/catalogue/search/results.py:448
+# squid/bot/catalogue/search/results.py:431
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/catalogue/search/results.py:446
+# squid/bot/catalogue/search/results.py:429
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/catalogue/search/results.py:265, squid/bot/catalogue/search/results.py:349
+# squid/bot/catalogue/search/results.py:259, squid/bot/catalogue/search/results.py:332
 bot-submission-search-view-retry = Retry
 
-# squid/bot/catalogue/search/results.py:344
+# squid/bot/catalogue/search/results.py:327
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/catalogue/search/results.py:450
+# squid/bot/catalogue/search/results.py:433
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/catalogue/search/results.py:568
+# squid/bot/catalogue/search/results.py:547
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/catalogue/search/results.py:456
+# squid/bot/catalogue/search/results.py:439
 bot-submission-search-view-tag = Tag
 
-# squid/bot/catalogue/search/results.py:588
+# squid/bot/catalogue/search/results.py:567
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/catalogue/search/results.py:596
+# squid/bot/catalogue/search/results.py:575
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/catalogue/search/results.py:454
+# squid/bot/catalogue/search/results.py:437
 bot-submission-search-view-version = Version
 
 # squid/bot/catalogue/search/results.py:135
@@ -1904,19 +1904,19 @@ build-schematic-tools-hide = Hide schematic tools
 # squid/bot/catalogue/browse.py:302
 build-schematic-tools-show = Schematic tools
 
-# squid/bot/catalogue/search/results.py:150, squid/bot/catalogue/search/results.py:154, squid/bot/catalogue/search/results.py:209, squid/bot/catalogue/search/results.py:262
+# squid/bot/catalogue/search/results.py:150, squid/bot/catalogue/search/results.py:154, squid/bot/catalogue/search/results.py:203, squid/bot/catalogue/search/results.py:256
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/catalogue/search/results.py:348
+# squid/bot/catalogue/search/results.py:331
 build-search-load-failed = Could not load search results.
 
-# squid/bot/catalogue/search/results.py:347
+# squid/bot/catalogue/search/results.py:330
 build-search-loading = Loading search results…
 
 # squid/bot/submission/cog.py:92
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/catalogue/search/results.py:345
+# squid/bot/catalogue/search/results.py:328
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/cog.py:102
@@ -4592,25 +4592,25 @@ recalculation-reviewed = Build #{ $build_id }, reviewed revision { $revision }.
 # squid/bot/submission/ui/recalculation.py:73
 recalculation-target = Build #{ $target }
 
-# squid/bot/catalogue/record_browser.py:91
+# squid/bot/catalogue/record_browser.py:75
 record-browse-checked = Last checked { $checked_at }
 
-# squid/bot/catalogue/record_browser.py:90
+# squid/bot/catalogue/record_browser.py:73
 record-browse-computed = Computed { $computed_at }
 
-# squid/bot/catalogue/record_browser.py:125
+# squid/bot/catalogue/record_browser.py:102
 record-browse-empty = No published records are available.
 
-# squid/bot/catalogue/record_browser.py:112
+# squid/bot/catalogue/record_display.py:54
 record-browse-no-holders = No confirmed holders yet.
 
-# squid/bot/catalogue/record_browser.py:101
+# squid/bot/catalogue/record_display.py:44
 record-browse-open-holder = Open build #{ $build_id }
 
-# squid/bot/catalogue/record_browser.py:92
+# squid/bot/catalogue/record_browser.py:77
 record-browse-pending = Newer inputs are waiting to be checked.
 
-# squid/bot/catalogue/record_browser.py:124
+# squid/bot/catalogue/record_browser.py:101
 record-browse-title = Records
 
 # squid/bot/catalogue/browse.py:730
@@ -4631,19 +4631,19 @@ record-browser-first = First
 # squid/bot/catalogue/browse.py:724
 record-browser-smallest = Smallest
 
-# squid/bot/catalogue/record_browser.py:71
+# squid/bot/catalogue/record_display.py:65
 record-rule-fastest = Fastest worst-case timing; earliest completion breaks a tie.
 
-# squid/bot/catalogue/record_browser.py:73
+# squid/bot/catalogue/record_display.py:67
 record-rule-fastest-smallest = Lowest volume, then fastest timing, then earliest completion.
 
-# squid/bot/catalogue/record_browser.py:67
+# squid/bot/catalogue/record_display.py:61
 record-rule-first = Earliest known completion date.
 
-# squid/bot/catalogue/record_browser.py:69
+# squid/bot/catalogue/record_display.py:63
 record-rule-smallest = Lowest volume; earliest completion breaks a tie.
 
-# squid/bot/catalogue/record_browser.py:75
+# squid/bot/catalogue/record_display.py:69
 record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.
 
 # squid/bot/submission/cog.py:153
@@ -4814,15 +4814,18 @@ redstoner-role-restored = { $member } — just kidding, here is your role back.
 # squid/bot/give_redstoner_cog.py:268
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
-# squid/bot/catalogue/schematics/presentation.py:59
+# squid/bot/catalogue/schematics/presentation.py:77
 schematic-block-count-disclaimer = -# Read by { $analyzer }. Block count is not the Door Rules cumulative volume.
 
-# squid/bot/catalogue/schematics/presentation.py:27
+# squid/bot/catalogue/schematics/presentation.py:45
 schematic-build-measured-size =
     ### Schematic for build { $id }
-    { "*" }*Measured size**: { $width } x { $height } x { $length } (bounding volume { $volume })
+    { "*" }*Measured size**: { $size } (bounding volume { $volume })
     { "*" }*Non-air blocks**: { $blocks }
     { "*" }*Distinct block states**: { $states }
+
+# squid/bot/catalogue/schematics/presentation.py:29
+schematic-caption-size = { $size } blocks
 
 # squid/bot/catalogue/schematics/tools.py:116, squid/bot/catalogue/schematics/tools.py:375
 schematic-conversion-maintenance = Conversion maintenance
@@ -4839,16 +4842,19 @@ schematic-convert-release = Choose conversion release
 # squid/bot/catalogue/schematics/tools.py:84
 schematic-convert-selected = Conversion release: { $label }
 
-# squid/bot/catalogue/schematics/presentation.py:90
+# squid/bot/catalogue/schematics/presentation.py:25
+schematic-download-label = Download schematic
+
+# squid/bot/catalogue/schematics/presentation.py:108
 schematic-inputs-heading = **Inputs found in this schematic**:
 
-# squid/bot/catalogue/schematics/presentation.py:133
+# squid/bot/catalogue/schematics/presentation.py:151
 schematic-moderator-evidence-disclaimer = -# Moderator evidence only. This does not alter the human-declared or official record timing.
 
-# squid/bot/catalogue/schematics/presentation.py:46
+# squid/bot/catalogue/schematics/presentation.py:64
 schematic-simulated-piston-evidence = **Simulated piston activity**: { $ticks } gt (moderator evidence only)
 
-# squid/bot/catalogue/schematics/presentation.py:122
+# squid/bot/catalogue/schematics/presentation.py:140
 schematic-simulated-timing-evidence =
     ### Simulated timing evidence
     { "*" }*Input**: ({ $x }, { $y }, { $z }) ({ $source })
@@ -4857,7 +4863,7 @@ schematic-simulated-timing-evidence =
     { "*" }*Evidence**: { $changes } block changes; { $pistons } piston events; { $redstone } redstone events
     { "*" }*Integrity checks**: { $status }
 
-# squid/bot/catalogue/schematics/presentation.py:86
+# squid/bot/catalogue/schematics/presentation.py:104
 schematic-simulation-input-unresolved = ### Simulation input not resolved
 
 # squid/bot/catalogue/schematics/tools.py:128
@@ -5145,31 +5151,28 @@ search-filter-not = Not: { $inner }
 # squid/bot/catalogue/search/labels.py:122
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/catalogue/search/results.py:414
+# squid/bot/catalogue/search/results.py:397
 search-grouped-build-count = { $total } builds
 
-# squid/bot/catalogue/search/results.py:219
+# squid/bot/catalogue/search/results.py:213
 search-grouped-build-details = Build details
 
-# squid/bot/catalogue/search/results.py:270
+# squid/bot/catalogue/search/results.py:264
 search-grouped-loading-build = Loading build…
 
 # squid/bot/catalogue/search/results.py:181
 search-grouped-matching-records = Matching records
 
-# squid/bot/catalogue/search/results.py:527
+# squid/bot/catalogue/search/results.py:510
 search-grouped-more-records = +{ $count } more records
-
-# squid/bot/catalogue/search/results.py:286
-search-grouped-open-holder = View build #{ $build_id }
 
 # squid/bot/catalogue/search/results.py:183
 search-grouped-records = Records
 
-# squid/bot/catalogue/search/results.py:416
+# squid/bot/catalogue/search/results.py:399
 search-grouped-result-count = { $total } results
 
-# squid/bot/catalogue/search/results.py:282
+# squid/bot/catalogue/record_display.py:40
 search-grouped-tied-holders = Tied holders
 
 # squid/search/application/ranking.py:67

@@ -3976,7 +3976,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:95"
+      "squid/bot/catalogue/schematics/presentation.py:113"
     ]
   },
   "bot-submission-schematics-data-version": {
@@ -3991,7 +3991,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:39"
+      "squid/bot/catalogue/schematics/presentation.py:57"
     ]
   },
   "bot-submission-schematics-declared-author": {
@@ -4006,7 +4006,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:42"
+      "squid/bot/catalogue/schematics/presentation.py:60"
     ]
   },
   "bot-submission-schematics-inconclusive": {
@@ -4015,7 +4015,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:120"
+      "squid/bot/catalogue/schematics/presentation.py:138"
     ]
   },
   "bot-submission-schematics-no": {
@@ -4024,7 +4024,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:113"
+      "squid/bot/catalogue/schematics/presentation.py:131"
     ]
   },
   "bot-submission-schematics-no-preview": {
@@ -4039,7 +4039,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:56"
+      "squid/bot/catalogue/schematics/presentation.py:74"
     ]
   },
   "bot-submission-schematics-none-observed": {
@@ -4048,7 +4048,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:112"
+      "squid/bot/catalogue/schematics/presentation.py:130"
     ]
   },
   "bot-submission-schematics-passed": {
@@ -4057,7 +4057,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:118"
+      "squid/bot/catalogue/schematics/presentation.py:136"
     ]
   },
   "bot-submission-schematics-signs": {
@@ -4072,7 +4072,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:53"
+      "squid/bot/catalogue/schematics/presentation.py:71"
     ]
   },
   "bot-submission-schematics-tick-gt-after-input": {
@@ -4092,7 +4092,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:108"
+      "squid/bot/catalogue/schematics/presentation.py:126"
     ]
   },
   "bot-submission-search-open-this-build-directly": {
@@ -4131,7 +4131,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:545"
+      "squid/bot/catalogue/search/results.py:524"
     ]
   },
   "bot-submission-search-view-creator": {
@@ -4140,7 +4140,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:452"
+      "squid/bot/catalogue/search/results.py:435"
     ]
   },
   "bot-submission-search-view-kind": {
@@ -4155,7 +4155,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:579"
+      "squid/bot/catalogue/search/results.py:558"
     ]
   },
   "bot-submission-search-view-metrics": {
@@ -4175,7 +4175,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:556"
+      "squid/bot/catalogue/search/results.py:535"
     ]
   },
   "bot-submission-search-view-pattern": {
@@ -4184,7 +4184,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:448"
+      "squid/bot/catalogue/search/results.py:431"
     ]
   },
   "bot-submission-search-view-restriction": {
@@ -4193,7 +4193,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:446"
+      "squid/bot/catalogue/search/results.py:429"
     ]
   },
   "bot-submission-search-view-retry": {
@@ -4202,8 +4202,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:265",
-      "squid/bot/catalogue/search/results.py:349"
+      "squid/bot/catalogue/search/results.py:259",
+      "squid/bot/catalogue/search/results.py:332"
     ]
   },
   "bot-submission-search-view-search-results": {
@@ -4212,7 +4212,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:344"
+      "squid/bot/catalogue/search/results.py:327"
     ]
   },
   "bot-submission-search-view-showcase-tag": {
@@ -4221,7 +4221,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:450"
+      "squid/bot/catalogue/search/results.py:433"
     ]
   },
   "bot-submission-search-view-status": {
@@ -4236,7 +4236,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:568"
+      "squid/bot/catalogue/search/results.py:547"
     ]
   },
   "bot-submission-search-view-tag": {
@@ -4245,7 +4245,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:456"
+      "squid/bot/catalogue/search/results.py:439"
     ]
   },
   "bot-submission-search-view-tags": {
@@ -4265,7 +4265,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:588"
+      "squid/bot/catalogue/search/results.py:567"
     ]
   },
   "bot-submission-search-view-value": {
@@ -4285,7 +4285,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:596"
+      "squid/bot/catalogue/search/results.py:575"
     ]
   },
   "bot-submission-search-view-version": {
@@ -4294,7 +4294,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:454"
+      "squid/bot/catalogue/search/results.py:437"
     ]
   },
   "bot-submission-search-view-view-build": {
@@ -6336,8 +6336,8 @@
     "locations": [
       "squid/bot/catalogue/search/results.py:150",
       "squid/bot/catalogue/search/results.py:154",
-      "squid/bot/catalogue/search/results.py:209",
-      "squid/bot/catalogue/search/results.py:262"
+      "squid/bot/catalogue/search/results.py:203",
+      "squid/bot/catalogue/search/results.py:256"
     ]
   },
   "build-search-load-failed": {
@@ -6346,7 +6346,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:348"
+      "squid/bot/catalogue/search/results.py:331"
     ]
   },
   "build-search-loading": {
@@ -6355,7 +6355,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:347"
+      "squid/bot/catalogue/search/results.py:330"
     ]
   },
   "build-search-matching-mode-help": {
@@ -6373,7 +6373,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:345"
+      "squid/bot/catalogue/search/results.py:328"
     ]
   },
   "build-search-query-help": {
@@ -14991,7 +14991,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:91"
+      "squid/bot/catalogue/record_browser.py:75"
     ]
   },
   "record-browse-computed": {
@@ -15006,7 +15006,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:90"
+      "squid/bot/catalogue/record_browser.py:73"
     ]
   },
   "record-browse-empty": {
@@ -15015,7 +15015,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:125"
+      "squid/bot/catalogue/record_browser.py:102"
     ]
   },
   "record-browse-no-holders": {
@@ -15024,7 +15024,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:112"
+      "squid/bot/catalogue/record_display.py:54"
     ]
   },
   "record-browse-open-holder": {
@@ -15039,7 +15039,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:101"
+      "squid/bot/catalogue/record_display.py:44"
     ]
   },
   "record-browse-pending": {
@@ -15048,7 +15048,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:92"
+      "squid/bot/catalogue/record_browser.py:77"
     ]
   },
   "record-browse-title": {
@@ -15057,7 +15057,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:124"
+      "squid/bot/catalogue/record_browser.py:101"
     ]
   },
   "record-browser-all": {
@@ -15120,7 +15120,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:71"
+      "squid/bot/catalogue/record_display.py:65"
     ]
   },
   "record-rule-fastest-smallest": {
@@ -15129,7 +15129,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:73"
+      "squid/bot/catalogue/record_display.py:67"
     ]
   },
   "record-rule-first": {
@@ -15138,7 +15138,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:67"
+      "squid/bot/catalogue/record_display.py:61"
     ]
   },
   "record-rule-smallest": {
@@ -15147,7 +15147,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:69"
+      "squid/bot/catalogue/record_display.py:63"
     ]
   },
   "record-rule-smallest-fastest": {
@@ -15156,7 +15156,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/record_browser.py:75"
+      "squid/bot/catalogue/record_display.py:69"
     ]
   },
   "record-search-query-help": {
@@ -15831,11 +15831,11 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:59"
+      "squid/bot/catalogue/schematics/presentation.py:77"
     ]
   },
   "schematic-build-measured-size": {
-    "fingerprint": "5635f3df9e13c85a19dbcf7acf5be9366d3dd7ba021a506c1473d282525ec3f1",
+    "fingerprint": "2cc66fbbc2e20faca7b8580502ccf128f9526ee5e833b249b90fd130bcae4772",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -15845,17 +15845,7 @@
         "options": []
       },
       {
-        "name": "width",
-        "function": null,
-        "options": []
-      },
-      {
-        "name": "height",
-        "function": null,
-        "options": []
-      },
-      {
-        "name": "length",
+        "name": "size",
         "function": null,
         "options": []
       },
@@ -15876,7 +15866,22 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:27"
+      "squid/bot/catalogue/schematics/presentation.py:45"
+    ]
+  },
+  "schematic-caption-size": {
+    "fingerprint": "a536287941c4ca43c5361c6851be46ec6ccf1401e009f94ce7c22f443e0bf754",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "size",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/catalogue/schematics/presentation.py:29"
     ]
   },
   "schematic-conversion-maintenance": {
@@ -15932,13 +15937,22 @@
       "squid/bot/catalogue/schematics/tools.py:84"
     ]
   },
+  "schematic-download-label": {
+    "fingerprint": "b5cdfa7b005f4b7e73af68e17c01e37c7eefca4eec73ec46b1b22bf4cfe02e21",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/schematics/presentation.py:25"
+    ]
+  },
   "schematic-inputs-heading": {
     "fingerprint": "2e793c3c14c660befe7c8e565e1c024e0c34f2d819f6ce03cc9116255ef1c916",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:90"
+      "squid/bot/catalogue/schematics/presentation.py:108"
     ]
   },
   "schematic-moderator-evidence-disclaimer": {
@@ -15947,7 +15961,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:133"
+      "squid/bot/catalogue/schematics/presentation.py:151"
     ]
   },
   "schematic-simulated-piston-evidence": {
@@ -15962,7 +15976,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:46"
+      "squid/bot/catalogue/schematics/presentation.py:64"
     ]
   },
   "schematic-simulated-timing-evidence": {
@@ -16022,7 +16036,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:122"
+      "squid/bot/catalogue/schematics/presentation.py:140"
     ]
   },
   "schematic-simulation-input-unresolved": {
@@ -16031,7 +16045,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/schematics/presentation.py:86"
+      "squid/bot/catalogue/schematics/presentation.py:104"
     ]
   },
   "schematic-video-action": {
@@ -17058,7 +17072,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:414"
+      "squid/bot/catalogue/search/results.py:397"
     ]
   },
   "search-grouped-build-details": {
@@ -17067,7 +17081,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:219"
+      "squid/bot/catalogue/search/results.py:213"
     ]
   },
   "search-grouped-loading-build": {
@@ -17076,7 +17090,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:270"
+      "squid/bot/catalogue/search/results.py:264"
     ]
   },
   "search-grouped-matching-records": {
@@ -17100,22 +17114,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:527"
-    ]
-  },
-  "search-grouped-open-holder": {
-    "fingerprint": "065fc067210796d898468114f3501c63ab341d5b12be39d3349600406c214959",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "build_id",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/bot/catalogue/search/results.py:286"
+      "squid/bot/catalogue/search/results.py:510"
     ]
   },
   "search-grouped-records": {
@@ -17139,7 +17138,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:416"
+      "squid/bot/catalogue/search/results.py:399"
     ]
   },
   "search-grouped-tied-holders": {
@@ -17148,7 +17147,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:282"
+      "squid/bot/catalogue/record_display.py:40"
     ]
   },
   "search-k-positive": {

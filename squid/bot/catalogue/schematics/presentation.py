@@ -1,10 +1,11 @@
 """Presentation helpers shared by the canonical build schematic workspace."""
 
+from squid.bot.ui import truncate_display_text
 from squid.core.i18n import tr
 from squid.schematics.application import RenderSkipReason, StoredSchematic
 from squid.schematics.domain.models import SchematicFormat, SimulationResult, Vector3
 from squid.schematics.errors import AmbiguousSimulationInputError
-from squid_i18n import Text, md, md_tr
+from squid_i18n import Text, md, md_tr, text_link
 from squid_ui.content.text import TextLike
 
 WRITABLE_EXTENSIONS = {
@@ -15,11 +16,28 @@ WRITABLE_EXTENSIONS = {
 """Formats the engine can write; legacy inputs remain read-only."""
 
 
+def schematic_caption(
+    width: int, height: int, length: int, *, filename: str | None = None, download_url: str | None = None
+) -> tuple[Text, Text]:
+    """Return the measured summary and its shorter name or download link."""
+    label = truncate_display_text(" ".join(filename.split()), 100) if filename else ""
+    if download_url is not None:
+        name = text_link(label or tr(t"schematic-download-label = Download schematic"), download_url)
+    else:
+        name = Text(label)
+    size = f"{width} \u00d7 {height} \u00d7 {length}"
+    measurement = tr(t"schematic-caption-size = {size} blocks")
+    return (Text(t"{name} · {measurement}") if name else measurement, name)
+
+
 def _describe(stored: StoredSchematic, *, render_skip: RenderSkipReason | None = None) -> Text:
     """Render the analysis as a readable card body."""
     metrics = stored.analysis.metrics
     id = stored.build_id
-    width, height, length = metrics.dimensions.width, metrics.dimensions.height, metrics.dimensions.length
+    dimensions = metrics.dimensions
+    size, _ = schematic_caption(
+        dimensions.width, dimensions.height, dimensions.length, filename=stored.original_filename
+    )
     volume = metrics.bounding_volume
     blocks = metrics.block_count
     states = metrics.palette_size
@@ -28,7 +46,7 @@ def _describe(stored: StoredSchematic, *, render_skip: RenderSkipReason | None =
             t"""
             schematic-build-measured-size =
                 ### Schematic for build {id!s}
-                {{ "*" }}*Measured size**: {width} x {height} x {length} (bounding volume {volume})
+                {{ "*" }}*Measured size**: {size} (bounding volume {volume})
                 {{ "*" }}*Non-air blocks**: {blocks}
                 {{ "*" }}*Distinct block states**: {states}
             """,

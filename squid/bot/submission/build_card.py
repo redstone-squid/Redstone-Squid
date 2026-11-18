@@ -9,10 +9,10 @@ import mimetypes
 from collections.abc import Sequence
 from urllib.parse import urlsplit
 
-from discord.utils import escape_markdown
-
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.catalogue.schematics.presentation import schematic_caption
+from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.submission.ui.attachment_review import review_attachments
 from squid.bot.ui import (
     truncate_display_text,
@@ -71,7 +71,7 @@ def _duplicate_summary(duplicates: Sequence[SchematicDuplicateInfo]) -> str:
 def _attachment_failure_summary(failures: Sequence[AttachmentFailureInfo]) -> str:
     lines = [
         truncate_display_text(
-            f"{_compact_plain(failure['filename'])} — {_compact_plain(failure['detail'])}",
+            attachment_issue_line(failure),
             _EVIDENCE_LINE_MAX_CHARACTERS,
         )
         for failure in failures[:4]
@@ -190,17 +190,14 @@ def _build_resources(
     if schematic is None:
         return _field_section("Resources", fields, fallbacks, names)
     multiple = schematic.multiple_files or len(build.schematic_urls) > 1
-    label = (
-        truncate_display_text(_compact_plain(schematic.filename), 100)
-        if multiple and schematic.filename
-        else "Download schematic"
+    caption, download = schematic_caption(
+        schematic.width,
+        schematic.height,
+        schematic.length,
+        filename=schematic.filename if multiple else None,
+        download_url=schematic.download_url,
     )
-    link = f"[{escape_markdown(label)}]({schematic.download_url})"
-    featured = sl.field(
-        "Schematic",
-        sl.md(f"{link} · {schematic.width} \u00d7 {schematic.height} \u00d7 {schematic.length} blocks"),
-        fallbacks=(sl.md(link),),
-    )
+    featured = sl.field("Schematic", caption, fallbacks=(download,))
     if "Schematic" in fields:
         fields = {"Submitted schematic links" if name == "Schematic" else name: value for name, value in fields.items()}
         fallbacks = {
