@@ -1,5 +1,6 @@
 """Build browser actions participate in the UI's state transactions."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
@@ -15,6 +16,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.search.clauses import CatalogueQuery
+from squid.bot.catalogue.search.results import SearchFocus
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildQueryService, BuildService
@@ -37,6 +39,8 @@ from squid.search.domain import (
     RecordSearchHit,
     SearchMode,
     SearchPage,
+    SearchRequest,
+    SearchResultAnchor,
     SearchScope,
 )
 from squid.search.domain.query import TextExpression
@@ -125,6 +129,22 @@ async def toggle_help(ui: StagedUI[BuildBrowseScreen]) -> None:
     await ui.press(ui.key_for("search-help"))
 
 
+async def pick_sort(ui: StagedUI[BuildBrowseScreen], sort: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    if ui.component._guided is None:
+        await ui.press(ui.key_for("guided-search"))
+    assert ui.component._guided is not None
+    if ui.component._guided.sort_picker is None:
+        provider = RecordingProvider((Candidate.create("-width", "Widest"), Candidate.create("width", "Narrowest")))
+        suggestions = SuggestionService(SuggestionRegistry.of((RegisteredSource("search_sorts", provider),)))
+        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
+        await ui.press(ui.key_for("sort"))
+    with anyio.fail_after(2):
+        while not any(key.endswith("sort-lookup.results") for key in ui.root.snapshot().handler_keys):
+            await anyio.sleep(0.01)
+    await ui.select(ui.key_for("sort-lookup.results"), [sort])
+
+
 async def test_back_to_builds_replaces_the_detail_with_the_catalogue() -> None:
     async with stage(_screen(), owner=object()) as ui:
         assert "Build #7" in ui.texts()
@@ -193,6 +213,88 @@ async def test_search_opens_full_build_and_preserves_results(records: bool) -> N
         assert screen._results is results
         ui.control(ui.key_for("search.open"))
         assert service.search.await_count == 1
+
+
+@pytest.mark.parametrize("entry", ["catalogue", "direct", "search"])
+async def test_sort_keeps_the_focused_build_on_its_new_page(entry: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    screen = _screen(initial_id=7 if entry == "direct" else None)
+    service = cast(AsyncMock, screen._search_service)
+    hit = BuildSearchHit("7", "Door 7", "confirmed")
+    service.search.return_value = SearchPage((hit,), total=1, next=None, prev=None)
+    async with stage(screen, owner=object()) as ui:
+        if entry == "catalogue":
+            await ui.select(ui.key_for("builds.open"), ["7"])
+        elif entry == "search":
+            await submit_search(ui, "door")
+            await ui.select(ui.key_for("search.open"), ["build:7"])
+        assert "Build #7" in ui.texts()
+
+        service.search.return_value = SearchPage(
+            (BuildSearchHit("9", "Door 9", "confirmed"), hit), total=17, next=None, prev=PageAnchor(offset=0), offset=15
+        )
+        await pick_sort(ui, "-width", monkeypatch)
+
+        request: SearchRequest = service.search.call_args.args[0]
+        assert request.anchor == SearchResultAnchor("build", "7")
+        assert "Build #7" in ui.texts()
+        assert screen._results is not None
+        assert screen._results.request.offset == 15
+        assert screen._results.request.anchor is None
+        calls = service.search.await_count
+        await pick_sort(ui, "-width", monkeypatch)
+        assert service.search.await_count == calls
+        await ui.press(ui.key_for("search.back"))
+        ui.control(ui.key_for("search.open"))
+        assert screen._results.request.offset == 15
+        ui.assert_within_limits()
+
+
+async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: pytest.MonkeyPatch) -> None:
+    records = AsyncMock(spec=RecordService)
+    record = PublishedTitle(
+        id=10,
+        definition_id=1,
+        title_id=uuid4(),
+        title="Smallest 2x2 door",
+        subtitle=None,
+        base_title=BaseTitle.SMALLEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
+        status=ResolutionStatus.RESOLVED,
+        holder_build_ids=(7, 9),
+        computed_at=datetime.now(UTC),
+    )
+    records.list_page.return_value = Page(items=(record,), total=1, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records, initial_records=True)
+    service = cast(AsyncMock, screen._search_service)
+    hit = RecordSearchHit("result:10", record.title, None, 9, "Door 9", "smallest", "all_time", holder_build_ids=(7, 9))
+    # The selected record also moves off the first page inside its holder's record list.
+    others = tuple(replace(hit, source_id=f"result:{index}", title=f"Other record {index}") for index in range(5))
+    service.search.return_value = SearchPage(
+        (BuildSearchHit("9", "Door 9", "confirmed", records=(*others, hit)),), total=1, next=None, prev=None
+    )
+    async with stage(screen, owner=object()) as ui:
+        await ui.select(ui.key_for("records.open"), ["10"])
+        await ui.press(ui.key_for("holder-7"))
+        await pick_sort(ui, "-width", monkeypatch)
+
+        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", "result:10")
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("linked-build.back"))
+        assert f"## {record.title}" in ui.texts()
+        await ui.press(ui.key_for("holder-7"))
+        await pick_sort(ui, "width", monkeypatch)
+
+        assert service.search.call_args.args[0].anchor == SearchResultAnchor("build", "9")
+        assert screen._sort == "width"
+        assert screen._results is not None
+        assert screen._results.focus == SearchFocus(
+            SearchResultAnchor("build", "9"), record_id="result:10", holder_id=7, show_records=True
+        )
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("search-back-records"))
+        assert f"## {record.title}" in ui.texts()
+        ui.assert_within_limits()
 
 
 @pytest.mark.parametrize("action", ["approve", "reject"])

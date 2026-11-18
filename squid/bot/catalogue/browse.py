@@ -19,7 +19,7 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, 
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.help import search_help
 from squid.bot.catalogue.search.labels import filter_label, sort_label
-from squid.bot.catalogue.search.results import SearchScreen
+from squid.bot.catalogue.search.results import SearchFocus, SearchScreen
 from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
@@ -44,12 +44,13 @@ from squid.permissions.domain.catalogue import (
     RECORD_ENTRY_REBUILD,
 )
 from squid.records.application import RecordService
+from squid.records.application.models import PublishedTitle
 from squid.records.domain import BaseTitle, VersionScope
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
-from squid.search.domain import RecordQuery, SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.search.domain import RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope, SearchSort
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
@@ -618,14 +619,20 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         elif self._results is not None:
             nodes.append(self._results)
         else:
-            expression = self._query.parsed.expression
-            version = (
-                expression.value
-                if isinstance(expression, FieldExpression) and isinstance(expression.value, VersionScope)
-                else _DEFAULT_RECORD_VERSION
-            )
-            nodes.append(self._records.get(version, self._browser) if self._mode == "records" else self._browser)
+            nodes.append(self._record_browser or self._browser)
         return tuple(nodes)
+
+    @property
+    def _record_browser(self) -> sp.Browser[PublishedTitle, ComponentsV2Target, sd.Request] | None:
+        if self._mode != "records":
+            return None
+        expression = self._query.parsed.expression
+        version = (
+            expression.value
+            if isinstance(expression, FieldExpression) and isinstance(expression.value, VersionScope)
+            else _DEFAULT_RECORD_VERSION
+        )
+        return self._records.get(version)
 
     def _workspace_controls(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         return sl.action_controls(
@@ -959,6 +966,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             message = "The catalogue search service is not configured"
             raise RuntimeError(message)
         expression = query.parsed.expression
+        focus = self._search_focus() if sort != self._sort and expression == self._query.parsed.expression else None
         if (
             self._mode == "records"
             and not sort
@@ -994,9 +1002,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # One row per build, listing the records it holds, as /search shows results.
             group_by_build=True,
             parsed_query=parsed,
+            anchor=focus.anchor if focus is not None else None,
         )
         page = await self._search_service.search(request)
-        self._results = SearchScreen(
+        results = SearchScreen(
             self._search_service,
             request,
             page,
@@ -1004,15 +1013,37 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             render_build=self._render_build,
             build_detail=self._detail,
         )
-        self._accept_search(query, sort)
+        restored = focus is not None and await results.restore_focus(focus)
+        self._results = results
+        # A holder opened from a record still has that record to return to.
+        keep_selected = focus is not None and (focus.record_id is not None or not restored)
+        self._accept_search(query, sort, keep_selected=keep_selected)
 
-    def _accept_search(self, query: CatalogueQuery, sort: str) -> None:
+    def _search_focus(self) -> SearchFocus | None:
+        if self._mode == "records":
+            if self._results is not None:
+                focus = self._results.focus
+                if focus is not None:
+                    return focus
+            elif (browser := self._record_browser) is not None and (record := browser.opened) is not None:
+                record_id = f"result:{record.id}"
+                return SearchFocus(SearchResultAnchor("record", record_id), record_id=record_id, show_records=True)
+        if self._selected is not None:
+            build = self._selected.opened
+        elif self._results is not None:
+            return self._results.focus
+        else:
+            build = self._browser.opened if self._mode == "builds" else None
+        return SearchFocus(SearchResultAnchor("build", str(build.id))) if build is not None else None
+
+    def _accept_search(self, query: CatalogueQuery, sort: str, *, keep_selected: bool = False) -> None:
         self._query = query
         self._sort = sort
         if self._guided is not None:
             self._guided.query = query
             self._guided.sort = sort
-        self._selected = None
+        if not keep_selected:
+            self._selected = None
         # A new search shows its results, so help gives way to them.
         self._show_search_help = False
 

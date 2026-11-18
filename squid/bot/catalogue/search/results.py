@@ -1,7 +1,7 @@
 """Mounted squid-ui component for interactive search results."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
@@ -19,13 +19,14 @@ from squid.search.domain import (
     SearchHit,
     SearchPage,
     SearchRequest,
+    SearchResultAnchor,
     SearchScope,
     SearchText,
 )
 from squid_i18n import Text, md_tr, strong
 from squid_reactivity import untracked
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.sources import window_fingerprint
+from squid_ui.sources import Position, WindowLoader, window_fingerprint
 
 if TYPE_CHECKING:
     from squid.search.application import SearchService
@@ -35,6 +36,16 @@ BuildLoader = Callable[[int], Awaitable[Build | None]]
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type BuildDetailFactory = Callable[[int], sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]
 """Build the full, interactive view of one build, given its ID, for a host that has one."""
+
+
+@dataclass(frozen=True, slots=True)
+class SearchFocus:
+    """The selected result and any record or holder open inside it."""
+
+    anchor: SearchResultAnchor
+    record_id: str | None = None
+    holder_id: int | None = None
+    show_records: bool = False
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -194,6 +205,33 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
             title=self._records_label,
         )
 
+    @property
+    def focus(self) -> SearchFocus:
+        return SearchFocus(
+            SearchResultAnchor("build", self.hit.source_id),
+            self._records.session.focus,
+            self._holder_id,
+            self._show_records,
+        )
+
+    async def restore_focus(self, focus: SearchFocus) -> None:
+        record_id = focus.record_id
+        if record_id is not None:
+            for index, record in enumerate(self.hit.records):
+                if record.source_id == record_id:
+                    session = self._records.session
+                    offset = index // session.page_size * session.page_size
+                    loaded = await WindowLoader(session.source, session.page_size, session.identity).load(
+                        Position(offset=offset)
+                    )
+                    assert loaded is not None
+                    session.replace(loaded)
+                    session.open(record_id, revision=session.revision)
+                    if (holder_id := focus.holder_id) is not None and holder_id in record.holder_build_ids:
+                        self._select_holder(holder_id)
+                    break
+        self._show_records = focus.show_records
+
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def card(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         build_id = self._holder_id or int(self.hit.source_id)
@@ -280,6 +318,9 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
         )
 
     async def _open_holder(self, build_id: int, _event: sl.ActionEvent[Any]) -> None:
+        self._select_holder(build_id)
+
+    def _select_holder(self, build_id: int) -> None:
         self._holder_id = build_id
         if self._build_detail is not None:
             self._holder_build = self._build_detail(build_id)
@@ -313,6 +354,8 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         build_detail: BuildDetailFactory | None = None,
     ) -> None:
         self._build_detail = build_detail
+        self._restored_detail: tuple[int, _GroupedBuildDetail] | None = None
+        request = replace(request, offset=request.offset if page.offset is None else page.offset, anchor=None)
         self._source = _SearchSource(service, request, page)
         self._load_build = load_build
         self._render_build = render_build
@@ -334,6 +377,41 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
         self._browser.session.replace(self._source.initial_loaded())
+
+    @property
+    def focus(self) -> SearchFocus | None:
+        hit = self._browser.opened
+        if isinstance(hit, BuildSearchHit):
+            detail = self._browser._detail.status
+            if isinstance(detail, sl.resources.Ready) and isinstance(detail.value, _GroupedBuildDetail):
+                return detail.value.focus
+            return SearchFocus(SearchResultAnchor("build", hit.source_id))
+        if isinstance(hit, RecordSearchHit):
+            return SearchFocus(SearchResultAnchor("record", hit.source_id), record_id=hit.source_id, show_records=True)
+        return None
+
+    async def restore_focus(self, focus: SearchFocus) -> bool:
+        anchor = focus.anchor
+        for hit in self.hits:
+            if hit.resource_kind == anchor.resource_kind and hit.source_id == anchor.source_id:
+                break
+            if (
+                anchor.resource_kind == "record"
+                and isinstance(hit, BuildSearchHit)
+                and any(record.source_id == anchor.source_id for record in hit.records)
+            ):
+                break
+        else:
+            return False
+        session = self._browser.session
+        session.open(_hit_identity(hit), revision=session.revision)
+        if isinstance(hit, BuildSearchHit) and (focus.show_records or focus.record_id is not None):
+            detail = self._detail(hit)
+            if isinstance(detail, _GroupedBuildDetail):
+                await detail.restore_focus(focus)
+                # The browser may build its detail again when the focus transaction publishes.
+                self._restored_detail = (session.visit, detail)
+        return True
 
     @property
     def request(self) -> SearchRequest:
@@ -370,6 +448,9 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _detail(self, hit: SearchHit) -> _SearchDetail | _GroupedBuildDetail:
         if isinstance(hit, BuildSearchHit) and self._source.base_request.group_by_build:
+            restored = self._restored_detail
+            if restored is not None and restored[0] == self._browser.session.visit:
+                return restored[1]
             # The nested browser owns its state; reading it while constructing the
             # detail must not make the outer browser recreate it on navigation.
             with untracked():

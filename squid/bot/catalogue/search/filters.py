@@ -398,6 +398,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             if items:
                 await on_pick(cast(sd.ActionEvent, action), items[0])
 
+        initial_source = search("")
         picker = sp.SearchPicker(
             search,
             key=key,
@@ -409,8 +410,9 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             show_heading=False,
             show_query=True,
             search_label=search_label,
+            hide_search_when_complete=initial_source.enumerable,
         )
-        picker.session = sp.BrowseSession(search(""), identity=lambda item: item.value, page_size=10)
+        picker.session = sp.BrowseSession(initial_source, identity=picker.identity, page_size=picker.page_size)
         return picker
 
     async def _toggle_filter(self, event: sd.PressEvent[RedstoneSquid]) -> None:
@@ -483,11 +485,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         await self._refresh()
 
     async def _sort_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
-        self.sort = item.value
         # Keep the sort panel open with nothing marked, so another order is one choice away.
         if self.sort_picker is not None:
             self.sort_picker.picked = ()
-        await self._refresh()
+        if item.value != self.sort:
+            self.sort = item.value
+            await self._refresh()
 
     async def _add(self, field: FieldDefinition, event: sd.SubmitEvent) -> None:
         value = self._field_expression(field, event)
