@@ -15068,6 +15068,24 @@
       "squid/bot/catalogue/browse.py:735"
     ]
   },
+  "record-browser-all-time": {
+    "fingerprint": "0ef3f752b717e3f789f0fac12c36c28f1ef370a8755694a10cc8082a40ef6a3b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/browse.py:772"
+    ]
+  },
+  "record-browser-current-version": {
+    "fingerprint": "c713f2949e3768bab576345ba6c1540a033472c292773671554084fe6d2e380c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/browse.py:773"
+    ]
+  },
   "record-browser-fastest": {
     "fingerprint": "fe25af35e38a1e0c65bf9b6c30c0ba5692ba8364271507ecb375ac4364eec8e1",
     "attributes": [],

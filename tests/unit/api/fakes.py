@@ -70,6 +70,7 @@ from squid.records.application import PublicRecordQueryService, RecordService
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.application.range_publication import RangePublicationService
 from squid.records.application.range_snapshots import RangePublication
+from squid.records.domain import VersionScope
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
@@ -515,6 +516,7 @@ class MockRecords(RecordService):
         descending: bool = True,
         page_size: int = 20,
         resolved_only: bool = False,
+        version_scope: VersionScope | None = None,
     ) -> Page[PublishedTitle]:
         return cast(Page[PublishedTitle], _EMPTY_PAGE)
 

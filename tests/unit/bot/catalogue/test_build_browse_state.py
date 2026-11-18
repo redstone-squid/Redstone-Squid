@@ -502,10 +502,10 @@ async def test_record_versions_filter_compact_standings_and_search() -> None:
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
-        assert "Smallest piston door" in ui.texts()
+        assert "• Smallest piston door" in ui.texts()
         assert ui.control(ui.key_for("all_time")).payload["style"] == 3
         await ui.press(ui.key_for("up_to_date"))
-        assert "Fastest piston door" in ui.texts()
+        assert "• Fastest piston door" in ui.texts()
         assert ui.control(ui.key_for("up_to_date")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
