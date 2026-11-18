@@ -1,10 +1,8 @@
 """Edit one search query through filter rows, a filter picker, and a sort picker.
 
-The query string is the single source of truth. Each top-level clause is shown as a
-filter row that can be edited or removed, and the "Add filter" and "Sort" panels
-open independently, so both can be visible at once. Adding a value keeps its field
-open for another filter; users can also return to the field list. Every change is reported to
-`on_apply` immediately.
+The parsed query supplies the editable filter rows. The "Add filter" and "Sort"
+panels open independently. Adding a value keeps its field open for another filter.
+Every change is reported to `on_apply` immediately.
 
 Adding a filter takes two steps: choose a field, then its value. How the value is
 chosen depends on the field:
@@ -24,7 +22,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.catalogue.search.clauses import query_leaves, replace_clause
+from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, query_leaves, replace_clause
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
@@ -34,7 +32,6 @@ from squid.search.application.fields import FieldRegistry
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.search.domain.query import (
-    BooleanExpression,
     BooleanOperator,
     ComparisonOperator,
     FieldExpression,
@@ -63,7 +60,7 @@ type GuidedNode = sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
 @dataclass(frozen=True, slots=True)
 class SearchSelection:
-    query: str
+    query: CatalogueQuery
     sort: str
 
 
@@ -77,7 +74,7 @@ OPERATORS = {
 
 
 class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
-    query: str = sl.state("")
+    query: CatalogueQuery = sl.state(CatalogueQuery())
     sort: str = sl.state("")
     filter_open: bool = sl.state(False)
     filter_picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
@@ -91,7 +88,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         service: SearchService,
         *,
         scope: str,
-        query: str,
+        query: CatalogueQuery,
         sort: str,
         on_apply: Callable[[SearchSelection], Awaitable[None]],
         actions: Callable[[], tuple[sl.semantic.ActionControl[sd.Request[Any, RedstoneSquid]], ...]] | None = None,
@@ -110,22 +107,22 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     @property
     def clauses(self) -> tuple[QueryExpression, ...]:
-        expression = self.parser.parse(self.query).expression
+        expression = self.query.parsed.expression
         return tuple(item for _, item in query_leaves(expression)) if expression is not None else ()
 
     def _set_expression(self, expression: QueryExpression | None) -> None:
-        self.query = self.parser.render(expression) if expression is not None else ""
+        self.query = self.query.with_expression(self.parser, expression)
 
     def _replace(self, index: int, replacement: QueryExpression | None) -> None:
-        expression = self.parser.parse(self.query).expression
+        expression = self.query.parsed.expression
         assert expression is not None
         path, _ = query_leaves(expression)[index]
         self._set_expression(replace_clause(expression, path, replacement))
 
     def _append(self, addition: QueryExpression) -> None:
-        expression = self.parser.parse(self.query).expression
+        expression = self.query.parsed.expression
         self._set_expression(
-            BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression is not None else addition
+            combine_clauses(BooleanOperator.AND, expression, addition) if expression is not None else addition
         )
         if self.filter_picker is not None:
             self.filter_picker.picked = ()
@@ -153,7 +150,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         return sl.action_controls(
             sl.form(
                 tr(t"guided-search-edit-query = Type a query"),
-                self._query_form(self.query),
+                self._query_form(self.query.text),
                 key="advanced",
                 on_submit=self._advanced,
             ),
@@ -248,12 +245,13 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     default=query,
                     required=False,
                     maximum=1000,
+                    strip=False,
                 ),
             ),
         )
 
     async def _advanced(self, event: sd.SubmitEvent) -> None:
-        self.query = self.parser.parse(str(event.values.get("query") or "")).normalized
+        self.query = CatalogueQuery.from_text(self.parser, str(event.values.get("query") or ""))
         event.reveal(sl.element_ref(sl.semantic.FormTrigger, "edit-0"))
         self._close_filter()
         await self._refresh()
@@ -373,9 +371,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._replace(index, NotExpression(replacement) if event.values.get("negated") else replacement)
         await self._refresh()
 
-    def clear(self) -> None:
-        self.query = ""
-        self.sort = ""
+    def close_panels(self) -> None:
         self._close_filter()
         self.sort_picker = None
 

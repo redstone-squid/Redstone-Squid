@@ -157,7 +157,8 @@ async def test_record_title_search_defaults_to_the_records_tab(query: str, title
     assert isinstance(screen, BuildBrowseScreen)
     assert screen._mode == "records"
     assert search.requests[0].scope is SearchScope.RECORDS
-    assert search.requests[0].query == f"base_title:{title} AND 5x5"
+    assert search.requests[0].query == query
+    assert screen._query.parsed.normalized == f"base_title:{title} AND 5x5"
     async with stage(screen, owner=object()) as ui:
         ui.assert_within_limits()
 
@@ -186,9 +187,11 @@ async def test_explicit_build_scope_overrides_the_record_title_filter() -> None:
 async def test_explicit_record_scope_expands_shorthand_without_status_filter() -> None:
     search = RecordingSearch()
 
-    await _run(_cog(search), query="smallest 5x5", scope=SearchTarget.records)
+    screen = await _run(_cog(search), query="smallest 5x5", scope=SearchTarget.records)
 
-    assert search.requests[0].query == "base_title:smallest AND 5x5"
+    assert isinstance(screen, BuildBrowseScreen)
+    assert search.requests[0].query == "smallest 5x5"
+    assert screen._query.parsed.normalized == "base_title:smallest AND 5x5"
 
 
 async def test_records_remain_an_explicit_search_target() -> None:
@@ -256,7 +259,7 @@ async def test_explicit_record_status_is_preserved(query: str) -> None:
     search = RecordingSearch()
     screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
     assert isinstance(screen, BuildBrowseScreen)
-    assert screen._query == query
+    assert screen._query.text == query
     assert search.requests[0].query == query
 
 
@@ -265,9 +268,7 @@ async def test_record_search_does_not_add_a_status_filter(query: str) -> None:
     search = RecordingSearch()
     screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
     assert isinstance(screen, BuildBrowseScreen)
-    normalized = SearchQueryParser().parse(query).normalized
-    expected = normalized
-    assert screen._query == search.requests[0].query == expected
+    assert screen._query.text == search.requests[0].query == query
 
 
 @pytest.mark.parametrize("scope", [SearchTarget.builds, SearchTarget.records])
@@ -297,8 +298,8 @@ async def test_registered_fields_survive_opening_the_catalogue(scope: SearchTarg
     screen = await _run(_cog(search), query="custom_flag:true", scope=scope)
     assert isinstance(screen, BuildBrowseScreen)
     async with stage(screen, owner=object()) as ui:
-        assert "custom_flag:true" in screen._query
-        assert search.requests[0].query == screen._query
+        assert "custom_flag:true" in screen._query.text
+        assert search.requests[0].query == screen._query.text
         await ui.press(ui.key_for("guided-search"))
         ui.control(ui.key_for("edit-0"))
         ui.assert_within_limits()

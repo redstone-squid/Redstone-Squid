@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
+from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.labels import filter_label
 from squid.core.actors import Actor
@@ -26,7 +27,7 @@ def editor(query: str = "") -> GuidedSearch:
     return GuidedSearch(
         service,
         scope="builds",
-        query=query,
+        query=CatalogueQuery.from_text(SearchQueryParser(), query),
         sort="",
         on_apply=AsyncMock(),
     )
@@ -37,7 +38,7 @@ def test_added_filters_preserve_or_grouping() -> None:
     addition = SearchQueryParser().parse("width>=3").expression
     assert addition is not None
     screen._append(addition)
-    parsed = SearchQueryParser().parse(screen.query).expression
+    parsed = screen.query.parsed.expression
     assert isinstance(parsed, BooleanExpression)
     assert parsed.operator is BooleanOperator.AND
     assert isinstance(parsed.operands[0], BooleanExpression)
@@ -52,7 +53,7 @@ def test_named_values_cannot_inject_query_syntax() -> None:
     field = DEFAULT_FIELD_REGISTRY.resolve("creator")
     assert field is not None
     screen._append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=True))
-    parsed = SearchQueryParser().parse(screen.query).expression
+    parsed = screen.query.parsed.expression
     assert isinstance(parsed, FieldExpression)
     assert parsed.value == value
 
@@ -61,13 +62,13 @@ async def test_text_edits_replace_builder_filters_and_apply_exact_query() -> Non
     screen = editor("title:door AND width:3")
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("remove-1"))
-        assert screen.query == "title:door"
+        assert screen.query.text == "title:door"
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "width>=5 AND NOT tag:slime"})
         assert len(screen.clauses) == 2
         await ui.press(ui.key_for("remove-0"))
-        assert screen.query == "NOT tag:slime"
-        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("NOT tag:slime", ""))
+        assert screen.query.text == "NOT tag:slime"
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
 
 
 async def test_edit_boolean_group_preserves_other_clauses() -> None:
@@ -75,10 +76,10 @@ async def test_edit_boolean_group_preserves_other_clauses() -> None:
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "6", "operator": "0"})
-        assert screen.query == "(width:6 OR width:4) AND height:5"
+        assert screen.query.text == "(width:6 OR width:4) AND height:5"
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": ""})
-        assert screen.query == ""
+        assert screen.query.text == ""
         assert screen.clauses == ()
 
 
@@ -135,7 +136,7 @@ async def test_filter_and_sort_panels_open_together_and_stay_in_the_message(monk
         assert "## Filter by Width" in ui.texts()
         assert screen.sort_picker is not None, "choosing a field leaves the sort panel open"
         assert not ui.root.finished
-        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection("", "-width"))
+        cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, "-width"))
         ui.assert_within_limits()
 
 
@@ -151,7 +152,7 @@ async def test_named_value_fields_open_their_value_picker_directly(monkeypatch: 
         await _choose(ui, "filter-lookup", "creator")
         assert not any(key.endswith("value") for key in ui.root.snapshot().handler_keys)
         await _choose(ui, "value-lookup", "Steve")
-        assert screen.query == 'creator:"Steve"'
+        assert screen.query.text == 'creator:"Steve"'
         assert screen.filter_open
         assert Text(filter_label(screen.clauses[0])).resolve() == "Creator is Steve"
         picker = screen.filter_picker
@@ -160,7 +161,7 @@ async def test_named_value_fields_open_their_value_picker_directly(monkeypatch: 
         await _choose(ui, "value-lookup", "Alex")
         assert screen.filter_picker is picker
         assert picker.picked == ()
-        assert screen.query == 'creator:"Steve" AND creator:"Alex"'
+        assert screen.query.text == 'creator:"Steve" AND creator:"Alex"'
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
         ui.assert_within_limits()
 
@@ -173,7 +174,7 @@ async def test_fixed_values_are_chosen_from_a_menu(monkeypatch: pytest.MonkeyPat
         await ui.press(ui.key_for("field"))
         await _choose(ui, "filter-lookup", "kind")
         await ui.select(ui.key_for("value-choice"), ["door"])
-        assert screen.query == 'kind:"door"'
+        assert screen.query.text == 'kind:"door"'
         assert screen.filter_open
 
 
@@ -217,12 +218,12 @@ async def test_guided_edits_preserve_or_and_negation() -> None:
             "negated",
         }
         await first.submit({"value": "7", "operator": "3"})
-        assert screen.query == '(closing_time>7 OR opening_time>"5") AND NOT width:3'
+        assert screen.query.text == '(closing_time>7 OR opening_time>"5") AND NOT width:3'
         await ui.press(ui.key_for("remove-1"))
-        assert screen.query == "closing_time>7 AND NOT width:3"
+        assert screen.query.text == "closing_time>7 AND NOT width:3"
         second = await ui.press_for_form(ui.key_for("edit-1"))
         await second.submit({"value": "4", "operator": "0"})
-        assert screen.query == "closing_time>7 AND NOT width:4"
+        assert screen.query.text == "closing_time>7 AND NOT width:4"
 
 
 async def test_guided_range_edit_prefills_and_preserves_bounds() -> None:
@@ -230,7 +231,7 @@ async def test_guided_range_edit_prefills_and_preserves_bounds() -> None:
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "4", "upper": "6", "operator": "5"})
-        assert screen.query == "width:[4 TO 6] OR height:7"
+        assert screen.query.text == "width:[4 TO 6] OR height:7"
 
 
 async def test_keyword_edit_treats_query_syntax_as_literal_text() -> None:
@@ -238,7 +239,7 @@ async def test_keyword_edit_treats_query_syntax_as_literal_text() -> None:
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "door AND height:99"})
-        assert screen.query == '"door AND height:99" OR width:3'
+        assert screen.query.text == '"door AND height:99" OR width:3'
 
 
 async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -263,12 +264,12 @@ async def test_not_filter_button_preserves_and_can_remove_negation() -> None:
         assert ui.control(ui.key_for("edit-0")).payload["label"] == "Not: Width is 3"
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "4", "operator": "0", "negated": True})
-        assert screen.query == "NOT width:4 OR height:5"
+        assert screen.query.text == "NOT width:4 OR height:5"
         form = await ui.press_for_form(ui.key_for("edit-0"))
         await form.submit({"value": "4", "operator": "0", "negated": False})
-        assert screen.query == "width:4 OR height:5"
+        assert screen.query.text == "width:4 OR height:5"
         await ui.press(ui.key_for("remove-0"))
-        assert screen.query == "height:5"
+        assert screen.query.text == "height:5"
 
 
 async def test_panels_keep_filter_rows_and_survive_filter_edits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -290,10 +291,10 @@ async def test_panels_keep_filter_rows_and_survive_filter_edits(monkeypatch: pyt
         await ui.press(ui.key_for("__cursor_next.$/clauses"))
         form = await ui.press_for_form(ui.key_for("edit-2"))
         await form.submit({"value": "8", "operator": "0"})
-        assert screen.query == "width:3 AND height:5 AND depth:8"
+        assert screen.query.text == "width:3 AND height:5 AND depth:8"
         assert screen.sort_picker is picker
         await ui.press(ui.key_for("remove-2"))
-        assert screen.query == "width:3 AND height:5"
+        assert screen.query.text == "width:3 AND height:5"
         assert screen.sort_picker is picker
         await ui.press(ui.key_for("field"))
         assert not screen.filter_open
@@ -318,12 +319,12 @@ async def test_add_several_bounds_then_change_fields_without_closing_panel(monke
             assert screen.filter_open
             assert screen.selected is not None
             assert screen.selected.name == "width"
-        assert screen.query == "width>=3 AND width<=5"
+        assert screen.query.text == "width>=3 AND width<=5"
         await ui.press(ui.key_for("change-field"))
         await _choose(ui, "filter-lookup", "height")
         form = await ui.press_for_form(ui.key_for("value"))
         await form.submit({"value": "7", "operator": "0"})
-        assert screen.query == "width>=3 AND width<=5 AND height:7"
+        assert screen.query.text == "width>=3 AND width<=5 AND height:7"
         ui.control(ui.key_for("edit-2"))
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
         ui.assert_within_limits()

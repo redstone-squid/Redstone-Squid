@@ -7,12 +7,14 @@ from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import anyio
+import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
 from squid.bot.catalogue.records import RecordsScreen
+from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildQueryService, BuildService
@@ -105,7 +107,7 @@ async def submit_search(ui: StagedUI[BuildBrowseScreen], query: str, sort: str =
     assert ui.component._guided is not None
     form = await ui.press_for_form(ui.key_for("advanced"))
     await form.submit({"query": query})
-    assert ui.component._guided.query == SearchQueryParser().parse(query).normalized
+    assert ui.component._guided.query.text == query
 
 
 async def toggle_help(ui: StagedUI[BuildBrowseScreen]) -> None:
@@ -150,7 +152,7 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 
     with sl.runtime.transaction():
         if search:
-            await screen._run_search("door", "")
+            await screen._run_search(CatalogueQuery.from_text(SearchQueryParser(), "door"), "")
         else:
             await screen._open_id(submit_event({"id": 7}))
 
@@ -431,11 +433,19 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
     if records:
         screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
-        await submit_search(ui, "door kind:door", "-created_at")
+        typed = "  door   KIND:door  "
+        await submit_search(ui, typed, "-created_at")
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
         assert request.mode is SearchMode.LEXICAL
         assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
-        assert request.query == "door AND kind:door"
+        assert request.query == typed
+        assert screen._query.parsed.normalized == "door AND kind:door"
+        await ui.press(ui.key_for("guided-search"))
+        assert any(typed in text for text in ui.texts())
+        await ui.press(ui.key_for("guided-search"))
+        form = await ui.press_for_form(ui.key_for("advanced"))
+        query_input = next(item for item in form.modal.walk_children() if isinstance(item, discord.ui.TextInput))
+        assert query_input.default == typed
         assert "## Search results" in ui.texts()
         assert not any("Search by meaning" in text for text in ui.texts())
         ui.assert_within_limits()
@@ -467,7 +477,8 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert request.sort is not None
         assert request.sort.field == "created_at"
         assert screen._guided is not None
-        assert screen._query == screen._guided.query == request.query
+        assert screen._query == screen._guided.query
+        assert screen._query.text == request.query
         assert screen._sort == "-created_at"
         await submit_search(ui, request.query, "-created_at")
         assert service.search.call_args.args[0].query == request.query
@@ -489,16 +500,16 @@ async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
         await ui.press(ui.key_for("fastest"))
         assert screen._guided is not None
-        assert "(base_title:fastest OR base_title:smallest)" in screen._guided.query
+        assert "(base_title:fastest OR base_title:smallest)" in screen._guided.query.text
         await ui.press(ui.key_for("smallest"))
-        expression = SearchQueryParser().parse(screen._query).expression
+        expression = screen._query.parsed.expression
         assert expression in (
             SearchQueryParser().parse("door AND base_title:fastest").expression,
             SearchQueryParser().parse("base_title:fastest AND door").expression,
         )
-        await ui.press(ui.key_for("remove-0" if screen._query.startswith("base_title") else "remove-1"))
+        await ui.press(ui.key_for("remove-0" if screen._query.text.startswith("base_title") else "remove-1"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
-        assert screen._guided.query == "door"
+        assert screen._guided.query.text == "door"
         assert screen._sort == "-created_at"
 
 
@@ -526,7 +537,7 @@ async def test_all_types_preserves_literal_keywords() -> None:
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "fastest AND base_title:smallest")
         await ui.press(ui.key_for("all-standings"))
-        assert screen._query == "(fastest)"
+        assert screen._query.text == "(fastest)"
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
 
 
@@ -539,14 +550,14 @@ async def test_all_types_clears_title_filters_and_preserves_other_filters() -> N
         assert ui.control(ui.key_for("smallest")).payload["label"] == "Smallest"
         await ui.press(ui.key_for("smallest"))
         await ui.press(ui.key_for("all-standings"))
-        assert screen._query == ""
+        assert screen._query.text == ""
         assert screen._results is None
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert "## Records" in ui.texts()
         # With a typed query, the query and sort stay and the search reruns without types.
         await submit_search(ui, "door base_title:smallest", "-created_at")
         await ui.press(ui.key_for("all-standings"))
-        assert screen._query == "door"
+        assert screen._query.text == "door"
         assert screen._sort == "-created_at"
         assert service.search.call_args.args[0].query == "door"
         ui.assert_within_limits()
@@ -590,7 +601,7 @@ async def test_record_toggles_are_visible_on_build_details() -> None:
         await ui.press(ui.key_for("first"))
         assert "## Search results" in ui.texts()
         assert screen._selected is None
-        assert screen._query == "base_title:first"
+        assert screen._query.text == "base_title:first"
 
 
 async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
@@ -601,7 +612,7 @@ async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
         original_results = screen._results
         cast(AsyncMock, screen._search_service).search.side_effect = RuntimeError("search unavailable")
         await ui.press(ui.key_for("fastest"))
-        assert screen._query == "base_title:smallest"
+        assert screen._query.text == "base_title:smallest"
         assert screen._results is original_results
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         assert ui.control(ui.key_for("fastest")).payload["style"] == 2
@@ -642,8 +653,10 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         assert "## Search help" not in ui.texts()
         if records:
             assert ui.control(ui.key_for("fastest")).payload["style"] == 3
-        assert screen._query == (
-            "kind:door base_title:fastest version_scope:all_time" if records else "door width<=5 height<=6"
+        assert screen._query.text == (
+            "kind:door AND base_title:fastest AND version_scope:all_time"
+            if records
+            else "door AND width<=5 AND height<=6"
         )
 
 
@@ -843,13 +856,13 @@ async def test_live_search_keeps_editor_and_updates_results_on_every_edit() -> N
             form = await ui.press_for_form(ui.key_for("advanced"))
             await form.submit({"query": query})
             assert screen._guided is editor
-            assert screen._query == query
+            assert screen._query.text == query
             assert service.search.call_args.args[0].query == query
             assert service.search.call_args.args[0].page_size == 15
             assert not ui.root.finished
             assert "## Search results" in ui.texts()
         await ui.press(ui.key_for("remove-0"))
-        assert screen._query == ""
+        assert screen._query.text == ""
         assert screen._guided is editor
         ui.assert_within_limits()
 
@@ -864,7 +877,7 @@ async def test_failed_live_search_preserves_query_and_results() -> None:
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "width:3"})
         assert screen._guided is not None
-        assert screen._guided.query == screen._query == ""
+        assert screen._guided.query == screen._query == CatalogueQuery()
         assert screen._results is results
         assert not ui.root.finished
 
@@ -885,13 +898,13 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         next=None,
         prev=None,
     )
-    screen._query = "width:3 AND height:5"
+    screen._query = CatalogueQuery.from_text(SearchQueryParser(), "width:3 AND height:5")
     async with stage(screen, owner=object()) as ui:
         monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
         await ui.press(ui.key_for("guided-search"))
         form = await ui.press_for_form(ui.key_for("advanced"))
-        await form.submit({"query": screen._query})
+        await form.submit({"query": screen._query.text})
         editor = screen._guided
         results = screen._results
         assert editor is not None
@@ -927,7 +940,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
             assert editor.selected.name == "width"
             assert editor.sort_picker is sort_picker
             assert screen._query == editor.query
-            assert screen._query.endswith(f"width<={value}")
+            assert screen._query.text.endswith(f"width<={value}")
             assert "## Search results" in ui.texts()
             ui.assert_within_limits()
         ui.control(ui.key_for("edit-4"))
@@ -979,7 +992,7 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         await ui.press(ui.key_for("reset"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert screen._guided is not None
-        assert screen._guided.query == ""
+        assert screen._guided.query.text == ""
         assert "## Records" in ui.texts()
 
 
@@ -988,14 +1001,15 @@ async def test_collapsed_query_and_sort_share_summary_with_reset() -> None:
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "width:3", "-height")
         await ui.press(ui.key_for("guided-search"))
-        summaries = [text for text in ui.texts() if "Width is 3" in text]
-        assert summaries == ["Width is 3 · Height, largest first"]
+        summaries = [text for text in ui.texts() if "width:3" in text]
+        assert summaries == ["`width:3` · Height, largest first"]
         assert screen._guided is None
         assert not any(key.endswith("reset") for key in ui.root.snapshot().handler_keys)
         await ui.press(ui.key_for("guided-search"))
         ui.control(ui.key_for("reset"))
         await ui.press(ui.key_for("reset"))
-        assert screen._query == screen._sort == ""
+        assert screen._query == CatalogueQuery()
+        assert screen._sort == ""
         assert screen._results is None
         assert "## Build catalogue" in ui.texts()
 
@@ -1148,7 +1162,7 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         await ui.press(ui.key_for("search.back"))
         ui.control(ui.key_for("search.open"))
         assert screen._guided is not None
-        assert screen._query == "width:3 AND height:5 AND depth:2"
+        assert screen._query.text == "width:3 AND height:5 AND depth:2"
 
 
 async def test_records_default_to_all_statuses_and_reset_clears_status_filter() -> None:
@@ -1157,14 +1171,14 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
     async with stage(screen, owner=object()) as ui:
-        assert screen._query == ""
+        assert screen._query.text == ""
         await ui.press(ui.key_for("guided-search"))
         assert screen._guided is not None
-        assert screen._guided.query == ""
+        assert screen._guided.query.text == ""
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "status:unresolved"})
         await ui.press(ui.key_for("remove-0"))
-        assert screen._query == ""
+        assert screen._query.text == ""
         assert service.search.call_args.args[0].query == ""
         assert screen._results is not None
         await ui.press(ui.key_for("all-standings"))
@@ -1172,7 +1186,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "status:unresolved"})
         await ui.press(ui.key_for("reset"))
-        assert screen._query == screen._guided.query == ""
+        assert screen._query == screen._guided.query == CatalogueQuery()
         assert screen._results is None
 
 
