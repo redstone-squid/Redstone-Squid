@@ -481,7 +481,7 @@ async def test_many_grouped_records_and_ties_remain_browsable_within_discord_lim
         SearchPage((hit,), total=1, next=None, prev=None),
     )
     async with stage(screen, owner=object()) as ui:
-        assert any("+9 more records" in text for text in ui.texts())
+        assert any("(+11) · #42" in text for text in ui.texts())
         await ui.select(ui.key_for("search.open"), ["build:42"])
         await ui.press(ui.key_for("search-show-records"))
         await ui.select(ui.key_for("search-records.open"), ["result:0"])
