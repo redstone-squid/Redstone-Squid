@@ -41,9 +41,7 @@ def _traceback_footer(ctx: sl.LayoutContext) -> sl.TextLike:
     assert selection is not None
     page, pages = selection.number.require(), region.count.require()
     section = tr(t"diagnostics-view-traceback = Traceback")
-    return md_tr(
-        t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report",
-    )
+    return md_tr(t"diagnostics-attachment-page-hint = {section} — page {page} of {pages}")
 
 
 # Earlier and Later page through a traceback, which opens at its last frame. Chrome applies to
@@ -279,12 +277,12 @@ class ErrorReportScreen(sd.Screen[int]):
         )
 
     def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
-        reference = report.reference
+        identifier = sl.inline_code(report.correlation_id)
         traceback_text: sl.TextLike = report.traceback.strip() or tr(
             t"diagnostics-view-no-traceback-was-recorded = No traceback was recorded."
         )
         children: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
-            sd.v2.heading(md_tr(t"diagnostics-view-error = Error {reference}")),
+            sd.v2.heading(md_tr(t"diagnostics-view-error = Error {identifier}")),
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(
                 traceback_text,
@@ -299,14 +297,7 @@ class ErrorReportScreen(sd.Screen[int]):
                 sd.v2.code("\n".join(report.log_tail), overflow=primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
-        children.append(
-            sl.download(
-                report_asset(report),
-                label=tr(t"diagnostics-view-full-report = Full report"),
-                key="full-report",
-                emphasis=sl.semantic.Emphasis.STRONG,
-            )
-        )
+        children.append(sl.download(report_asset(report), label="", key="full-report"))
         return sl.stack(*children)
 
     async def _refresh_reports(self, event: sl.PressEvent) -> None:
@@ -372,7 +363,6 @@ def report_asset(report: ErrorReport) -> sl.document.Asset:
 
 
 def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field]:
-    identifier = sl.inline_code(report.correlation_id)
     entries = [
         sl.field(
             tr(t"diagnostics-view-when = When"),
@@ -380,7 +370,6 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
         ),
         sl.field(tr(t"diagnostics-view-where = Where"), sl.text.Text(t"{report.surface} — {report.origin or '—'}")),
         sl.field(tr(t"diagnostics-view-exception = Exception"), sl.md(t"{report.exception_type}")),
-        sl.field(tr(t"diagnostics-view-full-id = Full ID"), sl.md(t"{identifier}")),
     ]
     if report.work_lost:
         entries.append(
@@ -395,7 +384,7 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
             sl.field(
                 tr(t"diagnostics-view-ambiguous = Ambiguous"),
                 md_tr(
-                    t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest.",
+                    t"diagnostics-shared-reference-note = {count} reports match this reference; this is the newest.",
                 ),
             )
         )

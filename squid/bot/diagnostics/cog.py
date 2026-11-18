@@ -60,7 +60,7 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         options={
             "reference": sd.Option(
                 name=tr(t"command-errors-reference-name = reference"),
-                description=tr(t"command-errors-reference-help = The error reference to open immediately"),
+                description=tr(t"command-errors-reference-help = The error reference, full ID, or ID prefix to open"),
             )
         },
     )

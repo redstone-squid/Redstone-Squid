@@ -7619,7 +7619,7 @@
     ]
   },
   "command-errors-reference-help": {
-    "fingerprint": "c8f42d17f19aeb24add92c41d925a9613cb50aaed4a69c3a029b9f8892ed9f6b",
+    "fingerprint": "a3d84dbd8a7ada57d1152f7467409c793a82eba15af12e0bf64a7615e443473d",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -9092,11 +9092,11 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:389"
+      "squid/bot/diagnostics/screen.py:378"
     ]
   },
   "diagnostics-attachment-page-hint": {
-    "fingerprint": "eaa56263524d2e340400af351e4701b12f308f3c9dbd48f05a5ba3fbcabed298",
+    "fingerprint": "25970b1f4a8b34cf80d088b09cee6945c72ec5cc11f0c0ae03a08f1dc451d44a",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -9126,7 +9126,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:328"
+      "squid/bot/diagnostics/screen.py:319"
     ]
   },
   "diagnostics-controls-not-owner": {
@@ -9135,7 +9135,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:54"
+      "squid/bot/diagnostics/screen.py:52"
     ]
   },
   "diagnostics-delete-warning": {
@@ -9144,7 +9144,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:197"
+      "squid/bot/diagnostics/screen.py:195"
     ]
   },
   "diagnostics-error-report-not-found": {
@@ -9171,7 +9171,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:232"
+      "squid/bot/diagnostics/screen.py:230"
     ]
   },
   "diagnostics-no-stored-error": {
@@ -9189,7 +9189,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:161"
+      "squid/bot/diagnostics/screen.py:159"
     ]
   },
   "diagnostics-report-list-stale": {
@@ -9198,11 +9198,11 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:116"
+      "squid/bot/diagnostics/screen.py:114"
     ]
   },
   "diagnostics-shared-reference-note": {
-    "fingerprint": "64cb680489c4996b6bdddb9c00ab4c5b9e2b0fd7c2f28c92ea09be3a01d760fa",
+    "fingerprint": "aae0e59a3f570070bae4da69a6e5aff2a7547a5c3776edbab1cd246f5271822f",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -9213,7 +9213,7 @@
       }
     ],
     "locations": [
-      "squid/bot/diagnostics/screen.py:399"
+      "squid/bot/diagnostics/screen.py:386"
     ]
   },
   "diagnostics-update-check-failed": {
@@ -9222,7 +9222,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:111"
+      "squid/bot/diagnostics/screen.py:109"
     ]
   },
   "diagnostics-view-ambiguous": {
@@ -9231,7 +9231,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:398"
+      "squid/bot/diagnostics/screen.py:385"
     ]
   },
   "diagnostics-view-clear-all": {
@@ -9240,7 +9240,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:277"
+      "squid/bot/diagnostics/screen.py:275"
     ]
   },
   "diagnostics-view-clear-every-error-report": {
@@ -9249,7 +9249,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:195"
+      "squid/bot/diagnostics/screen.py:193"
     ]
   },
   "diagnostics-view-delete-reports": {
@@ -9258,7 +9258,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:203"
+      "squid/bot/diagnostics/screen.py:201"
     ]
   },
   "diagnostics-view-deleted-stored-error-reports": {
@@ -9273,7 +9273,7 @@
       }
     ],
     "locations": [
-      "squid/bot/diagnostics/screen.py:250"
+      "squid/bot/diagnostics/screen.py:248"
     ]
   },
   "diagnostics-view-earlier": {
@@ -9282,22 +9282,22 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:55"
+      "squid/bot/diagnostics/screen.py:53"
     ]
   },
   "diagnostics-view-error": {
-    "fingerprint": "9ba019411fb692b9ca84810fb07896d107f0aa4d49c07ce39233d206dcb36511",
+    "fingerprint": "fa7b0667991d3b5707d0d78dccd976a4c0dc8f0b1754c5d06e19af9de6840778",
     "attributes": [],
     "has_value": true,
     "arguments": [
       {
-        "name": "reference",
+        "name": "identifier",
         "function": null,
         "options": []
       }
     ],
     "locations": [
-      "squid/bot/diagnostics/screen.py:287"
+      "squid/bot/diagnostics/screen.py:285"
     ]
   },
   "diagnostics-view-errors-cleared": {
@@ -9306,7 +9306,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:248"
+      "squid/bot/diagnostics/screen.py:246"
     ]
   },
   "diagnostics-view-exception": {
@@ -9315,25 +9315,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:382"
-    ]
-  },
-  "diagnostics-view-full-id": {
-    "fingerprint": "a0eee1e0411daad65bdd041bb1994a1e6523e9c2f97b16adae887102a9715b30",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/diagnostics/screen.py:383"
-    ]
-  },
-  "diagnostics-view-full-report": {
-    "fingerprint": "b4e9abecf68dfd94fa585cf8a034e408d0cd85e28b03ef8f738445f5a2b18aef",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/diagnostics/screen.py:305"
+      "squid/bot/diagnostics/screen.py:372"
     ]
   },
   "diagnostics-view-later": {
@@ -9342,7 +9324,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:56"
+      "squid/bot/diagnostics/screen.py:54"
     ]
   },
   "diagnostics-view-loading-error-reports": {
@@ -9351,7 +9333,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:262"
+      "squid/bot/diagnostics/screen.py:260"
     ]
   },
   "diagnostics-view-log-tail": {
@@ -9360,7 +9342,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:297"
+      "squid/bot/diagnostics/screen.py:295"
     ]
   },
   "diagnostics-view-no-traceback-was-recorded": {
@@ -9369,7 +9351,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:283"
+      "squid/bot/diagnostics/screen.py:281"
     ]
   },
   "diagnostics-view-recent-errors": {
@@ -9378,7 +9360,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:231"
+      "squid/bot/diagnostics/screen.py:229"
     ]
   },
   "diagnostics-view-refresh-reports": {
@@ -9387,7 +9369,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:144"
+      "squid/bot/diagnostics/screen.py:142"
     ]
   },
   "diagnostics-view-traceback": {
@@ -9405,7 +9387,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:378"
+      "squid/bot/diagnostics/screen.py:368"
     ]
   },
   "diagnostics-view-where": {
@@ -9414,7 +9396,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:381"
+      "squid/bot/diagnostics/screen.py:371"
     ]
   },
   "diagnostics-view-work-lost": {
@@ -9423,7 +9405,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:388"
+      "squid/bot/diagnostics/screen.py:377"
     ]
   },
   "diagnostics-view-work-lost-only": {
@@ -9432,7 +9414,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:268"
+      "squid/bot/diagnostics/screen.py:266"
     ]
   },
   "draft-editor-add-files": {

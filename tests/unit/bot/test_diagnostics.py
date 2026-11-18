@@ -188,7 +188,9 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
         await open_report(message_root, interaction, "aaa111")
 
         payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
-        assert "Error aaa111" in payload
+        assert "Error `aaa111-full`" in payload
+        assert "Full ID" not in payload
+        assert "Full report" not in payload
         assert "ValueError: boom" in payload
         assert "Back" in payload
 
@@ -226,6 +228,8 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
         assert pager.pages is not None
         assert pager.page == pager.pages - 1
         assert pager.pages > 1
+        assert any(f"Traceback — page {pager.pages} of {pager.pages}" in text for text in _texts(view))
+        assert all("the attachment has the whole report" not in text for text in _texts(view))
 
         message_root.presentation.move_cursor("traceback", PagePosition())
         earliest = commit_render(message_root)
@@ -423,7 +427,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
         view = commit_render(root)
         text = "\n".join(_texts(view))
         assert "report list has changed" in text
-        assert "Error aaa111" in text
+        assert "Error `aaa111-full`" in text
         assert screen._browser is original_browser
         assert tuple(report.reference for report in screen.reports) == ("aaa111",)
         if hide:
