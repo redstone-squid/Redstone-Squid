@@ -13,6 +13,7 @@ from squid_ui.ext.discord.primitives import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.runtime import ManagedService
 from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.testing import find_all
 
 
 class Search(sl.Reactive):
@@ -85,7 +86,8 @@ def test_a_sibling_reading_component_state_is_invalidated_with_its_owner() -> No
     runtime = ComponentRuntime(Parent())
     runtime.commit(runtime.render())
     source.count = 1
-    assert runtime.render(reuse_committed=True).nodes == (Text("1"), Text("also 1"))
+    updated = runtime.render(reuse_committed=True)
+    assert tuple(node.content for node in find_all(updated.nodes, Text)) == ("1", "also 1")
 
 
 def test_discard_preserves_old_reads_and_releases_prospective_reads() -> None:

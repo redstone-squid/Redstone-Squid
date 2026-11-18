@@ -218,10 +218,15 @@ class Contextual[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTa
 
 
 @immutable
-class PreparedSlot[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
-    """A declared component subtree whose keys already include its placement."""
+class ComponentPlacement[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
+    """A component boundary retained for source queries and delivered visibility."""
 
     placement: str = field(default="", kw_only=True)
+
+
+@immutable
+class PreparedSlot[RenderTargetT = RenderTarget, ContextT = object](ComponentPlacement[RenderTargetT, ContextT]):
+    """A declared subtree whose action keys already include its placement."""
 
 
 @immutable

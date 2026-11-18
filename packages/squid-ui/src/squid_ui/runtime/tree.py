@@ -61,9 +61,14 @@ class ComponentTree(QueryIndexOwner, Generic[RenderTargetT, ContextT]):  # noqa:
     """Original nodes by component placement, retaining boundaries and local keys for inspection."""
 
     deferred_paths: Mapping[str, AnyComponent] = field(default_factory=dict, compare=False, repr=False)
+    query_nodes: Mapping[str, tuple[LayoutNode[RenderTargetT, ContextT], ...]] | None = field(
+        default=None, compare=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         # Render topology is fixed even when its components' reactive state changes.
+        if self.query_nodes is not None:
+            object.__setattr__(self, "query_nodes", MappingProxyType(dict(self.query_nodes)))
         object.__setattr__(self, "deferred_paths", MappingProxyType(dict(self.deferred_paths)))
         object.__setattr__(self, "components", MappingProxyType(dict(self.components)))
         object.__setattr__(self, "authored_nodes", MappingProxyType(dict(self.authored_nodes)))

@@ -322,7 +322,7 @@ class PagerNav:
         """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
         state = materialized_navigation_state(key, PagePosition(page=page), extent, chrome)
         if not self.known_extent:
-            state = replace(state, extent=None)
+            state = replace(state, extent=None, page=None)
         if isinstance(owner, RoutedPage):
             return self.factory(
                 NavigationContext(

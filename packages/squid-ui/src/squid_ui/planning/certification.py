@@ -10,7 +10,9 @@ from dataclasses import dataclass, replace
 
 from squid_ui.authoring.presentations import Budget
 from squid_ui.authoring.semantic import Budgeted
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.native import NativeTraits
+from squid_ui.overflow import RoutedPage, resolve_page
 from squid_ui.planning.allocation import CertifiedPage, PageFamily
 from squid_ui.planning.allocation_policy import RegionPolicy
 from squid_ui.planning.composition import (
@@ -188,8 +190,26 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         peaks: dict[OccurrenceId, ResourceCost] = {}
         page_violations: dict[tuple[OccurrenceId, int], int] = {}
         pages: list[CertifiedPage[OutputT]] = []
-        snapshot = LayoutSnapshot(family, self.context) if self.context.inspect_layout else None
-        for coordinates, visible in family.combinations(self.context):
+        selected: dict[OccurrenceId, int] | None = None
+        if self.context.local_view:
+            selected = {}
+            for identity, region in family.regions.items():
+                contract = regions[identity].candidate.offer.region
+                assert contract is not None
+                owner = contract.owner
+                key = contract.cursor_key or contract.key
+                if identity in self.context.page_overrides:
+                    page = self.context.page_overrides[identity]
+                elif isinstance(owner, Controlled | RoutedPage):
+                    page = resolve_page(owner.value, len(region.pages))
+                else:
+                    position = self.context.positions.get(key) or self.context.presentation.pending_positions.get(key)
+                    if position is None and key in self.context.presentation.cursors:
+                        position = self.context.presentation.cursor(key).position
+                    page = position.page if position is not None else resolve_page(owner.initial, len(region.pages))
+                selected[identity] = min(max(0, page), len(region.pages) - 1)
+        snapshot = LayoutSnapshot(family, self.context, selected) if self.context.inspect_layout else None
+        for coordinates, visible in family.combinations(self.context, selected):
             self.context.work.consume()
             try:
                 admitted = evaluate_composition(visible, self.rules, self.context)

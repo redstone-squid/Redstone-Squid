@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui._dataclass import immutable
 from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
-from squid_ui.authoring.semantic import Budgeted
+from squid_ui.authoring.semantic import Budgeted, ComponentPlacement
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
@@ -21,6 +21,7 @@ from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.native import NativeTraits
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
+from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
@@ -318,6 +319,9 @@ class PlanningContext:
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
     limits: TargetLimits | None = None
     inspect_layout: bool = False
+    local_view: bool = False
+    page_overrides: Mapping[OccurrenceId, int] = field(default_factory=dict)
+    positions: Mapping[str, PagePosition] = field(default_factory=dict)
 
 
 @immutable
@@ -465,6 +469,7 @@ class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]
     forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
     layout: LayoutContext | None = field(default=None, kw_only=True)
     choices: tuple[tuple[OccurrenceId, str], ...] = field(default=(), kw_only=True)
+    visible_components: frozenset[str] = field(default=frozenset(), kw_only=True)
 
 
 def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
@@ -482,6 +487,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     forms: dict[str, FormBinding[ContextT]] = {}
     interactions: set[SemanticRef] = set()
     atoms: dict[OccurrenceId, AtomicContract] = {}
+    visible_components: set[str] = set()
     preflight: list[CandidateViolation] = []
     while pending:
         context.work.consume()
@@ -505,6 +511,8 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 raise LayoutInvariantError(message)
             forms[form.key] = form
         semantic = part.offer.occurrence.graph.units[part.offer.occurrence.reference].value
+        if isinstance(semantic, ComponentPlacement):
+            visible_components.add(semantic.placement)
         if isinstance(semantic, AtomicNode) or part.offer.atomic is not None:
             contract = part.offer.atomic
             if contract is None or part.children:
@@ -622,7 +630,9 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     if evaluation.preparation is None:
         message = "feasible target evaluation did not prepare construction"
         raise DrawInvariantError(message)
-    return AdmittedComposition(evaluation, MappingProxyType(bindings), MappingProxyType(forms))
+    return AdmittedComposition(
+        evaluation, MappingProxyType(bindings), MappingProxyType(forms), frozenset(visible_components)
+    )
 
 
 @immutable
@@ -630,6 +640,7 @@ class AdmittedComposition[ResourceT, PreparationT, ContextT]:
     evaluation: Evaluation[ResourceT, PreparationT]
     bindings: Mapping[str, ActionBinding]
     forms: Mapping[str, FormBinding[ContextT]]
+    visible_components: frozenset[str] = frozenset()
 
 
 def construct_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](
@@ -644,7 +655,9 @@ def construct_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, P
     body = rules.build(evaluation.preparation, context)
     context.work.consume()
     rules.validate(body, evaluation, context)
-    return BuiltComposition(body, evaluation, admitted.bindings, admitted.forms)
+    return BuiltComposition(
+        body, evaluation, admitted.bindings, admitted.forms, visible_components=admitted.visible_components
+    )
 
 
 def build_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](

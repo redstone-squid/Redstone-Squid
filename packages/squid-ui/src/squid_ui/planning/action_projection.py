@@ -76,6 +76,7 @@ class ActionPage[BodyT: scene.Body]:
     layout: LayoutContext | None = None
     certificate: CertificateScope = CertificateScope.VIEW
     choices: tuple[tuple[OccurrenceId, str], ...] = ()
+    visible_components: frozenset[str] | None = None
 
     @classmethod
     def prepare(
@@ -117,6 +118,7 @@ class ActionPage[BodyT: scene.Body]:
                 result.layout,
                 result.certificate,
                 result._choices,
+                result.visible_components,
             ),
             PageBindings(MappingProxyType(live), result.form_bindings, result.form_plans, result.resources),
         )
@@ -177,6 +179,7 @@ class ActionPage[BodyT: scene.Body]:
             layout=self.layout,
             certificate=self.certificate,
             _choices=self.choices,
+            visible_components=self.visible_components,
         )
 
 

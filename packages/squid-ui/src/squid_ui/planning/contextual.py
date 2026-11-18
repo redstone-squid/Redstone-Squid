@@ -12,6 +12,7 @@ from squid_ui.authoring.document import Document, DocumentLike, as_document
 from squid_ui.authoring.semantic import Contextual, Group, LayoutNode, PreparedSlot
 from squid_ui.authoring.traversal import _namespace, map_layout_children
 from squid_ui.boundary import Boundary
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutError
 from squid_ui.layout import (
     DocumentScope,
@@ -28,7 +29,7 @@ from squid_ui.planning.layout_snapshot import SemanticCapture, _ScopeReader
 from squid_ui.planning.result import CertificateScope, PlanEvent, PlanResult
 from squid_ui.planning.semantic_index import semantic_graph
 from squid_ui.presentation_state import RetainedCompositionUpdate
-from squid_ui.selectors import Match, select
+from squid_ui.selectors import Match
 
 
 class ContextResolutionError(LayoutError):
@@ -45,18 +46,41 @@ class ContextResolutionError(LayoutError):
 class _AuthoredLocations:
     authored: SemanticCapture
     reader: LocationQuery
+    owner: str | None = None
+    namespace: str | None = None
 
     def __call__[T](self, target: ElementRef[T] | Match[T], within: RegionRef | None) -> Locations:
         if isinstance(target, Match) and target._token is self.authored.index._token:
             reference = self.authored.references[self.authored.index.index(target)]
             return self.reader(ElementRef(type(target.node), reference.keys), within)
+        if isinstance(target, ElementRef) and self.owner is not None and within is None:
+            candidates = tuple(
+                match
+                for match in self.authored.index.matches
+                if isinstance(match.node, target.kind)
+                and match.owner == self.owner
+                and (
+                    self.authored.references[match._index].keys[-len(target.keys) :] == target.keys
+                    or (len(target.keys) == 1 and match.key == target.keys[0])
+                )
+            )
+            if len(candidates) > 1:
+                message = f"ambiguous element reference in placement {self.owner}: {target.keys!r}"
+                raise LayoutError(message)
+            if candidates:
+                return self.reader(ElementRef(target.kind, self.authored.references[candidates[0]._index].keys), within)
+            if self.namespace is not None:
+                scoped = (*target.keys[:-1], f"{self.namespace}.{target.keys[-1]}")
+                return self.reader(ElementRef(target.kind, scoped), within)
         return self.reader(target, within)
 
 
 class ContextualResolution[R, BodyT: scene.Body]:
     """Keep working content and query evidence private to one planning attempt."""
 
-    def __init__(self, document: Document[R], *, work_limit: int, max_rounds: int = 16) -> None:
+    def __init__(
+        self, document: Document[R], *, work_limit: int, max_rounds: int = 16, localization: Localization = NEUTRAL
+    ) -> None:
         self.work = WorkBudget(work_limit)
         self.max_rounds = max_rounds
         self.blocks: dict[str, Contextual[R, Any]] = {}
@@ -64,6 +88,7 @@ class ContextualResolution[R, BodyT: scene.Body]:
         self.assets = document.assets
         self.generated_assets: dict[str, tuple[Any, ...]] = {}
         self.partial = False
+        self.view_dependent = False
         self.excluded: list[tuple[tuple[OccurrenceId, str], ...]] = []
         self.last_choices: tuple[tuple[OccurrenceId, str], ...] = ()
         self.rejected: list[ContextResolutionError] = []
@@ -83,14 +108,21 @@ class ContextualResolution[R, BodyT: scene.Body]:
             document,
             children=tuple(child for i, node in enumerate(document.children) for child in declare(node, f"root.{i}")),
         )
-        graph = semantic_graph(
-            Group(self.document.children, key=document.key or "@document"), consume=self.work.consume
+
+        def authored(node: LayoutNode[R, Any], path: str) -> tuple[LayoutNode[R, Any], ...]:
+            if isinstance(node, Contextual):
+                node = replace(node, children=(*node.children, *node._prepared), _prepared=())
+            return (map_layout_children(node, path, authored),)
+
+        authored_nodes = tuple(
+            child for i, node in enumerate(self.document.children) for child in authored(node, str(i))
         )
-        capture = SemanticCapture(graph, self.work.consume)
+        graph = semantic_graph(Group(authored_nodes, key=document.key or "@document"), consume=self.work.consume)
+        capture = SemanticCapture(graph, self.work.consume, localization)
         self.authored_capture = capture
         self.authored = DocumentScope(_ScopeReader(capture, frozenset(capture.references)), len(capture.references))
 
-    def _document(self) -> Document[R]:
+    def _document(self, *, logical: bool = False) -> Document[R]:
         def expand(node: LayoutNode[R, Any], path: str) -> tuple[LayoutNode[R, Any], ...]:
             self.work.consume()
             if isinstance(node, Contextual):
@@ -102,8 +134,8 @@ class ContextualResolution[R, BodyT: scene.Body]:
                             for i, value in enumerate(self.working[node._identity])
                             for child in expand(value, f"{path}.{i}")
                         ),
-                        components=(),
-                        _prepared=(),
+                        components=self.blocks[node._identity].components if logical else (),
+                        _prepared=self.blocks[node._identity]._prepared if logical else (),
                     ),
                 )
             return (map_layout_children(node, path, expand),)
@@ -156,6 +188,9 @@ class ContextualResolution[R, BodyT: scene.Body]:
             try:
                 return self._solve(plan, pages=pages, replan=replan)
             except ContextResolutionError as error:
+                if not self.partial and error.reason in ("oscillates", "did not converge"):
+                    self.partial = True
+                    continue
                 if not self.last_choices or self.last_choices in self.excluded:
                     raise
                 self.rejected.append(error)
@@ -163,6 +198,7 @@ class ContextualResolution[R, BodyT: scene.Body]:
                 self.working = dict(initial)
                 self.generated_assets.clear()
                 self.partial = False
+                self.view_dependent = False
             except JointInfeasibleError as error:
                 if not self.rejected:
                     raise
@@ -177,31 +213,31 @@ class ContextualResolution[R, BodyT: scene.Body]:
         replan: Callable[[Mapping[OccurrenceId, int]], PlanResult[BodyT]],
     ) -> PlanResult[BodyT]:
         seen: set[str] = set()
+        previous: str | None = None
         observations: list[tuple[object, object]] = []
         for round_number in range(1, self.max_rounds + 1):
             self.work.consume()
-            result = plan(self._document(), pages, self.work, self.partial)
+            query_document = self._document(logical=True)
+            try:
+                result = plan(self._document(), pages, self.work, self.partial)
+            except JointInfeasibleError:
+                if self.partial:
+                    raise
+                # A closed-family failure does not disprove the demanded view.
+                self.partial = True
+                result = plan(self._document(), pages, self.work, self.partial)
             self.last_choices = result._choices
             layout = result.layout
             if layout is None:
                 message = "contextual content needs an automatic semantic composition target"
                 raise LayoutError(message)
-            visible = layout.visible.query(select(Contextual)).all()
             pending: list[str] = []
+            unresolved_offscreen = False
             changed = False
             observations = []
-            for match in visible:
+            for identity, containing, required in layout._invocations:
                 self.work.consume()
-                identity = match.node._identity
                 block = self.blocks[identity]
-                containing = next(
-                    (
-                        location.page.coordinates[-1].region
-                        for location in layout.locate(match).fragments
-                        if location.page.coordinates
-                    ),
-                    None,
-                )
                 ctx = layout._evaluating(
                     self.work.consume,
                     owner=block._scope,
@@ -209,7 +245,7 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     partial=self.partial,
                     authored=self.authored,
                 )
-                ctx._locate = _AuthoredLocations(self.authored_capture, ctx._locate)
+                ctx._locate = _AuthoredLocations(self.authored_capture, ctx._locate, block._scope, block.key)
                 token = EVALUATING.set(True)
                 try:
                     with read_only(), capture_reads() as reads:
@@ -224,13 +260,14 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     ):
                         changed = True
                 except FactUnavailableError:
-                    pending.append(block.key or identity)
+                    if required:
+                        pending.append(block.key or identity)
+                    else:
+                        unresolved_offscreen = True
                     continue
                 finally:
                     EVALUATING.reset(token)
-                if ctx.view_dependent and not self.partial:
-                    self.partial = True
-                    changed = True
+                self.view_dependent |= ctx.view_dependent
                 observations.extend(ctx.observations)
                 before = stable_fingerprint(self.working[identity], consume=self.work.consume)
                 after = stable_fingerprint(nodes, consume=self.work.consume)
@@ -242,18 +279,24 @@ class ContextualResolution[R, BodyT: scene.Body]:
                 consume=self.work.consume,
             )
             if not changed:
+                if unresolved_offscreen and not self.partial:
+                    self.partial = True
+                    seen.clear()
+                    continue
                 if pending:
                     reason = "has unresolved required facts"
                     raise ContextResolutionError(reason, tuple(pending), round_number)
-                result = plan(self._document(), pages, self.work, self.partial)
+            if not changed and signature == previous:
+                # The input handlers were generated from the same observed facts.
+                # Re-running search here could choose different cuts under the
+                # remaining budget and invalidate those captured handler values.
                 assert result.layout is not None
-                final_layout = result.layout._evaluating(
-                    self.work.consume, partial=self.partial, authored=self.authored
-                )
+                final_layout = result.layout._evaluating(None, partial=self.partial, authored=self.authored)
                 final_layout._locate = _AuthoredLocations(self.authored_capture, final_layout._locate)
                 return replace(
                     result,
                     layout=final_layout,
+                    query_document=query_document,
                     report=replace(
                         result.report,
                         events=(
@@ -270,7 +313,9 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     )
                     if self.partial
                     else result.scene,
-                    certificate=CertificateScope.VIEW if self.partial else CertificateScope.FAMILY,
+                    certificate=CertificateScope.VIEW
+                    if self.partial or self.view_dependent
+                    else CertificateScope.FAMILY,
                     allocation=None,
                     page_selector=replan,
                     session_updates=tuple(
@@ -278,12 +323,13 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     ),
                     metrics=replace(result.metrics, work_used=self.work.spent, context_rounds=round_number),
                 )
-            if signature in seen:
+            if signature in seen and signature != previous:
                 reason = "oscillates"
                 raise ContextResolutionError(
                     reason, tuple(block.key or identity for identity, block in self.blocks.items()), round_number
                 )
             seen.add(signature)
+            previous = signature
         reason = "did not converge"
         raise ContextResolutionError(
             reason, tuple(block.key or identity for identity, block in self.blocks.items()), self.max_rounds

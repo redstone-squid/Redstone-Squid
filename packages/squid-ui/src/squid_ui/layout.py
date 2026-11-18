@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Never, Protocol
 
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutError
 from squid_ui.selectors import Match, Query, Selector
 
@@ -208,7 +209,13 @@ class LayoutContext:
         regions: Mapping[RegionRef, RegionFacts],
         locate: LocationQuery,
         containing: OccurrenceId | None = None,
+        capabilities: frozenset[str] = frozenset(),
+        localization: Localization = NEUTRAL,
+        invocations: tuple[tuple[str, OccurrenceId | None, bool], ...] = (),
     ) -> None:
+        self._invocations = invocations
+        self.capabilities = capabilities
+        self.localization = localization
         self.observations: list[tuple[object, object]] = []
         self._scopes = (authored, placed, visible)
         self._consume: Callable[[int], None] | None = None
@@ -228,7 +235,7 @@ class LayoutContext:
 
     def _evaluating(
         self,
-        consume: Callable[[int], None],
+        consume: Callable[[int], None] | None,
         *,
         owner: str = "$",
         containing: OccurrenceId | None = None,
@@ -246,6 +253,9 @@ class LayoutContext:
             regions=regions,
             locate=_PartialLocations(self._locate) if partial else self._locate,
             containing=containing,
+            capabilities=self.capabilities,
+            localization=self.localization,
+            invocations=self._invocations,
         )
         result._consume = consume
         result._owner = owner
@@ -294,6 +304,9 @@ class LayoutContext:
     def locate[T](self, target: ElementRef[T] | Match[T], *, within: RegionRef | None = None) -> Locations:
         if self._consume is not None:
             self._consume(1)
+        if within is not None:
+            identity = self.region(within).identity
+            within = next(ref for ref, facts in self._regions.items() if facts.identity == identity)
         result = self._locate(target, within)
         result = replace(
             result,

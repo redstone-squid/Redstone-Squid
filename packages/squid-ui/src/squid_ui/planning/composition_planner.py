@@ -101,6 +101,8 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         extensions=request.target.extensions,
         limits=effective.limits,
         inspect_layout=request.inspect_layout,
+        local_view=request.partial_layout,
+        positions=request.positions or {},
     )
 
 
@@ -118,7 +120,9 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     resolved = ResolvedComposition.for_options(request, options)
     if not contextual_resolved and has_contextual(rendered):
         source = as_document(rendered)
-        resolver = ContextualResolution[RenderTargetT, BodyT](source, work_limit=resolved.work_limit)
+        resolver = ContextualResolution[RenderTargetT, BodyT](
+            source, work_limit=resolved.work_limit, localization=request.localization
+        )
         current_options = options or CompositionOptions(automatic=True, work_limit=resolved.work_limit)
 
         def attempt(
@@ -143,6 +147,8 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     context = _context(request, resolved)
     if work is not None:
         context = replace(context, work=work)
+    if options is not None:
+        context = replace(context, page_overrides=options.pages)
     document = as_document(rendered)
     context = replace(context, assets=document.assets)
     if not automatic and (document.assets or request.positions or request.nav is not None):
@@ -201,7 +207,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 form_bindings=MappingProxyType(dict(output.form_bindings)),
                 form_plans=MappingProxyType(dict(output.form_plans)),
                 resources=MappingProxyType(dict(output.resources)),
-                certificate=CertificateScope.FAMILY,
+                certificate=CertificateScope.VIEW if request.partial_layout else CertificateScope.FAMILY,
             )
 
         try:
@@ -223,6 +229,9 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
             _logger.debug(
                 "Joint allocation returned a certified layout with unproven optimality: %s", result.diagnostics
             )
+        if request.partial_layout:
+            options = replace(options, pages=dict(result.allocation.pages[0].coordinates))
+            result = replace(result, diagnostics=replace(result.diagnostics, optimal=False))
         page = result.allocation.select(options.pages)
         planned = replace(
             page,
@@ -306,6 +315,7 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
         effects=effects,
         layout=built.layout,
         _choices=built.choices,
+        visible_components=built.visible_components,
     )
 
 

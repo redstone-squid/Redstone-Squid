@@ -18,6 +18,7 @@ from squid_ui.target_types import Renderable
 
 # Query edges include controls and content values that layout rewriting treats as leaves.
 _UI_FIELDS: tuple[tuple[type, tuple[str, ...]], ...] = (
+    (s.Contextual, ("children", "_prepared")),
     (s.Group, ("children",)),
     (s.Stack, ("children",)),
     (s.Cluster, ("children",)),
@@ -217,10 +218,18 @@ def _build_index(tree: object, *, children: Children) -> TreeIndex:
     parents: list[int | None] = []
     ends: list[int] = []
     active: set[int] = set()
+    placements: set[str] = set()
 
     def visit(node: object, path: str, parent: int | None, owner: str | None, placement: str | None = None) -> None:
         local_key = getattr(node, "key", None)
-        if isinstance(node, Boundary):
+        if isinstance(node, s.ComponentPlacement) and rendered is not None and rendered.query_nodes is not None:
+            placement = node.placement
+            if placement in placements:
+                return
+            placements.add(placement)
+            local_key = placement.rsplit(".", 1)[-1]
+            node = rendered.components[placement]
+        elif isinstance(node, Boundary):
             placement = node.key if owner in (None, "$") else f"{owner}.{node.key}"
             local_key = node.key
             node = node.component
@@ -234,6 +243,14 @@ def _build_index(tree: object, *, children: Children) -> TreeIndex:
         try:
             index = len(matches)
             key = local_key if isinstance(local_key, str) else None
+            if (
+                rendered is not None
+                and rendered.query_nodes is not None
+                and key is not None
+                and owner not in (None, "$")
+                and key.startswith(f"{owner}.")
+            ):
+                key = key[len(owner) + 1 :]
             qualified = key if owner in (None, "$") or key is None else f"{owner}.{key}"
             matches.append(Match(node, path, owner, key, placement or qualified, index, token))
             parents.append(parent)
@@ -242,7 +259,12 @@ def _build_index(tree: object, *, children: Children) -> TreeIndex:
                 if rendered is None or placement is None or placement not in rendered.authored_nodes:
                     msg = f"{path}: component requires an authored ComponentTree"
                     raise ValueError(msg)
-                edges = ((str(i), value) for i, value in enumerate(rendered.authored_nodes[placement]))
+                nodes = (
+                    rendered.query_nodes.get(placement, rendered.authored_nodes[placement])
+                    if rendered.query_nodes is not None
+                    else rendered.authored_nodes[placement]
+                )
+                edges = ((str(i), value) for i, value in enumerate(nodes))
                 owner = placement
             else:
                 edges = children(node)

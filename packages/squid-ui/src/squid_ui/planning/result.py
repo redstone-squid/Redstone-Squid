@@ -7,9 +7,10 @@ updates remain here; hosts apply updates only after successfully delivering the 
 from collections.abc import Callable, Mapping
 from dataclasses import field, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from squid_ui._dataclass import immutable
+from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
@@ -122,6 +123,8 @@ class PlanResult[BodyT = Body]:
 
     layout: LayoutContext | None = field(default=None, kw_only=True, compare=False, repr=False)
     certificate: CertificateScope = field(default=CertificateScope.VIEW, kw_only=True)
+    visible_components: frozenset[str] | None = field(default=None, kw_only=True)
+    query_document: Document[Any, Any] | None = field(default=None, kw_only=True, repr=False, compare=False)
     _choices: tuple[tuple[OccurrenceId, str], ...] = field(default=(), kw_only=True, repr=False, compare=False)
 
     allocation: AllocationSelection[PlanResult[BodyT]] | None = field(default=None, kw_only=True)

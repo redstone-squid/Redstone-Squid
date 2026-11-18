@@ -106,7 +106,7 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
         return cls(root, allocated)
 
     def combinations(
-        self, context: PlanningContext
+        self, context: PlanningContext, selected: Mapping[OccurrenceId, int] | None = None
     ) -> Iterator[tuple[tuple[tuple[OccurrenceId, int], ...], CandidateComposition[RenderTargetT, ContextT, PayloadT]]]:
         def visit(
             part: CandidateComposition[RenderTargetT, ContextT, PayloadT],
@@ -118,7 +118,9 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
                 occurrence = part.offer.occurrence
                 identity = occurrence.fragment.logical if occurrence.fragment is not None else occurrence.identity
                 region = self.regions[identity]
-                for index, page in enumerate(region.pages):
+                index = min(max(0, selected.get(identity, 0)), len(region.pages) - 1) if selected is not None else 0
+                pages = enumerate(region.pages) if selected is None else ((index, region.pages[index]),)
+                for index, page in pages:
                     context.work.consume()
                     for coordinates, visible in visit(page):
                         yield ((identity, index), *coordinates), visible

@@ -96,7 +96,7 @@ from squid_ui.runtime import (
     Ready,
     transaction,
 )
-from squid_ui.testing import text_component
+from squid_ui.testing import find_all, text_component
 
 
 @dataclass(slots=True)
@@ -3927,7 +3927,7 @@ class TestDeferredExpansion:
 
         assert not invalidated
         tree = runtime.render()
-        assert tree.nodes == (Text("host"), Text("written by a load"))
+        assert tuple(node.content for node in find_all(tree.nodes, Text)) == ("host", "written by a load")
 
     def test_a_discovery_tree_cannot_be_committed(self):
         log: list[str] = []

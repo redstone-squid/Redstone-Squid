@@ -159,6 +159,12 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
     def on_mount(self) -> None:
         """Run when the first placement of this instance enters the delivered tree."""
 
+    def on_show(self, placement: str) -> None:
+        """Run after delivery when this placement's first fragment appears."""
+
+    def on_hide(self, placement: str) -> None:
+        """Run when this placement's last delivered fragment leaves, before unmount."""
+
     def on_unmount(self) -> None:
         """Run when the last placement leaves the delivered tree or the frontend finishes."""
 

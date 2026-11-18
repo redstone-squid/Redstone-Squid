@@ -6,7 +6,8 @@ from types import MappingProxyType
 from typing import Any
 
 from squid_ui.authoring.presentations import Alternatives, Omission, SemanticRef
-from squid_ui.authoring.semantic import FallbackContent, List, OptionalContent
+from squid_ui.authoring.semantic import ComponentPlacement, Contextual, FallbackContent, List, OptionalContent
+from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.layout import (
     ContentAddress,
     DocumentScope,
@@ -24,7 +25,7 @@ from squid_ui.layout import (
 )
 from squid_ui.planning.allocation import PageFamily
 from squid_ui.planning.composition import CandidateComposition, OccurrenceId, Placement, PlanningContext
-from squid_ui.planning.semantic_index import SemanticGraph
+from squid_ui.planning.semantic_index import SemanticGraph, semantic_graph
 from squid_ui.selectors import Match, Query, Selector, TreeIndex, query, select
 
 
@@ -39,7 +40,10 @@ class _Fragment:
 class SemanticCapture:
     """A canonical graph index, independent of the target representation's shape."""
 
-    def __init__(self, graph: SemanticGraph[Any, Any], consume: Callable[[int], None]) -> None:
+    def __init__(
+        self, graph: SemanticGraph[Any, Any], consume: Callable[[int], None], localization: Localization = NEUTRAL
+    ) -> None:
+        self.localization = localization
         self.references = tuple(graph.units)
         positions = {ref: i for i, ref in enumerate(self.references)}
         self.positions = MappingProxyType(positions)
@@ -52,7 +56,21 @@ class SemanticCapture:
             unit = graph.units[reference]
             key = reference.keys[-1]
             key = None if key.startswith("@") else key
-            matches.append(Match(unit.value, "/".join(reference.keys), None, key, key, i, token))
+            owner = "$"
+            parent = unit.parent
+            while parent is not None:
+                ancestor = graph.units[parent]
+                if isinstance(ancestor.value, ComponentPlacement):
+                    owner = ancestor.value.placement
+                    break
+                parent = ancestor.parent
+            qualified = key
+            if key is not None and owner != "$":
+                if key.startswith(f"{owner}."):
+                    key = key[len(owner) + 1 :]
+                else:
+                    qualified = f"{owner}.{key}"
+            matches.append(Match(unit.value, "/".join(reference.keys), owner, key, qualified, i, token))
             parents.append(positions[unit.parent] if unit.parent is not None else None)
             ends.append(i + 1)
         for i in range(len(ends) - 1, -1, -1):
@@ -74,7 +92,7 @@ class _ScopeReader:
             lambda _tree, index, _scope, _locale: self.capture.references[index] in self.members,
             "in captured layout scope",
         )
-        return query(self.capture.index, selector.intersect(membership))
+        return query(self.capture.index, selector.intersect(membership), localization=self.capture.localization)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,13 +106,24 @@ class _LocationReader:
     def __call__[T](self, target: ElementRef[T] | Match[T], within: RegionRef | None) -> Locations:
         if self.consume is not None:
             self.consume(len(self.capture.references))
+        prefix: tuple[str, ...] | None = None
+        if within is not None:
+            references = tuple(ref for ref in self.regions if ref.keys[-len(within.keys) :] == within.keys)
+            if len(references) != 1:
+                message = f"region reference is absent or ambiguous: {within.keys!r}"
+                raise ValueError(message)
+            prefix = references[0].keys
         if isinstance(target, Match):
             reference = self.capture.references[self.capture.index.index(target)]
         else:
             candidates = tuple(
                 match
                 for match in query(self.capture.index, select(target.kind)).all()
-                if self.capture.references[match._index].keys[-len(target.keys) :] == target.keys
+                if (prefix is None or self.capture.references[match._index].keys[: len(prefix)] == prefix)
+                and (
+                    self.capture.references[match._index].keys[-len(target.keys) :] == target.keys
+                    or (len(target.keys) == 1 and match.key == target.keys[0])
+                )
             )
             if len(candidates) > 1:
                 message = f"ambiguous element reference: {target.keys!r}"
@@ -120,7 +149,9 @@ class _LocationReader:
 class LayoutSnapshot:
     """Immutable facts for a materialized family, reusable across its certified views."""
 
-    def __init__[R, C, P](self, family: PageFamily[R, C, P], context: PlanningContext) -> None:
+    def __init__[R, C, P](
+        self, family: PageFamily[R, C, P], context: PlanningContext, selected: Mapping[OccurrenceId, int] | None = None
+    ) -> None:
         graph = family.root.offer.occurrence.graph
         choices: list[tuple[OccurrenceId, str]] = []
         pending = [family.root]
@@ -132,7 +163,9 @@ class LayoutSnapshot:
                 choices.append((occurrence.identity, part.offer.key))
             pending.extend(part.children)
         self.choices = tuple(choices)
-        self.capture = SemanticCapture(graph, context.work.consume)
+        self.capabilities = context.capabilities
+        self.localization = context.localization
+        self.capture = SemanticCapture(graph, context.work.consume, context.localization)
         self.region_refs = {
             identity: RegionRef(region.pages[0].offer.occurrence.page_source.keys)
             for identity, region in family.regions.items()
@@ -148,6 +181,28 @@ class LayoutSnapshot:
             )
         self.captures: dict[tuple[tuple[OccurrenceId, int], ...], SemanticCapture] = {}
         self.visible: dict[tuple[tuple[OccurrenceId, int], ...], frozenset[SemanticRef]] = {}
+        self.invocations: dict[
+            tuple[tuple[OccurrenceId, int], ...], tuple[tuple[str, OccurrenceId | None, bool], ...]
+        ] = {}
+        current_invocations: dict[str, tuple[OccurrenceId | None, bool]] = {}
+        base_invocations: dict[str, tuple[OccurrenceId | None, bool]] = {}
+        if not context.local_view:
+            pending_scopes: list[tuple[CandidateComposition[R, C, P], OccurrenceId | None]] = [(family.root, None)]
+            while pending_scopes:
+                part, containing = pending_scopes.pop()
+                context.work.consume()
+                occurrence = part.offer.occurrence
+                if part.offer.region is not None:
+                    containing = occurrence.identity
+                value = occurrence.graph.units[occurrence.reference].value
+                if isinstance(value, Contextual):
+                    base_invocations[value._identity] = (containing, False)
+                elif isinstance(value, Alternatives):
+                    source = semantic_graph(value.content, consume=context.work.consume)
+                    for unit in source.units.values():
+                        if isinstance(unit.value, Contextual):
+                            base_invocations.setdefault(unit.value._identity, (containing, False))
+                pending_scopes.extend((child, containing) for child in part.children)
         fragments: dict[SemanticRef, dict[_Fragment, None]] = {}
 
         def add(source: SemanticRef, fragment: _Fragment) -> None:
@@ -171,6 +226,15 @@ class LayoutSnapshot:
                 repeated |= coverage.repeated
                 if coverage.logical in coordinates and not any(identity == coverage.logical for identity, _ in chain):
                     chain = (*chain, (coverage.logical, coordinates[coverage.logical]))
+            value = occurrence.graph.units[occurrence.reference].value
+            containing = chain[-1][0] if chain else None
+            if isinstance(value, Contextual):
+                current_invocations[value._identity] = (containing, True)
+            elif isinstance(value, Alternatives):
+                source = semantic_graph(value.content, consume=context.work.consume)
+                for unit in source.units.values():
+                    if isinstance(unit.value, Contextual):
+                        current_invocations.setdefault(unit.value._identity, (containing, False))
             reference = occurrence.reference
             fragment = _Fragment(reference, chain, span, reference in repeated)
             omitted: set[SemanticRef] = set()
@@ -188,8 +252,10 @@ class LayoutSnapshot:
             for child in part.children:
                 visit(child, coordinates, chain, repeated, span, visible)
 
-        for coordinates, visible in family.combinations(context):
+        for coordinates, visible in family.combinations(context, selected):
             represented: set[SemanticRef] = set()
+            current_invocations.clear()
+            current_invocations.update(base_invocations)
             visit(visible, dict(coordinates), (), frozenset(), None, represented)
             for source in tuple(represented):
                 unit = graph.units.get(source)
@@ -198,7 +264,10 @@ class LayoutSnapshot:
                     represented.add(unit.parent)
                     unit = graph.units[unit.parent]
             self.visible[coordinates] = frozenset(represented)
-            self.captures[coordinates] = SemanticCapture(graph, context.work.consume)
+            self.invocations[coordinates] = tuple(
+                (identity, containing, required) for identity, (containing, required) in current_invocations.items()
+            )
+            self.captures[coordinates] = SemanticCapture(graph, context.work.consume, context.localization)
         # Correspondence can represent a canonical container without retaining
         # that container's target node. Derive only its missing ancestor facts.
         own_references = frozenset(fragments)
@@ -273,4 +342,7 @@ class LayoutSnapshot:
             regions=MappingProxyType(regions),
             locate=_LocationReader(capture, MappingProxyType(locations), regions, complete, consume),
             containing=containing,
+            capabilities=self.capabilities,
+            localization=self.localization,
+            invocations=self.invocations[coordinate],
         )

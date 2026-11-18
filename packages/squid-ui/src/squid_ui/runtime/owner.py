@@ -1,7 +1,7 @@
 """Frontend-neutral owner of a reactive component tree."""
 
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -9,6 +9,9 @@ from squid_reactivity import Subscriptions
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import BusAddress, DependencyAddress
 from squid_ui._presentation import PresentationCells
+from squid_ui.authoring.document import Document
+from squid_ui.authoring.semantic import ComponentPlacement, LayoutNode
+from squid_ui.authoring.traversal import map_layout_children
 from squid_ui.context_keys import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache
@@ -43,16 +46,20 @@ class RenderCandidate[RenderTargetT: RenderTarget = RenderTarget]:
             message = "render candidate already settled or superseded"
             raise LayoutInvariantError(message)
 
-    def commit(self) -> None:
-        """Adopt a delivered tree before running its mount and unmount hooks."""
+    def commit(self, *, visible: Iterable[str] | None = None, document: Document[RenderTargetT] | None = None) -> None:
+        """Adopt a delivered tree and reconcile logical and visible placements."""
         self._require_pending()
         if self.tree.deferred or self.tree.suspended:
             message = "a discovery render cannot be committed"
             raise LayoutInvariantError(message)
+        paths = frozenset(self.tree.components if visible is None else visible)
+        if paths - self.tree.components.keys():
+            message = "visible placements must belong to the delivered component tree"
+            raise LayoutInvariantError(message)
         self.settled = True
         self._runtime._staged = None
         self._runtime.subscriptions.commit()
-        self._runtime._commit_tree(self.tree, rendered_revision=self.revision)
+        self._runtime._commit_tree(self.tree, rendered_revision=self.revision, visible=paths, document=document)
 
     def discard(self) -> None:
         """Release prospective reads while retaining the delivered tree's reads."""
@@ -121,6 +128,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._context_view = MappingProxyType(self._context)
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.planning_snapshot = PlanningSnapshot()
+        self._visible: dict[str, AnyComponent] = {}
+        self._visible_view = MappingProxyType(self._visible)
         self._components: dict[str, AnyComponent] = {}
         self._components_view = MappingProxyType(self._components)
         self._cache = RenderCache[RenderTargetT]()
@@ -158,6 +167,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     def components(self) -> Mapping[str, AnyComponent]:
         """Live read-only placements in the committed tree, cleared by ``finish``."""
         return self._components_view
+
+    @property
+    def visible_components(self) -> Mapping[str, AnyComponent]:
+        """Placements present in the last successfully delivered interface."""
+        return self._visible_view
 
     def _reactive_changed(self, address: DependencyAddress) -> None:
         if self._closed:
@@ -371,39 +385,91 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             return ()
         return self._cache.pending_atomic_resources()
 
-    def commit(self, tree: ComponentTree[RenderTargetT]) -> None:
+    def commit(
+        self,
+        tree: ComponentTree[RenderTargetT],
+        *,
+        visible: Iterable[str] | None = None,
+        document: Document[RenderTargetT] | None = None,
+    ) -> None:
         """Commit a delivered tree using its staged candidate.
 
         Frontends can retain the candidate returned by stage and call its commit
         directly. Lifecycle errors do not roll back an already delivered tree.
         """
-        self.stage(tree).commit()
+        self.stage(tree).commit(visible=visible, document=document)
 
-    def _commit_tree(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int) -> None:
+    def _commit_tree(
+        self,
+        tree: ComponentTree[RenderTargetT],
+        *,
+        rendered_revision: int,
+        visible: frozenset[str],
+        document: Document[RenderTargetT] | None,
+    ) -> None:
         """Reconcile lifecycle after the candidate has adopted its subscriptions."""
-
-        if tree is self._committed_tree:
-            if self.revision == rendered_revision:
-                self._cached_tree = tree
-                self._cached_revision = self.revision
-            self.dirty = self.revision != rendered_revision
-            return
-
-        incremental = self._can_reconcile_incrementally(tree)
-        if incremental:
-            self._reconcile_incremental(tree)
-        else:
-            self._reconcile_components(tree)
-        self._committed_tree = tree
-        self.presentation_cells.retain(tree.components)
+        desired = {path: tree.components[path] for path in visible}
+        self._hide_removed(desired)
+        if tree is not self._committed_tree:
+            incremental = self._can_reconcile_incrementally(tree)
+            if incremental:
+                self._reconcile_incremental(tree)
+            else:
+                self._reconcile_components(tree)
+            self._committed_tree = tree
+            self.presentation_cells.retain(tree.components)
+            if not incremental:
+                self._cache.retain(tree.components)
+        self.queries.publish(self._query_tree(tree, document) if document is not None else tree)
+        self._show_added(desired)
         if self.revision == rendered_revision:
             self._cached_tree = tree
             self._cached_revision = self.revision
-        if not incremental:
-            self._cache.retain(tree.components)
         self.dirty = self.revision != rendered_revision
-        self.queries.publish(tree)
         self._raise_hook_errors()
+
+    def _query_tree(
+        self, tree: ComponentTree[RenderTargetT], document: Document[RenderTargetT]
+    ) -> ComponentTree[RenderTargetT]:
+        nodes = {"$": document.children}
+
+        def collect(node: LayoutNode[RenderTargetT], path: str) -> tuple[LayoutNode[RenderTargetT], ...]:
+            if isinstance(node, ComponentPlacement) and node.placement not in nodes:
+                children = node.children
+                while (
+                    len(children) == 1
+                    and isinstance(children[0], ComponentPlacement)
+                    and children[0].placement == node.placement
+                ):
+                    children = children[0].children
+                nodes[node.placement] = children
+            return (map_layout_children(node, path, collect),)
+
+        for i, node in enumerate(document.children):
+            collect(node, str(i))
+        return replace(tree, query_nodes=nodes)
+
+    def _hide_removed(self, desired: Mapping[str, AnyComponent]) -> None:
+        for path, component in sorted(
+            self._visible.items(), key=lambda item: (_component_depth(item[0]), item[0]), reverse=True
+        ):
+            if desired.get(path) is component:
+                continue
+            self._visible.pop(path)
+            try:
+                component.on_hide(path)
+            except Exception as error:
+                self._hook_errors.append(error)
+
+    def _show_added(self, desired: Mapping[str, AnyComponent]) -> None:
+        for path, component in sorted(desired.items(), key=lambda item: (_component_depth(item[0]), item[0])):
+            if self._visible.get(path) is component:
+                continue
+            self._visible[path] = component
+            try:
+                component.on_show(path)
+            except Exception as error:
+                self._hook_errors.append(error)
 
     def _can_reconcile_incrementally(self, tree: ComponentTree[RenderTargetT]) -> bool:
         # Shared or relocated instances need reconciliation by identity across the whole tree.
@@ -522,6 +588,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self._closed:
             return
         self._closed = True
+        self._hide_removed({})
         self.presentation_cells.retain({})
         self.discard()
         self.subscriptions.clear()

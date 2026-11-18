@@ -63,7 +63,7 @@ class RegionNavigation[RenderTargetT, ContextT]:
             return ()
         occurrence = self.occurrence
         if context.mounted:
-            label = (self.footer or context.chrome.page_footer)(page + 1, pages)
+            label = "" if context.local_view else (self.footer or context.chrome.page_footer)(page + 1, pages)
             placed = replace(
                 occurrence,
                 identity=OccurrenceId((*occurrence.identity.path, "@navigation", str(page))),
@@ -84,7 +84,7 @@ class RegionNavigation[RenderTargetT, ContextT]:
                 () if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)
             )
             return (
-                footer,
+                *((footer,) if not context.local_view else ()),
                 *(
                     navigation_candidate(
                         node,
@@ -103,8 +103,9 @@ class RegionNavigation[RenderTargetT, ContextT]:
         following = "".join(tree.plain(node) for node in resolve_text(context.chrome.next, context.localization).nodes)
         if page > 0 or self.disabled_controls:
             payloads.append(ControlRealization(previous, route=f"{route}.{max(0, page - 1)}", disabled=page == 0))
-        label = (self.footer or context.chrome.page_footer)(page + 1, pages)
-        payloads.append(TextRealization(resolve_text(label, context.localization).nodes))
+        if not context.local_view:
+            label = (self.footer or context.chrome.page_footer)(page + 1, pages)
+            payloads.append(TextRealization(resolve_text(label, context.localization).nodes))
         if page + 1 < pages or self.disabled_controls:
             payloads.append(
                 ControlRealization(following, route=f"{route}.{min(pages - 1, page + 1)}", disabled=page + 1 == pages)

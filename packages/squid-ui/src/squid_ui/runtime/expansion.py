@@ -15,7 +15,7 @@ from squid_reactivity.resources import AsyncBinding, observe_async_bindings, uni
 from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import read_only
 from squid_ui.authoring.document import Asset, Document, DocumentLike
-from squid_ui.authoring.semantic import Contextual, Group, LayoutNode
+from squid_ui.authoring.semantic import ComponentPlacement, Contextual, Group, LayoutNode
 from squid_ui.boundary import Boundary
 from squid_ui.context_keys import ContextKey
 from squid_ui.errors import LayoutInvariantError
@@ -307,8 +307,8 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
                     self.deferred_paths[child_path] = child_component
                     return []
                 expanded = _namespace(self.expand(child_component, child_path, context), item.key)
-                child_splices[child_path] = _NodeSplice(route, len(expanded), item.key)
-                return expanded
+                child_splices[child_path] = _NodeSplice(route, 1, item.key)
+                return [ComponentPlacement(tuple(expanded), key=item.key, placement=child_path)]
             return [_map_layout_children_routed(item, item_path, _inside(route), expand_item)]
 
         try:
@@ -469,7 +469,7 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
         )
         if candidate_nodes != candidate.nodes:
             candidate.nodes = candidate_nodes
-        if not _same_subtree_presentation_metadata(previous, candidate) or len(previous.nodes) != len(candidate.nodes):
+        if not _same_subtree_presentation_metadata(previous, candidate):
             return None
         # Propagate the replacement through cached ancestors without calling their render methods.
         previous_child = previous
@@ -484,7 +484,11 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
                 or (splice := parent.child_splices.get(child_path)) is None
             ):
                 return None
-            replacement = tuple(_namespace(list(changed_child.nodes), splice.key))
+            replacement = (
+                ComponentPlacement(
+                    tuple(_namespace(list(changed_child.nodes), splice.key)), key=splice.key, placement=child_path
+                ),
+            )
             if len(replacement) != splice.count:
                 return None
             same_topology = _same_component_map(previous_child.components, changed_child.components)

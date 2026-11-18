@@ -150,7 +150,13 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self._runtime.planning_snapshot.commit(candidate.plan, presentation)
         # Component hooks can invalidate or raise after reconciling the delivered tree.
         # Settlement precedes them so cleanup never rolls back that committed work.
-        candidate.render.commit()
+        plans = (candidate.plan, *(part.plan for part in candidate.planned_continuations))
+        visible = (
+            None
+            if any(plan.visible_components is None for plan in plans)
+            else {"$"}.union(*(plan.visible_components or frozenset() for plan in plans))
+        )
+        candidate.render.commit(visible=visible, document=candidate.plan.query_document)
         self.handlers = candidate.handlers
         self.form_bindings = candidate.form_bindings
         self.plan = candidate.plan

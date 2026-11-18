@@ -38,7 +38,7 @@ def test_footer_resolves_materialized_count_and_generated_queries() -> None:
     assert calls == [3, 3]
 
 
-def test_selection_dependent_footer_replans_and_reports_partial_facts() -> None:
+def test_selection_dependent_footer_replans_with_snapshot_scoped_totals() -> None:
     results = sl.region_ref("results")
 
     def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
@@ -56,12 +56,12 @@ def test_selection_dependent_footer_replans_and_reports_partial_facts() -> None:
     assert "Page 1" in sl.scene.Codec.dumps(result.scene)
     assert result.layout is not None
     region = result.layout.region(results)
-    assert isinstance(region.count, sl.Unknown)
+    assert region.count == sl.Known(3)
     assert region.groups == sl.Known(3)
     assert result.certificate is sl.planning.CertificateScope.VIEW
-    assert result.scene.pagers and all(pager.pages is None for pager in result.scene.pagers)
+    assert result.scene.pagers and all(pager.pages == 3 for pager in result.scene.pagers)
     assert sl.scene.Codec.loads(sl.scene.Codec.dumps(result.scene)) == result.scene
-    assert not result.layout.locate(sl.element_ref(ListItem, "item-21")).complete
+    assert result.layout.locate(sl.element_ref(ListItem, "item-21")).complete
     changed = result.for_page({region.identity: 2})
     assert "Page 3" in sl.scene.Codec.dumps(changed.scene)
     assert "Page 1" in sl.scene.Codec.dumps(result.scene)
@@ -173,3 +173,105 @@ def test_authored_matches_resolve_without_claiming_generated_content_is_authored
         target=html.target(),
     )
     assert "found" in sl.scene.Codec.dumps(result.scene)
+
+
+def test_context_references_are_scoped_to_the_producing_component_placement() -> None:
+    class Panel(sl.Component):
+        def __init__(self, count: int) -> None:
+            self.count = count
+
+        @override
+        def render(self) -> sl.LayoutNode:
+            def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
+                groups = ctx.region(sl.region_ref("results")).groups.require()
+                located = ctx.locate(sl.element_ref(ListItem, "item-0"))
+                assert len(located.fragments) == 1
+                return sl.paragraph(f"{groups} groups")
+
+            return sl.stack(
+                sl.bullets(
+                    *(sl.bullet(str(i), key=f"item-{i}") for i in range(self.count)), key="results", group_size=2
+                ),
+                sl.context(footer, key="footer"),
+            )
+
+    class Root(sl.Component):
+        def __init__(self) -> None:
+            self.left, self.right = Panel(3), Panel(7)
+
+        @override
+        def render(self) -> sl.LayoutNode:
+            return sl.stack(self.left.keyed("left"), self.right.keyed("right"))
+
+    runtime = ComponentRuntime(Root())
+    tree = runtime.render()
+    result = plan(tree.nodes, target=html.target())
+    text = sl.scene.Codec.dumps(result.scene)
+    assert "2 groups" in text and "4 groups" in text
+    runtime.discard()
+    runtime.finish()
+
+
+def test_an_unfittable_unselected_fragment_does_not_block_the_current_view() -> None:
+    document = sl.stack(
+        sl.paged(
+            sl.stack(
+                sl.unbreakable(sl.paragraph("a" * 40)),
+                sl.unbreakable(sl.paragraph("b" * 80)),
+            ),
+            key="body",
+            chars=50,
+        ),
+        sl.context(lambda _ctx: sl.paragraph("ready"), key="status"),
+    )
+    result = plan(document, target=html.target())
+    assert "a" * 40 in sl.scene.Codec.dumps(result.scene)
+    assert "b" * 80 not in sl.scene.Codec.dumps(result.scene)
+    assert result.certificate is sl.planning.CertificateScope.VIEW
+    assert result.layout is not None
+    region = result.layout.region(sl.region_ref("body"))
+    assert isinstance(region.count, sl.Unknown)
+    assert result.report.search is not None and not result.report.search.optimal
+    with pytest.raises(sl.planning.JointInfeasibleError):
+        result.for_page({region.identity: 1})
+    assert "a" * 40 in sl.scene.Codec.dumps(result.scene)
+
+
+def test_contextual_content_in_an_equivalent_representation_is_evaluated() -> None:
+    def content(_ctx: sl.LayoutContext) -> sl.LayoutNode:
+        return sl.paragraph("generated")
+
+    document = sl.alternatives(
+        sl.alternative(sl.context(content, key="body"), key="plain", fidelity=sl.equivalent()),
+        content=sl.context(content, key="body"),
+        key="representations",
+    )
+    result = plan(document, target=html.target())
+    assert "generated" in sl.scene.Codec.dumps(result.scene)
+
+
+def test_generated_footer_changes_real_page_allocation_before_certification() -> None:
+    observed: list[int] = []
+
+    def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
+        count = ctx.region(sl.region_ref("items")).count.require()
+        observed.append(count)
+        return sl.paragraph("f" * (10 * count))
+
+    document = sl.budget(
+        sl.region(
+            sl.bullets(*(sl.bullet("x" * 30, key=f"item-{i}") for i in range(4)), key="items", page_size=2),
+            key="body",
+            title="",
+            footer=(sl.context(footer, key="footer"),),
+        ),
+        min=0,
+        prefer=75,
+    )
+    result = plan(document, target=html.target())
+    assert result.layout is not None
+    count = result.layout.region(sl.region_ref("items")).count.require()
+    assert len(set(observed)) > 1
+    assert observed[-1] == count
+    assert "f" * (10 * count) in sl.scene.Codec.dumps(result.scene)
+    assert result.certificate is sl.planning.CertificateScope.FAMILY
