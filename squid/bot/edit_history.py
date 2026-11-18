@@ -7,7 +7,6 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid_i18n import md_tr
 from squid_reactivity import ReactiveConflictError
 from squid_reactivity.transactions import ConflictDetail
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -52,12 +51,9 @@ def _record_local_edit[ValueT](
 
 
 async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo: bool = False) -> None:
-    """Apply a history control and report the same outcomes in every screen."""
+    """Apply a history control and report failures."""
     result = await stack.redo() if redo else await stack.undo()
-    if result.applied:
-        label = result.entry.label if result.entry is not None else ""
-        await event.notice(md_tr(t"edit-history-applied = Applied: {label}"))
-    elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
+    if result.status is sl.runtime.HistoryResultStatus.CONFLICT:
         await event.notice(tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted."))
     elif result.status is sl.runtime.HistoryResultStatus.NEEDS_RECONCILIATION:
         await event.notice(

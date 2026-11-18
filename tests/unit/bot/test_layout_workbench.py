@@ -193,11 +193,15 @@ async def test_tag_picker_undo_and_redo_preserve_build_fields(oversized: bool) -
         assert draft.tags.value == {"Flush", "Seamless"}
         with transaction():
             draft.build = replace(draft.build, title="New title")
-        await ui.press("edit-undo")
+        undo = await ui.press("edit-undo")
+        undo.response.send_message.assert_not_awaited()
+        undo.followup.send.assert_not_awaited()
         assert draft.tags.value == {"Flush"}
         assert draft.build.title == "New title"
         assert_within_limits(commit_render(ui.root))
-        await ui.press("edit-redo")
+        redo = await ui.press("edit-redo")
+        redo.response.send_message.assert_not_awaited()
+        redo.followup.send.assert_not_awaited()
         assert draft.tags.value == {"Flush", "Seamless"}
         await ui.press("tag-1")
         assert draft.tags.value == {"Seamless"}

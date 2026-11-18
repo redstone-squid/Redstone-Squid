@@ -20,7 +20,6 @@ from squid.edits.domain import (
     EditValues,
     Revision,
 )
-from squid_i18n import md_tr
 from squid_reactivity import Signal, current_transaction
 from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True, eq=False)
 class SavedEdit:
-    """A committed edit in session history, with the label shown in undo and redo notices."""
+    """A committed edit in session history."""
 
     receipt: EditReceipt
     label: TextLike
@@ -217,10 +216,10 @@ class EditController:
         if can_undo or can_redo:
 
             async def undo(event: sl.PressEvent) -> None:
-                await event.notice(await self._notice(self.undo))
+                await self._apply_history(event, self.undo)
 
             async def redo(event: sl.PressEvent) -> None:
-                await event.notice(await self._notice(self.redo))
+                await self._apply_history(event, self.redo)
 
             nodes.append(
                 sl.action_controls(
@@ -252,15 +251,13 @@ class EditController:
         )
 
     @staticmethod
-    async def _notice(step: Callable[[], Awaitable[SavedEdit | None]]) -> TextLike:
+    async def _apply_history(event: sl.PressEvent, step: Callable[[], Awaitable[SavedEdit | None]]) -> None:
         try:
-            entry = await step()
+            await step()
         except EditCommitUncertainError as error:
-            return error.public_text()
+            await event.notice(error.public_text())
         except DomainError:
-            return tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted.")
-        label = "" if entry is None else entry.label
-        return md_tr(t"edit-history-applied = Applied: {label}")
+            await event.notice(tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted."))
 
 
 def _require_writable_action() -> None:

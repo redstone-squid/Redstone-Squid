@@ -10361,22 +10361,6 @@
       "squid/bot/submission/ui/sections.py:232"
     ]
   },
-  "edit-history-applied": {
-    "fingerprint": "2f1bae13080b88ef9a5f8db6082e4fe15f4019605bd1c91501e46481f2062a00",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "label",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/bot/edit_controller.py:263",
-      "squid/bot/edit_history.py:59"
-    ]
-  },
   "edit-history-conflict": {
     "fingerprint": "54f31ed7cb31d38fed4ff6a7978cc1a32f1a3df5d8b681089af08e79525b511c",
     "attributes": [],

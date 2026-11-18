@@ -9,7 +9,7 @@ from squid.bot.edit_controller import EditController
 from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommitUncertainError, EditValues, RevisionConflictError
-from squid_ui.testing import keys
+from squid_ui.testing import RecordingResponder, control, keys, press_event
 from tests.support.unit_of_work import CommittedState
 from tests.unit.edits.test_executor import ACTOR, TARGET, Handler, Store, Work, command
 
@@ -31,13 +31,16 @@ async def test_undo_and_redo_follow_the_controllers_own_revisions() -> None:
     controller = controller_for(state)
     await controller.execute(command("First"), "First")
     await controller.execute(command("Second", 2), "Second")
-    assert await controller.undo() is not None
+    responder = RecordingResponder()
+    event = press_event(responder=responder)
+    await control(controller.controls(), "edit-undo").on_trigger(event)
     assert state.value.values.unpack()["name"] == "First"
     assert await controller.undo() is not None
     assert state.value.values.unpack()["name"] == "Original"
     assert state.value.revision == 5
+    await control(controller.controls(), "edit-redo").on_trigger(event)
     assert await controller.redo() is not None
-    assert await controller.redo() is not None
+    assert not responder.notices
     assert state.value.values.unpack()["name"] == "Second"
     assert state.value.revision == 7
     assert await controller.redo() is None

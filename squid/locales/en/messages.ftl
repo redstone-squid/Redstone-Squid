@@ -3161,9 +3161,6 @@ draft-options-name = Name contains
 # squid/bot/submission/ui/sections.py:232
 draft-options-search = Search choices
 
-# squid/bot/edit_controller.py:263, squid/bot/edit_history.py:59
-edit-history-applied = Applied: { $label }
-
 # squid/bot/edit_controller.py:261, squid/bot/edit_history.py:61
 edit-history-conflict = This edit changed elsewhere or is no longer permitted.
 
