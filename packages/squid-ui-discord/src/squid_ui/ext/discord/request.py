@@ -414,6 +414,20 @@ class Request(Generic[OwnerT, ClientT]):
         audience raises. Each Screen instance may be presented only once, including attempts
         that fail before delivery, so construct a fresh instance when retrying.
         """
+        return await self._respond_in_scope(
+            self.scope, content, files=files, parent=parent, session_key=session_key, **overrides
+        )
+
+    async def _respond_in_scope(
+        self,
+        scope: Scope[Any, ClientT],
+        content: FacadeContent[ClientT] | Response[Any],
+        *,
+        files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
+        **overrides: Unpack[ResponseOverrides],
+    ) -> ResponseResult:
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
@@ -439,7 +453,7 @@ class Request(Generic[OwnerT, ClientT]):
             if self._deferred is None and response_type is discord.InteractionResponseType.deferred_channel_message:
                 message = "the interaction was deferred outside this request ledger"
                 raise RuntimeError(message)
-        return await self.scope._respond_resolved(
+        return await scope._respond_resolved(
             self,
             resolved,
             overrides=overrides,

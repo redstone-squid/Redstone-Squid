@@ -162,14 +162,8 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
             raise RuntimeError(msg)
         if state.parent is not None:
             parent = state.parent._screen_flow
-            if (
-                parent.scope is None
-                or parent.scope.runtime is not scope.runtime
-                or parent.closing
-                or parent.root is None
-                or parent.root.finished
-            ):
-                msg = "the parent screen is no longer available in this runtime"
+            if parent.scope is not scope or parent.closing or parent.root is None or parent.root.finished:
+                msg = "the parent screen is no longer available in this scope"
                 raise RuntimeError(msg)
         state.claimed = True
         state.scope = scope
@@ -365,7 +359,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         if request._transaction is not None:
             request._transaction.after_rollback(lambda *_args: host.start_cleanup(rollback_child))
         try:
-            result = await request.respond(child, **overrides)
+            result = await request._respond_in_scope(scope, child, **overrides)
         except BaseException as error:
             try:
                 with anyio.CancelScope(shield=True):
