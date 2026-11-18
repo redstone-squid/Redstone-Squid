@@ -15,6 +15,7 @@ from squid.bot.i18n import localization_resolver
 from squid.bot.limits import CommandLimits
 from squid.bot.members import DiscordMembers
 from squid.bot.ui import HOST_DEFAULTS
+from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.actors import Actor
 from squid.diagnostics.application import ErrorReportService
 from squid.permissions.application import PermissionService
@@ -209,7 +210,7 @@ def make_autocomplete_interaction(
     locale: str = "en-US",
     account_id: int = 11,
     allowed_nodes: frozenset[str] = frozenset(),
-) -> discord.Interaction[discord.Client]:
+) -> BotInteraction:
     """Create the interaction contract an autocomplete callback reads.
 
     Install suggestions, a fixed account resolver, and a permission fake that grants only
@@ -232,7 +233,7 @@ def make_autocomplete_interaction(
     interaction.guild = None if guild_id is None else _Identity(guild_id)
     interaction.guild_id = guild_id
     interaction.locale = locale
-    return cast(discord.Interaction[discord.Client], interaction.source)
+    return cast(BotInteraction, interaction.source)
 
 
 @dataclass(frozen=True, slots=True)

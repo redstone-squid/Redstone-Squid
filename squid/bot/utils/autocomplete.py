@@ -7,8 +7,8 @@ because autocomplete bypasses the command tree's normal error handler.
 """
 
 import logging
-from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Coroutine, Mapping
+from typing import TYPE_CHECKING
 
 import anyio
 import discord
@@ -41,14 +41,13 @@ AUTOCOMPLETE_CHOICE_LIMIT = 25
 CHOICE_NAME_LIMIT = 100
 """Discord's cap on a choice's display name."""
 
-type ContextResolver = Callable[[discord.Interaction[Any]], Mapping[str, str]]
-type AutocompleteCallback = Callable[
-    [discord.Interaction[Any], str],
-    Any,
-]
+type BotInteraction = discord.Interaction[squid.bot.app.RedstoneSquid]
+type SuggestionChoice = app_commands.Choice[str | int | float]
+type ContextResolver = Callable[[BotInteraction], Mapping[str, str]]
+type AutocompleteCallback = Callable[[BotInteraction, str], Coroutine[object, object, list[SuggestionChoice]]]
 
 
-def guild_context(interaction: discord.Interaction[Any]) -> Mapping[str, str]:
+def guild_context(interaction: BotInteraction) -> Mapping[str, str]:
     """Scope a source to the guild the command was run in."""
     return {} if interaction.guild_id is None else {"guild_id": str(interaction.guild_id)}
 
@@ -67,9 +66,9 @@ def suggests(
     """
 
     async def autocomplete(
-        interaction: discord.Interaction[Any],
+        interaction: BotInteraction,
         current: str,
-    ) -> list[app_commands.Choice[Any]]:
+    ) -> list[SuggestionChoice]:
         with trace_span("suggestions.autocomplete", {"squid.suggestion.source": source}):
             try:
                 # Include identity and permission lookups in Discord's response budget.
@@ -89,7 +88,7 @@ def suggests(
 class _InteractionAuthorizer:
     """Answer permission questions for the user behind an autocomplete interaction."""
 
-    def __init__(self, interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
+    def __init__(self, interaction: BotInteraction) -> None:
         self._interaction = interaction
 
     async def allows(self, node: str) -> bool:
@@ -97,13 +96,13 @@ class _InteractionAuthorizer:
 
 
 async def _choices(
-    interaction: discord.Interaction[Any],
+    interaction: BotInteraction,
     source_id: str,
     current: str,
     context: ContextResolver | None,
     *,
     multi: bool,
-) -> list[app_commands.Choice[Any]]:
+) -> list[SuggestionChoice]:
     service = interaction.client.services.suggestions
     source = service.registry.get(source_id)
     if source is None:
@@ -140,14 +139,14 @@ def _spliced_choice(
     query: str,
     span: ReplacementSpan,
     prefix: str,
-) -> app_commands.Choice[str]:
+) -> SuggestionChoice:
     """Rebuild the whole option value with one span replaced."""
     value = prefix + query[: span.start] + item.value + query[span.end :]
     return app_commands.Choice(name=_truncate(value), value=value)
 
 
 async def _viewer(
-    interaction: discord.Interaction[Any],
+    interaction: BotInteraction,
     source: SuggestionSource,
 ) -> Actor:
     """Resolve the caller's identity, paying for the account lookup only when a source needs it."""
@@ -171,7 +170,7 @@ def _choice(
     source: SuggestionSource,
     prefix: str,
     separator: str | None,
-) -> app_commands.Choice[Any]:
+) -> SuggestionChoice:
     if separator is not None:
         # A list-valued parameter is a string parameter by construction, whatever the type of the
         # individual entries: the value carries everything already typed alongside this one.
