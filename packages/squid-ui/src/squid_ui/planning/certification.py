@@ -6,7 +6,7 @@ inside the work allowance, so a retained family already has all its outputs.
 """
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from squid_ui.authoring.presentations import Budget
 from squid_ui.authoring.semantic import Budgeted
@@ -30,6 +30,7 @@ from squid_ui.planning.composition import (
     evaluate_composition,
 )
 from squid_ui.planning.fragments import FragmentTree
+from squid_ui.planning.layout_snapshot import LayoutSnapshot
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantic_correspondence import budget_floor
 
@@ -187,6 +188,7 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         peaks: dict[OccurrenceId, ResourceCost] = {}
         page_violations: dict[tuple[OccurrenceId, int], int] = {}
         pages: list[CertifiedPage[OutputT]] = []
+        snapshot = LayoutSnapshot(family, self.context) if self.context.inspect_layout else None
         for coordinates, visible in family.combinations(self.context):
             self.context.work.consume()
             try:
@@ -221,6 +223,8 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                 self.context.work.consume()
                 page_violations[key] = max(page_violations.get(key, 0), shortfall)
             built = construct_composition(admitted, self.rules, self.context)
+            if snapshot is not None:
+                built = replace(built, layout=snapshot.context(dict(coordinates)))
             self.context.work.consume()
             pages.append(CertifiedPage(coordinates, self.finalize(built, self.context)))
             self.certified_combinations += 1

@@ -38,6 +38,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     snapshot: PlanningSnapshot[BodyT] | None = None,
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    inspect_layout: bool = False,
 ) -> PlanResult[BodyT]:
     """Choose a target layout and return its Scene, handlers, and planning diagnostics.
 
@@ -72,6 +73,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
         nav=nav,
         session=session,
         search_budget=search_budget,
+        inspect_layout=inspect_layout,
         composition=composition,
     )
     return plan_request(rendered, request, cache=cache, snapshot=snapshot)

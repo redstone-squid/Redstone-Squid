@@ -27,7 +27,15 @@ from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleE
 from squid_ui.planning.planner import plan
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.resources import ResourceCost
-from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
+from squid_ui.planning.result import (
+    CertificateScope,
+    PlanEvent,
+    PlanMetrics,
+    PlanReport,
+    PlanResult,
+    PlanReuse,
+    PlanSeverity,
+)
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.spread import MessageSpread, plan_spread
 from squid_ui.planning.target import PreparedExtension, Target
@@ -39,6 +47,7 @@ __all__ = [
     "AllocationGoal",
     "AtomicContract",
     "AutomaticComposition",
+    "CertificateScope",
     "CompositionOptions",
     "CompositionRejectedError",
     "FixedComposition",

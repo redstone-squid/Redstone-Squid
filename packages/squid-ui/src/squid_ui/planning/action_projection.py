@@ -9,7 +9,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from squid_ui import scene
 from squid_ui._presentation import PresentationCells
@@ -27,8 +27,11 @@ from squid_ui.planning.identity_cache import CacheStats, IdentityCache
 from squid_ui.planning.interaction_handlers import RouteSelection
 from squid_ui.planning.offers.navigation import control_key, grouped_control_key
 from squid_ui.planning.resources import ResourceCost
-from squid_ui.planning.result import PlanMetrics, PlanReport, PlanResult
+from squid_ui.planning.result import CertificateScope, PlanMetrics, PlanReport, PlanResult
 from squid_ui.planning.semantic_index import SemanticGraph
+
+if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +73,8 @@ class ActionPage[BodyT: scene.Body]:
     effects: tuple[FidelityEffect, ...]
     bindings: Mapping[str, ActionSlot | ActionGroupSlot]
     slot: int
+    layout: LayoutContext | None = None
+    certificate: CertificateScope = CertificateScope.VIEW
 
     @classmethod
     def prepare(
@@ -108,6 +113,8 @@ class ActionPage[BodyT: scene.Body]:
                 result.effects,
                 MappingProxyType(bindings),
                 slot,
+                result.layout,
+                result.certificate,
             ),
             PageBindings(MappingProxyType(live), result.form_bindings, result.form_plans, result.resources),
         )
@@ -165,6 +172,8 @@ class ActionPage[BodyT: scene.Body]:
             metrics=self.metrics,
             cost=self.cost,
             effects=self.effects,
+            layout=self.layout,
+            certificate=self.certificate,
         )
 
 

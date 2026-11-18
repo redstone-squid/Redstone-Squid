@@ -143,6 +143,34 @@ class TreeIndex:
             raise ValueError(msg)
         return match._index
 
+    @classmethod
+    def capture(
+        cls,
+        matches: tuple[Match[object], ...],
+        parents: tuple[int | None, ...],
+        ends: tuple[int, ...],
+        token: object,
+    ) -> TreeIndex:
+        """Index an adapter's depth-first occurrences and subtree boundaries."""
+        by_type: dict[type, list[int]] = {}
+        by_key: dict[tuple[str, str], list[int]] = {}
+        for match in matches:
+            for kind in type(match.node).__mro__:
+                # Custom instance checks (including virtual ABC registrations) remain predicates.
+                if type(kind) is type:
+                    by_type.setdefault(kind, []).append(match._index)
+            for name, value in (("key", match.key), ("qualified_key", match.qualified_key)):
+                if value is not None:
+                    by_key.setdefault((name, value), []).append(match._index)
+        return cls(
+            matches,
+            parents,
+            ends,
+            token,
+            MappingProxyType({kind: tuple(indices) for kind, indices in by_type.items()}),
+            MappingProxyType({key: tuple(indices) for key, indices in by_key.items()}),
+        )
+
 
 _INDEX_LOCK = RLock()
 
@@ -226,21 +254,4 @@ def _build_index(tree: object, *, children: Children) -> TreeIndex:
 
     for index, root in enumerate(roots):
         visit(root, f"$/{index}", None, None, "$" if rendered is not None else None)
-    by_type: dict[type, list[int]] = {}
-    by_key: dict[tuple[str, str], list[int]] = {}
-    for match in matches:
-        for kind in type(match.node).__mro__:
-            # Custom instance checks (including virtual ABC registrations) remain predicates.
-            if type(kind) is type:
-                by_type.setdefault(kind, []).append(match._index)
-        for name, value in (("key", match.key), ("qualified_key", match.qualified_key)):
-            if value is not None:
-                by_key.setdefault((name, value), []).append(match._index)
-    return TreeIndex(
-        tuple(matches),
-        tuple(parents),
-        tuple(ends),
-        token,
-        MappingProxyType({kind: tuple(indices) for kind, indices in by_type.items()}),
-        MappingProxyType({key: tuple(indices) for key, indices in by_key.items()}),
-    )
+    return TreeIndex.capture(tuple(matches), tuple(parents), tuple(ends), token)

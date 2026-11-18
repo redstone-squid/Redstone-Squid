@@ -30,6 +30,7 @@ from squid_ui.planning.semantic_index import SemanticGraph, SemanticValue
 from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
     from squid_ui.planning.adapter import ExtensionAdapter
 
 
@@ -316,6 +317,7 @@ class PlanningContext:
     presentation: PresentationState = field(default_factory=PresentationState)
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
     limits: TargetLimits | None = None
+    inspect_layout: bool = False
 
 
 @immutable
@@ -461,6 +463,7 @@ class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]
     evaluation: Evaluation[ResourceT, PreparationT]
     bindings: Mapping[str, ActionBinding] = field(default_factory=dict)
     forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
+    layout: LayoutContext | None = field(default=None, kw_only=True)
 
 
 def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](

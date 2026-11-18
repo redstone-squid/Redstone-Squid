@@ -48,6 +48,7 @@ class StaticPlanOptions(TypedDict, total=False):
     strict: bool
     nav: PlannedNav | None
     reservation: ResourceCost
+    inspect_layout: bool
     composition: CompositionOptions | None
 
 
@@ -87,6 +88,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     session: PresentationState | None = None
     composition: CompositionOptions | CompositionPlanner[RenderTargetT, BodyT] | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET
+    inspect_layout: bool = False
     fingerprints: FingerprintCache | None = field(default=None, compare=False, repr=False)
     presentation: PresentationState = field(init=False, compare=False, repr=False)
     """`session`, or the empty state standing in for it -- resolved once, so that a request
@@ -111,6 +113,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             getattr(self.nav, "version", 0),
             self.composition is None,
             self.search_budget,
+            self.inspect_layout,
         )
 
     def exact_key(self) -> tuple[object, ...]:

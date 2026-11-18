@@ -7,6 +7,7 @@ updates remain here; hosts apply updates only after successfully delivering the 
 from collections.abc import Callable, Mapping
 from dataclasses import field, replace
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from squid_ui._dataclass import immutable
 from squid_ui.authoring.presentations import FidelityEffect
@@ -18,6 +19,14 @@ from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.presentation_state import SessionUpdate
 from squid_ui.scene.model import Body, Scene
+
+if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
+
+
+class CertificateScope(StrEnum):
+    VIEW = "view"
+    FAMILY = "family"
 
 
 class PlanSeverity(StrEnum):
@@ -72,6 +81,7 @@ class PlanMetrics:
     generated_states: int = 0
     target_evaluations: int = 0
     certified_combinations: int = 0
+    context_rounds: int = 0
     partition_hint: bool = False
     """A cached partition was offered to search; it still required current certification."""
 
@@ -109,6 +119,9 @@ class PlanResult[BodyT = Body]:
     discard them if delivery fails so planning does not move stored page or selection
     values ahead of the display the reader received.
     """
+
+    layout: LayoutContext | None = field(default=None, kw_only=True, compare=False, repr=False)
+    certificate: CertificateScope = field(default=CertificateScope.VIEW, kw_only=True)
 
     allocation: AllocationSelection[PlanResult[BodyT]] | None = field(default=None, kw_only=True)
 

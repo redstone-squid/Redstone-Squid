@@ -34,7 +34,7 @@ from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupported
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
-from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
+from squid_ui.planning.result import CertificateScope, PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
 from squid_ui.planning.snapshot import PlanningSnapshot
 
@@ -97,6 +97,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         presentation=request.presentation,
         extensions=request.target.extensions,
         limits=effective.limits,
+        inspect_layout=request.inspect_layout,
     )
 
 
@@ -169,6 +170,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 form_bindings=MappingProxyType(dict(output.form_bindings)),
                 form_plans=MappingProxyType(dict(output.form_plans)),
                 resources=MappingProxyType(dict(output.resources)),
+                certificate=CertificateScope.FAMILY,
             )
 
         try:
@@ -270,6 +272,7 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
         metrics=PlanMetrics(work_used=context.work.spent),
         cost=built.evaluation.cost,
         effects=effects,
+        layout=built.layout,
     )
 
 
