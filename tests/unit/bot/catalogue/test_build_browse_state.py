@@ -878,7 +878,6 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
             assert screen._query.endswith(f"width<={value}")
             assert "## Search results" in ui.texts()
             ui.assert_within_limits()
-        assert editor.clause_page == 2
         ui.control(ui.key_for("edit-4"))
         results = screen._results
         query = screen._query
@@ -890,7 +889,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         assert editor.filter_open
         assert editor.selected is not None
         assert editor.selected.name == "width"
-        assert editor.clause_page == 2
+        ui.control(ui.key_for("edit-4"))
         await ui.press(ui.key_for("field"))
         assert not editor.filter_open
         assert screen._guided is editor
@@ -1076,9 +1075,17 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         ui.control(ui.key_for("schematic-info"))
         ui.control(ui.key_for("search.back"))
         ui.assert_within_limits()
-        await ui.press(ui.key_for("next-clauses"))
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if "__cursor_next." in key and key.endswith("clauses"))
+        )
         ui.control(ui.key_for("edit-2"))
-        await ui.press(ui.key_for("previous-clauses"))
+        await ui.press(
+            next(
+                key
+                for key in ui.root.snapshot().handler_keys
+                if "__cursor_previous." in key and key.endswith("clauses")
+            )
+        )
         await toggle_help(ui)
         for tab in ("fields", "syntax", "examples"):
             await ui.press(ui.key_for(f"search-reference.{tab}"))

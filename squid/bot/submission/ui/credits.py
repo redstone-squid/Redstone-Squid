@@ -31,8 +31,6 @@ def edit_credit(credit: Credit, name: str, role: CreditRole) -> Credit:
 
 
 class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
-    page: int = sl.state(0)
-
     def __init__(self, workspace: AnswerWorkspace, field_id: str) -> None:
         self.workspace = workspace
         self.field_id = field_id
@@ -41,11 +39,10 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         credits = tuple(read_credits(self.workspace.answers.get(self.field_id, [])))
         revision = self.workspace.revision
-        page = min(self.page, max(0, (len(credits) - 1) // 5))
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [sl.heading(tr(t"credits-title = Credits"))]
-        for index in range(page * 5, min(len(credits), (page + 1) * 5)):
-            credit = credits[index]
-            nodes.append(
+        rows: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
+        for index, credit in enumerate(credits):
+            rows.append(
                 sl.stack(
                     sl.paragraph(f"{credit.name} · {credit.kind.value.replace('_', ' ')} · {credit.role.value}"),
                     sl.action_controls(
@@ -73,8 +70,10 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                         ),
                         key=f"credit-{index}",
                     ),
-                )
+                ).unbreakable()
             )
+        if rows:
+            nodes.append(sl.region(*rows, key="credits", title="", page_size=5))
         nodes.append(
             sl.action_controls(
                 sl.form(
@@ -129,24 +128,6 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
                 key="add-credit",
             )
         )
-        if len(credits) > 5:
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"credits-previous = Previous credits"),
-                        partial(self._page, page - 1),
-                        key="previous",
-                        available=page > 0,
-                    ),
-                    sl.action_control(
-                        tr(t"credits-next = Next credits"),
-                        partial(self._page, page + 1),
-                        key="next",
-                        available=(page + 1) * 5 < len(credits),
-                    ),
-                    key="credit-pages",
-                )
-            )
         return tuple(nodes)
 
     async def _save(self, transaction: sl.runtime.Transaction, credits: tuple[Credit, ...], revision: int) -> None:
@@ -194,9 +175,6 @@ class CreditEditor(sl.Component[ComponentsV2Target, sd.Request]):
             role=form.role,
         )
         await self._save(event.transaction, (*credits, credit), revision)
-
-    async def _page(self, page: int, event: sd.PressEvent) -> None:
-        self.page = max(0, page)
 
 
 class _IdentityReferenceForm(sl.forms.Form[sd.Request[Any, Any]]):

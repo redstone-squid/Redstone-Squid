@@ -42,8 +42,10 @@ from squid.submissions.domain.finalization import (
 )
 from squid_i18n import Text, md_tr
 from squid_ui.content.text import TextLike, md
+from squid_ui.ext.discord.primitives import SelectMenu
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import PressHandler
+from squid_ui.pages import RevealPage
 
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""
@@ -168,8 +170,6 @@ class SectionEditorScreen(sd.Screen[None]):
     """
 
     policy = sd.ResponseSpec(audience="personal", timeout=600, live_updates=True, session=DETAIL_SESSION)
-    picker_pages: Mapping[str, int] = sl.state({})
-    """The page each catalogue field's select menu shows, keyed by field ID."""
     picker_queries: Mapping[str, str] = sl.state({})
 
     def __init__(self, workspace: AnswerWorkspace, section_id: str) -> None:
@@ -249,51 +249,50 @@ class SectionEditorScreen(sd.Screen[None]):
         if not options:
             lines.append(tr(t"draft-options-empty = No matching choices. Clear the search to see all choices."))
             return [sd.v2.text(Text.join("\n", lines)), search]
-        pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
-        page = self._picker_page(field, options)
         multiple = field.value_kind is ValueKind.STRING_LIST
-        shown = options[page * PICKER_PAGE_SIZE : (page + 1) * PICKER_PAGE_SIZE]
-        if pages > 1:
-            page_number = page + 1
-            lines.append(
-                md_tr(
-                    t"draft-editor-picker-pages-multiple = -# Page {page_number} of {pages}. "
-                    t"Choices on other pages are kept.",
+        windows: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
+        for start in range(0, len(options), PICKER_PAGE_SIZE):
+            shown = options[start : start + PICKER_PAGE_SIZE]
+            visible = tuple(option.value for option in shown)
+            windows.append(
+                sd.v2.select(
+                    *(
+                        sd.v2.option(option.label[:100], option.value, default=option.value in selected)
+                        for option in shown
+                    ),
+                    on_select=partial(self._select_value, field.id, visible=visible),
+                    key=f"pick_{field.id}_{start}",
+                    placeholder=tr(t"draft-editor-choose = Choose…"),
+                    min_values=1 if field.required and not multiple else 0,
+                    max_values=len(shown) if multiple else 1,
                 )
-                if multiple
-                else md_tr(t"draft-editor-picker-pages = -# Page {page_number} of {pages}.")
             )
-        children: list[Any] = [
+        first = next((index for index, option in enumerate(options) if option.value in selected), 0)
+        first_window = first // PICKER_PAGE_SIZE * PICKER_PAGE_SIZE
+
+        def selection_hint(ctx: sl.LayoutContext) -> sl.LayoutNode:
+            count = ctx.region().count
+            return (
+                sl.note(tr(t"draft-editor-picker-other-pages = Choices on other pages are kept."))
+                if multiple and (isinstance(count, sl.Unknown) or count.value > 1)
+                else sl.group()
+            )
+
+        return [
             sd.v2.text(Text.join("\n", lines)),
             search,
-            sd.v2.select(
-                *(sd.v2.option(option.label[:100], option.value, default=option.value in selected) for option in shown),
-                on_select=partial(self._select_value, field.id),
-                key=f"pick_{field.id}",
-                placeholder=tr(t"draft-editor-choose = Choose…"),
-                min_values=1 if field.required and not multiple else 0,
-                max_values=len(shown) if multiple else 1,
+            sl.region(
+                *windows,
+                key=f"picker_{field.id}",
+                title="",
+                page_size=1,
+                page=RevealPage(
+                    anchor=sl.element_ref(SelectMenu, f"pick_{field.id}_{first_window}"),
+                    request=self.picker_queries.get(field.id, ""),
+                ),
+                footer=(sl.context(selection_hint, key=f"hint_{field.id}"),) if multiple else (),
             ),
         ]
-        if pages > 1:
-            children.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"draft-editor-previous-page = Previous page"),
-                        partial(self._turn_page, field.id, page, -1),
-                        key=f"previous_{field.id}",
-                        available=page > 0,
-                    ),
-                    sl.action_control(
-                        tr(t"draft-editor-next-page = Next page"),
-                        partial(self._turn_page, field.id, page, 1),
-                        key=f"next_{field.id}",
-                        available=page < pages - 1,
-                    ),
-                    key=f"pages_{field.id}",
-                )
-            )
-        return children
 
     def _matching_options(self, field: FormField) -> tuple[ChoiceOption, ...]:
         query = self.picker_queries.get(field.id, "").casefold().strip()
@@ -305,16 +304,6 @@ class SectionEditorScreen(sd.Screen[None]):
 
     async def _search_options(self, field_id: str, event: sd.SubmitEvent) -> None:
         self.picker_queries = {**self.picker_queries, field_id: str(event.values.get("query") or "")}
-        self.picker_pages = {**self.picker_pages, field_id: 0}
-
-    def _picker_page(self, field: FormField, options: Sequence[ChoiceOption]) -> int:
-        """The page a picker shows: the one last turned to, else the page with the first choice."""
-        pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
-        if field.id in self.picker_pages:
-            return min(self.picker_pages[field.id], pages - 1)
-        selected = _as_list(self.workspace.stored_answers.get(field.id))
-        first = next((index for index, option in enumerate(options) if option.value in selected), 0)
-        return first // PICKER_PAGE_SIZE
 
     async def _edit_form(self, chunk_id: str, event: sd.PressEvent) -> None:
         section = self.workspace.section(self.section_id)
@@ -322,23 +311,17 @@ class SectionEditorScreen(sd.Screen[None]):
         if chunk is not None:
             await present_chunk_form(self.workspace, chunk, event)
 
-    async def _select_value(self, field_id: str, event: sd.SelectionEvent) -> None:
+    async def _select_value(self, field_id: str, event: sd.SelectionEvent, *, visible: tuple[str, ...]) -> None:
         ws = self.workspace
         field = next(field for field in ws.fields if field.id == field_id)
         value: JSONValue
         if field.value_kind is ValueKind.STRING_LIST:
-            options = self._matching_options(field)
-            page = self._picker_page(field, options)
-            visible = {option.value for option in options[page * PICKER_PAGE_SIZE : (page + 1) * PICKER_PAGE_SIZE]}
             # A select menu reports only its own page; keep the choices made on other pages.
             retained = [item for item in _as_list(ws.stored_answers.get(field.id)) if item not in visible]
             value = [*retained, *event.values]
         else:
             value = event.values[0] if event.values else None
         await ws.save_values(event.transaction, {field.id: value})
-
-    async def _turn_page(self, field_id: str, current: int, step: int, event: sd.PressEvent) -> None:
-        self.picker_pages = {**self.picker_pages, field_id: max(0, current + step)}
 
     async def _done(self, event: sd.PressEvent) -> None:
         self.complete(event, None)

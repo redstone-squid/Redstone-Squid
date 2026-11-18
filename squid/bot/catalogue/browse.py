@@ -78,6 +78,7 @@ class _BuildSource:
     capabilities = sl.sources.SourceCapabilities(
         backward=True,
         offsets=True,
+        fixed_groups=True,
         jumpable=True,
         count=sl.sources.CountPrecision.EXACT,
     )

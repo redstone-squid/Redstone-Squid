@@ -19,6 +19,7 @@ from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.selectors import select
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -32,22 +33,11 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     category: str | None = sl.state(None)
     opened: str | None = sl.state(None)
     notice: sl.TextLike = sl.state("")
-    page: int = sl.state(0)
 
     def __init__(self, services: BotServices, run_id: UUID, candidates: tuple[InferenceCandidate, ...]) -> None:
         self.services = services
         self.run_id = run_id
         self.candidates = candidates
-
-    @property
-    def visible_candidates(self) -> tuple[InferenceCandidate, ...]:
-        """Return the Discord-sized candidate window for the current page."""
-        start = self.page * 25
-        return self.candidates[start : start + 25]
-
-    @property
-    def page_count(self) -> int:
-        return max(1, (len(self.candidates) + 24) // 25)
 
     @override
     def render(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
@@ -81,50 +71,55 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                 )
             )
             return nodes
-        nodes.append(
-            sl.choices(
-                *(
-                    sl.choice(_candidate_label(number, item), key=str(item.id))
-                    for number, item in enumerate(self.visible_candidates, start=self.page * 25 + 1)
-                ),
-                key="candidate",
-                selection=sl.controlled((self.selected,) if self.selected else (), self._select),
-            )
-        )
-        if len(self.candidates) > 25:
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"inference-candidates-previous = Previous candidates"),
-                        self._previous,
-                        key="previous",
-                        available=self.page > 0,
+        candidates = self.candidates
+        selected = self.selected
+        windows: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
+        for start in range(0, len(candidates), 25):
+            shown = candidates[start : start + 25]
+            windows.append(
+                sl.choices(
+                    *(
+                        sl.choice(_candidate_label(index, item), key=str(item.id))
+                        for index, item in enumerate(shown, start + 1)
                     ),
-                    sl.action_control(
-                        tr(t"inference-candidates-next = More candidates"),
-                        self._next,
-                        key="next",
-                        available=self.page + 1 < self.page_count,
+                    key=f"candidate-{start}",
+                    selection=sl.controlled(
+                        (selected,) if selected is not None and any(str(item.id) == selected for item in shown) else (),
+                        self._select,
                     ),
-                    key="candidate_pages",
-                )
+                ).unbreakable()
             )
+        nodes.append(sl.region(*windows, key="candidates", title="", page_size=1))
         current = next((item for item in self.candidates if str(item.id) == self.selected), None)
+        details: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         if current is not None:
             if current.facts.category is None:
-                nodes.append(
+                details.append(
                     sl.choices(
                         *(sl.choice(item.value, key=item.value) for item in BuildCategory),
                         key="category",
                         selection=sl.controlled((self.category,) if self.category else (), self._category),
                     )
                 )
-            nodes.append(
+            details.append(
                 sl.action_controls(
                     sl.action_control(tr(t"inference-candidates-open = Open candidate draft"), self._open, key="open"),
                     key="actions",
                 )
             )
+
+        def visible_details(
+            ctx: sl.LayoutContext,
+        ) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+            visible = ctx.visible.query(select(sl.semantic.Choices)).all()
+            return (
+                tuple(details)
+                if selected is not None
+                and any(choice.key == selected for match in visible for choice in match.node.choices)
+                else ()
+            )
+
+        nodes.append(sl.context(visible_details, key="candidate-details"))
         if self.opened:
             nodes.append(
                 primitives.Section(
@@ -149,7 +144,6 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
             candidates = await self.services.submission_inference.resume(self.run_id, actor)
             if candidates is not None:
                 self.candidates = candidates
-                self.page = min(self.page, self.page_count - 1)
                 await admit_candidates(self.services, candidates, actor=actor)
                 self.notice = tr(
                     t"inference-candidates-recovered = Retained inference recovered. Open a candidate to continue."
@@ -164,20 +158,6 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
 
     async def _category(self, event: sl.ChoiceEvent) -> None:
         self.category = event.selected[0]
-
-    async def _previous(self, event: sl.PressEvent) -> None:
-        del event
-        if self.page > 0:
-            self.page -= 1
-            self.selected = None
-            self.category = None
-
-    async def _next(self, event: sl.PressEvent) -> None:
-        del event
-        if self.page + 1 < self.page_count:
-            self.page += 1
-            self.selected = None
-            self.category = None
 
     async def _open(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         actor = await event.context.client.actors.resolve(event.context)

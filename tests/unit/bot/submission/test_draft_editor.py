@@ -66,7 +66,6 @@ from squid.tags.models import TagDefinition
 from squid_reactivity import LocalTopicBus
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.modal import build_form_modal
-from squid_ui.ext.discord.primitives import SelectMenu
 from squid_ui.ext.discord.testing import commit_render, payload_problems, stage
 from squid_ui.interactions.forms import FormValueError
 from squid_ui.runtime import transaction
@@ -417,7 +416,9 @@ async def test_a_choice_in_an_editor_message_redraws_the_panel() -> None:
     assert not panel.runtime.dirty
 
     with transaction() as tx:
-        await child._select_value("patterns", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)))
+        await child._select_value(
+            "patterns", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)), visible=("full_lamp",)
+        )
 
     # The save went through the shared workspace, so the panel's message is scheduled to redraw.
     assert panel.runtime.dirty
@@ -495,15 +496,15 @@ async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     with transaction() as tx:
         await editor.workspace.save_values(tx, {"source_version": "Java 1.2"})
     child = SectionEditorScreen(editor.workspace, "dimensions_versions")
-    text = rendered_text(child)
-    assert "Page 2 of 2." in text
-    assert "Choices on other pages are kept" not in text
-    (select,) = find_all(child.render(), SelectMenu)
-    assert [source_text(option.label) for option in select.options if option.default] == ["Java 1.2"]
-    with transaction() as tx:
-        await child._select_value("source_version", Mock(spec=sd.SelectionEvent, transaction=tx, values=("Java 1.1",)))
-    assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
-    assert "Minecraft version: Java 1.1" in rendered_text(editor)
+    async with stage(child, owner=object()) as ui:
+        text = "\n".join(ui.texts())
+        assert "Page 2 of 2" in text
+        assert "Choices on other pages are kept" not in text
+        menu = ui.control(ui.key_for("pick_source_version_25")).payload
+        assert [option["label"] for option in menu["options"] if option.get("default")] == ["Java 1.2"]
+        await ui.select(ui.key_for("pick_source_version_25"), ["Java 1.1"])
+        assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
+        assert "Minecraft version: Java 1.1" in rendered_text(editor)
 
 
 async def test_files_are_listed_with_a_status_only_when_they_need_attention() -> None:
@@ -757,10 +758,14 @@ async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
     child = SectionEditorScreen(ws, "taxonomy")
     with transaction() as tx:
         await child._search_options("restrictions", Mock(spec=sd.SubmitEvent, values={"query": "lamp"}))
-        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)))
+        await child._select_value(
+            "restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)), visible=("full_lamp",)
+        )
     assert ws.stored_answers["restrictions"] == ["funnel", "full_lamp"]
     with transaction() as tx:
-        await child._select_value("restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=()))
+        await child._select_value(
+            "restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=()), visible=("full_lamp",)
+        )
     assert ws.stored_answers["restrictions"] == ["funnel"]
 
 
@@ -823,3 +828,50 @@ async def test_credit_reference_form_preserves_existing_evidence(
     )
     assert ws.stored_answers["credits"] == [existing.to_json(), expected.to_json()]
     assert drafts.changes[-1].base_revision == revision
+
+
+async def test_credit_editor_pages_and_edits_rows_beyond_the_first_window() -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    ws = editor.workspace
+    credits = tuple(Credit(name=f"Builder {i}", kind=CreditKind.NAME) for i in range(7))
+    with transaction() as tx:
+        await ws.save_values(tx, {"credits": [credit.to_json() for credit in credits]})
+    child = SectionEditorScreen(ws, "identity")
+    async with stage(child, owner=object()) as ui:
+        ui.control(ui.key_for("edit-0"))
+        next_page = next(
+            key for key in ui.root.snapshot().handler_keys if "__cursor_next." in key and key.endswith("credits")
+        )
+        await ui.press(next_page)
+        form = await ui.press_for_form(ui.key_for("edit-5"))
+        await form.submit({"name": "Updated builder", "role": ["designer"]})
+        saved = ws.stored_answers["credits"]
+        assert isinstance(saved, list)
+        assert saved[5] == replace(credits[5], name="Updated builder", role=CreditRole.DESIGNER).to_json()
+        assert saved[0] == credits[0].to_json()
+        ui.assert_within_limits()
+
+
+async def test_catalogue_picker_keeps_selection_across_runtime_pages() -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    ws = editor.workspace
+    field = next(field for field in ws.fields if field.id == "restrictions")
+    assert field.option_source is not None
+    options = tuple(ChoiceOption(f"restriction-{i}", f"Restriction {i}") for i in range(31))
+    ws.option_sets = {**ws.option_sets, field.option_source: options}
+    child = SectionEditorScreen(ws, "taxonomy")
+    async with stage(child, owner=object()) as ui:
+        await ui.select(ui.key_for("pick_restrictions_0"), ["restriction-0"])
+        next_page = next(
+            key
+            for key in ui.root.snapshot().handler_keys
+            if "__cursor_next." in key and key.endswith("picker_restrictions")
+        )
+        await ui.press(next_page)
+        await ui.select(ui.key_for("pick_restrictions_25"), ["restriction-30"])
+        assert ws.stored_answers["restrictions"] == ["restriction-0", "restriction-30"]
+        await ui.select(ui.key_for("pick_restrictions_25"), [])
+        assert ws.stored_answers["restrictions"] == ["restriction-0"]
+        ui.assert_within_limits()

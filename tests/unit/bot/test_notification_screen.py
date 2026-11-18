@@ -327,19 +327,24 @@ async def test_follows_after_the_first_page_can_be_selected_and_named() -> None:
         for index in range(1, 32)
     )
     screen.settings.labels = {31: "Last builder"}
-    await choose(screen.subscriptions, "unfollow", "1")
-    await press(screen.subscriptions, "next")
-    assert [row.id for row in screen.subscriptions.subscriptions] == list(range(26, 32))
-    assert "Last builder" in labels(render_tree(screen.subscriptions))
-    await choose(screen.subscriptions, "unfollow", "31")
-    assert screen.subscriptions.selected_ids == ("1", "31")
-    await press(screen.subscriptions, "previous")
-    assert screen.subscriptions.selected_ids == ("1", "31")
-    screen.settings.subscriptions = screen.settings.subscriptions[:10]
-    screen.subscriptions.page = 1
-    screen.subscriptions.reconcile_selection()
-    assert screen.subscriptions.page == 0
-    assert screen.subscriptions.selected_ids == ("1",)
+    async with stage(screen.subscriptions, owner=object()) as ui:
+        await ui.select(ui.key_for("unfollow-0"), ["1"])
+        await ui.press(ui.key_for("__cursor_next.$/follows"))
+        shown = ui.control(ui.key_for("unfollow-25")).payload["options"]
+        assert [option["value"] for option in shown] == [str(index) for index in range(26, 32)]
+        assert any(option["label"] == "Last builder" for option in shown)
+        await ui.select(ui.key_for("unfollow-25"), ["31"])
+        assert screen.subscriptions.selected_ids == ("1", "31")
+        await ui.press(ui.key_for("__cursor_previous.$/follows"))
+        assert screen.subscriptions.selected_ids == ("1", "31")
+        await ui.select(ui.key_for("unfollow-0"), [])
+        assert screen.subscriptions.selected_ids == ("31",)
+        screen.settings.subscriptions = screen.settings.subscriptions[:10]
+        screen.subscriptions.reconcile_selection()
+        await ui.root.refresh()
+        assert screen.subscriptions.selected_ids == ()
+        assert len(ui.control(ui.key_for("unfollow-0")).payload["options"]) == 10
+        ui.assert_within_limits()
 
 
 @pytest.mark.parametrize(

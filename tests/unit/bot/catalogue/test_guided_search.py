@@ -86,7 +86,7 @@ async def test_long_queries_paginate_removable_clauses() -> None:
     screen = editor(" AND ".join(f"width:{index}" for index in range(8)))
     async with stage(screen, owner=object()) as ui:
         for _ in range(3):
-            await ui.press(ui.key_for("next-clauses"))
+            await ui.press(ui.key_for("__cursor_next.$/clauses"))
         await ui.press(ui.key_for("remove-7"))
         assert len(screen.clauses) == 7
 
@@ -282,12 +282,12 @@ async def test_panels_keep_filter_rows_and_survive_filter_edits(monkeypatch: pyt
         await ui.press(ui.key_for("field"))
         await ui.press(ui.key_for("sort"))
         ui.control(ui.key_for("advanced"))
-        for key in ("edit-0", "remove-0", "edit-1", "remove-1", "next-clauses"):
+        for key in ("edit-0", "remove-0", "edit-1", "remove-1", "__cursor_next.$/clauses"):
             ui.control(ui.key_for(key))
         assert ui.control(ui.key_for("field")).payload["style"] == 3
         assert ui.control(ui.key_for("sort")).payload["style"] == 3
         picker = screen.sort_picker
-        await ui.press(ui.key_for("next-clauses"))
+        await ui.press(ui.key_for("__cursor_next.$/clauses"))
         form = await ui.press_for_form(ui.key_for("edit-2"))
         await form.submit({"value": "8", "operator": "0"})
         assert screen.query == "width:3 AND height:5 AND depth:8"
@@ -324,7 +324,6 @@ async def test_add_several_bounds_then_change_fields_without_closing_panel(monke
         form = await ui.press_for_form(ui.key_for("value"))
         await form.submit({"value": "7", "operator": "0"})
         assert screen.query == "width>=3 AND width<=5 AND height:7"
-        assert screen.clause_page == 1
         ui.control(ui.key_for("edit-2"))
         cast(AsyncMock, screen.on_apply).assert_awaited_with(SearchSelection(screen.query, ""))
         ui.assert_within_limits()

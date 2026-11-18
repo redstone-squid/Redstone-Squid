@@ -211,7 +211,6 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
     """Own follow forms and the selection of subscriptions to remove."""
 
     selected_ids: tuple[str, ...] = sl.state(())
-    page: int = sl.state(0)
     filter_tag: Suggestion | None = sl.state(None)
     filter_tag_type: TagValueType = sl.state(TagValueType.TEXT)
 
@@ -225,37 +224,27 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
             for selected in self.selected_ids
             if any(str(item.id) == selected for item in self._settings.subscriptions)
         )
-        self.page = min(self.page, max(0, (len(self._settings.subscriptions) - 1) // MAX_LISTED))
-
-    @property
-    def subscriptions(self) -> tuple[NotificationSubscription, ...]:
-        return self._settings.subscriptions[self.page * MAX_LISTED : (self.page + 1) * MAX_LISTED]
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        selection: tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...] = ()
-        if self.subscriptions:
-            selection = (
+        subscriptions = self._settings.subscriptions
+        windows: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
+        for start in range(0, len(subscriptions), MAX_LISTED):
+            shown = subscriptions[start : start + MAX_LISTED]
+            visible = tuple(str(row.id) for row in shown)
+            windows.append(
                 sl.choices(
-                    *(
-                        sl.choice(
-                            self.describe(subscription),
-                            key=str(subscription.id),
-                            description=self.detail(subscription),
-                        )
-                        for subscription in self.subscriptions
-                    ),
-                    key="unfollow",
+                    *(sl.choice(self.describe(row), key=str(row.id), description=self.detail(row)) for row in shown),
+                    key=f"unfollow-{start}",
                     selection=sl.controlled(
-                        tuple(
-                            key for key in self.selected_ids if any(str(row.id) == key for row in self.subscriptions)
-                        ),
-                        self._selection_changed,
+                        tuple(key for key in self.selected_ids if key in visible),
+                        partial(self._selection_changed, visible),
                     ),
                     minimum=0,
-                    maximum=len(self.subscriptions),
-                ),
+                    maximum=len(shown),
+                ).unbreakable()
             )
+        selection = (sl.region(*windows, key="follows", title="", page_size=1),) if windows else ()
         actions = sl.action_controls(
             sl.action_control(
                 tr(t"bot-notifications-view-follow-creator = Follow creator"),
@@ -273,7 +262,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                 key="follow-filter",
                 on_submit=partial(self._follow_filter, tag=self.filter_tag),
             ),
-            bool(self.subscriptions)
+            bool(subscriptions)
             and sl.action_control(
                 tr(t"bot-notifications-view-unfollow-selected = Unfollow selected"),
                 self._unfollow,
@@ -310,38 +299,10 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                 ),
                 key="filter-tag-actions",
             ),
-            *(
-                (
-                    sl.action_controls(
-                        sl.action_control(
-                            tr(t"notification-previous = Previous follows"),
-                            self._previous,
-                            key="previous",
-                            available=self.page > 0,
-                        ),
-                        sl.action_control(
-                            tr(t"notification-next = Next follows"),
-                            self._next,
-                            key="next",
-                            available=(self.page + 1) * MAX_LISTED < len(self._settings.subscriptions),
-                        ),
-                        key="follow-pages",
-                    ),
-                )
-                if len(self._settings.subscriptions) > MAX_LISTED
-                else ()
-            ),
             actions,
         )
 
-    async def _previous(self, _event: sd.PressEvent) -> None:
-        self.page = max(0, self.page - 1)
-
-    async def _next(self, _event: sd.PressEvent) -> None:
-        self.page = min((len(self._settings.subscriptions) - 1) // MAX_LISTED, self.page + 1)
-
-    async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
-        visible = {str(row.id) for row in self.subscriptions}
+    async def _selection_changed(self, visible: tuple[str, ...], event: sl.ChoiceEvent) -> None:
         self.selected_ids = tuple(key for key in self.selected_ids if key not in visible) + event.selected
 
     async def _unfollow(self, event: sd.PressEvent) -> None:
@@ -512,27 +473,6 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                 *value_fields,
             ),
         )
-
-    def summary(self) -> sl.TextLike:
-        if not self._settings.subscriptions:
-            return tr(t"bot-notifications-view-nothing-yet = _Nothing yet._")
-        lines: list[sl.TextLike] = []
-        for subscription in self.subscriptions:
-            label = self.describe(subscription)
-            detail = self.detail(subscription)
-            lines.append(
-                md_tr(
-                    t"""
-                    bot-notifications-subscription =
-                        {{ "*" }}*{label}**
-                        {detail}
-                    """,
-                )
-            )
-        hidden = len(self._settings.subscriptions) - len(self.subscriptions)
-        if hidden > 0:
-            lines.append(md_tr(t"bot-notifications-remainder = …and {hidden} more."))
-        return sl.text.Text.join("\n", lines)
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return self._settings.labels.get(subscription.id) or _kind_label(subscription.kind)

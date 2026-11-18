@@ -19,6 +19,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, cast, override
+from uuid import uuid4
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -45,6 +46,7 @@ from squid.search.domain.query import (
 )
 from squid.suggestions.domain import Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.pages import RevealPage
 
 # Suggestion sources for fields whose values are names from a catalogue.
 VALUE_SOURCES = {
@@ -79,7 +81,7 @@ OPERATORS = {
 class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     query: str = sl.state("")
     sort: str = sl.state("")
-    clause_page: int = sl.state(0)
+    reveal_clause: tuple[int, str] | None = sl.state(None)
     filter_open: bool = sl.state(False)
     filter_picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
     """The field list, or the named values of `selected` once a field is chosen."""
@@ -116,7 +118,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     def _set_expression(self, expression: QueryExpression | None) -> None:
         self.query = self.parser.parse(render_expression(expression) if expression is not None else "").normalized
-        self.clause_page = min(self.clause_page, max(0, (len(self.clauses) - 1) // _CLAUSES_PER_PAGE))
 
     def _replace(self, index: int, replacement: QueryExpression | None) -> None:
         expression = self.parser.parse(self.query).expression
@@ -129,7 +130,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._set_expression(
             BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression is not None else addition
         )
-        self.clause_page = (len(self.clauses) - 1) // _CLAUSES_PER_PAGE
+        self.reveal_clause = (len(self.clauses) - 1, uuid4().hex)
         if self.filter_picker is not None:
             self.filter_picker.picked = ()
 
@@ -137,25 +138,19 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     def render(self) -> tuple[GuidedNode, ...]:
         nodes: list[GuidedNode] = [self._controls()]
         clauses = self.clauses
-        start = self.clause_page * _CLAUSES_PER_PAGE
-        for index, item in enumerate(clauses[start : start + _CLAUSES_PER_PAGE], start):
-            nodes.append(self._clause_row(index, item))
-        if len(clauses) > _CLAUSES_PER_PAGE:
+        if clauses:
+            reveal = self.reveal_clause
             nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"guided-search-previous-filters = Previous filters"),
-                        partial(self._page, -1),
-                        key="previous-clauses",
-                        available=self.clause_page > 0,
-                    ),
-                    sl.action_control(
-                        tr(t"guided-search-next-filters = Next filters"),
-                        partial(self._page, 1),
-                        key="next-clauses",
-                        available=start + _CLAUSES_PER_PAGE < len(clauses),
-                    ),
-                    key="clause-pages",
+                sl.region(
+                    *(sl.unbreakable(self._clause_row(index, item)) for index, item in enumerate(clauses)),
+                    key="clauses",
+                    title="",
+                    page_size=_CLAUSES_PER_PAGE,
+                    page=RevealPage(
+                        anchor=sl.element_ref(sl.semantic.FormTrigger, f"edit-{reveal[0]}"), request=reveal[1]
+                    )
+                    if reveal is not None
+                    else sl.uncontrolled(0),
                 )
             )
         if self.filter_open:
@@ -269,7 +264,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     async def _advanced(self, event: sd.SubmitEvent) -> None:
         self.query = self.parser.parse(str(event.values.get("query") or "")).normalized
-        self.clause_page = 0
+        self.reveal_clause = (0, uuid4().hex)
         self._close_filter()
         await self._refresh()
 
@@ -388,15 +383,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._replace(index, NotExpression(replacement) if event.values.get("negated") else replacement)
         await self._refresh()
 
-    async def _page(self, direction: int, _event: sd.PressEvent) -> None:
-        self.clause_page += direction
-
     def clear(self) -> None:
         self.query = ""
         self.sort = ""
         self._close_filter()
         self.sort_picker = None
-        self.clause_page = 0
+        self.reveal_clause = None
 
     def _close_filter(self) -> None:
         self.filter_open = False

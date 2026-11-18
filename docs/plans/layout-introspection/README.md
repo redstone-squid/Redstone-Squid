@@ -30,6 +30,12 @@ pages. Message continuations are delivery surfaces, not collection positions.
 An oversized group must adapt through an authored alternative or fail certification.
 The empty flow has zero content pages and a known-absent selection.
 
+`sl.region(..., page_size=N)` caps breakable content units; an unbreakable row
+counts as one unit. Screens can declare all control windows and leave their selection
+to the runtime. `RevealPage(anchor=sl.element_ref(NodeType, "key"), request=token)`
+reveals keyed content once, including within a component namespace. Delivery consumes
+the intent; subsequent page turns remain runtime-owned.
+
 For lazy sources, `SourceCapabilities.fixed_groups` explicitly promises aligned,
 complete groups and consecutive neighbour positions. `list_source(...,
 fixed_groups=True)` provides this contract for sequences. Group count and target fit
