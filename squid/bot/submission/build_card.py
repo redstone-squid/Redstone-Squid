@@ -18,7 +18,7 @@ from squid.bot.ui import (
     truncate_display_text,
 )
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application.ports import BuildSchematicSummaryProvider
+from squid.builds.application.ports import BuildSchematicSummary, BuildSchematicSummaryProvider
 from squid.builds.domain import Status
 from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
@@ -110,10 +110,8 @@ async def render_build_card(
     *,
     schematic_summaries: BuildSchematicSummaryProvider | None = None,
 ) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
-    """Return a build card that callers can compose with other layout nodes."""
-    metadata = build_metadata_fields(build)
-    schematic_field = None
-    # ORM identity columns may still be None before flush.
+    """Resolve media and the public schematic summary before composing the card."""
+    summary = None
     if (
         build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
         and build.submission_status is Status.CONFIRMED
@@ -123,59 +121,111 @@ async def render_build_card(
             summary = await schematic_summaries.summary_for(build.id)
         except Exception:
             logger.warning("Could not read schematic measurements for build %s", build.id, exc_info=True)
-            summary = None
-        if summary is not None:
-            multiple = summary.multiple_files or len(build.schematic_urls) > 1
-            label = (
-                truncate_display_text(_compact_plain(summary.filename), 100)
-                if multiple and summary.filename
-                else "Download schematic"
-            )
-            link = f"[{escape_markdown(label)}]({summary.download_url})"
-            schematic_field = sl.field(
-                "Schematic",
-                sl.md(f"{link} · {summary.width} \u00d7 {summary.height} \u00d7 {summary.length} blocks"),
-                fallbacks=(sl.md(link),),
-            )
-    performance_names = {
-        "Dimensions",
-        "Volume",
-        "Opening Time",
-        "Closing Time",
-        "Visible Opening Time",
-        "Visible Closing Time",
-    }
-    resource_names = {
-        "Server",
-        "Coordinates",
-        "Command",
-        "World Download",
+    thumbnail, media = await _get_media_urls(build, media_previews)
+    return build_card(build, thumbnail=thumbnail, media=media, schematic=summary)
+
+
+def build_card(
+    build: Build,
+    *,
+    thumbnail: str | None = None,
+    media: Sequence[str] = (),
+    schematic: BuildSchematicSummary | None = None,
+) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
+    """Compose the full card from a build and its resolved resources."""
+    fields = build_metadata_fields(build)
+    fallbacks = _field_ladders(build)
+    description = build_description(build)
+    return sl.section(
+        sl.heading(sl.md(format_build_display_title(build, markdown=True))),
+        description and sl.paragraph(description).truncate(),
+        _field_section("Review warnings", fields, fallbacks, {"⚠ Possible duplicate", "⚠ Attachment issues"}),
+        _attachment_review_action(build),
+        _field_section(
+            "Size & performance",
+            fields,
+            fallbacks,
+            {
+                "Dimensions",
+                "Volume",
+                "Opening Time",
+                "Closing Time",
+                "Visible Opening Time",
+                "Visible Closing Time",
+                "Extension Time",
+                "Retraction Time",
+            },
+        ),
+        _field_section("Compatibility", fields, fallbacks, {"Versions"}),
+        _field_section("Credits", fields, fallbacks, {"Creators", "Date Of Completion", "Sponsoring Server"}),
+        _build_resources(build, fields, fallbacks, schematic),
+        bool(media) and sl.media(*media, key="media"),
+        *_build_source(build),
+        accent=_status_tone(build.submission_status, build_id=build.id),
+        thumbnail=thumbnail,
+    )
+
+
+def _field_section(
+    title: str,
+    fields: dict[str, str],
+    fallbacks: dict[str, tuple[str, ...]],
+    names: set[str],
+    *,
+    leading: Sequence[sl.semantic.Field] = (),
+) -> sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
+    entries = tuple(
+        sl.field(name, value, fallbacks=fallbacks.get(name, ())) for name, value in fields.items() if name in names
+    )
+    return sl.section(sl.heading(title), sl.fields(*leading, *entries)) if leading or entries else None
+
+
+def _build_resources(
+    build: Build,
+    fields: dict[str, str],
+    fallbacks: dict[str, tuple[str, ...]],
+    schematic: BuildSchematicSummary | None,
+) -> sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
+    names = {"Server", "Coordinates", "Command", "World Download", "Schematic", "Videos", "Images", "Sponsor Website"}
+    if schematic is None:
+        return _field_section("Resources", fields, fallbacks, names)
+    multiple = schematic.multiple_files or len(build.schematic_urls) > 1
+    label = (
+        truncate_display_text(_compact_plain(schematic.filename), 100)
+        if multiple and schematic.filename
+        else "Download schematic"
+    )
+    link = f"[{escape_markdown(label)}]({schematic.download_url})"
+    featured = sl.field(
         "Schematic",
-        "Videos",
-        "Images",
-        "Sponsor Website",
-    }
-    credit_names = {"Creators", "Date Of Completion", "Sponsoring Server"}
-    review_names = {"⚠ Possible duplicate", "⚠ Attachment issues"}
+        sl.md(f"{link} · {schematic.width} \u00d7 {schematic.height} \u00d7 {schematic.length} blocks"),
+        fallbacks=(sl.md(link),),
+    )
+    if "Schematic" in fields:
+        fields = {"Submitted schematic links" if name == "Schematic" else name: value for name, value in fields.items()}
+        fallbacks = {
+            "Submitted schematic links" if name == "Schematic" else name: values for name, values in fallbacks.items()
+        }
+        names.add("Submitted schematic links")
+    return _field_section("Resources", fields, fallbacks, names, leading=(featured,))
 
-    ladders = _field_ladders(build)
 
-    # Give each field its own shorter alternatives so one long value does not
-    # force every field in the section to shrink.
-    def group(title: str, names: set[str]) -> sl.LayoutNode | None:
-        entries = tuple(
-            sl.field(
-                "Submitted schematic links" if name == "Schematic" and schematic_field is not None else name,
-                value,
-                fallbacks=ladders.get(name, ()),
-            )
-            for name, value in metadata.items()
-            if name in names
+def _attachment_review_action(build: Build) -> sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
+    if (
+        build.id is not None
+        and build.submission_status is Status.CONFIRMED
+        and (build.extra_info.get("attachment_failures") or build.extra_info.get("attachment_resolutions"))
+    ):
+        return sl.action_controls(
+            sl.routed_action_control(
+                "Review attachments", review_attachments.custom_id(build_id=build.id), key="review"
+            ),
+            key="attachment-review",
         )
-        if title == "Resources" and schematic_field is not None:
-            entries = (schematic_field, *entries)
-        return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
+    return None
 
+
+def _build_source(build: Build) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
     # A draft preview renders an unsaved build, which has no ID yet.
     footer = (
         f"Submission ID: {build.id}"
@@ -184,39 +234,15 @@ async def render_build_card(
     )
     if build.edited_time is not None:
         footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
-    rows = ()
-    if build.original_link is not None:
-        rows = (
-            sl.action_controls(
-                sl.link("Original Discord message", build.original_link, key="original-submission"),
-                key="submission-links",
-            ),
-        )
-    description = build_description(build)
-    thumbnail, extra_media = await _get_media_urls(build, media_previews)
-    return sl.section(
-        sl.heading(sl.md(format_build_display_title(build, markdown=True))),
-        # Allow the description to shrink when the full card exceeds the layout budget.
-        description and sl.paragraph(description).truncate(),
-        group("Review warnings", review_names),
-        build.id is not None
-        and build.submission_status is Status.CONFIRMED
-        and bool(build.extra_info.get("attachment_failures") or build.extra_info.get("attachment_resolutions"))
-        and sl.action_controls(
-            sl.routed_action_control(
-                "Review attachments", review_attachments.custom_id(build_id=build.id), key="review"
-            ),
-            key="attachment-review",
+    note = sl.note(sl.plain(footer))
+    if build.original_link is None:
+        return (note,)
+    return (
+        note,
+        sl.action_controls(
+            sl.link("Original Discord message", build.original_link, key="original-submission"),
+            key="submission-links",
         ),
-        group("Size & performance", performance_names),
-        group("Compatibility", {"Versions"}),
-        group("Credits", credit_names),
-        group("Resources", resource_names),
-        bool(extra_media) and sl.media(*extra_media, key="media"),
-        sl.note(sl.plain(footer)),
-        *rows,
-        accent=_status_tone(build.submission_status, build_id=build.id),
-        thumbnail=thumbnail,
     )
 
 
