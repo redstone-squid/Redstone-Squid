@@ -2,13 +2,13 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from functools import partial
 from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
+from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.builds.domain import Status
@@ -186,7 +186,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
             sl.sources.list_source(hit.records),
             key="search-records",
             identity=lambda record: record.source_id,
-            label=lambda record: truncate_display_text(record.title, 80),
+            label=lambda record: truncate_display_text(record.one_line_title, 80),
             summary=_record_line,
             detail=self._record_detail,
             page_size=5,
@@ -266,27 +266,16 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
     def _record_detail(
         self, record: RecordSearchHit
     ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        others = tuple(build_id for build_id in record.holder_build_ids if build_id != int(self.hit.source_id))
         metrics = ", ".join(f"{key}: {value}" for key, value in record.metrics.items())
-        return sl.section(
-            sl.heading(record.title),
-            sl.paragraph(record.subtitle) if record.subtitle else None,
-            sl.note(record.version_scope.replace("_", " ")),
-            sl.paragraph(metrics) if metrics else None,
-            sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if others else None,
-            sl.action_controls(
-                *(
-                    sl.action_control(
-                        tr(t"search-grouped-open-holder = View build #{build_id!s}"),
-                        partial(self._open_holder, build_id),
-                        key=f"search-holder-{build_id}",
-                    )
-                    for build_id in others
-                ),
-                key="search-tied-holders",
-            )
-            if others
-            else None,
+        return record_standings(
+            _highlighted(record.title_match or SearchText(record.title)),
+            record.subtitle,
+            record.base_title,
+            record.version_scope,
+            record.holder_build_ids,
+            self._open_holder,
+            current_holder=int(self.hit.source_id),
+            details=(sl.paragraph(metrics),) if metrics else (),
         )
 
     async def _open_holder(self, build_id: int, _event: sl.ActionEvent[Any]) -> None:
@@ -475,7 +464,7 @@ def _heading_subtitle(hit: SearchHit, request: SearchRequest) -> str | None:
 def _record_line(record: RecordSearchHit) -> Text:
     """Show a record with its subtitle; many records share a title and differ only by restrictions."""
     title = _highlighted(record.title_match or SearchText(record.title))
-    return title + f" · {record.subtitle}" if record.subtitle else title
+    return record_row(title, record.subtitle)
 
 
 def _result_label(hit: SearchHit, request: SearchRequest) -> str:

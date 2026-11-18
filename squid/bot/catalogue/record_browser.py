@@ -1,20 +1,20 @@
 """Published record standings and links to their holder builds."""
 
 from collections.abc import Awaitable, Callable
-from functools import partial
 
 from discord.utils import format_dt
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
+from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
 from squid.notifications.domain import SubscriptionKind
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
-from squid.records.domain.models import BaseTitle, VersionScope
+from squid.records.domain.models import VersionScope
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint
@@ -59,20 +59,6 @@ def _record_label(record: PublishedTitle) -> str:
     return truncate_display_text(record.one_line_title, 100)
 
 
-def _comparison_rule(base_title: BaseTitle) -> sl.TextLike:
-    match base_title:
-        case BaseTitle.FIRST:
-            return tr(t"record-rule-first = Earliest known completion date.")
-        case BaseTitle.SMALLEST:
-            return tr(t"record-rule-smallest = Lowest volume; earliest completion breaks a tie.")
-        case BaseTitle.FASTEST:
-            return tr(t"record-rule-fastest = Fastest worst-case timing; earliest completion breaks a tie.")
-        case BaseTitle.FASTEST_SMALLEST:
-            return tr(t"record-rule-fastest-smallest = Lowest volume, then fastest timing, then earliest completion.")
-        case BaseTitle.SMALLEST_FASTEST:
-            return tr(t"record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.")
-
-
 def record_browser(
     records: RecordService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
@@ -84,32 +70,23 @@ def record_browser(
     def detail(record: PublishedTitle) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         computed_at = format_dt(record.computed_at, style="R")
         checked_at = format_dt(record.last_checked_at, style="R") if record.last_checked_at is not None else None
-        return sl.section(
-            sl.heading(record.title),
-            sl.paragraph(_comparison_rule(record.base_title)),
-            sl.note(md_tr(t"record-browse-computed = Computed {computed_at}")),
-            sl.note(md_tr(t"record-browse-checked = Last checked {checked_at}")) if checked_at is not None else None,
-            sl.note(tr(t"record-browse-pending = Newer inputs are waiting to be checked."))
-            if record.refresh_pending
-            else None,
-            record.subtitle and sl.paragraph(record.subtitle),
-            sl.note(f"{record.build_kind.value} · {record.version_scope.replace('_', ' ')}"),
-            sl.action_controls(follow_control(SubscriptionKind.RECORD, record.title_id), key="record-follow"),
-            sl.action_controls(
-                *(
-                    sl.action_control(
-                        md_tr(
-                            t"record-browse-open-holder = Open build #{build_id!s}",
-                        ),
-                        partial(open_build, build_id),
-                        key=f"holder-{build_id}",
-                    )
-                    for build_id in record.holder_build_ids
-                ),
-                key="record-holders",
-            )
-            if record.holder_build_ids
-            else sl.note(tr(t"record-browse-no-holders = No confirmed holders yet.")),
+        details = [sl.note(md_tr(t"record-browse-computed = Computed {computed_at}"))]
+        if checked_at is not None:
+            details.append(sl.note(md_tr(t"record-browse-checked = Last checked {checked_at}")))
+        if record.refresh_pending:
+            details.append(sl.note(tr(t"record-browse-pending = Newer inputs are waiting to be checked.")))
+        return record_standings(
+            record.title,
+            record.subtitle,
+            record.base_title,
+            record.version_scope,
+            record.holder_build_ids,
+            open_build,
+            build_kind=record.build_kind.value,
+            details=(
+                *details,
+                sl.action_controls(follow_control(SubscriptionKind.RECORD, record.title_id), key="record-follow"),
+            ),
         )
 
     return sp.Browser(
@@ -117,7 +94,7 @@ def record_browser(
         key="records",
         identity=lambda record: str(record.id),
         label=_record_label,
-        summary=lambda record: record.one_line_title,
+        summary=lambda record: record_row(record.title, record.subtitle),
         detail=detail,
         page_size=CATALOGUE_PAGE_SIZE,
         show_page_size=True,
