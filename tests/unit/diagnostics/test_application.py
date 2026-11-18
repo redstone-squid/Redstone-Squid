@@ -32,12 +32,12 @@ class FakeRepository:
             raise RuntimeError(msg)
         self.saved.append(report)
 
-    async def find(self, reference: str, *, now: Instant) -> ErrorReport | None:
-        matches = self._matching(reference, now)
+    async def find(self, reference: str, *, now: Instant, prefix: bool = False) -> ErrorReport | None:
+        matches = self._matching(reference, now, prefix=prefix)
         return matches[0] if matches else None
 
-    async def count_matching(self, reference: str, *, now: Instant) -> int:
-        return len(self._matching(reference, now))
+    async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int:
+        return len(self._matching(reference, now, prefix=prefix))
 
     async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         unexpired = [
@@ -55,11 +55,15 @@ class FakeRepository:
         self.saved = []
         return cleared
 
-    def _matching(self, reference: str, now: Instant) -> list[ErrorReport]:
+    def _matching(self, reference: str, now: Instant, *, prefix: bool) -> list[ErrorReport]:
         return [
             report
             for report in self.saved
-            if report.expires_at > now and reference in (report.reference, report.correlation_id)
+            if report.expires_at > now
+            and (
+                reference in (report.reference, report.correlation_id)
+                or (prefix and report.correlation_id.startswith(reference))
+            )
         ]
 
 

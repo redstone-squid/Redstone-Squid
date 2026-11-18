@@ -28,7 +28,7 @@ RECENT_LIMIT = 100
 class ErrorReportOperations(Protocol):
     """Service operations required by the live diagnostics screen."""
 
-    async def lookup(self, reference: str) -> tuple[ErrorReport, int]: ...
+    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]: ...
 
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
 
@@ -207,7 +207,7 @@ class ErrorReportScreen(sd.Screen[int]):
     async def on_load(self) -> None:
         """Load a requested reference or the recent-report list when the screen mounts."""
         if self._reference is not None:
-            self._detail, self._matches = await self._operations.lookup(self._reference)
+            self._detail, self._matches = await self._operations.lookup(self._reference, prefix=True)
             return
         await self._load_recent()
 
@@ -390,8 +390,6 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
             )
         )
     if matches > 1:
-        # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
-        # would have a moderator confidently reading the wrong incident.
         count = matches
         entries.append(
             sl.field(

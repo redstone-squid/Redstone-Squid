@@ -114,6 +114,23 @@ async def test_find_returns_the_newest_of_several_sharing_a_reference(
     assert await repository.count_matching("c" * 12, now=NOW) == 2
 
 
+async def test_prefix_lookup_matches_literal_starts_of_correlation_ids(
+    repository: PostgresErrorReportRepository,
+) -> None:
+    older = make_report(correlation_id="request_%/older", occurred_at=NOW.subtract(hours=2))
+    newer = make_report(correlation_id="request_%/newer", occurred_at=NOW.subtract(hours=1))
+    for report in (older, newer, make_report(correlation_id="request_A/newest")):
+        await repository.save(report)
+
+    prefix = "request_%/"
+    assert await repository.find(prefix, now=NOW) is None
+    found = await repository.find(prefix, now=NOW, prefix=True)
+    assert found is not None
+    assert found.id == newer.id
+    assert await repository.count_matching(prefix, now=NOW, prefix=True) == 2
+    assert await repository.find("%/newer", now=NOW, prefix=True) is None
+
+
 async def test_expired_reports_are_invisible_and_purgeable(repository: PostgresErrorReportRepository) -> None:
     expired = make_report(correlation_id="d" * 32, expires_at=NOW.subtract(minutes=1))
     live = make_report(correlation_id="e" * 32, expires_at=NOW.add(hours=1))

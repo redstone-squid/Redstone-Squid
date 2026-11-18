@@ -22,9 +22,9 @@ class ErrorReportRepository(Protocol):
 
     async def save(self, report: ErrorReport) -> None: ...
 
-    async def find(self, reference: str, *, now: Instant) -> ErrorReport | None: ...
+    async def find(self, reference: str, *, now: Instant, prefix: bool = False) -> ErrorReport | None: ...
 
-    async def count_matching(self, reference: str, *, now: Instant) -> int: ...
+    async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int: ...
 
     async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
 
@@ -104,20 +104,19 @@ class ErrorReportService:
         except Exception:
             logger.exception("Could not store an error report [correlation_id=%s]", correlation_id)
 
-    async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
-        """Return the newest unexpired match and the number of reports sharing the reference.
+    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]:
+        """Return the newest unexpired match and the total number of matches.
 
-        Short references can collide, and several failures can share a correlation
-        ID. The count lets the caller show that the selected report is not the only
-        match. Raise ErrorReportNotFoundError when no unexpired report matches.
+        With prefix=True, also accept the start of a correlation ID. Raise
+        ErrorReportNotFoundError when no unexpired report matches.
         """
         async with self._uow_factory() as uow:
             normalized = self.normalize(reference)
             now = self._now()
-            report = await uow.error_reports.find(normalized, now=now)
+            report = await uow.error_reports.find(normalized, now=now, prefix=prefix)
             if report is None:
                 raise ErrorReportNotFoundError(context={"reference": normalized})
-            matches = await uow.error_reports.count_matching(normalized, now=now)
+            matches = await uow.error_reports.count_matching(normalized, now=now, prefix=prefix)
             return report, matches
 
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:

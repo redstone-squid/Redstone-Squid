@@ -93,9 +93,10 @@ class ErrorReportRecorder(ErrorReportService):
         self.clear_calls = 0
 
     @override
-    async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
+    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]:
         assert self.report is not None
         assert reference == self.report.reference
+        assert prefix
         return self.report, self.matches
 
     @override
