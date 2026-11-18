@@ -6,6 +6,7 @@ import pytest
 
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.infrastructure.providers.search_fields import SearchFieldProvider
 from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 
@@ -91,6 +92,23 @@ async def test_version_scopes_are_suggested_without_indexed_records() -> None:
 
     assert [item.value for item in result.items] == ["all_time", "up_to_date"]
     assert facets.calls == []
+
+
+async def test_catalogue_completions_use_the_scoped_registry() -> None:
+    instance, _ = provider()
+    for scope, status in (("builds", "confirmed"), ("records", "resolved")):
+        result = await instance.suggest(
+            SuggestionRequest(source="search_query", query="status:", context={"scope": scope})
+        )
+        assert status in {item.value for item in result.items}
+        assert len(result.items) == 3
+
+    fields = await SearchFieldProvider(StaticFields()).candidates(
+        SuggestionRequest(source="search_fields", context={"scope": "records"})
+    )
+    names = {item.suggestion.value for item in fields}
+    assert {"kind", "base_title", "status"} <= names
+    assert "width" not in names
 
 
 @pytest.mark.parametrize("values", [("Full Lamp", "Flush", "Seamless"), ()])

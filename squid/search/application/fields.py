@@ -98,7 +98,8 @@ class FieldRegistry:
             value = raw.casefold()
             if value not in field.value_enum or not field.applies_to(scope, value):
                 choices = ", ".join(member.value for member in field.value_enum if field.applies_to(scope, member))
-                raise ValidationError(md_tr(t"search-field-expects-choice = {field.name} expects one of {choices}."))
+                field_name = field.name
+                raise ValidationError(md_tr(t"search-field-expects-choice = {field_name} expects one of {choices}."))
             return field.value_enum(value)
         if field.value_type is FieldType.TEXT:
             return raw

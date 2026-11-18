@@ -115,21 +115,20 @@ class ScopedSearchQuery(SearchQuery):
 
     def __post_init__(self) -> None:
         if self.expression is not None and not expression_applies_to(self.expression, self.scope):
+            scope = self.scope.value
             raise ValidationError(
-                md_tr(
-                    t"search-query-incompatible-scope = This query contains filters that cannot be used in {self.scope}."
-                ),
+                md_tr(t"search-query-incompatible-scope = This query contains filters that cannot be used in {scope}."),
                 code=ErrorCode.INVALID_QUERY,
             )
 
 
+@dataclass(frozen=True, slots=True)
 class BuildQuery(ScopedSearchQuery):
-    __slots__ = ()
     scope = SearchScope.BUILDS
 
 
+@dataclass(frozen=True, slots=True)
 class RecordQuery(ScopedSearchQuery):
-    __slots__ = ()
     scope = SearchScope.RECORDS
 
 

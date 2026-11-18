@@ -15,6 +15,7 @@ from squid.search.application.completion import (
     render_value,
 )
 from squid.search.application.fields import FieldRegistry
+from squid.search.domain.scope import SearchScope
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.application.queries import SuggestionRepository
@@ -27,7 +28,11 @@ from squid.suggestions.domain import (
     SuggestionRequest,
     SuggestionResult,
 )
-from squid.suggestions.infrastructure.providers.search_fields import SearchFieldProvider, SearchSortProvider
+from squid.suggestions.infrastructure.providers.search_fields import (
+    SearchFieldProvider,
+    SearchSortProvider,
+    suggestion_search_scope,
+)
 
 
 class FacetReader(Protocol):
@@ -48,7 +53,8 @@ class SearchQueryProvider:
         self._facets = facets
 
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
-        registry = await self._search.fields()
+        scope = suggestion_search_scope(request)
+        registry = (await self._search.fields()).for_scope(scope)
         context = analyze(request.query, request.cursor, registry)
         limit = request.limit or MAX_QUERY_SUGGESTIONS
         span = ReplacementSpan(context.start, context.end)
@@ -58,19 +64,18 @@ class SearchQueryProvider:
                 # Range bounds are free-form; this provider does not suggest indexed values for them.
                 return SuggestionResult(replacement=span)
             case CompletionKind.FIELD_VALUE:
-                return SuggestionResult(items=await self._values(context, limit), replacement=span)
+                return SuggestionResult(items=await self._values(context, limit, scope), replacement=span)
             case CompletionKind.TERM:
                 return SuggestionResult(items=_terms(context, registry, limit), replacement=span)
 
-    async def _values(self, context: CompletionContext, limit: int) -> tuple[Suggestion, ...]:
+    async def _values(self, context: CompletionContext, limit: int, scope: SearchScope) -> tuple[Suggestion, ...]:
         assert context.field is not None
         if not completes_values(context.field):
             return ()
-        if context.field.suggested_values is not None:
+        choices = context.field.choices(scope)
+        if choices is not None:
             prefix = context.prefix.strip().casefold()
-            values = sorted(value for value in context.field.suggested_values if value.casefold().startswith(prefix))[
-                :limit
-            ]
+            values = sorted(value for value in choices if value.casefold().startswith(prefix))[:limit]
         else:
             values = await self._facets.facet_values(context.field.name, context.prefix, limit=limit)
         # Preserve prefix matching and ordering when quoting the values.

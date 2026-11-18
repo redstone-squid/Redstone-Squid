@@ -14,6 +14,7 @@ from squid.core.actors import Actor
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
+from squid.search.domain.scope import SearchScope
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_i18n import Text
@@ -26,8 +27,8 @@ def editor(query: str = "") -> GuidedSearch:
     service.fields.return_value = DEFAULT_FIELD_REGISTRY
     return GuidedSearch(
         service,
-        scope="builds",
-        query=CatalogueQuery.from_text(SearchQueryParser(), query),
+        scope=SearchScope.BUILDS,
+        query=CatalogueQuery.from_text(SearchQueryParser(scope=SearchScope.BUILDS), query),
         sort="",
         on_apply=AsyncMock(),
     )

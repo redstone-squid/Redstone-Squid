@@ -22,7 +22,6 @@ from squid.records.application import RecordService
 from squid.runtime import BotServices
 from squid.search.application import SearchService
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import (
     BuildSearchHit,
     RecordSearchHit,
@@ -94,7 +93,7 @@ async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | Se
     async def create(request: Any, *, initial_records: bool = False) -> BuildBrowseScreen:
         screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=initial_records)
         screen._search_service = cog.bot.services.search
-        screen._search_parser = SearchQueryParser(await cog.bot.services.search.fields())
+        screen._search_fields = await cog.bot.services.search.fields()
         return screen
 
     with patch.object(BuildBrowseScreen, "create", side_effect=create):
@@ -197,10 +196,10 @@ async def test_explicit_record_scope_expands_shorthand_without_status_filter() -
 async def test_records_remain_an_explicit_search_target() -> None:
     search = RecordingSearch()
 
-    await _run(_cog(search), query="width:5", scope=SearchTarget.records)
+    await _run(_cog(search), query="kind:door", scope=SearchTarget.records)
 
     assert search.requests[0].scope is SearchScope.RECORDS
-    assert search.requests[0].query == "width:5"
+    assert search.requests[0].query == "kind:door"
     assert search.requests[0].group_by_build
 
 
@@ -280,7 +279,7 @@ async def test_smart_search_and_sort_survive_editing_the_catalogue_query(scope: 
     assert screen._results is not None
     assert screen._results._build_detail is not None
     async with stage(screen, owner=object()) as ui:
-        await submit_search(ui, "width:5", "-height")
+        await submit_search(ui, "kind:door", "-height")
         assert search.requests[-1].mode is SearchMode.SEMANTIC
         assert search.requests[-1].sort is not None
         assert search.requests[-1].sort.field == "height"
@@ -293,7 +292,12 @@ async def test_smart_search_and_sort_survive_editing_the_catalogue_query(scope: 
 
 @pytest.mark.parametrize("scope", [SearchTarget.builds, SearchTarget.records])
 async def test_registered_fields_survive_opening_the_catalogue(scope: SearchTarget) -> None:
-    registry = FieldRegistry((*DEFAULT_FIELD_REGISTRY.definitions, FieldDefinition("custom_flag", FieldType.BOOLEAN)))
+    registry = FieldRegistry(
+        (
+            *DEFAULT_FIELD_REGISTRY.definitions,
+            FieldDefinition("custom_flag", FieldType.BOOLEAN, scopes=frozenset({SearchScope(scope.value)})),
+        )
+    )
     search = RecordingSearch(registry)
     screen = await _run(_cog(search), query="custom_flag:true", scope=scope)
     assert isinstance(screen, BuildBrowseScreen)

@@ -14,7 +14,7 @@ chosen depends on the field:
 """
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, cast, override
 
@@ -26,7 +26,6 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, 
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
-from squid.records.domain import BuildKind
 from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
 from squid.search.application.parser import SearchQueryParser
@@ -40,6 +39,7 @@ from squid.search.domain.query import (
     RangeValue,
     TextExpression,
 )
+from squid.search.domain.scope import SearchScope
 from squid.suggestions.domain import Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -87,7 +87,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self,
         service: SearchService,
         *,
-        scope: str,
+        scope: SearchScope,
         query: CatalogueQuery,
         sort: str,
         on_apply: Callable[[SearchSelection], Awaitable[None]],
@@ -99,11 +99,11 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.sort = sort
         self.on_apply = on_apply
         self.actions = actions
-        self.parser = SearchQueryParser()
+        self.parser = SearchQueryParser(scope=scope)
 
     @override
     async def on_load(self) -> None:
-        self.parser = SearchQueryParser(await self.service.fields())
+        self.parser = SearchQueryParser(await self.service.fields(), scope=self.scope)
 
     @property
     def clauses(self) -> tuple[QueryExpression, ...]:
@@ -188,7 +188,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         )
         if field.name in VALUE_SOURCES and self.filter_picker is not None:
             return (heading, self.filter_picker, sl.action_controls(change, key="filter-step"))
-        values = _menu_values(field)
+        values = _menu_values(field, self.scope)
         if values:
             return (
                 heading,
@@ -220,7 +220,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         return sl.action_controls(
             sl.form(
                 filter_label(item),
-                self._field_form(self._field_options(operand.field), operand, negated=negated)
+                self._field_form(operand.field, operand, negated=negated)
                 if isinstance(operand, FieldExpression)
                 else self._text_form(operand, negated=negated),
                 key=f"edit-{index}",
@@ -256,16 +256,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._close_filter()
         await self._refresh()
 
-    def _field_options(self, field: FieldDefinition) -> FieldDefinition:
-        if field.name == "kind":
-            return replace(field, suggested_values=tuple(kind.value for kind in BuildKind))
-        if field.name == "status":
-            return replace(
-                field,
-                suggested_values=("resolved", "unresolved") if self.scope == "records" else ("confirmed", "pending"),
-            )
-        return field
-
     def _field_form(
         self,
         field: FieldDefinition,
@@ -300,15 +290,15 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     ),
                 )
             )
-        if field.suggested_values and (not default or default in field.suggested_values):
+        choices = field.choices(self.scope)
+        if choices and (not default or default in choices):
             fields.append(
                 sl.forms.ChoiceField(
                     key="value",
                     label=label,
                     default=default or None,
                     options=tuple(
-                        sl.forms.ChoiceOption(item, item.replace("_", " ").capitalize(), item)
-                        for item in field.suggested_values
+                        sl.forms.ChoiceOption(item, item.replace("_", " ").capitalize(), item) for item in choices
                     ),
                 )
             )
@@ -352,10 +342,10 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         )
 
     def _field_expression(self, field: FieldDefinition, event: sd.SubmitEvent) -> FieldExpression:
-        value = FieldRegistry.coerce(field, str(event.values["value"]))
+        value = FieldRegistry.coerce(field, str(event.values["value"]), scope=self.scope)
         operator = str(event.values.get("operator") or "")
         if operator == "range":
-            upper = FieldRegistry.coerce(field, str(event.values.get("upper") or ""))
+            upper = FieldRegistry.coerce(field, str(event.values.get("upper") or ""), scope=self.scope)
             return FieldExpression(field, ComparisonOperator.EQUAL, RangeValue(value, upper))
         comparison = next(comparison for comparison, symbol in OPERATORS.items() if symbol == operator)
         return FieldExpression(field, comparison, value, phrase=isinstance(value, str))
@@ -456,14 +446,14 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         )
 
     async def _field_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
-        field = (await self.service.fields()).resolve(item.value)
+        field = self.parser.registry.resolve(item.value)
         if field is None:
             return
-        self.selected = self._field_options(field)
+        self.selected = field
         if field.name in VALUE_SOURCES:
 
             async def chosen(_event: sd.ActionEvent, value: Suggestion) -> None:
-                coerced = FieldRegistry.coerce(field, value.value)
+                coerced = FieldRegistry.coerce(field, value.value, scope=self.scope)
                 self._append(FieldExpression(field, ComparisonOperator.EQUAL, coerced, phrase=isinstance(coerced, str)))
                 _event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
                 await self._refresh()
@@ -487,7 +477,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     async def _choose_menu_value(self, field: FieldDefinition, event: sl.ChoiceEvent) -> None:
         if len(event.selected) != 1:
             return
-        value = FieldRegistry.coerce(field, event.selected[0])
+        value = FieldRegistry.coerce(field, event.selected[0], scope=self.scope)
         self._append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)))
         event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
         await self._refresh()
@@ -514,10 +504,10 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         await self.on_apply(SearchSelection(self.query, self.sort))
 
 
-def _menu_values(field: FieldDefinition) -> tuple[tuple[str, sl.TextLike], ...]:
+def _menu_values(field: FieldDefinition, scope: SearchScope) -> tuple[tuple[str, sl.TextLike], ...]:
     """Return (value, label) pairs for a field chosen from a short menu, or nothing for other fields."""
     if field.value_type is FieldType.BOOLEAN:
         return (("true", tr(t"guided-search-yes = Yes")), ("false", tr(t"guided-search-no = No")))
-    if field.suggested_values:
-        return tuple((item, item.replace("_", " ").capitalize()) for item in field.suggested_values)
+    if choices := field.choices(scope):
+        return tuple((item, item.replace("_", " ").capitalize()) for item in choices)
     return ()

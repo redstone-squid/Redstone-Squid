@@ -30,7 +30,16 @@ from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
-from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchMode, SearchPage, SearchScope
+from squid.search.domain import (
+    BuildQuery,
+    BuildSearchHit,
+    RecordQuery,
+    RecordSearchHit,
+    SearchMode,
+    SearchPage,
+    SearchScope,
+)
+from squid.search.domain.query import TextExpression
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
 from squid_reactivity import LocalTopicBus
@@ -152,7 +161,7 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 
     with sl.runtime.transaction():
         if search:
-            await screen._run_search(CatalogueQuery.from_text(SearchQueryParser(), "door"), "")
+            await screen._run_search(CatalogueQuery.from_text(screen._search_parser, "door"), "")
         else:
             await screen._open_id(submit_event({"id": 7}))
 
@@ -438,6 +447,8 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
         assert request.mode is SearchMode.LEXICAL
         assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
+        assert isinstance(request.parsed_query, RecordQuery if records else BuildQuery)
+        assert request.parsed_query is screen._query.parsed
         assert request.query == typed
         assert screen._query.parsed.normalized == "door AND kind:door"
         await ui.press(ui.key_for("guided-search"))
@@ -898,7 +909,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         next=None,
         prev=None,
     )
-    screen._query = CatalogueQuery.from_text(SearchQueryParser(), "width:3 AND height:5")
+    screen._query = CatalogueQuery.from_text(screen._search_parser, "width:3 AND height:5")
     async with stage(screen, owner=object()) as ui:
         monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
@@ -1118,7 +1129,7 @@ async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() 
         await submit_search(ui, build_query)
         await ui.press(ui.key_for("record-tools"))
         await ui.press(ui.key_for("all-records"))
-        assert screen._query == CatalogueQuery()
+        assert screen._query == CatalogueQuery(RecordQuery(None, ""))
         record_query = "title:door OR base_title:fastest"
         await submit_search(ui, record_query)
 
@@ -1135,6 +1146,22 @@ async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() 
         assert screen._guided is not None
         assert screen._guided.query == screen._query
         ui.assert_within_limits()
+
+
+async def test_shared_keywords_keep_their_meaning_when_entering_records() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records)
+    async with stage(screen, owner=object()) as ui:
+        typed = "  FASTEST   "
+        await submit_search(ui, typed)
+        assert screen._query.parsed.expression == TextExpression("FASTEST")
+        await ui.press(ui.key_for("all-records"))
+        assert isinstance(screen._query.parsed, RecordQuery)
+        assert screen._query.text == "(FASTEST)"
+        assert screen._query.parsed.expression == TextExpression("FASTEST")
+        await ui.press(ui.key_for("all-builds"))
+        assert screen._query.text == typed
 
 
 async def test_expanded_reset_is_disabled_until_query_sort_or_categories_change() -> None:
@@ -1260,7 +1287,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "status:unresolved"})
         await ui.press(ui.key_for("reset"))
-        assert screen._query == screen._guided.query == CatalogueQuery()
+        assert screen._query == screen._guided.query == CatalogueQuery(RecordQuery(None, ""))
         assert screen._results is None
 
 

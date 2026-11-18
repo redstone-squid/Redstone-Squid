@@ -5,6 +5,7 @@ The field registry is already the published contract for what may be queried
 memorized from documentation.
 """
 
+from squid.search.domain.scope import SearchScope
 from squid.suggestions.application import Candidate
 from squid.suggestions.application.ports import SearchFields
 from squid.suggestions.domain import SuggestionRequest
@@ -16,14 +17,13 @@ class SearchFieldProvider:
 
     def __init__(self, search: SearchFields) -> None:
         self._search = search
-        self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
+        self._cache = TtlCache[SearchScope, tuple[Candidate, ...]](self._load)
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        items = await self._cache.get(None)
-        return tuple(item for item in items if _in_scope(item.suggestion.value, request.context.get("scope")))
+        return await self._cache.get(suggestion_search_scope(request))
 
-    async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        registry = await self._search.fields()
+    async def _load(self, scope: SearchScope) -> tuple[Candidate, ...]:
+        registry = (await self._search.fields()).for_scope(scope)
         return tuple(
             Candidate.create(
                 value=field.name,
@@ -66,26 +66,6 @@ class SearchSortProvider:
         return tuple(results)
 
 
-def _in_scope(name: str, scope: str | None) -> bool:
-    if scope == "builds":
-        return name not in {"base_title", "version_scope", "record_state"}
-    if scope == "records":
-        return name in {
-            "title",
-            "description",
-            "kind",
-            "base_title",
-            "version_scope",
-            "status",
-            "record_state",
-            "creator",
-            "restriction",
-            "pattern",
-            "type",
-            "version",
-            "width",
-            "height",
-            "depth",
-            "volume",
-        }
-    return True
+def suggestion_search_scope(request: SuggestionRequest) -> SearchScope:
+    scope = request.context.get("scope", SearchScope.ALL)
+    return SearchScope(scope) if scope in SearchScope else SearchScope.ALL

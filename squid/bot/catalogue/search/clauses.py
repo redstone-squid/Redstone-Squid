@@ -1,47 +1,58 @@
 """Edit parsed catalogue queries without losing their Boolean grouping."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Self
 
-from squid.records.domain import BuildKind
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
+    BuildQuery,
     FieldExpression,
     NotExpression,
     QueryExpression,
-    SearchQuery,
+    RecordQuery,
     TextExpression,
+    expression_applies_to,
 )
+from squid.search.domain.scope import SearchScope
 
 
 @dataclass(frozen=True, slots=True)
 class CatalogueQuery:
     """The parsed query and, until a filter changes it, the user's exact input."""
 
-    parsed: SearchQuery = SearchQuery(None, "")
+    parsed: BuildQuery | RecordQuery = BuildQuery(None, "")
     source: str | None = None
 
     @classmethod
-    def from_text(cls, parser: SearchQueryParser, text: str) -> Self:
-        return cls(parser.parse(text), source=text)
+    def from_text(cls, parser: SearchQueryParser, text: str, *, typed: bool = True) -> Self:
+        parsed = parser.parse(text)
+        assert isinstance(parsed, BuildQuery | RecordQuery)
+        return cls(parsed, source=text if typed else None)
 
     @property
     def text(self) -> str:
         return self.source if self.source is not None else self.parsed.normalized
 
     def with_expression(self, parser: SearchQueryParser, expression: QueryExpression | None) -> CatalogueQuery:
-        if expression == self.parsed.expression:
+        if expression == self.parsed.expression and self.parsed.scope is parser.scope:
             return self
-        return CatalogueQuery(SearchQuery(expression, parser.render(expression) if expression is not None else ""))
+        parsed = parser.query(expression)
+        assert isinstance(parsed, BuildQuery | RecordQuery)
+        return CatalogueQuery(parsed)
 
     def with_shared_from(self, parser: SearchQueryParser, source: CatalogueQuery) -> CatalogueQuery:
         """Take the other tab's shared clauses while keeping this tab's local clauses."""
         shared, local = self._split()
         incoming, incoming_local = source._split()
         if not local and not incoming_local:
-            return source
+            query = self.with_expression(parser, source.parsed.expression)
+            raw = source.source
+            # In Records, leading title words can have a different meaning from Builds.
+            if raw is not None and parser.parse(raw).expression == query.parsed.expression:
+                return replace(query, source=raw)
+            return query
         if shared == incoming:
             return self
         return self.with_expression(parser, combine_clauses(BooleanOperator.AND, *incoming, *local))
@@ -57,25 +68,10 @@ class CatalogueQuery:
         )
         shared: list[QueryExpression] = []
         local: list[QueryExpression] = []
+        other_scope = SearchScope.RECORDS if isinstance(self.parsed, BuildQuery) else SearchScope.BUILDS
         for clause in clauses:
-            (shared if _is_shared(clause) else local).append(clause)
+            (shared if expression_applies_to(clause, other_scope) else local).append(clause)
         return tuple(shared), tuple(local)
-
-
-def _is_shared(expression: QueryExpression) -> bool:
-    match expression:
-        case BooleanExpression(operands=operands):
-            return all(_is_shared(operand) for operand in operands)
-        case NotExpression(operand=operand):
-            return _is_shared(operand)
-        case TextExpression():
-            return True
-        case FieldExpression(field=field, value=value):
-            # Both indexes have titles and kinds. Other fields are scope-specific,
-            # including status, which describes a different lifecycle in each tab.
-            return field.name == "title" or (
-                field.name == "kind" and isinstance(value, str) and value.casefold() in BuildKind
-            )
 
 
 def combine_clauses(operator: BooleanOperator, *clauses: QueryExpression) -> QueryExpression | None:
