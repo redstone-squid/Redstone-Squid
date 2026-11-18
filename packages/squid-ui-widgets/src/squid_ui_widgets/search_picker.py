@@ -44,6 +44,7 @@ class SearchPicker[ItemT](Component):
 
     With maximum=1 a new pick replaces the previous one; otherwise picks accumulate.
     Pick callbacks run after local state changes. The host owns durable persistence.
+    Enable `hide_search_when_complete` if the unfiltered source provides every option.
     """
 
     query: str | None = state(None)
@@ -67,6 +68,7 @@ class SearchPicker[ItemT](Component):
         show_heading: bool = True,
         search_label: TextLike | None = None,
         show_query: bool = False,
+        hide_search_when_complete: bool = False,
     ) -> None:
         self.key = require_key(key, name="SearchPicker.key")
         if minimum < 0 or maximum < 1 or minimum > maximum:
@@ -96,6 +98,7 @@ class SearchPicker[ItemT](Component):
         self.show_heading = show_heading
         self.search_label = search_label
         self.show_query = show_query
+        self.hide_search_when_complete = hide_search_when_complete
 
     async def _searched(self, event: SubmitEvent) -> None:
         query = str(event.values["query"]).strip()
@@ -190,13 +193,18 @@ class SearchPicker[ItemT](Component):
             key=f"{self.key}.search",
             on_submit=self._searched,
         )
-        header = heading(chrome.search) if self.show_heading else None
+        session = self.session
+        current = session.snapshot if session is not None else None
+        if self.hide_search_when_complete and not self.query and current is not None:
+            window = current.loaded.window
+            if not window.has_previous and not window.has_next:
+                search_control = None
+        header = heading(chrome.search) if self.show_heading and search_control is not None else None
         query = paragraph(self.query) if self.show_query and self.query else None
-        if self.session is None:
+        if session is None:
             return stack(header, query, *self._picked_nodes(), search_control)
 
-        current = self.session.snapshot
-        operation = self.session.operation
+        operation = session.operation
         status = None if operation is None else operation.status
         failed = isinstance(status, Failed)
         message = self.copy.failed if failed else self.copy.loading if isinstance(status, Pending) else None

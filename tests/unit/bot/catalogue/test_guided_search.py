@@ -17,6 +17,7 @@ from squid.search.domain.query import BooleanExpression, BooleanOperator, Compar
 from squid.search.domain.scope import SearchScope
 from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.suggestions.application import SuggestionSource as RegisteredSource
+from squid.suggestions.domain import SourceKind
 from squid_i18n import Text
 from squid_ui.ext.discord.testing import StagedUI, iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider
@@ -95,7 +96,14 @@ async def test_long_queries_paginate_removable_clauses() -> None:
 
 def _suggestions(*sources: tuple[str, tuple[Candidate, ...]]) -> SuggestionService:
     return SuggestionService(
-        SuggestionRegistry.of(tuple(RegisteredSource(name, RecordingProvider(items)) for name, items in sources))
+        SuggestionRegistry.of(
+            RegisteredSource(
+                name,
+                RecordingProvider(items),
+                kind=SourceKind.ENUMERABLE if name in {"search_fields", "search_sorts"} else SourceKind.QUERIED,
+            )
+            for name, items in sources
+        )
     )
 
 
@@ -128,6 +136,7 @@ async def test_filter_and_sort_panels_open_together_and_stay_in_the_message(monk
         assert "## Sort by" in ui.texts()
 
         await _choose(ui, "sort-lookup", "-width")
+        assert not any(key.endswith("sort-lookup.search") for key in ui.root.snapshot().handler_keys)
         assert screen.sort == "-width"
         assert screen.sort_picker is not None
         assert screen.sort_picker.picked == ()
@@ -244,16 +253,21 @@ async def test_keyword_edit_treats_query_syntax_as_literal_text() -> None:
 
 
 async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = _suggestions(("search_fields", (Candidate.create("width", "Width"),)))
+    other_fields = tuple(Candidate.create(f"other-{index}", f"Other {index}") for index in range(10))
+    service = _suggestions(("search_fields", (*other_fields, Candidate.create("width", "Width"))))
     screen = editor()
     async with stage(screen, owner=object()) as ui:
         _install(ui, monkeypatch, service)
         await ui.press(ui.key_for("field"))
+        with anyio.fail_after(2):
+            while not any(key.endswith("filter-lookup.next") for key in ui.root.snapshot().handler_keys):
+                await anyio.sleep(0.01)
         assert "## Search" not in ui.texts()
         assert ui.control(ui.key_for("filter-lookup.search")).payload["label"] == "Search fields"
         form = await ui.press_for_form(ui.key_for("filter-lookup.search"))
         await form.submit({"query": "wid"})
         assert "wid" in ui.texts()
+        assert ui.key_for("filter-lookup.search")
         await _choose(ui, "filter-lookup", "width")
         assert ui.control(ui.key_for("field")).payload["label"] == "Close filters"
         assert ui.control(ui.key_for("value")).payload["label"] == "Set Width filter"

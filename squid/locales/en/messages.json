@@ -12169,15 +12169,6 @@
       "squid/bot/lookup.py:114"
     ]
   },
-  "lookup-catalogue": {
-    "fingerprint": "da7efa476667d18cf0ed2e4886aecd7aafc4a110fb7df095853f35ab299f44cc",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/lookup.py:110"
-    ]
-  },
   "lookup-use-selection": {
     "fingerprint": "7b1b08d829e82ff129ce0cf9a0b7d89261482dab7ed65fcef7482eb576904bc7",
     "attributes": [],

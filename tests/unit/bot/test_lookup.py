@@ -58,10 +58,13 @@ async def test_failed_fetch_is_retried_instead_of_cached_as_empty() -> None:
     assert (await source.fetch(sl.sources.ORIGIN, 25)).items[0].label == "Recovered"
 
 
-@pytest.mark.parametrize("confirm", [True, False])
-async def test_lookup_returns_the_selected_identity_only_after_confirmation(confirm: bool) -> None:
+@pytest.mark.parametrize(
+    ("kind", "confirm"),
+    [(SourceKind.QUERIED, True), (SourceKind.QUERIED, False), (SourceKind.ENUMERABLE, True)],
+)
+async def test_lookup_returns_the_selected_identity_only_after_confirmation(kind: SourceKind, confirm: bool) -> None:
     provider = RecordingProvider((Candidate.create("first", "Same name"), Candidate.create("second", "Same name")))
-    service = SuggestionService(SuggestionRegistry.of((RegisteredSource("creators", provider),)))
+    service = SuggestionService(SuggestionRegistry.of((RegisteredSource("creators", provider, kind=kind),)))
 
     class Parent(sd.Screen):
         policy = sd.ResponseSpec(session=sd.SessionSpec("lookup-test"))
@@ -91,6 +94,8 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(conf
         with anyio.fail_after(2):
             while not any(key.endswith("lookup.results") for key in child.root.snapshot().handler_keys):
                 await anyio.sleep(0.01)
+        has_search = any(key.endswith("lookup.search") for key in child.root.snapshot().handler_keys)
+        assert has_search == (kind == SourceKind.QUERIED)
         await child.select(child.key_for("lookup.results"), ["second"])
         assert parent.value == ""
         await child.press(child.key_for("confirm" if confirm else "cancel"))

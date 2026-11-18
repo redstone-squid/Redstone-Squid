@@ -85,6 +85,7 @@ class LookupScreen(sd.Screen[Suggestion]):
             description=lambda item: item.description or f"{item.kind} · {item.value[:8]}",
             on_pick=self._picked,
             page_size=25,
+            hide_search_when_complete=not self.bounded,
         )
 
     @override
@@ -103,11 +104,14 @@ class LookupScreen(sd.Screen[Suggestion]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+        help_text = (
+            (sl.note(tr(t"lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results.")),)
+            if self.bounded
+            else ()
+        )
         return (
             sl.heading(self.title),
-            sl.note(tr(t"lookup-bounded = Up to 25 matches are shown. Search by name to narrow the results."))
-            if self.bounded
-            else sl.note(tr(t"lookup-catalogue = Browse or search by name.")),
+            *help_text,
             self.picker,
             sl.action_controls(
                 sl.action_control(self.confirm, self._confirm, key="confirm", available=bool(self.picker.picked)),

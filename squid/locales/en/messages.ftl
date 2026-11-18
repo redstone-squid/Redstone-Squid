@@ -3727,9 +3727,6 @@ lookup-bounded = Up to 25 matches are shown. Search by name to narrow the result
 # squid/bot/lookup.py:114
 lookup-cancel = Cancel
 
-# squid/bot/lookup.py:110
-lookup-catalogue = Browse or search by name.
-
 # squid/bot/lookup.py:143
 lookup-use-selection = Use selection
 
