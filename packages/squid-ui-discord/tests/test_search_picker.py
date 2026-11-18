@@ -100,7 +100,7 @@ async def test_lookup_picks_several_results_in_one_callback() -> None:
     lookup = _lookup(items, commits, maximum=3)
     message_root = MessageRoot(lookup, access=Everyone(), timeout=None)
 
-    await _search(message_root, lookup, "")
+    await _search(message_root, lookup, "a")
     rendered = commit_render(message_root)
     assert query(rendered, select_node(discord.ui.Select)).one().node.max_values == 2
     await message_root.dispatch("lookup.results", interaction_harness(), ["a", "b"])
