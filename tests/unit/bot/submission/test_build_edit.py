@@ -63,6 +63,21 @@ async def test_every_category_renders_its_form_sections_within_discord_limits(bu
     assert_within_limits(commit_render(root))
 
 
+async def test_editor_renders_both_histories_when_saved_refresh_fails() -> None:
+    screen = editor(_door(version_spec="1.20"))
+    cast(AsyncMock, screen.builds.get).side_effect = RuntimeError("reload failed")
+    with sl.runtime.transaction() as tx:
+        await screen.workspace.save_values(tx, {"version_compatibility": "1.21"})
+    async with stage(screen, owner=object()) as ui:
+        await ui.press(ui.key_for("review"))
+        await ui.press(ui.key_for("apply"))
+
+        assert screen.controller.refresh_failed
+        assert screen.controller.undoable
+        assert screen.workspace.history.can_undo
+        assert ui.key_for("refresh-saved")
+
+
 async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     build = _door(version_spec="1.20")
     workspace = editor(build).workspace

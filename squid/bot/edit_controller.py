@@ -225,7 +225,7 @@ class EditController:
                 sl.action_controls(
                     can_undo and sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo"),
                     can_redo and sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo"),
-                    key="edit-history",
+                    key="saved-edit-history",
                 )
             )
         return (*nodes, *self.refresh_controls())
