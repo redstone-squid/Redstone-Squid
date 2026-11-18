@@ -269,39 +269,26 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             chrome=chrome,
             chronology=self.chronology,
         )
-        size_controls = (
-            (
-                ActionControls(
-                    (
-                        page_size_button(
-                            self.key,
-                            self.page_size,
-                            partial(self._resize, self.session.revision),
-                            maximum=25,
-                            chrome=chrome,
-                        ),
-                    ),
-                    key=f"{self.key}.size-controls",
-                ),
+        size = (
+            page_size_button(
+                self.key, self.page_size, partial(self._resize, self.session.revision), maximum=25, chrome=chrome
             )
             if self.show_page_size
-            else ()
+            else None
         )
         if state is None:
-            return size_controls
-        return (
-            tuple(
-                nav(
-                    NavigationContext(
-                        state,
-                        partial(self._move, "previous", self.session.revision),
-                        partial(self._move, "next", self.session.revision),
-                        partial(self._seek, self.session.revision) if state.extent is not None else None,
-                        chrome=chrome,
-                    )
+            return (ActionControls((size,), key=f"{self.key}.size-controls"),) if size is not None else ()
+        return tuple(
+            nav(
+                NavigationContext(
+                    state,
+                    partial(self._move, "previous", self.session.revision),
+                    partial(self._move, "next", self.session.revision),
+                    partial(self._seek, self.session.revision) if state.extent is not None else None,
+                    chrome=chrome,
+                    page_size=size,
                 )
             )
-            + size_controls
         )
 
     def _render_detail(

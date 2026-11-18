@@ -200,6 +200,8 @@ class NavigationContext:
     chrome: Chrome = dataclass_field(default=DEFAULT_CHROME, kw_only=True)
     jump_route: str | None = None
     """Persistent button route that opens a page-number form, when provided by the host."""
+    page_size: sem.FormTrigger | None = dataclass_field(default=None, kw_only=True)
+    """Optional page-size form to include alongside the navigation buttons."""
 
     @property
     def key(self) -> str:
@@ -372,7 +374,7 @@ __all__ = [
 
 
 def default_nav(context: NavigationContext) -> Sequence[NavNode]:
-    """Build portable Previous and Next actions from navigation state."""
+    """Build a portable group of navigation buttons."""
     state = context.state
 
     def control(
@@ -389,9 +391,10 @@ def default_nav(context: NavigationContext) -> Sequence[NavNode]:
         if state.backward
         else ()
     )
+    size = (context.page_size,) if context.page_size is not None else ()
     return (
         sem.ActionControls(
-            (*previous, control(state.next_label, context.on_next, state.next_key, state.has_next)),
+            (*previous, control(state.next_label, context.on_next, state.next_key, state.has_next), *size),
             key=f"{state.next_key}.navigation",
         ),
     )

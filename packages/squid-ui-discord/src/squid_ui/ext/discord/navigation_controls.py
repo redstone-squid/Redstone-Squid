@@ -2,7 +2,6 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 
-from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.primitives.nodes import (
     Button,
@@ -18,16 +17,14 @@ from squid_ui.ext.discord.primitives.nodes import (
     Thumbnail,
 )
 from squid_ui.ext.discord.target_types import DiscordTarget
-from squid_ui.interactions import ActionEvent, ActionMode
+from squid_ui.interactions import ActionMode
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.planning.pagination.navigation import (
     NavigationContext,
     PresentPageForm,
     SeekPageSelection,
     SubmitPageJump,
-    SubmitPageSize,
     page_jump_form,
-    page_size_form,
 )
 from squid_ui.target_types import Renderable
 
@@ -39,7 +36,7 @@ type NavFactory = Callable[[NavigationContext], Sequence[Renderable[DiscordTarge
 type PlannedNav = Callable[[NavigationContext], Sequence[NavNode]]
 
 
-def navigation_controls(context: NavigationContext) -> Row:
+def navigation_controls(context: NavigationContext, *extra: Button | RoutedButton) -> Row:
     """Build stable boundary-aware controls from the facts in ``context``."""
     state = context.state
 
@@ -55,7 +52,11 @@ def navigation_controls(context: NavigationContext) -> Row:
         if state.backward
         else ()
     )
-    return Row((*previous, button(state.next_label, context.on_next, state.next_key, state.has_next)))
+    items = (*previous, button(state.next_label, context.on_next, state.next_key, state.has_next), *extra)
+    if (size := context.page_size) is not None:
+        form = FormBinding(size.key, size.spec, size.on_submit, size.mode, size.label)
+        items = (*items, FormButton(size.label, PresentPageForm(form), form.key, mode=form.mode, form=form))
+    return Row(items)
 
 
 def default_nav(context: NavigationContext) -> Sequence[MountNavNode]:
@@ -108,46 +109,21 @@ def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     return (navigation_controls(context),) if control is None else (navigation_controls(context), control)
 
 
-def page_size_button(
-    key: str,
-    page_size: int,
-    on_change: Callable[[ActionEvent, int], Awaitable[None]],
-    *,
-    maximum: int | None = None,
-    chrome: Chrome = DEFAULT_CHROME,
-) -> FormButton:
-    """Build an optional size button; the owner applies the count and resets its page.
-
-    Keep this control visible even when all items fit on one page, so readers can
-    choose a smaller size again. The form rebases against the latest rendered control.
-    """
-    form = FormBinding(
-        f"{key}.page-size",
-        page_size_form(page_size, maximum=maximum, chrome=chrome),
-        SubmitPageSize(on_change),
-        ActionMode.REBASE,
-        chrome.items_per_page,
-        unavailable=chrome.page_jump_unavailable,
-    )
-    return FormButton(chrome.items_per_page, PresentPageForm(form), form.key, mode=form.mode, form=form)
-
-
 def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """Previous/Next plus a form-opening button for an addressable pager.
 
     Opt in with ``MessageRoot(..., nav=page_jump_nav)``. The form accepts every
     page, including pages beyond a select menu's option limit.
     """
-    row = navigation_controls(context)
     state = context.state
     seek = context.on_seek
     if state.page is None or state.extent is None or state.extent < 2:
-        return (row,)
+        return (navigation_controls(context),)
     label = state.seek_label or context.chrome.jump_to_page
     if context.jump_route is not None:
-        return (Row((*row.items, RoutedButton(label, context.jump_route))),)
+        return (navigation_controls(context, RoutedButton(label, context.jump_route)),)
     if not callable(seek):
-        return (row,)
+        return (navigation_controls(context),)
     form = FormBinding(
         f"{state.seek_key}.jump",
         page_jump_form(state.page, state.extent, title=label, chrome=context.chrome),
@@ -157,4 +133,4 @@ def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
         unavailable=context.chrome.page_jump_unavailable,
     )
     button = FormButton(label, PresentPageForm(form), form.key, mode=form.mode, form=form)
-    return (Row((*row.items, button)),)
+    return (navigation_controls(context, button),)

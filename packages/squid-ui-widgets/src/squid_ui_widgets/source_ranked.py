@@ -173,6 +173,11 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
             if window.items
             else self._hook(self.empty, total, name="empty")
         )
+        size = (
+            page_size_button(self.key, self.page_size, partial(self._resize, self.session.revision), chrome=chrome)
+            if self.show_page_size
+            else None
+        )
         navigation = (
             nav(
                 NavigationContext(
@@ -181,6 +186,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
                     partial(self._move, "next", self.session.revision),
                     partial(self._seek, self.session.revision) if navigation_state.extent is not None else None,
                     chrome=chrome,
+                    page_size=size,
                 )
             )
             if navigation_state is not None
@@ -193,15 +199,8 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
             *body,
             note(numeric_footer) if navigation_state is not None and numeric_footer is not None else None,
             *navigation,
-            ActionControls(
-                (
-                    page_size_button(
-                        self.key, self.page_size, partial(self._resize, self.session.revision), chrome=chrome
-                    ),
-                ),
-                key=f"{self.key}.size-controls",
-            )
-            if self.show_page_size
+            ActionControls((size,), key=f"{self.key}.size-controls")
+            if navigation_state is None and size is not None
             else None,
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
             note(status) if status is not None else None,
