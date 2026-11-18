@@ -162,8 +162,14 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
             raise RuntimeError(msg)
         if state.parent is not None:
             parent = state.parent._screen_flow
-            if parent.scope is not scope or parent.closing or parent.root is None or parent.root.finished:
-                msg = "the parent screen is no longer available in this scope"
+            if (
+                parent.scope is None
+                or parent.scope.runtime is not scope.runtime
+                or parent.closing
+                or parent.root is None
+                or parent.root.finished
+            ):
+                msg = "the parent screen is no longer available in this runtime"
                 raise RuntimeError(msg)
         state.claimed = True
         state.scope = scope
@@ -316,27 +322,50 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
     ) -> Presented[Screen[ChildResultT, Any, ClientT]] | Rejected | Abandoned:
         """Open a child with its own admission policy and attach its lifetime to this screen."""
         self._screen_validate_event(event)
+        return await self.present_child(event.context, child, on_result=on_result, on_cancel=on_cancel, **overrides)
+
+    async def present_child[ChildResultT](
+        self,
+        request: Request[Any, ClientT],
+        child: Screen[ChildResultT, Any, ClientT],
+        *,
+        on_result: Callable[[ScreenResultEvent[ChildResultT]], Awaitable[None]],
+        on_cancel: Callable[[Cancelled], Awaitable[None]] | None = None,
+        **overrides: Unpack[ResponseOverrides],
+    ) -> Presented[Screen[ChildResultT, Any, ClientT]] | Rejected | Abandoned:
+        """Present a child from an authorized request, including a separate command interaction.
+
+        The request supplies delivery authority. The parent owns the child and handles its result
+        under the parent's own access policy and action lock.
+        """
         state, child_state = self._screen_flow, child._screen_flow
         if child is self or child_state.parent is not None or child_state.claimed or child_state.closing:
             msg = "a child screen must be a fresh unattached instance"
             raise RuntimeError(msg)
+        scope = state.scope
+        if (
+            scope is None
+            or scope.runtime is not request.runtime
+            or state.closing
+            or self._screen_require_root().finished
+        ):
+            msg = "the parent screen is no longer available in this runtime"
+            raise RuntimeError(msg)
+        host = scope.runtime.execution_host
+        if host is None:
+            msg = "screen flows require an execution host"
+            raise RuntimeError(msg)
         child_state.parent = self
         child_state.on_result = on_result
         child_state.on_cancel = on_cancel
-        scope = state.scope
-        assert scope is not None
-        host = scope.runtime.execution_host
-        if host is None:
-            child_state.parent = None
-            msg = "screen flows require an execution host"
-            raise RuntimeError(msg)
 
         async def rollback_child() -> None:
             await child._screen_close(ScreenCancelReason.CLOSED)
 
-        event.transaction.after_rollback(lambda *_args: host.start_cleanup(rollback_child))
+        if request._transaction is not None:
+            request._transaction.after_rollback(lambda *_args: host.start_cleanup(rollback_child))
         try:
-            result = await event.context.respond(child, **overrides)
+            result = await request.respond(child, **overrides)
         except BaseException as error:
             try:
                 with anyio.CancelScope(shield=True):
