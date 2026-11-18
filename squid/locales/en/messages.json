@@ -6017,6 +6017,39 @@
       "squid/bot/submission/ui/build_edit.py:190"
     ]
   },
+  "build-edit-search-destination": {
+    "fingerprint": "591b747fc26bf04cc82cb66e7ea8d41a2a129da020316d7a9a4a5508b81c370b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "build_id",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/submission/ui/build_edit.py:475"
+    ]
+  },
+  "build-edit-search-patterns": {
+    "fingerprint": "d1ce64d38ce4cd5813d44e09d179f7c69bb014a680c4b4ba0450e28f7ebc0cf7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/build_edit.py:442"
+    ]
+  },
+  "build-edit-search-unavailable": {
+    "fingerprint": "5d777e1d620f0e47c04b57fe4ac73fb9726302bff8f4c49d6dd588a610a61c89",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/build_edit.py:484"
+    ]
+  },
   "build-editor-build-deleted": {
     "fingerprint": "9c0d0f0a93937ce42be6a7a4c875fcaf7760cb4512d90ea5bffd7864aac084e1",
     "attributes": [],
@@ -8490,6 +8523,51 @@
     "arguments": [],
     "locations": [
       "squid/bot/follows.py:64"
+    ]
+  },
+  "contextual-search-cancel": {
+    "fingerprint": "07efd94f6393694f0f8e4699e57c37043ebe92c1f8012be6de16a179fed22cae",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/contextual.py:179"
+    ]
+  },
+  "contextual-search-empty": {
+    "fingerprint": "f94f31b64c089d395aad18e71448d82aa14afe8602053dd096a80249c039ced3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/contextual.py:120"
+    ]
+  },
+  "contextual-search-expired": {
+    "fingerprint": "3de11c9125cce52253ff1701fba53659c6cf716a7c033285530a714802993678",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/contextual.py:115"
+    ]
+  },
+  "contextual-search-pick": {
+    "fingerprint": "86bb641d1084c572d532e347f91fbfdf71ed78896bdf4e084df82b2bf732a710",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/contextual.py:176"
+    ]
+  },
+  "contextual-search-prompt": {
+    "fingerprint": "9389604b6cb0f39b3913fab3fc1e8e55329d84f35a96fd19ea0c47d57b743c79",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/contextual.py:69"
     ]
   },
   "core-account-required-action": {

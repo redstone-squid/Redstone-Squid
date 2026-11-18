@@ -20,6 +20,7 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
+from squid.bot.catalogue.search.contextual import ContextualSearches
 from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
@@ -180,6 +181,7 @@ class RedstoneSquid(Bot):
         self.account_ids = AccountIdCache()
         self.actors = DiscordActorResolver(self)
         self.members = DiscordMembers(self)
+        self.contextual_searches = ContextualSearches()
         self.interaction_metrics = InteractionMetrics()
         self.gateway_history = GatewayHistory()
         self.layout_profiler = MemoryProfiler()

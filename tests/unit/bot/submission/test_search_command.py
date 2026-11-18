@@ -97,7 +97,7 @@ async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | Se
         return screen
 
     with patch.object(BuildBrowseScreen, "create", side_effect=create):
-        request = cast(Any, SimpleNamespace(client=cog.bot))
+        request = cast(Any, SimpleNamespace(client=cog.bot, interaction=None, defer=AsyncMock()))
         result = await unwrap(cast(Any, BuildCommands).search_records.callback)(cog, request, **kwargs)
     target = kwargs.get("scope", SearchTarget.builds)
     assert isinstance(

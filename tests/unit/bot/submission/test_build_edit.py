@@ -1,14 +1,20 @@
 """Editing a saved build through the build form's sections, staged until the user applies them."""
 
 from dataclasses import replace
+from inspect import unwrap
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
+import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.catalogue.search.contextual import ContextualSearches, search_autocomplete
+from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
+from squid.bot.utils.autocomplete import BotInteraction
 from squid.builds.application import BuildService
 from squid.builds.domain import Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import name_credits
@@ -16,9 +22,12 @@ from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
 from squid.submissions.domain import FormManifest
 from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
-from squid_ui.ext.discord.testing import assert_within_limits, commit_render
+from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
+from squid.suggestions.infrastructure.providers import StaticProvider
+from squid_ui.ext.discord.testing import InteractionHarness, assert_within_limits, commit_render, stage
 from squid_ui.testing import press_event, texts
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
+from tests.support.discord import make_command_interaction
 
 
 def editor(build: Build) -> BuildEditScreen:
@@ -72,6 +81,55 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     assert workspace.patch().attributes() == {"version_spec": "1.21"}
     assert workspace.answers["credits"] == []
     assert workspace.answers["version_compatibility"] == "1.21"
+
+
+async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_result() -> None:
+    build = _door(patterns=["Regular"])
+    screen = editor(build)
+    sources = SuggestionRegistry.of(
+        (
+            SuggestionSource("approved_patterns", StaticProvider.labelled((("full_lamp", "Full Lamp"),))),
+            SuggestionSource("search_query", StaticProvider.of(("width:",))),
+        )
+    )
+    async with stage(screen, owner=object()) as ui:
+        client = ui.interaction.client
+        client.contextual_searches = ContextualSearches()
+        client.services = SimpleNamespace(suggestions=SuggestionService(sources))
+        registration = SimpleNamespace(name="search", type=discord.AppCommandType.chat_input, mention="</search:2>")
+        with patch.object(client.tree, "fetch_commands", new=AsyncMock(return_value=[registration])):
+            launch = await ui.press(ui.key_for("search-patterns"))
+        assert launch.deferrals[0].kwargs["ephemeral"] is True
+        assert "</search:2>" in launch.edits[0].kwargs["content"]
+
+        for user_id, channel_id, expected in ((1, 5, "full_lamp"), (2, 5, "width:"), (1, 6, "width:")):
+            autocomplete = make_command_interaction(
+                client, name="search", user_id=user_id, channel_id=channel_id, autocomplete=True
+            )
+            assert [choice.value for choice in await search_autocomplete(cast(BotInteraction, autocomplete), "")] == [
+                expected
+            ]
+
+        invocation = InteractionHarness(client=client, message_id=100)
+        # A slash command is owned by its cog, which can differ from the editor's owner.
+        request = await client.ui.scope(object()).request(invocation.source)
+        cog = BuildCommands.__new__(BuildCommands)
+        await unwrap(cog.search_records.callback)(cog, request, query="lamp")
+        assert invocation.deferrals[0].kwargs["ephemeral"] is True
+        key = sd.SessionKey.custom("contextual-search", (1, 5))
+        (session,) = client.ui.sessions.get(key)
+        root = session.root
+        (match,) = (key for key in root.snapshot().handler_keys if key == "match" or key.endswith(".match"))
+
+        selection = InteractionHarness(client=client, message_id=100)
+        await root.dispatch(match, selection.source, ["0"], generation=root.generation)
+        assert root.finished
+        assert not ui.root.finished
+        assert screen.workspace.answers["patterns"] == ["regular", "full_lamp"]
+        assert build.patterns == ["Regular"]
+        assert client.contextual_searches.active(invocation.source) is None
+        await screen.workspace.history.undo()
+        assert screen.workspace.answers["patterns"] == ["regular"]
 
 
 def test_editor_derivations_share_normalization_without_sharing_answer_dicts() -> None:

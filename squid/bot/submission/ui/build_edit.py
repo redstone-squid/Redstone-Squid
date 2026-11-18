@@ -19,7 +19,7 @@ proposals instead.
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from copy import deepcopy
 from types import MappingProxyType
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -38,10 +38,14 @@ from squid.edits.application import EditRunner
 from squid.edits.domain import RevisionConflictError
 from squid.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
 from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
+from squid.suggestions.domain import Suggestion
 from squid_i18n import Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
 """Fetch the current choices of one option source, such as `approved_restrictions`."""
@@ -432,6 +436,14 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                     available=not self.conflict,
                 )
             )
+            if not self.conflict and self.workspace.section("patterns") is not None:
+                actions.append(
+                    sl.action_control(
+                        tr(t"build-edit-search-patterns = Search patterns"),
+                        sd.on_press(self._search_patterns),
+                        key="search-patterns",
+                    )
+                )
         actions.append(sl.action_control(tr(t"draft-editor-preview = Preview"), self._preview, key="preview"))
         if self.conflict:
             actions.append(
@@ -450,6 +462,36 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
     async def _remove_unlisted(self, event: sd.SelectionEvent) -> None:
         if await self._may_event(event):
             self.workspace.remove_unresolved(event.transaction, event.values)
+
+    async def _search_patterns(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        if not await self._may_event(event) or self.confirming or self.conflict:
+            return
+        request = event.context
+        build_id = self._build_id
+        await request.client.contextual_searches.start(
+            request,
+            self,
+            "approved_patterns",
+            tr(t"build-edit-search-destination = Add a pattern to build #{build_id}"),
+            self._add_search_pattern,
+        )
+
+    async def _add_search_pattern(self, event: sd.ScreenResultEvent[Suggestion]) -> None:
+        if not await self._may_event(event):
+            return
+        ws = self.workspace
+        if self.confirming or self.conflict or ws.section("patterns") is None:
+            await event.notice(tr(t"build-edit-search-unavailable = Return to the editor before adding a pattern."))
+            return
+        current = ws.stored_answers.get("patterns")
+        patterns = current if isinstance(current, list) else []
+        match = event.value
+        if match.value in patterns:
+            return
+        options = ws.option_sets.get("approved_patterns", ())
+        if all(option.value != match.value for option in options):
+            ws.option_sets = {**ws.option_sets, "approved_patterns": (*options, ChoiceOption(match.value, match.label))}
+        await ws.save_values(event.transaction, {"patterns": [*patterns, match.value]})
 
     async def _preview(self, event: sd.PressEvent) -> None:
         preview = deepcopy(self.build)

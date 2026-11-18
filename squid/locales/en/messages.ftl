@@ -1811,6 +1811,15 @@ build-edit-history-save = Save build changes
 # squid/bot/submission/ui/build_edit.py:190
 build-edit-history-unlisted = Remove names not in the catalogue
 
+# squid/bot/submission/ui/build_edit.py:475
+build-edit-search-destination = Add a pattern to build #{ $build_id }
+
+# squid/bot/submission/ui/build_edit.py:442
+build-edit-search-patterns = Search patterns
+
+# squid/bot/submission/ui/build_edit.py:484
+build-edit-search-unavailable = Return to the editor before adding a pattern.
+
 # squid/bot/submission/ui/controls.py:74
 build-editor-build-deleted = That build no longer exists.
 
@@ -2575,6 +2584,21 @@ context-follow-record = Follow record
 
 # squid/bot/follows.py:64
 context-follow-saved = Following. Manage your follows in /notifications.
+
+# squid/bot/catalogue/search/contextual.py:179
+contextual-search-cancel = Cancel search
+
+# squid/bot/catalogue/search/contextual.py:120
+contextual-search-empty = No matches. Try another /search query.
+
+# squid/bot/catalogue/search/contextual.py:115
+contextual-search-expired = This search ended. Use Search in the editor to start again.
+
+# squid/bot/catalogue/search/contextual.py:176
+contextual-search-pick = Select a match to add it
+
+# squid/bot/catalogue/search/contextual.py:69
+contextual-search-prompt = Use /search here within two minutes. Leave scope empty.
 
 # squid/core/errors.py:226
 core-account-required-action = A linked account is required for this action.

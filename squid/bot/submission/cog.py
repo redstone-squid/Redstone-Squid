@@ -10,6 +10,7 @@ from discord.ext.commands import Context, when_mentioned
 
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.search.contextual import search_autocomplete
 from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
@@ -67,7 +68,6 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @sd.command(
         name=tr(t"command-search-name = search"),
         description=tr(t"command-search-help = Search builds, records, and taxonomy metadata"),
-        defer="public",
         options={
             "scope": sd.Option(
                 name=tr(t"command-search-scope-name = scope"),
@@ -100,7 +100,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             "query": sd.Option(
                 name=tr(t"command-search-query-name = query"),
                 description=md_tr(t"build-search-query-help = Search text and filters, e.g. `width:5`."),
-                autocomplete=suggests("search_query"),
+                autocomplete=search_autocomplete,
             ),
         },
     )
@@ -112,8 +112,14 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         mode: SearchModeChoice = SearchModeChoice.keyword,
         *,
         query: str,
-    ) -> BuildBrowseScreen | SearchScreen:
+    ) -> BuildBrowseScreen | SearchScreen | None:
         """Search records, builds, patterns, and restrictions using text and field filters."""
+        if scope is None and (interaction := request.interaction) is not None:
+            searches = request.client.contextual_searches
+            if (search := searches.active(interaction)) is not None:
+                await searches.present(request, search, query)
+                return None
+        await request.defer("public")
         return await open_search(
             request,
             scope=scope,
