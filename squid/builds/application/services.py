@@ -67,6 +67,10 @@ class BuildService:
         async with self._uow_factory() as uow:
             return await uow.builds.get_by_source_submission_draft_id(draft_id)
 
+    async def next_attachment_review(self, after: int) -> int | None:
+        async with self._uow_factory() as uow:
+            return await uow.builds.next_attachment_review(after)
+
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         """Return IDs of builds linked to a Discord source message, in ascending order."""
         async with self._uow_factory() as uow:

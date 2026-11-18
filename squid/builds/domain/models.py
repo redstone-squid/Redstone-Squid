@@ -88,6 +88,12 @@ class AttachmentFailureInfo(TypedDict):
     detail: str
 
 
+class AttachmentResolution(TypedDict):
+    issue: AttachmentFailureInfo
+    reason: str
+    added_url: str | None
+
+
 class Info(TypedDict, total=False):
     """Additional submission details retained in the build's JSON metadata."""
 
@@ -96,6 +102,7 @@ class Info(TypedDict, total=False):
     server_info: ServerInfo
     schematic_duplicates: list[SchematicDuplicateInfo]
     attachment_failures: list[AttachmentFailureInfo]
+    attachment_resolutions: list[AttachmentResolution]
     inference_review_notes: list[str]
     source_submission: dict[str, Any]
 

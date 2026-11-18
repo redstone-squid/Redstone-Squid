@@ -13,6 +13,7 @@ from discord.utils import escape_markdown
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.submission.ui.attachment_review import review_attachments
 from squid.bot.ui import (
     truncate_display_text,
 )
@@ -198,6 +199,15 @@ async def render_build_card(
         # Allow the description to shrink when the full card exceeds the layout budget.
         description and sl.paragraph(description).truncate(),
         group("Review warnings", review_names),
+        build.id is not None
+        and build.submission_status is Status.CONFIRMED
+        and bool(build.extra_info.get("attachment_failures") or build.extra_info.get("attachment_resolutions"))
+        and sl.action_controls(
+            sl.routed_action_control(
+                "Review attachments", review_attachments.custom_id(build_id=build.id), key="review"
+            ),
+            key="attachment-review",
+        ),
         group("Size & performance", performance_names),
         group("Compatibility", {"Versions"}),
         group("Credits", credit_names),

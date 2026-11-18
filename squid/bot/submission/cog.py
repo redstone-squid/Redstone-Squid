@@ -15,6 +15,7 @@ from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
 from squid.bot.submission.form import open_submission_form
 from squid.bot.submission.message_intake import BuildMessageIntake
+from squid.bot.submission.ui.attachment_review import AttachmentReview
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
 from squid.builds.domain import DoorOrientationLiteral
@@ -120,6 +121,10 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
             query=query,
         )
+
+    @build_group.command(name="issues", description="Review unresolved build attachments", defer="private")
+    async def attachment_issues(self, request: sd.Request[Self, BotT]) -> AttachmentReview:
+        return await AttachmentReview.open(request)
 
     @build_group.command(
         name=tr(t"command-build-browse-name = browse"),

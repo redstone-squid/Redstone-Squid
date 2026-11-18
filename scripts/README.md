@@ -107,3 +107,18 @@ disables release LTO to reduce Rust build memory use. `UV_CACHE_DIR`, `UV_LINK_M
 `android-link-with-libpython3.sh` keeps the Python library linked into aarch64 Android
 Rust extensions. The wrapper also supplies Nucleation's feature and CMake settings; see
 [the upstream issue record](../docs/plans/completed/nucleation-android-build.md).
+
+## Reviewing deferred attachments
+
+Staff with build edit permission can open `/build issues` or **Review attachments**
+on a confirmed build card. Preview the original and check the source messages. Use
+**Other candidate** to inspect another build that shares the attachment. Publishing
+uploads the selected image or video to Catbox and saves its URL on the selected build.
+Excluding requires a reason. Reopening the last decision restores its warning and
+removes the link added by that decision.
+
+For historical files, set `ATTACHMENT_REVIEW_ARCHIVE` to the directory containing
+`retained-files.jsonl` and `retained-files/`. With Docker Compose, include
+`-f compose.attachment-review.yml` alongside the deployment's usual Compose files.
+The bot user needs read access to the manifest and files and traversal access to
+their directories. Only those two archive entries are mounted, both read-only.

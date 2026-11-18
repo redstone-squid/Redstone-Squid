@@ -1,0 +1,5 @@
+services:
+  bot:
+    volumes:
+      - ${ATTACHMENT_REVIEW_ARCHIVE:?Set the archive directory}/retained-files.jsonl:/var/lib/app/attachment-review/retained-files.jsonl:ro
+      - ${ATTACHMENT_REVIEW_ARCHIVE:?Set the archive directory}/retained-files:/var/lib/app/attachment-review/retained-files:ro

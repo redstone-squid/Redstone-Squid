@@ -65,6 +65,11 @@ class FakeBuildRepository(FakeBuildEditing):
             return self.build
         return None
 
+    async def next_attachment_review(self, after: int) -> int | None:
+        if self.build and self.build.id and self.build.id > after and self.build.extra_info.get("attachment_failures"):
+            return self.build.id
+        return None
+
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         # ORM identity columns may still be None before flush.
         if self.build is None or self.build.id is None:  # pyright: ignore[reportUnnecessaryComparison]

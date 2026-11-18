@@ -427,6 +427,20 @@ class BuildRepository:
         )
         return await session.scalar(statement) or 0
 
+    async def next_attachment_review(self, after: int) -> int | None:
+        builds = Build.__table__.c
+        return await self._session().scalar(
+            select(builds.id)
+            .where(
+                builds.id > after,
+                builds.submission_status == Status.CONFIRMED,
+                func.jsonb_typeof(builds.extra_info["attachment_failures"]) == "array",
+                builds.extra_info["attachment_failures"][0].is_not(None),
+            )
+            .order_by(builds.id)
+            .limit(1)
+        )
+
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         """Return build IDs linked to the message, in ascending order."""
         session = self._session()
