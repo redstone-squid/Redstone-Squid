@@ -16726,6 +16726,26 @@
       "squid/bot/catalogue/search/labels.py:43"
     ]
   },
+  "search-field-expects-choice": {
+    "fingerprint": "3c9d91ec0dd733c47065b91e8bc597d30f9a4545ac9de27ee122831d66618c3a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "field_name",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "choices",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/search/application/fields.py:102"
+    ]
+  },
   "search-field-height": {
     "fingerprint": "d3a510f1bb06eec0651cc1e03841fa9176e41ca6e443c07dfd5ab45f794b2613",
     "attributes": [],
@@ -17050,6 +17070,21 @@
     "arguments": [],
     "locations": [
       "squid/search/application/ranking.py:67"
+    ]
+  },
+  "search-query-incompatible-scope": {
+    "fingerprint": "5fba9db530908169ead2432e0e85212e78c0636247bfa18284d9a9e952c926c1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "scope",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/search/domain/query.py:120"
     ]
   },
   "search-reference-and": {

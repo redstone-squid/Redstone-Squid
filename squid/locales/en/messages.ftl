@@ -5064,6 +5064,9 @@ search-field-depth = Depth
 # squid/bot/catalogue/search/labels.py:43
 search-field-description = Description
 
+# squid/search/application/fields.py:102
+search-field-expects-choice = { $field_name } expects one of { $choices }.
+
 # squid/bot/catalogue/search/labels.py:67
 search-field-height = Height
 
@@ -5147,6 +5150,9 @@ search-grouped-tied-holders = Tied holders
 
 # squid/search/application/ranking.py:67
 search-k-positive = k must be positive
+
+# squid/search/domain/query.py:120
+search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
 # squid/bot/catalogue/search/help.py:160
 search-reference-and = - Everything you type must match: `door width<=5`.
