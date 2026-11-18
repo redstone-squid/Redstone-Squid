@@ -11,6 +11,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_history import history_actions, track_local_edits
 from squid.bot.ui import tr
+from squid.bot.voting.poll_display import poll_choices, poll_question
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -115,6 +116,11 @@ def format_duration(seconds: int) -> sl.TextLike:
     )
 
 
+def _split_option_line(line: str) -> tuple[str | None, str]:
+    emoji, separator, label = line.partition("|")
+    return (emoji.strip(), label.strip()) if separator else (None, line.strip())
+
+
 def parse_option_lines(
     lines: Sequence[str],
     *,
@@ -136,9 +142,8 @@ def parse_option_lines(
         )
     options: list[VoteOption] = []
     for index, line in enumerate(cleaned):
-        if "|" in line:
-            emoji, label = (part.strip() for part in line.split("|", 1))
-        else:
+        emoji, label = _split_option_line(line)
+        if emoji is None:
             if index >= len(palette):
                 raise InvalidVoteConfigurationError(
                     tr(
@@ -146,7 +151,7 @@ def parse_option_lines(
                         t"configured generic emoji palette does not have enough entries for these options."
                     )
                 )
-            emoji, label = palette[index].emoji, line
+            emoji = palette[index].emoji
         if not emoji or not label:
             raise InvalidVoteConfigurationError(
                 tr(t"poll-setup-option-emoji-required = Each option needs a non-empty emoji and label.")
@@ -343,7 +348,6 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[ComponentsV2Target, sd.R
     draft = PollDraft.from_answers(answers)
     try:
         draft.validate()
-        options = "\n".join(f"- {line}" for line in draft.option_lines)
     except InvalidVoteConfigurationError as error:
         return sl.status(error.message, tone=sl.Tone.DANGER)
     fields = [
@@ -360,7 +364,11 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[ComponentsV2Target, sd.R
                 tr(t"bot-voting-poll-wizard-every-server = Every server"),
             )
         )
-    return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
+    choices = poll_choices(
+        (str(index), label, emoji or "")
+        for index, (emoji, label) in enumerate(map(_split_option_line, draft.option_lines), start=1)
+    )
+    return sl.section(poll_question(draft.question), choices, sl.fields(*fields))
 
 
 class PollScreen(sd.Screen[str]):
@@ -499,8 +507,8 @@ class PollScreen(sd.Screen[str]):
         lines = parse_poll_choices(str(dict(content.values)["options"]))
         rows = []
         for line in lines:
-            emoji, separator, label = line.partition("|")
-            rows.append({"label": label.strip() if separator else line, "emoji": emoji.strip() if separator else ""})
+            emoji, label = _split_option_line(line)
+            rows.append({"label": label, "emoji": emoji or ""})
         self.option_driver.machine_state = self.option_editor.initial_from(rows)
         self.editing_options = True
 

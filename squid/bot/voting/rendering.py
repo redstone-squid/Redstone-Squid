@@ -10,6 +10,7 @@ import squid_ui_widgets as sp
 from squid.bot.chrome import CHROME
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
+from squid.bot.voting.poll_display import poll_choices, poll_question
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid_i18n import discord_markup
 from squid_ui.ext.discord import primitives
@@ -141,7 +142,7 @@ def _generic_poll_nodes(
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
     options = snapshot.options_for_guild(poll.guild_id or 0)
-    nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [sl.heading(sl.plain(poll.question))]
+    nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [poll_question(poll.question)]
 
     if show_totals:
         raw = snapshot.raw_tallies()
@@ -172,14 +173,9 @@ def _generic_poll_nodes(
         nodes.append(sl.tally(tally_options, key="poll.tally", chrome=CHROME))
     else:
         nodes.append(
-            sl.bullets(
-                *(
-                    sl.bullet(
-                        sl.md(t"{sl.emoji_text(option.emoji)} {option.label}"), key=option.identifier or option.emoji
-                    )
-                    for option in options
-                ),
-                key="poll.options",
+            poll_choices(
+                (option.identifier or option.emoji, option.label or option.identifier or option.emoji, option.emoji)
+                for option in options
             )
         )
 
