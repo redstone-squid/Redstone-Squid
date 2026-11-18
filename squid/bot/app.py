@@ -79,7 +79,6 @@ CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"
 # write one merely by staying alive.
 
 EXTENSIONS: tuple[Extension, ...] = (
-    "squid.bot.reaction_events_cog",
     "squid.bot.messages_cog",
     "squid.bot.settings.cog",
     "squid.bot.guild_state_cog",
@@ -252,6 +251,18 @@ class RedstoneSquid(Bot):
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         self.interaction_metrics.observe(interaction)
+
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+        await self.reactions.dispatch_add(payload)
+
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent) -> None:
+        await self.reactions.dispatch_remove(payload)
+
+    async def on_raw_reaction_clear(self, payload: discord.RawReactionClearEvent) -> None:
+        await self.reactions.dispatch_clear(payload)
+
+    async def on_raw_reaction_clear_emoji(self, payload: discord.RawReactionClearEmojiEvent) -> None:
+        await self.reactions.dispatch_clear_emoji(payload)
 
     async def _check_command_limit(self, ctx: commands.Context[Self]) -> bool:
         # Hybrid slash commands have already spent their unit in the command tree.

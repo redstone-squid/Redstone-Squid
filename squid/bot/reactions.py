@@ -1,6 +1,6 @@
 """Route Discord reaction events to voting, starboard, and other subscribers.
 
-ReactionRouterCog receives Discord's raw reaction events and hands them to
+The bot receives Discord's raw reaction events and hands them to
 ReactionRouter, which delivers each event to every subscriber that wants it.
 A subscriber is any object with methods marked by @reaction_handler. Each
 subscriber decides what a reaction means; the router handles ordering,

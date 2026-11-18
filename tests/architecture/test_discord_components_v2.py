@@ -95,8 +95,8 @@ def test_bot_uses_components_v2_outside_archive_relay() -> None:
     assert not violations, "\n".join(violations)
 
 
-def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
-    """Keep the four raw-reaction handler names in reaction_events.py.
+def test_bot_owns_all_raw_reaction_listeners() -> None:
+    """Keep the four raw-reaction handler names with the bot.
 
     Comparing names by file catches both an extra handler and a missing router method.
     This checks definitions, not the event registration performed at runtime.
@@ -109,7 +109,7 @@ def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
                 listeners[str(path.relative_to(BOT_ROOT))].add(node.name)
 
     assert dict(listeners) == {
-        "reaction_events_cog.py": {
+        "app.py": {
             "on_raw_reaction_add",
             "on_raw_reaction_clear",
             "on_raw_reaction_clear_emoji",
