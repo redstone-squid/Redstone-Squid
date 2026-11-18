@@ -42,7 +42,8 @@ SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
 class SearchPicker[ItemT](Component):
     """Search a window source and retain picked items across query changes.
 
-    With maximum=1 a new pick replaces the previous one; otherwise picks accumulate.
+    With maximum=1 a new pick replaces the previous one. Higher limits allow
+    selecting several visible results at once and accumulating picks across pages.
     Pick callbacks run after local state changes. The host owns durable persistence.
     Enable `hide_search_when_complete` if the unfiltered source provides every option.
     """
@@ -118,26 +119,21 @@ class SearchPicker[ItemT](Component):
             self.session.retry(revision=revision)
 
     async def _selected(self, revision: int, event: ChoiceEvent) -> None:
-        """Add the single visible selection within configured bounds."""
-        if len(event.selected) != 1:
+        """Add the selected visible results within configured bounds."""
+        if not 1 <= len(event.selected) <= self.maximum:
             return
         if self.session is None or self.session.revision != revision:
             return
         current = self.session.snapshot
         if current is None:
             return
-        item = next(
-            (candidate for candidate in current.loaded.window.items if self.identity(candidate) == event.selected[0]),
-            None,
-        )
-        if item is None:
+        visible = {self.identity(item): item for item in current.loaded.window.items}
+        if any(key not in visible for key in event.selected):
             return
-        identities = tuple(self.identity(candidate) for candidate in self.picked)
-        item_identity = self.identity(item)
-        if item_identity in identities:
-            return
-        updated = (item,) if self.maximum == 1 else (*self.picked, item)
-        if len(updated) > self.maximum:
+        identities = {self.identity(item) for item in self.picked}
+        additions = tuple(visible[key] for key in dict.fromkeys(event.selected) if key not in identities)
+        updated = additions if self.maximum == 1 else (*self.picked, *additions)
+        if not additions or len(updated) > self.maximum:
             return
         self.picked = updated
         await self.on_pick(event, updated)
@@ -250,7 +246,7 @@ class SearchPicker[ItemT](Component):
                 key=f"{self.key}.results",
                 selection=controlled((), partial(self._selected, self.session.revision)),
                 minimum=1,
-                maximum=1,
+                maximum=min(len(entries), max(1, self.maximum - len(self.picked))),
             )
             if entries
             else note(chrome.no_results)

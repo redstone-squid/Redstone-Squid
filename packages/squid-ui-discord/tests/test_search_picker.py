@@ -94,6 +94,25 @@ async def test_single_lookup_replaces_and_minimum_gates_removal() -> None:
     assert remove.disabled
 
 
+async def test_lookup_picks_several_results_in_one_callback() -> None:
+    commits: list[tuple[Entry, ...]] = []
+    items = (Entry("a", "Alpha"), Entry("b", "Beta"), Entry("c", "Gamma"))
+    lookup = _lookup(items, commits, maximum=3)
+    message_root = MessageRoot(lookup, access=Everyone(), timeout=None)
+
+    await _search(message_root, lookup, "")
+    rendered = commit_render(message_root)
+    assert query(rendered, select_node(discord.ui.Select)).one().node.max_values == 2
+    await message_root.dispatch("lookup.results", interaction_harness(), ["a", "b"])
+    assert commits == [items[:2]]
+
+    commit_render(message_root)
+    await message_root.dispatch("lookup.next", interaction_harness())
+    commit_render(message_root)
+    await message_root.dispatch("lookup.results", interaction_harness(), ["c"])
+    assert commits == [items[:2], items]
+
+
 async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> None:
     commits: list[tuple[Entry, ...]] = []
     lookup = _lookup((Entry("a", "Alpha"), Entry("b", "Beta"), Entry("c", "Gamma")), commits)
