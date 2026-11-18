@@ -14,7 +14,7 @@ from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE, record_brows
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.rows import build_row
 from squid.bot.catalogue.schematics.tools import SchematicTools
-from squid.bot.catalogue.search.clauses import query_leaves
+from squid.bot.catalogue.search.clauses import query_leaves, replace_clause
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.help import search_help
 from squid.bot.catalogue.search.labels import filter_label, sort_label
@@ -43,13 +43,17 @@ from squid.permissions.domain.catalogue import (
     RECORD_ENTRY_REBUILD,
 )
 from squid.records.application import RecordService
+from squid.records.domain import BaseTitle
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
+    ComparisonOperator,
+    FieldExpression,
     NotExpression,
     QueryExpression,
 )
@@ -62,6 +66,8 @@ from squid_ui.sources import window_fingerprint
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
+
+_RECORD_TITLE_BUTTONS = (BaseTitle.SMALLEST, BaseTitle.FASTEST, BaseTitle.FIRST)
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,7 +402,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     )
 
     _results: SearchScreen | None = sl.state(None, opaque=True)
-    _record_categories: frozenset[str] = sl.state(frozenset())
     _show_search_help: bool = sl.state(False)
     _query: str = sl.state("")
     _sort: str = sl.state("")
@@ -648,7 +653,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             return
         self._results = None
         self._sort = ""
-        self._record_categories = frozenset()
         expanded = self._guided is not None
         self._guided = None
         self._mode = mode
@@ -665,7 +669,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _find_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        query = _query_summary(self._query, records=self._mode == "records", parser=self._search_parser)
+        expression = self._search_parser.parse(self._query).expression
+        query = _query_summary(self._query, expression, records=self._mode == "records")
         sort = sort_label(self._sort)
         nodes.append(
             sd.v2.section(
@@ -685,6 +690,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._guided is not None:
             nodes.append(self._guided)
         if self._mode == "records":
+            selection = _record_title_filter(expression)
+            titles = selection[1] if selection is not None else frozenset()
             nodes.extend(
                 (
                     sl.action_controls(
@@ -694,19 +701,21 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                                 label,
                                 partial(self._toggle_record_category, category),
                                 key=category,
-                                tone=sl.Tone.SUCCESS if category in self._record_categories else sl.Tone.NEUTRAL,
+                                tone=sl.Tone.SUCCESS if category in titles else sl.Tone.NEUTRAL,
+                                available=selection is not None,
                             )
                             for category, label in (
-                                ("smallest", tr(t"record-browser-smallest = Smallest")),
-                                ("fastest", tr(t"record-browser-fastest = Fastest")),
-                                ("first", tr(t"record-browser-first = First")),
+                                (BaseTitle.SMALLEST, tr(t"record-browser-smallest = Smallest")),
+                                (BaseTitle.FASTEST, tr(t"record-browser-fastest = Fastest")),
+                                (BaseTitle.FIRST, tr(t"record-browser-first = First")),
                             )
                         ),
                         sl.action_control(
                             tr(t"record-browser-all = All types"),
                             self._all_types,
                             key="all-standings",
-                            tone=sl.Tone.SUCCESS if not self._record_categories else sl.Tone.NEUTRAL,
+                            tone=sl.Tone.SUCCESS if selection is not None and not titles else sl.Tone.NEUTRAL,
+                            available=selection is not None,
                         ),
                         key="record-categories",
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
@@ -727,7 +736,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 tr(t"guided-search-reset = Reset"),
                 self._reset_search,
                 key="reset",
-                available=bool(self._query != self._default_query or self._sort or self._record_categories),
+                available=bool(self._query != self._default_query or self._sort),
             ),
         )
 
@@ -735,7 +744,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._show_search_help = not self._show_search_help
 
     async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
-        self._record_categories = frozenset()
         await self._run_search(query, "")
         if self._guided is not None:
             self._guided.clear()
@@ -817,21 +825,41 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             actions=self._search_actions,
         )
 
-    async def _toggle_record_category(self, category: str, _event: sl.PressEvent) -> None:
-        self._record_categories = self._record_categories ^ {category}
-        await self._run_search(self._query, self._sort)
+    async def _toggle_record_category(self, category: BaseTitle, _event: sl.PressEvent) -> None:
+        await self._edit_record_titles(category)
 
     async def _all_types(self, _event: sl.PressEvent) -> None:
-        """Clear the record type buttons, keeping the typed query and sort."""
-        self._record_categories = frozenset()
-        if self._query != self._default_query or self._sort:
-            await self._run_search(self._query, self._sort)
+        await self._edit_record_titles(None)
+
+    async def _edit_record_titles(self, toggle: BaseTitle | None) -> None:
+        expression = self._search_parser.parse(self._query).expression
+        selection = _record_title_filter(expression)
+        if selection is None:
+            return
+        path, titles = selection
+        titles = titles ^ {toggle} if toggle is not None else frozenset()
+        field = DEFAULT_FIELD_REGISTRY.resolve("base_title")
+        assert field is not None
+        clauses = tuple(FieldExpression(field, ComparisonOperator.EQUAL, title.value) for title in sorted(titles))
+        replacement = BooleanExpression(BooleanOperator.OR, clauses) if len(clauses) > 1 else next(iter(clauses), None)
+        if expression is not None and path is not None:
+            expression = replace_clause(expression, path, replacement)
+        elif expression is not None and replacement is not None:
+            expression = BooleanExpression(BooleanOperator.AND, (expression, replacement))
+        elif expression is None:
+            expression = replacement
+        query = self._search_parser.render(expression) if expression is not None else self._default_query
+        if query != self._default_query or self._sort:
+            if query != self._query:
+                await self._run_search(query, self._sort)
         else:
+            self._query = query
             self._results = None
             self._selected = None
+            if self._guided is not None:
+                self._guided.query = query
 
     async def _reset_search(self, _event: sl.PressEvent) -> None:
-        self._record_categories = frozenset()
         self._query = self._default_query
         self._sort = ""
         self._results = None
@@ -845,12 +873,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             message = "The catalogue search service is not configured"
             raise RuntimeError(message)
         scope = SearchScope.RECORDS if self._mode == "records" else SearchScope.BUILDS
-        expression = query
-        if self._record_categories:
-            categories = " OR ".join(f"base_title:{category}" for category in sorted(self._record_categories))
-            expression = f"({query}) AND ({categories})" if query.strip() else f"({categories})"
         request = SearchRequest(
-            expression,
+            query,
             scope=scope,
             mode=self._search_mode,
             sort=SearchSort.parse(sort or None),
@@ -870,6 +894,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         self._query = query
         self._sort = sort
+        if self._guided is not None:
+            self._guided.query = query
         self._selected = None
         # A new search shows its results, so help gives way to them.
         self._show_search_help = False
@@ -878,12 +904,51 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._selected = None
 
 
-def _query_summary(query: str, *, records: bool, parser: SearchQueryParser) -> sl.TextLike:
+def _record_title_filter(
+    expression: QueryExpression | None,
+) -> tuple[tuple[int, ...] | None, frozenset[BaseTitle]] | None:
+    """Find the single title clause or OR group that the buttons can edit."""
+    if expression is None:
+        return None, frozenset()
+    conjuncts = (
+        tuple(((index,), clause) for index, clause in enumerate(expression.operands))
+        if isinstance(expression, BooleanExpression) and expression.operator is BooleanOperator.AND
+        else (((), expression),)
+    )
+    path = None
+    titles: set[BaseTitle] = set()
+    for clause_path, clause in conjuncts:
+        alternatives = (
+            clause.operands
+            if isinstance(clause, BooleanExpression) and clause.operator is BooleanOperator.OR
+            else (clause,)
+        )
+        if not any(
+            isinstance(leaf, FieldExpression) and leaf.field.name == "base_title"
+            for _, item in query_leaves(clause)
+            for leaf in (item.operand if isinstance(item, NotExpression) else item,)
+        ):
+            continue
+        if path is not None:
+            return None
+        for item in alternatives:
+            if (
+                not isinstance(item, FieldExpression)
+                or item.field.name != "base_title"
+                or item.operator is not ComparisonOperator.EQUAL
+                or item.value not in _RECORD_TITLE_BUTTONS
+            ):
+                return None
+            titles.add(BaseTitle(item.value))
+        path = clause_path
+    return path, frozenset(titles)
+
+
+def _query_summary(query: str, expression: QueryExpression | None, *, records: bool) -> sl.TextLike:
     """Describe the active query as its filters, or as everything when it is empty.
 
     A query with OR keeps its syntax, because a flat list of filters would hide the grouping.
     """
-    expression = parser.parse(query).expression if query.strip() else None
     if expression is None:
         return (
             tr(t"browse-query-all-standings = All standings")

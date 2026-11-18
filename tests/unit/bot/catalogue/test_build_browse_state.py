@@ -448,7 +448,7 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("smallest"))
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "(base_title:smallest)"
+        assert request.query == "base_title:smallest"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
 
@@ -463,22 +463,74 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
-        assert request.query == ('(title:"vault door") AND (base_title:fastest OR base_title:smallest)')
+        assert request.query == 'title:"vault door" AND (base_title:fastest OR base_title:smallest)'
         assert request.sort is not None
         assert request.sort.field == "created_at"
-        assert screen._query == 'title:"vault door"'
+        assert screen._guided is not None
+        assert screen._query == screen._guided.query == request.query
         assert screen._sort == "-created_at"
-        await submit_search(ui, 'title:"vault door"', "-created_at")
+        await submit_search(ui, request.query, "-created_at")
         assert service.search.call_args.args[0].query == request.query
         await ui.press(ui.key_for("smallest"))
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
-        assert service.search.call_args.args[0].query.endswith("AND (base_title:fastest)")
+        assert service.search.call_args.args[0].query == 'title:"vault door" AND base_title:fastest'
         await ui.press(ui.key_for("fastest"))
         assert service.search.call_args.args[0].query == 'title:"vault door"'
         ui.assert_within_limits()
 
 
-async def test_all_types_clears_only_the_type_buttons() -> None:
+@pytest.mark.parametrize("query", ["smallest door", 'door AND BASE_TITLE:"smallest"'])
+async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, query, "-created_at")
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
+        await ui.press(ui.key_for("fastest"))
+        assert screen._guided is not None
+        assert "(base_title:fastest OR base_title:smallest)" in screen._guided.query
+        await ui.press(ui.key_for("smallest"))
+        expression = SearchQueryParser().parse(screen._query).expression
+        assert expression in (
+            SearchQueryParser().parse("door AND base_title:fastest").expression,
+            SearchQueryParser().parse("base_title:fastest AND door").expression,
+        )
+        await ui.press(ui.key_for("remove-0" if screen._query.startswith("base_title") else "remove-1"))
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert screen._guided.query == "door"
+        assert screen._sort == "-created_at"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "NOT base_title:smallest",
+        "base_title:smallest OR kind:door",
+        "base_title:smallest AND base_title:fastest",
+        "base_title:fastest_smallest",
+    ],
+)
+async def test_record_buttons_leave_complex_title_filters_to_the_editor(query: str) -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, query)
+        for key in ("smallest", "fastest", "first", "all-standings"):
+            assert ui.control(ui.key_for(key)).payload["disabled"]
+
+
+async def test_all_types_preserves_literal_keywords() -> None:
+    screen = _screen(initial_id=None)
+    screen._mode = "records"
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "fastest AND base_title:smallest")
+        await ui.press(ui.key_for("all-standings"))
+        assert screen._query == "(fastest)"
+        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+
+
+async def test_all_types_clears_title_filters_and_preserves_other_filters() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
@@ -487,13 +539,12 @@ async def test_all_types_clears_only_the_type_buttons() -> None:
         assert ui.control(ui.key_for("smallest")).payload["label"] == "Smallest"
         await ui.press(ui.key_for("smallest"))
         await ui.press(ui.key_for("all-standings"))
-        assert screen._record_categories == frozenset()
+        assert screen._query == ""
         assert screen._results is None
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert "## Records" in ui.texts()
         # With a typed query, the query and sort stay and the search reruns without types.
-        await submit_search(ui, "door", "-created_at")
-        await ui.press(ui.key_for("smallest"))
+        await submit_search(ui, "door base_title:smallest", "-created_at")
         await ui.press(ui.key_for("all-standings"))
         assert screen._query == "door"
         assert screen._sort == "-created_at"
@@ -539,7 +590,7 @@ async def test_record_toggles_are_visible_on_build_details() -> None:
         await ui.press(ui.key_for("first"))
         assert "## Search results" in ui.texts()
         assert screen._selected is None
-        assert screen._record_categories == frozenset({"first"})
+        assert screen._query == "base_title:first"
 
 
 async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
@@ -550,7 +601,7 @@ async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
         original_results = screen._results
         cast(AsyncMock, screen._search_service).search.side_effect = RuntimeError("search unavailable")
         await ui.press(ui.key_for("fastest"))
-        assert screen._record_categories == frozenset({"smallest"})
+        assert screen._query == "base_title:smallest"
         assert screen._results is original_results
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         assert ui.control(ui.key_for("fastest")).payload["style"] == 2
@@ -589,7 +640,8 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         await ui.press(ui.key_for("example-0"))
         assert "## Search results" in ui.texts()
         assert "## Search help" not in ui.texts()
-        assert screen._record_categories == frozenset()
+        if records:
+            assert ui.control(ui.key_for("fastest")).payload["style"] == 3
         assert screen._query == (
             "kind:door base_title:fastest version_scope:all_time" if records else "door width<=5 height<=6"
         )
