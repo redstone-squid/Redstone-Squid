@@ -68,14 +68,28 @@ class CountPrecision(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SourceCapabilities:
-    """Navigation and count facts a source can support."""
+    """Navigation, count precision, and optional fixed grouping promises.
+
+    fixed_groups promises complete, extent-aligned groups and consecutive neighbour
+    addresses. It says nothing about the target space their contents require.
+    """
 
     backward: bool = False
     offsets: bool = False
     jumpable: bool = False
     count: CountPrecision = CountPrecision.NONE
+    fixed_groups: bool = False
+
+    def group_count[T](self, window: Window[T], extent: int) -> int | None:
+        """Count declared groups, independently of target fit certification."""
+        if self.fixed_groups and self.count is CountPrecision.EXACT and window.total is not None:
+            return (window.total + extent - 1) // extent
+        return None
 
     def __post_init__(self) -> None:
+        if self.fixed_groups and not self.offsets:
+            message = "fixed item groups require offset addresses"
+            raise ValueError(message)
         if self.jumpable and not self.offsets:
             message = "a jumpable source must know offsets"
             raise ValueError(message)
@@ -130,18 +144,18 @@ class WindowSource[ItemT](Protocol):
 
 
 class _ListSource[ItemT]:
-    capabilities = SourceCapabilities(
-        backward=True,
-        offsets=True,
-        jumpable=True,
-        count=CountPrecision.EXACT,
-    )
+    capabilities: SourceCapabilities
 
-    def __init__(self, items: Iterable[ItemT]) -> None:
+    def __init__(self, items: Iterable[ItemT], *, fixed_groups: bool) -> None:
         self.items = tuple(items)
+        self.capabilities = SourceCapabilities(
+            backward=True, offsets=True, jumpable=True, count=CountPrecision.EXACT, fixed_groups=fixed_groups
+        )
 
     async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
         offset = min(max(0, position.offset), max(0, len(self.items) - 1))
+        if self.capabilities.fixed_groups:
+            offset = offset // extent * extent
         visible = self.items[offset : offset + extent]
         return Window(
             Position(offset=offset),
@@ -152,13 +166,14 @@ class _ListSource[ItemT]:
         )
 
 
-def list_source[ItemT](items: Iterable[ItemT]) -> WindowSource[ItemT]:
+def list_source[ItemT](items: Iterable[ItemT], *, fixed_groups: bool = False) -> WindowSource[ItemT]:
     """Snapshot the iterable into an exact offset-addressed source.
 
+    fixed_groups aligns fetches to complete groups of the requested extent.
     Items themselves are not copied. Fetches ignore anchors and direction and clamp
     an out-of-range offset to the last item, or zero for an empty source.
     """
-    return _ListSource(items)
+    return _ListSource(items, fixed_groups=fixed_groups)
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +264,29 @@ class WindowLoader[ItemT]:
             message = f"WindowSource returned {len(window.items)} items for extent {self.extent}"
             raise ValueError(message)
         capabilities = self.source.capabilities
+        if capabilities.fixed_groups:
+            if window.position.offset % self.extent:
+                message = "a fixed-group source returned an unaligned position"
+                raise ValueError(message)
+            if window.has_next and len(window.items) != self.extent:
+                message = "a fixed-group source returned an incomplete nonfinal group"
+                raise ValueError(message)
+            if window.next is not None and window.next.offset != window.position.offset + self.extent:
+                message = "a fixed-group source returned a nonconsecutive next group"
+                raise ValueError(message)
+            if window.previous is not None and window.previous.offset != max(0, window.position.offset - self.extent):
+                message = "a fixed-group source returned a nonconsecutive previous group"
+                raise ValueError(message)
+            if capabilities.count is CountPrecision.EXACT and window.total is not None:
+                if window.position.offset > max(0, (window.total - 1) // self.extent * self.extent):
+                    message = "an exact source returned a position beyond its final fixed-group"
+                    raise ValueError(message)
+                expected = min(self.extent, max(0, window.total - window.position.offset))
+                if len(window.items) != expected or window.has_next != (
+                    window.position.offset + expected < window.total
+                ):
+                    message = "a fixed-group source returned content inconsistent with its exact count"
+                    raise ValueError(message)
         if not capabilities.backward and window.has_previous:
             message = "a forward-only source returned has_previous=True"
             raise ValueError(message)
@@ -277,9 +315,8 @@ def window_footer[ItemT](
         return None
     first = window.position.offset + 1
     last = window.position.offset + len(window.items)
-    if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None:
-        pages = max(1, (window.total + extent - 1) // extent)
-        # Like a paginated text block, a list that fits on one page has no page number to show.
+    if (pages := capabilities.group_count(window, extent)) is not None and capabilities.jumpable:
+        # One authored group needs no group-number footer; target fit is separate.
         return chrome.page_footer(window.position.offset // extent + 1, pages) if pages > 1 else None
     if capabilities.count is CountPrecision.EXACT and window.total is not None:
         return chrome.total_range_footer(first, last, window.total)

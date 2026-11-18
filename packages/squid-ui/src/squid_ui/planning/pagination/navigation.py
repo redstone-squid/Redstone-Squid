@@ -14,6 +14,7 @@ presentation session, or the application through `Controlled.on_change`.
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
+from enum import StrEnum
 from typing import Any, Self, cast, override
 
 from squid_ui.authoring import semantic as sem
@@ -144,6 +145,12 @@ class PresentPageForm(_HandlerComposition):
         )
 
 
+class NavigationUnit(StrEnum):
+    ITEMS = "items"
+    GROUPS = "groups"
+    PAGES = "pages"
+
+
 @dataclass(frozen=True, slots=True)
 class NavigationState:
     """Proven cursor facts with no interaction handlers."""
@@ -166,6 +173,7 @@ class NavigationState:
     seek_key: str = ""
     seek_label: TextLike = ""
     """Placeholder for a jump control, resolved from chrome by whoever built this."""
+    unit: NavigationUnit = NavigationUnit.PAGES
     page_option: Callable[[int], TextLike] | None = None
     """Labels one jump entry, called with a 1-based page number."""
 
@@ -347,6 +355,7 @@ __all__ = [
     "NavNode",
     "NavigationContext",
     "NavigationState",
+    "NavigationUnit",
     "PageCommit",
     "PagerNav",
     "PlannedNav",

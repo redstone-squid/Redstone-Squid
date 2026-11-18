@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import TextLike
-from squid_ui.planning.pagination.navigation import NavigationState
+from squid_ui.planning.pagination.navigation import NavigationState, NavigationUnit
 from squid_ui.sources import Chronology, CountPrecision, LoadedWindow, SourceCapabilities
 
 
@@ -38,11 +38,7 @@ def source_navigation_state[ItemT](
     says how the items are sorted in time.
     """
     window = loaded.window
-    extent = (
-        max(1, (window.total + page_size - 1) // page_size)
-        if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None
-        else None
-    )
+    extent = capabilities.group_count(window, page_size) if capabilities.jumpable else None
     if not (window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1):
         return None
     total = window.total if capabilities.count is not CountPrecision.NONE else None
@@ -62,7 +58,8 @@ def source_navigation_state[ItemT](
         previous_key=f"{key}.previous",
         next_key=f"{key}.next",
         extent=extent,
-        page=window.position.offset // page_size if capabilities.offsets else None,
+        page=window.position.offset // page_size if capabilities.fixed_groups else None,
+        unit=NavigationUnit.GROUPS if capabilities.fixed_groups else NavigationUnit.ITEMS,
         visible_range=visible_range,
         total=total,
         count=capabilities.count,

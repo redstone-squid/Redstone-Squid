@@ -217,3 +217,39 @@ async def test_loader_follows_source_addresses_without_reconstructing_them() -> 
     assert second is not None and second.window.items == ("c",)
     returned = await loader.previous(second)
     assert returned is not None and returned.window.items == ("a", "b")
+
+
+async def test_fixed_source_groups_are_aligned_and_counted_without_claiming_fit() -> None:
+    source = list_source(tuple(str(i) for i in range(23)), fixed_groups=True)
+    loader = WindowLoader(source, 10, str)
+    loaded = await loader.load(Position(offset=21))
+    assert loaded is not None
+    assert loaded.position.offset == 20
+    assert loaded.window.items == ("20", "21", "22")
+    assert source.capabilities.group_count(loaded.window, 10) == 3
+    previous = await loader.previous(loaded)
+    assert previous is not None and previous.position.offset == 10
+    assert source.capabilities.group_count(previous.window, 10) == 3
+    ordinary = list_source(tuple(str(i) for i in range(23)))
+    assert ordinary.capabilities.group_count(loaded.window, 10) is None
+
+
+@pytest.mark.parametrize(
+    "window",
+    [
+        Window(Position(offset=1), ("a", "b"), total=3),
+        Window(Position(), ("a",), next=Position(offset=2), total=3),
+        Window(Position(), ("a", "b"), next=Position(offset=4), total=3),
+        Window(Position(), ("a",), total=3),
+        Window(Position(offset=4), (), total=3),
+    ],
+)
+async def test_loader_rejects_broken_fixed_group_promises(window: Window[str]) -> None:
+    class Broken:
+        capabilities = SourceCapabilities(offsets=True, count=CountPrecision.EXACT, fixed_groups=True)
+
+        async def fetch(self, position: Position, extent: int) -> Window[str]:
+            return window
+
+    with pytest.raises(ValueError, match="fixed-group"):
+        await WindowLoader(Broken(), 2, str).load()

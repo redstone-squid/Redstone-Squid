@@ -63,3 +63,12 @@ def test_unsupported_exact_facts_fail_explicitly() -> None:
         fact.require()
     assert error.value.fact is fact
     assert sl.Known(None).require() is None
+
+
+def test_empty_grouped_flow_has_no_selected_content_page() -> None:
+    result = plan(sl.bullets(key="empty", group_size=10), target=html.target(), inspect_layout=True)
+    assert result.layout is not None
+    facts = result.layout.region(sl.region_ref("empty"))
+    assert facts.groups == sl.Known(0)
+    assert facts.count == sl.Known(0)
+    assert facts.selection == sl.Known(None)

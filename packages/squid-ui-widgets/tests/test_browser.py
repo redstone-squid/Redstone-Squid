@@ -6,7 +6,9 @@ from typing import override
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui_widgets._window import source_navigation_state
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,9 +18,9 @@ class Entry:
 
 
 async def _loaded(
-    items: tuple[Entry, ...], *, extent: int = 2
+    items: tuple[Entry, ...], *, extent: int = 2, fixed_groups: bool = False
 ) -> tuple[sl.sources.WindowSource[Entry], sl.sources.LoadedWindow[Entry]]:
-    source = sl.sources.list_source(items)
+    source = sl.sources.list_source(items, fixed_groups=fixed_groups)
     loaded = await sl.sources.WindowLoader(source, extent, lambda item: item.key).load()
     assert loaded is not None
     return source, loaded
@@ -189,9 +191,27 @@ async def test_page_numbers_appear_only_when_there_is_more_than_one_page() -> No
     one_page_source, one_page = await _loaded((Entry("a", "A"), Entry("b", "B")))
     single = _paged_browser(one_page_source)
     single.session.replace(one_page)
-    two_page_source, two_pages = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
+    two_page_source, two_pages = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")), fixed_groups=True)
     paged = _paged_browser(two_page_source)
     paged.session.replace(two_pages)
 
     assert not [text for text in engine.texts(engine.render_tree(single)) if "of 1" in text]
     assert [text for text in engine.texts(engine.render_tree(paged)) if "1 of 2" in text]
+
+
+async def test_source_count_is_not_a_layout_page_count() -> None:
+    source = sl.sources.list_source(tuple(str(i) for i in range(23)))
+    loaded = await sl.sources.WindowLoader(source, 10, str).load()
+    assert loaded is not None
+    facts = source_navigation_state(loaded, source.capabilities, key="results", page_size=10, chrome=DEFAULT_CHROME)
+    assert facts is not None
+    assert facts.extent is None and facts.page is None
+    assert facts.total == 23 and facts.visible_range == (1, 10)
+
+    fixed = sl.sources.list_source(tuple(str(i) for i in range(23)), fixed_groups=True)
+    loaded = await sl.sources.WindowLoader(fixed, 10, str).load()
+    assert loaded is not None
+    facts = source_navigation_state(loaded, fixed.capabilities, key="results", page_size=10, chrome=DEFAULT_CHROME)
+    assert facts is not None
+    assert facts.extent == 3 and facts.page == 0
+    assert facts.unit.value == "groups"

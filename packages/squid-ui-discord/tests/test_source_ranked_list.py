@@ -92,8 +92,14 @@ class FlakyScoreSource(ScoreSource):
     ("capabilities", "expected"),
     [
         (
-            sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+            sl.sources.SourceCapabilities(
+                offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT, fixed_groups=True
+            ),
             "-# Page 1 of 2",
+        ),
+        (
+            sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+            "-# 1\N{EN DASH}2 of 3",
         ),
         (sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.EXACT), "-# 1\N{EN DASH}2 of 3"),
         (
@@ -129,6 +135,7 @@ async def test_source_ranked_list_shows_progress_and_follows_source_navigation()
             offsets=True,
             jumpable=True,
             count=sl.sources.CountPrecision.EXACT,
+            fixed_groups=True,
         ),
     )
     ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
@@ -189,7 +196,9 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
 async def test_a_jumpable_source_seeks_by_page() -> None:
     source = ScoreSource(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10), ("Barbara", 5), ("Donald", 1)),
-        capabilities=sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+        capabilities=sl.sources.SourceCapabilities(
+            offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT, fixed_groups=True
+        ),
     )
     message_root = MessageRoot(
         sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
@@ -263,7 +272,9 @@ async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> 
 async def test_page_form_jumps_to_a_source_offset_beyond_25_pages() -> None:
     source = ScoreSource(
         tuple((f"Player {index}", index) for index in range(200)),
-        capabilities=sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+        capabilities=sl.sources.SourceCapabilities(
+            offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT, fixed_groups=True
+        ),
     )
     ranked = sp.SourceRankedList(source, key="ranked", identity=lambda entry: entry[0], page_size=2)
     root = MessageRoot(ranked, access=Everyone(), timeout=None, nav=page_jump_nav)

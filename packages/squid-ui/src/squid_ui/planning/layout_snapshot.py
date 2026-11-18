@@ -137,7 +137,9 @@ class LayoutSnapshot:
             identity: RegionRef(region.pages[0].offer.occurrence.page_source.keys)
             for identity, region in family.regions.items()
         }
-        self.counts = {identity: len(region.pages) for identity, region in family.regions.items()}
+        self.counts = {
+            identity: len(region.pages) if any(region.anchors) else 0 for identity, region in family.regions.items()
+        }
         self.groups: dict[OccurrenceId, int | None] = {}
         for identity, ref in self.region_refs.items():
             unit = graph.units.get(SemanticRef(ref.keys))
@@ -230,7 +232,9 @@ class LayoutSnapshot:
                 Known(self.counts[identity])
                 if complete
                 else Unknown(UnknownReason.INCOMPLETE, "only this view was resolved"),
-                Known(PageCoordinate(identity, Known(selected[identity]))) if identity in selected else Known(None),
+                Known(PageCoordinate(identity, Known(selected[identity])))
+                if identity in selected and self.counts[identity] > 0
+                else Known(None),
                 Known(groups)
                 if (groups := self.groups[identity]) is not None
                 else Unknown(UnknownReason.UNSUPPORTED, "no fixed item grouping was declared"),
