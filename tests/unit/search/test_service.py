@@ -8,10 +8,11 @@ import pytest
 
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
-from squid.search.application import SearchService, SearchSlice
+from squid.search.application import SearchQueryParser, SearchService, SearchSlice
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.search.application.ports import QueryEmbedding
 from squid.search.domain import (
+    BuildQuery,
     BuildSearchHit,
     FieldDefinition,
     SearchMode,
@@ -71,6 +72,19 @@ async def test_service_resolves_the_sort_field_before_searching() -> None:
     await service.search(SearchRequest("door", sort=SearchSort("width")))
 
     assert backend.calls[0][2] == DEFAULT_FIELD_REGISTRY.resolve("width")
+
+
+async def test_service_uses_the_scoped_tree_without_reparsing_display_text() -> None:
+    backend = FakeSearchBackend()
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+    parsed = SearchQueryParser(scope=SearchScope.BUILDS).parse("door width:5")
+    assert isinstance(parsed, BuildQuery)
+
+    await service.search(SearchRequest("as typed", scope=SearchScope.BUILDS, parsed_query=parsed))
+
+    assert backend.calls[0][1] is parsed
+    with pytest.raises(ValidationError, match="scope"):
+        SearchRequest("as typed", scope=SearchScope.RECORDS, parsed_query=parsed)
 
 
 @pytest.mark.parametrize("field", ["volume", "nonexistent"])
@@ -179,7 +193,7 @@ async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search(
     "search_request",
     [
         SearchRequest("door"),
-        SearchRequest("status:confirmed", mode=SearchMode.SEMANTIC),
+        SearchRequest("status:resolved", mode=SearchMode.SEMANTIC),
         SearchRequest("door", mode=SearchMode.SEMANTIC, sort=SearchSort("width")),
     ],
 )

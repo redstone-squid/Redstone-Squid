@@ -6,15 +6,8 @@ from typing import Literal
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
-
-
-class SearchScope(StrEnum):
-    """Resources included in a search."""
-
-    RECORDS = "records"
-    BUILDS = "builds"
-    METADATA = "metadata"
-    ALL = "all"
+from squid.search.domain.query import BuildQuery, RecordQuery
+from squid.search.domain.scope import SearchScope as SearchScope
 
 
 class SearchMode(StrEnum):
@@ -67,8 +60,12 @@ class SearchRequest:
     sort: SearchSort | None = None
     visible_statuses: frozenset[str] | None = None
     group_by_build: bool = False
+    parsed_query: BuildQuery | RecordQuery | None = None
 
     def __post_init__(self) -> None:
+        if self.parsed_query is not None and self.parsed_query.scope is not self.scope:
+            msg = "parsed query scope must match the search request"
+            raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
         if not 1 <= self.page_size <= 50:
             msg = "page_size must be between 1 and 50"
             raise ValidationError(msg, public_context={"field": "page_size", "minimum": 1, "maximum": 50})

@@ -18,11 +18,13 @@ from squid.search.domain.models import (
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
+    BuildQuery,
     ComparisonOperator,
     FieldExpression,
     NotExpression,
     QueryExpression,
     RangeValue,
+    RecordQuery,
     SearchQuery,
     TextExpression,
 )
@@ -30,6 +32,7 @@ from squid.search.domain.query import (
 __all__ = [
     "BooleanExpression",
     "BooleanOperator",
+    "BuildQuery",
     "BuildSearchHit",
     "ComparisonOperator",
     "FieldDefinition",
@@ -39,6 +42,7 @@ __all__ = [
     "NotExpression",
     "QueryExpression",
     "RangeValue",
+    "RecordQuery",
     "RecordSearchHit",
     "SearchHit",
     "SearchMatch",

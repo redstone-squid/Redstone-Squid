@@ -56,10 +56,14 @@ class SearchService:
         transaction. An embedding failure is logged and leaves the backend to
         return lexical results with a warning.
         """
-        registry = await self.fields()
-        query = SearchQueryParser(registry).parse(request.query)
+        registry = await self.fields() if request.parsed_query is None or request.sort is not None else None
+        query: SearchQuery | None = request.parsed_query
+        if query is None:
+            assert registry is not None
+            query = SearchQueryParser(registry, scope=request.scope).parse(request.query)
         sort_field = None
         if request.sort is not None:
+            assert registry is not None
             sort_field = registry.resolve(request.sort.field)
             if sort_field is None or not sort_field.supports_sort:
                 field_name = request.sort.field

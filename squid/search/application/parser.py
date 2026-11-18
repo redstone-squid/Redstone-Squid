@@ -10,15 +10,18 @@ from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinit
 from squid.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
+    BuildQuery,
     ComparisonOperator,
     FieldExpression,
     NotExpression,
     QueryExpression,
     RangeValue,
+    RecordQuery,
     ScalarValue,
     SearchQuery,
     TextExpression,
 )
+from squid.search.domain.scope import SearchScope
 
 
 class QuerySyntaxError(ValidationError):
@@ -100,10 +103,13 @@ class SearchQueryParser:
         self,
         registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
         *,
+        scope: SearchScope = SearchScope.ALL,
         max_length: int = 1_000,
         max_tokens: int = 100,
         max_nesting: int = 10,
     ) -> None:
+        self.scope = scope
+        self.registry = registry.for_scope(scope)
         self._registry = registry
         self._max_length = max_length
         self._max_tokens = max_tokens
@@ -123,18 +129,29 @@ class SearchQueryParser:
         self._tokens = self._expand_record_prefix(self._tokenize(source))
         self._index = 0
         if self._peek().kind is _TokenKind.END:
-            return SearchQuery(expression=None, normalized="")
+            return self.query(None)
         expression = self._parse_or(nesting=0)
         trailing = self._peek()
         if trailing.kind is not _TokenKind.END:
             _fail(f"unexpected {trailing.value!r}", trailing.position)
-        return SearchQuery(expression=expression, normalized=self.render(expression))
+        return self.query(expression)
+
+    def query(self, expression: QueryExpression | None) -> SearchQuery:
+        """Create a scoped query from an already parsed or edited expression."""
+        normalized = self.render(expression) if expression is not None else ""
+        match self.scope:
+            case SearchScope.BUILDS:
+                return BuildQuery(expression, normalized)
+            case SearchScope.RECORDS:
+                return RecordQuery(expression, normalized)
+            case _:
+                return SearchQuery(expression, normalized)
 
     def render(self, expression: QueryExpression) -> str:
         """Render a query so that parsing it preserves its meaning."""
         rendered = _render_expression(expression)
         first_word = rendered.partition(" ")[0].casefold()
-        field = self._registry.resolve("base_title")
+        field = self.registry.resolve("base_title")
         if field is None or not any(first_word == prefix[0] for prefix in _RECORD_PREFIXES):
             return rendered
         pending = [expression]
@@ -150,14 +167,14 @@ class SearchQueryParser:
         return f"({rendered})"
 
     def _expand_record_prefix(self, tokens: tuple[_Token, ...]) -> tuple[_Token, ...]:
-        field = self._registry.resolve("base_title")
+        field = self.registry.resolve("base_title")
         if field is None:
             return tokens
         for token, following in pairwise(tokens):
             if (
                 token.kind is _TokenKind.WORD
                 and following.kind in _FIELD_OPERATORS
-                and self._registry.resolve(token.value) == field
+                and self.registry.resolve(token.value) == field
             ):
                 return tokens
         for prefix in _RECORD_PREFIXES:
@@ -287,12 +304,14 @@ class SearchQueryParser:
         return TextExpression(token.value, phrase=token.kind is _TokenKind.PHRASE)
 
     def _parse_field(self, name: _Token) -> FieldExpression:
-        field = self._registry.resolve(name.value)
+        field = self.registry.resolve(name.value)
         if field is None:
+            if self._registry.resolve(name.value) is not None:
+                _fail(f"{name.value!r} cannot be used in {self.scope} searches", name.position)
             _fail(
                 f"unknown search field {name.value!r}",
                 name.position,
-                suggestions=self._registry.suggestions(name.value),
+                suggestions=self.registry.suggestions(name.value),
             )
         operator_token = self._advance()
         operator = {
@@ -326,7 +345,7 @@ class SearchQueryParser:
 
     def _coerce(self, field: FieldDefinition, token: _Token) -> ScalarValue:
         try:
-            return self._registry.coerce(field, token.value)
+            return self.registry.coerce(field, token.value, scope=self.scope)
         except ValueError as error:
             _fail(str(error), token.position, cause=error)
 

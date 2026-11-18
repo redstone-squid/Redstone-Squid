@@ -9,10 +9,13 @@ converts values before the backend compiles the tree into a filter.
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+from typing import ClassVar
 
-from squid.core.errors import ValidationError
+from squid.core.errors import ErrorCode, ValidationError
 from squid.core.i18n import tr
 from squid.search.domain.fields import FieldDefinition
+from squid.search.domain.scope import CATALOGUE_SCOPES, SearchScope
+from squid_i18n import md_tr
 
 
 class BooleanOperator(StrEnum):
@@ -60,6 +63,18 @@ class FieldExpression:
     value: ScalarValue | RangeValue
     phrase: bool = False
 
+    def applies_to(self, scope: SearchScope) -> bool:
+        if isinstance(self.value, RangeValue):
+            return (
+                self.field.supports_range
+                and self.operator is ComparisonOperator.EQUAL
+                and self.field.accepts(self.value.lower, scope)
+                and self.field.accepts(self.value.upper, scope)
+            )
+        return (self.operator is ComparisonOperator.EQUAL or self.field.supports_range) and self.field.accepts(
+            self.value, scope
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class NotExpression:
@@ -90,3 +105,44 @@ class SearchQuery:
 
     expression: QueryExpression | None
     normalized: str
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedSearchQuery(SearchQuery):
+    """A tree validated against the capabilities of one catalogue index."""
+
+    scope: ClassVar[SearchScope]
+
+    def __post_init__(self) -> None:
+        if self.expression is not None and not expression_applies_to(self.expression, self.scope):
+            raise ValidationError(
+                md_tr(
+                    t"search-query-incompatible-scope = This query contains filters that cannot be used in {self.scope}."
+                ),
+                code=ErrorCode.INVALID_QUERY,
+            )
+
+
+class BuildQuery(ScopedSearchQuery):
+    __slots__ = ()
+    scope = SearchScope.BUILDS
+
+
+class RecordQuery(ScopedSearchQuery):
+    __slots__ = ()
+    scope = SearchScope.RECORDS
+
+
+def expression_applies_to(expression: QueryExpression, scope: SearchScope) -> bool:
+    """Check the whole subtree, including branches inside OR and NOT."""
+    if scope not in CATALOGUE_SCOPES:
+        return True
+    match expression:
+        case BooleanExpression(operands=operands):
+            return all(expression_applies_to(operand, scope) for operand in operands)
+        case NotExpression(operand=operand):
+            return expression_applies_to(operand, scope)
+        case TextExpression():
+            return True
+        case FieldExpression():
+            return expression.applies_to(scope)

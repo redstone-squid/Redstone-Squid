@@ -89,6 +89,8 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
             return false()
         value = " ".join(str(expression.value).split()).lower()
         comparison = func.lower(func.btrim(func.regexp_replace(value_column, r"\s+", " ", "g"))) == value
+    elif field.name == "kind":
+        comparison = func.lower(value_column) == str(expression.value).casefold()
     else:
         comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
     predicate = (

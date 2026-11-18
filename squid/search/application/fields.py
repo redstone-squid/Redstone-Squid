@@ -1,16 +1,33 @@
 """Allowlisted search field definitions and value coercion."""
 
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from difflib import get_close_matches
+from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid.records.domain.models import BaseTitle, VersionScope
+from squid.records.domain.models import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.search.domain.query import ScalarValue
+from squid.search.domain.scope import CATALOGUE_SCOPES, SearchScope
 from squid_i18n import md_tr
+
+
+class BuildSearchStatus(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    DENIED = "denied"
+
+
+class SearchBuildKind(StrEnum):
+    DOOR = BuildKind.DOOR.value
+    ENTRANCE = BuildKind.ENTRANCE.value
+    EXTENDER = BuildKind.EXTENDER.value
+    UTILITY = BuildKind.UTILITY.value
+    OTHER = "other"
 
 
 class FieldRegistry:
@@ -35,9 +52,31 @@ class FieldRegistry:
                     )
                 self._fields[key] = field
 
-    def resolve(self, name: str) -> FieldDefinition | None:
+    def resolve(self, name: str, *, scope: SearchScope = SearchScope.ALL) -> FieldDefinition | None:
         """Resolve a field name or alias without regard to case; return None if unknown."""
-        return self._fields.get(name.casefold())
+        field = self._fields.get(name.casefold())
+        if field is None or not field.applies_to(scope):
+            return None
+        for enum_scope, value_enum in field.scoped_enums:
+            if enum_scope is scope:
+                return replace(
+                    field,
+                    scopes=field.scopes
+                    if all(enum is value_enum for _, enum in field.scoped_enums)
+                    else frozenset({scope}),
+                    value_enum=value_enum,
+                    suggested_values=tuple(member.value for member in value_enum),
+                    scoped_enums=(),
+                )
+        return field
+
+    def for_scope(self, scope: SearchScope) -> FieldRegistry:
+        """Return the field names and value definitions accepted in this search."""
+        if scope not in CATALOGUE_SCOPES:
+            return self
+        return FieldRegistry(
+            resolved for field in self.definitions if (resolved := self.resolve(field.name, scope=scope)) is not None
+        )
 
     def suggestions(self, name: str, *, limit: int = 3) -> tuple[str, ...]:
         """Suggest canonical public names for a misspelled field."""
@@ -45,7 +84,7 @@ class FieldRegistry:
         return tuple(dict.fromkeys(self._fields[match].name for match in matches))
 
     @staticmethod
-    def coerce(field: FieldDefinition, raw: str) -> ScalarValue:
+    def coerce(field: FieldDefinition, raw: str, *, scope: SearchScope = SearchScope.ALL) -> ScalarValue:
         """Convert a literal to the field's value type.
 
         Numbers accept the field's unit suffixes and must be finite and aligned
@@ -55,6 +94,12 @@ class FieldRegistry:
         Raises:
             ValidationError: If the value does not meet the field's requirements.
         """
+        if field.value_enum is not None:
+            value = raw.casefold()
+            if value not in field.value_enum or not field.applies_to(scope, value):
+                choices = ", ".join(member.value for member in field.value_enum if field.applies_to(scope, member))
+                raise ValidationError(md_tr(t"search-field-expects-choice = {field.name} expects one of {choices}."))
+            return field.value_enum(value)
         if field.value_type is FieldType.TEXT:
             return raw
         if field.value_type is FieldType.NUMBER:
@@ -95,7 +140,7 @@ class FieldRegistry:
 
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
-        FieldDefinition("title", FieldType.TEXT, ranked=True),
+        FieldDefinition("title", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("description", FieldType.TEXT, ranked=True),
         FieldDefinition("tag", FieldType.TEXT, ranked=True),
         FieldDefinition("restriction", FieldType.TEXT, ranked=True),
@@ -103,11 +148,34 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("pattern", FieldType.TEXT, ranked=True),
         FieldDefinition("creator", FieldType.TEXT, ranked=True),
         FieldDefinition("version", FieldType.TEXT),
-        FieldDefinition("status", FieldType.TEXT),
-        FieldDefinition("kind", FieldType.TEXT),
-        FieldDefinition("base_title", FieldType.TEXT, suggested_values=tuple(title.value for title in BaseTitle)),
-        FieldDefinition("version_scope", FieldType.TEXT, suggested_values=tuple(scope.value for scope in VersionScope)),
-        FieldDefinition("record_state", FieldType.TEXT),
+        FieldDefinition(
+            "status",
+            FieldType.TEXT,
+            scopes=CATALOGUE_SCOPES,
+            scoped_enums=((SearchScope.BUILDS, BuildSearchStatus), (SearchScope.RECORDS, ResolutionStatus)),
+        ),
+        FieldDefinition(
+            "kind",
+            FieldType.TEXT,
+            scopes=CATALOGUE_SCOPES,
+            scoped_enums=((SearchScope.BUILDS, SearchBuildKind), (SearchScope.RECORDS, SearchBuildKind)),
+            value_scopes=((SearchBuildKind.OTHER, SearchScope.BUILDS),),
+        ),
+        FieldDefinition(
+            "base_title",
+            FieldType.TEXT,
+            suggested_values=tuple(title.value for title in BaseTitle),
+            scopes=frozenset({SearchScope.RECORDS}),
+            value_enum=BaseTitle,
+        ),
+        FieldDefinition(
+            "version_scope",
+            FieldType.TEXT,
+            suggested_values=tuple(scope.value for scope in VersionScope),
+            scopes=frozenset({SearchScope.RECORDS}),
+            value_enum=VersionScope,
+        ),
+        FieldDefinition("record_state", FieldType.TEXT, scopes=frozenset({SearchScope.RECORDS})),
         FieldDefinition("volume", FieldType.NUMBER, supports_range=True),
         FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("height", FieldType.NUMBER, supports_range=True, supports_sort=True),
