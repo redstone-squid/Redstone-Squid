@@ -49,6 +49,14 @@ class SearchSort:
 
 
 @dataclass(frozen=True, slots=True)
+class SearchResultAnchor:
+    """Find the page containing a build or record by its indexed source ID."""
+
+    resource_kind: Literal["build", "record"]
+    source_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class SearchRequest:
     """Search text, filters, and paging options shared by the bot and API."""
 
@@ -61,6 +69,7 @@ class SearchRequest:
     visible_statuses: frozenset[str] | None = None
     group_by_build: bool = False
     parsed_query: BuildQuery | RecordQuery | None = None
+    anchor: SearchResultAnchor | None = None
 
     def __post_init__(self) -> None:
         if self.parsed_query is not None and self.parsed_query.scope is not self.scope:
@@ -172,3 +181,4 @@ class SearchPage:
     next: PageAnchor | None
     prev: PageAnchor | None
     warnings: tuple[str, ...] = ()
+    offset: int | None = None

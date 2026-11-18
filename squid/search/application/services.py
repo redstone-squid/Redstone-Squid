@@ -87,7 +87,7 @@ class SearchService:
                 logger.exception("Search query embedding generation failed")
         async with self._uow_factory() as uow:
             result = await uow.search.search(request, query, sort_field=sort_field, query_embedding=query_embedding)
-        offset = request.offset
+        offset = request.offset if result.offset is None else result.offset
         following = offset + request.page_size
         return SearchPage(
             hits=result.hits,
@@ -95,6 +95,7 @@ class SearchService:
             next=PageAnchor(offset=following) if following < result.total else None,
             prev=PageAnchor(offset=max(offset - request.page_size, 0)) if offset else None,
             warnings=result.warnings,
+            offset=offset,
         )
 
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:

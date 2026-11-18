@@ -17,6 +17,7 @@ class SearchSlice:
     hits: tuple[SearchHit, ...]
     total: int
     warnings: tuple[str, ...] = ()
+    offset: int | None = None
 
 
 class SearchBackend(Protocol):
@@ -30,7 +31,7 @@ class SearchBackend(Protocol):
         sort_field: FieldDefinition | None = None,
         query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
-        """Return the page of matches that starts at `request.offset`.
+        """Return the page containing the anchor, or the page at `request.offset`.
 
         `query` and `sort_field` are `request.query` and `request.sort` after the
         service has parsed and resolved them against the field registry.

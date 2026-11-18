@@ -11,12 +11,13 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any, cast
 
-from sqlalchemy import case, func, select, union_all
+from sqlalchemy import case, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import CTE
 
+from squid.core.pagination import MAX_PAGE_OFFSET
 from squid.search.application.highlighting import highlight_title
 from squid.search.application.ports import SearchSlice
 from squid.search.application.ranking import RankedCandidate
@@ -69,7 +70,7 @@ class ResultPager:
     async def page(
         self, predicate: ColumnElement[bool], order: ResultOrder, *, warnings: tuple[str, ...] = ()
     ) -> SearchSlice:
-        """Return the units starting at `request.offset` among documents matching `predicate`."""
+        """Return one page of units, locating the anchor in the same order used for paging."""
         ranked = None if order is None or isinstance(order, FieldDefinition) else order
         if ranked is not None and not ranked:
             return SearchSlice((), 0, warnings)
@@ -97,13 +98,30 @@ class ResultPager:
             value = paged.c.order_value
             # Units without the sort field come last in either direction.
             ordering = [value.is_(None), value.desc() if self._descending else value.asc(), *ordering]
+        offset = literal(self.request.offset)
+        anchor = self.request.anchor
+        if anchor is not None and total:
+            positions = select(paged.c.unit_id, func.row_number().over(order_by=ordering).label("position")).cte()
+            target = select(SearchDocument.id).where(
+                SearchDocument.resource_kind == anchor.resource_kind, SearchDocument.source_key == anchor.source_id
+            )
+            if anchor.resource_kind == "record" and self.request.group_by_build:
+                target = select(units.c.unit_id).where(units.c.document_id.in_(target))
+            position = select(func.min(positions.c.position)).where(positions.c.unit_id.in_(target)).scalar_subquery()
+            size = self.request.page_size
+            aligned = (position - 1) // size * size
+            offset = case((aligned <= MAX_PAGE_OFFSET, aligned), else_=offset)
         rows = (
             await self.session.execute(
-                select(paged).order_by(*ordering).offset(self.request.offset).limit(self.request.page_size)
+                select(paged, offset.label("page_offset"))
+                .order_by(*ordering)
+                .offset(offset)
+                .limit(self.request.page_size)
             )
         ).all()
         if not rows:
             return SearchSlice((), total, warnings)
+        page_offset = rows[0].page_offset
         unit_ids = [row.unit_id for row in rows]
         documents = {
             document.id: document
@@ -114,10 +132,10 @@ class ResultPager:
         scores = {row.unit_id: float(row.order_value) if ranked is not None else None for row in rows}
         if not self.request.group_by_build:
             hits = tuple(document_hit(documents[unit_id], scores[unit_id]) for unit_id in unit_ids)
-            return SearchSlice(hits, total, warnings)
+            return SearchSlice(hits, total, warnings, page_offset)
         # Use every match rather than the ranked ones, so a hit also lists matches outside the candidate pool.
         hits = await self._grouped_hits(matches, unit_ids, documents, scores, ranked or {})
-        return SearchSlice(hits, total, warnings)
+        return SearchSlice(hits, total, warnings, page_offset)
 
     @property
     def _descending(self) -> bool:

@@ -16,7 +16,15 @@ import squid.search.infrastructure.repository as search_repository
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
-from squid.search.domain import BuildSearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.search.domain import (
+    BuildSearchHit,
+    SearchMode,
+    SearchRequest,
+    SearchResultAnchor,
+    SearchScope,
+    SearchSort,
+    SortDirection,
+)
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
@@ -205,6 +213,32 @@ async def test_record_scope_includes_only_matching_records(
     for hit in page.hits:
         assert isinstance(hit, BuildSearchHit)
         assert [record.source_id for record in hit.records] == ["result:101"]
+
+
+@pytest.mark.parametrize(
+    ("anchor", "offset", "build"),
+    [
+        (SearchResultAnchor("build", "1"), 1, "1"),
+        (SearchResultAnchor("record", "result:102"), 1, "1"),
+        (SearchResultAnchor("record", "result:101"), 0, "2"),
+        (SearchResultAnchor("record", "result:103"), 0, "2"),
+    ],
+)
+async def test_sorted_grouped_search_locates_the_anchor_in_visible_results(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    anchor: SearchResultAnchor,
+    offset: int,
+    build: str,
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    page = await search(
+        partial(SqlAlchemyUnitOfWork, async_session_factory),
+        SearchRequest("", page_size=1, sort=SearchSort("width"), group_by_build=True, anchor=anchor),
+    )
+
+    assert page.offset == offset
+    assert page.hits[0].source_id == build
 
 
 async def test_grouped_rank_limit_does_not_truncate_record_details(
