@@ -37,7 +37,7 @@ def record_standings(
         sl.note(f"{build_kind} · {scope}" if build_kind else scope),
         sl.paragraph(rule) if (rule := _comparison_rule(base_title)) else None,
         *details,
-        sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if others and current_holder is not None else None,
+        sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if len(holders) > 1 else None,
         sl.action_controls(
             *(
                 sl.action_control(

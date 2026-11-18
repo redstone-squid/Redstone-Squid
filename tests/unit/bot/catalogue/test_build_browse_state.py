@@ -320,6 +320,8 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
         assert "Build #7" in ui.texts()
         await ui.press(ui.key_for("linked-build.back"))
         assert "## Smallest 2x2 door" in ui.texts()
+        assert any("Lowest volume" in text for text in ui.texts())
+        assert any("Tied holders" in text for text in ui.texts())
         assert not any("unresolved" in text or "no_candidate" in text for text in ui.texts())
         ui.control(ui.key_for("holder-9"))
         await ui.press(ui.key_for("all-builds"))

@@ -8,12 +8,13 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.showcase.catalogue import CataloguePreview
 from squid.bot.showcase.cog import LayoutShowcaseCog
 from squid_ui.ext.discord.testing import ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 
 
-@pytest.mark.parametrize(("command", "count"), [("workbench", 2), ("review", 3)])
+@pytest.mark.parametrize(("command", "count"), [("workbench", 2), ("review", 3), ("catalogue", 1)])
 async def test_commands_deliver_live_panels(command: str, count: int) -> None:
     bot = make_layout_bot(topic_bus=sl.runtime.LocalTopicBus())
     cog = LayoutShowcaseCog(cast(Any, bot))
@@ -35,15 +36,28 @@ async def test_commands_deliver_live_panels(command: str, count: int) -> None:
         assert screen.session is session
         assert screen.parent is None
         assert screen.outcome is None
-        assert root.scheduler is bot.ui.scheduler
+        assert root.scheduler is (None if command == "catalogue" else bot.ui.scheduler)
 
 
-def test_only_two_subcommands_remain() -> None:
+def test_showcase_subcommands() -> None:
     assert {entry.qualified_name for entry in cast(Any, LayoutShowcaseCog).__cog_commands__} == {
         "layout",
+        "layout catalogue",
         "layout workbench",
         "layout review",
     }
+
+
+async def test_catalogue_preview_tabs_fit_discord() -> None:
+    async with sd.testing.stage(CataloguePreview(), owner=object()) as ui:
+        assert any("Lowest volume" in text for text in ui.texts())
+        ui.assert_within_limits()
+        await ui.press(ui.key_for("catalogue-preview.search"))
+        assert any("Smallest **2x2** Seamless Door" in text for text in ui.texts())
+        ui.assert_within_limits()
+        await ui.press(ui.key_for("catalogue-preview.build"))
+        assert any("Submission ID: 42" in text for text in ui.texts())
+        ui.assert_within_limits()
 
 
 async def test_live_join_is_idempotent_and_host_close_finishes_children() -> None:

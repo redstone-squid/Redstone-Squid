@@ -8,6 +8,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_ui.ext.discord as sd
+from squid.bot.showcase.catalogue import CataloguePreview
 from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
 from squid.bot.showcase.workbench import BuildDraft, BuildPreview, Workbench
 from squid_i18n import tr
@@ -18,17 +19,26 @@ if TYPE_CHECKING:
 
 
 class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
-    """Two working examples of reactive Discord applications."""
+    """Development previews and examples for Discord layouts."""
 
     @commands.hybrid_group(
         to_locale_str(tr(t"command-layout-name = layout")),
         description=to_locale_str(
-            tr(t"command-layout-help = Explore the build workbench or collaborative review room.")
+            tr(t"command-layout-help = Preview catalogue components or explore reactive Discord layouts.")
         ),
     )
     async def layout_group(self, ctx: Context[BotT]) -> None:
-        """Explore the build workbench or collaborative review room."""
+        """Preview catalogue components or explore reactive Discord layouts."""
         await ctx.send_help("layout")
+
+    @layout_group.command(
+        to_locale_str(tr(t"command-layout-catalogue-name = catalogue")),
+        description=to_locale_str(tr(t"command-layout-catalogue-help = Preview record standings and a build card.")),
+    )
+    async def catalogue(self, ctx: Context[BotT]) -> None:
+        """Preview the catalogue's record and build components."""
+        request = await self.ui.request(ctx)
+        await request.respond(CataloguePreview())
 
     @layout_group.command(
         to_locale_str(tr(t"command-layout-workbench-name = workbench")),

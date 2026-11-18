@@ -2303,8 +2303,14 @@ command-help-help = Show a grouped command directory or focused command details.
 # squid/bot/help_cog.py:206
 command-help-name = help
 
-# squid/bot/showcase/cog.py:26
-command-layout-help = Explore the build workbench or collaborative review room.
+# squid/bot/showcase/cog.py:36
+command-layout-catalogue-help = Preview record standings and a build card.
+
+# squid/bot/showcase/cog.py:35
+command-layout-catalogue-name = catalogue
+
+# squid/bot/showcase/cog.py:27
+command-layout-help = Preview catalogue components or explore reactive Discord layouts.
 
 # squid/bot/showcase/cog.py:24
 command-layout-name = layout
@@ -3522,6 +3528,18 @@ ingestion-consent-timestamp-notice = Notice { $version }, timed at the moment yo
 
 # squid/bot/submission/consent_banner.py:54
 ingestion-enable-automatic-action = Enable Automatic Build Ingestion
+
+# squid/bot/showcase/catalogue.py:59
+layout-catalogue-build = Build card
+
+# squid/bot/showcase/catalogue.py:57
+layout-catalogue-published = Published record
+
+# squid/bot/showcase/catalogue.py:69
+layout-catalogue-sample-holder = Sample holder #{ $build_id }
+
+# squid/bot/showcase/catalogue.py:58
+layout-catalogue-search = Search result
 
 # squid/bot/showcase/inspector.py:44
 layout-inspector-developer-snapshot = Developer snapshot

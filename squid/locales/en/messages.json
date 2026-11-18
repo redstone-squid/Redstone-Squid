@@ -7608,13 +7608,31 @@
       "squid/bot/help_cog.py:206"
     ]
   },
-  "command-layout-help": {
-    "fingerprint": "ee057505d593a83942750a3d3a9458c9ab3f812324062fb9e7582e3ffa5030f0",
+  "command-layout-catalogue-help": {
+    "fingerprint": "0df23c5d7118da0db44ffee5a66a991cdf679f306426bb7ef189c0e946d4efe6",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/showcase/cog.py:26"
+      "squid/bot/showcase/cog.py:36"
+    ]
+  },
+  "command-layout-catalogue-name": {
+    "fingerprint": "bf219145c1cfde5db2b43f7fe5c2784a834652c36902764b64cf1c505f1a4e0d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/showcase/cog.py:35"
+    ]
+  },
+  "command-layout-help": {
+    "fingerprint": "2b0c729fa15defd4df964407ea074dc32cd59de6b7136fa790664009a84ea11c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/showcase/cog.py:27"
     ]
   },
   "command-layout-name": {
@@ -11534,6 +11552,48 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/consent_banner.py:54"
+    ]
+  },
+  "layout-catalogue-build": {
+    "fingerprint": "855225bbb9842f6263a9ac105ef79ebd00ecf823c4d7b32e621c76fc94a281dd",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/showcase/catalogue.py:59"
+    ]
+  },
+  "layout-catalogue-published": {
+    "fingerprint": "dc53a05a3100a500a8d980e153276405ec95aa727fa6f458e63d5d1586c0b06a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/showcase/catalogue.py:57"
+    ]
+  },
+  "layout-catalogue-sample-holder": {
+    "fingerprint": "03acedb615fe1fe20db65c242c92e08adbc0d2abc3c31df4b6791c6d1d8f4eee",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "build_id",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/showcase/catalogue.py:69"
+    ]
+  },
+  "layout-catalogue-search": {
+    "fingerprint": "237e001f9597b08185d9bc2aa682d544b79fede9b29dcbf746f80a8d603cce29",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/showcase/catalogue.py:58"
     ]
   },
   "layout-inspector-developer-snapshot": {
