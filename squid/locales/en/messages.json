@@ -10947,8 +10947,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:160",
-      "squid/bot/catalogue/search/filters.py:181"
+      "squid/bot/catalogue/search/filters.py:151",
+      "squid/bot/catalogue/search/filters.py:171"
     ]
   },
   "guided-search-cancel-batch": {
@@ -10966,7 +10966,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:187"
+      "squid/bot/catalogue/search/filters.py:185"
     ]
   },
   "guided-search-close-filters": {
@@ -10975,7 +10975,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:158"
+      "squid/bot/catalogue/search/filters.py:149"
     ]
   },
   "guided-search-comparison": {
@@ -10993,7 +10993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:152"
+      "squid/bot/catalogue/search/filters.py:143"
     ]
   },
   "guided-search-edit-text": {
@@ -11017,7 +11017,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:185"
+      "squid/bot/catalogue/search/filters.py:180"
     ]
   },
   "guided-search-filter-progress": {
@@ -11070,7 +11070,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:513"
+      "squid/bot/catalogue/search/filters.py:536"
     ]
   },
   "guided-search-operator-at-least": {
@@ -11178,7 +11178,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:446"
+      "squid/bot/catalogue/search/filters.py:447"
     ]
   },
   "guided-search-search-values": {
@@ -11193,7 +11193,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:470"
+      "squid/bot/catalogue/search/filters.py:472"
     ]
   },
   "guided-search-selected-field": {
@@ -11217,7 +11217,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:146"
+      "squid/bot/catalogue/search/filters.py:137"
     ]
   },
   "guided-search-sorting": {
@@ -11226,7 +11226,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:166"
+      "squid/bot/catalogue/search/filters.py:157"
     ]
   },
   "guided-search-upper": {
@@ -11244,7 +11244,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/filters.py:513"
+      "squid/bot/catalogue/search/filters.py:536"
     ]
   },
   "help-account": {

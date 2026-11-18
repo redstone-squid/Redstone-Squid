@@ -3335,28 +3335,28 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner_cog.py:128
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/catalogue/search/filters.py:160, squid/bot/catalogue/search/filters.py:181
+# squid/bot/catalogue/search/filters.py:151, squid/bot/catalogue/search/filters.py:171
 guided-search-add-filter = Add filter
 
 # squid/bot/catalogue/search/filters.py:183
 guided-search-cancel-batch = Cancel adding filters
 
-# squid/bot/catalogue/search/filters.py:187
+# squid/bot/catalogue/search/filters.py:185
 guided-search-change-field = Choose another field
 
-# squid/bot/catalogue/search/filters.py:158
+# squid/bot/catalogue/search/filters.py:149
 guided-search-close-filters = Close filters
 
 # squid/bot/catalogue/search/filters.py:286
 guided-search-comparison = Comparison
 
-# squid/bot/catalogue/search/filters.py:152
+# squid/bot/catalogue/search/filters.py:143
 guided-search-edit-query = Type a query
 
 # squid/bot/catalogue/search/filters.py:333
 guided-search-edit-text = Edit keywords
 
-# squid/bot/catalogue/search/filters.py:185
+# squid/bot/catalogue/search/filters.py:180
 guided-search-filter-heading = Filter by { $name }
 
 # squid/bot/catalogue/search/filters.py:178
@@ -3368,7 +3368,7 @@ guided-search-keywords = Keywords
 # squid/bot/catalogue/search/filters.py:322, squid/bot/catalogue/search/filters.py:339
 guided-search-negated = Exclude matches
 
-# squid/bot/catalogue/search/filters.py:513
+# squid/bot/catalogue/search/filters.py:536
 guided-search-no = No
 
 # squid/bot/catalogue/search/filters.py:280
@@ -3404,25 +3404,25 @@ guided-search-reset = Reset
 # squid/bot/catalogue/search/filters.py:432
 guided-search-search-filter = Search fields
 
-# squid/bot/catalogue/search/filters.py:446
+# squid/bot/catalogue/search/filters.py:447
 guided-search-search-options = Search sort orders
 
-# squid/bot/catalogue/search/filters.py:470
+# squid/bot/catalogue/search/filters.py:472
 guided-search-search-values = Search { $name }
 
 # squid/bot/catalogue/search/filters.py:206
 guided-search-selected-field = Set { $name } filter
 
-# squid/bot/catalogue/search/filters.py:146
+# squid/bot/catalogue/search/filters.py:137
 guided-search-sort = Sort by
 
-# squid/bot/catalogue/search/filters.py:166
+# squid/bot/catalogue/search/filters.py:157
 guided-search-sorting = Sort
 
 # squid/bot/catalogue/search/filters.py:313
 guided-search-upper = And (only for between)
 
-# squid/bot/catalogue/search/filters.py:513
+# squid/bot/catalogue/search/filters.py:536
 guided-search-yes = Yes
 
 # squid/bot/help_cog.py:27
