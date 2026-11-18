@@ -9,7 +9,7 @@ cursor change can select output without rerunning search or changing a sibling.
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import uuid4
 
 from squid_ui.authoring.presentations import SemanticRef
@@ -17,13 +17,17 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.planning.composition import (
     CandidateComposition,
-    NavigationInput,
     OccurrenceId,
     Placement,
     PlanningContext,
+    RegionContract,
 )
+from squid_ui.planning.context_evaluation import evaluate_contextual
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+
+if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +37,7 @@ class RegionAllocation[RenderTargetT, ContextT, PayloadT]:
     cuts: tuple[int, ...]
     pages: tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...]
     anchors: tuple[frozenset[SemanticRef], ...]
+    contract: RegionContract[RenderTargetT, ContextT, PayloadT]
     allocation: ResourceCost = EMPTY_COST
     source_order: tuple[SemanticRef, ...] = ()
 
@@ -82,28 +87,47 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
             pages: list[CandidateComposition[RenderTargetT, ContextT, PayloadT]] = []
             anchors: list[frozenset[SemanticRef]] = []
             start = 0
-            for index, end in enumerate(ends):
+            for end in ends:
                 context.work.consume()
                 fragment = slice_fragment(node, start, end, context)
-                chrome = offer.region.navigation(index, len(ends), context)
-                children = (
-                    *(child for child in fragment.children if child.offer.occurrence.placement != Placement.FOOTER),
-                    *chrome,
-                    *(child for child in fragment.children if child.offer.occurrence.placement == Placement.FOOTER),
-                )
-                pages.append(
-                    CandidateComposition(
-                        replace(fragment.offer, children=tuple(child.offer.occurrence for child in children)), children
-                    )
-                )
+                pages.append(fragment)
                 anchors.append(frozenset(source for unit in anchor_units[start:end] for source in unit))
                 start = end
             sources = frozenset(source for unit in anchor_units for source in unit)
             ordered = tuple(ref for ref in root.offer.occurrence.graph.units if ref in sources)
             allocated[offer.occurrence.identity] = RegionAllocation(
-                offer.occurrence.identity, offer.region.key, ends, tuple(pages), tuple(anchors), source_order=ordered
+                offer.occurrence.identity,
+                offer.region.key,
+                ends,
+                tuple(pages),
+                tuple(anchors),
+                offer.region,
+                source_order=ordered,
             )
         return cls(root, allocated)
+
+    def contextualize(
+        self,
+        part: CandidateComposition[RenderTargetT, ContextT, PayloadT],
+        layout: LayoutContext,
+        context: PlanningContext,
+    ) -> CandidateComposition[RenderTargetT, ContextT, PayloadT]:
+        context.work.consume()
+        children = tuple(self.contextualize(child, layout, context) for child in part.children)
+        coverage = part.offer.occurrence.fragment
+        if coverage is not None and coverage.logical in self.regions:
+            chrome = self.regions[coverage.logical].contract.chrome
+            scoped = layout._evaluating(context.work.consume, containing=coverage.logical)
+            output = evaluate_contextual(chrome.content, scoped)
+            generated = chrome.realize(output, context)
+            children = (
+                *(child for child in children if child.offer.occurrence.placement != Placement.FOOTER),
+                *generated,
+                *(child for child in children if child.offer.occurrence.placement == Placement.FOOTER),
+            )
+        return CandidateComposition(
+            replace(part.offer, children=tuple(child.offer.occurrence for child in children)), children
+        )
 
     def combinations(
         self, context: PlanningContext, selected: Mapping[OccurrenceId, int] | None = None
@@ -162,7 +186,6 @@ class RegionPages:
     cuts: tuple[int, ...]
     anchors: tuple[frozenset[SemanticRef], ...]
     allocation: ResourceCost
-    navigation: tuple[tuple[NavigationInput, ...], ...]
     source_order: tuple[SemanticRef, ...] = ()
     owner: PageOwnership = FIRST_PAGE
     cursor_key: str = ""
@@ -254,10 +277,6 @@ class AllocationSnapshot[OutputT]:
                 region.cuts,
                 region.anchors,
                 region.allocation,
-                tuple(
-                    tuple(child.offer.navigation for child in page.children if child.offer.navigation is not None)
-                    for page in region.pages
-                ),
                 region.source_order,
                 contracts[identity].owner,
                 contracts[identity].cursor_key or region.key,

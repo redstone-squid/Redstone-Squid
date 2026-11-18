@@ -2,8 +2,9 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
+from hashlib import sha256
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from squid_ui.authoring.presentations import Alternatives, Omission, SemanticRef
 from squid_ui.authoring.semantic import ComponentPlacement, Contextual, FallbackContent, List, OptionalContent
@@ -23,8 +24,10 @@ from squid_ui.layout import (
     Unknown,
     UnknownReason,
 )
+from squid_ui.pages import PagePosition
 from squid_ui.planning.allocation import PageFamily
 from squid_ui.planning.composition import CandidateComposition, OccurrenceId, Placement, PlanningContext
+from squid_ui.planning.pagination.navigation import materialized_navigation
 from squid_ui.planning.semantic_index import SemanticGraph, semantic_graph
 from squid_ui.selectors import Match, Query, Selector, TreeIndex, query, select
 
@@ -146,11 +149,133 @@ class _LocationReader:
         return Locations(locations, self.complete)
 
 
+@dataclass(frozen=True, slots=True)
+class _FamilyScope:
+    layout: FamilyLayout
+    coordinates: Mapping[OccurrenceId, int]
+    name: Literal["authored", "placed", "visible"]
+
+    def __call__[T](self, selector: Selector[T]) -> Query[T]:
+        scope: DocumentScope = getattr(
+            self.layout.snapshot.context(
+                self.coordinates, complete=not self.layout.context.local_view, consume=self.layout.context.work.consume
+            ),
+            self.name,
+        )
+        return scope.query(selector)
+
+
+@dataclass(frozen=True, slots=True)
+class _FamilyLocations:
+    layout: FamilyLayout
+    coordinates: Mapping[OccurrenceId, int]
+
+    def __call__[T](self, target: ElementRef[T] | Match[T], within: RegionRef | None) -> Locations:
+        return self.layout.snapshot.context(
+            self.coordinates, complete=not self.layout.context.local_view, consume=self.layout.context.work.consume
+        ).locate(target, within=within)
+
+
+class FamilyLayout:
+    """Candidate facts, with canonical query capture built only when requested."""
+
+    def __init__(
+        self,
+        family: PageFamily[Any, Any, Any],
+        context: PlanningContext,
+        selected: Mapping[OccurrenceId, int] | None = None,
+    ) -> None:
+        self.family = family
+        self.context = context
+        self.selected = selected
+        self._snapshot: LayoutSnapshot | None = None
+        graph = family.root.offer.occurrence.graph
+        self.region_refs = {
+            identity: RegionRef(region.pages[0].offer.occurrence.page_source.keys)
+            for identity, region in family.regions.items()
+        }
+        self.counts = {
+            identity: len(region.pages) if any(region.anchors) else 0 for identity, region in family.regions.items()
+        }
+        self.groups = {}
+        for identity, ref in self.region_refs.items():
+            unit = graph.units.get(SemanticRef(ref.keys))
+            self.groups[identity] = (
+                unit.value.group_count if unit is not None and isinstance(unit.value, List) else None
+            )
+
+    @property
+    def snapshot(self) -> LayoutSnapshot:
+        if self._snapshot is None:
+            self._snapshot = LayoutSnapshot(self.family, self.context, self.selected, facts=self)
+        return self._snapshot
+
+    def regions(self, selected: Mapping[OccurrenceId, int], *, complete: bool) -> dict[RegionRef, RegionFacts]:
+        result = {}
+        unknown = Unknown(UnknownReason.INCOMPLETE, "only this view was resolved")
+        unknown_index = Unknown(UnknownReason.INCOMPLETE, "preceding rendered pages have not been certified")
+        for identity, ref in self.region_refs.items():
+            count = Known(self.counts[identity]) if complete else unknown
+            selection = (
+                PageCoordinate(
+                    identity, Known(selected[identity]) if complete or selected[identity] == 0 else unknown_index
+                )
+                if identity in selected and self.counts[identity] > 0
+                else None
+            )
+            contract = self.family.regions[identity].contract
+            navigation = None
+            if identity in selected:
+                route = (
+                    None
+                    if self.context.mounted
+                    else "composition.page." + sha256("/".join(identity.path).encode()).hexdigest()[:24]
+                )
+                navigation = materialized_navigation(
+                    contract.cursor_key or contract.key,
+                    PagePosition(page=selected[identity]),
+                    len(self.family.regions[identity].pages),
+                    selection,
+                    count,
+                    self.context.chrome,
+                    self.context.presentation,
+                    contract.owner,
+                    route_prefix=route,
+                )
+            groups = self.groups[identity]
+            result[ref] = RegionFacts(
+                identity,
+                count,
+                Known(selection),
+                Known(groups)
+                if groups is not None
+                else Unknown(UnknownReason.UNSUPPORTED, "no fixed item grouping was declared"),
+                _navigation=navigation,
+            )
+        return result
+
+    def for_view(self, coordinates: Mapping[OccurrenceId, int]) -> LayoutContext:
+        return LayoutContext(
+            authored=DocumentScope(_FamilyScope(self, coordinates, "authored")),
+            placed=DocumentScope(_FamilyScope(self, coordinates, "placed")),
+            visible=DocumentScope(_FamilyScope(self, coordinates, "visible")),
+            regions=self.regions(coordinates, complete=not self.context.local_view),
+            locate=_FamilyLocations(self, coordinates),
+            capabilities=self.context.capabilities,
+            localization=self.context.localization,
+        )
+
+
 class LayoutSnapshot:
     """Immutable facts for a materialized family, reusable across its certified views."""
 
     def __init__[R, C, P](
-        self, family: PageFamily[R, C, P], context: PlanningContext, selected: Mapping[OccurrenceId, int] | None = None
+        self,
+        family: PageFamily[R, C, P],
+        context: PlanningContext,
+        selected: Mapping[OccurrenceId, int] | None = None,
+        *,
+        facts: FamilyLayout | None = None,
     ) -> None:
         graph = family.root.offer.occurrence.graph
         choices: list[tuple[OccurrenceId, str]] = []
@@ -166,19 +291,10 @@ class LayoutSnapshot:
         self.capabilities = context.capabilities
         self.localization = context.localization
         self.capture = SemanticCapture(graph, context.work.consume, context.localization)
-        self.region_refs = {
-            identity: RegionRef(region.pages[0].offer.occurrence.page_source.keys)
-            for identity, region in family.regions.items()
-        }
-        self.counts = {
-            identity: len(region.pages) if any(region.anchors) else 0 for identity, region in family.regions.items()
-        }
-        self.groups: dict[OccurrenceId, int | None] = {}
-        for identity, ref in self.region_refs.items():
-            unit = graph.units.get(SemanticRef(ref.keys))
-            self.groups[identity] = (
-                unit.value.group_count if unit is not None and isinstance(unit.value, List) else None
-            )
+        self.facts = facts or FamilyLayout(family, context, selected)
+        self.facts._snapshot = self
+        self.region_refs = self.facts.region_refs
+        self.counts = self.facts.counts
         self.captures: dict[tuple[tuple[OccurrenceId, int], ...], SemanticCapture] = {}
         self.visible: dict[tuple[tuple[OccurrenceId, int], ...], frozenset[SemanticRef]] = {}
         self.invocations: dict[
@@ -296,25 +412,7 @@ class LayoutSnapshot:
             message = "layout capture needs one reachable coordinate combination"
             raise ValueError(message)
         unknown_index = Unknown(UnknownReason.INCOMPLETE, "preceding rendered pages have not been certified")
-        regions = {
-            ref: RegionFacts(
-                identity,
-                Known(self.counts[identity])
-                if complete
-                else Unknown(UnknownReason.INCOMPLETE, "only this view was resolved"),
-                Known(
-                    PageCoordinate(
-                        identity, Known(selected[identity]) if complete or selected[identity] == 0 else unknown_index
-                    )
-                )
-                if identity in selected and self.counts[identity] > 0
-                else Known(None),
-                Known(groups)
-                if (groups := self.groups[identity]) is not None
-                else Unknown(UnknownReason.UNSUPPORTED, "no fixed item grouping was declared"),
-            )
-            for identity, ref in self.region_refs.items()
-        }
+        regions = self.facts.regions(selected, complete=complete)
         locations: dict[SemanticRef, tuple[FragmentLocation, ...]] = {}
         for source, fragments in self.fragments.items():
             locations[source] = tuple(

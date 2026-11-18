@@ -64,12 +64,21 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+        total = len(self._claims)
+
+        def page_footer(ctx: sl.LayoutContext) -> sl.TextLike:
+            region = ctx.region()
+            selection = region.selection.require()
+            assert selection is not None
+            page, pages = selection.number.require(), region.count.require()
+            return md_tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
+
         entries = tuple(_claim_entry(claim) for claim in self._claims)
         body: sl.LayoutNode[ComponentsV2Target, sd.Request] = (
             sd.v2.lines(
                 *entries,
                 join="\n\n",
-                overflow=primitives.Paginate(key="claims", footer=self._page_footer),
+                overflow=primitives.Paginate(key="claims", footer=page_footer),
             )
             if entries
             else sd.v2.text(tr(t"claims-review-empty = No creator credit claims are awaiting review."))
@@ -124,10 +133,6 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
             # With no claims there is nothing to select, so the actions could never be used.
             return (panel,)
         return (panel, sl.action_controls(*buttons, key="claim-actions"))
-
-    def _page_footer(self, page: int, pages: int) -> sl.text.Text:
-        total = len(self._claims)
-        return md_tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
 
     async def _select_claim(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])

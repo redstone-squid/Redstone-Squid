@@ -4,28 +4,28 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from hashlib import sha256
+from typing import Any, cast
 from urllib.parse import quote
 
 from squid_i18n import tree
 from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
+from squid_ui.authoring.document import Document, DocumentLike
 from squid_ui.authoring.presentations import (
     Budget,
     SemanticRef,
 )
 from squid_ui.content.text import TextLike, resolve_text
+from squid_ui.factories.contextual import context as contextual
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.layout import Known, LayoutContext
 from squid_ui.native import NativeTraits, NativeValue
-from squid_ui.overflow import (
-    FIRST_PAGE,
-    PageOwnership,
-)
 from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     CandidateComposition,
+    ContextualChrome,
     FragmentCoverage,
-    NavigationInput,
     OccurrenceId,
     Placement,
     PlanningContext,
@@ -36,7 +36,7 @@ from squid_ui.planning.control_style import button_style
 from squid_ui.planning.interaction_handlers import ChoiceCommit, SelectChoices
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, NavigationChoice
 from squid_ui.planning.pagination.content import RootRegion
-from squid_ui.planning.pagination.navigation import PagerNav, default_nav
+from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.planning.realizations import (
     ActionsRealization,
     ControlRealization,
@@ -48,91 +48,98 @@ from squid_ui.planning.semantic_index import UnsupportedSemanticError
 
 
 @dataclass(frozen=True, slots=True)
-class RegionNavigation[RenderTargetT, ContextT]:
-    occurrence: SemanticOccurrence[RenderTargetT, ContextT]
+class PaginationContent:
+    factory: PlannedNav | None
+    mounted: bool
     disabled_controls: bool
-    footer: Callable[[int, int], TextLike] | None = None
-    owner: PageOwnership = FIRST_PAGE
-    cursor_key: str = ""
-    default_controls: bool = False
+    footer: Callable[[LayoutContext], TextLike] | None
 
-    def __call__(
-        self, page: int, pages: int, context: PlanningContext
-    ) -> tuple[CandidateComposition[RenderTargetT, ContextT, Realization], ...]:
-        if pages == 1:
+    def __call__(self, ctx: LayoutContext) -> DocumentLike[Any, Any]:
+        region = ctx.region()
+        navigation = region.navigation
+        if navigation is None or not (navigation.has_previous or navigation.has_next):
             return ()
-        occurrence = self.occurrence
-        if context.mounted:
-            label = "" if context.local_view else (self.footer or context.chrome.page_footer)(page + 1, pages)
-            placed = replace(
-                occurrence,
-                identity=OccurrenceId((*occurrence.identity.path, "@navigation", str(page))),
-                placement=Placement.NAVIGATION,
-                fragment=FragmentCoverage(occurrence.identity, 0, 0, frozenset()),
-            )
-            footer = CandidateComposition(
-                RealizationOffer[RenderTargetT, ContextT, Realization](
-                    replace(placed, identity=OccurrenceId((*placed.identity.path, "footer"))),
-                    "footer",
-                    TextRealization(resolve_text(label, context.localization).nodes),
-                )
-            )
-            navigation = context.navigation
-            if navigation is None and self.default_controls:
-                navigation = PagerNav(default_nav, context.presentation, staged=True)
-            controls = (
-                () if navigation is None else navigation(self.cursor_key, page, pages, context.chrome, self.owner)
-            )
-            return (
-                *((footer,) if not context.local_view else ()),
-                *(
-                    navigation_candidate(
-                        node,
-                        replace(placed, identity=OccurrenceId((*placed.identity.path, str(index)))),
-                        context,
-                        disabled_controls=self.disabled_controls,
-                    )
-                    for index, node in enumerate(controls)
+        selection = region.selection.require()
+        total = region.count
+        label = None
+        if self.footer is not None:
+            label = self.footer(ctx)
+        elif selection is not None and isinstance(selection.number, Known) and isinstance(total, Known):
+            label = navigation.chrome.page_footer(selection.number.value, total.value)
+        footer = (sem.Paragraph(label, key="footer"),) if label is not None else ()
+        if self.mounted:
+            controls = self.factory(navigation) if self.factory is not None else ()
+            return (*footer, *cast(tuple[sem.LayoutNode[Any, Any], ...], tuple(controls)))
+        state = navigation.state
+        previous = (
+            (
+                sem.RoutedActionControl(
+                    state.previous_key,
+                    state.previous_label,
+                    cast(str, navigation.on_previous),
+                    available=state.has_previous,
                 ),
             )
-        route = "composition.page." + sha256("/".join(occurrence.identity.path).encode()).hexdigest()[:24]
-        payloads: list[Realization] = []
-        previous = "".join(
-            tree.plain(node) for node in resolve_text(context.chrome.previous, context.localization).nodes
+            if state.has_previous or self.disabled_controls
+            else ()
         )
-        following = "".join(tree.plain(node) for node in resolve_text(context.chrome.next, context.localization).nodes)
-        if page > 0 or self.disabled_controls:
-            payloads.append(ControlRealization(previous, route=f"{route}.{max(0, page - 1)}", disabled=page == 0))
-        if not context.local_view:
-            label = (self.footer or context.chrome.page_footer)(page + 1, pages)
-            payloads.append(TextRealization(resolve_text(label, context.localization).nodes))
-        if page + 1 < pages or self.disabled_controls:
-            payloads.append(
-                ControlRealization(following, route=f"{route}.{min(pages - 1, page + 1)}", disabled=page + 1 == pages)
+        following = (
+            (
+                sem.RoutedActionControl(
+                    state.next_key, state.next_label, cast(str, navigation.on_next), available=state.has_next
+                ),
             )
-        result: list[CandidateComposition[RenderTargetT, ContextT, Realization]] = []
-        for index, payload in enumerate(payloads):
-            context.work.consume()
-            identity = OccurrenceId((*occurrence.identity.path, "@navigation", str(page), str(index)))
+            if state.has_next or self.disabled_controls
+            else ()
+        )
+        return cast(tuple[sem.LayoutNode[Any, Any], ...], (*previous, *footer, *following))
+
+
+@dataclass(frozen=True, slots=True)
+class PaginationRealization[R, C]:
+    occurrence: SemanticOccurrence[R, C]
+    disabled_controls: bool
+    mounted: bool
+
+    def __call__(
+        self, document: Document[R, C], context: PlanningContext
+    ) -> tuple[CandidateComposition[R, C, Realization], ...]:
+        if document.assets or document.key is not None:
+            message = "pagination chrome cannot declare document assets or identity"
+            raise UnsupportedSemanticError(message)
+        result: list[CandidateComposition[R, C, Realization]] = []
+        for index, node in enumerate(document.children):
+            identity = OccurrenceId(
+                (
+                    *self.occurrence.identity.path,
+                    "@navigation",
+                    "footer" if self.mounted and isinstance(node, sem.Paragraph) else str(index),
+                )
+            )
             placed = replace(
-                occurrence,
+                self.occurrence,
                 identity=identity,
                 placement=Placement.NAVIGATION,
-                fragment=FragmentCoverage(occurrence.identity, 0, 0, frozenset()),
+                fragment=FragmentCoverage(self.occurrence.identity, 0, 0, frozenset()),
             )
-            navigation = None
-            if isinstance(payload, ControlRealization) and payload.route is not None:
-                navigation = NavigationInput(
-                    occurrence.identity, payload.route, int(payload.route.rsplit(".", 1)[1]), not payload.disabled
-                )
-            result.append(
-                CandidateComposition(
-                    RealizationOffer[RenderTargetT, ContextT, Realization](
-                        placed, "navigation", payload, navigation=navigation
-                    )
-                )
-            )
+            candidate = navigation_candidate(node, placed, context, disabled_controls=self.disabled_controls)
+            result.append(candidate)
         return tuple(result)
+
+
+def pagination_chrome[R, C](
+    occurrence: SemanticOccurrence[R, C],
+    context: PlanningContext,
+    disabled_controls: bool,
+    footer: Callable[[LayoutContext], TextLike] | None = None,
+    *,
+    default_controls: bool = False,
+) -> ContextualChrome[R, C, Realization]:
+    factory = context.navigation or (default_nav if default_controls else None)
+    return ContextualChrome(
+        contextual(PaginationContent(factory, context.mounted, disabled_controls, footer), key="@pagination"),
+        PaginationRealization(occurrence, disabled_controls, context.mounted),
+    )
 
 
 def navigation_candidate[R, C](
@@ -144,7 +151,9 @@ def navigation_candidate[R, C](
     context.work.consume()
     children = ()
     binding = None
-    if isinstance(node, sem.ActionControls):
+    if isinstance(node, sem.Paragraph):
+        payload = TextRealization(resolve_text(node.content, context.localization).nodes)
+    elif isinstance(node, sem.ActionControls):
         payload = ActionsRealization(navigation=True)
         children = tuple(
             navigation_candidate(

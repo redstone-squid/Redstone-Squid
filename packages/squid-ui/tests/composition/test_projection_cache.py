@@ -237,7 +237,7 @@ def test_detached_allocation_preserves_nested_coordinate_selection() -> None:
     outer = OccurrenceId(("outer",))
     inner = OccurrenceId(("outer", "inner"))
     regions = {
-        identity: RegionPages(str(identity), (1, 2), (frozenset(), frozenset()), EMPTY_COST, ((), ()))
+        identity: RegionPages(str(identity), (1, 2), (frozenset(), frozenset()), EMPTY_COST)
         for identity in (outer, inner)
     }
     snapshot = AllocationSnapshot(

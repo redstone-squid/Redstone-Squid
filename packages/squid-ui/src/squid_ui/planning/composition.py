@@ -11,8 +11,9 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui._dataclass import immutable
+from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
-from squid_ui.authoring.semantic import Budgeted, ComponentPlacement
+from squid_ui.authoring.semantic import Budgeted, ComponentPlacement, Contextual
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
 from squid_ui.content.text import NEUTRAL, Localization
@@ -23,7 +24,7 @@ from squid_ui.native import NativeTraits
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.pagination.navigation import PagerNav
+from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, TargetLimits
 from squid_ui.planning.resources import ResourceIdentity as ResourceIdentity
 from squid_ui.planning.semantic_correspondence import SourceScope, budget_floor
@@ -59,14 +60,6 @@ class FragmentCoverage:
 
 
 @immutable
-class NavigationInput:
-    region: OccurrenceId
-    route: str
-    page: int
-    enabled: bool
-
-
-@immutable
 class FragmentContract[PayloadT]:
     """Ordered source units and a pure constructor for an exact contiguous fragment.
 
@@ -97,13 +90,20 @@ class FragmentContract[PayloadT]:
 
 
 @immutable
+class ContextualChrome[RenderTargetT, ContextT, PayloadT]:
+    content: Contextual[RenderTargetT, ContextT]
+    realize: Callable[
+        [Document[RenderTargetT, ContextT], PlanningContext],
+        tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...],
+    ]
+
+
+@immutable
 class RegionContract[RenderTargetT, ContextT, PayloadT]:
     """Target-declared pagination chrome, composed and charged on every visible page."""
 
     key: str
-    navigation: Callable[
-        [int, int, PlanningContext], tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...]
-    ]
+    chrome: ContextualChrome[RenderTargetT, ContextT, PayloadT]
     chars: int | None = None
     min_fill: int = 0
     widows: int = 1
@@ -211,7 +211,6 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     keep_with_next: bool = False
     fragments: FragmentContract[PayloadT] | None = None
     region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
-    navigation: NavigationInput | None = None
     preference_priority: int | None = None
     """Compare this subtree as a sibling preference scope, even without a pager."""
 
@@ -311,7 +310,7 @@ class PlanningContext:
     capabilities: frozenset[str] = frozenset()
     capacities: Mapping[Axis, int] = field(default_factory=dict)
     chrome: Chrome = DEFAULT_CHROME
-    navigation: PagerNav | None = None
+    navigation: PlannedNav | None = None
     mounted: bool = False
     assets: tuple[Asset, ...] = ()
     escape_text: Callable[[str], str] | None = None

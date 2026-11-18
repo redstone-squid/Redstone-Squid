@@ -156,7 +156,6 @@ def test_fragmented_and_repeated_sources_are_not_collapsed_to_one_page() -> None
         (1, 2),
         (frozenset({source}), frozenset({source})),
         EMPTY_COST,
-        ((), ()),
     )
     view = MembershipView(MappingProxyType({identity: region}), {identity: 1})
     assert view.locate(source) == (Membership(identity, 0), Membership(identity, 1))

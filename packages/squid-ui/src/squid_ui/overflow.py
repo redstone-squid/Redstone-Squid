@@ -6,11 +6,15 @@ Pagination and semantic lists share PageOwnership, PageEvent, and RoutedPage.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
 from squid_ui.interactions.ownership import Controlled, Uncontrolled
+
+if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
+
 
 # --- Who keeps a pager's page ---------------------------------------------------------
 
@@ -99,8 +103,7 @@ class Paginate:
     `RoutedPage(value, route, seek_route)` supplies the same page through persistent routes.
 
     For `Lines`, `per` groups that many entries per page even when space remains.
-    Pages that exceed the text budget are split further. `footer` receives the
-    displayed page number and total pages and replaces this node's default footer.
+    Pages that exceed the text budget are split further. `footer` receives the captured layout context and replaces this node's default footer.
 
     `min_fill` is a preferred character count on non-final pages. `widows` is the
     preferred minimum number of fragments on the final page. Both are soft goals:
@@ -111,7 +114,7 @@ class Paginate:
     boundary: str = "\n"
     page: PageOwnership = FIRST_PAGE
     per: int | None = None
-    footer: Callable[[int, int], TextLike] | None = None
+    footer: Callable[[LayoutContext], TextLike] | None = None
     min_fill: int = 0
     widows: int = 1
 

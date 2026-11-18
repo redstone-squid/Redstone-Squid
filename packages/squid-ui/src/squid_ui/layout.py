@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Never, Protocol
 
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.errors import LayoutError
-from squid_ui.selectors import Match, Query, Selector
 
 if TYPE_CHECKING:
     from squid_ui.planning.composition import OccurrenceId
+    from squid_ui.planning.pagination.navigation import NavigationContext
+    from squid_ui.selectors import Match, Query, Selector
 
 
 class UnknownReason(StrEnum):
@@ -128,6 +129,7 @@ class RegionFacts:
     _count: Fact[int]
     _selection: Fact[PageCoordinate | None]
     _groups: Fact[int]
+    _navigation: NavigationContext | None = field(default=None, kw_only=True)
     _observe: Callable[[str, object], None] | None = field(default=None, compare=False, repr=False)
 
     def _read[T](self, name: str, value: T) -> T:
@@ -143,6 +145,11 @@ class RegionFacts:
     @property
     def selection(self) -> Fact[PageCoordinate | None]:
         return self._read("selection", self._selection)
+
+    @property
+    def navigation(self) -> NavigationContext | None:
+        """Available movements and their bindings for this captured selection."""
+        return self._read("navigation", self._navigation)
 
     @property
     def groups(self) -> Fact[int]:
@@ -266,7 +273,7 @@ class LayoutContext:
     def view_dependent(self) -> bool:
         for key, _value in self.observations:
             match key:
-                case ("query", "visible", _) | (*_, "selection" | "visibility"):
+                case ("query", "visible", _) | (*_, "selection" | "visibility" | "navigation"):
                     return True
         return False
 

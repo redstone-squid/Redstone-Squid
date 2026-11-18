@@ -16,9 +16,6 @@ from squid_ui.content.text import resolve_text
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.overflow import (
-    FIRST_PAGE,
-)
 from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     FragmentContract,
@@ -46,7 +43,7 @@ from squid_ui.planning.interaction_handlers import (
     ToggleDetails,
 )
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, ItemSummary, NavigationChoice
-from squid_ui.planning.offers.navigation import RegionNavigation, control_key
+from squid_ui.planning.offers.navigation import control_key, pagination_chrome
 from squid_ui.planning.offers.policy import Offers, OfferScope
 from squid_ui.planning.realizations import (
     ActionsRealization,
@@ -158,9 +155,7 @@ def _items_offers[RenderTargetT, ContextT](
                 flow=True,
                 region=RegionContract(
                     cursor_key,
-                    RegionNavigation(
-                        occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True
-                    ),
+                    pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                     cursor_key=cursor_key,
                 ),
             ),
@@ -197,9 +192,7 @@ def _items_offers[RenderTargetT, ContextT](
             ),
             region=RegionContract(
                 cursor_key,
-                RegionNavigation(
-                    occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True
-                ),
+                pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                 cursor_key=cursor_key,
             ),
         ),
@@ -294,7 +287,7 @@ def _navigation_offers[RenderTargetT, ContextT](
     cursor_key = f"{value.key}.destinations"
     contract = RegionContract(
         cursor_key,
-        RegionNavigation(occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True),
+        pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
         cursor_key=cursor_key,
     )
     individual = RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -373,7 +366,7 @@ def _grid_offers[RenderTargetT, ContextT](
     )
     contract = RegionContract(
         value.key + ".cells",
-        RegionNavigation(occurrence, scope.policy.disabled_controls, owner=FIRST_PAGE, cursor_key=value.key + ".cells"),
+        pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls),
         cursor_key=value.key + ".cells",
     )
     buttons = RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -584,9 +577,7 @@ def _choices_offers[RenderTargetT, ContextT](
             ),
             region=RegionContract(
                 cursor_key,
-                RegionNavigation(
-                    occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True
-                ),
+                pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                 cursor_key=cursor_key,
             ),
         )

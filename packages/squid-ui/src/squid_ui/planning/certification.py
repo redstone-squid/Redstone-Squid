@@ -32,7 +32,7 @@ from squid_ui.planning.composition import (
     evaluate_composition,
 )
 from squid_ui.planning.fragments import FragmentTree
-from squid_ui.planning.layout_snapshot import LayoutSnapshot
+from squid_ui.planning.layout_snapshot import FamilyLayout
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
 from squid_ui.planning.semantic_correspondence import budget_floor
 
@@ -208,9 +208,11 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                         position = self.context.presentation.cursor(key).position
                     page = position.page if position is not None else resolve_page(owner.initial, len(region.pages))
                 selected[identity] = min(max(0, page), len(region.pages) - 1)
-        snapshot = LayoutSnapshot(family, self.context, selected) if self.context.inspect_layout else None
+        layout = FamilyLayout(family, self.context, selected)
+        snapshot = layout.snapshot if self.context.inspect_layout else None
         for coordinates, visible in family.combinations(self.context, selected):
             self.context.work.consume()
+            visible = family.contextualize(visible, layout.for_view(dict(coordinates)), self.context)
             try:
                 admitted = evaluate_composition(visible, self.rules, self.context)
             except SharedResourceConflictError as error:

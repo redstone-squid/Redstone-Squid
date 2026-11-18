@@ -35,7 +35,11 @@ class ErrorReportOperations(Protocol):
     async def clear_all(self) -> int: ...
 
 
-def _traceback_footer(page: int, pages: int) -> sl.TextLike:
+def _traceback_footer(ctx: sl.LayoutContext) -> sl.TextLike:
+    region = ctx.region()
+    selection = region.selection.require()
+    assert selection is not None
+    page, pages = selection.number.require(), region.count.require()
     section = tr(t"diagnostics-view-traceback = Traceback")
     return md_tr(
         t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report",

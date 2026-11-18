@@ -6,7 +6,7 @@ buttons or a jump menu without knowing how the content is loaded. Page numbers
 are separate from cursor offsets: a source cursor may address items, not pages.
 
 A materialized pager is one whose content the planner already holds, such as a
-`Paginate` text pager or an option window. `PagerNav` builds its controls during
+`Paginate` text pager or an option window. contextual chrome builds its controls during
 planning, and `PageCommit` sends each page turn to whoever owns the page: the
 presentation session, or the application through `Controlled.on_change`.
 """
@@ -25,6 +25,7 @@ from squid_ui.interactions import ActionEvent, ActionMode, PressEvent, Selection
 from squid_ui.interactions.forms import FormBinding, FormSpec, IntField
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
+from squid_ui.layout import Fact, Known, PageCoordinate
 from squid_ui.overflow import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.presentation_state import PresentationState
@@ -164,9 +165,9 @@ class NavigationState:
     previous_key: str
     next_key: str
     extent: int | None = None
-    """How many pages there are, when that is known."""
+    """Exact extent in `unit`, when known."""
     page: int | None = None
-    """Zero-based page number, when known; source addresses remain with their owner."""
+    """Zero-based position in `unit`, when known."""
     visible_range: tuple[int, int] | None = None
     total: int | None = None
     count: CountPrecision = CountPrecision.NONE
@@ -188,8 +189,8 @@ class NavigationContext:
     on_seek: Callable[[ActionEvent, int], Awaitable[None]] | str | None = None
     """Jump to a zero-based page, or `None` when the source cannot address one.
 
-    A source declares this reachable with `SourceCapabilities.jumpable`; a materialized
-    cursor always knows its own extent, so it always offers one.
+    Sources must declare seeking. Rendered-page jumps additionally require established
+    ordinal and total facts for this capture.
     """
 
     chrome: Chrome = dataclass_field(default=DEFAULT_CHROME, kw_only=True)
@@ -307,43 +308,50 @@ def materialized_navigation_state(key: str, position: PagePosition, extent: int,
     )
 
 
-@dataclass(frozen=True, slots=True)
-class PagerNav:
-    """Build the navigation controls for materialized pagers in one plan."""
-
-    factory: PlannedNav
-    session: PresentationState
-    staged: bool = False
-    known_extent: bool = True
-
-    def __call__(
-        self, key: str, page: int, extent: int, chrome: Chrome, owner: PageOwnership = FIRST_PAGE
-    ) -> Sequence[NavNode]:
-        """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
-        state = materialized_navigation_state(key, PagePosition(page=page), extent, chrome)
-        if not self.known_extent:
-            state = replace(state, extent=None, page=None)
-        if isinstance(owner, RoutedPage):
-            return self.factory(
-                NavigationContext(
-                    state,
-                    owner.route(max(0, page - 1)),
-                    owner.route(min(extent - 1, page + 1)),
-                    owner.seek_route() if self.known_extent and owner.seek_route is not None else None,
-                    owner.jump_route(page, extent) if self.known_extent and owner.jump_route is not None else None,
-                    chrome=chrome,
-                )
-            )
-        commit = PageCommit(owner, key, extent, self.session, self.staged)
-        return self.factory(
-            NavigationContext(
-                state,
-                TurnPage(commit, page - 1),
-                TurnPage(commit, page + 1),
-                commit if self.known_extent else None,
-                chrome=chrome,
-            )
+def materialized_navigation(
+    key: str,
+    position: PagePosition,
+    extent: int,
+    selection: PageCoordinate | None,
+    count: Fact[int],
+    chrome: Chrome,
+    session: PresentationState,
+    owner: PageOwnership = FIRST_PAGE,
+    *,
+    route_prefix: str | None = None,
+) -> NavigationContext:
+    """Bind legal destinations while exposing only established ordinal/count facts."""
+    page = position.page
+    state = replace(
+        materialized_navigation_state(key, position, extent, chrome),
+        page=selection.index.value if selection is not None and isinstance(selection.index, Known) else None,
+        extent=count.value if isinstance(count, Known) else None,
+    )
+    seekable = state.page is not None and state.extent is not None
+    if route_prefix is not None:
+        return NavigationContext(
+            state,
+            f"{route_prefix}.{max(0, page - 1)}",
+            f"{route_prefix}.{min(extent - 1, page + 1)}",
+            chrome=chrome,
         )
+    if isinstance(owner, RoutedPage):
+        return NavigationContext(
+            state,
+            owner.route(max(0, page - 1)),
+            owner.route(min(extent - 1, page + 1)),
+            owner.seek_route() if seekable and owner.seek_route is not None else None,
+            owner.jump_route(page, extent) if seekable and owner.jump_route is not None else None,
+            chrome=chrome,
+        )
+    commit = PageCommit(owner, key, extent, session, staged=True)
+    return NavigationContext(
+        state,
+        TurnPage(commit, page - 1),
+        TurnPage(commit, page + 1),
+        commit if seekable else None,
+        chrome=chrome,
+    )
 
 
 __all__ = [
@@ -357,10 +365,10 @@ __all__ = [
     "NavigationState",
     "NavigationUnit",
     "PageCommit",
-    "PagerNav",
     "PlannedNav",
     "TurnPage",
     "default_nav",
+    "materialized_navigation",
     "materialized_navigation_state",
     "page_jump_form",
     "page_select_nav",

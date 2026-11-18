@@ -183,7 +183,7 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
         min_fill: int = 0,
         widows: int = 1,
         page: PageOwnership = FIRST_PAGE,
-        footer: Callable[[int, int], TextLike] | None = None,
+        footer: Callable[[LayoutContext], TextLike] | None = None,
     ) -> Budgeted[RenderTargetT, ContextT]:
         """Same as ``paged(self, ...)`` with the same keyword arguments."""
         return paged(
@@ -909,7 +909,7 @@ class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
     min_fill: int = 0
     widows: int = 1
     page: PageOwnership = FIRST_PAGE
-    footer: Callable[[int, int], TextLike] | None = None
+    footer: Callable[[LayoutContext], TextLike] | None = None
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -1129,7 +1129,7 @@ def paged[RenderTargetT = RenderTarget, ContextT = object](
     min_fill: int = 0,
     widows: int = 1,
     page: PageOwnership = FIRST_PAGE,
-    footer: Callable[[int, int], TextLike] | None = None,
+    footer: Callable[[LayoutContext], TextLike] | None = None,
 ) -> Budgeted[RenderTargetT, ContextT]:
     """Apply a preferred character budget and heterogeneous paging to ``node``."""
     region = Paged(node, key, chars, min_fill, widows, page, footer)

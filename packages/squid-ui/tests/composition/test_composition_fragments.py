@@ -6,6 +6,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.ext.slack.composition import SlackCompositionRules
+from squid_ui.planning.allocation import PageFamily
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,
@@ -17,6 +18,7 @@ from squid_ui.planning.composition import (
     build_composition,
 )
 from squid_ui.planning.fragments import fragment_tree, slice_fragment
+from squid_ui.planning.layout_snapshot import FamilyLayout
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.realizations import Realization, TableRealization
 from squid_ui.planning.semantic_index import semantic_graph
@@ -85,12 +87,19 @@ def test_wrappers_preserve_legal_breaks_and_repeated_chrome() -> None:
 
 
 def test_navigation_is_real_target_content() -> None:
-    node = sl.region(sl.paragraph("Body"), key="region", title="Region")
+    node = sl.region(sl.paragraph("Body"), sl.paragraph("Next"), key="region", title="Region")
     rules, context = SlackCompositionRules[RenderTarget, object](), PlanningContext(WorkBudget(1000))
     occurrence = SemanticOccurrence(OccurrenceId(("root",)), semantic_graph(node), ref("region"))
     candidate = select_composition(occurrence, rules, context, selections={})
     assert isinstance(candidate, CandidateComposition) and candidate.offer.region is not None
-    chrome = candidate.offer.region.navigation(0, 2, context)
+    family = PageFamily.from_cuts(candidate, (fragment_tree(candidate, context),), ((1, 2),), context)
+    coordinates, visible = next(family.combinations(context))
+    resolved = family.contextualize(visible, FamilyLayout(family, context).for_view(dict(coordinates)), context)
+    chrome = tuple(
+        child
+        for child in resolved.children
+        if child.offer.occurrence.placement == sl.planning.composition.Placement.NAVIGATION
+    )
     assert len(chrome) == 2  # Slack cannot represent disabled buttons; the previous control is absent.
     for child in chrome:
         assert child.offer.occurrence.sources == frozenset()

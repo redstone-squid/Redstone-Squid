@@ -4,10 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
-from squid_reactivity import capture_reads
-from squid_reactivity.transactions import read_only
 from squid_ui import scene
-from squid_ui._contextual import EVALUATING
 from squid_ui.authoring.document import Document, DocumentLike, as_document
 from squid_ui.authoring.semantic import Contextual, Group, LayoutNode, PreparedSlot
 from squid_ui.authoring.traversal import _namespace, map_layout_children
@@ -23,6 +20,7 @@ from squid_ui.layout import (
     RegionRef,
 )
 from squid_ui.planning.composition import OccurrenceId, WorkBudget
+from squid_ui.planning.context_evaluation import evaluate_contextual
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.layout_snapshot import SemanticCapture, _ScopeReader
@@ -246,13 +244,8 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     authored=self.authored,
                 )
                 ctx._locate = _AuthoredLocations(self.authored_capture, ctx._locate, block._scope, block.key)
-                token = EVALUATING.set(True)
                 try:
-                    with read_only(), capture_reads() as reads:
-                        output = block.callback(ctx)
-                    if reads.sources:
-                        message = f"context {block.key}: capture reactive inputs in render before defining the callback"
-                        raise LayoutError(message)
+                    output = evaluate_contextual(block, ctx)
                     old_assets = self.generated_assets.get(identity, ())
                     nodes = self._output(block, output)
                     if stable_fingerprint(old_assets, consume=self.work.consume) != stable_fingerprint(
@@ -265,8 +258,6 @@ class ContextualResolution[R, BodyT: scene.Body]:
                     else:
                         unresolved_offscreen = True
                     continue
-                finally:
-                    EVALUATING.reset(token)
                 self.view_dependent |= ctx.view_dependent
                 observations.extend(ctx.observations)
                 before = stable_fingerprint(self.working[identity], consume=self.work.consume)

@@ -29,7 +29,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.interaction_handlers import (
     RouteSelection,
 )
-from squid_ui.planning.offers.navigation import RegionNavigation, grouped_control_key, region_cursor_key
+from squid_ui.planning.offers.navigation import grouped_control_key, pagination_chrome, region_cursor_key
 from squid_ui.planning.offers.policy import Offers, OfferScope
 from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.realizations import (
@@ -253,13 +253,7 @@ def _list_offers[RenderTargetT, ContextT](
     fragments = FragmentContract(units, legal_ends, payload.fragment, continuations=True) if items else None
     contract = RegionContract(
         value.key,
-        RegionNavigation(
-            occurrence,
-            scope.policy.disabled_controls,
-            None,
-            value.page,
-            value.key,
-        ),
+        pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls),
         owner=value.page,
         cursor_key=value.key,
         required_ends=tuple(required),
@@ -646,12 +640,11 @@ def container_offers[RenderTargetT, ContextT](
         )
         region = RegionContract(
             value.key,
-            RegionNavigation(
+            pagination_chrome(
                 occurrence,
+                scope.context,
                 scope.policy.disabled_controls,
                 value.footer if isinstance(value, sem.Paged) else None,
-                value.page,
-                cursor_key,
             ),
             value.chars if isinstance(value, sem.Paged) else None,
             value.min_fill if isinstance(value, sem.Paged) else 0,
@@ -744,9 +737,7 @@ def container_offers[RenderTargetT, ContextT](
                 cursor_key = f"{value.key}.actions"
                 contract = RegionContract(
                     cursor_key,
-                    RegionNavigation(
-                        occurrence, scope.policy.disabled_controls, cursor_key=cursor_key, default_controls=True
-                    ),
+                    pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                     cursor_key=cursor_key,
                 )
                 container = replace(container, region=contract)

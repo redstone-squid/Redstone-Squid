@@ -18,7 +18,6 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.overflow import FIRST_PAGE, PageOwnership, RoutedPage, resolve_page
 from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
-from squid_ui.planning.pagination.navigation import PagerNav
 from squid_ui.presentation_state import (
     ActivePagers,
     CursorState,
@@ -80,7 +79,6 @@ class CursorCoordinator:
 
     session: PresentationState
     chrome: Chrome
-    nav: PagerNav | None = None
     overrides: Mapping[str, PagePosition] | None = None
     policy: PagePositionPolicy = resolve_page_position
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)

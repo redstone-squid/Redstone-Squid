@@ -9,6 +9,7 @@ from typing import Any, cast
 
 import pytest
 
+import squid_ui as sl
 from squid_i18n import tr
 from squid_ui import scene
 from squid_ui.ext.discord.planning import classic_target, components_v2_target
@@ -103,8 +104,20 @@ def test_unknown_renderables_are_rejected_with_their_path() -> None:
 def test_a_page_footer_is_resolved_on_every_text_primitive(make: Any) -> None:
     # Only Lines used to resolve its footer, so a paged traceback in a code block failed to plan.
     node = make(tr(t"test-hello = hello\n    world"))
+
+    def footer(ctx: sl.LayoutContext) -> sl.TextLike:
+        selection = ctx.region().selection.require()
+        assert selection is not None
+        page = selection.number.require()
+        return tr(t"test-page = page {page}")
+
     paged = replace(
-        node, overflow=Paginate(key="pages", per=1, footer=lambda page, pages: tr(t"test-page = page {page}"))
+        node,
+        overflow=Paginate(
+            key="pages",
+            per=1,
+            footer=footer,
+        ),
     )
 
     result = plan(paged, target=components_v2_target(ADAPTER))

@@ -33,7 +33,7 @@ from squid_ui.planning.contextual import ContextualResolution
 from squid_ui.planning.identity import has_contextual, requires_live_preparation, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
-from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
+from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
 from squid_ui.planning.result import CertificateScope, PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
@@ -92,9 +92,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.capabilities,
         effective.capacities,
         request.chrome,
-        PagerNav(resolved.navigation, request.presentation, staged=True, known_extent=not request.partial_layout)
-        if resolved.navigation is not None
-        else None,
+        resolved.navigation,
         resolved.mounted,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,

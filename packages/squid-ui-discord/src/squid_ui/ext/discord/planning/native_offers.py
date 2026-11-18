@@ -52,9 +52,9 @@ from squid_ui.planning.composition import (
 )
 from squid_ui.planning.offers.content import container_offers
 from squid_ui.planning.offers.navigation import (
-    RegionNavigation,
     control_key,
     navigation_candidate,
+    pagination_chrome,
     region_cursor_key,
 )
 from squid_ui.planning.offers.policy import Offers
@@ -139,9 +139,7 @@ def _lines_offers[RenderTargetT, ContextT](
             cursor_key = pagination.key or region_cursor_key(occurrence)
             contract = RegionContract(
                 cursor_key,
-                RegionNavigation(
-                    occurrence, scope.policy.disabled_controls, pagination.footer, pagination.page, cursor_key
-                ),
+                pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, pagination.footer),
                 min_fill=pagination.min_fill,
                 widows=pagination.widows,
                 owner=pagination.page,
@@ -370,9 +368,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
                 ),
                 region=RegionContract(
                     cursor_key,
-                    RegionNavigation(
-                        occurrence, scope.policy.disabled_controls, overflow.footer, overflow.page, cursor_key
-                    ),
+                    pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, overflow.footer),
                     min_fill=overflow.min_fill,
                     widows=overflow.widows,
                     owner=overflow.page,
