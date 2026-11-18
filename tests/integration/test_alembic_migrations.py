@@ -2447,3 +2447,88 @@ def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
         command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize("conflicting_digest", [False, True])
+def test_payload_schema_reset_preserves_input_immutability(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    conflicting_digest: bool,
+) -> None:
+    """Payload rewrites restore the input guard on upgrade, downgrade, and rollback."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    parent = "a7c1e5b9d304"
+    revision = "b8e2c6f0a4d9"
+    command.upgrade(config, parent)
+    engine = create_engine(migration_database_url)
+    draft_id, job_id = uuid4(), uuid4()
+    payload = {"payload_schema": 7, "creators": ["Builder"], "taxonomy": {}, "details": {"kind": "door"}}
+    digest = submission_payload_digest(payload)
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts "
+                    "(id, owner_account_id, schema_id, schema_revision, category, answers, origin, expires_at) "
+                    "VALUES (:draft, :account, 'test', 1, 'door', '{}', 'web', now() + interval '1 day')"
+                ),
+                {"draft": draft_id, "account": account},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, payload, payload_sha256, status, attention_issues) "
+                    "VALUES (:job, :draft, 0, CAST(:payload AS jsonb), :digest, 'pending', '[]')"
+                ),
+                {"job": job_id, "draft": draft_id, "payload": json.dumps(payload), "digest": digest},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_inputs (job_id, payload, payload_sha256) "
+                    "VALUES (:job, CAST(:payload AS jsonb), :digest)"
+                ),
+                {"job": job_id, "payload": json.dumps(payload), "digest": "0" * 64 if conflicting_digest else digest},
+            )
+
+        if conflicting_digest:
+            with pytest.raises(RuntimeError, match="conflicting digest"):
+                command.upgrade(config, revision)
+            with engine.connect() as connection:
+                assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == parent
+                for table in ("submission_finalization_jobs", "submission_finalization_inputs"):
+                    assert connection.execute(text(f"SELECT payload FROM {table}")).scalar_one() == payload
+                assert (
+                    connection.execute(text("SELECT payload_sha256 FROM submission_finalization_jobs")).scalar_one()
+                    == digest
+                )
+            with (
+                pytest.raises(DBAPIError, match="submission finalization inputs are immutable"),
+                engine.begin() as connection,
+            ):
+                connection.execute(text("UPDATE submission_finalization_inputs SET payload = payload"))
+        else:
+            for target, schema in [(revision, 1), (parent, 7), (revision, 1)]:
+                if target == parent:
+                    command.downgrade(config, target)
+                else:
+                    command.upgrade(config, target)
+                with engine.connect() as connection:
+                    job = connection.execute(
+                        text("SELECT payload, payload_sha256 FROM submission_finalization_jobs")
+                    ).one()
+                    retained = connection.execute(
+                        text("SELECT payload, payload_sha256 FROM submission_finalization_inputs")
+                    ).one()
+                    assert job == retained
+                    assert retained.payload["payload_schema"] == schema
+                    assert retained.payload["credits"][0]["name"] == "Builder"
+                    assert retained.payload_sha256 == submission_payload_digest(retained.payload)
+                with (
+                    pytest.raises(DBAPIError, match="submission finalization inputs are immutable"),
+                    engine.begin() as connection,
+                ):
+                    connection.execute(text("UPDATE submission_finalization_inputs SET payload = payload"))
+    finally:
+        engine.dispose()

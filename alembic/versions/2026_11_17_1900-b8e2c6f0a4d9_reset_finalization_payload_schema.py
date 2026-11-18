@@ -64,6 +64,9 @@ def _digest(payload: dict) -> str:
 
 def _migrate_payloads(rewrite: Callable[[dict], dict]) -> None:
     connection = op.get_bind()
+    # Rewrite the retained representation under the migration transaction's table
+    # lock. A failure rolls back both the payload changes and the trigger state.
+    op.execute("ALTER TABLE submission_finalization_inputs DISABLE TRIGGER submission_finalization_inputs_immutable")
     for name, identity in [("submission_finalization_jobs", "id"), ("submission_finalization_inputs", "job_id")]:
         table = sa.table(
             name, sa.column(identity, sa.Uuid()), sa.column("payload", JSONB()), sa.column("payload_sha256", sa.Text())
@@ -81,6 +84,7 @@ def _migrate_payloads(rewrite: Callable[[dict], dict]) -> None:
                 .where(table.c[identity] == row_id)
                 .values(payload=rewritten, payload_sha256=_digest(rewritten))
             )
+    op.execute("ALTER TABLE submission_finalization_inputs ENABLE TRIGGER submission_finalization_inputs_immutable")
 
 
 def upgrade() -> None:
