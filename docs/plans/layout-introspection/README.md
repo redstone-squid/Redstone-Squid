@@ -1,240 +1,273 @@
-# Layout introspection: design and typing spike
+# Contextual content, pagination, and layout facts
 
-Contextual layout remains a design and experiment; pagination is unchanged. Live
-selector roots, explicit query captures, and eager preparation diagnostics are now
-implemented. The agreed
-requirements are general contextual content, pure computations over a render
-snapshot, region-relative pages, explicit target capabilities, and bounded
-resolution that preserves the last delivered UI on failure.
+This revision replaces the earlier requirement to construct and certify every page
+before contextual content can be used. It proposes a model for discussion, not a
+finished public API. Runtime pagination has not changed. Live selector roots,
+explicit captures, and eager component-preparation diagnostics are implemented.
 
-The key references are [Typst context](https://typst.app/docs/reference/context/)
-and [queries](https://typst.app/docs/reference/introspection/query/), LaTeX's
-[label/reference machinery](https://latex-project.org/help/documentation/source2e.pdf),
-and [CSS generated content](https://www.w3.org/TR/css-content-3/). Borrow stable
-references, explicit deferred evaluation, and generated document content. Python
-callbacks receive ordinary typed values once the contextual boundary is entered.
+The central rule is: certify the interface being delivered, and state the scope of
+what is known. A layout can be consistent now without knowing every future page or
+remaining unchanged after more content loads.
 
-## Proposed authoring boundary
+## What a page means
 
-`sl.context(callback, key=..., initial=())` returns a layout node. `initial` is
-bootstrap content, not a user-visible fallback. Its output preserves the callback's
-render-target and interaction-context types. `ContextKey` lives in
-`squid_ui.context_keys`, leaving the public `sl.context` name available.
+Separate the objects that the existing UI sometimes presents as one page:
 
-```python
-results = region_ref("results")
+| Object | Meaning | Owner |
+| --- | --- | --- |
+| Collection | Ordered application items, possibly changing or incompletely loaded | Source |
+| Window | A fetched slice with source-defined positions and neighbours | Loader |
+| Flow | Authored content and legal continuation boundaries within a named scope | Authoring/runtime |
+| Page | A bounded realization of part of a flow under particular layout inputs | Planner |
+| View | The selected combination of region fragments and surrounding content | Presentation/runtime |
+| Delivery surface | A message, continuation message, browser surface, or other target container | Frontend |
 
+A source window is neither a promise to fit nor a mandatory layout boundary. A
+window can require several pages; a page can use content from several windows if
+loading policy permits it. An authored batch of ten items can deliberately define
+its own scope, but ten items are not a target-fit guarantee. One message can contain
+several independently paged regions. Message continuations are delivery surfaces,
+not automatically positions in an application's collection.
 
-def footer(ctx: LayoutContext) -> sl.LayoutNode:
-    pages = ctx.region(results)
-    selected = pages.selection
-    if selected is None:
-        return sl.paragraph(f"{pages.count} pages; results are hidden")
-    return sl.paragraph(f"Page {selected.number} of {pages.count}")
+A page is a layout result, not a durable integer identity. Its description includes
+the flow, the covered content boundaries, the relevant input revision, the target
+constraints, and its contextual expansion. Text can split inside an item, so a
+position sometimes needs an intra-item continuation boundary as well as an item key.
+Such boundaries must be declared by the content/target protocol, not guessed from
+Python object identity or invented Discord pixel coordinates.
 
+Reserve an internal page identity for that realized result. Navigation retains a
+content address and enough revision information to validate it. A page's ordinal is
+a derived fact about a particular pagination, not its address. The same address may
+appear on a different numbered page after reflow.
 
-# Inside the ordinary component render:
-sl.context(footer, key="results-footer")
-```
+## Navigation and numbering
 
-A callback runs per contextual occurrence and reachable view coordinate. With no
-explicit region, `ctx.region()` uses the containing region; an outside callback
-must name one. Stored indices remain zero-based; `.number` is one-based display
-numbering. A region hidden by its parent has a count but `selection=None`.
+Next continues after the last consumed content boundary, including any unconsumed
+content already loaded. Crossing a fetch boundary does not skip that remainder.
+Previous can use a valid visited checkpoint; discovering an unvisited predecessor
+requires an appropriate source/layout capability. Forward-only sources must not
+acquire arbitrary backward seeking merely because the UI has a Previous button.
 
-Application rendering captures data, presentation values, and callback definitions
-once. Contextual callbacks consume that snapshot and layout facts, can return
-layout content and controls, and may run repeatedly. They cannot perform I/O,
-write reactive state, or start lifecycle work. Captured mutable objects must not
-change during planning. A synchronous Python callback is trusted code: operation
-budgets cannot preempt an infinite loop inside arbitrary application code.
+A continuation records the flow/source identity, a source position and possible
+intra-item boundary, and validation information for the relevant revisions and
+layout inputs. Exact representation and persistence rules need a typing pass.
+Every successful Next step must consume content or reach a declared end. A loading
+state is not a content page or a zero-progress continuation. An underfilled view may
+be delivered according to policy; filling it across windows requires explicit, bounded
+lookahead demand outside the solver. More-content availability may itself be unknown.
 
-`spikes/layout_api.pyi` gives concrete proposed signatures and
-`spikes/typing_examples.py` exercises all three use cases against current layout,
-selector, and Discord types. Neither file is a runtime implementation.
+Navigation requests are relative to a delivered revision. Fetching, loading, or
+planning a destination does not advance the committed cursor. Delivery commits the
+new content address, facts, and visibility together; failure preserves the old UI.
 
-## Queries, identities, and absence
+A page number is known when the preceding boundaries in the same pagination are
+established, for example by resolving a contiguous prefix from the start. A direct
+seek to an item does not establish how many rendered pages precede it. Counting
+button presses is not a page ordinal. Source offsets remain useful independent facts.
 
-Reuse the existing selector language and typed matches. A live root query follows
-the latest committed tree and registers reactive dependencies when read. An
-explicit `.capture()` pins membership and layout facts for several consistent
-operations; it does not deep-copy application objects. Prefer this single query
-API over a `live=True` flag or unrelated functions. A returned match identifies
-one occurrence and does not retarget itself when another element matches.
+An exact total requires a closed enumeration or another sound proof under declared
+constraints. Knowing 100 items or ten source windows does not prove ten layout pages.
+Discovering an exact total can itself change contextual output and invalidate earlier
+boundaries or ordinals. Revalidate those dependencies rather than preserving old numbers.
+Estimates and bounds must be labelled. A finite fully materialized family can provide
+an exact total, but exhaustive enumeration is an optional capability/optimization.
+A known exact count is valid only for its captured scope and revisions.
 
-Layout evaluations pin queries to their candidate and coordinate. They never
-read another candidate's latest answers. Use `query(runtime.queries, selector)` for committed live reads; `.capture()`
-returns a `QuerySnapshot`. Raw trees retain their captured structural index.
-Context exposes three explicit scopes:
+For an incomplete flow, useful copy is "Items 41–50 of 100", "More results", or
+"Page 3" when its prefix is established. "Page 3 of 20" requires both facts. An
+empty flow should have zero content pages; its region can still display an empty
+state. Do not manufacture "Page 1 of 0" to make a pager's integer API convenient.
+This empty-flow convention is a proposed behavior change to review with the API.
+
+## Content depends on a context
+
+Pagination is one consumer of a general contextual-content boundary. Keep the
+proposed `sl.context(callback, key=..., initial=..., components=...)`: a callback
+receives typed facts and returns ordinary target/context-preserving layout content.
+The precise fact and continuation types below are not yet settled signatures.
+
+Distinguish three dependency mechanisms:
+
+- Captured inputs: state, presentation values, inherited bindings, loaded data, and
+  target capabilities. Reading these need not introduce layout feedback.
+- External demand: a declared resource or navigation request loads required data
+  asynchronously. A fact query does not itself fetch or start component lifecycle.
+- Derived layout facts: visibility, chosen representation, fragmentation, available
+  capacity, and locations. Generated content can change these and require iteration.
+
+Ordinary components render against captured inputs. Contextual callbacks may run
+repeatedly but must be pure: no I/O, reactive writes, mutable state machines, component
+construction, or lifecycle effects. Capture definitions and values once per attempt;
+async completions create a new attempt. Referenced application objects must not mutate
+under a captured attempt. Budgets cannot preempt an infinite synchronous Python callback.
+
+An eager component load prepares that instance's first useful state. It does not
+materialize an entire lazy collection or establish all item sizes. A source can
+remain open even when every declared component slot has finished `on_load()`.
+
+## Facts have scope, availability, and evidence
+
+A fact identifies its scope and relevant revisions: source/data, render snapshot,
+target constraints, navigation position, and candidate/view as applicable. A cache
+may omit an input only when tracked dependencies justify doing so. Facts from another
+candidate, source revision, or delivered generation cannot silently fill a gap.
+
+A mutable source may not offer a consistent collection snapshot at all. Do not combine
+counts or locations from separate fetches into one global claim without a source revision
+or another stated consistency contract. Its current window can still be laid out locally.
+
+The API must distinguish these cases rather than encode all of them as `None`:
+
+| Answer | Example | Meaning |
+| --- | --- | --- |
+| Known value | Three fragments in this captured plan | Established within its stated scope |
+| Known absence | This declared region is hidden | Established negative answer |
+| Unknown | The total requires unloaded content | A legitimate limitation of present knowledge |
+| Partial result | Two known locations; the remaining flow is unexamined | Membership is useful but not exhaustive |
+| Estimate or bound | Approximately 100 items, or at least four pages | Evidence weaker than an exact total |
+| Provisional solver value | A bootstrap location used in an iteration | Internal working hypothesis, never a certified fact |
+| Failure | Source load failed, invalid reference, or exhausted work | Diagnostic outcome, not unknown or zero |
+
+An unavailable capability must also be distinguishable from a fact that could become
+known after loading. Authors may render explicit content for unknown/partial answers.
+A required read without sufficient evidence prevents that requested result from being
+certified; diagnose or request its declared preparation work as appropriate. Do not
+label external waiting as nonconvergence. Do not silently load the rest of a collection
+because a footer asks for its exact page count.
+
+The next typing pass must cover discriminated known/unknown answers, precision and
+coverage, required reads, and narrowing in ordinary Python. Optional selection and
+fact availability are separate dimensions: a hidden selection can be known absent,
+while a selected page can exist with an unknown ordinal or total. Avoid a magical
+integer that stands for all these states.
+
+## Queries, references, and locations
+
+Reuse typed selectors and canonical semantic values. `query(runtime.queries, selector)`
+follows the committed component tree; `.capture()` pins membership and occurrence
+identity. A capture does not deep-copy application objects or claim that an external
+collection is fully loaded. `.count()` counts captured matches, not unseen source items.
+Returned matches never retarget themselves.
+
+Contextual queries are pinned to their candidate, scope, and view. Proposed scopes:
 
 | Scope | Meaning |
 | --- | --- |
-| `authored` | Captured canonical semantic content, before contextual expansion and candidate omissions |
-| `placed` | Logical content represented anywhere in this candidate family, including contextual output |
-| `visible` | Logical content represented in this coordinate's selected scene |
+| `authored` | Captured semantic content and declarations, before generated expansion/omission |
+| `placed` | Sources represented in the realized plan, including generated content and any materialized offscreen fragments |
+| `visible` | Sources represented in the selected view |
 
-Queries return canonical source types through representation correspondence;
-rendered target nodes require a separately advertised target capability. Reuse the
-selector engine with an adapter for canonical semantic content. Its existing
-`ui_children` traversal includes all alternatives, so it cannot directly define
-these scopes. Counting a logical item counts it once even if it has several
-fragments. Repeated instances of the same Python object remain separate matches.
+These are not automatic queries over an entire remote collection. Each scope names
+its coverage; asking for all source-wide placements can produce partial/unknown facts.
+The current `ui_children` traversal visits representation alternatives and cannot
+itself define canonical semantic membership. Count logical occurrences once across
+fragments; preserve separate placements of a shared Python object.
 
-Existing `Match` values belong to one capture. Passing an older capture's match to
-`locate` fails. `element_ref(Kind, *keys)` provides a stable keyed locator scoped
-to the producing component placement. Duplicate matches raise an ambiguity error;
-callers can query a narrower scope or pass an exact match. Unkeyed source indices
-are not stable references across renders. Generated keys are namespaced under the
-contextual occurrence; coordinate-dependent expansions also need invocation
-identity so different page outputs cannot alias one another.
+Stable element/region references are scoped to their producing placement. Unkeyed
+source indices are not stable across renders. Matches belong to one capture; passing
+another capture's match to `locate` fails. Generated occurrences need contextual
+placement identity, including invocation identity where different views generate
+different content. Source identity, generated occurrence identity, page identity,
+and delivery generation must remain distinct.
 
-`ctx.locate(target, within=region)` returns every fragment location. Each contains
-an occurrence ID, a page-coordinate chain for nested regions, fragment ordinal,
-repetition provenance, and visibility. An existing source omitted from layout
-has no locations. An absent optional reference also has no locations; authored
-queries distinguish absence from omission. Required lookup uses query `.one()`
-or `ctx.region`, while `.optional()` and `find_region` express intentional absence.
+Location results carry all known fragments, continuation boundaries, nesting/address
+information, repetition provenance, and coverage. A complete empty result establishes
+absence/omission within its scope; an empty partial result does not. Repeated table
+headings must not become extra logical items. Ambiguity is an error within the stated
+lookup scope; finding one match in an incomplete global search does not prove uniqueness.
+Geometric facts require a target capability.
 
-A fragmented item can occupy pages 2 and 3; the caller decides how to format that
-set. Repeated table headings must be marked as repetitions, not mistaken for
-additional content. Location queries must not invent pixel coordinates for
-Discord. Future geometric facts need an explicit target capability.
+## Planning, feedback, and certification
 
-## Resolution and search integration
+Planning realizes a demanded view from captured data, a content address, constraints,
+and declared contextual computations. Data preparation may yield another captured
+attempt. There are no asynchronous pauses or hidden fetches inside synchronous layout.
 
-The current pipeline expands components, explores offers and partitions, builds a
-`PageFamily`, certifies every reachable coordinate combination, and retains the
-result as an `AllocationSnapshot`. Its `project` operation cannot change layout
-costs. Therefore inserting generated text after certification is unsound.
+1. Establish the demanded content scope and available source/capability facts.
+2. Prepare declared required resources/slots, or capture an explicit loading state.
+3. Explore representations, continuation boundaries, and contextual expansions under
+   one shared allowance. Bootstrap content supplies a provisional working state.
+4. Track fact reads. Rebuild affected graph/offer/partition work when output changes.
+   Resolve actual feedback cycles within this attempt, with bounded iteration.
+5. Certify the selected view against target limits and the facts its output asserts.
+   Include parent/sibling budgets and navigation chrome: fitting a child alone is insufficient.
+6. Stage the scene, continuation, fact capture, and lifecycle changes; commit after delivery.
 
-The proposed integration is inside candidate evaluation, before certification:
+A certificate states its scope. A local certificate does not promise that an unseen
+next page fits, that every alternative view has been explored, or that a global search
+is optimal. A complete finite-family certificate can offer those stronger guarantees
+where established. Navigating to an uncertified view prepares and certifies that view
+before replacing the current one. Retain/reuse certified views only while their inputs
+and dependency evidence remain valid.
 
-1. Start with contextual bootstrap content and construct a provisional family.
-2. Build immutable fact indexes for that family and its coordinate views.
-3. Evaluate contextual nodes whose observed facts changed. Record their reads.
-4. If output changed, rebuild affected semantic/offer/partition work; new content
-   can change available representations and introduce regions. Old cuts and
-   resource certificates are invalid until checked again.
-5. Certify every reachable scene only when content and observed facts stabilize.
-   Publish facts with the successful candidate, then commit after delivery.
+Source positions/capabilities and known captured input facts can often resolve
+acyclic computations directly. Actual feedback includes a visible-item summary that
+changes which items fit, or an exact page total that changes fragmentation. Different
+sizes on different pages are ordinary inputs to layout, not automatic inconsistency.
 
-This is not repeated application `render()`. Each candidate has isolated working
-content and facts. A cursor turn may select already certified contextual output
-when the complete family remains valid. All callbacks, query indexing, iteration,
-and coordinate enumeration consume the existing shared planning work allowance.
-Dependency reads initially track complete query results; finer property tracking
-is an optimization, not required for correctness.
+For feedback, stable equality includes generated structure, relevant choices,
+boundaries, and observed facts. Detect cycles and bound nonrepeating growth. Reject a
+nonconverging candidate and try declared alternatives within the allowance; distinguish
+exhaustion from proof of infeasibility. Never certify a contradictory provisional answer
+just because iteration stopped. An unknown total explicitly handled by the author can
+be a consistent final answer; a stale guessed exact total cannot.
 
-Required facts can be provisionally unavailable. Such a read suspends that block
-and retains its bootstrap/previous working content while other blocks progress.
-If the graph becomes quiescent with required reads unresolved, fail with the
-context key and missing target. Optional absence is a valid query result. Merely
-using zero or the last delivered answer for an unresolved fact would mask errors.
+Certification is about consistency within an attempt. Data hydration, source updates,
+changed constraints, or a different navigation request can legitimately cause reflow.
+A numeric page from an old generation must not silently select a different content range.
 
-Fixed-point equality includes generated content and relevant layout choices,
-not just the displayed text or page count. Detect repeated working states and
-bound nonrepeating growth. Diagnostics should include the contextual key, queried
-reference, observed values, and iterations. Caches require render-snapshot,
-candidate, occurrence, callback, and coordinate identity; query dependencies may
-permit sharing within that boundary. No answers are written to `sl.presentation`.
+## Components, visibility, and tooling
 
-## Component preparation and visibility
+Contextual output may choose keyed component slots declared before planning. Discover
+and eagerly prepare those instances, concurrently where independent and once per shared
+instance; capture subtrees before layout. Callbacks cannot introduce undeclared component
+instances. Eager slot preparation does not require eager loading of all remote data.
 
-Contextual content may place component slots declared before planning. The runtime
-can discover their keyed component instances without executing every layout
-branch. Callbacks choose among prepared slots; they cannot introduce undeclared
-instances or construct components during layout. The slot declaration and its
-generic target/context signature still need a typing pass.
+Committed declarations own logical lifetime, state, presentation cells, history, and
+services even when layout omits a slot. Proposed synchronous `on_show`/`on_hide` hooks
+report per-placement visibility after delivery: first fragment appears/last disappears,
+with hide before eventual unmount. Speculative candidates trigger neither hook. Visibility
+is presence in the delivered interface, not viewport tracking.
 
-Use eager preparation by default: discover declared slots, prepare independent
-components concurrently, capture their rendered subtrees, then begin layout.
-Planning has no asynchronous loading pauses. Load a shared component instance
-once even when it has several declared placements. Keep loading policy separate
-from query and layout APIs so explicit lazy slots can be considered later.
+Preparation diagnostics already record per-instance time, outcome, reuse, and declaring
+paths, with concurrent batch time separately. Extend tooling with demand/source scope,
+fact availability/evidence, local versus complete certificates, resolution rounds/work,
+and contextual dependency chains. A missing total should explain whether content is
+unloaded, a capability is absent, or feedback did not resolve. Keep this in developer tools.
 
-`on_load()` holds work needed before the component can render its first useful
-state. Required database or network requests are legitimate; expensive optional
-enrichment should use a useful initial/loading state and the resource system.
-Eager preparation may wait for a slot that the final layout omits. It does not
-start that component's owned services during speculative preparation.
+## Implementation sequence and acceptance cases
 
-Mounting follows the committed logical slot declaration. A hidden slot retains
-its state, presentation cells, history, and mounted services until its declaration
-or owner is removed. Proposed `on_show` and `on_hide` hooks report per-placement
-visibility changes after successful delivery. Provisional candidates trigger
-neither hook. A placement is shown when any fragment appears and hidden when its
-last fragment leaves the active delivered interface; this is not viewport tracking.
-Shown placements receive `on_hide` before their eventual unmount. Start with
-synchronous notifications alongside the existing mount/unmount hooks; ongoing
-work uses owned services. Visibility-dependent activity can pause or resume
-without changing logical ownership.
+Keep the live-query and preparation foundations. Before planner implementation, replace
+the old page-count-only stubs with types for content addresses, realized pages, scoped
+facts, partial locations, and certificate scope. Review the empty-flow convention and
+navigation copy alongside those signatures; this document does not settle every public name.
 
-## Preparation diagnostics
+Implement a bounded materialized flow and page footer first through the general context
+boundary, then extend demand-driven realization across source windows. Treat existing
+`PageFamily`/`AllocationSnapshot` as the complete finite case, not the universal model.
+Audit `PagePosition`, `MaterializedCursorRequest`, source `NavigationState`, Browser,
+source-ranked views, and continuation delivery against the distinct units above.
 
-Tooling is part of the preparation contract. Record per-component preparation
-wall time, outcome, whether loading was reused, and the declaring slot paths.
-Report batch elapsed time separately: concurrent durations are not additive.
-If concurrency is limited, distinguish queueing time from load execution.
+Acceptance cases must include variable-size lazy items; one window spanning pages; a
+page crossing fetch windows; an item continuing within itself; an oversized unsplittable
+item with an explicit adaptation/failure; empty and forward-only flows; partial locations;
+known item count with unknown page total; direct seek with unknown ordinal; prefix-based
+numbering; stale counts/checkpoints after source updates or reflow; nested shared budgets;
+exact closed-flow totals; contextual feedback cycles; and failed navigation preserving
+previously delivered facts, cursor, state, and visibility.
 
-Developer inspection and slow-preparation diagnostics should identify which
-required load delayed delivery, separately from layout time, resolution rounds,
-and planning work. Slow thresholds are configurable diagnostics, not implicit
-timeouts or layout-ranking inputs. Keep these details in developer tooling.
+## Prior art and existing experiments
 
-## Candidate failure
+[CSS fragmentation](https://www.w3.org/TR/css-break-3/) separates a flow, its fragments,
+and the containers they occupy. [Typst context](https://typst.app/docs/reference/context/)
+and [queries](https://typst.app/docs/reference/introspection/query/) demonstrate contextual
+content and repeated layout evaluation. Borrow those distinctions and explicit evaluation;
+our lazy sources additionally require scoped knowledge and demand-driven preparation.
 
-Reject a nonconverging candidate and consider other declared alternatives. Retain
-the rejected-branch diagnostics. If no candidate can be certified, fail without
-replacing the last delivered UI. Work exhaustion must not be reported as proof of
-infeasibility. Hidden regions retain their explicit optional selection, and
-location queries retain all fragments rather than choosing an arbitrary page.
-
-## Experiment results
-
-Eleven tests in `spikes/test_experiment.py` pass. Both Pyrefly and BasedPyright
-accept the signatures/examples and reject the six negative probes for the intended
-type errors. The experiment remains separate from the production planner.
-
-| Experiment | Result |
-| --- | --- |
-| Real HTML allocation: 83 keyed builds, 12 per page | Existing metadata reports 7 pages, selected index 1, 12 visible sources, and build 42 on page index 3 |
-| Synthetic footer changes its own available page space | Page counts 6, 13, then 15; stabilizes in 4 passes with 3 callback evaluations |
-| Turn the selected page with unchanged page count | Only the callback reading the selection reevaluates; a constant callback is reused |
-| A required fact appears after another block generates content | The dependent block suspends provisionally and resolves on a later pass |
-| A required fact remains absent | Quiescence fails with the context key and missing query |
-| Alternating output and unbounded growth | Repeated states fail as oscillation; nonrepeating growth reaches the iteration bound |
-| Candidate/snapshot changes and work exhaustion | Caches remain isolated and layout plus query operations share one allowance |
-
-The real allocator test reads `RegionPages`/`AllocationSelection` metadata and
-checks that the previously selected output remains the same object. It does not
-construct another page family. The source anchors can answer direct page
-membership but cannot distinguish exact split fragments from repeated chrome.
-Build the richer location index from `FragmentCoverage` and repeated-source
-metadata before certification discards that provenance. Nested addresses also
-need parent/child page-coordinate joins, which the simple membership adapter
-deliberately does not implement.
-
-`spikes/experiment.py` contains an isolated string/row model. Its deterministic
-layout is a function of generated text, so comparing text states is sufficient
-there; production equality must include graph, representation, and partition
-choices. It demonstrates mechanics, not production search integration, resource
-calibration, global optimality, lifecycle behavior, or target certification.
-Its eight-round default and synthetic work units are experimental parameters,
-not proposed production limits. Previously returned certificates remain immutable
-when a new attempt fails; actual delivery preservation remains the host's job.
-
-Run the executable experiment from the repository root:
-
-```sh
-PYTHONPATH=docs/plans/layout-introspection/spikes uv run --locked pytest docs/plans/layout-introspection/spikes/test_experiment.py -q
-```
-
-For explicit Pyrefly checking, add the spike directory with `--search-path` and
-pass its `.py`/`.pyi` files. BasedPyright needs an explicit spike include (docs are
-normally excluded), a merged workspace package tree as in CI's installed-package
-approach, and its missing-source warning disabled for the intentional stub module.
-
-The next implementation slice must connect contextual content to candidate
-construction and recertification, using a page footer as the first query consumer.
-It should preserve the general query boundary and produce a measured integration
-cost before adding a broader public vocabulary.
+The existing `spikes/layout_api.pyi` and typing examples describe the superseded complete-
+family proposal. They are historical experiments, not signatures for this revision.
+`spikes/experiment.py` exercises bounded feedback in an isolated row model;
+`spikes/test_experiment.py` also reads real finite allocator metadata for 83 items at
+12 per page. Those experiments do not establish lazy-source, continuation, partial-fact,
+lifecycle, or production search semantics. They remain useful fixtures for the closed case.

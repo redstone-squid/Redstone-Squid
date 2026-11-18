@@ -1,4 +1,4 @@
-"""Check the three use cases and preserve target and interaction context types."""
+"""Historical complete-family examples; the revised fact API needs a new typing pass."""
 
 from typing import assert_type
 

@@ -1,4 +1,4 @@
-"""Proposed authoring types; no production implementation."""
+"""Historical complete-family typing experiment; superseded by the parent plan."""
 
 from collections.abc import Callable
 
