@@ -348,6 +348,7 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[ComponentsV2Target, sd.R
     draft = PollDraft.from_answers(answers)
     try:
         draft.validate()
+        options = draft.option_lines
     except InvalidVoteConfigurationError as error:
         return sl.status(error.message, tone=sl.Tone.DANGER)
     fields = [
@@ -366,7 +367,7 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[ComponentsV2Target, sd.R
         )
     choices = poll_choices(
         (str(index), label, emoji or "")
-        for index, (emoji, label) in enumerate(map(_split_option_line, draft.option_lines), start=1)
+        for index, (emoji, label) in enumerate(map(_split_option_line, options), start=1)
     )
     return sl.section(poll_question(draft.question), choices, sl.fields(*fields))
 
