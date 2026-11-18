@@ -418,9 +418,9 @@ class Request(Generic[OwnerT, ClientT]):
             self.scope, content, files=files, parent=parent, session_key=session_key, **overrides
         )
 
-    async def _respond_in_scope(
+    async def _respond_in_scope[DestinationOwnerT](
         self,
-        scope: Scope[Any, ClientT],
+        scope: Scope[DestinationOwnerT, ClientT],
         content: FacadeContent[ClientT] | Response[Any],
         *,
         files: Sequence[discord.File] = (),

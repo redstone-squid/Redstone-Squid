@@ -318,15 +318,15 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         self._screen_validate_event(event)
         return await self.present_child(event.context, child, on_result=on_result, on_cancel=on_cancel, **overrides)
 
-    async def present_child[ChildResultT](
+    async def present_child[ChildResultT, RequestOwnerT](
         self,
-        request: Request[Any, ClientT],
-        child: Screen[ChildResultT, Any, ClientT],
+        request: Request[RequestOwnerT, ClientT],
+        child: Screen[ChildResultT, OwnerT, ClientT],
         *,
         on_result: Callable[[ScreenResultEvent[ChildResultT]], Awaitable[None]],
         on_cancel: Callable[[Cancelled], Awaitable[None]] | None = None,
         **overrides: Unpack[ResponseOverrides],
-    ) -> Presented[Screen[ChildResultT, Any, ClientT]] | Rejected | Abandoned:
+    ) -> Presented[Screen[ChildResultT, OwnerT, ClientT]] | Rejected | Abandoned:
         """Present a child from an authorized request, including a separate command interaction.
 
         The request supplies delivery authority. The parent owns the child and handles its result
@@ -369,7 +369,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
                 raise BaseExceptionGroup(message, [error, cleanup_error]) from None
             raise
         if isinstance(result, Presented):
-            return cast(Presented[Screen[ChildResultT, Any, ClientT]], result)
+            return cast(Presented[Screen[ChildResultT, OwnerT, ClientT]], result)
         await child._screen_opening_failed()
         assert isinstance(result, Rejected | Abandoned)
         return result
