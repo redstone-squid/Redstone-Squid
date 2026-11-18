@@ -61,7 +61,15 @@ class PageCommit(_HandlerComposition):
         match self.owner:
             case Controlled(on_change=on_change):
                 await on_change(
-                    PageEvent(event.actor, event.responder, event.locale, event.metadata, page, context=event.context)
+                    PageEvent(
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        page,
+                        context=event.context,
+                        _transaction=event._transaction,
+                    )
                 )
             case Uncontrolled():
                 # No explicit acknowledgement: the frontend answers the press by editing the

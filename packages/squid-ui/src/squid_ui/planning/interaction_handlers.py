@@ -101,6 +101,7 @@ class ChoiceCommit[ContextT = object](_HandlerComposition):
                         tuple(key for key in selected if key not in self.previous),
                         tuple(key for key in self.previous if key not in selected),
                         context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -163,6 +164,7 @@ class EntityCommit[ContextT = object](_HandlerComposition):
                         tuple(value for value in selected if value not in self.previous),
                         tuple(value for value in self.previous if value not in selected),
                         context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -216,7 +218,13 @@ class ItemCommit[ContextT = object](_HandlerComposition):
             case Controlled(on_change=on_change):
                 await on_change(
                     OpenEvent(
-                        event.actor, event.responder, event.locale, event.metadata, opened=opened, context=event.context
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        opened=opened,
+                        context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -269,7 +277,13 @@ class NavigationCommit[ContextT = object](_HandlerComposition):
             case Controlled(on_change=on_change):
                 await on_change(
                     NavigateEvent(
-                        event.actor, event.responder, event.locale, event.metadata, destination, context=event.context
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        destination,
+                        context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -334,6 +348,7 @@ class ToggleDetails[ContextT = object](_HandlerComposition):
                         event.metadata,
                         opened=not self.open,
                         context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -365,7 +380,13 @@ class FlipToggle[ContextT = object](_HandlerComposition):
             case Controlled(on_change=on_change):
                 await on_change(
                     ToggleEvent(
-                        event.actor, event.responder, event.locale, event.metadata, not self.on, context=event.context
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        not self.on,
+                        context=event.context,
+                        _transaction=event._transaction,
                     )
                 )
             case ValueBinding():
@@ -390,7 +411,13 @@ class ForwardSelection[ContextT = object](_HandlerComposition):
     async def __call__(self, event: PressEvent[ContextT]) -> None:
         await self.handler(
             SelectionEvent(
-                event.actor, event.responder, event.locale, event.metadata, (self.key,), context=event.context
+                event.actor,
+                event.responder,
+                event.locale,
+                event.metadata,
+                (self.key,),
+                context=event.context,
+                _transaction=event._transaction,
             )
         )
 

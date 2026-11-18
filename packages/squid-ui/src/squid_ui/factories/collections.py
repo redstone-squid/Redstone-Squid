@@ -285,6 +285,12 @@ class _TallySelection[ContextT]:
         if event.selected:
             await self.callback(
                 SelectionEvent(
-                    event.actor, event.responder, event.locale, event.metadata, event.selected, context=event.context
+                    event.actor,
+                    event.responder,
+                    event.locale,
+                    event.metadata,
+                    event.selected,
+                    context=event.context,
+                    _transaction=event._transaction,
                 )
             )

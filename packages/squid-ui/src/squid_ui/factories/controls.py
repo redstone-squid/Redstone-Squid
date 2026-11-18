@@ -399,6 +399,7 @@ class _RatingSelection[ContextT]:
                     event.metadata,
                     int(event.selected[0]),
                     context=event.context,
+                    _transaction=event._transaction,
                 )
             )
 
