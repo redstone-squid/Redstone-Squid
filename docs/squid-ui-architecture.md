@@ -946,6 +946,14 @@ services. Required database or network work belongs here. Optional enrichment be
 a resource with useful initial content. `send` and `refresh` prepare components; terminal
 and stage-only paths deliberately do not.
 
+`sl.context(callback, key=..., initial=..., components=...)` generates semantic content
+from captured layout facts. Capture reactive inputs in `render()` and close over them;
+callbacks may run repeatedly and cannot read live state, write it, or construct components.
+Declare keyed component slots in `components` so they prepare eagerly and retain their
+logical lifetime while omitted. `on_show(placement)` and `on_hide(placement)` track presence
+in successfully delivered fragments, independently of mount/unmount. A shared instance
+can have several visible placements. Failed delivery triggers neither visibility change.
+
 Preparation reports retain declaring paths, execution time, outcome, and reuse status.
 Batch elapsed time measures concurrent wall time separately. Slow preparation logs use
 `runtime.preparation.slow_threshold` (seconds); this diagnostic never cancels a load. The
@@ -959,7 +967,8 @@ captured = editors.capture()
 ```
 
 Each live read tracks a reactive dependency. Rendering or discarding a candidate leaves
-its answers unchanged; successful commit publishes the new tree. `captured` pins membership
+its answers unchanged; successful commit publishes the resolved tree, including generated
+contextual content. `captured` pins membership
 and occurrence identity, while its application objects may still change. Querying a raw
 node or an explicit tree index retains that tree's captured structure.
 
@@ -1181,7 +1190,19 @@ arrives. REBASE presses keep acting on the newest state, which is what that poli
 
 Every paginator has an explicit unique string key. `sd.MessageRoot` stores a cursor per key; embedded
 components prefix it automatically. Shared composition certifies content, footers, and
-navigation together on every page, so controls spend real text and component budgets.
+navigation together, so controls spend real text and component budgets. Complete finite
+families can certify every page combination; contextual content can instead certify the
+demanded view when offscreen content cannot be proven to fit.
+
+`LayoutContext` exposes authored, placed, and visible semantic queries, region facts,
+and fragment locations. `Known` and `Unknown` distinguish established values from missing
+knowledge; `.require()` makes a fact necessary for certification. `Known(None)` establishes
+absence. Exact totals describe the captured document: selection-dependent content can have
+an exact total now and a different total after navigation. Partial certification leaves
+totals unknown and suppresses numeric total/jump controls. `PlanResult.certificate` identifies
+view versus family scope; `plan(..., inspect_layout=True)` exposes facts without generation.
+See [the layout design](plans/layout-introspection/README.md) for examples and remaining
+source-flow work.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
 `sd.MessageRoot` resets only that cursor; keyed anchors preserve the reader's page across insertions and
@@ -1189,10 +1210,18 @@ reordering where possible. `per=N` is count-based pagination; the default fills 
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
 
+For semantic lists, `page_size=N` permits smaller cuts when needed; `group_size=N`
+declares indivisible groups. Group count does not establish target fit. Lazy sources
+must declare `SourceCapabilities.fixed_groups` to number groups; an exact item count
+alone produces an item-range footer. `list_source(..., fixed_groups=True)` supplies
+aligned groups for a sequence. Browser windows remain fetched slices: automatic layout
+continuations spanning fetch windows are not implemented.
+
 A `NavFactory` receives `on_previous`, `on_next`, and `on_seek`. `on_seek` takes a zero-based
 page and is present only where the cursor can address one: always for a materialized cursor,
 and for a source window only when it declares `SourceCapabilities.jumpable` with an exact count.
-`NavigationState.page` is a page number and pairs with `extent`. Source addresses remain
+`NavigationState.unit` distinguishes items, declared groups, and rendered pages; `page`
+and `extent` use that unit. Source addresses remain
 with the browsing session and never enter the navigation factory. The stock `default_nav` draws no jump control, since a
 select costs a whole component row on every paginator in the process; `sd.navigation_controls.page_select_nav`
 opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
