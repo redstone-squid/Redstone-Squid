@@ -74,11 +74,7 @@ def element_ref[T](kind: type[T], *keys: str) -> ElementRef[T]:
 
 @dataclass(frozen=True, slots=True)
 class ContentAddress:
-    """A flow-relative content anchor, optionally continuing inside that content.
-
-    revision validates the captured data/layout inputs; ordinal page numbers are
-    deliberately absent. A continuation boundary is owned by the content protocol.
-    """
+    """A captured flow-relative anchor, not a persisted navigation checkpoint."""
 
     flow: RegionRef
     anchor: tuple[str, ...]

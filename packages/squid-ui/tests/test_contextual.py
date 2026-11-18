@@ -8,6 +8,7 @@ import squid_ui as sl
 import squid_ui.ext.html as html
 from squid_reactivity import ReactiveWriteError
 from squid_ui.authoring.semantic import Heading, ListItem
+from squid_ui.ext.discord import testing as discord_testing
 from squid_ui.planning import plan
 from squid_ui.planning.contextual import ContextResolutionError
 from squid_ui.runtime import ComponentRuntime
@@ -235,6 +236,32 @@ def test_an_unfittable_unselected_fragment_does_not_block_the_current_view() -> 
     with pytest.raises(sl.planning.JointInfeasibleError):
         result.for_page({region.identity: 1})
     assert "a" * 40 in sl.scene.Codec.dumps(result.scene)
+
+
+def test_an_uncertified_prefix_leaves_the_later_rendered_ordinal_unknown() -> None:
+    result = plan(
+        sl.stack(
+            sl.bullets(
+                sl.bullet("a" * 2100, key="first"),
+                sl.bullet("b" * 5000, key="middle"),
+                sl.bullet("c" * 2100, key="last"),
+                key="results",
+                group_size=1,
+            ),
+            sl.context(lambda _ctx: sl.paragraph("ready"), key="status"),
+        ),
+        target=discord_testing.target_profile("partial-prefix"),
+    )
+    assert result.layout is not None
+    region = result.layout.region(sl.region_ref("results"))
+    later = result.for_page({region.identity: 2})
+    assert "c" * 2100 in sl.scene.Codec.dumps(later.scene)
+    assert later.layout is not None
+    selected = later.layout.region(sl.region_ref("results")).selection.require()
+    assert selected is not None and isinstance(selected.number, sl.Unknown)
+    locations = later.layout.locate(sl.element_ref(ListItem, "last"))
+    assert locations.fragments and not locations.complete
+    assert isinstance(locations.fragments[0].page.coordinates[-1].number, sl.Unknown)
 
 
 def test_contextual_content_in_an_equivalent_representation_is_evaluated() -> None:

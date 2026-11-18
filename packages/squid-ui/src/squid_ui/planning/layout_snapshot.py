@@ -295,13 +295,18 @@ class LayoutSnapshot:
         if coordinate is None:
             message = "layout capture needs one reachable coordinate combination"
             raise ValueError(message)
+        unknown_index = Unknown(UnknownReason.INCOMPLETE, "preceding rendered pages have not been certified")
         regions = {
             ref: RegionFacts(
                 identity,
                 Known(self.counts[identity])
                 if complete
                 else Unknown(UnknownReason.INCOMPLETE, "only this view was resolved"),
-                Known(PageCoordinate(identity, Known(selected[identity])))
+                Known(
+                    PageCoordinate(
+                        identity, Known(selected[identity]) if complete or selected[identity] == 0 else unknown_index
+                    )
+                )
                 if identity in selected and self.counts[identity] > 0
                 else Known(None),
                 Known(groups)
@@ -319,7 +324,7 @@ class LayoutSnapshot:
                         tuple(
                             PageCoordinate(
                                 identity,
-                                Known(index),
+                                Known(index) if complete or index == 0 else unknown_index,
                                 ContentAddress(self.region_refs[identity], source.keys, fragment.span),
                             )
                             for identity, index in fragment.page
