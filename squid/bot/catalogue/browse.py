@@ -1,7 +1,7 @@
 """Canonical build catalogue, review, and schematic workspace."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Literal, Self, cast, override
 
@@ -387,6 +387,13 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         return False
 
 
+@dataclass(frozen=True, slots=True)
+class _TabSearch:
+    query: CatalogueQuery = CatalogueQuery()
+    sort: str = ""
+    mode: SearchMode = SearchMode.LEXICAL
+
+
 class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A live build workspace that ends when replaced or timed out."""
 
@@ -406,6 +413,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     _query: CatalogueQuery = sl.state(CatalogueQuery())
     _sort: str = sl.state("")
     _search_mode: SearchMode = sl.state(SearchMode.LEXICAL)
+    _build_search: _TabSearch = sl.state(_TabSearch())
+    _record_search: _TabSearch = sl.state(_TabSearch())
     _guided: GuidedSearch | None = sl.state(None, opaque=True)
     _mode: Literal["builds", "records", "tools"] = sl.state("builds")
     _selected: sp.Browser[Build, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
@@ -640,20 +649,36 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
 
-    async def _switch(self, mode: Literal["builds", "records", "tools"], _event: sl.PressEvent) -> None:
+    async def _switch(self, mode: Literal["builds", "records", "tools"], event: sl.ActionEvent) -> None:
         if mode == self._mode:
             return
+        if self._mode != "tools":
+            active = _TabSearch(self._query, self._sort, self._search_mode)
+            if self._mode == "builds":
+                self._build_search = active
+                self._record_search = replace(
+                    self._record_search,
+                    query=self._record_search.query.with_shared_from(self._search_parser, active.query),
+                )
+            else:
+                self._record_search = active
+                self._build_search = replace(
+                    self._build_search,
+                    query=self._build_search.query.with_shared_from(self._search_parser, active.query),
+                )
         self._results = None
-        self._sort = ""
-        expanded = self._guided is not None
-        self._guided = None
         self._mode = mode
-        self._search_mode = SearchMode.LEXICAL
-        self._query = CatalogueQuery()
-        if expanded:
-            self._open_search_editor()
         self._selected = None
-        await self._browser._back(_event)
+        if mode != "tools":
+            expanded = self._guided is not None
+            self._guided = None
+            saved = self._record_search if mode == "records" else self._build_search
+            self._query, self._sort, self._search_mode = saved.query, saved.sort, saved.mode
+            if saved.query.parsed.expression is not None or saved.sort:
+                await self._run_search(saved.query, saved.sort)
+            if expanded:
+                self._open_search_editor()
+        await self._browser._back(event)
 
     async def _open_holder(self, build_id: int, event: sl.ActionEvent[Any]) -> None:
         if not await self._select(build_id):
@@ -792,7 +817,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if not await self._select(build_id):
             await event.notice(tr(t"build-id-not-visible = No visible build has that ID."))
         elif self._mode == "tools":
-            self._mode = "builds"
+            selected = self._selected
+            await self._switch("builds", event)
+            self._selected = selected
 
     async def _guided_search(self, event: sl.PressEvent) -> None:
         if self._guided is not None:

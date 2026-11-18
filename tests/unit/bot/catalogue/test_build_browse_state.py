@@ -1063,6 +1063,80 @@ async def test_editor_expansion_survives_switching_catalogue_tabs() -> None:
         assert not any(key.endswith("advanced") for key in ui.root.snapshot().handler_keys)
 
 
+async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    screen = _screen(initial_id=None, records=records)
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        shared = '  (title:"vault door" or piston)   KIND:door  '
+        await submit_search(ui, shared)
+        await ui.press(ui.key_for("all-records"))
+        assert screen._query.text == shared
+        assert service.search.call_args.args[0].scope is SearchScope.RECORDS
+        assert service.search.call_args.args[0].query == shared
+
+        record_query = shared + "base_title:smallest status:resolved"
+        await submit_search(ui, record_query, "-updated_at")
+        await ui.press(ui.key_for("all-builds"))
+        assert screen._query.text == shared
+        assert screen._sort == ""
+
+        build_query = 'kind:door (title:"vault door" OR piston) width<=5 status:confirmed'
+        await submit_search(ui, build_query, "-width")
+        await ui.press(ui.key_for("all-records"))
+        assert (
+            screen._query.text
+            == 'kind:door AND (title:"vault door" OR piston) AND base_title:smallest AND status:resolved'
+        )
+        assert screen._sort == "-updated_at"
+        assert ui.control(ui.key_for("smallest")).payload["style"] == 3
+
+        await submit_search(ui, "kind:door base_title:fastest status:resolved", "-updated_at")
+        await ui.press(ui.key_for("all-builds"))
+        request = service.search.call_args.args[0]
+        assert request.scope is SearchScope.BUILDS
+        assert request.query == "kind:door AND width<=5 AND status:confirmed"
+        assert screen._sort == "-width"
+
+        await ui.press(ui.key_for("reset"))
+        await ui.press(ui.key_for("all-records"))
+        assert screen._query.text == "base_title:fastest AND status:resolved"
+        assert screen._sort == "-updated_at"
+        assert ui.control(ui.key_for("fastest")).payload["style"] == 3
+        ui.assert_within_limits()
+
+
+async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() -> None:
+    records = AsyncMock(spec=RecordService)
+    records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
+    records.gaps.return_value = ()
+    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    screen = _screen(initial_id=None, records=records, record_tools=tools)
+    async with stage(screen, owner=object()) as ui:
+        build_query = "  NOT (title:door AND width:5)  "
+        await submit_search(ui, build_query)
+        await ui.press(ui.key_for("record-tools"))
+        await ui.press(ui.key_for("all-records"))
+        assert screen._query == CatalogueQuery()
+        record_query = "title:door OR base_title:fastest"
+        await submit_search(ui, record_query)
+
+        await ui.press(ui.key_for("record-tools"))
+        form = await ui.press_for_form(ui.key_for("open-id"))
+        await form.submit({"id": "7"})
+        assert screen._query.text == build_query
+        assert "Build #7" in ui.texts()
+        await ui.press(ui.key_for("linked-build.back"))
+        assert "## Search results" in ui.texts()
+
+        await ui.press(ui.key_for("all-records"))
+        assert screen._query.text == record_query
+        assert screen._guided is not None
+        assert screen._guided.query == screen._query
+        ui.assert_within_limits()
+
+
 async def test_expanded_reset_is_disabled_until_query_sort_or_categories_change() -> None:
     screen = _screen(initial_id=None)
     async with stage(screen, owner=object()) as ui:

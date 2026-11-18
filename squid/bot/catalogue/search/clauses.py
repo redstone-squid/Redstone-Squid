@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Self
 
+from squid.records.domain import BuildKind
 from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.query import (
     BooleanExpression,
@@ -34,6 +35,47 @@ class CatalogueQuery:
         if expression == self.parsed.expression:
             return self
         return CatalogueQuery(SearchQuery(expression, parser.render(expression) if expression is not None else ""))
+
+    def with_shared_from(self, parser: SearchQueryParser, source: CatalogueQuery) -> CatalogueQuery:
+        """Take the other tab's shared clauses while keeping this tab's local clauses."""
+        shared, local = self._split()
+        incoming, incoming_local = source._split()
+        if not local and not incoming_local:
+            return source
+        if shared == incoming:
+            return self
+        return self.with_expression(parser, combine_clauses(BooleanOperator.AND, *incoming, *local))
+
+    def _split(self) -> tuple[tuple[QueryExpression, ...], tuple[QueryExpression, ...]]:
+        expression = self.parsed.expression
+        if expression is None:
+            return (), ()
+        clauses = (
+            expression.operands
+            if isinstance(expression, BooleanExpression) and expression.operator is BooleanOperator.AND
+            else (expression,)
+        )
+        shared: list[QueryExpression] = []
+        local: list[QueryExpression] = []
+        for clause in clauses:
+            (shared if _is_shared(clause) else local).append(clause)
+        return tuple(shared), tuple(local)
+
+
+def _is_shared(expression: QueryExpression) -> bool:
+    match expression:
+        case BooleanExpression(operands=operands):
+            return all(_is_shared(operand) for operand in operands)
+        case NotExpression(operand=operand):
+            return _is_shared(operand)
+        case TextExpression():
+            return True
+        case FieldExpression(field=field, value=value):
+            # Both indexes have titles and kinds. Other fields are scope-specific,
+            # including status, which describes a different lifecycle in each tab.
+            return field.name == "title" or (
+                field.name == "kind" and isinstance(value, str) and value.casefold() in BuildKind
+            )
 
 
 def combine_clauses(operator: BooleanOperator, *clauses: QueryExpression) -> QueryExpression | None:
