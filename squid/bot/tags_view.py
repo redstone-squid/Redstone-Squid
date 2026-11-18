@@ -1,4 +1,4 @@
-"""Canonical tag catalogue, contribution, and moderation workspace."""
+"""Build showcase tags and the shared tag catalogue workspace."""
 
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -8,12 +8,14 @@ from typing import Any, Protocol, override
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
+from squid.bot.accounts.consent import with_consented_account
 from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
+from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import Revision
@@ -37,7 +39,7 @@ from squid.tags.application.edits import (
     ShowcaseValues,
     tag_target,
 )
-from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -95,6 +97,129 @@ class _ModerationActions(sl.Component[ComponentsV2Target, sd.Request[Any, Redsto
                 key="moderation-actions",
             ),
         )
+
+
+class BuildTagsScreen(sd.Screen[None, Any, RedstoneSquid]):
+    """View and apply showcase tags on one build."""
+
+    policy = sd.ResponseSpec(audience="personal", timeout=300, session=sd.SessionSpec("build-tags"))
+
+    _build: Build = sl.state(opaque=True)
+    _selected: TagDefinition | None = sl.state(None, opaque=True)
+
+    def __init__(
+        self,
+        build: Build,
+        *,
+        account_id: int | None,
+        load_build: Callable[[], Awaitable[Build]],
+        load_tag: Callable[[int], Awaitable[TagDefinition | None]],
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[Actor]],
+    ) -> None:
+        self._build = build
+        self._account_id = account_id
+        self._load_build = load_build
+        self._load_tag = load_tag
+        self._edits = EditController(edits, actor, self._refresh)
+
+    @override
+    def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        build = self._build
+        heading = sl.heading(tr(t"build-tags-heading = Showcase tags"))
+        title = sl.paragraph(f"#{build.id} · {build.one_line_title}").truncate()
+        if self._selected is not None:
+            tag = self._selected
+            apply = partial(self._apply, tag.id, build.id, build.revision)
+            return (
+                sl.section(
+                    heading,
+                    title,
+                    sl.heading(tag.display_name, level=3),
+                    sl.action_controls(
+                        sl.action_control(tr(t"tags-apply-selected = Apply this tag"), apply, key="apply")
+                        if tag.value_type is TagValueType.NONE
+                        else sl.form(
+                            tr(t"tags-apply-selected = Apply this tag"),
+                            _showcase_value_form(tag),
+                            key="apply",
+                            on_submit=apply,
+                        ),
+                        sl.action_control(tr(t"bot-tags-view-cancel = Cancel"), self._cancel_selection, key="cancel"),
+                        key="selection",
+                    ),
+                ),
+                *self._edits.refresh_controls(),
+            )
+
+        entries = []
+        for assignment in sorted(build.tags, key=lambda item: item.definition.display_name.casefold()):
+            definition = assignment.definition
+            if (
+                definition.semantic_kind is not TagSemanticKind.SHOWCASE
+                or definition.moderation_status is not TagModerationStatus.APPROVED
+                or definition.withdrawn
+            ):
+                continue
+            text = definition.display_name
+            if (value := assignment.presentation_value) is not None:
+                text += f" · {value}"
+                if (unit := assignment.presentation_unit) is not None:
+                    text += f" {unit.symbol}"
+            entries.append(sl.bullet(text, key=str(definition.id)))
+
+        can_apply = self._account_id is not None and self._account_id == build.submitter_account_id
+        return (
+            sl.section(
+                heading,
+                title,
+                sl.bullets(*entries, key="applied-tags")
+                if entries
+                else sl.note(tr(t"build-tags-empty = No showcase tags have been applied.")),
+                can_apply
+                and sl.action_controls(
+                    sl.action_control(tr(t"build-tags-add-or-update = Add or update tag"), self._choose, key="choose"),
+                    key="build-tag-actions",
+                ),
+                sl.note(md_tr(t"build-tags-catalogue = Browse the tag catalogue or propose a tag with `/tags`.")),
+            ),
+            *self._edits.refresh_controls(),
+        )
+
+    async def _choose(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+        await pick(
+            event,
+            "showcase_tag_ids",
+            tr(t"build-tags-choose = Choose a showcase tag"),
+            self._tag_picked,
+            confirm=tr(t"ui-chrome-continue = Continue"),
+        )
+
+    async def _tag_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
+        tag = await self._load_tag(int(item.value))
+        if tag is None or tag.authority is not TagAuthority.USER or tag.semantic_kind is not TagSemanticKind.SHOWCASE:
+            await event.notice(tr(t"build-tags-tag-unavailable = That showcase tag is no longer available."))
+            return
+        self._selected = tag
+
+    async def _cancel_selection(self, _event: sl.PressEvent) -> None:
+        self._selected = None
+
+    async def _apply(self, tag_id: int, build_id: int, revision: int, event: sd.ActionEvent[RedstoneSquid]) -> None:
+        value = _showcase_submission_value(event)
+
+        async def save(source: sd.ActionEvent, _account_id: int) -> None:
+            await self._edits.bind(SHOWCASE_EDIT, build_target(build_id), revision).save(
+                ShowcaseValues(tag_id=tag_id, value=value).edit_values(),
+                tr(t"tags-history-assignment = Edit showcase tag"),
+            )
+            self._selected = None
+            await source.notice(tr(t"tags-applied = Tag applied."))
+
+        await with_consented_account(event, event.context.client.services.accounts, save)
+
+    async def _refresh(self) -> None:
+        self._build = await self._load_build()
 
 
 class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
@@ -290,18 +415,10 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         )
                     )
                 else:
-                    field: sl.forms.FormField
-                    label = tr(t"bot-tags-view-value = Value")
-                    if tag.value_type is TagValueType.BOOLEAN:
-                        field = sl.forms.BoolField(key="value", label=label)
-                    elif tag.value_type is TagValueType.NUMERIC:
-                        field = sl.forms.FloatField(key="value", label=label)
-                    else:
-                        field = sl.forms.TextField(key="value", label=label, maximum=300)
                     nodes.append(
                         sl.form(
                             tr(t"tags-apply-selected = Apply this tag"),
-                            sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]](tag.display_name, (field,)),
+                            _showcase_value_form(tag),
                             key="apply-tag",
                             on_submit=handler,
                         )
@@ -312,10 +429,8 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self, tag: TagDefinition, build_id: int, revision: int | None, event: sd.ActionEvent
     ) -> None:
         assert revision is not None
-        value = event.values.get("value") if isinstance(event, sl.SubmitEvent) else None
-        text = str(value).lower() if isinstance(value, bool) else None if value is None else str(value)
         await self.edits.bind(SHOWCASE_EDIT, build_target(build_id), revision).save(
-            ShowcaseValues(tag_id=tag.id, value=text).edit_values(),
+            ShowcaseValues(tag_id=tag.id, value=_showcase_submission_value(event)).edit_values(),
             tr(t"tags-history-assignment = Edit showcase tag"),
         )
         await event.notice(tr(t"tags-applied = Tag applied."))
@@ -496,6 +611,25 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             tr(t"tags-operation-permission-denied = You are no longer allowed to perform this tag operation.")
         )
         return False
+
+
+def _showcase_value_form(tag: TagDefinition) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
+    field: sl.forms.FormField
+    label = tr(t"bot-tags-view-value = Value")
+    if tag.value_type is TagValueType.BOOLEAN:
+        field = sl.forms.BoolField(key="value", label=label)
+    elif tag.value_type is TagValueType.NUMERIC:
+        field = sl.forms.FloatField(key="value", label=label)
+    else:
+        field = sl.forms.TextField(key="value", label=label, maximum=300)
+    return sl.forms.FormSpec(tag.display_name, (field,))
+
+
+def _showcase_submission_value(event: sl.ActionEvent) -> str | None:
+    value = event.values.get("value") if isinstance(event, sl.SubmitEvent) else None
+    if isinstance(value, bool):
+        return str(value).lower()
+    return None if value is None else str(value)
 
 
 def _tag_summary(tag: TagDefinition) -> str:

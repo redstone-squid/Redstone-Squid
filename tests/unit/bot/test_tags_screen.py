@@ -1,15 +1,21 @@
-"""The consolidated tag catalogue and moderation workspace."""
+"""Build showcase tags and the shared tag catalogue workspace."""
 
 from collections.abc import Sequence
+from types import SimpleNamespace
 from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import pytest
 
 import squid_ui as sl
+import squid_ui.ext.discord as sd
 from squid.bot.admin_cog import Admin
-from squid.bot.tags_view import TagsScreen
+from squid.bot.routes import AppRequest, ScreenUnavailable
+from squid.bot.submission.ui.controls import build_tags
+from squid.bot.tags_view import BuildTagsScreen, TagsScreen
 from squid.builds.application.restrictions import RestrictionService
+from squid.builds.domain import Status
+from squid.builds.models import DoorBuild
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
@@ -22,10 +28,12 @@ from squid.edits.domain import (
 )
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_VIEW_PENDING,
     RESTRICTION_ALIAS_CREATE,
     TAG_PROPOSAL_APPROVE,
     TAG_PROPOSAL_LIST,
 )
+from squid.suggestions.domain import Suggestion
 from squid.tags.application import TagService
 from squid.tags.application.edits import (
     ALIAS_EDIT,
@@ -38,9 +46,10 @@ from squid.tags.application.edits import (
     tag_target,
 )
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
+from squid.tags.models import TagAssignment, TagDefinition
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render
 from squid_ui.runtime import transaction
-from squid_ui.testing import RecordingResponder, labels
+from squid_ui.testing import RecordingResponder, labels, texts
 from tests.support.edits import bound_revisions
 
 
@@ -208,6 +217,99 @@ async def test_tags_use_browsers_and_capability_aware_tabs() -> None:
     assert screen._pending is not None
     assert screen._tabs is not None
     assert {"Catalogue", "Propose and apply", "Moderation", "Restriction aliases"} <= set(labels(screen._tabs.render()))
+
+
+async def test_build_tags_open_for_read_only_viewers_without_requesting_consent() -> None:
+    compact = tag(1, "Compact")
+    compact.value_type = TagValueType.TEXT
+    compact.canonical_unit_definition = compact.default_display_unit_definition = None
+    assignment = TagAssignment(compact, "tileable")
+    assignment.display_unit_definition = None
+    build = DoorBuild(
+        id=42,
+        door_width=3,
+        door_height=3,
+        submission_status=Status.CONFIRMED,
+        submitter_account_id=7,
+        tags=[assignment, TagAssignment(tag(2, "Pending", pending=True))],
+    )
+    accounts = AsyncMock()
+    client = SimpleNamespace(
+        services=SimpleNamespace(
+            build_queries=AsyncMock(get=AsyncMock(return_value=build)),
+            accounts=accounts,
+            tags=AsyncMock(),
+            edits=AsyncMock(),
+        ),
+        actors=SimpleNamespace(resolve=AsyncMock(return_value=Actor())),
+    )
+    screen = await build_tags.function(cast(AppRequest, SimpleNamespace(client=client)), 42)
+
+    rendered = screen.render()
+    assert f"#42 · {build.one_line_title}" in texts(rendered)
+    assert "Compact · tileable" in texts(rendered)
+    assert all("Pending" not in text for text in texts(rendered))
+    assert labels(rendered) == []
+    accounts.get_account_by_identity.assert_not_awaited()
+    assert_within_limits(commit_render(sd.MessageRoot(screen, access=sd.Owner(1), timeout=None)))
+
+
+async def test_build_tags_require_visibility_before_opening_a_pending_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    build = DoorBuild(id=42, submission_status=Status.PENDING)
+    client = SimpleNamespace(services=SimpleNamespace(build_queries=AsyncMock(get=AsyncMock(return_value=build))))
+    request = cast(AppRequest, SimpleNamespace(client=client))
+    allows = AsyncMock(return_value=False)
+    monkeypatch.setattr("squid.bot.submission.ui.controls.allows", allows)
+
+    with pytest.raises(ScreenUnavailable):
+        await build_tags.function(request, 42)
+
+    allows.assert_awaited_once_with(request, BUILD_SUBMISSION_VIEW_PENDING)
+
+
+async def test_build_submitter_can_apply_a_tag_and_see_the_refreshed_assignment() -> None:
+    tags = FakeTagService()
+    tags.published.value_type = TagValueType.TEXT
+    tags.published.canonical_unit_definition = tags.published.default_display_unit_definition = None
+    build = DoorBuild(id=42, submitter_account_id=7)
+    assignment = TagAssignment(tags.published, "tileable")
+    assignment.display_unit_definition = None
+    updated = DoorBuild(id=42, revision=2, submitter_account_id=7, tags=[assignment])
+    screen = BuildTagsScreen(
+        build,
+        account_id=7,
+        load_build=AsyncMock(return_value=updated),
+        load_tag=AsyncMock(return_value=tags.published),
+        edits=TagEditRecorder(tags, FakeRestrictionService()),
+        actor=AsyncMock(return_value=Actor(account_id=7)),
+    )
+    assert "Add or update tag" in labels(screen.render())
+    assert "No showcase tags have been applied." in texts(screen.render())
+
+    accounts = SimpleNamespace(
+        get_account_by_identity=AsyncMock(return_value=SimpleNamespace(id=7, needs_consent_refresh=False))
+    )
+    event = sl.SubmitEvent(
+        context=cast(
+            AppRequest,
+            SimpleNamespace(
+                user=SimpleNamespace(id=1), client=SimpleNamespace(services=SimpleNamespace(accounts=accounts))
+            ),
+        ),
+        actor=sl.interactions.Actor("1"),
+        responder=RecordingResponder(),
+        values={"value": "tileable"},
+    )
+    with transaction():
+        await screen._tag_picked(event, Suggestion("1", "Compact"))
+    assert "Apply this tag" in labels(screen.render())
+    assert_within_limits(commit_render(sd.MessageRoot(screen, access=sd.Owner(1), timeout=None)))
+
+    with transaction():
+        await screen._apply(1, 42, 1, event)
+
+    assert tags.assignments == [(42, 1, "tileable", 7)]
+    assert "Compact · tileable" in texts(screen.render())
 
 
 async def test_seeded_build_application_uses_the_opening_build() -> None:

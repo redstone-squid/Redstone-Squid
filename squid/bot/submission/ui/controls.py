@@ -3,56 +3,39 @@
 from functools import partial
 from uuid import UUID
 
-from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.ui import opening, recalculation
-from squid.bot.tags_view import TagsScreen
+from squid.bot.tags_view import BuildTagsScreen
 from squid.bot.utils.permissions import allows
+from squid.builds.domain import Status
+from squid.builds.models import Build
 from squid.core.i18n import tr
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import (
-    RESTRICTION_ALIAS_CREATE,
-    TAG_PROPOSAL_APPROVE,
-    TAG_PROPOSAL_ARCHIVE,
-    TAG_PROPOSAL_LIST,
-    TAG_PROPOSAL_REJECT,
-)
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 
 builds = router.group("/builds")
 
 
 @builds.route("/{build_id}/tags")
-async def build_tags(request: AppRequest, build_id: int) -> TagsScreen | None:
+async def build_tags(request: AppRequest, build_id: int) -> BuildTagsScreen:
     services = request.client.services
-    account_id = await ensure_consented_account(request, services.accounts)
-    if account_id is None:
-        return None
 
-    async def authorize(node: PermissionNode) -> bool:
-        return await allows(request, node)
+    async def load_build() -> Build:
+        build = await services.build_queries.get(build_id)
+        if build is None or (
+            build.submission_status is not Status.CONFIRMED and not await allows(request, BUILD_SUBMISSION_VIEW_PENDING)
+        ):
+            raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
+        return build
 
-    capabilities = frozenset(
-        [
-            node
-            for node in (
-                RESTRICTION_ALIAS_CREATE,
-                TAG_PROPOSAL_APPROVE,
-                TAG_PROPOSAL_ARCHIVE,
-                TAG_PROPOSAL_LIST,
-                TAG_PROPOSAL_REJECT,
-            )
-            if await authorize(node)
-        ]
-    )
-    return TagsScreen(
-        services.tags,
-        services.restrictions,
-        services.edits,
-        partial(request.client.actors.resolve, request, refresh=True),
-        build_id=build_id,
-        actor_account_id=account_id,
-        capabilities=capabilities,
-        authorize=authorize,
+    build = await load_build()
+    viewer = await request.client.actors.resolve(request)
+    return BuildTagsScreen(
+        build,
+        account_id=viewer.account_id,
+        load_build=load_build,
+        load_tag=services.tags.public_definition,
+        edits=services.edits,
+        actor=partial(request.client.actors.resolve, request, refresh=True),
     )
 
 
