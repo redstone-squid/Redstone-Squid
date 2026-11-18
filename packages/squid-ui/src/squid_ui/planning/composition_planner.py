@@ -31,7 +31,12 @@ from squid_ui.planning.composition_request import CompositionOptions, TargetComp
 from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.contextual import ContextualResolution
 from squid_ui.planning.identity import has_contextual, requires_live_preparation, stable_fingerprint
-from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
+from squid_ui.planning.joint_search import (
+    JointExhaustedError,
+    JointInfeasibleError,
+    JointUnsupportedError,
+    search_composition,
+)
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
@@ -220,6 +225,18 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 partition_hint=partition_hint,
                 excluded=options.excluded,
             )
+        except JointInfeasibleError:
+            if contextual_resolved or request.partial_layout:
+                raise
+            return _plan(
+                rendered,
+                replace(request, partial_layout=True, inspect_layout=True),
+                rules,
+                selections,
+                options,
+                None,
+                work=context.work,
+            )
         except JointExhaustedError as error:
             _logger.debug("Joint allocation exhausted without a certified layout: %s", error.diagnostics)
             raise
@@ -247,7 +264,21 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
             cache.remember_partitions(
                 cache_key, {key: region.cuts for key, region in result.allocation.regions.items()}
             )
-        return RetainedComposition.prepare(document, request, options, planned).present(options=options)
+        presented = RetainedComposition.prepare(document, request, options, planned).present(options=options)
+        if request.partial_layout:
+
+            def replan_view(pages: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
+                return _plan(
+                    rendered,
+                    replace(request, partial_layout=False),
+                    rules,
+                    selections,
+                    replace(options, pages=pages),
+                    None,
+                )
+
+            return replace(presented, allocation=None, page_selector=replan_view)
+        return presented
     candidate = select_composition(
         SemanticOccurrence(OccurrenceId(("root",)), graph, root), rules, context, selections=selections
     )

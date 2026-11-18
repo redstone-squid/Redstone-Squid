@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from squid_ui.authoring.presentations import Budget
 from squid_ui.authoring.semantic import Budgeted
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.layout import FactUnavailableError
 from squid_ui.native import NativeTraits
 from squid_ui.overflow import RoutedPage, resolve_page
 from squid_ui.planning.allocation import CertifiedPage, PageFamily
@@ -212,7 +213,11 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         snapshot = layout.snapshot if self.context.inspect_layout else None
         for coordinates, visible in family.combinations(self.context, selected):
             self.context.work.consume()
-            visible = family.contextualize(visible, layout.for_view(dict(coordinates)), self.context)
+            if family.regions:
+                try:
+                    visible = family.contextualize(visible, layout.for_view(dict(coordinates)), self.context)
+                except FactUnavailableError as error:
+                    return FamilyRejection((ConstraintViolation(visible.offer.occurrence.identity, str(error)),))
             try:
                 admitted = evaluate_composition(visible, self.rules, self.context)
             except SharedResourceConflictError as error:

@@ -14,6 +14,7 @@ from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.layout import Known, RegionRef
 from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.overflow import FIRST_PAGE, RoutedPage
 from squid_ui.pages import PagePosition
@@ -131,7 +132,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         fingerprint = self.fingerprint
         graph = self.graph
         overrides = {**request.presentation.pending_positions, **(request.positions or {})}
-        coordinator = CursorCoordinator(request.presentation, request.chrome, overrides=overrides)
+        coordinator = CursorCoordinator(request.presentation, overrides=overrides)
         coordinates: dict[OccurrenceId, int] = {}
         requests: dict[OccurrenceId, MaterializedCursorRequest] = {}
         positions: dict[OccurrenceId, PagePosition] = {}
@@ -196,8 +197,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                     if stored.position.anchor is not None and stored.position.anchor in covered:
                         anchors[stored.position.anchor] = stored.position.page
             cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
-            grant = coordinator.grant(cursor)
-            position = grant.position
+            position = coordinator.grant(cursor)
             if identity in options.pages:
                 position = PagePosition(page=max(0, min(options.pages[identity], len(region.cuts) - 1)))
             coordinates[identity] = position.page
@@ -207,6 +207,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             msg = "page coordinates contain an unknown region occurrence"
             raise LayoutInvariantError(msg)
         visible = allocation.visible(coordinates)
+        selected = allocation.select(coordinates)
         reports: list[RegionReport] = []
         retained: set[str] = set()
         for identity, region in allocation.regions.items():
@@ -222,10 +223,14 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 RegionReport(region.cursor_key, region.allocation, len(region.cuts), position.page, selected_anchor)
             )
             if identity in visible:
-                coordinator.record(cursor, position, anchor=selected_anchor)
+                count = (
+                    selected.layout.region(RegionRef(region.source_prefix)).count
+                    if selected.layout is not None
+                    else Known(len(region.cuts))
+                )
+                coordinator.record(cursor, position, anchor=selected_anchor, count=count)
             elif not isinstance(cursor.owner, Controlled | RoutedPage):
                 retained.add(region.cursor_key)
-        selected = allocation.select(coordinates)
         output = replace(selected.scene, pagers=coordinator.pagers)
         updates = list(coordinator.updates[:-1])
         active = coordinator.updates[-1]
@@ -286,7 +291,8 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             ),
         )
         updates.append(RegionLayoutUpdate(layout))
-        updates.append(RetainedCompositionUpdate(self))
+        if not request.partial_layout:
+            updates.append(RetainedCompositionUpdate(self))
 
         return replace(
             selected,

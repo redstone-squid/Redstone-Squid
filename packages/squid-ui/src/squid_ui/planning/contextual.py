@@ -298,12 +298,6 @@ class ContextualResolution[R, BodyT: scene.Body]:
                             ),
                         ),
                     ),
-                    scene=replace(
-                        result.scene,
-                        pagers=tuple(pager.model_copy(update={"pages": None}) for pager in result.scene.pagers),
-                    )
-                    if self.partial
-                    else result.scene,
                     certificate=CertificateScope.VIEW
                     if self.partial or self.view_dependent
                     else CertificateScope.FAMILY,

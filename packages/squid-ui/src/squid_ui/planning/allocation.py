@@ -58,7 +58,7 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
         cuts: tuple[tuple[int, ...], ...],
         context: PlanningContext,
     ) -> PageFamily[RenderTargetT, ContextT, PayloadT]:
-        """Build a page family from legal region cuts and their navigation chrome."""
+        """Build source fragments from legal cuts; contextual chrome is resolved per view."""
         allocated: dict[OccurrenceId, RegionAllocation[RenderTargetT, ContextT, PayloadT]] = {}
         for node, ends in zip(regions, cuts, strict=True):
             context.work.consume()

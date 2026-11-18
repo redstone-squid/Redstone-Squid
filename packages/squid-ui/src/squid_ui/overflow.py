@@ -103,7 +103,8 @@ class Paginate:
     `RoutedPage(value, route, seek_route)` supplies the same page through persistent routes.
 
     For `Lines`, `per` groups that many entries per page even when space remains.
-    Pages that exceed the text budget are split further. `footer` receives the captured layout context and replaces this node's default footer.
+    Pages that exceed the text budget are split further. `footer` receives the captured
+    layout context and replaces this node's default footer.
 
     `min_fill` is a preferred character count on non-final pages. `widows` is the
     preferred minimum number of fragments on the final page. Both are soft goals:

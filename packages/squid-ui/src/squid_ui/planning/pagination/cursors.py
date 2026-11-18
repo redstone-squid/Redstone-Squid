@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 from hashlib import blake2s
 
 from squid_ui import scene
-from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
+from squid_ui.layout import Fact, Known
 from squid_ui.overflow import FIRST_PAGE, PageOwnership, RoutedPage, resolve_page
 from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
 from squid_ui.presentation_state import (
@@ -53,12 +53,6 @@ def recover_anchor(anchor: str | None, previous: tuple[str, ...], available: Map
     return None
 
 
-@dataclass(frozen=True, slots=True)
-class CursorGrant:
-    position: PagePosition
-    extent: int
-
-
 def content_fingerprint(parts: Sequence[str]) -> str:
     """Hash the identity of all content owned by a materialized slicer."""
     digest = blake2s(digest_size=16)
@@ -71,21 +65,20 @@ def content_fingerprint(parts: Sequence[str]) -> str:
 
 @dataclass(slots=True)
 class CursorCoordinator:
-    """Coordinate page positions, navigation, and staged updates for one candidate.
+    """Coordinate page positions and staged updates for one candidate.
 
     Give each candidate its own coordinator so a rejected layout cannot change
     remembered positions or contribute pagers to the selected scene.
     """
 
     session: PresentationState
-    chrome: Chrome
     overrides: Mapping[str, PagePosition] | None = None
     policy: PagePositionPolicy = resolve_page_position
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
 
-    def grant(self, request: MaterializedCursorRequest) -> CursorGrant:
+    def grant(self, request: MaterializedCursorRequest) -> PagePosition:
         """Resolve one keyed position through the shared precedence policy.
 
         A controlled page skips that policy: the application's value wins, clamped to the extent.
@@ -93,7 +86,7 @@ class CursorCoordinator:
         extent = max(1, request.extent)
         owner = request.owner
         if isinstance(owner, Controlled | RoutedPage):
-            return CursorGrant(PagePosition(page=resolve_page(owner.value, extent)), extent)
+            return PagePosition(page=resolve_page(owner.value, extent))
         cursor = self.session.cursor(request.key)
         anchor = recover_anchor(cursor.position.anchor, cursor.source_order, request.anchors or {})
         anchored_page = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
@@ -102,7 +95,7 @@ class CursorCoordinator:
             revealed = request.anchors.get(owner.anchor)
             if revealed is not None and override is None:
                 override = PagePosition(owner.anchor, revealed)
-        position = self.policy(
+        return self.policy(
             override=override,
             anchored=PagePosition(anchor, anchored_page) if anchored_page is not None else None,
             stale=bool(cursor.fingerprint and cursor.fingerprint != request.fingerprint),
@@ -110,7 +103,6 @@ class CursorCoordinator:
             initial=PagePosition(page=resolve_page(owner.initial, extent)),
             upper_bound=extent - 1,
         )
-        return CursorGrant(position, extent)
 
     def record(
         self,
@@ -118,6 +110,7 @@ class CursorCoordinator:
         position: PagePosition,
         *,
         anchor: str | None = None,
+        count: Fact[int],
     ) -> None:
         """Stage the cursor and scene pager produced by a materialized slice."""
         if request.key in self._granted:
@@ -130,7 +123,12 @@ class CursorCoordinator:
         resolved = PagePosition(anchor, position.page)
         if extent > 1:
             self._pagers.append(
-                scene.Pager(key=request.key, page=resolved.page, pages=extent, content_fingerprint=request.fingerprint)
+                scene.Pager(
+                    key=request.key,
+                    page=resolved.page,
+                    pages=count.value if isinstance(count, Known) else None,
+                    content_fingerprint=request.fingerprint,
+                )
             )
         if not isinstance(request.owner, Controlled | RoutedPage):
             self._updates.append(

@@ -9,6 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.html as html
 from squid_reactivity import ReactiveWriteError
 from squid_ui.authoring.semantic import Paragraph
+from squid_ui.ext.discord import testing as discord_testing
 from squid_ui.planning import plan
 from squid_ui.planning.pagination.navigation import NavigationContext, NavNode, default_nav
 from squid_ui.selectors import select
@@ -96,3 +97,53 @@ def test_builtin_chrome_applies_the_contextual_effect_guard() -> None:
     with pytest.raises(ReactiveWriteError):
         plan(sl.bullets("a", "b", key="results", group_size=1), target=html.target(), nav=invalid_nav)
     assert counter.value == 0
+
+
+def test_builtin_pagination_certifies_a_view_without_an_authored_context() -> None:
+    result = plan(
+        sl.bullets(
+            sl.bullet("a" * 2100, key="first"),
+            sl.bullet("b" * 5000, key="middle"),
+            sl.bullet("c" * 2100, key="last"),
+            key="results",
+            group_size=1,
+        ),
+        target=discord_testing.target_profile("builtin-partial"),
+    )
+    assert result.certificate is sl.planning.CertificateScope.VIEW
+    assert result.allocation is None
+    assert result.layout is not None
+    region = result.layout.region(sl.region_ref("results"))
+    assert region.groups == sl.Known(3)
+    assert isinstance(region.count, sl.Unknown)
+    assert region.navigation is not None and region.navigation.extent is None
+    assert region.navigation.on_seek is None
+    assert all(pager.pages is None for pager in result.scene.pagers)
+    assert "Page 1 of 3" not in sl.scene.Codec.dumps(result.scene)
+    later = result.for_page({region.identity: 2})
+    assert "c" * 2100 in sl.scene.Codec.dumps(later.scene)
+    assert later.layout is not None
+    selected = later.layout.region(sl.region_ref("results")).selection.require()
+    assert selected is not None and isinstance(selected.number, sl.Unknown)
+    with pytest.raises(sl.planning.JointInfeasibleError):
+        result.for_page({region.identity: 1})
+    assert "a" * 2100 in sl.scene.Codec.dumps(result.scene)
+
+
+def test_custom_footer_handles_unknown_facts_in_the_same_context() -> None:
+    def footer(ctx: sl.LayoutContext) -> str:
+        return "More" if isinstance(ctx.region().count, sl.Unknown) else "Known"
+
+    result = plan(
+        sl.paged(
+            sl.stack(sl.unbreakable(sl.paragraph("a" * 40)), sl.unbreakable(sl.paragraph("b" * 80))),
+            key="body",
+            chars=50,
+            footer=footer,
+        ),
+        target=html.target(),
+    )
+    assert result.certificate is sl.planning.CertificateScope.VIEW
+    assert "More" in html.Renderer().draw(result.scene)
+    assert "Known" not in html.Renderer().draw(result.scene)
+    assert all(pager.pages is None for pager in result.scene.pagers)

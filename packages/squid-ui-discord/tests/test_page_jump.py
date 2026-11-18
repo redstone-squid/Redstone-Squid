@@ -15,9 +15,8 @@ from squid_ui.ext.discord.primitives import Lines, Paginate, Row, Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordTarget
 from squid_ui.ext.discord.testing import commit_classic_render, commit_render, interaction_harness, query
 from squid_ui.interactions.forms import IntField
-from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, plan
-from squid_ui.planning.pagination.navigation import NavigationContext, materialized_navigation_state
+from squid_ui.planning.pagination.navigation import NavigationContext, NavigationState
 from squid_ui.selectors import select as select_node
 
 
@@ -194,7 +193,18 @@ async def test_two_pagers_keep_separate_forms_and_positions() -> None:
 
 @pytest.mark.parametrize("page,pages,seekable", [(None, 100, True), (0, None, True), (0, 1, True), (0, 100, False)])
 def test_jump_is_omitted_without_an_addressable_range(page, pages, seekable: bool) -> None:
-    state = replace(materialized_navigation_state("rows", PagePosition(), 100, DEFAULT_CHROME), page=page, extent=pages)
+    state = NavigationState(
+        key="rows",
+        has_previous=True,
+        has_next=True,
+        backward=True,
+        previous_label="Previous",
+        next_label="Next",
+        previous_key="previous",
+        next_key="next",
+        page=page,
+        extent=pages,
+    )
 
     async def turn(_event) -> None:
         pass

@@ -197,7 +197,7 @@ class FamilyLayout:
         self.counts = {
             identity: len(region.pages) if any(region.anchors) else 0 for identity, region in family.regions.items()
         }
-        self.groups = {}
+        self.groups: dict[OccurrenceId, int | None] = {}
         for identity, ref in self.region_refs.items():
             unit = graph.units.get(SemanticRef(ref.keys))
             self.groups[identity] = (
@@ -211,7 +211,7 @@ class FamilyLayout:
         return self._snapshot
 
     def regions(self, selected: Mapping[OccurrenceId, int], *, complete: bool) -> dict[RegionRef, RegionFacts]:
-        result = {}
+        result: dict[RegionRef, RegionFacts] = {}
         unknown = Unknown(UnknownReason.INCOMPLETE, "only this view was resolved")
         unknown_index = Unknown(UnknownReason.INCOMPLETE, "preceding rendered pages have not been certified")
         for identity, ref in self.region_refs.items():

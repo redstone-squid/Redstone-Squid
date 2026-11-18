@@ -41,16 +41,15 @@ MATERIALIZED_SEEK_KEY = "__cursor_seek"
 class PageCommit(_HandlerComposition):
     """Send a page turn on one materialized pager to whoever owns its page.
 
-    Shared pagination stages an uncontrolled page request until delivery commits
-    the display; legacy pagination moves the cursor immediately. A controlled page
-    goes to the application's `on_change`, which decides whether to accept it.
+    An uncontrolled page request is staged until delivery commits the display.
+    A controlled page goes to the application's `on_change`, which decides whether
+    to accept it.
     """
 
     owner: Ownership[int, PageEvent]
     key: str
     extent: int
     session: PresentationState
-    staged: bool = False
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -67,10 +66,7 @@ class PageCommit(_HandlerComposition):
             case Uncontrolled():
                 # No explicit acknowledgement: the frontend answers the press by editing the
                 # message in place, so a page turn costs one response instead of two.
-                if self.staged:
-                    self.session.request_cursor(self.key, PagePosition(page=page))
-                else:
-                    self.session.move_cursor(self.key, PagePosition(page=page))
+                self.session.request_cursor(self.key, PagePosition(page=page))
                 event.invalidate()
 
 
@@ -289,25 +285,6 @@ def page_size_form(page_size: int, *, maximum: int | None = None, chrome: Chrome
     )
 
 
-def materialized_navigation_state(key: str, position: PagePosition, extent: int, chrome: Chrome) -> NavigationState:
-    """Build the navigation facts shared by every materialized slicer."""
-    return NavigationState(
-        key=key,
-        has_previous=position.page > 0,
-        has_next=position.page < extent - 1,
-        backward=True,
-        previous_label=chrome.previous,
-        next_label=chrome.next,
-        previous_key=f"{MATERIALIZED_PREVIOUS_KEY}.{key}",
-        next_key=f"{MATERIALIZED_NEXT_KEY}.{key}",
-        extent=extent,
-        page=position.page,
-        seek_key=f"{MATERIALIZED_SEEK_KEY}.{key}",
-        seek_label=chrome.jump_to_page,
-        page_option=chrome.page_option,
-    )
-
-
 def materialized_navigation(
     key: str,
     position: PagePosition,
@@ -322,10 +299,20 @@ def materialized_navigation(
 ) -> NavigationContext:
     """Bind legal destinations while exposing only established ordinal/count facts."""
     page = position.page
-    state = replace(
-        materialized_navigation_state(key, position, extent, chrome),
+    state = NavigationState(
+        key=key,
+        has_previous=page > 0,
+        has_next=page < extent - 1,
+        backward=True,
+        previous_label=chrome.previous,
+        next_label=chrome.next,
+        previous_key=f"{MATERIALIZED_PREVIOUS_KEY}.{key}",
+        next_key=f"{MATERIALIZED_NEXT_KEY}.{key}",
         page=selection.index.value if selection is not None and isinstance(selection.index, Known) else None,
         extent=count.value if isinstance(count, Known) else None,
+        seek_key=f"{MATERIALIZED_SEEK_KEY}.{key}",
+        seek_label=chrome.jump_to_page,
+        page_option=chrome.page_option,
     )
     seekable = state.page is not None and state.extent is not None
     if route_prefix is not None:
@@ -344,7 +331,7 @@ def materialized_navigation(
             owner.jump_route(page, extent) if seekable and owner.jump_route is not None else None,
             chrome=chrome,
         )
-    commit = PageCommit(owner, key, extent, session, staged=True)
+    commit = PageCommit(owner, key, extent, session)
     return NavigationContext(
         state,
         TurnPage(commit, page - 1),
@@ -369,7 +356,6 @@ __all__ = [
     "TurnPage",
     "default_nav",
     "materialized_navigation",
-    "materialized_navigation_state",
     "page_jump_form",
     "page_select_nav",
     "page_size_button",

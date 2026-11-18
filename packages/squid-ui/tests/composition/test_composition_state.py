@@ -104,11 +104,23 @@ async def test_controlled_negative_page_dispatches_without_cursor_writes() -> No
     assert selected == []
 
 
-def test_custom_navigation_cost_changes_feasibility() -> None:
+def test_custom_navigation_cost_can_require_view_scoped_fallback() -> None:
     target = replace(V2, limits=V2Limits(total_components=6))
-    plan(content(), target=target, nav=default_nav, composition=OPTIONS)
+    complete = plan(content(), target=target, nav=default_nav, composition=OPTIONS)
+    assert complete.certificate is sl.planning.CertificateScope.FAMILY
+    partial = plan(content(), target=target, nav=page_select_nav, composition=OPTIONS)
+    assert partial.certificate is sl.planning.CertificateScope.VIEW
+    assert partial.cost.within(target.limits.capacities)
+    assert partial.layout is not None
+    assert isinstance(partial.layout.region(sl.region_ref("r")).count, sl.Unknown)
+    assert not any(
+        isinstance(node, discord_scene.Select)
+        for node in partial.scene.expect_body(discord_scene.ComponentsV2).children
+    )
+    assert all(pager.pages is None for pager in partial.scene.pagers)
+    smaller = replace(V2, limits=V2Limits(total_components=3))
     with pytest.raises(sl.planning.JointInfeasibleError):
-        plan(content(), target=target, nav=page_select_nav, composition=OPTIONS)
+        plan(content(), target=smaller, nav=page_select_nav, composition=OPTIONS)
 
 
 def test_controlled_cursor_movement_retains_allocation(monkeypatch: pytest.MonkeyPatch) -> None:

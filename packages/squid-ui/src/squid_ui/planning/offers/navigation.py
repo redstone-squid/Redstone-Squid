@@ -48,10 +48,8 @@ from squid_ui.planning.semantic_index import UnsupportedSemanticError
 
 
 @dataclass(frozen=True, slots=True)
-class PaginationContent:
+class _PaginationContent:
     factory: PlannedNav | None
-    mounted: bool
-    disabled_controls: bool
     footer: Callable[[LayoutContext], TextLike] | None
 
     def __call__(self, ctx: LayoutContext) -> DocumentLike[Any, Any]:
@@ -67,39 +65,14 @@ class PaginationContent:
         elif selection is not None and isinstance(selection.number, Known) and isinstance(total, Known):
             label = navigation.chrome.page_footer(selection.number.value, total.value)
         footer = (sem.Paragraph(label, key="footer"),) if label is not None else ()
-        if self.mounted:
-            controls = self.factory(navigation) if self.factory is not None else ()
-            return (*footer, *cast(tuple[sem.LayoutNode[Any, Any], ...], tuple(controls)))
-        state = navigation.state
-        previous = (
-            (
-                sem.RoutedActionControl(
-                    state.previous_key,
-                    state.previous_label,
-                    cast(str, navigation.on_previous),
-                    available=state.has_previous,
-                ),
-            )
-            if state.has_previous or self.disabled_controls
-            else ()
-        )
-        following = (
-            (
-                sem.RoutedActionControl(
-                    state.next_key, state.next_label, cast(str, navigation.on_next), available=state.has_next
-                ),
-            )
-            if state.has_next or self.disabled_controls
-            else ()
-        )
-        return cast(tuple[sem.LayoutNode[Any, Any], ...], (*previous, *footer, *following))
+        controls = self.factory(navigation) if self.factory is not None else ()
+        return (*footer, *cast(tuple[sem.LayoutNode[Any, Any], ...], tuple(controls)))
 
 
 @dataclass(frozen=True, slots=True)
-class PaginationRealization[R, C]:
+class _PaginationRealization[R, C]:
     occurrence: SemanticOccurrence[R, C]
     disabled_controls: bool
-    mounted: bool
 
     def __call__(
         self, document: Document[R, C], context: PlanningContext
@@ -113,7 +86,7 @@ class PaginationRealization[R, C]:
                 (
                     *self.occurrence.identity.path,
                     "@navigation",
-                    "footer" if self.mounted and isinstance(node, sem.Paragraph) else str(index),
+                    str(index),
                 )
             )
             placed = replace(
@@ -135,10 +108,10 @@ def pagination_chrome[R, C](
     *,
     default_controls: bool = False,
 ) -> ContextualChrome[R, C, Realization]:
-    factory = context.navigation or (default_nav if default_controls else None)
+    factory = context.navigation or (default_nav if default_controls or not context.mounted else None)
     return ContextualChrome(
-        contextual(PaginationContent(factory, context.mounted, disabled_controls, footer), key="@pagination"),
-        PaginationRealization(occurrence, disabled_controls, context.mounted),
+        contextual(_PaginationContent(factory, footer), key="@pagination"),
+        _PaginationRealization(occurrence, disabled_controls),
     )
 
 
