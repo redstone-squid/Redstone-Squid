@@ -103,6 +103,7 @@ def bullets(
     key: str,
     ordered: bool = False,
     page_size: int | None = None,
+    group_size: int | None = None,
     page: PageOwnership = FIRST_PAGE,
 ) -> List:
     """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page."""
@@ -113,6 +114,7 @@ def bullets(
         ordered,
         page_size,
         page,
+        group_size=group_size,
     )
 
 

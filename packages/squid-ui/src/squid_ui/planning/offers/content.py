@@ -220,7 +220,7 @@ def _list_offers[RenderTargetT, ContextT](
             zip(occurrence.graph.children.get(occurrence.reference, ()), value.items, strict=True)
         )
     )
-    per = value.page_size
+    per = value.group_size or value.page_size
     required: list[int] = []
     expanded: list[ReferencedText] = []
     capacity = scope.text_capacity
@@ -245,11 +245,12 @@ def _list_offers[RenderTargetT, ContextT](
     items = tuple(expanded)
     payload = TextSequenceRealization(items, list_ordered=value.ordered if value.markers else None)
     units = tuple(frozenset({item.reference}) for item in items)
-    fragments = (
-        FragmentContract(units, tuple(range(1, len(items) + 1)), payload.fragment, continuations=True)
-        if items
-        else None
+    legal_ends = (
+        tuple(dict.fromkeys((*required, len(items))))
+        if value.group_size is not None
+        else tuple(range(1, len(items) + 1))
     )
+    fragments = FragmentContract(units, legal_ends, payload.fragment, continuations=True) if items else None
     contract = RegionContract(
         value.key,
         RegionNavigation(
@@ -270,7 +271,7 @@ def _list_offers[RenderTargetT, ContextT](
         fragments=fragments,
         region=None if isinstance(value, RosterMembers) else contract,
     )
-    if (not scope.spill and not isinstance(value, RosterMembers)) or not value.items:
+    if value.group_size is not None or (not scope.spill and not isinstance(value, RosterMembers)) or not value.items:
         return (complete,)
     originals = tuple(
         ReferencedText(

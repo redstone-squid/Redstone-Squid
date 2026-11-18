@@ -295,9 +295,9 @@ class ListItem:
 class List(Adaptable[RenderTarget]):
     """A keyed list with application-owned or remembered paging.
 
-    HTML uses `page_size` when supplied. Discord also pages on text overflow and
-    may split a count-based page further. Ordered numbering spans the full list;
-    `markers=False` leaves entries unmarked.
+    page_size limits item count but allows further splits to fit. group_size
+    fixes consecutive groups: each group must fit using permitted adaptations
+    or planning fails. Ordered numbering spans the full list.
     """
 
     items: tuple[ListItem, ...]
@@ -306,8 +306,20 @@ class List(Adaptable[RenderTarget]):
     page_size: int | None = None
     page: PageOwnership = FIRST_PAGE
     markers: bool = field(default=True, kw_only=True)
+    group_size: int | None = field(default=None, kw_only=True)
+
+    @property
+    def group_count(self) -> int | None:
+        """Count authored groups, without claiming that they fit the target."""
+        return (len(self.items) + self.group_size - 1) // self.group_size if self.group_size is not None else None
 
     def __post_init__(self) -> None:
+        if self.group_size is not None and self.group_size < 1:
+            message = "List.group_size must be positive"
+            raise ValueError(message)
+        if self.group_size is not None and self.page_size is not None:
+            message = "choose group_size for fixed groups or page_size for a maximum"
+            raise ValueError(message)
         if self.page_size is not None and self.page_size < 1:
             message = "List.page_size must be positive"
             raise ValueError(message)
