@@ -9,7 +9,7 @@ from squid_ui.scene import Codec
 # Importing these vocabularies registers the schemas included in this artifact.
 _SCENE_VOCABULARIES = (discord_scene, html_scene, slack_scene)
 
-SCHEMA_ARTIFACT = Path(__file__).parents[3] / "docs" / "schema" / "scene-v1.schema.json"
+SCHEMA_ARTIFACT = Path(__file__).parents[3] / "docs" / "public" / "schema" / "scene-v1.schema.json"
 
 
 def test_documentation_schema_matches_codec() -> None:

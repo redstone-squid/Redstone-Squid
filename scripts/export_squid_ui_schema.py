@@ -13,7 +13,7 @@ _SCENE_VOCABULARIES = (discord_scene, html_scene, slack_scene)
 
 def main() -> None:
     """Write the canonical, human-readable scene protocol schema."""
-    destination = Path(__file__).parents[1] / "docs" / "schema" / "scene-v1.schema.json"
+    destination = Path(__file__).parents[1] / "docs" / "public" / "schema" / "scene-v1.schema.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(Codec.schema_json(indent=2) + "\n", encoding="utf-8")
 

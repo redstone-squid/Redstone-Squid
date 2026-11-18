@@ -31,4 +31,3 @@ Add `--storage-postgres` to include PostgreSQL through Docker, or supply
 test creates and removes an isolated schema; the test role needs permission to create schemas.
 
 - [Suite overview](https://redstone-squid.github.io/Redstone-Squid/squid-ui/)
-- [API map](https://redstone-squid.github.io/Redstone-Squid/squid-ui-api/)

@@ -4,40 +4,27 @@ site_url = "https://redstone-squid.github.io/Redstone-Squid/"
 site_description = "A Discord bot for managing Minecraft redstone build submissions."
 repo_url = "https://github.com/redstone-squid/Redstone-Squid"
 repo_name = "redstone-squid/Redstone-Squid"
-edit_uri = "edit/master/docs/"
-docs_dir = "docs"
+edit_uri = "edit/master/docs/public/"
+docs_dir = "docs/public"
 site_dir = "site"
 
 
-# Navigation: the framework docs and bot guides. Pages not listed here (docs/plans,
-# docs/decisions, translated READMEs) still build and remain searchable and linkable,
-# but stay out of the reader-facing tree.
 [[project.nav]]
 Home = "index.md"
 
 [[project.nav]]
-"Squid UI" = [
-    { Overview = "squid-ui.md" },
-    { Quickstart = "squid-ui-quickstart.md" },
-    { "Slack compile" = "squid-ui-slack-quickstart.md" },
-    { "API map" = "squid-ui-api.md" },
-    { Architecture = "squid-ui-architecture.md" },
-    { Vocabulary = "squid-vocabulary.md" },
+"Redstone Squid" = [
+    { "Use the bot" = "use-the-bot.md" },
+    { "Run your own instance" = "docker.md" },
 ]
 
 [[project.nav]]
-Bot = [
-    { "Screen conventions" = "bot-screens.md" },
-    { Internationalization = "i18n.md" },
-    { Notifications = "notifications.md" },
-    { "Edits and history" = "edits.md" },
-    { "Error reports" = "error-reports.md" },
-    { "Action ledger" = "action-ledger.md" },
-    { "Credential hashing" = "credential-hashing.md" },
-    { "Media normalization" = "media-normalization.md" },
-    { "Running with Docker" = "docker.md" },
-    { "Adding a build attribute" = "new-build-attribute.md" },
-    { "Writing a migration" = "new-migration.md" },
+"Squid UI" = [
+    "squid-ui.md",
+    "squid-ui-quickstart.md",
+    "squid-ui-architecture.md",
+    "squid-ui-slack-quickstart.md",
+    "reference/squid-reactivity.md",
 ]
 
 [project.theme]

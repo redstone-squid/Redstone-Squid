@@ -54,7 +54,7 @@ UI_PUBLIC_PACKAGES = (
 )
 
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
-"""Preferred verbs for the distinct lifetime operations described in `docs/squid-ui-architecture.md`."""
+"""Preferred verbs for the distinct lifetime operations."""
 
 OBJECT_ENDING_VERBS = frozenset({"close", "finish"})
 """A class may expose either `close` or `finish` to end its own lifetime.

@@ -163,7 +163,11 @@ class HelpScreen(sd.Screen):
         links: list[sl.semantic.Link] = [
             sl.link(tr(t"help-source = Source"), project_url, key="source"),
             sl.link(tr(t"help-submission-form = Submission form"), SUBMISSION_FORM_URL, key="form"),
-            sl.link(tr(t"help-documentation = Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(
+                tr(t"help-documentation = Documentation"),
+                f"{project_url}/blob/master/docs/public/index.md",
+                key="docs",
+            ),
             sl.link(tr(t"help-regulations = Regulations"), REGULATIONS_URL, key="regulations"),
         ]
         if self._bot.user is not None:

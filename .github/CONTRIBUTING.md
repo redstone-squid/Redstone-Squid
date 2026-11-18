@@ -47,7 +47,7 @@ remain available.
 
 - Names in each package's `__all__` are the supported public surface and are snapshot-tested in
   `packages/*/tests/test_public_api.py`. Adding a public name means adding it there, documenting
-  it, and covering it in the package's reference page under `docs/reference/`.
+  it, and updating the relevant public guide under `docs/public/` or the package README.
 - Import boundaries between the packages are enforced by `tests/architecture/test_boundaries.py`;
   portable packages must not acquire transport or storage imports.
 - All six distributions release in lockstep at one version. User-visible changes belong in

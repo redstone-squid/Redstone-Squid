@@ -41,9 +41,9 @@ REQUIRED_FILES = (
 # Files that may pin the version in install instructions; not every README does.
 OPTIONAL_FILES = (
     *(Path("packages") / name / "README.md" for name in DISTRIBUTIONS),
-    Path("docs/squid-ui.md"),
-    Path("docs/squid-ui-quickstart.md"),
-    Path("docs/squid-ui-slack-quickstart.md"),
+    Path("docs/public/squid-ui.md"),
+    Path("docs/public/squid-ui-quickstart.md"),
+    Path("docs/public/squid-ui-slack-quickstart.md"),
 )
 # Files that legitimately carry the literal without pinning the release: adapter
 # profiles state a compatibility *floor*, which does not move on every bump.

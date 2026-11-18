@@ -1,62 +1,31 @@
-# Docker Setup for Redstone Squid
+# Deploy Redstone Squid
 
-## Quick Start
+Start with the [Compose setup guide](public/docker.md) for a new instance.
+Keep the production `.env` on the host and use the same database credentials
+across the services.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/redstone-squid/Redstone-Squid.git
-   cd Redstone-Squid
-   ```
+## Release deployments
 
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual credentials
-   ```
+The production workflow publishes two immutable images. The API and bot use
+one image, and the worker uses a separate image with the optional schematic
+engine. The host needs Docker Compose, `.env`, and the deployment files that
+CI copies to it.
 
-3. **Build and run with Docker Compose:**
-   ```bash
-   docker compose up -d
-   ```
+CI authenticates to the host using the repository secrets `SSH_HOST`,
+`SSH_USER`, and `SSH_KEY`. Put the pinned OpenSSH host entry in
+`SSH_KNOWN_HOSTS`.
 
-4. **Check logs:**
-   ```bash
-   docker compose logs -f server
-   ```
+The deploy script runs Alembic using the new image before replacing the
+running services. It saves the previous image digests in
+`.deploy/previous-release` and restores them if the new services fail readiness.
+Plan schema changes so the previous application can still run against the
+upgraded database.
 
-## Manual Docker Commands
+## Shared gateway
 
-### Build the image:
-```bash
-docker build -t redstone-squid .
-```
-
-### Run the container:
-```bash
-docker run -d \
-  --name redstone-squid-bot \
-  --env-file .env \
-  -p 8000:8000 \
-  --restart unless-stopped \
-  redstone-squid
-```
-
-The dedicated worker build includes the pinned FFmpeg/ffprobe toolchain but leaves media processing disabled:
-
-```bash
-docker build --build-arg WITH_MEDIA=1 --build-arg WITH_SCHEMATICS=1 -t redstone-squid-worker .
-```
-
-See [Media processing deployment](media-processing.md) before setting `SQUID_MEDIA_ENABLED=true`; it
-documents the required paths, shared object storage, scratch-space arithmetic, and subprocess/container limits.
-
-## Shared gateway hosts
-
-The app repository owns the API, bot, worker, and website. Host infrastructure owns
-Caddy, TLS, DNS, and the shared external `edge` network. Caddy routes API paths to
-`redstone-api:8000` and catalogue pages to `redstone-web:4321`.
-
-Set these values in this checkout's ignored `.env` once:
+The host provides Caddy, TLS, DNS, and the external Docker network `edge`.
+Caddy sends API requests to `redstone-api:8000` and website requests to
+`redstone-web:4321`. Set these values in `.env`.
 
 ```dotenv
 COMPOSE_PROJECT_NAME=redstone-squid
@@ -64,45 +33,25 @@ COMPOSE_FILE=compose.yml:compose.override.yml:deploy/compose.edge.yml
 SITE_URL=https://squid.your-domain.com
 ```
 
-If this host needs `compose.render.yml`, insert it before `deploy/compose.edge.yml`
-in `COMPOSE_FILE`. Create the shared network with `docker network create edge` if
-the host infrastructure has not already created it. Then run:
+The edge configuration starts the website and loopback-only pgweb, attaches
+the API to the proxy network, and removes the API's host port. Create the
+`edge` network if the host does not already provide it. For same-origin browser
+authentication, the site's `API_BASE_URL` defaults to `SITE_URL`.
 
-```sh
-docker compose up -d --build --wait
-```
+Use plain `docker compose` commands to load the file list from `.env`.
+The release deploy script appends its image configuration to that list.
+Rebuild the website separately with `docker compose up -d --build --wait web`.
 
-The edge configuration starts the website and loopback-only pgweb, connects the API
-to Caddy, and removes the API's host port. Website settings come from the same
-`.env`; `API_BASE_URL` defaults to `SITE_URL` for same-origin browser authentication.
-See `.env.example` for optional website and network settings.
+## Health and logs
 
-Compose reads `COMPOSE_FILE` from `.env` for ordinary `up`, `logs`, and `ps`
-commands. Explicit `-f` arguments replace that selection, so use plain commands on
-configured hosts. See [Docker's Compose environment reference](https://docs.docker.com/compose/how-tos/environment-variables/envvars/#compose_file).
+The API serves `/livez` and `/readyz` on port 8000 by default. The bot and worker
+serve the same endpoints inside their containers on ports 8001 and 8002.
+Readiness checks include the database and schema. The API can fall back to
+local rate limiting while Redis is unavailable.
 
-`scripts/deploy.sh` also preserves this file selection when appending its immutable
-image configuration. Release cutover and rollback target the API, bot, worker, and
-Redis; rebuild the website separately with `docker compose up -d --build --wait web`.
+Use `docker compose logs api bot worker` to inspect standard output. The
+observability collector reads the rotating JSON files from the shared
+`squid-logs` volume. Each service keeps five backups per log file and rotates
+the active file at 32 MiB.
 
-## Updating
-
-To update the bot:
-
-```bash
-# Pull latest code
-git pull
-
-# Rebuild and restart
-docker compose up -d --build
-```
-
-## Stopping the Bot
-
-```bash
-# Stop and remove containers
-docker compose down
-
-# Stop, remove containers, and remove volumes
-docker compose down -v
-```
+For optional media workers, see [Media processing deployment](media-processing.md).

@@ -19,7 +19,7 @@ rewritten retroactively. For current code, read the recurring historical names a
 | `Composition`, `compose()` | `RenderedMessage`, `render_message()` |
 
 The applied source of truth is [the vocabulary](../../squid-vocabulary.md); the live system
-description is [the architecture guide](../../squid-ui-architecture.md).
+description is [the architecture guide](../../public/squid-ui-architecture.md).
 
 The audit behind these plans covered the whole package (~8k lines), the nine production
 consumers, and a comparison against CascadeUI

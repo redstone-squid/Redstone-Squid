@@ -79,8 +79,7 @@ without a listener or delivery runtime.
 
 - [Suite overview](https://redstone-squid.github.io/Redstone-Squid/squid-ui/)
 - [Quickstart](https://redstone-squid.github.io/Redstone-Squid/squid-ui-quickstart/)
-- [API map](https://redstone-squid.github.io/Redstone-Squid/squid-ui-api/)
-- [Architecture and ownership](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
+- [How a screen updates](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
 - [Scene protocol 1 schema](https://redstone-squid.github.io/Redstone-Squid/schema/scene-v1.schema.json)
 
 ## Component lifetime

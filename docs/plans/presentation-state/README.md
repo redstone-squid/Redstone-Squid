@@ -1,7 +1,7 @@
 # Readable presentation controls
 
 Implemented through placement-owned reactive cells. The public API is described
-in the [quickstart](../../squid-ui-quickstart.md#presentation-controls); the
+in the `sl.presentation` API; the
 [typing examples](../../../packages/squid-ui/tests/typing_presentation.py) check
 the actual implementation rather than a separate stub API.
 

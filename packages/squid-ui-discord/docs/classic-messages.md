@@ -99,7 +99,7 @@ Now the message is Squid's, and the same service function is called from an acti
 The standalone roots below require a running `UIExecutionHost` named `execution`,
 started with `await tasks.start(execution.run)` in a host-owned AnyIO task group.
 Finish the roots before closing the execution host; see the
-[quickstart](../../../docs/squid-ui-quickstart.md) for application runtime startup.
+[quickstart](../../../docs/public/squid-ui-quickstart.md) for application runtime startup.
 
 ```python
 class Door(sl.Component):

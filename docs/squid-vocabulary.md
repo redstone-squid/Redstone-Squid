@@ -5,8 +5,7 @@ retired vocabulary across public and private identifiers.**
 
 One dictionary for `squid-ui`, `squid-reactivity`, `squid-replication`, `squid-storage`,
 `squid-ui-discord`, `squid-ui-slack`, and `squid-ui-widgets`, covering head nouns, suffixes, callable verbs, and
-private identifiers. It is the naming source of truth referenced by
-[squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
+private identifiers.
 
 ## The rules
 

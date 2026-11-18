@@ -164,8 +164,7 @@ Storage stays optional. Importing `squid_ui.ext.discord` without a durability ex
 require `squid-storage`.
 
 - [Quickstart](https://redstone-squid.github.io/Redstone-Squid/squid-ui-quickstart/)
-- [API map](https://redstone-squid.github.io/Redstone-Squid/squid-ui-api/)
-- [Architecture and ownership](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
+- [How a screen updates](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
 - [Classic-message guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/classic-messages.md)
 - [Migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md)
 
