@@ -508,19 +508,19 @@ def _highlighted(value: SearchText) -> Text:
 def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
     """Describe a result with the same rows as the catalogue, with matched words in bold."""
     if isinstance(hit, BuildSearchHit):
+        if request.group_by_build and request.scope is SearchScope.RECORDS and hit.records:
+            # The matching-records detail lists every title held by this build.
+            record = _record_row(hit.records[0])
+            extra = len(hit.records) - 1
+            return record + f" (+{extra}) · #{hit.source_id}" if extra else record + f" · #{hit.source_id}"
         build = build_row(hit.source_id, _highlighted(hit.title_match or SearchText(hit.title)), hit.dimensions)
         if not request.group_by_build:
             return build
-        if request.scope is SearchScope.RECORDS and hit.records:
-            # A record search is about records: lead with the best one, then the build holding it.
-            others = hit.records[1:]
-            lines: list[sl.TextLike] = [_record_row(hit.records[0]), build]
-        else:
-            others = hit.records
-            # A build whose only record repeats its title adds nothing.
-            if len(others) == 1 and others[0].title == hit.title:
-                others = ()
-            lines = [build]
+        others = hit.records
+        # A build whose only record repeats its title adds nothing.
+        if len(others) == 1 and others[0].title == hit.title:
+            others = ()
+        lines: list[sl.TextLike] = [build]
         lines.extend(_record_row(record) for record in others[:2])
         if len(others) > 2:
             count = len(others) - 2
