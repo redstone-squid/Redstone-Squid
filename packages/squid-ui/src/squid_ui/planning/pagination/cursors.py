@@ -17,7 +17,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.layout import Fact, Known
 from squid_ui.overflow import FIRST_PAGE, PageOwnership, RoutedPage, resolve_page
-from squid_ui.pages import PagePosition, PagePositionPolicy, RevealPage, resolve_page_position
+from squid_ui.pages import InitialPage, PagePosition, PagePositionPolicy, resolve_page_position
 from squid_ui.presentation_state import (
     ActivePagers,
     CursorState,
@@ -91,7 +91,7 @@ class CursorCoordinator:
         anchor = recover_anchor(cursor.position.anchor, cursor.source_order, request.anchors or {})
         anchored_page = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
         override = None if self.overrides is None else self.overrides.get(request.key)
-        if isinstance(owner, RevealPage) and owner.request != cursor.reveal_request and request.anchors is not None:
+        if isinstance(owner, InitialPage) and request.key not in self.session.cursors and request.anchors is not None:
             assert isinstance(owner.anchor, str)
             revealed = request.anchors.get(owner.anchor)
             if revealed is not None and override is None:
@@ -119,7 +119,7 @@ class CursorCoordinator:
             raise LayoutInvariantError(message)
         self._granted.add(request.key)
         extent = max(1, request.extent)
-        if extent <= 1 and not isinstance(request.owner, RevealPage) and not request.source_order:
+        if extent <= 1 and not isinstance(request.owner, InitialPage) and not request.source_order:
             return
         resolved = PagePosition(anchor, position.page)
         if extent > 1:
@@ -139,7 +139,6 @@ class CursorCoordinator:
                         resolved,
                         extent,
                         request.fingerprint,
-                        request.owner.request if isinstance(request.owner, RevealPage) else None,
                         request.source_order,
                     ),
                     requested=self.session.pending_positions.get(request.key),

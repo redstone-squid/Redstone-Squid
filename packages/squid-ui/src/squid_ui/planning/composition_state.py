@@ -17,7 +17,7 @@ from squid_ui.interactions.ownership import Controlled
 from squid_ui.layout import ElementRef, Known, RegionRef
 from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.overflow import FIRST_PAGE, RoutedPage
-from squid_ui.pages import PagePosition, RevealPage
+from squid_ui.pages import InitialPage, PagePosition
 from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
@@ -28,6 +28,7 @@ from squid_ui.planning.pagination.cursors import CursorCoordinator, Materialized
 from squid_ui.planning.pagination.reuse import same_allocation_document
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
+from squid_ui.planning.reveals import RevealResolver
 from squid_ui.planning.semantic_index import ItemBranch, SemanticGraph, semantic_graph
 from squid_ui.planning.structure import disclosure_state, opened_item
 from squid_ui.presentation_state import (
@@ -36,6 +37,7 @@ from squid_ui.presentation_state import (
     RegionLayoutState,
     RegionLayoutUpdate,
     RetainedCompositionUpdate,
+    RevealsConsumed,
 )
 
 
@@ -133,6 +135,18 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
         graph = self.graph
         overrides = {**request.presentation.pending_positions, **(request.positions or {})}
         coordinator = CursorCoordinator(request.presentation, overrides=overrides)
+        resolutions = (
+            RevealResolver(graph).resolve(
+                tuple(request.presentation.pending_reveals.values()),
+                allocation.regions,
+                request.presentation.pending_position_sequence,
+            )
+            if request.presentation.pending_reveals
+            else ()
+        )
+        desired_reveals = {
+            region: page for resolution in resolutions for region, page in resolution.coordinates.items()
+        }
         coordinates: dict[OccurrenceId, int] = {}
         requests: dict[OccurrenceId, MaterializedCursorRequest] = {}
         positions: dict[OccurrenceId, PagePosition] = {}
@@ -196,7 +210,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                     covered = {anchor(ref.keys) for ref in region.anchors[stored.position.page]}
                     if stored.position.anchor is not None and stored.position.anchor in covered:
                         anchors[stored.position.anchor] = stored.position.page
-            if isinstance(owner, RevealPage) and isinstance(owner.anchor, ElementRef):
+            if isinstance(owner, InitialPage) and isinstance(owner.anchor, ElementRef):
                 reference = owner.anchor
                 matches = [
                     ref
@@ -227,6 +241,8 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 owner = replace(owner, anchor=resolved)
             cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
             position = coordinator.grant(cursor)
+            if identity in desired_reveals and key not in (request.positions or {}):
+                position = PagePosition(page=desired_reveals[identity])
             if identity in options.pages:
                 position = PagePosition(page=max(0, min(options.pages[identity], len(region.cuts) - 1)))
             coordinates[identity] = position.page
@@ -262,6 +278,11 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 retained.add(region.cursor_key)
         output = replace(selected.scene, pagers=coordinator.pagers)
         updates = list(coordinator.updates[:-1])
+        updates.append(
+            RevealsConsumed(
+                tuple(resolution.request for resolution in resolutions if resolution.settled(desired_reveals, visible))
+            )
+        )
         active = coordinator.updates[-1]
         assert isinstance(active, ActivePagers)
         # A closed disclosure hides its layout scopes without deleting their delivered cursors.

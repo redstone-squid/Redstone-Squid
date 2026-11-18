@@ -421,30 +421,28 @@ def test_the_solver_counts_the_nav_it_realized():
 
 
 @pytest.mark.parametrize("oversized", [False, True])
-def test_reveal_resolves_after_measurement_and_is_consumed_only_on_delivery(oversized: bool) -> None:
+def test_initial_anchor_resolves_after_measurement_and_is_consumed_only_on_delivery(oversized: bool) -> None:
     presentation = PresentationState()
     entries = tuple(sl.bullet("same " * (900 if oversized else 250), key=str(index)) for index in range(5))
-    document = sl.bullets(*entries, key="entries", page=sl.pages.RevealPage(anchor="3", request="visit-1"))
+    document = sl.bullets(*entries, key="entries", page=sl.pages.InitialPage(anchor="3"))
     first = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
     assert first.scene.pagers[0].page > 0
     assert not presentation.cursors
     retry = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
     assert retry.scene.pagers[0].page == first.scene.pagers[0].page
     presentation.apply_updates(first.session_updates)
-    assert presentation.cursor("entries").reveal_request == "visit-1"
+    assert "entries" in presentation.cursors
     presentation.move_cursor("entries", PagePosition(page=0))
     manual = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
     assert manual.scene.pagers[0].page == 0
 
 
-def test_single_page_reveal_is_consumed_without_navigation_chrome() -> None:
+def test_single_page_initial_anchor_is_consumed_without_navigation_chrome() -> None:
     presentation = PresentationState()
-    document = sl.bullets(
-        sl.bullet("Only entry", key="one"), key="entries", page=sl.pages.RevealPage(anchor="one", request="visit-1")
-    )
+    document = sl.bullets(sl.bullet("Only entry", key="one"), key="entries", page=sl.pages.InitialPage(anchor="one"))
     planned = sl.planning.plan(document, target=DISCORD_V2_DPY27, session=presentation)
     assert not planned.scene.pagers
     assert not presentation.cursors
     presentation.apply_updates(planned.session_updates)
-    assert presentation.cursor("entries").reveal_request == "visit-1"
+    assert "entries" in presentation.cursors
     assert presentation.cursor("entries").extent == 1

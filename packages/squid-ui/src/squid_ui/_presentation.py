@@ -15,6 +15,7 @@ from squid_ui.errors import LayoutInvariantError
 
 if TYPE_CHECKING:
     from squid_ui.interactions import ActionEvent
+    from squid_ui.layout import ElementRef
     from squid_ui.runtime.histories import History, HistoryField
 
 
@@ -147,6 +148,12 @@ class PresentationScope:
             raise LayoutInvariantError(msg)
         return ancestors[0]
 
+    def reveal(self, reference: ElementRef[object]) -> None:
+        if not self.active or self.cells.on_reveal is None:
+            message = "this presentation placement cannot request navigation"
+            raise LayoutInvariantError(message)
+        self.cells.on_reveal(self, reference)
+
     def bind[EventT](self, callback: Callable[[EventT], Awaitable[None]]) -> Callable[[EventT], Awaitable[None]]:
         """Retain interaction placement for an ad hoc form's later callback."""
 
@@ -199,6 +206,7 @@ class PresentationCells:
 
     def __init__(self) -> None:
         self.on_change: Callable[[], None] | None = None
+        self.on_reveal: Callable[[PresentationScope, ElementRef[object]], None] | None = None
         self.scopes: dict[tuple[Reactive, str], PresentationScope] = {}
         self._placements: dict[str, PresentationScope] = {}
         self.restored: dict[str, dict[str, Any]] = {}
@@ -219,8 +227,6 @@ class PresentationCells:
         return self.scopes[key]
 
     def for_key(self, key: str) -> PresentationScope | None:
-        if not any(scope.declarations for scope in self._placements.values()):
-            return None
         matches = [scope for scope in self._placements.values() if key.startswith(scope.path + ".")]
         if matches:
             return max(matches, key=lambda scope: len(scope.path))

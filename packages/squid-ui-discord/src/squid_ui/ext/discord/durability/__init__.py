@@ -368,7 +368,6 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
                 },
                 "extent": cursor.extent,
                 "fingerprint": cursor.fingerprint,
-                "reveal_request": cursor.reveal_request,
             }
             for key, cursor in state.cursors.items()
         },
@@ -384,7 +383,6 @@ def _presentation_from_wire(wire: WirePresentation) -> PresentationSnapshot:
                 PagePosition(item.position.anchor, item.position.offset),
                 item.extent,
                 item.fingerprint,
-                item.reveal_request,
             )
             for key, item in wire.cursors.items()
         },

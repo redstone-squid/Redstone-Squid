@@ -32,9 +32,11 @@ The empty flow has zero content pages and a known-absent selection.
 
 `sl.region(..., page_size=N)` caps breakable content units; an unbreakable row
 counts as one unit. Screens can declare all control windows and leave their selection
-to the runtime. `RevealPage(anchor=sl.element_ref(NodeType, "key"), request=token)`
-reveals keyed content once, including within a component namespace. Delivery consumes
-the intent; subsequent page turns remain runtime-owned.
+to the runtime. `InitialPage(anchor=sl.element_ref(NodeType, "key"))` chooses where a region first opens.
+Actions use `event.reveal(sl.element_ref(NodeType, "key"))` to navigate again, without
+storing request tokens. References resolve in the interaction placement and its ancestors.
+Requests survive failed delivery and are consumed after successful delivery; action rollback
+discards them. Later requests win when destinations conflict within one region.
 
 For lazy sources, `SourceCapabilities.fixed_groups` explicitly promises aligned,
 complete groups and consecutive neighbour positions. `list_source(...,

@@ -16,7 +16,7 @@ from squid_ui.context_keys import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.snapshot import PlanningSnapshot
-from squid_ui.presentation_state import PresentationState
+from squid_ui.presentation_state import PresentationState, RevealsConsumed
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.preparation import ComponentPreparation
@@ -590,6 +590,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._closed = True
         self._hide_removed({})
         self.presentation_cells.retain({})
+        self.presentation.apply_updates((RevealsConsumed(tuple(self.presentation.pending_reveals.values())),))
         self.discard()
         self.subscriptions.clear()
         visited: set[AnyComponent] = set()

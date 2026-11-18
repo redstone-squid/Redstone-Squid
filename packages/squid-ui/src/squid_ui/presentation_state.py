@@ -10,7 +10,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from squid_ui._presentation import PresentationCells
+from squid_ui._presentation import PresentationCells, PresentationScope
+from squid_ui.layout import ElementRef
 
 if TYPE_CHECKING:
     from squid_ui.planning.composition_state import RetainedComposition
@@ -25,8 +26,14 @@ class CursorState:
     position: PagePosition = FIRST_POSITION
     extent: int = 1
     fingerprint: str = ""
-    reveal_request: str | None = None
     source_order: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RevealRequest:
+    scope: PresentationScope
+    reference: ElementRef[object]
+    sequence: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +83,12 @@ class PresentationState:
     retained_composition: RetainedComposition | None = field(
         default=None, kw_only=True, repr=False, compare=False, metadata={"stable_identity": False}
     )
+    pending_reveals: dict[tuple[PresentationScope, ElementRef[object]], RevealRequest] = field(
+        default_factory=dict, kw_only=True, repr=False
+    )
+    _navigation_sequence: int = field(default=0, init=False, repr=False, compare=False)
     pending_positions: dict[str, PagePosition] = field(default_factory=dict, kw_only=True)
+    pending_position_sequence: dict[str, int] = field(default_factory=dict, kw_only=True, repr=False)
     region_layout: RegionLayoutState | None = field(default=None, kw_only=True)
     cursors: dict[str, CursorState] = field(default_factory=dict)
     selections: dict[str, SelectionState] = field(default_factory=dict)
@@ -86,6 +98,7 @@ class PresentationState:
 
     def __post_init__(self) -> None:
         self.declared.on_change = self._touch
+        self.declared.on_reveal = self.request_reveal
 
     @property
     def revision(self) -> int:
@@ -106,7 +119,6 @@ class PresentationState:
             PagePosition(selected.anchor, selected.page),
             extent=current.extent,
             fingerprint=current.fingerprint,
-            reveal_request=current.reveal_request,
             source_order=current.source_order,
         )
         if updated != current:
@@ -115,19 +127,28 @@ class PresentationState:
 
     def request_cursor(self, key: str, position: PagePosition) -> None:
         """Request a page without advancing the position of the committed display."""
-        if self.pending_positions.get(key) != position:
-            self.pending_positions[key] = position
-            self._touch()
+        self._navigation_sequence += 1
+        self.pending_positions[key] = position
+        self.pending_position_sequence[key] = self._navigation_sequence
+        self._touch()
+
+    def request_reveal(self, scope: PresentationScope, reference: ElementRef[object]) -> None:
+        """Queue an accepted action's navigation intent without moving delivered cursors."""
+        self._navigation_sequence += 1
+        self.pending_reveals[scope, reference] = RevealRequest(scope, reference, self._navigation_sequence)
+        self._touch()
 
     def reset_cursor(self, key: str | None = None) -> None:
         if key is None:
             if not self.cursors and not self.pending_positions:
                 return
             self.pending_positions.clear()
+            self.pending_position_sequence.clear()
             self.cursors.clear()
             self._touch()
         else:
             pending = self.pending_positions.pop(key, None)
+            self.pending_position_sequence.pop(key, None)
             if self.cursors.pop(key, None) is not None or pending is not None:
                 self._touch()
 
@@ -168,6 +189,12 @@ class PresentationState:
         changed = False
         for update in updates:
             match update:
+                case RevealsConsumed(requests=requests):
+                    for request in requests:
+                        key = (request.scope, request.reference)
+                        if self.pending_reveals.get(key) is request:
+                            del self.pending_reveals[key]
+                            changed = True
                 case RetainedCompositionUpdate(state=state):
                     if self.retained_composition is not state:
                         self.retained_composition = state
@@ -179,6 +206,7 @@ class PresentationState:
                 case CursorUpdate(key=key, state=cursor, requested=requested):
                     if requested is not None and self.pending_positions.get(key) == requested:
                         del self.pending_positions[key]
+                        self.pending_position_sequence.pop(key, None)
                         changed = True
                     if self.cursors.get(key) != cursor:
                         self.cursors[key] = cursor
@@ -191,6 +219,7 @@ class PresentationState:
                     for stale in tuple(self.pending_positions):
                         if stale not in keys:
                             del self.pending_positions[stale]
+                            self.pending_position_sequence.pop(stale, None)
                             changed = True
                     for stale in tuple(self.cursors):
                         if stale not in keys:
@@ -201,6 +230,11 @@ class PresentationState:
 
 
 # --- Planning's writes, staged ------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class RevealsConsumed:
+    requests: tuple[RevealRequest, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +267,9 @@ class RetainedCompositionUpdate:
     state: RetainedComposition | None
 
 
-type SessionUpdate = RetainedCompositionUpdate | CursorUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
+type SessionUpdate = (
+    RevealsConsumed | RetainedCompositionUpdate | CursorUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
+)
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend

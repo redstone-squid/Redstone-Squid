@@ -67,13 +67,8 @@ class PagePositionPolicy(Protocol):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RevealPage(Uncontrolled[int]):
-    """Reveal a keyed entry once, then let the reader turn layout pages normally.
-
-    Change `request` for each new reveal intent. Planning stages its consumption
-    with the cursor; a failed delivery leaves the intent eligible for retry.
-    """
+class InitialPage(Uncontrolled[int]):
+    """Choose the initial content anchor, then let the runtime retain page turns."""
 
     initial: int = 0
     anchor: str | ElementRef[object]
-    request: str

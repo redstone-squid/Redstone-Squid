@@ -8,6 +8,7 @@ import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.ext.discord.testing import stage
 from squid_ui_widgets._window import source_navigation_state
 
 
@@ -51,23 +52,17 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     )
     browser.session.replace(loaded)
 
-    # Drive the semantic picker; adapters may lower its options into separate buttons.
-    await engine.choose(browser, "browser.open", "a")
-
-    await browser._detail.resolve()
-    assert browser.opened == Entry("a", "A")
-    assert built == ["a"], "one detail per open, not one per render"
-
-    await browser._detail.resolve()
-    await engine.press(browser, "browser.item-next")
-    await browser._detail.resolve()
-
-    assert browser.opened == Entry("b", "B")
-    assert built == ["a", "b"]
-
-    await engine.press(browser, "browser.back")
-
-    assert browser.opened is None
+    async with stage(browser, owner=object()) as ui:
+        await ui.select(ui.key_for("browser.open"), ["a"])
+        assert browser.opened == Entry("a", "A")
+        assert built == ["a"], "one detail per open, not one per render"
+        await ui.root.refresh()
+        await ui.press(ui.key_for("browser.item-next"))
+        assert browser.opened == Entry("b", "B")
+        assert built == ["a", "b"]
+        await ui.press(ui.key_for("browser.back"))
+        assert browser.opened is None
+        assert not ui.root.presentation.pending_reveals
 
 
 async def test_on_back_replaces_returning_to_the_list() -> None:

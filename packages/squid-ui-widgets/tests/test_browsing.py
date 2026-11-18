@@ -36,7 +36,6 @@ async def test_item_steps_cross_windows_and_back_returns_to_the_containing_windo
     assert session.snapshot is not None
     assert session.snapshot.focus is None
     assert session.snapshot.loaded.window.items == ("a", "b")
-    assert session.snapshot.reveal == "b"
 
 
 class HeldSource:

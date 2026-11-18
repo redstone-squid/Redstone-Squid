@@ -26,7 +26,6 @@ class WireCursor(WireModel):
     position: WirePosition
     extent: int
     fingerprint: str
-    reveal_request: str | None = None
 
 
 class WireSelection(WireModel):

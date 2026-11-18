@@ -22,6 +22,7 @@ from squid_ui.content.text import TextLike
 if TYPE_CHECKING:
     from squid_ui.interactions.forms import FormIssue, FormLike, SubmitHandler
     from squid_ui.interactions.guards import Guard
+    from squid_ui.layout import ElementRef
     from squid_ui.runtime.continuations import PostCommitOperation
     from squid_ui.runtime.histories import History
 
@@ -129,6 +130,23 @@ class ActionEvent[ContextT = object]:
             msg = "event.read() requires an active presentation interaction"
             raise RuntimeError(msg)
         return reference.read(scope)
+
+    def reveal(self, reference: ElementRef[object]) -> None:
+        """Reveal content after this action commits, consuming the request after delivery.
+
+        References resolve in this placement, then its ancestors. Repeating a command
+        creates a new intent, including when the target is unchanged. Only runtime-owned
+        pagination moves; application-owned pagination must handle its own navigation.
+        """
+        scope = presentation_scope()
+        if scope is None:
+            message = "event.reveal() requires an active presentation interaction"
+            raise RuntimeError(message)
+        if self.transaction.readonly:
+            message = "read-only actions cannot request navigation"
+            raise RuntimeError(message)
+        self.transaction.after_commit(lambda _result: scope.reveal(reference))
+        self.invalidate()
 
     async def acknowledge(self) -> None:
         await self.responder.acknowledge()

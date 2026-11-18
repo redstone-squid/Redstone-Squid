@@ -757,7 +757,7 @@ async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
         await ws.save_values(tx, {"restrictions": ["funnel"]})
     child = SectionEditorScreen(ws, "taxonomy")
     with transaction() as tx:
-        await child._search_options("restrictions", Mock(spec=sd.SubmitEvent, values={"query": "lamp"}))
+        await child._search_options("restrictions", Mock(spec=sl.SubmitEvent, values={"query": "lamp"}))
         await child._select_value(
             "restrictions", Mock(spec=sd.SelectionEvent, transaction=tx, values=("full_lamp",)), visible=("full_lamp",)
         )
@@ -874,4 +874,11 @@ async def test_catalogue_picker_keeps_selection_across_runtime_pages() -> None:
         assert ws.stored_answers["restrictions"] == ["restriction-0", "restriction-30"]
         await ui.select(ui.key_for("pick_restrictions_25"), [])
         assert ws.stored_answers["restrictions"] == ["restriction-0"]
+        for _ in range(2):
+            form = await ui.press_for_form(ui.key_for("search_restrictions"))
+            await form.submit({"query": ""})
+            ui.control(ui.key_for("pick_restrictions_0"))
+            assert not ui.root.presentation.pending_reveals
+            await ui.press(next_page)
+            ui.control(ui.key_for("pick_restrictions_25"))
         ui.assert_within_limits()

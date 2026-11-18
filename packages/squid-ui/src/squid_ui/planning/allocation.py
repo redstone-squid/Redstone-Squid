@@ -41,6 +41,18 @@ class RegionAllocation[RenderTargetT, ContextT, PayloadT]:
     allocation: ResourceCost = EMPTY_COST
     source_order: tuple[SemanticRef, ...] = ()
 
+    @property
+    def source_prefix(self) -> tuple[str, ...]:
+        return self.pages[0].offer.occurrence.page_source.keys
+
+    @property
+    def cursor_key(self) -> str:
+        return self.contract.cursor_key or self.contract.key
+
+    @property
+    def owner(self) -> PageOwnership:
+        return self.contract.owner
+
 
 @dataclass(frozen=True, slots=True)
 class PageFamily[RenderTargetT, ContextT, PayloadT]:

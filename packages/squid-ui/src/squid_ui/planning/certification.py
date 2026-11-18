@@ -35,6 +35,7 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.fragments import FragmentTree
 from squid_ui.planning.layout_snapshot import FamilyLayout
 from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+from squid_ui.planning.reveals import RevealResolver
 from squid_ui.planning.semantic_correspondence import budget_floor
 
 
@@ -193,6 +194,18 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
         pages: list[CertifiedPage[OutputT]] = []
         selected: dict[OccurrenceId, int] | None = None
         if self.context.local_view:
+            resolutions = (
+                RevealResolver(family.root.offer.occurrence.graph, self.context.work.consume).resolve(
+                    tuple(self.context.presentation.pending_reveals.values()),
+                    family.regions,
+                    self.context.presentation.pending_position_sequence,
+                )
+                if self.context.presentation.pending_reveals
+                else ()
+            )
+            desired_reveals = {
+                region: page for resolution in resolutions for region, page in resolution.coordinates.items()
+            }
             selected = {}
             for identity, region in family.regions.items():
                 contract = regions[identity].candidate.offer.region
@@ -201,6 +214,10 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                 key = contract.cursor_key or contract.key
                 if identity in self.context.page_overrides:
                     page = self.context.page_overrides[identity]
+                elif key in self.context.positions:
+                    page = self.context.positions[key].page
+                elif identity in desired_reveals:
+                    page = desired_reveals[identity]
                 elif isinstance(owner, Controlled | RoutedPage):
                     page = resolve_page(owner.value, len(region.pages))
                 else:

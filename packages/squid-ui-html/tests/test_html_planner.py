@@ -490,13 +490,13 @@ def test_custom_roles_preserve_builtin_target_behavior(base: sl.Tone) -> None:
     assert custom.scene == builtin.scene
 
 
-def test_html_list_reveal_is_consumed_by_the_delivered_cursor() -> None:
+def test_html_initial_anchor_is_consumed_by_the_delivered_cursor() -> None:
     presentation = PresentationState()
     document = sl.bullets(
         *(sl.bullet(str(index), key=str(index)) for index in range(6)),
         key="entries",
         page_size=2,
-        page=sl.pages.RevealPage(anchor="4", request="visit"),
+        page=sl.pages.InitialPage(anchor="4"),
     )
     planned = sl.planning.plan(document, target=squid_ui.ext.html.target(), session=presentation)
     assert planned.scene.pagers[0].page == 2

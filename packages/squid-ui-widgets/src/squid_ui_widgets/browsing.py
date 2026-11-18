@@ -18,11 +18,10 @@ type Movement = Literal["refresh", "previous", "next", "seek", "previous-item", 
 
 @dataclass(frozen=True, slots=True)
 class BrowseSnapshot[ItemT]:
-    """One accepted window, with an optional focus and an overview reveal anchor."""
+    """One accepted window, with an optional focused item."""
 
     loaded: LoadedWindow[ItemT]
     focus: str | None = None
-    reveal: str | None = None
     notice: Literal["removed", "end"] | None = None
 
 
@@ -115,7 +114,7 @@ class BrowseSession[ItemT](Reactive):
         if revision != self.revision or current is None:
             return
         if any(self.identity(item) == key for item in current.loaded.window.items):
-            self._publish(replace(current, focus=key, reveal=key, notice=None))
+            self._publish(replace(current, focus=key, notice=None))
 
     def back(self, *, revision: int) -> None:
         if revision != self.revision or self.snapshot is None:
@@ -214,7 +213,7 @@ class BrowseSession[ItemT](Reactive):
                             address = loaded.window.previous if backward else loaded.window.next
                             continue
                         focus = keys[target]
-                    return BrowseSnapshot(loaded, focus, focus)
+                    return BrowseSnapshot(loaded, focus)
                 address = loaded.window.previous if backward else loaded.window.next
             # Data may have disappeared after the displayed source advertised another window.
             window = replace(current.window, previous=None) if backward else replace(current.window, next=None)
@@ -224,7 +223,7 @@ class BrowseSession[ItemT](Reactive):
         assert loaded is not None
         focus = base.focus if base is not None and movement == "refresh" else None
         removed = focus is not None and not any(self.identity(item) == focus for item in loaded.window.items)
-        return BrowseSnapshot(loaded, None if removed else focus, focus, "removed" if removed else None)
+        return BrowseSnapshot(loaded, None if removed else focus, "removed" if removed else None)
 
 
 __all__ = ["BrowseSession", "BrowseSnapshot"]

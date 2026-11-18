@@ -8,7 +8,7 @@ from squid_reactivity import untracked
 from squid_reactivity.operations import Failed, Pending
 from squid_reactivity.resources import PendingMode, resource
 from squid_ui.authoring.document import DocumentLike
-from squid_ui.authoring.semantic import ActionControl, ActionControls, ChoiceEvent, ControlDisplay, Link
+from squid_ui.authoring.semantic import ActionControl, ActionControls, ChoiceEvent, ControlDisplay, Link, ListItem
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import (
@@ -24,8 +24,7 @@ from squid_ui.factories import (
     stack,
 )
 from squid_ui.interactions import ActionEvent
-from squid_ui.overflow import FIRST_PAGE
-from squid_ui.pages import RevealPage
+from squid_ui.layout import element_ref
 from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
@@ -165,11 +164,16 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         if len(event.selected) == 1:
             self.session.open(event.selected[0], revision=revision)
 
-    async def _back(self, _event: ActionEvent) -> None:
-        self.session.back(revision=self.session.revision)
+    async def _back(self, event: ActionEvent) -> None:
+        await self._back_at(self.session.revision, event)
 
-    async def _back_at(self, revision: int, _event: ActionEvent) -> None:
+    async def _back_at(self, revision: int, event: ActionEvent) -> None:
+        if revision != self.session.revision:
+            return
+        focused = self.session.focus
         self.session.back(revision=revision)
+        if focused is not None:
+            event.reveal(element_ref(ListItem, focused))
 
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
@@ -225,9 +229,6 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
                         for item in items
                     ),
                     key=f"{self.key}.items",
-                    page=RevealPage(anchor=current.reveal, request=str(self.session.visit))
-                    if (current := self.session.snapshot) is not None and current.reveal is not None
-                    else FIRST_PAGE,
                 ),
             )
             picker = choices(

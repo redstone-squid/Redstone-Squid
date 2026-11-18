@@ -45,7 +45,7 @@ from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.primitives import SelectMenu
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import PressHandler
-from squid_ui.pages import RevealPage
+from squid_ui.pages import InitialPage
 
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""
@@ -286,9 +286,8 @@ class SectionEditorScreen(sd.Screen[None]):
                 key=f"picker_{field.id}",
                 title="",
                 page_size=1,
-                page=RevealPage(
+                page=InitialPage(
                     anchor=sl.element_ref(SelectMenu, f"pick_{field.id}_{first_window}"),
-                    request=self.picker_queries.get(field.id, ""),
                 ),
                 footer=(sl.context(selection_hint, key=f"hint_{field.id}"),) if multiple else (),
             ),
@@ -304,6 +303,7 @@ class SectionEditorScreen(sd.Screen[None]):
 
     async def _search_options(self, field_id: str, event: sd.SubmitEvent) -> None:
         self.picker_queries = {**self.picker_queries, field_id: str(event.values.get("query") or "")}
+        event.reveal(sl.element_ref(SelectMenu, f"pick_{field_id}_0"))
 
     async def _edit_form(self, chunk_id: str, event: sd.PressEvent) -> None:
         section = self.workspace.section(self.section_id)

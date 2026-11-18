@@ -19,7 +19,6 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, cast, override
-from uuid import uuid4
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -46,7 +45,6 @@ from squid.search.domain.query import (
 )
 from squid.suggestions.domain import Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.pages import RevealPage
 
 # Suggestion sources for fields whose values are names from a catalogue.
 VALUE_SOURCES = {
@@ -81,7 +79,6 @@ OPERATORS = {
 class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     query: str = sl.state("")
     sort: str = sl.state("")
-    reveal_clause: tuple[int, str] | None = sl.state(None)
     filter_open: bool = sl.state(False)
     filter_picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
     """The field list, or the named values of `selected` once a field is chosen."""
@@ -130,7 +127,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._set_expression(
             BooleanExpression(BooleanOperator.AND, (expression, addition)) if expression is not None else addition
         )
-        self.reveal_clause = (len(self.clauses) - 1, uuid4().hex)
         if self.filter_picker is not None:
             self.filter_picker.picked = ()
 
@@ -139,18 +135,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         nodes: list[GuidedNode] = [self._controls()]
         clauses = self.clauses
         if clauses:
-            reveal = self.reveal_clause
             nodes.append(
                 sl.region(
                     *(sl.unbreakable(self._clause_row(index, item)) for index, item in enumerate(clauses)),
                     key="clauses",
                     title="",
                     page_size=_CLAUSES_PER_PAGE,
-                    page=RevealPage(
-                        anchor=sl.element_ref(sl.semantic.FormTrigger, f"edit-{reveal[0]}"), request=reveal[1]
-                    )
-                    if reveal is not None
-                    else sl.uncontrolled(0),
                 )
             )
         if self.filter_open:
@@ -264,7 +254,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     async def _advanced(self, event: sd.SubmitEvent) -> None:
         self.query = self.parser.parse(str(event.values.get("query") or "")).normalized
-        self.reveal_clause = (0, uuid4().hex)
+        event.reveal(sl.element_ref(sl.semantic.FormTrigger, "edit-0"))
         self._close_filter()
         await self._refresh()
 
@@ -388,7 +378,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.sort = ""
         self._close_filter()
         self.sort_picker = None
-        self.reveal_clause = None
 
     def _close_filter(self) -> None:
         self.filter_open = False
@@ -480,6 +469,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             async def chosen(_event: sd.ActionEvent, value: Suggestion) -> None:
                 coerced = FieldRegistry.coerce(field, value.value)
                 self._append(FieldExpression(field, ComparisonOperator.EQUAL, coerced, phrase=isinstance(coerced, str)))
+                _event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
                 await self._refresh()
 
             name = field_label(field.name)
@@ -503,6 +493,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             return
         value = FieldRegistry.coerce(field, event.selected[0])
         self._append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)))
+        event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
         await self._refresh()
 
     async def _sort_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
@@ -516,6 +507,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         value = self._field_expression(field, event)
         addition = NotExpression(value) if event.values.get("negated") else value
         self._append(addition)
+        event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
         await self._refresh()
 
     async def _remove(self, index: int, _event: sd.PressEvent) -> None:

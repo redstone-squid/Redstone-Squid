@@ -86,7 +86,7 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
     )
     async with stage(browser, owner=object()) as ui:
         await ui.select(ui.key_for("browser.open"), ["7"])
-        previous = ui.root.presentation.cursor("browser.items").reveal_request
+        previous = ui.root.presentation.cursor("browser.items").position
         with monkeypatch.context() as patch:
 
             async def failed_delivery(*args: object, **kwargs: object) -> None:
@@ -95,8 +95,9 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
             patch.setattr(ui.root, "_deliver", failed_delivery)
             with pytest.raises(RuntimeError, match="delivery failed"):
                 await ui.press(ui.key_for("browser.back"))
-        assert ui.root.presentation.cursor("browser.items").reveal_request == previous
+        assert ui.root.presentation.cursor("browser.items").position == previous
+        assert ui.root.presentation.pending_reveals
         assert "Detail 7" in ui.texts()
         await ui.root.refresh()
         assert any("Entry 7:" in text for text in ui.texts())
-        assert ui.root.presentation.cursor("browser.items").reveal_request == str(browser.session.visit)
+        assert not ui.root.presentation.pending_reveals
