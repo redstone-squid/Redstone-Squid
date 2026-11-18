@@ -28,7 +28,7 @@ class Pager(SceneValue):
 
     key: str
     page: int = Field(ge=0, strict=True)
-    pages: int = Field(ge=1, strict=True)
+    pages: int | None = Field(ge=1, strict=True)
     content_fingerprint: str
 
     def browser_state(self) -> dict[str, Any]:

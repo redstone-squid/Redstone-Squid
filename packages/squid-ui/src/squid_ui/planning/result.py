@@ -122,6 +122,7 @@ class PlanResult[BodyT = Body]:
 
     layout: LayoutContext | None = field(default=None, kw_only=True, compare=False, repr=False)
     certificate: CertificateScope = field(default=CertificateScope.VIEW, kw_only=True)
+    _choices: tuple[tuple[OccurrenceId, str], ...] = field(default=(), kw_only=True, repr=False, compare=False)
 
     allocation: AllocationSelection[PlanResult[BodyT]] | None = field(default=None, kw_only=True)
 

@@ -35,6 +35,8 @@ from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
 from squid_ui.target_types import Renderable, RenderTarget
 
 if TYPE_CHECKING:
+    from squid_ui.authoring.document import DocumentLike
+    from squid_ui.layout import LayoutContext
     from squid_ui.runtime.histories import History
 
 
@@ -202,6 +204,24 @@ class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     key: str | None = None
+
+
+@immutable
+class Contextual[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
+    """Pure contextual content with component placements declared before planning."""
+
+    callback: Callable[[LayoutContext], DocumentLike[RenderTargetT, ContextT]] = field(kw_only=True)
+    components: tuple[Boundary[RenderTargetT, ContextT], ...] = field(default=(), kw_only=True)
+    _prepared: tuple[Group[RenderTargetT, ContextT], ...] = field(default=(), kw_only=True, repr=False)
+    _scope: str = field(default="$", kw_only=True, repr=False)
+    _identity: str = field(default="", kw_only=True, repr=False)
+
+
+@immutable
+class PreparedSlot[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
+    """A declared component subtree whose keys already include its placement."""
+
+    placement: str = field(default="", kw_only=True)
 
 
 @immutable
@@ -1137,6 +1157,7 @@ __all__ = [
     "Code",
     "Column",
     "Columns",
+    "Contextual",
     "ControlDisplay",
     "ControlGroup",
     "Controlled",

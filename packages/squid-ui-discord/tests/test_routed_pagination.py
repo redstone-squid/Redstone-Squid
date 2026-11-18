@@ -109,6 +109,7 @@ async def test_routed_widget_encodes_resolved_form_range_and_uses_existing_trans
     result = plan(driver.render(machine, machine.initial_state), target=DISCORD_V2_DPY27, nav=page_jump_nav)
     button = testing.find_all(result.scene, discord_scene.RoutedButton)[-1]
     route, page, pages = encoded[button.route_id]
+    assert result.scene.pagers[0].pages is not None
     assert pages == result.scene.pagers[0].pages and pages > 2
     form = page_jump_form(page, pages)
     submitted = await form.evaluate({"page": str(pages)})
@@ -177,6 +178,7 @@ async def test_routed_and_mounted_rankings_share_budget_splits_and_jump_dispatch
     local = plan(mounted.nodes, target=DISCORD_V2_DPY27, nav=page_select_nav)
     routed = wt.routed(ranking(), target=DISCORD_V2_DPY27, nav=page_select_nav)
     assert routed.planned is not None
+    assert routed.planned.scene.pagers[0].pages is not None
     assert routed.planned.scene.pagers[0].pages > 2
     assert routed.planned.scene.pagers == local.scene.pagers
     menu = testing.find(routed.planned.scene, discord_scene.RoutedSelect)
@@ -232,6 +234,7 @@ async def test_semantic_region_uses_its_controlled_owner(target: Target) -> None
             automatic=True, partitions={sl.planning.OccurrenceId(("root", "region")): (1, 2, 3, 4)}
         ),
     )
+    assert result.scene.pagers[0].pages is not None
     assert result.scene.pagers[0].page == result.scene.pagers[0].pages - 1
     assert not any(isinstance(update, CursorUpdate) for update in result.session_updates)
     await result.bindings["__cursor_previous.$/region"].handler(testing.press_event())
@@ -259,6 +262,7 @@ def test_uncontrolled_semantic_region_accepts_last_page_seed() -> None:
         sl.stack(*(sl.paragraph(str(index) * 20) for index in range(4))), key="region", chars=40, page=Uncontrolled(-1)
     )
     result = plan(document, target=DISCORD_V2_DPY27, nav=default_nav)
+    assert result.scene.pagers[0].pages is not None
     assert result.scene.pagers[0].page == result.scene.pagers[0].pages - 1
     assert any(isinstance(update, CursorUpdate) for update in result.session_updates)
 

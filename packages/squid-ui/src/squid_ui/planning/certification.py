@@ -224,7 +224,7 @@ class FamilyCertifier[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepa
                 page_violations[key] = max(page_violations.get(key, 0), shortfall)
             built = construct_composition(admitted, self.rules, self.context)
             if snapshot is not None:
-                built = replace(built, layout=snapshot.context(dict(coordinates)))
+                built = replace(built, layout=snapshot.context(dict(coordinates)), choices=snapshot.choices)
             self.context.work.consume()
             pages.append(CertifiedPage(coordinates, self.finalize(built, self.context)))
             self.certified_combinations += 1

@@ -29,7 +29,8 @@ from squid_ui.planning.composition import (
 from squid_ui.planning.composition_input import prepare_composition
 from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
-from squid_ui.planning.identity import requires_live_preparation, stable_fingerprint
+from squid_ui.planning.contextual import ContextualResolution
+from squid_ui.planning.identity import has_contextual, requires_live_preparation, stable_fingerprint
 from squid_ui.planning.joint_search import JointExhaustedError, JointUnsupportedError, search_composition
 from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PagerNav, PlannedNav
@@ -91,7 +92,9 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         request.target.capabilities,
         effective.capacities,
         request.chrome,
-        PagerNav(resolved.navigation, request.presentation, staged=True) if resolved.navigation is not None else None,
+        PagerNav(resolved.navigation, request.presentation, staged=True, known_extent=not request.partial_layout)
+        if resolved.navigation is not None
+        else None,
         resolved.mounted,
         escape_text=request.target.adapter.escape_text,
         presentation=request.presentation,
@@ -108,10 +111,38 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
     selections: Mapping[OccurrenceId, str],
     options: CompositionOptions | None = None,
     cache: PlanCache | None = None,
+    *,
+    work: WorkBudget | None = None,
+    contextual_resolved: bool = False,
 ) -> PlanResult[BodyT]:
     resolved = ResolvedComposition.for_options(request, options)
+    if not contextual_resolved and has_contextual(rendered):
+        source = as_document(rendered)
+        resolver = ContextualResolution[RenderTargetT, BodyT](source, work_limit=resolved.work_limit)
+        current_options = options or CompositionOptions(automatic=True, work_limit=resolved.work_limit)
+
+        def attempt(
+            document: Document[RenderTargetT], pages: Mapping[OccurrenceId, int], budget: WorkBudget, partial: bool
+        ) -> PlanResult[BodyT]:
+            return _plan(
+                document,
+                replace(request, inspect_layout=True, partial_layout=partial),
+                rules,
+                selections,
+                replace(current_options, pages=pages, excluded=(*current_options.excluded, *resolver.excluded)),
+                None,
+                work=budget,
+                contextual_resolved=True,
+            )
+
+        def replan(pages: Mapping[OccurrenceId, int]) -> PlanResult[BodyT]:
+            return _plan(source, request, rules, selections, replace(current_options, pages=pages), None)
+
+        return resolver.solve(attempt, pages=current_options.pages, replan=replan)
     automatic = resolved.automatic
     context = _context(request, resolved)
+    if work is not None:
+        context = replace(context, work=work)
     document = as_document(rendered)
     context = replace(context, assets=document.assets)
     if not automatic and (document.assets or request.positions or request.nav is not None):
@@ -183,6 +214,7 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 policies=options.policies,
                 partitions=options.partitions,
                 partition_hint=partition_hint,
+                excluded=options.excluded,
             )
         except JointExhaustedError as error:
             _logger.debug("Joint allocation exhausted without a certified layout: %s", error.diagnostics)
@@ -273,6 +305,7 @@ def _output[RenderTargetT, AdapterT, BodyT: scene.Body, ResourceT, PreparationT]
         cost=built.evaluation.cost,
         effects=effects,
         layout=built.layout,
+        _choices=built.choices,
     )
 
 

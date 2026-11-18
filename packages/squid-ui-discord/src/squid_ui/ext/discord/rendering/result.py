@@ -42,6 +42,6 @@ class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), Bo
         return self.plan.scene.pagers[0].page if self.plan.scene.pagers else 0
 
     @property
-    def pages(self) -> int:
-        """Total page count, or one when the scene is not paginated."""
+    def pages(self) -> int | None:
+        """Exact total when known; None for a partial plan, one without a pager."""
         return self.plan.scene.pagers[0].pages if self.plan.scene.pagers else 1

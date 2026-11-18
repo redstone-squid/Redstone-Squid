@@ -31,6 +31,7 @@ class CompositionOptions:
     partitions: Mapping[OccurrenceId, tuple[int, ...]] = field(default_factory=dict)
     pages: Mapping[OccurrenceId, int] = field(default_factory=dict)
     work_limit: int = 50_000
+    excluded: tuple[tuple[tuple[OccurrenceId, str], ...], ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "selections", MappingProxyType(dict(self.selections)))

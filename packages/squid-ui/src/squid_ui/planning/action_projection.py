@@ -75,6 +75,7 @@ class ActionPage[BodyT: scene.Body]:
     slot: int
     layout: LayoutContext | None = None
     certificate: CertificateScope = CertificateScope.VIEW
+    choices: tuple[tuple[OccurrenceId, str], ...] = ()
 
     @classmethod
     def prepare(
@@ -115,6 +116,7 @@ class ActionPage[BodyT: scene.Body]:
                 slot,
                 result.layout,
                 result.certificate,
+                result._choices,
             ),
             PageBindings(MappingProxyType(live), result.form_bindings, result.form_plans, result.resources),
         )
@@ -174,6 +176,7 @@ class ActionPage[BodyT: scene.Body]:
             effects=self.effects,
             layout=self.layout,
             certificate=self.certificate,
+            _choices=self.choices,
         )
 
 

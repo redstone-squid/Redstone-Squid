@@ -15,7 +15,7 @@ from squid_reactivity.resources import AsyncBinding, observe_async_bindings, uni
 from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import read_only
 from squid_ui.authoring.document import Asset, Document, DocumentLike
-from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.authoring.semantic import Contextual, Group, LayoutNode
 from squid_ui.boundary import Boundary
 from squid_ui.context_keys import ContextKey
 from squid_ui.errors import LayoutInvariantError
@@ -278,6 +278,13 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         def expand_item(
             item: LayoutNode[RenderTargetT, ContextT], item_path: str, route: _LayoutRoute
         ) -> list[LayoutNode[RenderTargetT, ContextT]]:
+            if isinstance(item, Contextual):
+                prepared: list[Group[RenderTargetT, ContextT]] = []
+                for index, slot in enumerate(item.components):
+                    slot_route = (*_inside(route), _IndexStep("_prepared", index), _SequenceStep("children", 0))
+                    expanded = expand_item(slot, f"{item_path}.slots.{index}", slot_route)
+                    prepared.append(Group(tuple(expanded), key=slot.key))
+                return [replace(item, _prepared=tuple(prepared), _scope=path)]
             if isinstance(item, Component):
                 item = item.keyed(item._composition_key)
             if isinstance(item, Boundary):

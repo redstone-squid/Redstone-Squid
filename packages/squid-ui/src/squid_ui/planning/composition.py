@@ -464,6 +464,7 @@ class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]
     bindings: Mapping[str, ActionBinding] = field(default_factory=dict)
     forms: Mapping[str, FormBinding[ContextT]] = field(default_factory=dict)
     layout: LayoutContext | None = field(default=None, kw_only=True)
+    choices: tuple[tuple[OccurrenceId, str], ...] = field(default=(), kw_only=True)
 
 
 def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT](

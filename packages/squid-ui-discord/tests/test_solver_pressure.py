@@ -139,6 +139,7 @@ class TestRegionPagination:
         first = sl.planning.plan(document, target=DISCORD_V2_DPY27)
         assert first.allocation is not None
         identity = next(iter(first.allocation.regions))
+        assert first.scene.pagers[0].pages is not None
         pages = [first.for_page({identity: index}) for index in range(first.scene.pagers[0].pages)]
         assert all(len(self._texts(page)[0]) <= 50 for page in pages)
         content = "".join(self._texts(result)[0] for result in pages)
@@ -167,6 +168,7 @@ class TestRegionPagination:
 
         assert first.allocation is not None
         identity = next(iter(first.allocation.regions))
+        assert first.scene.pagers[0].pages is not None
         pages = [first.for_page({identity: index}) for index in range(first.scene.pagers[0].pages)]
         assert all(sum(map(len, self._texts(page))) <= 100 for page in pages)
         assert [text for page in pages for text in self._texts(page)] == ["x" * 10] * 100

@@ -282,6 +282,7 @@ def test_large_action_groups_reuse_the_committed_allocation_for_page_turns() -> 
     document = ActionControls(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
     session.apply_updates(first.session_updates)
+    assert first.scene.pagers[0].pages is not None
     assert first.scene.pagers[0].pages > 1
     session.move_cursor(first.scene.pagers[0].key, PagePosition(page=1))
     second = plan(document, target=DISCORD_V2_DPY27, session=session)

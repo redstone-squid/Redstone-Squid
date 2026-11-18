@@ -1,7 +1,7 @@
 """Scoped layout facts, with explicit unknown answers for incomplete content."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Never, Protocol
 
@@ -107,7 +107,14 @@ class FragmentLocation:
     page: PageAddress
     fragment: int
     repeated: bool
-    visible: bool
+    _visible: bool
+    _observe: Callable[[str, object], None] | None = field(default=None, compare=False, repr=False)
+
+    @property
+    def visible(self) -> bool:
+        if self._observe is not None:
+            self._observe("visibility", self._visible)
+        return self._visible
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +131,7 @@ class RegionFacts:
     _count: Fact[int]
     _selection: Fact[PageCoordinate | None]
     _groups: Fact[int]
-    _observe: Callable[[str, object], None] | None = None
+    _observe: Callable[[str, object], None] | None = field(default=None, compare=False, repr=False)
 
     def _read[T](self, name: str, value: T) -> T:
         if self._observe is not None:
@@ -157,9 +164,36 @@ class LocationQuery(Protocol):
 @dataclass(frozen=True, slots=True)
 class DocumentScope:
     _query: ScopeQuery
+    _size: int = 0
 
     def query[T](self, selector: Selector[T]) -> Query[T]:
         return self._query(selector)
+
+
+@dataclass(frozen=True, slots=True)
+class _ObservedScope:
+    reader: ScopeQuery
+    observations: list[tuple[object, object]]
+    name: str
+    consume: Callable[[int], None] | None
+    size: int
+
+    def __call__[T](self, selector: Selector[T]) -> Query[T]:
+        result = self.reader(selector)
+        matches = result.all()
+        if self.consume is not None:
+            self.consume(1 + self.size)
+        self.observations.append((("query", self.name, selector.description), tuple((m.path, m.node) for m in matches)))
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class _PartialLocations:
+    reader: LocationQuery
+
+    def __call__[T](self, target: ElementRef[T] | Match[T], within: RegionRef | None) -> Locations:
+        result = self.reader(target, within)
+        return Locations(tuple(loc for loc in result.fragments if loc._visible), complete=False)
 
 
 class LayoutContext:
@@ -175,16 +209,69 @@ class LayoutContext:
         locate: LocationQuery,
         containing: OccurrenceId | None = None,
     ) -> None:
-        self.authored = authored
-        self.placed = placed
-        self.visible = visible
+        self.observations: list[tuple[object, object]] = []
+        self._scopes = (authored, placed, visible)
+        self._consume: Callable[[int], None] | None = None
+        self.authored = DocumentScope(
+            _ObservedScope(authored._query, self.observations, "authored", None, authored._size), authored._size
+        )
+        self.placed = DocumentScope(
+            _ObservedScope(placed._query, self.observations, "placed", None, placed._size), placed._size
+        )
+        self.visible = DocumentScope(
+            _ObservedScope(visible._query, self.observations, "visible", None, visible._size), visible._size
+        )
         self._regions = regions
         self._locate = locate
         self._containing = containing
-        self.observations: list[tuple[object, object]] = []
+        self._owner = "$"
+
+    def _evaluating(
+        self,
+        consume: Callable[[int], None],
+        *,
+        owner: str = "$",
+        containing: OccurrenceId | None = None,
+        partial: bool = False,
+        authored: DocumentScope | None = None,
+    ) -> LayoutContext:
+        regions = self._regions
+        if partial:
+            unknown = Unknown(UnknownReason.INCOMPLETE, "other contextual views have not been resolved")
+            regions = {ref: replace(facts, _count=unknown) for ref, facts in regions.items()}
+        result = LayoutContext(
+            authored=authored or self._scopes[0],
+            placed=self._scopes[2] if partial else self._scopes[1],
+            visible=self._scopes[2],
+            regions=regions,
+            locate=_PartialLocations(self._locate) if partial else self._locate,
+            containing=containing,
+        )
+        result._consume = consume
+        result._owner = owner
+        scopes = result._scopes
+        result.authored, result.placed, result.visible = tuple(
+            DocumentScope(_ObservedScope(scope._query, result.observations, name, consume, scope._size), scope._size)
+            for scope, name in zip(scopes, ("authored", "placed", "visible"), strict=True)
+        )
+        return result
+
+    @property
+    def view_dependent(self) -> bool:
+        for key, _value in self.observations:
+            match key:
+                case ("query", "visible", _) | (*_, "selection" | "visibility"):
+                    return True
+        return False
 
     def find_region(self, reference: RegionRef) -> RegionFacts | None:
-        found = [facts for key, facts in self._regions.items() if key.keys[-len(reference.keys) :] == reference.keys]
+        if self._consume is not None:
+            self._consume(1 + len(self._regions))
+        keys = reference.keys
+        scoped = (*keys[:-1], f"{self._owner}.{keys[-1]}") if self._owner != "$" else keys
+        found = [facts for key, facts in self._regions.items() if key.keys[-len(keys) :] == scoped]
+        if not found:
+            found = [facts for key, facts in self._regions.items() if key.keys[-len(keys) :] == keys]
         if len(found) > 1:
             message = f"ambiguous region reference: {reference.keys!r}"
             raise LayoutError(message)
@@ -205,6 +292,15 @@ class LayoutContext:
         return found
 
     def locate[T](self, target: ElementRef[T] | Match[T], *, within: RegionRef | None = None) -> Locations:
+        if self._consume is not None:
+            self._consume(1)
         result = self._locate(target, within)
+        result = replace(
+            result,
+            fragments=tuple(
+                replace(loc, _observe=lambda name, answer: self.observations.append((("location", name), answer)))
+                for loc in result.fragments
+            ),
+        )
         self.observations.append((("locate", target, within), result))
         return result

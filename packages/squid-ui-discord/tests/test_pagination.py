@@ -400,6 +400,7 @@ def test_count_pages_hold_every_entry_exactly_once(count, per):
     assert result.allocation is not None
     occurrence = next(iter(result.allocation.regions))
     collected = []
+    assert result.scene.pagers[0].pages is not None
     for page in range(result.scene.pagers[0].pages):
         selected = result.for_page({occurrence: page})
         collected.extend(

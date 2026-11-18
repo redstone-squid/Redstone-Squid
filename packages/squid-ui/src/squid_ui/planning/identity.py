@@ -14,6 +14,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum
 from string.templatelib import Template
 
+from squid_ui.authoring.semantic import Contextual
 from squid_ui.content.text import Text
 from squid_ui.native import NativeTraits
 from squid_ui.overflow import RoutedPage
@@ -115,7 +116,11 @@ def _digest(value: object, consume: Callable[[], None] | None, cache: Fingerprin
 
 def requires_live_preparation(value: object) -> bool:
     """Whether routes or opaque factories can change output behind stable identity."""
-    return _contains(value, (RoutedPage,), live=True)
+    return _contains(value, (RoutedPage, Contextual), live=True)
+
+
+def has_contextual(value: object) -> bool:
+    return _contains(value, (Contextual,))
 
 
 def has_routed_page(value: object) -> bool:

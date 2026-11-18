@@ -89,7 +89,9 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         policies: Mapping[OccurrenceId, RegionPolicy] | None,
         partitions: Mapping[OccurrenceId, tuple[int, ...]] | None,
         partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None,
+        excluded: tuple[tuple[tuple[OccurrenceId, str], ...], ...],
     ) -> None:
+        self.excluded = excluded
         self.root = root
         self.context = context
         self.selected = selections or {}
@@ -188,6 +190,11 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     def _certify(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> tuple[bool, bool]:
         """Certify a partition and retain its measured result when feasible."""
         self.context.work.consume()
+        choices = {offer.occurrence.identity: offer.key for offer, _rank in task.choices}
+        for pattern in self.excluded:
+            self.context.work.consume(1 + len(pattern))
+            if pattern and all(choices.get(identity) == key for identity, key in pattern):
+                return False, False
         family = PageFamily.from_cuts(task.candidate, task.regions, task.cuts, self.context)
         region_map = {node.candidate.offer.occurrence.identity: node for node in task.regions}
         certificate = self.certifier.certify(family, region_map)
@@ -250,6 +257,7 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
     policies: Mapping[OccurrenceId, RegionPolicy] | None = None,
     partitions: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
     partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None = None,
+    excluded: tuple[tuple[tuple[OccurrenceId, str], ...], ...] = (),
 ) -> JointResult[OutputT]:
     """Certify a nondominated allocation without publishing bindings or state.
 
@@ -268,4 +276,5 @@ def search_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prep
         policies=policies,
         partitions=partitions,
         partition_hint=partition_hint,
+        excluded=excluded,
     ).run()

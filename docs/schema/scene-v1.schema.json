@@ -3934,9 +3934,16 @@
           "type": "integer"
         },
         "pages": {
-          "minimum": 1,
-          "title": "Pages",
-          "type": "integer"
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pages"
         }
       },
       "required": [

@@ -5,8 +5,8 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
-from squid_ui.authoring.presentations import Omission, SemanticRef
-from squid_ui.authoring.semantic import List
+from squid_ui.authoring.presentations import Alternatives, Omission, SemanticRef
+from squid_ui.authoring.semantic import FallbackContent, List, OptionalContent
 from squid_ui.layout import (
     ContentAddress,
     DocumentScope,
@@ -122,6 +122,16 @@ class LayoutSnapshot:
 
     def __init__[R, C, P](self, family: PageFamily[R, C, P], context: PlanningContext) -> None:
         graph = family.root.offer.occurrence.graph
+        choices: list[tuple[OccurrenceId, str]] = []
+        pending = [family.root]
+        while pending:
+            part = pending.pop()
+            occurrence = part.offer.occurrence
+            value = occurrence.graph.units[occurrence.reference].value
+            if isinstance(value, Alternatives | FallbackContent | OptionalContent):
+                choices.append((occurrence.identity, part.offer.key))
+            pending.extend(part.children)
+        self.choices = tuple(choices)
         self.capture = SemanticCapture(graph, context.work.consume)
         self.region_refs = {
             identity: RegionRef(region.pages[0].offer.occurrence.page_source.keys)
@@ -251,9 +261,11 @@ class LayoutSnapshot:
             )
         capture = self.captures[coordinate]
         return LayoutContext(
-            authored=DocumentScope(_ScopeReader(capture, frozenset(capture.references), consume)),
-            placed=DocumentScope(_ScopeReader(capture, self.placed, consume)),
-            visible=DocumentScope(_ScopeReader(capture, self.visible[coordinate], consume)),
+            authored=DocumentScope(
+                _ScopeReader(capture, frozenset(capture.references), consume), len(capture.references)
+            ),
+            placed=DocumentScope(_ScopeReader(capture, self.placed, consume), len(capture.references)),
+            visible=DocumentScope(_ScopeReader(capture, self.visible[coordinate], consume), len(capture.references)),
             regions=MappingProxyType(regions),
             locate=_LocationReader(capture, MappingProxyType(locations), regions, complete, consume),
             containing=containing,

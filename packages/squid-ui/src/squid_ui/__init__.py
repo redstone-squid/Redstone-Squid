@@ -77,6 +77,7 @@ from squid_ui.authoring.presentations import (
 )
 from squid_ui.authoring.semantic import (
     ChoiceEvent,
+    Contextual,
     EntityEvent,
     LayoutNode,
     NavigateEvent,
@@ -139,6 +140,7 @@ from squid_ui.factories import (
     code,
     column,
     columns,
+    context,
     control_group,
     controlled,
     details,
@@ -236,6 +238,7 @@ __all__ = [
     "Conditional",
     "ContentAddress",
     "ContextKey",
+    "Contextual",
     "Correspondence",
     "Document",
     "DocumentLike",
@@ -314,6 +317,7 @@ __all__ = [
     "column",
     "columns",
     "computed",
+    "context",
     "control_group",
     "controlled",
     "corresponds",

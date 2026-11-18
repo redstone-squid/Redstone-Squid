@@ -135,11 +135,13 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
     first = plan(document, target=DISCORD_V2_DPY27, nav=_nav)
 
     assert first.scene.pagers[0].key == "toolbar"
+    assert first.scene.pagers[0].pages is not None
     assert first.scene.pagers[0].pages > 1
     assert first.report.search is not None
     assert first.allocation is not None
 
     visible: set[str] = set()
+    assert first.scene.pagers[0].pages is not None
     for page_index in range(first.scene.pagers[0].pages):
         page_result = plan(
             document,
@@ -157,7 +159,9 @@ def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
 
     def pages_for(overflow) -> int:
         document = Document((Text("hi", overflow=overflow), ControlGroup(buttons)), key="toolbar")
-        return plan(document, target=DISCORD_V2_DPY27, nav=_nav).scene.pagers[0].pages
+        count = plan(document, target=DISCORD_V2_DPY27, nav=_nav).scene.pagers[0].pages
+        assert count is not None
+        return count
 
     assert pages_for(Paginate(key="noted", per=5)) == pages_for(Never())
 

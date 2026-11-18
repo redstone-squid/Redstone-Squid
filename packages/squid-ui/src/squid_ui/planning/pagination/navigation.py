@@ -306,26 +306,35 @@ class PagerNav:
     factory: PlannedNav
     session: PresentationState
     staged: bool = False
+    known_extent: bool = True
 
     def __call__(
         self, key: str, page: int, extent: int, chrome: Chrome, owner: PageOwnership = FIRST_PAGE
     ) -> Sequence[NavNode]:
         """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
         state = materialized_navigation_state(key, PagePosition(page=page), extent, chrome)
+        if not self.known_extent:
+            state = replace(state, extent=None)
         if isinstance(owner, RoutedPage):
             return self.factory(
                 NavigationContext(
                     state,
                     owner.route(max(0, page - 1)),
                     owner.route(min(extent - 1, page + 1)),
-                    owner.seek_route() if owner.seek_route is not None else None,
-                    owner.jump_route(page, extent) if owner.jump_route is not None else None,
+                    owner.seek_route() if self.known_extent and owner.seek_route is not None else None,
+                    owner.jump_route(page, extent) if self.known_extent and owner.jump_route is not None else None,
                     chrome=chrome,
                 )
             )
         commit = PageCommit(owner, key, extent, self.session, self.staged)
         return self.factory(
-            NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit, chrome=chrome)
+            NavigationContext(
+                state,
+                TurnPage(commit, page - 1),
+                TurnPage(commit, page + 1),
+                commit if self.known_extent else None,
+                chrome=chrome,
+            )
         )
 
 

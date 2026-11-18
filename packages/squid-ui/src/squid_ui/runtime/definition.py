@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overlo
 
 from squid_reactivity import Reactive, untracked
 from squid_reactivity.internals import State
+from squid_ui._contextual import EVALUATING
 from squid_ui._presentation import PresentationCells, presentation_mutations
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.boundary import Boundary
@@ -87,9 +88,9 @@ class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[Rend
     """
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        if _CURRENT_CONTEXT.get() is not None:
+        if _CURRENT_CONTEXT.get() is not None or EVALUATING.get():
             message = (
-                f"{cls.__name__} was constructed during rendering. "
+                f"{cls.__name__} was constructed during rendering or layout evaluation. "
                 "Create and retain child components during setup or an action; render only places them."
             )
             raise LayoutInvariantError(message)

@@ -222,6 +222,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
         assert "ValueError: boom" in first_shown
         assert message_root.plan is not None
         pager = next(pager for pager in message_root.plan.scene.pagers if pager.key == "traceback")
+        assert pager.pages is not None
         assert pager.page == pager.pages - 1
         assert pager.pages > 1
 

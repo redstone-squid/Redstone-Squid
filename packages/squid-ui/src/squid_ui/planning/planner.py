@@ -95,7 +95,11 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
         result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
     # Automatic composition prepares every reachable output inside its work
     # allowance. Cursor selection must not leave other pages with raw handlers.
-    return result if result.allocation is not None else prepare_bindings(result, request)
+    return (
+        result
+        if result.allocation is not None or result.page_selector is not None
+        else prepare_bindings(result, request)
+    )
 
 
 __all__ = ["plan", "plan_request"]
