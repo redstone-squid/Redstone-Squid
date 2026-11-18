@@ -71,6 +71,17 @@ sample live reactive state, write it, construct components, or perform I/O. Quer
 not start loading. Arbitrary application objects must remain unchanged during an attempt;
 the runtime cannot preempt an infinite synchronous Python callback.
 
+Built-in pagination chrome is also a `sl.context` declaration. Certification evaluates
+it for each candidate view before measuring the target, using the same effect guard
+and fact types as authored callbacks. This adds no outer feedback rounds for ordinary
+pagination. `ctx.region().navigation` exposes available movements and their bindings;
+its ordinal, extent, and jump availability follow established facts. Static and mounted
+targets use the same semantic controls.
+
+Custom `Paged.footer` and `Paginate.footer` callbacks receive one `LayoutContext` and
+return text. The old `(page, pages)` callback is removed. `Chrome.page_footer` remains
+a text formatter for already established numbers, also used for declared source groups.
+
 Generated content participates in the actual target budgets, including footers,
 controls, bindings, and assets. The resolver requires stable structure and repeated
 observations, detects cycles, and bounds rounds and shared planning work. A rejected
@@ -83,7 +94,7 @@ facts fail without publishing provisional output.
 known value or raises `FactUnavailableError`; an unresolved required read prevents
 certification. `Known(None)` means established absence, rather than unknown.
 
-A region exposes `count`, `selection`, and `groups`. `count` is the rendered total
+A region exposes `count`, `selection`, `groups`, and `navigation`. `count` is the rendered total
 for this capture; `groups` is an authored fixed-group count. Neither claims knowledge
 of unseen source items. `PageCoordinate.number` is a fact rather than a magic integer.
 `Locations.fragments` carries fragment and repetition provenance, page coordinates,
@@ -103,14 +114,15 @@ References inside a component resolve relative to its placement. Ambiguous refer
 fail. Matches are pinned to their capture; they do not silently retarget another tree.
 Atomic target payloads remain opaque.
 
-`plan(..., inspect_layout=True)` exposes these facts without contextual generation.
-Contextual plans expose them automatically through `PlanResult.layout`. Geometric
+`plan(..., inspect_layout=True)` exposes these facts without authored contextual generation.
+Documents with authored contexts expose them automatically through `PlanResult.layout`. Geometric
 facts and automatic loading are not part of this API.
 
-A contextual selection read requires replanning on navigation, but does not by itself
+An authored contextual selection read requires replanning on navigation, but does not by itself
 make the current total unknown. Fully known current content can retain exact counts
 and complete locations. If only the demanded view can be certified, totals become
 unknown, locations are partial, and numeric total/jump chrome is suppressed.
+This view-scoped fallback also applies to built-in pagination without an authored context.
 Selecting a later fragment does not establish its rendered ordinal when preceding
 fragments have not been certified; its authored group position remains a separate unit.
 `CertificateScope.VIEW` distinguishes this proof from a complete family certificate;
@@ -170,9 +182,10 @@ unknown ordinals, stale checkpoints after reflow, and failed navigation retainin
 previous delivered state. Estimates, bounds, and demand diagnostics need their own typed
 contracts; they must not be smuggled into exact facts.
 
-## Prior experiments
+## Validation
 
-The files in `spikes/` are historical experiments for the superseded complete-family
-proposal. Production typing and integration tests now live with the packages. The
-experiments remain useful finite examples, but do not establish lazy continuation or
-production lifecycle semantics.
+Production typing probes live in `packages/squid-ui/tests/typing_contextual.py`.
+Planner tests cover scoped queries, fragmented locations, feedback, and partial facts;
+Discord integration tests cover delivered visibility, generated handlers, and failed
+publication. Pagination chrome tests exercise the same contextual evaluation directly,
+including custom footer queries, unavailable counts, and effect guards.
