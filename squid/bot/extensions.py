@@ -4,16 +4,17 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import Generic, TypeVar, cast
 
 import anyio
 from discord.ext import commands
 
 logger = logging.getLogger(__name__)
+ExportT = TypeVar("ExportT", covariant=True, default=None)
 
 
 @dataclass(frozen=True, slots=True)
-class ExtensionSpec[Exports = None]:
+class ExtensionSpec(Generic[ExportT]):
     """Describe an extension without importing its Discord entry point."""
 
     id: str

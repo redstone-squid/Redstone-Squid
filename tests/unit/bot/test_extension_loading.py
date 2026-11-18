@@ -57,7 +57,7 @@ class RegistrationVotes(VoteService):
 class StubBot(commands.Bot):
     """A real command registry with checked services and real reaction registration."""
 
-    def __init__(self) -> None:
+    def __init__(self, extensions: Sequence[Extension]) -> None:
         super().__init__(
             command_prefix="!",
             intents=discord.Intents.none(),
@@ -68,6 +68,7 @@ class StubBot(commands.Bot):
         self.ui = sd.install(self, sd.Config(bus=self.topic_bus))
         self.sessions = self.ui.sessions
         self.services = bot_services(votes=RegistrationVotes())
+        self.extension_manager = ExtensionManager(extensions)
         self.background_tasks = SchedulingRecorder()
         self.reactions = ReactionRouter(cast(RedstoneSquid, self), BackgroundTaskSupervisor())
         self.post_reconciler = unconfigured(PostReconciler)
@@ -97,8 +98,7 @@ async def _loaded_bot(extensions: Sequence[Extension]) -> AsyncIterator[commands
     can no longer see, and the real implementation runs instead.
     """
     before = dict(sys.modules)
-    bot = StubBot()
-    bot.extension_manager = ExtensionManager(extensions)
+    bot = StubBot(extensions)
     try:
         await bot.extension_manager.start(bot.load_extension, bot.unload_extension)
         yield bot
