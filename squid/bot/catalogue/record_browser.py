@@ -8,14 +8,13 @@ from discord.utils import format_dt
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.bot.catalogue.rows import record_row
 from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.pagination import PageSelector
 from squid.notifications.domain import SubscriptionKind
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle
-from squid.records.domain.models import BaseTitle
+from squid.records.domain.models import BaseTitle, VersionScope
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint
@@ -32,12 +31,16 @@ class RecordSource:
         count=sl.sources.CountPrecision.EXACT,
     )
 
-    def __init__(self, records: RecordService) -> None:
+    def __init__(self, records: RecordService, version_scope: VersionScope) -> None:
         self._records = records
+        self._version_scope = version_scope
 
     async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[PublishedTitle]:
         page = await self._records.list_page(
-            selector=PageSelector(offset=position.offset), page_size=extent, resolved_only=True
+            selector=PageSelector(offset=position.offset),
+            page_size=extent,
+            resolved_only=True,
+            version_scope=self._version_scope,
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
         return sl.sources.Window(
@@ -53,12 +56,7 @@ class RecordSource:
 
 
 def _record_label(record: PublishedTitle) -> str:
-    scope = record.version_scope.replace("_", " ")
-    return truncate_display_text(f"{record.one_line_title} · {scope}", 100)
-
-
-def _record_summary(record: PublishedTitle) -> sl.TextLike:
-    return record_row(record.one_line_title, record.version_scope)
+    return truncate_display_text(record.one_line_title, 100)
 
 
 def _comparison_rule(base_title: BaseTitle) -> sl.TextLike:
@@ -78,6 +76,8 @@ def _comparison_rule(base_title: BaseTitle) -> sl.TextLike:
 def record_browser(
     records: RecordService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
+    *,
+    version_scope: VersionScope,
 ) -> sp.Browser[PublishedTitle, ComponentsV2Target, sd.Request]:
     """Keep the selected record available while its holder is opened in the catalogue."""
 
@@ -113,11 +113,11 @@ def record_browser(
         )
 
     return sp.Browser(
-        RecordSource(records),
+        RecordSource(records, version_scope),
         key="records",
         identity=lambda record: str(record.id),
         label=_record_label,
-        summary=_record_summary,
+        summary=lambda record: record.one_line_title,
         detail=detail,
         page_size=CATALOGUE_PAGE_SIZE,
         show_page_size=True,

@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.catalogue.rows import build_row, record_row
+from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.builds.domain import Status
 from squid.builds.models import Build
@@ -187,13 +187,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
             key="search-records",
             identity=lambda record: record.source_id,
             label=lambda record: truncate_display_text(record.title, 80),
-            summary=lambda record: Text.join(
-                "\n",
-                (
-                    _highlighted(record.title_match or SearchText(record.title)),
-                    record.subtitle or record.version_scope,
-                ),
-            ),
+            summary=_record_line,
             detail=self._record_detail,
             page_size=5,
             title=self._records_label,
@@ -510,7 +504,7 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
     if isinstance(hit, BuildSearchHit):
         if request.group_by_build and request.scope is SearchScope.RECORDS and hit.records:
             # The matching-records detail lists every title held by this build.
-            record = _record_row(hit.records[0])
+            record = _record_line(hit.records[0])
             extra = len(hit.records) - 1
             return record + f" (+{extra}) · #{hit.source_id}" if extra else record + f" · #{hit.source_id}"
         build = build_row(hit.source_id, _highlighted(hit.title_match or SearchText(hit.title)), hit.dimensions)
@@ -521,18 +515,14 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
         if len(others) == 1 and others[0].title == hit.title:
             others = ()
         lines: list[sl.TextLike] = [build]
-        lines.extend(_record_row(record) for record in others[:2])
+        lines.extend(_record_line(record) for record in others[:2])
         if len(others) > 2:
             count = len(others) - 2
             lines.append(tr(t"search-grouped-more-records = +{count} more records"))
         return Text.join("\n", lines)
     if isinstance(hit, RecordSearchHit):
-        return _record_row(hit)
+        return _record_line(hit)
     return Text.join("\n", (_highlighted(hit.title_match or SearchText(hit.title)), _metadata_label(hit.metadata_kind)))
-
-
-def _record_row(record: RecordSearchHit) -> Text:
-    return record_row(_record_line(record), record.version_scope)
 
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:

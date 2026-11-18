@@ -448,7 +448,10 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
         assert request.mode is SearchMode.LEXICAL
         assert request.scope is (SearchScope.RECORDS if records else SearchScope.BUILDS)
         assert isinstance(request.parsed_query, RecordQuery if records else BuildQuery)
-        assert request.parsed_query is screen._query.parsed
+        if records:
+            assert request.parsed_query.normalized.endswith("AND version_scope:all_time")
+        else:
+            assert request.parsed_query is screen._query.parsed
         assert request.query == typed
         assert screen._query.parsed.normalized == "door AND kind:door"
         await ui.press(ui.key_for("guided-search"))
@@ -472,6 +475,46 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
         assert request.query == "base_title:smallest"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
+
+
+async def test_record_versions_filter_compact_standings_and_search() -> None:
+    records = AsyncMock(spec=RecordService)
+
+    async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedTitle]:
+        assert kwargs["resolved_only"] is True
+        current = version_scope is VersionScope.UP_TO_DATE
+        record = PublishedTitle(
+            id=2 if current else 1,
+            definition_id=1,
+            title_id=uuid4(),
+            title="Fastest piston door" if current else "Smallest piston door",
+            subtitle=None,
+            base_title=BaseTitle.FASTEST if current else BaseTitle.SMALLEST,
+            build_kind=BuildKind.DOOR,
+            version_scope=version_scope,
+            status=ResolutionStatus.RESOLVED,
+            holder_build_ids=(7,),
+            computed_at=datetime.now(UTC),
+        )
+        return Page(items=(record,), total=1, next=None, prev=None)
+
+    records.list_page.side_effect = list_page
+    screen = _screen(initial_id=None, records=records, initial_records=True)
+    service = cast(AsyncMock, screen._search_service)
+    async with stage(screen, owner=object()) as ui:
+        assert "Smallest piston door" in ui.texts()
+        assert ui.control(ui.key_for("all_time")).payload["style"] == 3
+        await ui.press(ui.key_for("up_to_date"))
+        assert "Fastest piston door" in ui.texts()
+        assert ui.control(ui.key_for("up_to_date")).payload["style"] == 3
+        await ui.press(ui.key_for("fastest"))
+        request = service.search.call_args.args[0]
+        assert request.parsed_query.normalized == "version_scope:up_to_date AND base_title:fastest"
+        await ui.press(ui.key_for("all_time"))
+        request = service.search.call_args.args[0]
+        assert request.parsed_query.normalized == "base_title:fastest AND version_scope:all_time"
+        assert ui.control(ui.key_for("all_time")).payload["style"] == 3
+        ui.assert_within_limits()
 
 
 async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_removed() -> None:

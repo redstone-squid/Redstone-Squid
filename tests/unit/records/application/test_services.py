@@ -155,12 +155,14 @@ class FakeRuns:
         descending: bool = True,
         limit: int,
         resolved_only: bool = False,
+        version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedTitle]:
         ordered = sorted(
             (
                 key
                 for key, record in self.published_records.items()
-                if not resolved_only or record.status is ResolutionStatus.RESOLVED
+                if (not resolved_only or record.status is ResolutionStatus.RESOLVED)
+                and (version_scope is None or record.version_scope is version_scope)
             ),
             reverse=descending,
         )
@@ -171,9 +173,12 @@ class FakeRuns:
             ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
         return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
 
-    async def count_published_records(self, *, resolved_only: bool = False) -> int:
+    async def count_published_records(
+        self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
+    ) -> int:
         return sum(
-            not resolved_only or record.status is ResolutionStatus.RESOLVED
+            (not resolved_only or record.status is ResolutionStatus.RESOLVED)
+            and (version_scope is None or record.version_scope is version_scope)
             for record in self.published_records.values()
         )
 

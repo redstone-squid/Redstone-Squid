@@ -522,6 +522,7 @@ class PostgresRecordRepository:
         descending: bool,
         limit: int,
         resolved_only: bool = False,
+        version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedTitle]:
         """List one page of published results in display order.
 
@@ -536,9 +537,12 @@ class PostgresRecordRepository:
             descending=descending,
             limit=limit,
             resolved_only=resolved_only,
+            version_scope=version_scope,
         )
 
-    async def count_published_records(self, *, resolved_only: bool = False) -> int:
+    async def count_published_records(
+        self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
+    ) -> int:
         """Count the results belonging to the currently active computation runs."""
         session = self._session()
         statement = (
@@ -549,6 +553,12 @@ class PostgresRecordRepository:
         )
         if resolved_only:
             statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
+        if version_scope is not None:
+            statement = (
+                statement.join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
+                .join(TitleDefinition.record_title)
+                .where(RecordTitle.version_scope == version_scope)
+            )
         return await session.scalar(statement) or 0
 
     async def _active_records(
@@ -561,6 +571,7 @@ class PostgresRecordRepository:
         descending: bool = True,
         limit: int,
         resolved_only: bool = False,
+        version_scope: VersionScope | None = None,
     ) -> tuple[PublishedTitle, ...]:
         session = self._session()
         statement = (
@@ -580,6 +591,8 @@ class PostgresRecordRepository:
             statement = statement.options(defer(TitleResult.door_evidence))
         if resolved_only:
             statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
+        if version_scope is not None:
+            statement = statement.join(TitleDefinition.record_title).where(RecordTitle.version_scope == version_scope)
         if result_id is not None:
             statement = statement.where(TitleResult.id == result_id)
         reverse = before_id is not None

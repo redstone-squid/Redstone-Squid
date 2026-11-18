@@ -396,13 +396,13 @@ def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() 
         return SearchRequest("2x2", scope=scope, group_by_build=True)
 
     records = source_text(_result_description(hit, grouped()), format="plain")
-    assert records == "Smallest 2x2 Door · Java Edition — all time (+1) · #42"
+    assert records == "Smallest 2x2 Door · Java Edition (+1) · #42"
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
         description = source_text(_result_description(hit, grouped(scope)), format="plain")
         assert description.splitlines() == [
             "#42 2x2 Seamless Door",
-            "Smallest 2x2 Door · Java Edition — all time",
-            "Fastest 2x2 Door · Java Edition — all time",
+            "Smallest 2x2 Door · Java Edition",
+            "Fastest 2x2 Door · Java Edition",
         ]
     same = replace(hit, title="Smallest 2x2 Door", title_match=None, records=hit.records[:1])
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
@@ -410,7 +410,7 @@ def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() 
             "#42 Smallest 2x2 Door",
         ]
     assert source_text(_result_description(same, grouped()), format="plain").splitlines() == [
-        "Smallest 2x2 Door · Java Edition — all time · #42",
+        "Smallest 2x2 Door · Java Edition · #42",
     ]
     # Only matched words are bold, so highlighting stands out from the row.
     assert (

@@ -16,7 +16,7 @@ from squid.records.application.models import (
     TitleDiagnosticGap,
 )
 from squid.records.application.snapshots import RecordSnapshot
-from squid.records.domain import BaseTitle, BuildKind, FormattedTitle
+from squid.records.domain import BaseTitle, BuildKind, FormattedTitle, VersionScope
 from squid.unit_of_work import UnitOfWork
 
 
@@ -115,9 +115,12 @@ class RecordRunRepository(Protocol):
         descending: bool,
         limit: int,
         resolved_only: bool = False,
+        version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedTitle]: ...
 
-    async def count_published_records(self, *, resolved_only: bool = False) -> int: ...
+    async def count_published_records(
+        self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
+    ) -> int: ...
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 
