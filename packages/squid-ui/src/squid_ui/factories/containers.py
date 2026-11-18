@@ -115,7 +115,8 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     header: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
     footer: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
     page: PageOwnership = FIRST_PAGE,
+    page_size: int | None = None,
 ) -> Region[RenderTargetT, ContextT]:
     """Let the planner allocate space jointly with sibling and nested regions."""
     title = Text(title)
-    return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page)
+    return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page, page_size)

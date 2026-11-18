@@ -651,6 +651,7 @@ def container_offers[RenderTargetT, ContextT](
             value.widows if isinstance(value, sem.Paged) else 1,
             value.page,
             cursor_key,
+            per=value.page_size if isinstance(value, sem.Region) else None,
         )
     container = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,

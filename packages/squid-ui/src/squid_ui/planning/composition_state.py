@@ -14,10 +14,10 @@ from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.authoring.semantic import Details, Grid, Group, Items, List, Navigation, Paged, Region
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.interactions.ownership import Controlled
-from squid_ui.layout import Known, RegionRef
+from squid_ui.layout import ElementRef, Known, RegionRef
 from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.overflow import FIRST_PAGE, RoutedPage
-from squid_ui.pages import PagePosition
+from squid_ui.pages import PagePosition, RevealPage
 from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
 from squid_ui.planning.composition_request import CompositionOptions
@@ -196,6 +196,22 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                     covered = {anchor(ref.keys) for ref in region.anchors[stored.position.page]}
                     if stored.position.anchor is not None and stored.position.anchor in covered:
                         anchors[stored.position.anchor] = stored.position.page
+            if isinstance(owner, RevealPage) and isinstance(owner.anchor, ElementRef):
+                reference = owner.anchor
+                matches = [
+                    ref
+                    for ref, unit in graph.units.items()
+                    if ref.keys[: len(region.source_prefix)] == region.source_prefix
+                    and isinstance(unit.value, reference.kind)
+                    and (
+                        ref.keys[-len(reference.keys) :] == reference.keys
+                        or (len(reference.keys) == 1 and ref.keys[-1].endswith(f".{reference.keys[0]}"))
+                    )
+                ]
+                if len(matches) > 1:
+                    message = f"ambiguous reveal reference: {reference.keys!r}"
+                    raise LayoutInvariantError(message)
+                owner = replace(owner, anchor=anchor(matches[0].keys) if matches else "")
             cursor = MaterializedCursorRequest(key, len(region.cuts), cursor_fingerprint, anchors, owner, order)
             position = coordinator.grant(cursor)
             if identity in options.pages:

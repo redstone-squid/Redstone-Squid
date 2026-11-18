@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Protocol
 
 from squid_ui.interactions.ownership import Uncontrolled
+from squid_ui.layout import ElementRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,5 +75,5 @@ class RevealPage(Uncontrolled[int]):
     """
 
     initial: int = 0
-    anchor: str
+    anchor: str | ElementRef[object]
     request: str

@@ -92,6 +92,7 @@ class CursorCoordinator:
         anchored_page = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
         override = None if self.overrides is None else self.overrides.get(request.key)
         if isinstance(owner, RevealPage) and owner.request != cursor.reveal_request and request.anchors is not None:
+            assert isinstance(owner.anchor, str)
             revealed = request.anchors.get(owner.anchor)
             if revealed is not None and override is None:
                 override = PagePosition(owner.anchor, revealed)

@@ -892,11 +892,15 @@ class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
     header: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
     footer: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
     page: PageOwnership = FIRST_PAGE
+    page_size: int | None = None
 
     def __post_init__(self) -> None:
         if not self.key:
             msg = "region key must not be empty"
             raise ValueError(msg)
+        if self.page_size is not None and self.page_size < 1:
+            message = "region page_size must be positive"
+            raise ValueError(message)
 
 
 @immutable
