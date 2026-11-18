@@ -23,6 +23,7 @@ from squid.bot.app import (
     RedstoneSquid,
 )
 from squid.bot.errors import SquidCommandTree
+from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.help_cog import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.cog import BuildCommands
@@ -86,7 +87,7 @@ class StubBot(commands.Bot):
 
 
 @asynccontextmanager
-async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
+async def _loaded_bot(extensions: Sequence[Extension]) -> AsyncIterator[commands.Bot]:
     """Load the requested extensions, restoring imported modules when the context exits.
 
     `load_extension` builds a *fresh* module object and assigns it into `sys.modules`, rather than
@@ -97,12 +98,13 @@ async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
     """
     before = dict(sys.modules)
     bot = StubBot()
+    bot.extension_manager = ExtensionManager(extensions)
     try:
-        for extension in extensions:
-            await bot.load_extension(extension)
+        await bot.extension_manager.start(bot.load_extension, bot.unload_extension)
         yield bot
     finally:
         await bot.ui.close()
+        await bot.extension_manager.close(bot.unload_extension)
         for name, module in before.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module
@@ -123,7 +125,9 @@ async def production_bot() -> AsyncIterator[commands.Bot]:
 
 
 async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> None:
-    assert set(loaded_bot.extensions) == set(LOADABLE)
+    assert set(loaded_bot.extensions) == {
+        extension if isinstance(extension, str) else extension.module for extension in LOADABLE
+    }
 
 
 async def test_submission_extension_reloads_with_its_own_command_group() -> None:

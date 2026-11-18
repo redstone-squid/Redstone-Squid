@@ -14,6 +14,7 @@ from pytest_mock import MockerFixture
 
 import squid_ui.ext.discord as sd
 from squid.bot import app as bot_app
+from squid.bot.extensions import ExtensionDependencyError, ExtensionManager
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_reactivity import EventLedger, transaction
@@ -212,13 +213,12 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     bot.topic_bridge = None
     bot.development_mode = False
     bot.__dict__["layout_profiler"] = object()
-    bot.load_extension = AsyncCallRecorder()
+    bot.extension_manager = ExtensionManager(())
     run = AsyncCallRecorder()
     layout_job = run()
     metrics_job = run()
     bot.interaction_metrics = cast(Any, UIRuntimeRecorder(metrics_job))
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
-    mocker.patch.object(bot_app, "EXTENSIONS", ())
     install = mocker.patch.object(bot_app, "install_ui_router")
     mocker.patch.object(bot_app, "start_permission_epoch_watch")
 
@@ -240,6 +240,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
 async def test_ui_cleanup_failure_still_closes_application_resources(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     bot.reactions = cast(Any, ClosingResource())
+    bot.extension_manager = ExtensionManager(())
     bot.ui = cast(
         Any, ClosingResource(close=AsyncCallRecorder(error=ExceptionGroup("UI shutdown", [ValueError("cleanup")])))
     )
@@ -255,6 +256,15 @@ async def test_ui_cleanup_failure_still_closes_application_resources(mocker: Moc
     bot.catbox.aclose.assert_awaited_once()
     bot.media_previews.aclose.assert_awaited_once()
     close_gateway.assert_awaited_once()
+
+
+async def test_managed_extensions_require_a_restart_even_with_relative_names() -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    bot.extension_manager = ExtensionManager(bot_app.EXTENSIONS)
+
+    for operation in (bot.load_extension, bot.reload_extension, bot.unload_extension):
+        with pytest.raises(ExtensionDependencyError, match=r"Restart.*voting"):
+            await operation(".cog", package="squid.bot.voting")
 
 
 @pytest.mark.parametrize("development", [True, False])

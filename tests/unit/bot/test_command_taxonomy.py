@@ -15,7 +15,7 @@ from squid.bot.give_redstoner_cog import GiveRedstoner
 from squid.bot.permissions_cog import PermissionCog
 from squid.bot.settings.cog import SettingsCog
 from squid.bot.showcase.cog import LayoutShowcaseCog
-from squid.bot.starboard import StarboardCog
+from squid.bot.starboard.cog import StarboardCog
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.version_tracking_cog import VersionTracker
 from squid.bot.voting.cog import VoteCog

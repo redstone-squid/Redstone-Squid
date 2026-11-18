@@ -6,7 +6,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.starboard import StarboardCog
+from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
 from squid.core.actors import Actor
 from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision

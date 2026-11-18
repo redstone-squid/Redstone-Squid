@@ -3026,15 +3026,6 @@
       "squid/bot/recount_cog.py:136"
     ]
   },
-  "bot-recount-that-message-is-not-a-vote-or": {
-    "fingerprint": "cd6591d40524810065e30feac78bec3414d7be2aedbb07af4db637e090154d03",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/recount_cog.py:119"
-    ]
-  },
   "bot-recount-that-vote-is-already-being-recounted": {
     "fingerprint": "c25784a9f59e83c987d4d75b36f4a40680001f52abb45586a8ff033084b22150",
     "attributes": [],

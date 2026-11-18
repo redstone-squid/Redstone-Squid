@@ -12,6 +12,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
+from squid.bot.starboard.spec import StarboardExports, extension
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
@@ -257,4 +258,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    await bot.add_cog(StarboardCog(bot))
+    ctx = bot.extension_manager.setup_context(extension)
+    cog = StarboardCog(bot)
+    await bot.add_cog(cog)
+    ctx.publish(StarboardExports(recount=cog.recount))

@@ -904,9 +904,6 @@ bot-recount-i-cannot-read-that-message = I cannot read that message.
 # squid/bot/recount_cog.py:136
 bot-recount-starboard-reactions-recounted = Starboard reactions recounted.
 
-# squid/bot/recount_cog.py:119
-bot-recount-that-message-is-not-a-vote-or = That message is not a vote or a starboard message.
-
 # squid/bot/recount_cog.py:106
 bot-recount-that-vote-is-already-being-recounted = That vote is already being recounted.
 

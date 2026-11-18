@@ -24,6 +24,7 @@ from squid.bot.voting.poll_wizard import (
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
+from squid.bot.voting.spec import VotingExports, extension
 from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
@@ -258,6 +259,8 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return result
 
 
-async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    await bot.add_cog(VoteCog(bot))
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
+    ctx = bot.extension_manager.setup_context(extension)
+    cog = VoteCog(bot)
+    await bot.add_cog(cog)
+    ctx.publish(VotingExports(recount=cog.reactions))

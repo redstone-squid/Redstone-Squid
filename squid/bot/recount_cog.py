@@ -14,15 +14,20 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from math import ceil
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, Self
 
 import discord
 from discord import app_commands
 
 import squid_ui.ext.discord as sd
 from squid.bot.i18n import to_locale_str
+from squid.bot.recount.spec import extension
+from squid.bot.starboard.spec import StarboardRecount
+from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import enforce
+from squid.bot.voting.spec import VoteRecount
+from squid.bot.voting.spec import extension as voting_extension
 from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_i18n import md_tr
@@ -30,8 +35,6 @@ from squid_ui.content.text import Text
 
 if TYPE_CHECKING:
     import squid.bot.app
-    from squid.bot.starboard.cog import StarboardCog
-    from squid.bot.voting.cog import VoteCog
 
 GUILD_COOLDOWN_SECONDS = 30.0
 """How long a guild waits after starting a recount before it may start another."""
@@ -44,8 +47,10 @@ _MESSAGE_LINK = re.compile(
 class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Recount the reactions on one vote card or starboard source message."""
 
-    def __init__(self, bot: BotT) -> None:
+    def __init__(self, bot: BotT, *, votes: VoteRecount, starboards: StarboardRecount) -> None:
         super().__init__(bot)
+        self._votes = votes
+        self._starboards = starboards
         self._last_started: dict[int, float] = {}
         """When each guild last started a recount, in `time.monotonic` seconds."""
         self._origins_in_progress: set[int] = set()
@@ -99,14 +104,13 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         # A vote card, recognized by its session.
         snapshot = await self.bot.services.votes.get_session_for_message(message_id)
         if snapshot is not None:
-            vote_cog = cast("VoteCog[BotT] | None", self.bot.get_cog("VoteCog"))
-            if not snapshot.is_open or vote_cog is None:
+            if not snapshot.is_open:
                 return tr(t"bot-recount-that-vote-is-already-closed = That vote is already closed.")
-            if vote_cog.reactions.is_recounting(snapshot.id):
+            if self._votes.is_recounting(snapshot.id):
                 return tr(t"bot-recount-that-vote-is-already-being-recounted = That vote is already being recounted.")
             if (wait := self._start(guild_id)) is not None:
                 return _cooldown(wait)
-            changed = await vote_cog.reactions.recount(snapshot.id)
+            changed = await self._votes.recount(snapshot.id)
             return (
                 tr(t"bot-recount-votes-recounted = Votes recounted.")
                 if changed
@@ -114,9 +118,6 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             )
 
         # A starboard post or the source message it mirrors.
-        starboard_cog = cast("StarboardCog[BotT] | None", self.bot.get_cog("StarboardCog"))
-        if starboard_cog is None:
-            return tr(t"bot-recount-that-message-is-not-a-vote-or = That message is not a vote or a starboard message.")
         await authorize_starboard()
         origin_channel_id, origin_id = await self._starboard_origin(channel_id, message_id)
         if origin_id in self._origins_in_progress:
@@ -128,7 +129,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return _cooldown(wait)
         self._origins_in_progress.add(origin_id)
         try:
-            keys = await starboard_cog.recount(origin)
+            keys = await self._starboards(origin)
         finally:
             self._origins_in_progress.discard(origin_id)
         if not keys:
@@ -164,4 +165,9 @@ def _cooldown(seconds: float) -> Text:
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    await bot.add_cog(RecountCog(bot))
+    ctx = bot.extension_manager.setup_context(extension)
+    await bot.add_cog(
+        RecountCog(
+            bot, votes=ctx.require(voting_extension).recount, starboards=ctx.require(starboard_extension).recount
+        )
+    )

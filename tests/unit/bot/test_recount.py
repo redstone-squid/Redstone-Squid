@@ -6,9 +6,7 @@ from typing import Any, cast, override
 import pytest
 
 from squid.bot.recount_cog import RecountCog
-from squid.bot.starboard.cog import StarboardCog
-from squid.bot.voting.cog import VoteCog
-from squid.bot.voting.reactions import VoteReactionHandler
+from squid.bot.voting.spec import VoteRecount
 from squid.messages.models import Message
 from squid.posts.application import PostService
 from squid.posts.domain import PostReference
@@ -28,7 +26,7 @@ LINK = f"https://discord.com/channels/{GUILD_ID}/200/100"
 
 
 @dataclass
-class VoteReactions(VoteReactionHandler):
+class VoteReactions(VoteRecount):
     running: set[int] = field(default_factory=set)
     recounted: list[int] = field(default_factory=list)
 
@@ -43,10 +41,9 @@ class VoteReactions(VoteReactionHandler):
 
 
 @dataclass
-class Starboard(StarboardCog):
+class Starboard:
     recounted: list[int] = field(default_factory=list)
 
-    @override
     async def recount(self, message: Any) -> tuple[tuple[int, int], ...]:
         self.recounted.append(message.id)
         return ((1, message.id),)
@@ -85,11 +82,6 @@ class Starboards(StarboardService):
         )
 
 
-class VotingCog(VoteCog):
-    def __init__(self, reactions: VoteReactions) -> None:
-        self.reactions = reactions
-
-
 class Harness:
     def __init__(self, *, snapshot: VoteSessionSnapshot | None = None, mirror_of: int | None = None) -> None:
         self.reactions = VoteReactions()
@@ -99,15 +91,15 @@ class Harness:
         async def get_or_fetch_message(channel_id: int, message_id: int) -> Any:
             return MessageHarness(message_id=message_id, channel_id=channel_id, guild_id=GUILD_ID).source
 
-        cogs = {"VoteCog": VotingCog(self.reactions), "StarboardCog": self.starboard}
         bot = make_layout_bot(
             services=bot_services(votes=Votes(snapshot), posts=Posts(mirror_of), starboards=Starboards()),
-            get_cog=cogs.get,
             get_or_fetch_message=get_or_fetch_message,
         )
         # Skip sd.Cog.__init__, which needs a running UI; the command logic reads only these.
         self.cog = cast(Any, RecountCog).__new__(RecountCog)
         self.cog.bot = bot
+        self.cog._votes = self.reactions
+        self.cog._starboards = self.starboard.recount
         self.cog._last_started = {}
         self.cog._origins_in_progress = set()
 

@@ -23,16 +23,20 @@ from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.catalogue.search.contextual import ContextualSearches
 from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
+from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.interaction_metrics import InteractionMetrics
 from squid.bot.members import DiscordMembers
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
+from squid.bot.recount.spec import extension as recount_extension
 from squid.bot.routes import router as ui_router
+from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
+from squid.bot.voting.spec import extension as voting_extension
 from squid.config import (
     BotIdentityConfig,
     BotProcessConfig,
@@ -74,7 +78,7 @@ CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"
 # reads job heartbeats, and forever-jobs such as the scheduler and challenge runner never
 # write one merely by staying alive.
 
-EXTENSIONS = (
+EXTENSIONS: tuple[Extension, ...] = (
     "squid.bot.reaction_events_cog",
     "squid.bot.messages_cog",
     "squid.bot.settings.cog",
@@ -83,9 +87,9 @@ EXTENSIONS = (
     "squid.bot.log_cog",
     "squid.bot.help_cog",
     "squid.bot.feedback_cog",
-    "squid.bot.voting.cog",
-    "squid.bot.starboard.cog",
-    "squid.bot.recount_cog",
+    voting_extension,
+    starboard_extension,
+    recount_extension,
     "squid.bot.sync.cog",
     "squid.bot.events.cog",
     "squid.bot.notifications_cog",
@@ -98,7 +102,7 @@ EXTENSIONS = (
     "squid.bot.welcome_relay_cog",
     "squid.bot.navigation.cog",
 )
-"""Production extensions in load order. Tests load this same set to detect registration conflicts."""
+"""Extensions enabled in production."""
 
 DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools_cog", "squid.bot.showcase.cog")
 """Additional extensions loaded only in development mode."""
@@ -145,6 +149,8 @@ class RedstoneSquid(Bot):
         self.inference_model = inference_model
         self.inference_reasoning_effort = inference_reasoning_effort
         self.development_mode = development_mode
+        extensions = (*EXTENSIONS, *DEVELOPMENT_EXTENSIONS) if development_mode else EXTENSIONS
+        self.extension_manager = ExtensionManager(extensions)
         description = f"{config.bot_name} v{config.bot_version}".strip()
         intents = discord.Intents(guilds=True, members=True, messages=True, message_content=True, reactions=True)
         super().__init__(
@@ -314,6 +320,21 @@ class RedstoneSquid(Bot):
             await super().start(token, reconnect=reconnect)
 
     @override
+    async def load_extension(self, name: str, *, package: str | None = None) -> None:
+        self.extension_manager.check_live_operation(self._resolve_name(name, package))
+        await super().load_extension(name, package=package)
+
+    @override
+    async def unload_extension(self, name: str, *, package: str | None = None) -> None:
+        self.extension_manager.check_live_operation(self._resolve_name(name, package))
+        await super().unload_extension(name, package=package)
+
+    @override
+    async def reload_extension(self, name: str, *, package: str | None = None) -> None:
+        self.extension_manager.check_live_operation(self._resolve_name(name, package))
+        await super().reload_extension(name, package=package)
+
+    @override
     async def close(self) -> None:
         """Stop gateway-triggered and background work before application resources close."""
         await self.reactions.close()
@@ -327,6 +348,7 @@ class RedstoneSquid(Bot):
                 logger.exception("UI cleanup failed during application shutdown")
         if ui_shutdown.cancel_called:
             logger.error("UI cleanup did not finish before the application shutdown deadline")
+        await self.extension_manager.close(super().unload_extension)
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not
@@ -358,20 +380,7 @@ class RedstoneSquid(Bot):
             self.topic_publisher = self.topic_bridge
             self.background_tasks.start(self.topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
 
-        extensions = [*EXTENSIONS]
-        if self.development_mode:
-            extensions.extend(DEVELOPMENT_EXTENSIONS)
-
-        loaded: list[str] = []
-        try:
-            for extension in extensions:
-                await self.load_extension(extension)
-                loaded.append(extension)
-        except Exception:
-            for extension in reversed(loaded):
-                with contextlib.suppress(commands.ExtensionError):
-                    await self.unload_extension(extension)
-            raise
+        await self.extension_manager.start(super().load_extension, super().unload_extension)
 
         # After every extension, because loading is what imports the handler modules that
         # register routes, and installing the router freezes the table.
