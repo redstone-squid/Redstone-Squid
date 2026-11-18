@@ -128,7 +128,26 @@ class SearchQueryParser:
         trailing = self._peek()
         if trailing.kind is not _TokenKind.END:
             _fail(f"unexpected {trailing.value!r}", trailing.position)
-        return SearchQuery(expression=expression, normalized=render_expression(expression))
+        return SearchQuery(expression=expression, normalized=self.render(expression))
+
+    def render(self, expression: QueryExpression) -> str:
+        """Render a query so that parsing it preserves its meaning."""
+        rendered = _render_expression(expression)
+        first_word = rendered.partition(" ")[0].casefold()
+        field = self._registry.resolve("base_title")
+        if field is None or not any(first_word == prefix[0] for prefix in _RECORD_PREFIXES):
+            return rendered
+        pending = [expression]
+        while pending:
+            clause = pending.pop()
+            if isinstance(clause, FieldExpression) and clause.field == field:
+                return rendered
+            if isinstance(clause, BooleanExpression):
+                pending.extend(clause.operands)
+            elif isinstance(clause, NotExpression):
+                pending.append(clause.operand)
+        # A leading literal can become shorthand when an explicit title filter is removed.
+        return f"({rendered})"
 
     def _expand_record_prefix(self, tokens: tuple[_Token, ...]) -> tuple[_Token, ...]:
         field = self._registry.resolve("base_title")
@@ -354,7 +373,7 @@ def _combine(operator: BooleanOperator, operands: list[QueryExpression]) -> Quer
     return BooleanExpression(operator, tuple(flattened))
 
 
-def render_expression(expression: QueryExpression) -> str:
+def _render_expression(expression: QueryExpression) -> str:
     """Render a parsed expression with its Boolean grouping preserved."""
     if isinstance(expression, TextExpression):
         return _quote(expression.value) if expression.phrase else expression.value
@@ -372,7 +391,7 @@ def render_expression(expression: QueryExpression) -> str:
         }[expression.operator]
         return f"{expression.field.name}{operator}{value}"
     if isinstance(expression, NotExpression):
-        operand = render_expression(expression.operand)
+        operand = _render_expression(expression.operand)
         if isinstance(expression.operand, BooleanExpression):
             operand = f"({operand})"
         return f"NOT {operand}"
@@ -381,7 +400,7 @@ def render_expression(expression: QueryExpression) -> str:
 
 
 def _render_with_parentheses(expression: QueryExpression, parent: BooleanOperator) -> str:
-    rendered = render_expression(expression)
+    rendered = _render_expression(expression)
     if isinstance(expression, BooleanExpression) and expression.operator is not parent:
         return f"({rendered})"
     return rendered

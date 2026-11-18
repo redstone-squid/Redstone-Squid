@@ -163,6 +163,7 @@ def test_parser_expands_leading_record_titles(prefix: str) -> None:
         ('"fastest smallest" door', '"fastest smallest" AND door'),
         ("door fastest", "door AND fastest"),
         ("first attempt", "first AND attempt"),
+        ("(fastest) door", "(fastest AND door)"),
         ("smallestish door", "smallestish AND door"),
         ("title:fastest", "title:fastest"),
         ("fastest base_title:smallest", "fastest AND base_title:smallest"),
@@ -170,7 +171,10 @@ def test_parser_expands_leading_record_titles(prefix: str) -> None:
     ],
 )
 def test_parser_preserves_literal_text_and_explicit_record_filters(query: str, normalized: str) -> None:
-    assert SearchQueryParser().parse(query).normalized == normalized
+    parser = SearchQueryParser()
+    parsed = parser.parse(query)
+    assert parsed.normalized == normalized
+    assert parser.parse(normalized) == parsed
 
 
 def test_record_prefix_preserves_boolean_precedence_and_error_positions() -> None:

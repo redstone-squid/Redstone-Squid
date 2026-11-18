@@ -31,7 +31,7 @@ from squid.bot.ui import tr
 from squid.records.domain import BuildKind
 from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
-from squid.search.application.parser import SearchQueryParser, render_expression
+from squid.search.application.parser import SearchQueryParser
 from squid.search.domain.fields import FieldDefinition, FieldType
 from squid.search.domain.query import (
     BooleanExpression,
@@ -114,7 +114,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         return tuple(item for _, item in query_leaves(expression)) if expression is not None else ()
 
     def _set_expression(self, expression: QueryExpression | None) -> None:
-        self.query = self.parser.parse(render_expression(expression) if expression is not None else "").normalized
+        self.query = self.parser.render(expression) if expression is not None else ""
 
     def _replace(self, index: int, replacement: QueryExpression | None) -> None:
         expression = self.parser.parse(self.query).expression
