@@ -10,7 +10,7 @@ from discord.ext.commands import Context, when_mentioned
 
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.browse import BuildBrowseScreen
-from squid.bot.catalogue.search.contextual import search_autocomplete
+from squid.bot.catalogue.search.contextual import SEARCH_COMMAND_NAME, SEARCH_SCOPE_NAME, search_autocomplete
 from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
@@ -66,11 +66,11 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return await self.intake.recalculate(request, message)
 
     @sd.command(
-        name=tr(t"command-search-name = search"),
+        name=SEARCH_COMMAND_NAME,
         description=tr(t"command-search-help = Search builds, records, and taxonomy metadata"),
         options={
             "scope": sd.Option(
-                name=tr(t"command-search-scope-name = scope"),
+                name=SEARCH_SCOPE_NAME,
                 description=tr(
                     t"build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all."
                 ),

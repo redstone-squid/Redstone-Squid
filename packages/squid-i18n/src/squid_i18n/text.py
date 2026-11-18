@@ -504,12 +504,10 @@ def emoji_text(value: str) -> Text:
 
 
 def discord_markup(value: str) -> Text:
-    """Show text copied from a Discord message with the formatting its author gave it.
+    """Preserve markup from Discord, such as message content or a registered command mention.
 
-    Discord receives `value` unchanged, so its Markdown, mentions and emoji display as they
-    did in the original message. Other destinations show it as literal text. Use this only
-    for content Discord already accepted from a user; mentions in it ping unless the
-    message's allowed mentions exclude them.
+    Discord receives `value` unchanged. Other destinations display it as literal text.
+    Mentions can ping according to the message's allowed mentions.
     """
     return Text._from_parts((_DiscordMarkup(value),)) if value else Text("")
 

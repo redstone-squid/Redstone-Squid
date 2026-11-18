@@ -2444,13 +2444,13 @@ command-search-help = Search builds, records, and taxonomy metadata
 # squid/bot/submission/cog.py:91
 command-search-mode-name = mode
 
-# squid/bot/submission/cog.py:68
+# squid/bot/catalogue/search/contextual.py:36
 command-search-name = search
 
 # squid/bot/submission/cog.py:101
 command-search-query-name = query
 
-# squid/bot/submission/cog.py:73
+# squid/bot/catalogue/search/contextual.py:37
 command-search-scope-name = scope
 
 # squid/bot/submission/cog.py:86
@@ -2585,8 +2585,8 @@ context-follow-saved = Following. Manage your follows in /notifications.
 # squid/bot/catalogue/search/contextual.py:179
 contextual-search-cancel = Cancel search
 
-# squid/bot/catalogue/search/contextual.py:120
-contextual-search-empty = No matches. Try another /search query.
+# squid/bot/catalogue/search/contextual.py:182
+contextual-search-empty = No matches. Try another query with { $command }.
 
 # squid/bot/catalogue/search/contextual.py:115
 contextual-search-expired = This search ended. Use Search in the editor to start again.
@@ -2594,8 +2594,8 @@ contextual-search-expired = This search ended. Use Search in the editor to start
 # squid/bot/catalogue/search/contextual.py:176
 contextual-search-pick = Select a match to add it
 
-# squid/bot/catalogue/search/contextual.py:69
-contextual-search-prompt = Use /search here within two minutes. Leave scope empty.
+# squid/bot/catalogue/search/contextual.py:87
+contextual-search-prompt = Use { $command } here within two minutes. Leave { $scope } empty.
 
 # squid/core/errors.py:226
 core-account-required-action = A linked account is required for this action.

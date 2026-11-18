@@ -24,7 +24,7 @@ from squid.submissions.domain import FormManifest
 from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
 from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
 from squid.suggestions.infrastructure.providers import StaticProvider
-from squid_ui.ext.discord.testing import InteractionHarness, assert_within_limits, commit_render, stage
+from squid_ui.ext.discord.testing import InteractionHarness, assert_within_limits, commit_render, payload_texts, stage
 from squid_ui.testing import press_event, texts
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
 from tests.support.discord import make_command_interaction
@@ -83,7 +83,8 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
     assert workspace.answers["version_compatibility"] == "1.21"
 
 
-async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_result() -> None:
+@pytest.mark.parametrize("registered", [True, False])
+async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_result(registered: bool) -> None:
     build = _door(patterns=["Regular"])
     screen = editor(build)
     sources = SuggestionRegistry.of(
@@ -97,10 +98,14 @@ async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_r
         client.contextual_searches = ContextualSearches()
         client.services = SimpleNamespace(suggestions=SuggestionService(sources))
         registration = SimpleNamespace(name="search", type=discord.AppCommandType.chat_input, mention="</search:2>")
-        with patch.object(client.tree, "fetch_commands", new=AsyncMock(return_value=[registration])):
+        commands = [registration] if registered else []
+        command = "</search:2>" if registered else "`/search`"
+        with patch.object(client.tree, "fetch_commands", new=AsyncMock(return_value=commands)):
             launch = await ui.press(ui.key_for("search-patterns"))
         assert launch.deferrals[0].kwargs["ephemeral"] is True
-        assert "</search:2>" in launch.edits[0].kwargs["content"]
+        prompt = launch.edits[0].kwargs["content"]
+        assert prompt.endswith(f"Use {command} here within two minutes. Leave `scope` empty.")
+        assert prompt.count("/search") == 1
 
         autocomplete = make_command_interaction(client, name="search", user_id=1, channel_id=5, autocomplete=True)
         (pattern,) = await search_autocomplete(cast(BotInteraction, autocomplete), "")
@@ -114,18 +119,23 @@ async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_r
                 "width:"
             ]
 
-        invocation = InteractionHarness(client=client, message_id=100)
         # A slash command is owned by its cog, which can differ from the editor's owner.
-        request = await client.ui.scope(object()).request(invocation.source)
+        scope = client.ui.scope(object())
         cog = BuildCommands.__new__(BuildCommands)
-        await unwrap(cog.search_records.callback)(cog, request, query=pattern.value)
+        invoke = unwrap(cog.search_records.callback)
+        no_matches = InteractionHarness(client=client, message_id=100)
+        await invoke(cog, await scope.request(no_matches.source), query="zzzzz")
+        assert payload_texts(no_matches.edits[0].kwargs["view"]) == [f"No matches. Try another query with {command}."]
+
+        invocation = InteractionHarness(client=client, message_id=101)
+        await invoke(cog, await scope.request(invocation.source), query=pattern.value)
         assert invocation.deferrals[0].kwargs["ephemeral"] is True
         key = sd.SessionKey.custom("contextual-search", (1, 5))
         (session,) = client.ui.sessions.get(key)
         root = session.root
         (match,) = (key for key in root.snapshot().handler_keys if key == "match" or key.endswith(".match"))
 
-        selection = InteractionHarness(client=client, message_id=100)
+        selection = InteractionHarness(client=client, message_id=101)
         await root.dispatch(match, selection.source, ["0"], generation=root.generation)
         assert root.finished
         assert not ui.root.finished

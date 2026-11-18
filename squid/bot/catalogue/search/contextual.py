@@ -21,7 +21,7 @@ from squid.bot.utils.autocomplete import (
     suggests,
 )
 from squid.suggestions.domain import Suggestion, SuggestionRequest
-from squid_i18n import discord_text, resolve_text
+from squid_i18n import Text, discord_markup, discord_text, inline_code, resolve_text, source_text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
@@ -30,10 +30,13 @@ if TYPE_CHECKING:
 
 _SEARCH_SECONDS = 120
 _MAX_SEARCHES = 256
-_COMMAND_NAME = "search"
 _CHOICE_PREFIX = "~editor:"
 _MAX_CHOICES = 4 * AUTOCOMPLETE_CHOICE_LIMIT
 _EXPIRED = tr(t"contextual-search-expired = This search ended. Use Search in the editor to start again.")
+SEARCH_COMMAND_NAME = tr(t"command-search-name = search")
+SEARCH_SCOPE_NAME = tr(t"command-search-scope-name = scope")
+_COMMAND_NAME = source_text(SEARCH_COMMAND_NAME, format="plain")
+_SCOPE_NAME = source_text(SEARCH_SCOPE_NAME, format="plain")
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,9 +82,10 @@ class ContextualSearches:
         interaction = request.interaction
         assert interaction is not None
         await request.defer("private")
-        mention = await self._mention(request.client)
-        hint = tr(t"contextual-search-prompt = Use /search here within two minutes. Leave scope empty.")
-        content = "\n".join(discord_text(resolve_text(line, request.localization)) for line in (title, hint))
+        command = await self._command_reference(request.client)
+        scope = inline_code(SEARCH_SCOPE_NAME)
+        hint = tr(t"contextual-search-prompt = Use {command} here within two minutes. Leave {scope} empty.")
+        content = discord_text(resolve_text(Text.join("\n", (title, hint)), request.localization))
         now = monotonic()
         key = (interaction.user.id, interaction.channel_id)
         self._searches = {identity: search for identity, search in self._searches.items() if search.active(now)}
@@ -91,27 +95,30 @@ class ContextualSearches:
         search = _Search(parent, source, title, on_pick, suggests(source), now + _SEARCH_SECONDS)
         self._searches[key] = search
         try:
-            await request.respond(content if mention is None else f"{content}\n{mention}", audience="personal")
+            await request.respond(content, audience="personal")
         except BaseException:
             self._discard(interaction, search)
             raise
 
-    async def _mention(self, client: RedstoneSquid) -> str | None:
+    async def _command_reference(self, client: RedstoneSquid) -> Text:
         if monotonic() >= self._mention_expires_at:
             try:
                 commands = await client.tree.fetch_commands()
             except discord.HTTPException:
-                return self._command_mention
-            self._command_mention = next(
-                (
-                    command.mention
-                    for command in commands
-                    if command.name == _COMMAND_NAME and command.type is discord.AppCommandType.chat_input
-                ),
-                None,
-            )
-            self._mention_expires_at = monotonic() + 300
-        return self._command_mention
+                pass
+            else:
+                self._command_mention = next(
+                    (
+                        command.mention
+                        for command in commands
+                        if command.name == _COMMAND_NAME and command.type is discord.AppCommandType.chat_input
+                    ),
+                    None,
+                )
+                self._mention_expires_at = monotonic() + 300
+        if self._command_mention is not None:
+            return discord_markup(self._command_mention)
+        return inline_code(Text(t"/{SEARCH_COMMAND_NAME}"))
 
     def _discard(self, interaction: BotInteraction, search: _Search) -> None:
         key = (interaction.user.id, interaction.channel_id)
@@ -170,7 +177,10 @@ class ContextualSearches:
             await request.respond(text_node(_EXPIRED))
             return
         if not result.items:
-            await request.respond(text_node(tr(t"contextual-search-empty = No matches. Try another /search query.")))
+            command = await self._command_reference(request.client)
+            await request.respond(
+                text_node(tr(t"contextual-search-empty = No matches. Try another query with {command}."))
+            )
             return
 
         async def picked(event: sd.ScreenResultEvent[Suggestion]) -> None:
@@ -194,7 +204,7 @@ _query_autocomplete = suggests("search_query")
 
 async def search_autocomplete(interaction: BotInteraction, current: str) -> list[SuggestionChoice]:
     return await interaction.client.contextual_searches.autocomplete(
-        interaction, current, scoped=bool(getattr(interaction.namespace, "scope", None))
+        interaction, current, scoped=bool(getattr(interaction.namespace, _SCOPE_NAME, None))
     )
 
 
