@@ -1,16 +1,7 @@
-"""Edit one search query through filter rows, a filter picker, and a sort picker.
+"""Edit a search query through filter rows and independent filter and sort panels.
 
-The parsed query supplies the editable filter rows. The "Add filter" and "Sort"
-panels open independently. Adding a value keeps its field open for another filter.
-Every change is reported to `on_apply` immediately.
-
-Adding a filter takes two steps: choose a field, then its value. How the value is
-chosen depends on the field:
-
-- Fields backed by a named catalogue, such as creators or restrictions, open a
-  searchable picker of known values.
-- Fields with a short fixed list, such as kind, and yes/no fields show a menu.
-- Other fields, such as numbers, dates, and free text, open a form.
+Select fields together, then enter their values through a picker, menu, or form
+for each field. The batch applies after the last value is entered.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
@@ -24,7 +15,7 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, query_leaves, replace_clause
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
-from squid.bot.lookup import PickHandler, RequestAuthorizer, SuggestionSource
+from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
 from squid.search.application import SearchService
 from squid.search.application.fields import FieldRegistry
@@ -54,6 +45,7 @@ VALUE_SOURCES = {
 
 # Filter rows shown per page; long queries page through them.
 _CLAUSES_PER_PAGE = 2
+_PICKER_PAGE_SIZE = 10
 
 type GuidedNode = sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]
 
@@ -81,6 +73,8 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     """The field list, or the named values of `selected` once a field is chosen."""
     selected: FieldDefinition | None = sl.state(None)
     """The field whose value is being chosen in the Add filter panel."""
+    pending_fields: tuple[FieldDefinition, ...] = sl.state(())
+    pending_clauses: tuple[QueryExpression, ...] = sl.state(())
     sort_picker: sp.SearchPicker[Suggestion] | None = sl.state(None, opaque=True)
 
     def __init__(
@@ -119,13 +113,10 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         path, _ = query_leaves(expression)[index]
         self._set_expression(replace_clause(expression, path, replacement))
 
-    def _append(self, addition: QueryExpression) -> None:
+    def _append(self, *additions: QueryExpression) -> None:
         expression = self.query.parsed.expression
-        self._set_expression(
-            combine_clauses(BooleanOperator.AND, expression, addition) if expression is not None else addition
-        )
-        if self.filter_picker is not None:
-            self.filter_picker.picked = ()
+        clauses = additions if expression is None else (expression, *additions)
+        self._set_expression(combine_clauses(BooleanOperator.AND, *clauses))
 
     @override
     def render(self) -> tuple[GuidedNode, ...]:
@@ -174,7 +165,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         )
 
     def _filter_panel(self) -> tuple[GuidedNode, ...]:
-        """Render the Add filter panel: the field list, then the chosen field's value step."""
         field = self.selected
         if field is None:
             return (
@@ -182,9 +172,19 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 *((self.filter_picker,) if self.filter_picker is not None else ()),
             )
         name = field_label(field.name)
-        heading = sl.heading(tr(t"guided-search-filter-heading = Filter by {name}"))
+        step = len(self.pending_clauses) + 1
+        total = step + len(self.pending_fields)
+        heading = sl.heading(
+            tr(t"guided-search-filter-progress = Filter by {name} ({step} of {total})")
+            if total > 1
+            else tr(t"guided-search-filter-heading = Filter by {name}")
+        )
         change = sl.action_control(
-            tr(t"guided-search-change-field = Choose another field"), self._change_field, key="change-field"
+            tr(t"guided-search-cancel-batch = Cancel adding filters")
+            if total > 1
+            else tr(t"guided-search-change-field = Choose another field"),
+            self._change_field,
+            key="change-field",
         )
         if field.name in VALUE_SOURCES and self.filter_picker is not None:
             return (heading, self.filter_picker, sl.action_controls(change, key="filter-step"))
@@ -194,7 +194,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 heading,
                 sl.choices(
                     *(sl.choice(label, key=value) for value, label in values),
-                    key="value-choice",
+                    key=f"{field.name}.value-choice",
                     selection=sl.controlled((), partial(self._choose_menu_value, field)),
                 ),
                 sl.action_controls(change, key="filter-step"),
@@ -205,7 +205,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 sl.form(
                     tr(t"guided-search-selected-field = Set {name} filter"),
                     self._field_form(field),
-                    key="value",
+                    key=f"{field.name}.value",
                     on_submit=partial(self._add, field),
                 ),
                 change,
@@ -369,17 +369,20 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.filter_open = False
         self.filter_picker = None
         self.selected = None
+        self.pending_fields = ()
+        self.pending_clauses = ()
 
     async def _picker(
         self,
         event: sd.ActionEvent[RedstoneSquid],
         source: str,
-        on_pick: PickHandler,
+        on_pick: sp.SearchPickHandler[Suggestion],
         *,
         key: str,
         label: Callable[[Suggestion], sl.TextLike],
         search_label: sl.TextLike,
         context: Mapping[str, str] | None = None,
+        maximum: int = 1,
     ) -> sp.SearchPicker[Suggestion]:
         """Build an inline picker over a suggestion source; choosing an item calls `on_pick`."""
         request = event.context
@@ -394,10 +397,6 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             )
             return SuggestionSource(request.client.services.suggestions, suggestion, RequestAuthorizer(request))
 
-        async def picked(action: sl.ActionEvent[Any], items: tuple[Suggestion, ...]) -> None:
-            if items:
-                await on_pick(cast(sd.ActionEvent, action), items[0])
-
         initial_source = search("")
         picker = sp.SearchPicker(
             search,
@@ -405,8 +404,9 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             identity=lambda item: item.value,
             label=label,
             description=lambda item: item.description or "",
-            on_pick=picked,
-            page_size=10,
+            on_pick=on_pick,
+            maximum=maximum,
+            page_size=_PICKER_PAGE_SIZE,
             show_heading=False,
             show_query=True,
             search_label=search_label,
@@ -426,11 +426,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         return await self._picker(
             event,
             "search_fields",
-            self._field_picked,
+            self._fields_picked,
             key="filter-lookup",
             label=lambda item: field_label(item.value),
             search_label=tr(t"guided-search-search-filter = Search fields"),
             context={"scope": self.scope},
+            maximum=_PICKER_PAGE_SIZE,
         )
 
     async def _toggle_sort(self, event: sd.PressEvent[RedstoneSquid]) -> None:
@@ -447,55 +448,77 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             context={"scope": self.scope},
         )
 
-    async def _field_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
-        field = self.parser.registry.resolve(item.value)
-        if field is None:
-            return
-        self.selected = field
+    async def _fields_picked(self, event: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
+        fields = tuple(field for item in items if (field := self.parser.registry.resolve(item.value)) is not None)
+        if fields:
+            await self._open_field(cast(sd.ActionEvent[RedstoneSquid], event), fields[0])
+            self.pending_fields = fields[1:]
+
+    async def _open_field(self, event: sd.ActionEvent[RedstoneSquid], field: FieldDefinition) -> None:
+        picker = None
         if field.name in VALUE_SOURCES:
 
-            async def chosen(_event: sd.ActionEvent, value: Suggestion) -> None:
-                coerced = FieldRegistry.coerce(field, value.value, scope=self.scope)
-                self._append(FieldExpression(field, ComparisonOperator.EQUAL, coerced, phrase=isinstance(coerced, str)))
-                _event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
-                await self._refresh()
+            async def chosen(action: sl.ActionEvent, values: tuple[Suggestion, ...]) -> None:
+                if values:
+                    await self._add_choice(field, values[0].value, action)
 
             name = field_label(field.name)
-            self.filter_picker = await self._picker(
-                cast(sd.ActionEvent[RedstoneSquid], event),
+            picker = await self._picker(
+                event,
                 VALUE_SOURCES[field.name],
                 chosen,
                 key="value-lookup",
                 label=lambda value: value.label,
                 search_label=tr(t"guided-search-search-values = Search {name}"),
             )
-        else:
-            self.filter_picker = None
+        self.filter_picker = picker
+        self.selected = field
 
-    async def _change_field(self, event: sd.PressEvent[RedstoneSquid]) -> None:
+    async def _change_field(self, event: sd.ActionEvent[RedstoneSquid]) -> None:
         self.filter_picker = await self._fields_picker(event)
         self.selected = None
+        self.pending_fields = ()
+        self.pending_clauses = ()
 
     async def _choose_menu_value(self, field: FieldDefinition, event: sl.ChoiceEvent) -> None:
-        if len(event.selected) != 1:
-            return
-        value = FieldRegistry.coerce(field, event.selected[0], scope=self.scope)
-        self._append(FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)))
-        event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
-        await self._refresh()
+        if len(event.selected) == 1:
+            await self._add_choice(field, event.selected[0], event)
 
-    async def _sort_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
+    async def _add_choice(self, field: FieldDefinition, raw: str, event: sl.ActionEvent) -> None:
+        value = FieldRegistry.coerce(field, raw, scope=self.scope)
+        await self._apply_filter(
+            field, FieldExpression(field, ComparisonOperator.EQUAL, value, phrase=isinstance(value, str)), event
+        )
+
+    async def _sort_picked(self, _event: sl.ActionEvent, items: tuple[Suggestion, ...]) -> None:
         # Keep the sort panel open with nothing marked, so another order is one choice away.
         if self.sort_picker is not None:
             self.sort_picker.picked = ()
-        if item.value != self.sort:
-            self.sort = item.value
+        if items and items[0].value != self.sort:
+            self.sort = items[0].value
             await self._refresh()
 
     async def _add(self, field: FieldDefinition, event: sd.SubmitEvent) -> None:
         value = self._field_expression(field, event)
         addition = NotExpression(value) if event.values.get("negated") else value
-        self._append(addition)
+        await self._apply_filter(field, addition, event)
+
+    async def _apply_filter(self, field: FieldDefinition, addition: QueryExpression, event: sl.ActionEvent) -> None:
+        if self.selected != field:
+            return
+        request_event = cast(sd.ActionEvent[RedstoneSquid], event)
+        additions = (*self.pending_clauses, addition)
+        if self.pending_fields:
+            next_field, *remaining = self.pending_fields
+            await self._open_field(request_event, next_field)
+            self.pending_fields = tuple(remaining)
+            self.pending_clauses = additions
+            return
+        if self.pending_clauses:
+            await self._change_field(request_event)
+        elif self.filter_picker is not None:
+            self.filter_picker.picked = ()
+        self._append(*additions)
         event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
         await self._refresh()
 

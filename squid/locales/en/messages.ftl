@@ -3338,6 +3338,9 @@ give-redstoner-value-2 = { $source_channel_mention }
 # squid/bot/catalogue/search/filters.py:160, squid/bot/catalogue/search/filters.py:181
 guided-search-add-filter = Add filter
 
+# squid/bot/catalogue/search/filters.py:183
+guided-search-cancel-batch = Cancel adding filters
+
 # squid/bot/catalogue/search/filters.py:187
 guided-search-change-field = Choose another field
 
@@ -3355,6 +3358,9 @@ guided-search-edit-text = Edit keywords
 
 # squid/bot/catalogue/search/filters.py:185
 guided-search-filter-heading = Filter by { $name }
+
+# squid/bot/catalogue/search/filters.py:178
+guided-search-filter-progress = Filter by { $name } ({ $step } of { $total })
 
 # squid/bot/catalogue/search/filters.py:336
 guided-search-keywords = Keywords

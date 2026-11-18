@@ -112,11 +112,11 @@ def _install(ui: StagedUI[GuidedSearch], monkeypatch: pytest.MonkeyPatch, servic
     monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
 
 
-async def _choose(ui: StagedUI[GuidedSearch], picker: str, value: str) -> None:
+async def _choose(ui: StagedUI[GuidedSearch], picker: str, *values: str) -> None:
     with anyio.fail_after(2):
         while not any(key.endswith(f"{picker}.results") for key in ui.root.snapshot().handler_keys):
             await anyio.sleep(0.01)
-    await ui.select(ui.key_for(f"{picker}.results"), [value])
+    await ui.select(ui.key_for(f"{picker}.results"), values)
 
 
 async def test_filter_and_sort_panels_open_together_and_stay_in_the_message(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -186,6 +186,57 @@ async def test_fixed_values_are_chosen_from_a_menu(monkeypatch: pytest.MonkeyPat
         await ui.select(ui.key_for("value-choice"), ["door"])
         assert screen.query.text == 'kind:"door"'
         assert screen.filter_open
+
+
+async def test_selected_fields_apply_together_after_all_values_are_entered(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", tuple(Candidate.create(field, field.title()) for field in ("width", "creator", "kind"))),
+        ("creators", (Candidate.create("Steve", "Steve"),)),
+    )
+    original = "title:door OR title:extender"
+    screen = editor(original)
+    applied = cast(AsyncMock, screen.on_apply)
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "width", "creator", "kind")
+        assert "## Filter by Width (1 of 3)" in ui.texts()
+
+        form = await ui.press_for_form(ui.key_for("value"))
+        await form.submit({"value": "5", "operator": "2"})
+        assert "## Filter by Creator (2 of 3)" in ui.texts()
+        await _choose(ui, "value-lookup", "Steve")
+        assert "## Filter by Kind (3 of 3)" in ui.texts()
+        assert screen.query.text == original
+        applied.assert_not_awaited()
+
+        await ui.select(ui.key_for("value-choice"), ["door"])
+        assert screen.query.text == '(title:door OR title:extender) AND width<=5 AND creator:"Steve" AND kind:"door"'
+        applied.assert_awaited_once_with(SearchSelection(screen.query, ""))
+        assert "## Add filter" in ui.texts()
+        ui.control(ui.key_for("edit-4"))
+
+
+async def test_cancelling_a_filter_batch_discards_entered_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(
+        ("search_fields", (Candidate.create("width", "Width"), Candidate.create("height", "Height"))),
+    )
+    screen = editor()
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press(ui.key_for("field"))
+        await _choose(ui, "filter-lookup", "width", "height")
+        form = await ui.press_for_form(ui.key_for("value"))
+        await form.submit({"value": "5", "operator": "2"})
+        assert ui.control(ui.key_for("change-field")).payload["label"] == "Cancel adding filters"
+        await ui.press(ui.key_for("change-field"))
+
+        assert screen.query.text == ""
+        cast(AsyncMock, screen.on_apply).assert_not_awaited()
+        await _choose(ui, "filter-lookup", "height")
+        form = await ui.press_for_form(ui.key_for("value"))
+        await form.submit({"value": "7", "operator": "0"})
+        assert screen.query.text == "height:7"
 
 
 async def test_choose_another_field_returns_to_the_field_list(monkeypatch: pytest.MonkeyPatch) -> None:

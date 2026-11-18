@@ -10951,6 +10951,15 @@
       "squid/bot/catalogue/search/filters.py:181"
     ]
   },
+  "guided-search-cancel-batch": {
+    "fingerprint": "ba87ea75a77459bf1045db4323d4a5c7f879ca51b2b7b26bce5c5e30aed5c803",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/filters.py:183"
+    ]
+  },
   "guided-search-change-field": {
     "fingerprint": "a73ec35841c9a47e1f957b59114969be7b920c9818fb02d1182b91fc91a67309",
     "attributes": [],
@@ -11009,6 +11018,31 @@
     ],
     "locations": [
       "squid/bot/catalogue/search/filters.py:185"
+    ]
+  },
+  "guided-search-filter-progress": {
+    "fingerprint": "451278c1a9961553982871ef8aca47b6f419f2fa24359d413f90efe7d132afd9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "name",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "step",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "total",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/catalogue/search/filters.py:178"
     ]
   },
   "guided-search-keywords": {
