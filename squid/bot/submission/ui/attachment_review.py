@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import json
+import logging
 import mimetypes
 import os
 from functools import partial
@@ -24,10 +25,34 @@ from squid.builds.models import Build
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
+logger = logging.getLogger(__name__)
+
+
+def archive_root() -> Path:
+    return Path(os.environ.get("ATTACHMENT_REVIEW_ARCHIVE", "/var/lib/app/attachment-review"))
+
+
+def warn_if_attachment_archive_unavailable() -> None:
+    """Check archive access at startup without scanning the retained files."""
+    root = archive_root()
+    try:
+        with (root / "retained-files.jsonl").open("rb") as manifest:
+            manifest.read(1)
+        with os.scandir(root / "retained-files") as files:
+            next(files, None)
+    except OSError as error:
+        logger.warning(
+            "Attachment review archive unavailable at %s: %s. "
+            "Preview and publish require the archive. Set ATTACHMENT_REVIEW_ARCHIVE "
+            "and include compose.attachment-review.yml when deploying with Compose.",
+            root,
+            error,
+        )
+
 
 def retained_bytes(identity: str, filename: str) -> bytes:
     """Read the verified archived original, addressed only by source UUID."""
-    root = Path(os.environ.get("ATTACHMENT_REVIEW_ARCHIVE", "/var/lib/app/attachment-review"))
+    root = archive_root()
     key = str(UUID(identity))
     with (root / "retained-files.jsonl").open() as manifest:
         for line in manifest:
@@ -35,13 +60,18 @@ def retained_bytes(identity: str, filename: str) -> bytes:
             if entry["source_id"] != key or not entry.get("retained") or entry["filename"] != filename:
                 continue
             path = root / "retained-files" / key
-            if path.stat().st_size != entry["byte_size"] or entry["byte_size"] > 100_000_000:
-                break
+            if entry["byte_size"] > 100_000_000:
+                msg = "Archived original exceeds the 100 MB review limit"
+                raise ValueError(msg)
+            if path.stat().st_size != entry["byte_size"]:
+                msg = "Archived original size does not match the manifest"
+                raise ValueError(msg)
             data = path.read_bytes()
             if hashlib.sha256(data).hexdigest() == entry["sha256"]:
                 return data
-            break
-    msg = "Original unavailable or checksum mismatch"
+            msg = "Archived original checksum does not match the manifest"
+            raise ValueError(msg)
+    msg = "No retained manifest entry matches the attachment ID and filename"
     raise ValueError(msg)
 
 
@@ -193,7 +223,14 @@ class AttachmentReview(sd.Screen[None]):
             item = failures[index]
             try:
                 data = await asyncio.to_thread(retained_bytes, item["attachment_id"], item["filename"])
-            except OSError, ValueError:
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                logger.warning(
+                    "Attachment review %s failed for build %s, attachment %s: %s",
+                    action,
+                    build.id,
+                    item["attachment_id"],
+                    error,
+                )
                 await event.notice("The verified original is unavailable. Check the source messages or review archive.")
                 return
             if action == "preview":

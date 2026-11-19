@@ -5,7 +5,26 @@ from uuid import uuid4
 
 import pytest
 
-from squid.bot.submission.ui.attachment_review import retained_bytes
+from squid.bot.submission.ui.attachment_review import retained_bytes, warn_if_attachment_archive_unavailable
+
+
+def test_startup_warns_when_archive_mount_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("ATTACHMENT_REVIEW_ARCHIVE", str(tmp_path))
+    (tmp_path / "retained-files.jsonl").touch()
+
+    warn_if_attachment_archive_unavailable()
+
+    assert "Attachment review archive unavailable" in caplog.text
+    assert str(tmp_path / "retained-files") in caplog.text
+    assert "compose.attachment-review.yml" in caplog.text
+
+    caplog.clear()
+    (tmp_path / "retained-files").mkdir()
+    warn_if_attachment_archive_unavailable()
+
+    assert not caplog.records
 
 
 def test_review_uses_only_verified_original(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

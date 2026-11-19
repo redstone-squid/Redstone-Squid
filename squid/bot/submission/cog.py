@@ -1,5 +1,6 @@
 """Discord commands for build search, browsing, editing, and submission."""
 
+import asyncio
 import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self, override
@@ -16,7 +17,7 @@ from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
 from squid.bot.submission.form import open_submission_form
 from squid.bot.submission.message_intake import BuildMessageIntake
-from squid.bot.submission.ui.attachment_review import AttachmentReview
+from squid.bot.submission.ui.attachment_review import AttachmentReview, warn_if_attachment_archive_unavailable
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
 from squid.builds.domain import DoorOrientationLiteral
@@ -340,4 +341,5 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load search and build commands."""
+    await asyncio.to_thread(warn_if_attachment_archive_unavailable)
     await bot.add_cog(BuildCommands(bot))
