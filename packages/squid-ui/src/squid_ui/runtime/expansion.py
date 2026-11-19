@@ -16,16 +16,16 @@ from squid_reactivity.topics import DependencyAddress
 from squid_reactivity.transactions import read_only
 from squid_ui.authoring.document import Asset, Document, DocumentLike
 from squid_ui.authoring.semantic import ComponentPlacement, Contextual, Group, LayoutNode
-from squid_ui.boundary import Boundary
-from squid_ui.context_keys import ContextKey
-from squid_ui.errors import LayoutInvariantError
-from squid_ui.runtime._tree import (
+from squid_ui.authoring.traversal import (
     _IndexStep,
     _LayoutRoute,
     _map_layout_children_routed,
     _namespace,
     _SequenceStep,
 )
+from squid_ui.boundary import Boundary
+from squid_ui.context_keys import ContextKey
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.runtime.definition import _CURRENT_CONTEXT, AnyComponent, Component, RuntimeOwner
 from squid_ui.runtime.tree import (
     ComponentTree,

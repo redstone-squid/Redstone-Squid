@@ -10,7 +10,7 @@ from functools import update_wrapper
 from typing import Any
 
 import discord
-from squid_ui.interactions.routing import Route
+from squid_ui.routing import Route
 
 type RouteHandler = Callable[..., Awaitable[None]]
 """Storage type. The checked surface is `Router.route`, which pins the first argument."""

@@ -5,10 +5,10 @@ from dataclasses import dataclass
 import pytest
 
 from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.authoring.traversal import map_layout_children
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.primitives import Text
 from squid_ui.ext.discord.target_types import DiscordTarget
-from squid_ui.runtime._tree import map_layout_children
 
 
 @dataclass(frozen=True, slots=True)

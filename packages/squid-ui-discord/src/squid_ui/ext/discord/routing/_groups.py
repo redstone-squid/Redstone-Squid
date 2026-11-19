@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Concatenate
 
 import discord
-from squid_ui.interactions.routing import Route
+from squid_ui.routing import Route
 
 from ._contracts import Middleware, RouteComponent, RouteHandle, RouteHandler, RouteLike, _accepted, _Registration
 

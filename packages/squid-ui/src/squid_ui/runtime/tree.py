@@ -16,8 +16,8 @@ from squid_ui._presentation import PresentationCells
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring.document import Asset
 from squid_ui.authoring.semantic import LayoutNode
+from squid_ui.authoring.traversal import _LayoutRoute
 from squid_ui.context_keys import ContextKey
-from squid_ui.runtime._tree import _LayoutRoute
 from squid_ui.runtime.definition import AnyComponent, ContextT, RenderTargetT
 from squid_ui.target_types import RenderTarget
 

@@ -11,6 +11,17 @@ Widget commits accept values within the widget's state. Application callbacks de
 to persist those values or perform business actions.
 """
 
+from squid_ui.authoring.grids import GridCell
+from squid_ui.authoring.rosters import (
+    RosterEntry,
+    RosterGroup,
+    RosterOverflow,
+    RosterPlacement,
+    RosterSlot,
+    RosterStatus,
+    place_roster,
+)
+from squid_ui.authoring.tallies import TallyOption
 from squid_ui_widgets import guards, machines
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
 from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy
@@ -44,7 +55,6 @@ from squid_ui_widgets.editor import (
     EditorState,
     EditorValues,
 )
-from squid_ui_widgets.grid import GridCell
 from squid_ui_widgets.menu import Menu, MenuEntry, MenuState
 from squid_ui_widgets.multi_choice import (
     MultiChoice,
@@ -53,19 +63,9 @@ from squid_ui_widgets.multi_choice import (
     MultiChoiceState,
 )
 from squid_ui_widgets.ranked import RankedEntry, RankedList, RankedListState
-from squid_ui_widgets.roster import (
-    RosterEntry,
-    RosterGroup,
-    RosterOverflow,
-    RosterPlacement,
-    RosterSlot,
-    RosterStatus,
-    place_roster,
-)
 from squid_ui_widgets.search_picker import SearchPicker, SearchPickHandler, SearchProvider
 from squid_ui_widgets.source_ranked import SourceRankedList
 from squid_ui_widgets.tabs import Tab, Tabs, TabsState
-from squid_ui_widgets.tally import TallyOption
 from squid_ui_widgets.wizard import (
     REVIEW_STEP,
     Wizard,

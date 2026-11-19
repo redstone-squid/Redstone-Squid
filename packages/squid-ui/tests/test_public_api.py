@@ -94,11 +94,3 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         "squid_ui.ext.html",
         "squid_ui_widgets",
     )
-
-
-def test_legacy_control_routing_imports_share_the_promoted_types() -> None:
-    legacy = import_module("squid_ui.interactions.routing")
-    assert sl.routing is import_module("squid_ui.routing")
-    assert legacy.Route is sl.routing.Route
-    assert legacy.Converter is sl.routing.Converter
-    assert legacy.CONVERTERS is sl.routing.CONVERTERS

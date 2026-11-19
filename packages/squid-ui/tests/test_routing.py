@@ -7,8 +7,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.routing as routing
-from squid_ui.interactions.routing import Route
-from squid_ui.routing import AddressParts, AddressRoute, Converter, InvalidAddress, RoutePattern, RouteTable
+from squid_ui.routing import AddressParts, AddressRoute, Converter, InvalidAddress, Route, RoutePattern, RouteTable
 
 type Tab = Literal["media", "versions"]
 type OptionalTab = Tab | None

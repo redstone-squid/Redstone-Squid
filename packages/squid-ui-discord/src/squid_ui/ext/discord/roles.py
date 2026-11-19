@@ -29,7 +29,7 @@ from squid_ui.ext.discord.primitives.nodes import (
 )
 from squid_ui.ext.discord.routing import RouteComponent, RouteGroup
 from squid_ui.ext.discord.target_types import DiscordTarget
-from squid_ui.interactions.routing import Route
+from squid_ui.routing import Route
 from squid_ui.runtime.definition import Component
 
 

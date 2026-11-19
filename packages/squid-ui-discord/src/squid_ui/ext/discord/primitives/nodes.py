@@ -198,7 +198,7 @@ class RoutedButton(DiscordValue, NativeNode[DiscordTarget]):
     The host can register the route after a restart and recover application state from
     its parameters. A mount's author lock and generation checks do not apply to routed
     buttons, even inside a mounted message; the route handler must check authorization.
-    Build the ID with squid_ui.interactions.routing.Route so its format and length are validated.
+    Build the ID with squid_ui.routing.Route so its format and length are validated.
     """
 
     label: TextLike | None

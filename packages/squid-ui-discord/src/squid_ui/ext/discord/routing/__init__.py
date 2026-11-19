@@ -22,7 +22,7 @@ Use ``squid_ui.ext.discord.testing.interaction_harness`` with ``Router.dispatch`
 handlers without a bot, gateway, or real message.
 """
 
-from squid_ui.interactions.routing import Route
+from squid_ui.routing import Route
 
 from ._client import routers
 from ._contracts import (
