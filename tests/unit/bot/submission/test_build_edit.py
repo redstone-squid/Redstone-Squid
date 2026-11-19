@@ -22,7 +22,7 @@ from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import name_credits
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
-from squid.submissions.domain import FormManifest
+from squid.submissions.domain import ChoiceOption, FormManifest
 from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
 from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
 from squid.suggestions.infrastructure.providers import StaticProvider
@@ -324,7 +324,7 @@ async def test_picking_showcase_tags_keeps_the_values_of_tags_that_stay() -> Non
         section for section in screen.workspace.sections if "showcase_tags" in {f.id for f in section.fields}
     )
     child = SectionEditorScreen(screen.workspace, section.id)
-    assert "speed: 1.5" in "\n".join(texts(child.render()))
+    assert "speed: 1.5" in _payload(child)
 
     with sl.runtime.transaction() as tx:
         event = Mock(spec=sd.SelectionEvent, transaction=tx, values=("compact",))
@@ -334,3 +334,73 @@ async def test_picking_showcase_tags_keeps_the_values_of_tags_that_stay() -> Non
     assert screen.workspace.patch().attributes() == {
         "showcase_tags": [ShowcaseTag("speed", "1.5"), ShowcaseTag("compact")]
     }
+
+
+_VALUED_TAGS = (
+    ChoiceOption("compact", "Compact"),
+    ChoiceOption("speed", "Speed", "numeric"),
+    ChoiceOption("lit", "Lit", "boolean"),
+)
+
+
+def _payload(screen: sd.Screen[None]) -> str:
+    """The display text of a screen's committed render, which must fit Discord's limits."""
+    built = commit_render(sd.MessageRoot(screen, access=sd.Owner(7), timeout=None))
+    assert_within_limits(built)
+    return "\n".join(payload_texts(built))
+
+
+def _showcase_editor(screen: BuildEditScreen, options: tuple[ChoiceOption, ...]) -> SectionEditorScreen:
+    screen.workspace.option_sets = {**screen.workspace.option_sets, "approved_showcase_tags": options}
+    (section,) = screen.workspace.sections
+    return SectionEditorScreen(screen.workspace, section.id)
+
+
+async def test_a_showcase_only_editor_sets_tag_values_checks_them_and_undoes_them() -> None:
+    screen = editor(_door(), showcase_only=True)
+    await screen.projection.reload()
+    workspace = screen.workspace
+    child = _showcase_editor(screen, _VALUED_TAGS)
+    with sl.runtime.transaction() as tx:
+        event = Mock(spec=sd.SelectionEvent, transaction=tx, values=("compact", "speed"))
+        await child._select_value("showcase_tags", event, visible=("compact", "speed", "lit"))
+    assert "Speed: ⚠️ *Needs a value*" in _payload(child)
+    assert "Speed: ⚠️ *Needs a value*" in rendered(screen)
+
+    press = Mock(spec=sd.SelectionEvent, values=("speed",), present_form=AsyncMock())
+    await child.showcase_tags["showcase_tags"]._open_value_form(press)
+    form = press.present_form.call_args
+    spec: sl.forms.FormSpec[Any] = form.args[0]
+
+    rejected = await spec.evaluate({"value": "fast"})
+    assert "expects a number" in sl.text.source_text(rejected.errors[0].message)
+    accepted = await spec.evaluate({"value": " 1.50 "})
+    with sl.runtime.transaction() as tx:
+        await form.kwargs["on_submit"](Mock(spec=sl.SubmitEvent, transaction=tx, values=accepted.values))
+
+    assert workspace.patch().attributes() == {"showcase_tags": [ShowcaseTag("compact"), ShowcaseTag("speed", "1.50")]}
+    assert "Speed: 1.50" in _payload(SectionEditorScreen(workspace, child.section_id))
+    await workspace.history.undo()
+    assert workspace.answers["showcase_tags"] == [{"key": "compact"}, {"key": "speed"}]
+
+
+async def test_a_boolean_tag_value_is_chosen_as_yes_or_no() -> None:
+    screen = editor(_door(), showcase_only=True)
+    child = _showcase_editor(screen, _VALUED_TAGS)
+    assert screen.workspace.prefill({"showcase_tags": [{"key": "lit"}]}) is None
+    press = Mock(spec=sd.SelectionEvent, values=("lit",), present_form=AsyncMock())
+
+    await child.showcase_tags["showcase_tags"]._open_value_form(press)
+
+    spec: sl.forms.FormSpec[Any] = press.present_form.call_args.args[0]
+    assert (await spec.evaluate({"value": "false"})).values == {"value": "false"}
+
+
+async def test_many_valued_showcase_tags_render_within_discord_limits() -> None:
+    options = tuple(ChoiceOption(f"tag_{index}", f"Tag {index}", "text") for index in range(40))
+    screen = editor(_door(), showcase_only=True)
+    child = _showcase_editor(screen, options)
+    tags = [{"key": option.value, "value": "x" * 300} for option in options]
+    assert screen.workspace.prefill({"showcase_tags": tags}) is None
+
+    assert "Tag 0: " in _payload(child)

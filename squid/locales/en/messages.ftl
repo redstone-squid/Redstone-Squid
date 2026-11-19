@@ -2957,22 +2957,22 @@ diagnostics-view-work-lost-only = Work lost only
 # squid/bot/submission/ui/drafts.py:1012, squid/bot/submission/ui/drafts.py:584, squid/bot/submission/ui/drafts.py:767
 draft-editor-add-files = Add files
 
-# squid/bot/submission/ui/sections.py:82
+# squid/bot/submission/ui/sections.py:83
 draft-editor-build-size = Build size
 
-# squid/bot/submission/ui/sections.py:269
+# squid/bot/submission/ui/sections.py:279
 draft-editor-choose = Choose…
 
 # squid/bot/submission/ui/drafts.py:733
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:599, squid/bot/submission/ui/sections.py:357
+# squid/bot/submission/ui/build_edit.py:599, squid/bot/submission/ui/sections.py:367
 draft-editor-done = Done
 
-# squid/bot/submission/ui/sections.py:87
+# squid/bot/submission/ui/sections.py:88
 draft-editor-door-size = Door size
 
-# squid/bot/submission/ui/drafts.py:582, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:210
+# squid/bot/submission/ui/drafts.py:582, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:217
 draft-editor-edit = Edit
 
 # squid/bot/submission/ui/drafts.py:667
@@ -3071,22 +3071,22 @@ draft-editor-main-schematic = Use as main schematic
 # squid/bot/submission/ui/drafts.py:722
 draft-editor-main-schematic-help = Choose which schematic to use for this build's preview and schematic tools. Select that file below, then choose Use as main schematic.
 
-# squid/bot/submission/ui/sections.py:441, squid/bot/submission/ui/sections.py:539
+# squid/bot/submission/ui/sections.py:451, squid/bot/submission/ui/sections.py:546, squid/bot/submission/ui/showcase_tags.py:130
 draft-editor-no = No
 
-# squid/bot/submission/ui/sections.py:409, squid/bot/submission/ui/sections.py:432
+# squid/bot/submission/ui/sections.py:419, squid/bot/submission/ui/sections.py:442
 draft-editor-not-set = *Not set*
 
-# squid/bot/submission/ui/sections.py:233
+# squid/bot/submission/ui/sections.py:241
 draft-editor-nothing-chosen = *Nothing chosen yet.*
 
-# squid/bot/submission/ui/sections.py:583
+# squid/bot/submission/ui/sections.py:590
 draft-editor-one-per-line = One per line
 
-# squid/bot/submission/ui/sections.py:280
+# squid/bot/submission/ui/sections.py:290
 draft-editor-picker-other-pages = Choices on other pages are kept.
 
-# squid/bot/submission/ui/sections.py:225
+# squid/bot/submission/ui/sections.py:235
 draft-editor-picker-required = **{ $label }** · Required
 
 # squid/bot/submission/ui/build_edit.py:462, squid/bot/submission/ui/drafts.py:601
@@ -3101,37 +3101,37 @@ draft-editor-preview-intro = **Preview** · This is the card others will see onc
 # squid/bot/submission/ui/drafts.py:868
 draft-editor-preview-loading = Drawing the preview…
 
-# squid/bot/submission/ui/sections.py:680
+# squid/bot/submission/ui/sections.py:687
 draft-editor-problem-above-maximum = Too large
 
-# squid/bot/submission/ui/sections.py:678
+# squid/bot/submission/ui/sections.py:685
 draft-editor-problem-below-minimum = Too small
 
-# squid/bot/submission/ui/sections.py:674
+# squid/bot/submission/ui/sections.py:681
 draft-editor-problem-required = Required
 
-# squid/bot/submission/ui/sections.py:676
+# squid/bot/submission/ui/sections.py:683
 draft-editor-problem-required-value = Must be confirmed
 
-# squid/bot/submission/ui/sections.py:686
+# squid/bot/submission/ui/sections.py:693
 draft-editor-problem-too-few-items = Needs more entries
 
-# squid/bot/submission/ui/sections.py:684
+# squid/bot/submission/ui/sections.py:691
 draft-editor-problem-too-long = Too long
 
-# squid/bot/submission/ui/sections.py:688
+# squid/bot/submission/ui/sections.py:695
 draft-editor-problem-too-many-items = Too many entries
 
-# squid/bot/submission/ui/sections.py:682
+# squid/bot/submission/ui/sections.py:689
 draft-editor-problem-too-short = Too short
 
-# squid/bot/submission/ui/sections.py:692
+# squid/bot/submission/ui/sections.py:699
 draft-editor-problem-unknown-field = No longer part of the form
 
-# squid/bot/submission/ui/sections.py:690
+# squid/bot/submission/ui/sections.py:697
 draft-editor-problem-unknown-option = No longer available, choose again
 
-# squid/bot/submission/ui/sections.py:694
+# squid/bot/submission/ui/sections.py:701
 draft-editor-problem-wrong-type = Not a valid value, enter it again
 
 # squid/bot/submission/ui/drafts.py:626
@@ -3158,7 +3158,7 @@ draft-editor-replacement-failed = The replacement could not be added. Try again 
 # squid/bot/submission/ui/drafts.py:816
 draft-editor-replacement-label = New file
 
-# squid/bot/submission/ui/sections.py:407, squid/bot/submission/ui/sections.py:431
+# squid/bot/submission/ui/sections.py:417, squid/bot/submission/ui/sections.py:441
 draft-editor-required = ⚠️ *Required*
 
 # squid/bot/submission/ui/drafts.py:617
@@ -3168,16 +3168,16 @@ draft-editor-required-left =
        *[other] ⚠️ **{ NUMBER($missing) } required fields are empty.** Fill them in to submit.
     }
 
-# squid/bot/submission/ui/sections.py:379
+# squid/bot/submission/ui/sections.py:389
 draft-editor-section-empty = *Optional. Nothing added yet.*
 
-# squid/bot/submission/ui/sections.py:193
+# squid/bot/submission/ui/sections.py:200
 draft-editor-section-gone = This section is no longer part of the form.
 
-# squid/bot/submission/ui/sections.py:622
+# squid/bot/submission/ui/sections.py:629
 draft-editor-size-format = Enter the size as width x height x depth, such as 5x7x4. Use ? for a value you don't know.
 
-# squid/bot/submission/ui/sections.py:644
+# squid/bot/submission/ui/sections.py:651
 draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know.
 
 # squid/bot/submission/ui/drafts.py:912
@@ -3227,7 +3227,7 @@ draft-editor-use-file = Use this file
 # squid/bot/submission/ui/drafts.py:606
 draft-editor-waiting-hint = This message updates when your files are ready.
 
-# squid/bot/submission/ui/sections.py:441, squid/bot/submission/ui/sections.py:538
+# squid/bot/submission/ui/sections.py:451, squid/bot/submission/ui/sections.py:545, squid/bot/submission/ui/showcase_tags.py:129
 draft-editor-yes = Yes
 
 # squid/bot/submission/ui/drafts.py:353
@@ -3260,13 +3260,13 @@ draft-inference-not-ready = The schematic is not ready for inference. Check its 
 # squid/bot/submission/ui/drafts.py:413
 draft-inference-review = Schematic suggestions filled empty answers. Review the build size, width/depth orientation, name, credits, and restrictions below. Category, opening size, orientation, and opening/closing times were not detected.
 
-# squid/bot/submission/ui/sections.py:254
+# squid/bot/submission/ui/sections.py:264
 draft-options-empty = No matching choices. Clear the search to see all choices.
 
-# squid/bot/submission/ui/sections.py:242
+# squid/bot/submission/ui/sections.py:252
 draft-options-name = Name contains
 
-# squid/bot/submission/ui/sections.py:236
+# squid/bot/submission/ui/sections.py:246
 draft-options-search = Search choices
 
 # squid/bot/edit_controller.py:260, squid/bot/edit_history.py:57
@@ -3284,10 +3284,10 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_controller.py:226, squid/bot/edit_history.py:77
 edit-history-undo = Undo
 
-# squid/bot/submission/ui/sections.py:345
+# squid/bot/submission/ui/sections.py:355
 editor-detail-closed = Done. You can dismiss this message.
 
-# squid/bot/submission/ui/sections.py:347
+# squid/bot/submission/ui/sections.py:357
 editor-detail-locked = These answers can no longer be edited here.
 
 # squid/edits/domain.py:219
@@ -5450,6 +5450,21 @@ settings-tab-server = Server
 
 # squid/bot/settings/screen.py:513
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
+
+# squid/bot/submission/ui/showcase_tags.py:52
+showcase-tags-needs-value = { $label }: ⚠️ *Needs a value*
+
+# squid/bot/submission/ui/showcase_tags.py:87
+showcase-tags-needs-value-short = Needs a value
+
+# squid/bot/submission/ui/showcase_tags.py:137
+showcase-tags-number-help = A number, such as 1.5.
+
+# squid/bot/submission/ui/showcase_tags.py:95
+showcase-tags-set-value = Set a tag's value…
+
+# squid/bot/submission/ui/showcase_tags.py:122
+showcase-tags-value = Value
 
 # squid/bot/starboard/screen.py:191
 starboard-add-emoji = Add or replace emoji
