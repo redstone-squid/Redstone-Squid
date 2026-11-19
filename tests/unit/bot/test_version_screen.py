@@ -3,7 +3,10 @@
 from dataclasses import dataclass
 from typing import Any, cast, override
 
+from squid.bot.utils.permissions import Grants
 from squid.bot.version_tracking_cog import VersionScreen
+from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition, MinecraftVersion
 from squid_ui.testing import RecordingResponder, labels, submit, submit_event
@@ -30,7 +33,7 @@ class Authorizer:
         self.allowed = allowed
         self.calls = 0
 
-    async def __call__(self) -> bool:
+    async def __call__(self, _node: PermissionNode) -> bool:
         self.calls += 1
         return self.allowed
 
@@ -46,7 +49,7 @@ def make_screen(*, allowed: bool = True) -> ScreenHarness:
     versions = VersionRecorder()
     authorizer = Authorizer(allowed)
     return ScreenHarness(
-        VersionScreen(versions, can_create=allowed, authorize_create=authorizer),
+        VersionScreen(versions, grants=Grants(frozenset({VERSION_ENTRY_CREATE} if allowed else ()), authorizer)),
         versions,
         authorizer,
     )

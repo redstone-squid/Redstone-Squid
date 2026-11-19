@@ -22,10 +22,9 @@ from squid.bot.accounts.presentation import link_conflict, link_message, refresh
 from squid.bot.lookup import pick
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -42,7 +41,6 @@ if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
-type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type AccountTab = Literal["overview", "identity", "claims", "merge", "review"]
 
 
@@ -65,12 +63,7 @@ class AccountWorkspace(sd.Screen):
         actor_id: int,
         account: Account | None,
         request_consent: ConsentRequest,
-        can_review_claims: bool,
-        can_approve_claims: bool,
-        can_reject_claims: bool,
-        authorize_claim: ClaimAuthorizer,
-        can_refresh_any: bool = False,
-        can_refresh_identity: bool = False,
+        grants: Grants,
     ) -> None:
         self._pending_focus: AccountTab | None = None
         self._accounts = accounts
@@ -79,12 +72,7 @@ class AccountWorkspace(sd.Screen):
         self._actor_id = actor_id
         self._account = account
         self._request_consent = request_consent
-        self._can_review_claims = can_review_claims
-        self._can_approve_claims = can_approve_claims
-        self._can_reject_claims = can_reject_claims
-        self._authorize_claim = authorize_claim
-        self._can_refresh_any = can_refresh_any
-        self._can_refresh_identity = can_refresh_identity
+        self.grants = grants
         self._overview: AccountOverview | None = None
         self._claims: ClaimReviewComponent | None = None
         self._tabs: sp.Tabs[ComponentsV2Target, sd.Request] | None = None
@@ -127,9 +115,6 @@ class AccountWorkspace(sd.Screen):
                 timeout=timeout,
             )
 
-        async def authorize_claim(node: PermissionNode) -> bool:
-            return await allows(request, node)
-
         async def edit_actor() -> Actor:
             return await request.client.actors.resolve(request, refresh=True)
 
@@ -140,12 +125,14 @@ class AccountWorkspace(sd.Screen):
             actor_id=actor.id,
             account=account,
             request_consent=open_consent,
-            can_review_claims=await allows(request, ACCOUNT_CLAIM_LIST),
-            can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
-            can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
-            authorize_claim=authorize_claim,
-            can_refresh_any=await allows(request, ACCOUNT_IDENTITY_REFRESH_ANY),
-            can_refresh_identity=await allows(request, ACCOUNT_IDENTITY_REFRESH),
+            grants=await Grants.load(
+                request,
+                ACCOUNT_CLAIM_LIST,
+                ACCOUNT_CLAIM_APPROVE,
+                ACCOUNT_CLAIM_REJECT,
+                ACCOUNT_IDENTITY_REFRESH,
+                ACCOUNT_IDENTITY_REFRESH_ANY,
+            ),
         )
 
     @router.route("/account", fragment="tab")
@@ -165,7 +152,7 @@ class AccountWorkspace(sd.Screen):
         # ORM identity columns may still be None before flush.
         if self._account is not None and self._account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             tabs.update(("overview", "claims", "merge"))
-        if self._can_review_claims:
+        if ACCOUNT_CLAIM_LIST in self.grants:
             tabs.add("review")
         return frozenset(tabs)
 
@@ -209,15 +196,13 @@ class AccountWorkspace(sd.Screen):
         if self._overview is not None:
             await self._overview.on_load()
         self._claims = None
-        if self._can_review_claims:
+        if ACCOUNT_CLAIM_LIST in self.grants:
             claims = await self._accounts.pending_alias_claims(with_claimants=True)
             self._claims = ClaimReviewComponent(
                 self._accounts,
                 claims,
                 author_id=self._actor_id,
-                can_approve=self._can_approve_claims,
-                can_reject=self._can_reject_claims,
-                authorize=self._authorize_claim,
+                grants=self.grants,
             )
         tabs: list[sp.Tab[ComponentsV2Target, sd.Request]] = []
         if self._overview is not None:
@@ -280,7 +265,7 @@ class AccountWorkspace(sd.Screen):
             account is not None
             and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
             and not account.needs_consent_refresh
-            and self._can_refresh_identity
+            and ACCOUNT_IDENTITY_REFRESH in self.grants
         ):
             controls.append(
                 sl.action_control(
@@ -289,7 +274,7 @@ class AccountWorkspace(sd.Screen):
                     key="refresh",
                 )
             )
-        if self._can_refresh_any:
+        if ACCOUNT_IDENTITY_REFRESH_ANY in self.grants:
             controls.append(
                 sl.form(
                     tr(t"account-refresh-member-action = Refresh member"),
@@ -471,26 +456,15 @@ class AccountWorkspace(sd.Screen):
         if not opened:
             await release()
 
+    @requires_grant(ACCOUNT_IDENTITY_REFRESH)
     async def _refresh_identity(self, event: sd.PressEvent) -> None:
-        if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH):
-            await event.notice(
-                tr(t"account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.")
-            )
-            return
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
         await self._rebuild(changed_account_id=account_id)
         await event.notice(refresh_message(refresh))
 
+    @requires_grant(ACCOUNT_IDENTITY_REFRESH_ANY)
     async def _refresh_member_identity(self, event: sd.SubmitEvent) -> None:
-        if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH_ANY):
-            await event.notice(
-                tr(
-                    t"account-workspace-refresh-denied-again = You are no longer allowed "
-                    t"to refresh another member's identity."
-                )
-            )
-            return
         form = _RefreshMemberForm.from_submission(event)
         member = form.user
         assert isinstance(member, discord.abc.Snowflake)

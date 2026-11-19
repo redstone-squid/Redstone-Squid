@@ -12,10 +12,10 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -38,7 +38,6 @@ from squid_i18n import Text, emoji_text, md_tr
 from squid_ui.ext.discord.form_fields import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
-type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ChannelValidator = Callable[[int], Awaitable[None]]
 
 
@@ -55,8 +54,8 @@ class StarboardOperations(Protocol):
 class StarboardScreen(sd.Screen):
     """A guild configuration session that rechecks permission before each mutation.
 
-    Initial capabilities choose visible controls; the authorizer checks current
-    permission when an action is submitted, including deletion confirmation.
+    Grants held at open choose visible controls; each action, including deletion
+    confirmation, rechecks them before it runs.
     """
 
     _snapshots: Mapping[int, StarboardSnapshot] = sl.state({})
@@ -72,8 +71,7 @@ class StarboardScreen(sd.Screen):
         operations: StarboardOperations,
         *,
         guild_id: int,
-        capabilities: frozenset[PermissionNode],
-        authorize: StarboardAuthorizer,
+        grants: Grants,
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         validate_channel: ChannelValidator,
@@ -81,8 +79,7 @@ class StarboardScreen(sd.Screen):
     ) -> None:
         self._operations = operations
         self._guild_id = guild_id
-        self._capabilities = capabilities
-        self._authorize = authorize
+        self.grants = grants
         self._validate_channel = validate_channel
         self._role_label = role_label or (lambda _id: tr(t"starboard-unknown-role = Deleted role"))
         self.edits = EditController(edits, actor, self._refresh)
@@ -113,7 +110,7 @@ class StarboardScreen(sd.Screen):
             empty=tr(t"starboard-none-configured = No starboards are configured."),
         )
         tabs = [sp.Tab("boards", tr(t"bot-starboard-screen-boards = Boards"), self._browser)]
-        if STARBOARD_BOARD_CREATE in self._capabilities:
+        if STARBOARD_BOARD_CREATE in self.grants:
             tabs.append(sp.Tab("create", tr(t"bot-starboard-screen-create = Create"), self._create_nodes()))
         if focus is not None:
             offset = next((index // 10 * 10 for index, board in enumerate(boards) if str(board.id) == focus), 0)
@@ -169,7 +166,7 @@ class StarboardScreen(sd.Screen):
     def _board_editor(self, board: StarboardConfig) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         snapshot = self._snapshots[board.id]
         sections: list[sp.Tab[ComponentsV2Target, sd.Request]] = []
-        if STARBOARD_BOARD_EDIT in self._capabilities:
+        if STARBOARD_BOARD_EDIT in self.grants:
             sections.append(
                 sp.Tab(
                     "settings",
@@ -184,7 +181,7 @@ class StarboardScreen(sd.Screen):
                     ),
                 )
             )
-        if STARBOARD_EMOJI_EDIT in self._capabilities:
+        if STARBOARD_EMOJI_EDIT in self.grants:
             sections.append(
                 sp.Tab(
                     "emojis",
@@ -214,7 +211,7 @@ class StarboardScreen(sd.Screen):
                     ),
                 )
             )
-        if STARBOARD_WEIGHT_EDIT in self._capabilities:
+        if STARBOARD_WEIGHT_EDIT in self.grants:
             sections.append(
                 sp.Tab(
                     "weights",
@@ -259,13 +256,12 @@ class StarboardScreen(sd.Screen):
                 ),
                 key="board-actions",
             )
-            if STARBOARD_BOARD_DELETE in self._capabilities
+            if STARBOARD_BOARD_DELETE in self.grants
             else sl.note(""),
         )
 
+    @requires_grant(STARBOARD_BOARD_EDIT)
     async def _choose_setting(self, snapshot: StarboardSnapshot, event: sl.ChoiceEvent) -> None:
-        if not await self._may(event, STARBOARD_BOARD_EDIT):
-            return
         setting = event.selected[0]
         await event.present_form(
             _setting_form(setting, dict(snapshot.settings)[setting]),
@@ -273,9 +269,8 @@ class StarboardScreen(sd.Screen):
             on_submit=partial(self._edit, snapshot, setting),
         )
 
+    @requires_grant(STARBOARD_BOARD_CREATE)
     async def _create(self, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, STARBOARD_BOARD_CREATE):
-            return
         form = _CreateBoardForm.from_submission(event)
         channel_id = cast(discord.abc.Snowflake, form.channel_id).id
         name = form.name
@@ -300,9 +295,8 @@ class StarboardScreen(sd.Screen):
         created_name = created.name
         await event.notice(md_tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
 
+    @requires_grant(STARBOARD_BOARD_EDIT)
     async def _edit(self, before: StarboardSnapshot, setting: str, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, STARBOARD_BOARD_EDIT):
-            return
         value = event.values["value"]
         if setting == "channel_id":
             value = cast(discord.abc.Snowflake, value).id
@@ -315,9 +309,8 @@ class StarboardScreen(sd.Screen):
             BoardValues.capture(after).values(), tr(t"starboard-history-edit = Edit starboard")
         )
 
+    @requires_grant(STARBOARD_EMOJI_EDIT)
     async def _edit_emoji(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, STARBOARD_EMOJI_EDIT):
-            return
         form = _EditEmojiForm.from_submission(event)
         aliases = tuple(item for item in before.aliases() if item.emoji != form.emoji)
         aliases += (
@@ -332,28 +325,24 @@ class StarboardScreen(sd.Screen):
             ),
         )
 
+    @requires_grant(STARBOARD_EMOJI_EDIT)
     async def _remove_emoji(self, before: StarboardSnapshot, emoji: str, event: sl.ActionEvent[Any]) -> None:
-        if await self._may(event, STARBOARD_EMOJI_EDIT):
-            await self._save(before, replace(before, emojis=tuple(item for item in before.emojis if item[0] != emoji)))
+        await self._save(before, replace(before, emojis=tuple(item for item in before.emojis if item[0] != emoji)))
 
+    @requires_grant(STARBOARD_WEIGHT_EDIT)
     async def _edit_weight(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, STARBOARD_WEIGHT_EDIT):
-            return
         form = _EditWeightForm.from_submission(event)
         role_id = cast(discord.abc.Snowflake, form.role_id).id
         weights = dict(before.weights)
         weights[role_id] = form.multiplier
         await self._save(before, replace(before, weights=tuple(sorted(weights.items()))))
 
+    @requires_grant(STARBOARD_WEIGHT_EDIT)
     async def _remove_weight(self, before: StarboardSnapshot, role_id: int, event: sl.ActionEvent[Any]) -> None:
-        if await self._may(event, STARBOARD_WEIGHT_EDIT):
-            await self._save(
-                before, replace(before, weights=tuple(item for item in before.weights if item[0] != role_id))
-            )
+        await self._save(before, replace(before, weights=tuple(item for item in before.weights if item[0] != role_id)))
 
+    @requires_grant(STARBOARD_BOARD_DELETE)
     async def _request_delete(self, snapshot: StarboardSnapshot, event: sl.ActionEvent[Any]) -> None:
-        if not await self._may(event, STARBOARD_BOARD_DELETE):
-            return
         self._deleting = snapshot
         self._decision = sp.Decision[ComponentsV2Target, sd.Request](
             tr(t"starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session."),
@@ -370,7 +359,7 @@ class StarboardScreen(sd.Screen):
             self._deleting = None
             self._decision = None
             return
-        if not await self._may(event.source, STARBOARD_BOARD_DELETE):
+        if not await self.grants.confirm(event.source, STARBOARD_BOARD_DELETE):
             self._deleting = None
             self._decision = None
             return
@@ -380,17 +369,6 @@ class StarboardScreen(sd.Screen):
         self._deleting = None
         self._decision = None
         await event.source.notice(tr(t"bot-starboard-screen-starboard-deleted = Starboard deleted."))
-
-    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
-        if await self._authorize(node):
-            return True
-        await event.notice(
-            tr(
-                t"starboard-operation-permission-denied = You are no longer allowed to "
-                t"perform this starboard operation."
-            )
-        )
-        return False
 
 
 def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:

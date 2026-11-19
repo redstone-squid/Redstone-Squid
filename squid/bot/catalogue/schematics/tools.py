@@ -1,7 +1,7 @@
 """Schematic actions and their results within a build detail panel."""
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast, override
 
 import anyio
@@ -15,7 +15,7 @@ from squid.bot.catalogue.schematics.presentation import (
 from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import Grants, allows
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
@@ -50,13 +50,13 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         *,
         schematics: SchematicService,
         actor_account_id: int | None,
-        authorize: Callable[[PermissionNode], Awaitable[bool]],
+        grants: Grants,
         show_details: Callable[[], bool] | None = None,
     ) -> None:
         self._build_id = build_id
         self._schematics = schematics
         self._actor_account_id = actor_account_id
-        self._authorize = authorize
+        self.grants = grants
         self._show_details = show_details
         self._video_delivery_lock = asyncio.Lock()
         self._delivered_videos: set[int] = set()
@@ -154,7 +154,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
             await event.notice(tr(t"build-schematic-missing = This build has no schematic attached."))
             return None
         is_uploader = self._actor_account_id is not None and stored.uploaded_by_account_id == self._actor_account_id
-        if not (stored.publication.is_public_downloadable or is_uploader or await self._authorize(private_access)):
+        if not (stored.publication.is_public_downloadable or is_uploader or await self.grants.allows(private_access)):
             await event.notice(tr(t"build-schematic-not-public = This schematic is not publicly available."))
             return None
         return stored

@@ -25,7 +25,7 @@ from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import Grants
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.builds.domain import EditAccess, Status
@@ -34,7 +34,6 @@ from squid.core.actors import Actor
 from squid.core.pagination import PageSelector
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_EDIT,
@@ -66,21 +65,10 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint
 
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
-type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
 _RECORD_TITLE_BUTTONS = (BaseTitle.SMALLEST, BaseTitle.FASTEST, BaseTitle.FIRST)
 _DEFAULT_RECORD_VERSION = VersionScope.ALL_TIME
-
-
-@dataclass(frozen=True, slots=True)
-class BuildCapabilities:
-    """Initial visibility choices for build details and actions, not authorization to execute them."""
-
-    view_pending: bool
-    approve: bool
-    reject: bool
-    edit: bool
 
 
 class _BuildSource:
@@ -165,8 +153,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     Given only an ID, the build loads on first render; a `Build` is shown immediately.
 
-    Capabilities control which review actions appear, and those actions recheck permission
-    through authorize. Edit belongs to the catalogue's navigation row instead.
+    Grants choose which review actions appear, and those actions recheck their node.
+    Edit belongs to the catalogue's navigation row instead.
     """
 
     _decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
@@ -187,9 +175,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         actor: Callable[[], Awaitable[Actor]],
         schematics: SchematicService,
         render_build: BuildRenderer,
-        capabilities: BuildCapabilities,
+        grants: Grants,
         actor_account_id: int | None,
-        authorize: BuildAuthorizer,
         refresh_posts: RefreshPosts,
     ) -> None:
         if isinstance(build, int):
@@ -210,13 +197,12 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             build_id,
             schematics=schematics,
             actor_account_id=actor_account_id,
-            authorize=authorize,
+            grants=grants,
             show_details=lambda: self._show_schematics,
         )
         self._render_build = render_build
-        self._capabilities = capabilities
+        self.grants = grants
         self._actor_account_id = actor_account_id
-        self._authorize = authorize
         self._refresh_posts = refresh_posts
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
@@ -272,7 +258,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     key="schematic-tools",
                 )
             )
-        if build.submission_status is Status.PENDING and self._capabilities.approve:
+        if build.submission_status is Status.PENDING and BUILD_SUBMISSION_APPROVE in self.grants:
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-approve = Approve"),
@@ -281,7 +267,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     tone=sl.Tone.SUCCESS,
                 )
             )
-        if build.submission_status is Status.PENDING and self._capabilities.reject:
+        if build.submission_status is Status.PENDING and BUILD_SUBMISSION_REJECT in self.grants:
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-reject = Reject"),
@@ -339,11 +325,11 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         if choice == "cancel" or action is None:
             return
         node = BUILD_SUBMISSION_APPROVE if action == "approve" else BUILD_SUBMISSION_REJECT
-        if not await self._may(event.source, node):
+        if not await self.grants.confirm(event.source, node):
             return
 
         async def apply_review(source: sd.ActionEvent, _account_id: int) -> None:
-            if not await self._may(source, node):
+            if not await self.grants.confirm(source, node):
                 return
             assert review is not None
             await review.save(
@@ -365,14 +351,6 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     async def _refresh_review(self) -> None:
         self.projection.invalidate()
         await self._refresh_posts(self._build_id)
-
-    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
-        if await self._authorize(node):
-            return True
-        await event.notice(
-            tr(t"build-operation-permission-denied = You are no longer allowed to perform this build operation.")
-        )
-        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -420,9 +398,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         topics: TopicBus,
         initial_id: int | None,
         render_build: BuildRenderer,
-        capabilities: BuildCapabilities,
+        grants: Grants,
         actor_account_id: int | None,
-        authorize: BuildAuthorizer,
         refresh_posts: RefreshPosts,
         records: RecordService | None = None,
         record_tools: RecordsScreen | None = None,
@@ -451,12 +428,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._schematics = schematics
         self._initial_id = initial_id
         self._render_build = render_build
-        self._capabilities = capabilities
+        self.grants = grants
         self._actor_account_id = actor_account_id
-        self._authorize = authorize
         self._refresh_posts = refresh_posts
         statuses = {Status.CONFIRMED}
-        if capabilities.view_pending:
+        if BUILD_SUBMISSION_VIEW_PENDING in grants:
             statuses.add(Status.PENDING)
         self._statuses = frozenset(statuses)
         self._browser = sp.Browser(
@@ -485,42 +461,29 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         build_id: int | None = None,
         initial_records: bool = False,
     ) -> Self:
-        """Build the catalogue with the requesting user's capabilities.
+        """Build the catalogue with the requesting user's grants.
 
         Args:
             build_id: Open this build's detail once the screen loads.
             initial_records: Start on the record standings instead of the build list.
         """
         subject = await request.client.actors.resolve(request)
-        permissions = request.client.services.permissions
-
-        async def held(node: PermissionNode) -> bool:
-            return (await permissions.check(subject, node)).allowed
-
-        capabilities = BuildCapabilities(
-            view_pending=await held(BUILD_SUBMISSION_VIEW_PENDING),
-            approve=await held(BUILD_SUBMISSION_APPROVE),
-            reject=await held(BUILD_SUBMISSION_REJECT),
-            edit=await held(BUILD_SUBMISSION_EDIT),
+        grants = await Grants.load(
+            request,
+            BUILD_SUBMISSION_VIEW_PENDING,
+            BUILD_SUBMISSION_APPROVE,
+            BUILD_SUBMISSION_REJECT,
+            BUILD_SUBMISSION_EDIT,
+            RECORD_ENTRY_INSPECT,
+            RECORD_ENTRY_REBUILD,
         )
-
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
 
         async def refresh_posts(build_id: int) -> None:
             await request.client.refresh_posts("build", str(build_id))
 
-        can_inspect = request.guild is not None and await held(RECORD_ENTRY_INSPECT)
-        can_rebuild = request.guild is not None and await held(RECORD_ENTRY_REBUILD)
         record_tools = (
-            RecordsScreen(
-                request.client.services.records,
-                request.client.services.record_computation,
-                can_inspect=can_inspect,
-                can_rebuild=can_rebuild,
-                authorize=authorize,
-            )
-            if can_inspect or can_rebuild
+            RecordsScreen(request.client.services.records, request.client.services.record_computation, grants=grants)
+            if request.guild is not None and (RECORD_ENTRY_INSPECT in grants or RECORD_ENTRY_REBUILD in grants)
             else None
         )
 
@@ -535,9 +498,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             render_build=lambda build: render_build_card(
                 build, request.client.media_previews, schematic_summaries=request.client.services.schematic_summaries
             ),
-            capabilities=capabilities,
+            grants=grants,
             actor_account_id=subject.account_id,
-            authorize=authorize,
             refresh_posts=refresh_posts,
             records=request.client.services.records,
             search=request.client.services.search,
@@ -575,7 +537,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         """Open one build, unless it does not exist or the opener may not see it while pending."""
         screen = await cls.create(request, build_id=build_id)
         build = await request.client.services.build_queries.get(build_id)
-        if build is None or (build.submission_status is not Status.CONFIRMED and not screen._capabilities.view_pending):
+        if build is None or (
+            build.submission_status is not Status.CONFIRMED and BUILD_SUBMISSION_VIEW_PENDING not in screen.grants
+        ):
             raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
         return screen
 
@@ -807,16 +771,18 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             actor=self._actor,
             schematics=self._schematics,
             render_build=self._render_build,
-            capabilities=self._capabilities,
+            grants=self.grants,
             actor_account_id=self._actor_account_id,
-            authorize=self._authorize,
             refresh_posts=self._refresh_posts,
         )
 
     def _build_actions(self, build: Build) -> tuple[sl.semantic.RoutedActionControl, ...]:
         """Edit, for anyone who may edit some of the build; the editor decides how much."""
         assert build.id is not None
-        if build.edit_access(self._actor_account_id, may_edit_any=self._capabilities.edit) is EditAccess.NONE:
+        if (
+            build.edit_access(self._actor_account_id, may_edit_any=BUILD_SUBMISSION_EDIT in self.grants)
+            is EditAccess.NONE
+        ):
             return ()
         return (
             sl.routed_action_control(
@@ -828,7 +794,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _select(self, build_id: int) -> bool:
         build = await self._queries.get(build_id)
-        if build is None or (build.submission_status is not Status.CONFIRMED and not self._capabilities.view_pending):
+        if build is None or (
+            build.submission_status is not Status.CONFIRMED and BUILD_SUBMISSION_VIEW_PENDING not in self.grants
+        ):
             return False
         await self._show_build(build)
         return True

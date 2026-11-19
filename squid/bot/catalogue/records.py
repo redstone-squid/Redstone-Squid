@@ -17,7 +17,7 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
 from squid.bot.ui import tr, truncate_display_text
-from squid.permissions.domain import PermissionNode
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
@@ -57,9 +57,6 @@ class RecordComputationOperations(Protocol):
     ) -> RebuildSummary: ...
 
 
-type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
-
-
 type BuildOpener = Callable[[int, sl.ActionEvent], Awaitable[None]]
 
 
@@ -71,8 +68,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     lists categories whose titles contain terms the title rules do not know, and
     "Recompute" recalculates standings once either has been fixed.
 
-    Initial capabilities choose which tabs and forms are visible. Each maintenance
-    action calls authorize again before invoking the record service.
+    The grants held at open choose which tabs and forms are visible. Each maintenance
+    action rechecks its node before invoking the record service.
     """
 
     policy = sd.ResponseSpec(
@@ -98,21 +95,17 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         records: RecordOperations,
         computation: RecordComputationOperations,
         *,
-        can_inspect: bool,
-        can_rebuild: bool,
-        authorize: RecordAuthorizer,
+        grants: Grants,
     ) -> None:
         self._records = records
         self._computation = computation
-        self._can_inspect = can_inspect
-        self._can_rebuild = can_rebuild
-        self._authorize = authorize
+        self.grants = grants
         self.open_build: BuildOpener | None = None
         """Opens a build from a gap's details; set by a host that can show builds."""
 
     @override
     async def on_load(self) -> None:
-        if self._can_inspect:
+        if RECORD_ENTRY_INSPECT in self.grants:
             await self._refresh_diagnostics()
         self._build_tabs()
 
@@ -183,9 +176,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
+    @requires_grant(RECORD_ENTRY_INSPECT)
     async def _recompute_diagnostic(self, definition_id: int, kind: BuildKind, event: sl.PressEvent) -> None:
-        if not await self._may(event, RECORD_ENTRY_INSPECT):
-            return
         summary = await self._records.materialize_definition(
             definition_id, kind=kind, version_id=int(self._version.value) if self._version else None
         )
@@ -250,7 +242,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         return (self._tabs,)
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        if not (self._can_inspect or self._can_rebuild):
+        if not (RECORD_ENTRY_INSPECT in self.grants or RECORD_ENTRY_REBUILD in self.grants):
             return (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
         version = self._version.label if self._version else tr(t"records-active-version = the active version")
         return (
@@ -261,13 +253,13 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 )
             ),
             sl.action_controls(
-                self._can_inspect
+                RECORD_ENTRY_INSPECT in self.grants
                 and sl.action_control(
                     tr(t"records-choose-definition = Recompute a category"),
                     self._choose_definition,
                     key="definition",
                 ),
-                self._can_rebuild
+                RECORD_ENTRY_REBUILD in self.grants
                 and sl.form(
                     tr(t"bot-submission-records-rebuild-records = Rebuild all records"),
                     self._rebuild_form(),
@@ -319,7 +311,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
                     ),
                 )
-                if self._can_inspect
+                if RECORD_ENTRY_INSPECT in self.grants
                 else ()
             ),
         )
@@ -388,7 +380,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         version = int(self._version.value) if self._version else None
 
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:
-            if not await self._may(source, RECORD_ENTRY_INSPECT):
+            if not await self.grants.confirm(source, RECORD_ENTRY_INSPECT):
                 return
             assert item.description is not None
             summary = await self._records.materialize_definition(
@@ -409,9 +401,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             confirm=tr(t"records-recompute-definition = Recompute definition"),
         )
 
+    @requires_grant(RECORD_ENTRY_INSPECT)
     async def _lookup(self, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, RECORD_ENTRY_INSPECT):
-            return
         form = _LookupForm.from_submission(event)
         kind = form.kind
         selected = form.base_key.strip()
@@ -452,9 +443,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             )
         )
 
+    @requires_grant(RECORD_ENTRY_REBUILD)
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, RECORD_ENTRY_REBUILD):
-            return
         form = _RebuildForm.from_submission(event)
         kind = form.kind
         version_id = (
@@ -464,7 +454,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if version_id is not None:
             await self._computation.pin_current_version(version_id)
         summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
-        if self._can_inspect:
+        if RECORD_ENTRY_INSPECT in self.grants:
             await self._refresh_diagnostics()
             self._build_tabs()
         definitions = summary.definitions
@@ -476,14 +466,6 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 t"definitions; {resolved} resolved; {unresolved} awaiting evidence.",
             )
         )
-
-    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
-        if await self._authorize(node):
-            return True
-        await event.notice(
-            tr(t"records-operation-permission-denied = You are no longer allowed to perform this records operation.")
-        )
-        return False
 
 
 def _gap_title(gap: RecordGap) -> str:

@@ -11,7 +11,8 @@ import pytest
 import squid.bot.settings.screen as settings_view
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.settings.screen import SettingsCapabilities, SettingsPanel
+from squid.bot.settings.screen import SettingsPanel
+from squid.bot.utils.permissions import Grants
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import (
@@ -24,7 +25,7 @@ from squid.edits.domain import (
     RevisionConflictError,
 )
 from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT
+from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
 from squid.settings.application import SettingsService
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
@@ -34,13 +35,14 @@ from squid.voting.domain.models import VoteConfiguration
 from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import readonly_transaction
 from squid_ui.ext.discord.testing import commit_render, delivered_to, http_error, interaction_harness, message_harness
-from squid_ui.testing import submit_event
+from squid_ui.testing import RecordingResponder, submit_event
 from tests.support.discord import make_layout_bot
 from tests.support.edits import bound_revisions
+from tests.support.grants import grants
 from tests.support.services import bot_services
 
 GUILD_ID = 7
-EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
+EVERYTHING = (SETTINGS_SERVER_VIEW, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT)
 
 
 @dataclass(slots=True)
@@ -170,14 +172,11 @@ def make_component_panel(
     settings = FakeSettingsService(stored)
     votes = settings.votes
 
-    async def authorize(_node: object) -> bool:
-        return True
-
     async def actor() -> Actor:
         return Actor(account_id=1, guild_id=GUILD_ID)
 
     async def execute(command: EditCommand, actor: Actor) -> EditResult:
-        if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
+        if not await panel.settings.grants.allows(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
         if bound_revisions(command)[0].value != settings.revision:
             raise RevisionConflictError(bound_revisions(command)[0], settings.revision)
@@ -211,8 +210,7 @@ def make_component_panel(
         edits=cast(Any, SimpleNamespace(execute=execute)),
         actor=actor,
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
-        capabilities=EVERYTHING,
-        authorize=authorize,
+        grants=grants(*EVERYTHING),
     )
     bot = make_layout_bot()
     message_root = sd.DiscordUIRuntime.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
@@ -361,10 +359,7 @@ async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
         await panel.server.set_channel("Vote", 12)
     writes = len(settings.channel_writes)
 
-    async def deny(_node: object) -> bool:
-        return False
-
-    panel.settings.authorize = deny
+    panel.settings.grants = grants(*EVERYTHING, current=False)
     with pytest.raises(AuthorizationError), sl.runtime.transaction():
         await panel.edits.undo()
 
@@ -388,9 +383,9 @@ async def test_diagnostics_rechecks_access_and_refreshes_settings() -> None:
     allowed = True
 
     async def authorize(node: PermissionNode) -> bool:
-        return allowed and node == settings_view.SETTINGS_SERVER_VIEW
+        return allowed and node == SETTINGS_SERVER_VIEW
 
-    panel.settings.authorize = authorize
+    panel.settings.grants = Grants(frozenset(EVERYTHING), authorize)
     await message_root.send(delivered_to(message_harness()))
     diagnostics = next(key for key in message_root.snapshot().handler_keys if key.endswith("diagnostics"))
     interaction = interaction_harness(user_id=1)
@@ -417,12 +412,15 @@ async def test_each_channel_picker_writes_its_own_setting() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
-    class Selection:
-        selected = (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),)
-        context: dict[str, object] = {}
+    selection = sl.EntityEvent(
+        sl.interactions.Actor("1"),
+        RecordingResponder(),
+        selected=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),),
+        context={},
+    )
 
     with sl.runtime.transaction():
-        await panel.server._channel_changed(cast(Any, Selection()), "Builds")
+        await panel.server._channel_changed(selection, "Builds")
 
     assert panel.server.channel_id("Builds") == 12
     assert panel.server.channel_id("Vote") == 3

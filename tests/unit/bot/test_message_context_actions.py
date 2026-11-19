@@ -13,6 +13,9 @@ import pytest
 import squid_ui.ext.discord as sd
 from squid.bot.admin_cog import Admin
 from squid.bot.give_redstoner_cog import RedstonerScreen
+from squid.bot.utils.permissions import Grants
+from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.testing import RecordingResponder, labels, press, press_event
 
@@ -107,7 +110,7 @@ class AsyncAuthorizer:
         self.result = result
         self.calls = 0
 
-    async def __call__(self) -> bool:
+    async def __call__(self, _node: PermissionNode) -> bool:
         self.calls += 1
         return self.result
 
@@ -132,8 +135,7 @@ def make_redstoner_screen(
             guild_id=1,
             role_id=2,
             source_channel_id=3,
-            can_deploy=can_deploy,
-            authorize_deploy=authorizer,
+            grants=Grants(frozenset({REDSTONER_PANEL_MANAGE} if can_deploy else ()), authorizer),
             publish_panel=publisher,
         ),
         authorizer,

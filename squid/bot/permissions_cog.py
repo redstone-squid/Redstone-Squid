@@ -8,11 +8,11 @@ from discord import app_commands
 import squid_ui.ext.discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import get_or_create_discord_account_id
-from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
-from squid.permissions.domain import Effect, PermissionNode, Reason, TraceStep
+from squid.permissions.domain import Effect, Reason, TraceStep
 from squid.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
@@ -83,18 +83,9 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         )
         role_id = role.id if role is not None else None
         label = role.name if role is not None else target.display_name if target is not None else "unknown"
-        subject = await request.client.actors.resolve(request)
-        capability_list: list[PermissionNode] = []
-        for node in ACCESS_NODES:
-            if (await self.bot.services.permissions.check(subject, node)).allowed:
-                capability_list.append(node)  # noqa: PERF401 - await comprehensions confuse Pyrefly.
-        capabilities = frozenset(capability_list)
 
         async def actor() -> Actor:
             return await request.client.actors.resolve(request, refresh=True)
-
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
 
         return AccessScreen(
             self.admin,
@@ -103,9 +94,8 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
             account_id=account_id,
             discord_role_id=role_id,
             subject_label=label,
-            capabilities=capabilities,
+            grants=await Grants.load(request, *ACCESS_NODES),
             actor=actor,
-            authorize=authorize,
         )
 
 

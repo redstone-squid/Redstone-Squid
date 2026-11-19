@@ -8,6 +8,7 @@ import pytest
 
 import squid_ui as sl
 from squid.bot.catalogue.records import RecordsScreen
+from squid.bot.utils.permissions import Grants
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import (
@@ -100,9 +101,12 @@ def make_screen(*, inspect: bool = True, rebuild: bool = True) -> ScreenHarness:
         RecordsScreen(
             records,
             computation,
-            can_inspect=inspect,
-            can_rebuild=rebuild,
-            authorize=Authorizer(inspect=inspect, rebuild=rebuild),
+            grants=Grants(
+                frozenset(
+                    node for node, held in ((RECORD_ENTRY_INSPECT, inspect), (RECORD_ENTRY_REBUILD, rebuild)) if held
+                ),
+                Authorizer(inspect=inspect, rebuild=rebuild),
+            ),
         ),
         records,
         computation,
@@ -201,6 +205,6 @@ async def test_diagnostic_recompute_carries_kind_version_and_rechecks_permission
         screen._version = Suggestion(value="9", label="Java 1.21", kind="version")
         await screen._recompute_diagnostic(42, kind, press_event())
     assert harness.records.materialize_calls == [(42, kind, 9)]
-    screen._authorize = Authorizer(inspect=False, rebuild=True)
+    screen.grants = Grants(screen.grants.held, Authorizer(inspect=False, rebuild=True))
     await screen._recompute_diagnostic(42, kind, press_event())
     assert harness.records.materialize_calls == [(42, kind, 9)]

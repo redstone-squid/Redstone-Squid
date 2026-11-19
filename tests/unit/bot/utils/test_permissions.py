@@ -9,6 +9,7 @@ import pytest
 from discord.ext.commands import Context
 from whenever import Instant
 
+import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
@@ -18,13 +19,17 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     PermissionNodeRequired,
     requires,
+    requires_grant,
 )
 from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.runtime import BotServices
+from squid_ui.testing import RecordingResponder, press_event
+from tests.support.grants import grants
 from tests.support.permissions import permission_uow_factory
 from tests.support.services import bot_services
 
@@ -255,3 +260,24 @@ async def test_editor_actor_refreshes_discord_roles_and_bypasses_identity_cache(
     assert second.account_id == 8
     assert live_guild.fetch_member.await_count == 2
     assert cast(FakeAccountService, bot.services.accounts).lookups == 3
+
+
+class _GuardedScreen:
+    def __init__(self, held: bool) -> None:
+        self.grants = grants(BUILD_SUBMISSION_EDIT, current=held)
+        self.ran: list[int] = []
+
+    @requires_grant(BUILD_SUBMISSION_EDIT, denied="No editing.")
+    async def edit(self, revision: int, event: sl.PressEvent) -> None:
+        self.ran.append(revision)
+
+
+@pytest.mark.parametrize("held", [True, False])
+async def test_requires_grant_rechecks_before_running_the_handler(held: bool) -> None:
+    screen = _GuardedScreen(held)
+    responder = RecordingResponder()
+
+    await screen.edit(3, press_event(responder=responder))
+
+    assert screen.ran == ([3] if held else [])
+    assert [text for text, _ in responder.notices] == ([] if held else ["No editing."])

@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from typing import Any, cast, override
 from uuid import UUID
 
@@ -36,12 +36,14 @@ from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
 from squid.bot.follows import FollowCard
+from squid.bot.utils.permissions import Grants
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
+from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_ui.content.text import NEUTRAL, resolve_text, source_text
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
-from squid_ui.testing import find, keys, labels, render_tree
+from squid_ui.interactions import Visibility
+from squid_ui.testing import RecordingResponder, find, keys, labels, press_event, render_tree, submit_event
 from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
 
 ACCOUNT_ID = 42
@@ -108,14 +110,28 @@ async def no_refresh(*, changed_account_id: int | None = None) -> None:
     pass
 
 
-class NoticeSource:
-    def __init__(self, **values: object) -> None:
-        self.values = values
-        self.errors: tuple[sl.forms.FormIssue, ...] = ()
-        self.notices: list[sl.TextLike] = []
+@dataclass
+class TextResponder(RecordingResponder):
+    """Keeps each notice as given, so tests can compare message objects."""
 
-    async def notice(self, text: sl.TextLike, **_kwargs: object) -> None:
-        self.notices.append(text)
+    texts: list[sl.TextLike] = field(default_factory=list)
+
+    @override
+    async def notice(self, text: sl.TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+        self.texts.append(text)
+        await super().notice(text, visibility=visibility)
+
+
+def notice_source(**values: object) -> sd.SubmitEvent:
+    return cast(sd.SubmitEvent, submit_event(values, responder=TextResponder()))
+
+
+def notice_press() -> sd.PressEvent:
+    return cast(sd.PressEvent, press_event(responder=TextResponder()))
+
+
+def notices(event: sl.ActionEvent) -> list[sl.TextLike]:
+    return cast(TextResponder, event.responder).texts
 
 
 class ScheduleRoot:
@@ -140,7 +156,7 @@ class PressSource:
 
 
 class TransitionSource:
-    def __init__(self, source: NoticeSource) -> None:
+    def __init__(self, source: sl.ActionEvent) -> None:
         self.source = source
 
 
@@ -307,10 +323,7 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
 
     await workspace.on_load()
@@ -343,15 +356,12 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
-    event = NoticeSource(code="abcd")
+    event = notice_source(code="abcd")
 
-    await workspace._link(cast(sd.SubmitEvent, event))
+    await workspace._link(event)
 
     assert accounts.linked == []
     assert consent.preview is accounts.reservation.preview
@@ -359,12 +369,12 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     assert accounts.reservation_ttls == [120]
 
     assert consent.answered is not None
-    await consent.answered(cast(sd.PressEvent, event), AccountConsent.grant_current())
+    await consent.answered(event, AccountConsent.grant_current())
 
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
-    assert len(event.notices) == 1
-    assert "linked to **Notch**" in source_text(event.notices[0])
+    assert len(notices(event)) == 1
+    assert "linked to **Notch**" in source_text(notices(event)[0])
 
 
 async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> None:
@@ -380,14 +390,11 @@ async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> 
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
 
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
     assert consent.on_abandon is not None
     await consent.on_abandon()
     await consent.on_abandon()
@@ -409,13 +416,10 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
 
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
@@ -433,14 +437,11 @@ async def test_accountless_link_cancel_releases_without_creating_personal_rows()
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
 
     assert "Link Minecraft account" in labels(workspace._identity_nodes())
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
     assert accounts.created_consents == []
     assert consent.on_abandon is not None
     await consent.on_abandon()
@@ -462,28 +463,25 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
-    prompt = NoticeSource()
+    prompt = notice_source()
 
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
     granted = AccountConsent.grant_current()
     assert consent.answered is not None
-    await consent.answered(cast(sd.PressEvent, prompt), granted)
+    await consent.answered(prompt, granted)
 
     # A repeated callback or late abandonment must not redeem or release again.
-    await consent.answered(cast(sd.PressEvent, prompt), granted)
+    await consent.answered(prompt, granted)
     assert consent.on_abandon is not None
     await consent.on_abandon()
 
     assert accounts.created_consents == [granted]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
-    assert "linked to **Notch**" in source_text(prompt.notices[0])
+    assert "linked to **Notch**" in source_text(notices(prompt)[0])
 
 
 async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
@@ -499,17 +497,14 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
 
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
     assert accounts.granted == []
     assert consent.answered is not None
-    await consent.answered(cast(sd.PressEvent, NoticeSource()), AccountConsent.grant_current())
+    await consent.answered(notice_source(), AccountConsent.grant_current())
 
     assert accounts.granted == [ACCOUNT_ID]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
@@ -527,11 +522,7 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
             actor_id=AUTHOR_ID,
             account=account,
             request_consent=no_consent_request,
-            can_review_claims=False,
-            can_approve_claims=False,
-            can_reject_claims=False,
-            authorize_claim=authorize,
-            can_refresh_any=allowed,
+            grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY} if allowed else ()), authorize),
         )
 
     assert "Refresh member" not in labels(workspace(allowed=False)._identity_nodes())
@@ -550,11 +541,7 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
             actor_id=AUTHOR_ID,
             account=account,
             request_consent=no_consent_request,
-            can_review_claims=False,
-            can_approve_claims=False,
-            can_reject_claims=False,
-            authorize_claim=authorize,
-            can_refresh_identity=allowed,
+            grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH} if allowed else ()), authorize),
         )
 
     assert "Refresh Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
@@ -577,24 +564,20 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
-        can_refresh_identity=True,
+        grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH}), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
-    event = NoticeSource()
+    event = notice_press()
 
-    await workspace._refresh_identity(cast(sd.PressEvent, event))
+    await workspace._refresh_identity(event)
 
     assert authorized == [ACCOUNT_IDENTITY_REFRESH]
     assert accounts.refreshed == ([ACCOUNT_ID] if allowed else [])
     if allowed:
-        assert event.notices == [refresh_message(refresh)]
+        assert notices(event) == [refresh_message(refresh)]
     else:
-        assert len(event.notices) == 1
-        assert "no longer allowed" in source_text(event.notices[0])
+        assert len(notices(event)) == 1
+        assert "no longer allowed" in source_text(notices(event)[0])
 
 
 async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
@@ -611,18 +594,14 @@ async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> 
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
-        can_refresh_any=True,
+        grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
-    event = NoticeSource(user=discord.Object(id=999))
+    event = notice_source(user=discord.Object(id=999))
 
-    await workspace._refresh_member_identity(cast(sd.SubmitEvent, event))
+    await workspace._refresh_member_identity(event)
 
     assert accounts.identity_reads == []
-    assert "no longer allowed" in source_text(event.notices[0])
+    assert "no longer allowed" in source_text(notices(event)[0])
 
 
 async def test_staff_refresh_reports_a_named_member_without_an_account() -> None:
@@ -636,15 +615,11 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
-        can_refresh_any=True,
+        grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
 
     with pytest.raises(AccountNotFoundError) as caught:
-        await workspace._refresh_member_identity(cast(sd.SubmitEvent, NoticeSource(user=discord.Object(id=999))))
+        await workspace._refresh_member_identity(notice_source(user=discord.Object(id=999)))
 
     assert caught.value.context["provider"] == IdentityProvider.DISCORD.value
     assert caught.value.context["subject"] == "999"
@@ -674,19 +649,15 @@ async def test_staff_refresh_targets_the_selected_account_and_forwards_its_notic
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
-        can_refresh_any=True,
+        grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
-    event = NoticeSource(user=discord.Object(id=999))
+    event = notice_source(user=discord.Object(id=999))
 
-    await workspace._refresh_member_identity(cast(sd.SubmitEvent, event))
+    await workspace._refresh_member_identity(event)
 
     assert accounts.refreshed == [99]
-    assert event.notices == [refresh_message(refresh)]
+    assert notices(event) == [refresh_message(refresh)]
 
 
 async def test_merge_requires_the_workspace_decision() -> None:
@@ -701,19 +672,16 @@ async def test_merge_requires_the_workspace_decision() -> None:
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
-    submit = NoticeSource(code="merge-me")
+    submit = notice_source(code="merge-me")
 
-    await workspace._request_merge(cast(sd.SubmitEvent, submit))
+    await workspace._request_merge(submit)
 
     assert accounts.completed == []
     assert workspace._merge_decision is not None
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
-    source = NoticeSource()
+    source = notice_source()
     await workspace._finish_merge(cast(Any, TransitionSource(source)), "confirm")
     assert accounts.completed == [(ACCOUNT_ID, "merge-me")]
 
@@ -780,7 +748,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
         submitted={"display_name": "Builder", "pronouns": None, "bio": "Hello"},
     )
     committed = editor.transition(staged, "save")
-    source = NoticeSource()
+    source = notice_source()
 
     assert component.on_change is not None
     with sl.runtime.transaction():
@@ -789,7 +757,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     accounts = cast(AccountMutationService, panel._accounts)
     assert len(accounts.profile_updates) == 1
     assert panel._profile_editor is None
-    assert len(source.notices) == 1
+    assert len(notices(source)) == 1
 
 
 def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict[str, Any]]:
@@ -812,7 +780,7 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict
 
         async def answer(consent: AccountConsent | None) -> None:
             with sl.runtime.transaction():
-                await on_answer(cast(sd.PressEvent, event), consent)
+                await on_answer(event, consent)
             if consent is not None:
                 await cast(Any, event).responder.message_root.schedule()
 
@@ -985,13 +953,10 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     with pytest.raises(RuntimeError, match="delivery failed"):
-        await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+        await workspace._link(notice_source(code="abcd"))
     assert consent.on_abandon is not None
     await consent.on_abandon()
 
@@ -1048,10 +1013,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
         for tab in ("identity", "claims", "merge", "overview"):
@@ -1130,10 +1092,7 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=no_consent_request,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     focusable: sl.Focusable[AccountTab] = workspace
     assert isinstance(workspace, sl.Focusable)
@@ -1172,16 +1131,13 @@ async def test_link_cleanup_survives_redemption_failure(failure: BaseException, 
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=consent,
-        can_review_claims=False,
-        can_approve_claims=False,
-        can_reject_claims=False,
-        authorize_claim=authorize,
+        grants=Grants(frozenset(), authorize),
     )
     mocker.patch.object(accounts, "link_minecraft_account", side_effect=failure)
-    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(notice_source(code="abcd"))
     assert consent.answered is not None
     with pytest.raises(type(failure)):
-        await consent.answered(cast(sd.PressEvent, NoticeSource()), AccountConsent.grant_current())
+        await consent.answered(notice_source(), AccountConsent.grant_current())
     assert consent.on_abandon is not None
     await consent.on_abandon()
     assert accounts.released == ["abcd"]

@@ -14,9 +14,11 @@ from squid.bot.submission.ui import drafts
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.builds.domain import Status
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import primitives
+from tests.support.grants import grants
 
 
 @pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#claims"])
@@ -52,7 +54,7 @@ async def test_build_visibility_is_checked_before_opening(
     view_pending: bool,
 ) -> None:
     request = MagicMock()
-    screen = MagicMock(_capabilities=MagicMock(view_pending=view_pending))
+    screen = MagicMock(grants=grants(*([BUILD_SUBMISSION_VIEW_PENDING] if view_pending else [])))
     build = None if status is None else MagicMock(submission_status=status)
     request.client.services.build_queries.get = AsyncMock(return_value=build)
     monkeypatch.setattr(BuildBrowseScreen, "create", AsyncMock(return_value=screen))

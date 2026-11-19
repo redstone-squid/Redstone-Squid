@@ -40,7 +40,7 @@ from squid.tags.application.edits import (
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
-from squid_ui.testing import RecordingResponder, labels
+from squid_ui.testing import RecordingResponder, labels, submit_event
 from tests.support.edits import bound_revisions
 from tests.support.grants import grants
 
@@ -154,18 +154,16 @@ class FakeRestrictionService(RestrictionService):
         return Revision(tag_target(1), self.revision)
 
 
-class NoticeEvent:
-    def __init__(self, **values: object) -> None:
-        self.values = values
-        self.errors: tuple[sl.forms.FormIssue, ...] = ()
-        self.notices: list[object] = []
+def form_event(**values: object) -> sl.SubmitEvent:
+    return submit_event(values)
 
-    async def notice(self, text: object, **_kwargs: object) -> None:
-        self.notices.append(text)
+
+def notices(event: sl.ActionEvent) -> list[str]:
+    return [text for text, _ in cast(RecordingResponder, event.responder).notices]
 
 
 class TransitionEvent:
-    def __init__(self, source: NoticeEvent) -> None:
+    def __init__(self, source: sl.ActionEvent) -> None:
         self.source = source
 
 
@@ -209,13 +207,13 @@ async def test_tags_use_browsers_and_capability_aware_tabs() -> None:
 async def test_seeded_build_application_uses_the_opening_build() -> None:
     screen, tags, _ = make_screen(build_id=42)
     await screen.on_load()
-    event = NoticeEvent(tag_id=1, value=None)
+    event = form_event(tag_id=1, value=None)
 
     with transaction():
-        await screen._apply(cast(sl.SubmitEvent, event))
+        await screen._apply(event)
 
     assert tags.assignments == [(42, 1, None, 7)]
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1
 
 
 async def test_open_assignment_form_keeps_its_displayed_build_revision() -> None:
@@ -223,23 +221,23 @@ async def test_open_assignment_form_keeps_its_displayed_build_revision() -> None
     await screen.on_load()
     opening_revision = tags.revision
     with transaction():
-        await screen._apply(cast(sl.SubmitEvent, NoticeEvent(tag_id=1, value=None)))
+        await screen._apply(form_event(tag_id=1, value=None))
     with transaction(), pytest.raises(RevisionConflictError):
-        await screen._apply(cast(sl.SubmitEvent, NoticeEvent(tag_id=1, value=None)), base_revision=opening_revision)
+        await screen._apply(form_event(tag_id=1, value=None), base_revision=opening_revision)
     assert len(tags.assignments) == 1
 
 
 async def test_proposal_refreshes_the_service_backed_browsers() -> None:
     screen, tags, _ = make_screen()
     await screen.on_load()
-    event = NoticeEvent(name="Reliable", value_type=TagValueType.NONE, query_name=None)
+    event = form_event(name="Reliable", value_type=TagValueType.NONE, query_name=None)
 
     with transaction():
-        await screen._propose(cast(sl.SubmitEvent, event))
+        await screen._propose(event)
 
     assert tags.proposals == [("Reliable", TagValueType.NONE, "reliable", 7)]
     assert tags.public_reads == 2
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1
 
 
 async def test_revoked_alias_permission_prevents_mutation() -> None:
@@ -247,12 +245,12 @@ async def test_revoked_alias_permission_prevents_mutation() -> None:
         capabilities=frozenset({RESTRICTION_ALIAS_CREATE}),
         allowed=False,
     )
-    event = NoticeEvent(restriction="locational", alias="location")
+    event = form_event(restriction="locational", alias="location")
 
-    await screen._add_alias(cast(sl.SubmitEvent, event))
+    await screen._add_alias(event)
 
     assert restrictions.aliases == []
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1
 
 
 async def test_moderation_requires_a_decision_and_rechecks_permission() -> None:
@@ -267,13 +265,13 @@ async def test_moderation_requires_a_decision_and_rechecks_permission() -> None:
 
     assert screen._pending_action == (proposal, "approve")
     assert screen._decision is not None
-    source = NoticeEvent()
+    source = form_event()
     transition = TransitionEvent(source)
     with transaction():
         await screen._decide(cast(Any, transition), "confirm")
 
     assert tags.approvals == [2]
-    assert len(source.notices) == 1
+    assert len(notices(source)) == 1
     assert screen._pending_action is None
 
 
@@ -287,7 +285,7 @@ async def test_alias_history_rechecks_authority_and_reverses_membership() -> Non
     screen, _, restrictions = make_screen(capabilities=frozenset({RESTRICTION_ALIAS_CREATE}))
     await screen.on_load()
     with transaction():
-        await screen._add_alias(cast(sl.SubmitEvent, NoticeEvent(restriction="locational", alias="location")))
+        await screen._add_alias(form_event(restriction="locational", alias="location"))
     assert restrictions.aliases == [("locational", "location")]
     assert await screen.edits.undo() is not None
     assert restrictions.aliases == []
@@ -299,14 +297,12 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
     screen, tags, _ = make_screen(capabilities=frozenset({TAG_PROPOSAL_APPROVE, RESTRICTION_ALIAS_CREATE}))
     await screen.on_load()
     with transaction():
-        await screen._add_alias(cast(sl.SubmitEvent, NoticeEvent(restriction="locational", alias="location")))
-        await screen._propose(
-            cast(sl.SubmitEvent, NoticeEvent(name="Reliable", value_type=TagValueType.NONE, query_name=None))
-        )
+        await screen._add_alias(form_event(restriction="locational", alias="location"))
+        await screen._propose(form_event(name="Reliable", value_type=TagValueType.NONE, query_name=None))
     assert len(screen.edits.undoable) == 2
     await screen._request_moderation(cast(sl.PressEvent, object()), tags.proposal, "approve")
     with transaction():
-        await screen._decide(cast(Any, TransitionEvent(NoticeEvent())), "confirm")
+        await screen._decide(cast(Any, TransitionEvent(form_event())), "confirm")
     assert len(screen.edits.undoable) == 1
     assert screen.edits.undoable[0].receipt.targets == frozenset({tag_target(1).identity})
 

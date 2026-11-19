@@ -17,7 +17,7 @@ from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import ConsentedAccountWork
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     commit_render,
@@ -28,6 +28,7 @@ from squid_ui.ext.discord.testing import (
 )
 from squid_ui.testing import RecordingResponder, choose, keys, press_event, render_tree
 from tests.support.discord import make_layout_bot
+from tests.support.grants import grants
 
 AUTHOR_ID = 11
 NOW = Instant.from_utc(2026, 8, 19)
@@ -79,17 +80,12 @@ class ComponentHarness:
 def make_component(claims: tuple[AliasClaim, ...], *, conflict: bool = False) -> ComponentHarness:
     accounts = AccountRecorder(claims, conflict=conflict)
 
-    async def authorize(_node: PermissionNode) -> bool:
-        return True
-
     return ComponentHarness(
         ClaimReviewComponent(
             accounts,
             claims,
             author_id=AUTHOR_ID,
-            can_approve=True,
-            can_reject=True,
-            authorize=authorize,
+            grants=grants(ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT),
         ),
         accounts,
     )

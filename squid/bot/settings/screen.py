@@ -13,11 +13,11 @@ from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
 from squid.bot.ui import CardField, tr
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditValues
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
     SETTINGS_SERVER_VIEW,
@@ -74,22 +74,6 @@ KIND_LABELS: dict[VoteKind, Text] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class SettingsCapabilities:
-    """Capabilities captured when the panel opens, used to choose visible pages and controls.
-
-    Action handlers use the separate authorizer for permission checks; these flags
-    do not refresh automatically when a grant changes.
-    """
-
-    view_server: bool
-    edit_server: bool
-    edit_voting: bool
-
-
-type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
-
-
 @dataclass(slots=True)
 class _SettingsLocalization:
     # Keep the mounted root binding even when a later render rolls back UI values.
@@ -111,27 +95,29 @@ class SettingsPanel(sd.Screen):
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         guild: discord.Guild,
-        capabilities: SettingsCapabilities,
-        authorize: SettingsAuthorizer,
+        grants: Grants,
         owner_guild_id: int | None = None,
     ) -> None:
-        self._capabilities = capabilities
         self._guild = guild
         self._owner_guild_id = owner_guild_id
-        self.settings = SettingsEditor(settings, guild.id, authorize, edits, actor)
+        self.settings = SettingsEditor(settings, guild.id, grants, edits, actor)
         self.edits = self.settings.edits
-        self.server = ServerSettings(self.settings, guild, editable=capabilities.edit_server)
+        self.server = ServerSettings(self.settings, guild, editable=SETTINGS_SERVER_EDIT in grants)
         self.voting = VotingSettings(
-            self.settings, guild, editable=capabilities.edit_voting, owner_guild_id=owner_guild_id
+            self.settings, guild, editable=SETTINGS_VOTING_EDIT in grants, owner_guild_id=owner_guild_id
         )
 
     @property
+    def grants(self) -> Grants:
+        return self.settings.grants
+
+    @property
     def shows_server(self) -> bool:
-        return self._capabilities.view_server or self._capabilities.edit_server
+        return SETTINGS_SERVER_VIEW in self.settings.grants or SETTINGS_SERVER_EDIT in self.settings.grants
 
     @property
     def shows_voting(self) -> bool:
-        return self._capabilities.view_server or self._capabilities.edit_voting
+        return SETTINGS_SERVER_VIEW in self.settings.grants or SETTINGS_VOTING_EDIT in self.settings.grants
 
     @override
     async def on_load(self) -> None:
@@ -186,12 +172,8 @@ class SettingsPanel(sd.Screen):
             content = self.server
         return (navigation, content, *self.edits.refresh_controls())
 
+    @requires_grant(SETTINGS_SERVER_VIEW, SETTINGS_SERVER_EDIT)
     async def _show_diagnostics(self, event: sl.PressEvent) -> None:
-        if not (
-            await self.settings.authorize(SETTINGS_SERVER_VIEW) or await self.settings.authorize(SETTINGS_SERVER_EDIT)
-        ):
-            await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
-            return
         await self.settings.refresh()
         snapshot = self.settings.snapshot
         assert snapshot is not None
@@ -199,7 +181,7 @@ class SettingsPanel(sd.Screen):
         services = request.client.services
         boards = (
             await services.starboards.list_for_guild(self._guild.id)
-            if await self.settings.authorize(STARBOARD_BOARD_VIEW)
+            if await self.settings.grants.allows(STARBOARD_BOARD_VIEW)
             else ()
         )
         role_id = None
@@ -225,13 +207,13 @@ class SettingsEditor(sl.Reactive):
         self,
         settings: SettingsService,
         guild_id: int,
-        authorize: SettingsAuthorizer,
+        grants: Grants,
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
     ) -> None:
         self._settings = settings
         self._guild_id = guild_id
-        self.authorize = authorize
+        self.grants = grants
         self.localization = _SettingsLocalization()
         self.edits = EditController(edits, actor, self.refresh)
 
@@ -245,12 +227,6 @@ class SettingsEditor(sl.Reactive):
             await self.refresh()
         await self.edits.bind(GUILD_EDIT, guild_target(self._guild_id), self.revision).save(values, label)
 
-    async def may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
-        if await self.authorize(node):
-            return True
-        await event.notice(tr(t"settings-change-permission-denied = You are no longer allowed to change this."))
-        return False
-
 
 class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
     """Edit publication channels and language from the shared guild snapshot."""
@@ -259,6 +235,10 @@ class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
         self._settings = settings
         self._guild = guild
         self._editable = editable
+
+    @property
+    def grants(self) -> Grants:
+        return self._settings.grants
 
     @property
     def locale_override(self) -> str | None:
@@ -323,18 +303,16 @@ class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
             )
         return children
 
+    @requires_grant(SETTINGS_SERVER_EDIT)
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
-        if not await self._settings.may(event, SETTINGS_SERVER_EDIT):
-            return
         channel_id = event.selected[0].id if event.selected else None
         if channel_id is not None and not isinstance(channel_id, int):
             await event.notice(tr(t"settings-channel-invalid = That channel selection is invalid."))
             return
         await self.set_channel(setting, channel_id)
 
+    @requires_grant(SETTINGS_SERVER_EDIT)
     async def _locale_changed(self, event: sd.ChoiceEvent) -> None:
-        if not await self._settings.may(event, SETTINGS_SERVER_EDIT):
-            return
         request = event.context
         assert request.root is not None
         await self.set_locale(
@@ -401,6 +379,10 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         self._owner_guild_id = owner_guild_id
 
     @property
+    def grants(self) -> Grants:
+        return self._settings.grants
+
+    @property
     def configuration(self) -> VoteConfiguration:
         snapshot = self._settings.snapshot
         return VoteConfiguration(None, ()) if snapshot is None else snapshot.voting[self.kind]
@@ -465,9 +447,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
     def weight_for(self, role_id: int) -> float | None:
         return next((weight.multiplier for weight in self.configuration.weights if weight.role_id == role_id), None)
 
+    @requires_grant(SETTINGS_VOTING_EDIT)
     async def _role_changed(self, event: sl.EntityEvent) -> None:
-        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            return
         role_id = event.selected[0].id
         if not isinstance(role_id, int):
             await event.notice(
@@ -490,9 +471,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
             on_submit=lambda form_event: self._role_weight_submitted(form_event, role.id),
         )
 
+    @requires_grant(SETTINGS_VOTING_EDIT)
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
-        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            return
         snapshot = self._settings.snapshot
         assert snapshot is not None
         revision, kind = self._settings.revision, self.kind
@@ -512,7 +492,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         assert isinstance(parent, sd.Screen)
 
         async def selected(result: sd.ScreenResultEvent[tuple[VoteOption, ...]]) -> None:
-            if not await self._settings.may(result, SETTINGS_VOTING_EDIT):
+            if not await self.grants.confirm(result, SETTINGS_VOTING_EDIT):
                 return
             after = replace(before, preset=EmojiPreset(self._guild.id, kind, result.value))
             values = snapshot.model_copy(update={"voting": snapshot.voting | {kind: after}})
@@ -522,9 +502,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
 
         await parent.open_child(source, VoteEmojiEditor(self._guild, kind, options), on_result=selected)
 
+    @requires_grant(SETTINGS_VOTING_EDIT)
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
-        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            return
         form = _VoteWeightForm.from_submission(event)
         text = (form.multiplier or "").strip()
         try:
@@ -534,9 +513,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
                 tr(t"settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.")
             )
 
+    @requires_grant(SETTINGS_VOTING_EDIT)
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            return
         form = _VoteEmojisForm.from_submission(event)
         text = form.aliases
         options: list[VoteOption] = []
@@ -580,9 +558,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         except InvalidVoteConfigurationError as error:
             await event.notice(str(error))
 
+    @requires_grant(SETTINGS_VOTING_EDIT)
     async def _reset(self, event: sl.PressEvent) -> None:
-        if not await self._settings.may(event, SETTINGS_VOTING_EDIT):
-            return
         if self.confirming_reset:
             await self.reset_voting()
         else:

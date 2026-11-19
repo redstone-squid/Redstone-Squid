@@ -12,7 +12,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import Grants
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.actors import Actor
@@ -136,7 +136,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._restrictions = restrictions
         self._build_id = build_id
         self._actor_account_id = actor_account_id
-        self._grants = grants
+        self.grants = grants
 
     @override
     async def on_load(self) -> None:
@@ -161,7 +161,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             title=tr(t"bot-tags-view-published-build-tags = Published build tags"),
             empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
-        if TAG_PROPOSAL_LIST in self._grants:
+        if TAG_PROPOSAL_LIST in self.grants:
             pending = tuple(await self._tags.pending())
             actions = tuple(
                 action
@@ -169,7 +169,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                     ("approve", TAG_PROPOSAL_APPROVE),
                     ("reject", TAG_PROPOSAL_REJECT),
                 )
-                if node in self._grants
+                if node in self.grants
             )
             self._pending = sp.Browser(
                 sl.sources.list_source(pending),
@@ -194,7 +194,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         if self._pending is not None:
             tabs.append(sp.Tab("moderation", tr(t"bot-tags-view-moderation = Moderation"), self._pending))
-        if RESTRICTION_ALIAS_CREATE in self._grants:
+        if RESTRICTION_ALIAS_CREATE in self.grants:
             tabs.append(
                 sp.Tab("aliases", tr(t"bot-tags-view-restriction-aliases = Restriction aliases"), self._alias_nodes())
             )
@@ -271,7 +271,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     ) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             _ModerationActions(tag, ("archive",), self._request_moderation)
-            if TAG_PROPOSAL_ARCHIVE in self._grants
+            if TAG_PROPOSAL_ARCHIVE in self.grants
             else _tag_fields(tag)
         ]
         if tag.semantic_kind is TagSemanticKind.SHOWCASE and self._actor_account_id is not None:
@@ -354,9 +354,8 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._restriction = (item, await self._restrictions.alias_revision(item.value))
         self._build_tabs()
 
+    @requires_grant(RESTRICTION_ALIAS_CREATE)
     async def _add_selected_alias(self, revision: Revision, event: sd.SubmitEvent) -> None:
-        if not await self._grants.confirm(event, RESTRICTION_ALIAS_CREATE):
-            return
         await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
             AliasValues(alias=str(event.values["alias"])).edit_values(),
             tr(t"tags-history-alias = Add restriction alias"),
@@ -412,9 +411,8 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             )
         )
 
+    @requires_grant(RESTRICTION_ALIAS_CREATE)
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
-        if not await self._grants.confirm(event, RESTRICTION_ALIAS_CREATE):
-            return
         form = _AliasForm.from_submission(event)
         restriction = form.restriction
         alias = form.alias
@@ -457,7 +455,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             "reject": TAG_PROPOSAL_REJECT,
             "archive": TAG_PROPOSAL_ARCHIVE,
         }[action]
-        if not await self._grants.confirm(event.source, node):
+        if not await self.grants.confirm(event.source, node):
             self._pending_action = None
             self._decision = None
             return

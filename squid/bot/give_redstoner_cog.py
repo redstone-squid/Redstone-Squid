@@ -14,7 +14,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes import AppRequest, router
 from squid.bot.ui import render_payload, text_node, tr
-from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.bot.utils.permissions import Grants, enforce, hide_unless, requires_grant
 from squid.community.application import RedstonerService
 from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
@@ -79,7 +79,6 @@ async def remove_own_redstoner_role(request: AppRequest) -> None:
     )
 
 
-type RedstonerAuthorizer = Callable[[], Awaitable[bool]]
 type PanelPublisher = Callable[[], Awaitable[None]]
 
 
@@ -94,22 +93,20 @@ class RedstonerScreen(sd.Screen):
         guild_id: int,
         role_id: int,
         source_channel_id: int,
-        can_deploy: bool,
-        authorize_deploy: RedstonerAuthorizer,
+        grants: Grants,
         publish_panel: PanelPublisher,
     ) -> None:
         self._guild_id = guild_id
         self._role_id = role_id
         self._source_channel_id = source_channel_id
-        self._can_deploy = can_deploy
-        self._authorize_deploy = authorize_deploy
+        self.grants = grants
         self._publish_panel = publish_panel
 
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         role_mention = sl.mention(self._role_id, kind="role")
         source_channel_mention = sl.mention(self._source_channel_id, kind="channel")
         actions: list[sl.semantic.ActionControl] = []
-        if self._can_deploy:
+        if REDSTONER_PANEL_MANAGE in self.grants:
             actions.append(
                 sl.action_control(
                     tr(t"give-redstoner-deploy-role-controls = Deploy role controls"), self._deploy, key="deploy"
@@ -133,12 +130,11 @@ class RedstonerScreen(sd.Screen):
             sl.action_controls(*actions, key="redstoner-admin-actions"),
         )
 
+    @requires_grant(
+        REDSTONER_PANEL_MANAGE,
+        denied=tr(t"redstoner-deploy-forbidden = You are no longer allowed to deploy Redstoner controls."),
+    )
     async def _deploy(self, event: sl.PressEvent) -> None:
-        if not await self._authorize_deploy():
-            await event.notice(
-                tr(t"redstoner-deploy-forbidden = You are no longer allowed to deploy Redstoner controls.")
-            )
-            return
         await self._publish_panel()
         await event.notice(tr(t"give-redstoner-redstoner-role-controls = Redstoner role controls deployed."))
 
@@ -167,9 +163,6 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 audience="personal",
             )
 
-        async def may_deploy() -> bool:
-            return await allows(request, REDSTONER_PANEL_MANAGE)
-
         async def publish_panel() -> None:
             channel = request.channel
             assert isinstance(channel, GuildMessageable)
@@ -197,8 +190,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             guild_id=guild.id,
             role_id=community.redstoner_role_id,
             source_channel_id=community.redstoner_corner_channel_id,
-            can_deploy=await may_deploy(),
-            authorize_deploy=may_deploy,
+            grants=await Grants.load(request, REDSTONER_PANEL_MANAGE),
             publish_panel=publish_panel,
         )
 

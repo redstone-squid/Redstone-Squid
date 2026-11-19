@@ -1,6 +1,6 @@
 """Minecraft version catalogue management."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, Self, override
 
@@ -11,7 +11,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import render_payload, text_node, tr
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.errors import InvalidVersionError
@@ -41,9 +41,6 @@ class VersionItem:
     value: str
 
 
-type VersionAuthorizer = Callable[[], Awaitable[bool]]
-
-
 class VersionScreen(sd.Screen):
     """A version catalogue that ends when replaced or timed out."""
 
@@ -53,12 +50,10 @@ class VersionScreen(sd.Screen):
         self,
         versions: VersionOperations,
         *,
-        can_create: bool,
-        authorize_create: VersionAuthorizer,
+        grants: Grants,
     ) -> None:
         self._versions = versions
-        self._can_create = can_create
-        self._authorize_create = authorize_create
+        self.grants = grants
         self._browser: sp.Browser[VersionItem, ComponentsV2Target, sd.Request] | None = None
 
     @override
@@ -93,7 +88,7 @@ class VersionScreen(sd.Screen):
             if self._browser is None
             else self._browser
         ]
-        if self._can_create:
+        if VERSION_ENTRY_CREATE in self.grants:
             nodes.append(
                 sl.form(
                     tr(t"bot-version-tracking-add-version = Add version"),
@@ -104,10 +99,10 @@ class VersionScreen(sd.Screen):
             )
         return nodes
 
+    @requires_grant(
+        VERSION_ENTRY_CREATE, denied=tr(t"versions-add-permission-denied = You are no longer allowed to add versions.")
+    )
     async def _add(self, event: sl.SubmitEvent) -> None:
-        if not await self._authorize_create():
-            await event.notice(tr(t"versions-add-permission-denied = You are no longer allowed to add versions."))
-            return
         form = _AddVersionForm.from_submission(event)
         edition = form.edition
         version_text = form.version
@@ -129,15 +124,7 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
     )
     async def versions(self, request: sd.Request[Self, BotT]) -> VersionScreen:
         """Open the paged version catalogue."""
-
-        async def may_create() -> bool:
-            return await allows(request, VERSION_ENTRY_CREATE)
-
-        return VersionScreen(
-            self.version_service,
-            can_create=await may_create(),
-            authorize_create=may_create,
-        )
+        return VersionScreen(self.version_service, grants=await Grants.load(request, VERSION_ENTRY_CREATE))
 
     @sd.Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:

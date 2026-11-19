@@ -13,6 +13,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
+from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
@@ -34,7 +35,7 @@ from squid.permissions.application.edits import (
     RoleDeletionValues,
     RolePresenceValues,
 )
-from squid.permissions.domain import CATALOGUE, Effect, PermissionNode
+from squid.permissions.domain import CATALOGUE, Effect
 from squid.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
@@ -51,13 +52,12 @@ from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
-type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Browse and administer one subject's access in a guild.
 
-    Initial capabilities determine which tabs are displayed. Mutation handlers
+    Grants held at open determine which tabs are displayed. Mutation handlers
     recheck authorization and obtain a fresh administrative actor; the application
     service then enforces role rank, scope, and delegation limits.
     """
@@ -83,17 +83,15 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         account_id: int | None,
         discord_role_id: int | None,
         subject_label: str,
-        capabilities: frozenset[PermissionNode],
+        grants: Grants,
         actor: ActorProvider,
-        authorize: AccessAuthorizer,
     ) -> None:
         self._admin = admin
         self._guild_id = guild_id
         self._account_id = account_id
         self._discord_role_id = discord_role_id
         self._subject_label = subject_label
-        self._capabilities = capabilities
-        self._authorize = authorize
+        self.grants = grants
         self.edits = EditController(runner, actor, self._refresh)
 
     @override
@@ -103,7 +101,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _refresh(self) -> None:
         self._revision = await self._admin.revision()
         tabs: list[sp.Tab[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        if PERM_SUBJECT_INSPECT in self._capabilities:
+        if PERM_SUBJECT_INSPECT in self.grants:
             rules = await self._admin.rules_for(
                 account_id=self._account_id,
                 discord_role_id=self._discord_role_id,
@@ -130,9 +128,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             roles = await self._admin.roles(guild_id=self._guild_id)
             tabs.append(sp.Tab("roles", tr(t"access-view-internal-roles = Internal roles"), self._role_browser(roles)))
             tabs.append(sp.Tab("role-editor", tr(t"access-view-edit-roles = Edit roles"), self._role_forms()))
-        if PERM_NODE_VIEW in self._capabilities:
+        if PERM_NODE_VIEW in self.grants:
             tabs.append(sp.Tab("catalogue", tr(t"access-view-catalogue = Catalogue"), self._catalogue()))
-        if PERM_AUDIT_VIEW in self._capabilities:
+        if PERM_AUDIT_VIEW in self.grants:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", tr(t"access-view-audit = Audit"), self._audit(audit)))
         subject_label = self._subject_label
@@ -145,11 +143,11 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @property
     def _may_grant(self) -> bool:
-        return PERM_GRANT_GUILD in self._capabilities or PERM_GRANT_GLOBAL in self._capabilities
+        return PERM_GRANT_GUILD in self.grants or PERM_GRANT_GLOBAL in self.grants
 
     @property
     def _may_manage_roles(self) -> bool:
-        return ROLE_DEFINITION_MANAGE_GUILD in self._capabilities or ROLE_DEFINITION_MANAGE in self._capabilities
+        return ROLE_DEFINITION_MANAGE_GUILD in self.grants or ROLE_DEFINITION_MANAGE in self.grants
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
@@ -344,9 +342,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
     async def _custom_role_pattern(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
-        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
-            return
         form = _RolePatternForm.from_submission(event)
         await self._save(
             PATTERN_EDIT,
@@ -359,9 +356,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             tr(t"access-view-internal-role-updated = Internal role updated."),
         )
 
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
     async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
-        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
-            return
         await self._save(
             RANK_EDIT,
             RankValues(role_id=role_id, rank=int(str(event.values["rank"]))),
@@ -375,7 +371,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         composing = operation in {"compose", "decompose"}
 
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:
-            if not await self._authorize_mutation(source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+            if not await self.grants.confirm(source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
                 return
             label = tr(t"access-view-internal-role-updated = Internal role updated.")
             if composing:
@@ -470,11 +466,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             values.edit_values(), label
         )
 
+    @requires_grant(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL)
     async def _change_rule(
         self, event: sl.SubmitEvent, *, base_revision: int | None = None, pattern: str | None = None
     ) -> None:
-        if not await self._authorize_mutation(event, PERM_GRANT_GUILD, PERM_GRANT_GLOBAL):
-            return
         effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(
             str(event.values["operation"])
         )
@@ -495,11 +490,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         await event.notice(label)
 
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
     async def _change_assignment(
         self, event: sl.SubmitEvent, *, base_revision: int | None = None, role: PermissionRole | None = None
     ) -> None:
-        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
-            return
         if role is None:
             role = await self._admin.role(str(event.values["slug"]), guild_id=self._guild_id)
         label = tr(t"access-view-internal-role-assignment-updated = Internal role assignment updated.")
@@ -519,9 +513,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         await event.notice(label)
 
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
     async def _create_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
-        if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
-            return
         form = _CreateRoleForm.from_submission(event)
         slug = form.slug
         if not slug:
@@ -558,19 +551,12 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._decision = None
         if pending is None or choice == "cancel":
             return
-        if not await self._authorize_mutation(event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+        if not await self.grants.confirm(event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
         slug, identity, revision = pending
         label = md_tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
         await self._save(ROLE_DELETE, RoleDeletionValues(role_id=identity), revision, label)
         await event.source.notice(label)
-
-    async def _authorize_mutation(self, event: sl.ActionEvent[Any], *nodes: PermissionNode) -> bool:
-        for node in nodes:
-            if await self._authorize(node):
-                return True
-        await event.notice(tr(t"access-change-forbidden = You are no longer allowed to change access controls."))
-        return False
 
 
 def _without(form: sl.forms.FormSpec[sd.Request[Any, Any]], key: str) -> sl.forms.FormSpec[sd.Request[Any, Any]]:

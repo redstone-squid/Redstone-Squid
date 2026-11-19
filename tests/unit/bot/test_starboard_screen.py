@@ -23,8 +23,9 @@ from squid.starboard.application.edits import STARBOARD_CREATE, STARBOARD_DELETE
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.runtime import transaction
-from squid_ui.testing import labels
+from squid_ui.testing import RecordingResponder, labels, submit_event
 from tests.support.edits import bound_revisions
+from tests.support.grants import grants
 
 
 def board(name: str = "main") -> StarboardConfig:
@@ -111,18 +112,16 @@ class EditRecorder:
         )
 
 
-class NoticeEvent:
-    def __init__(self, **values: object) -> None:
-        self.values = values
-        self.errors: tuple[sl.forms.FormIssue, ...] = ()
-        self.notices: list[object] = []
+def form_event(**values: object) -> sl.SubmitEvent:
+    return submit_event(values)
 
-    async def notice(self, text: object, **_kwargs: object) -> None:
-        self.notices.append(text)
+
+def notices(event: sl.ActionEvent) -> list[str]:
+    return [text for text, _ in cast(RecordingResponder, event.responder).notices]
 
 
 class TransitionEvent:
-    def __init__(self, source: NoticeEvent) -> None:
+    def __init__(self, source: sl.ActionEvent) -> None:
         self.source = source
 
 
@@ -134,9 +133,6 @@ def make_screen(
     operations = FakeStarboardService()
     creator = ChannelValidator()
 
-    async def authorize(_node: PermissionNode) -> bool:
-        return allowed
-
     async def actor() -> Actor:
         return Actor(account_id=1, guild_id=7)
 
@@ -144,8 +140,7 @@ def make_screen(
         StarboardScreen(
             operations,
             guild_id=7,
-            capabilities=capabilities,
-            authorize=authorize,
+            grants=grants(*capabilities, current=allowed),
             validate_channel=creator,
             edits=EditRecorder(operations),
             actor=actor,
@@ -181,38 +176,38 @@ async def test_starboard_screen_uses_user_guild_tabs_and_browser() -> None:
 async def test_create_uses_injected_discord_operation_and_refreshes() -> None:
     screen, operations, creator = make_screen(capabilities=frozenset({STARBOARD_BOARD_CREATE}))
     await screen.on_load()
-    event = NoticeEvent(channel_id=discord.Object(11), name="main", required=4.0)
+    event = form_event(channel_id=discord.Object(11), name="main", required=4.0)
 
     with transaction():
-        await screen._create(cast(sl.SubmitEvent, event))
+        await screen._create(event)
 
     assert creator.calls == [11]
     assert operations.list_reads == 2
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1
 
 
 async def test_revoked_delete_permission_prevents_the_decision() -> None:
     screen, _, _ = make_screen(capabilities=frozenset({STARBOARD_BOARD_DELETE}), allowed=False)
-    event = NoticeEvent(name="main")
+    event = form_event(name="main")
 
     await screen._request_delete(StarboardSnapshot.capture(board(), {}), cast(sl.ActionEvent, event))
 
     assert screen._decision is None
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1
 
 
 async def test_delete_requires_confirmation_and_refreshes() -> None:
     screen, operations, _ = make_screen(capabilities=frozenset({STARBOARD_BOARD_DELETE}))
     await screen.on_load()
-    submit = NoticeEvent(name="main")
+    submit = form_event(name="main")
     await screen._request_delete(screen._snapshots[1], cast(sl.ActionEvent, submit))
-    source = NoticeEvent()
+    source = form_event()
 
     await screen._delete(cast(Any, TransitionEvent(source)), "confirm")
 
     assert operations.deletions == [(7, "main")]
     assert operations.list_reads == 2
-    assert len(source.notices) == 1
+    assert len(notices(source)) == 1
 
 
 def test_starboard_is_one_app_only_workspace() -> None:
@@ -228,7 +223,7 @@ async def test_edit_retains_the_snapshot_revision_and_validates_the_selected_cha
     operations.config.revision = 9
     await screen._refresh()
 
-    await screen._edit(before, "channel_id", cast(sl.SubmitEvent, NoticeEvent(value=discord.Object(42))))
+    await screen._edit(before, "channel_id", form_event(value=discord.Object(42)))
 
     assert validator.calls == [42]
     recorder = cast(EditRecorder, screen.edits._runner)
@@ -239,10 +234,10 @@ async def test_edit_retains_the_snapshot_revision_and_validates_the_selected_cha
 async def test_revoked_edit_permission_prevents_channel_validation_and_mutation() -> None:
     screen, operations, validator = make_screen(allowed=False)
     await screen.on_load()
-    event = NoticeEvent(value=discord.Object(42))
+    event = form_event(value=discord.Object(42))
 
-    await screen._edit(screen._snapshots[1], "channel_id", cast(sl.SubmitEvent, event))
+    await screen._edit(screen._snapshots[1], "channel_id", event)
 
     assert validator.calls == []
     assert operations.config.channel_id == 11
-    assert len(event.notices) == 1
+    assert len(notices(event)) == 1

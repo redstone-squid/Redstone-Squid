@@ -1,6 +1,6 @@
 """The semantic review workspace for creator credit claims."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from typing import Any, override
 
 import squid_ui as sl
@@ -11,7 +11,7 @@ from squid.accounts.models import AliasClaim
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.accounts.profile_render import present_claimant
 from squid.bot.ui import tr
-from squid.permissions.domain import PermissionNode
+from squid.bot.utils.permissions import Grants
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
@@ -19,7 +19,6 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
-type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
@@ -41,17 +40,13 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         claims: Sequence[AliasClaim],
         *,
         author_id: int,
-        can_approve: bool,
-        can_reject: bool,
-        authorize: ClaimAuthorizer,
+        grants: Grants,
         timeout: float = REVIEW_SECONDS,
     ) -> None:
         self._accounts = accounts
         self._claims = tuple(claims)
         self._author_id = author_id
-        self._can_approve = can_approve
-        self._can_reject = can_reject
-        self._authorize = authorize
+        self.grants = grants
         self._timeout = timeout
 
     @property
@@ -102,7 +97,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
                 maximum=1,
             )
         buttons: list[sl.semantic.ActionControl[sd.Request]] = []
-        if self._can_approve:
+        if ACCOUNT_CLAIM_APPROVE in self.grants:
             buttons.append(
                 sl.action_control(
                     tr(t"claims-view-take-the-name = Take the name")
@@ -114,7 +109,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
                     available=self.selected is not None,
                 )
             )
-        if self._can_reject:
+        if ACCOUNT_CLAIM_REJECT in self.grants:
             buttons.append(
                 sl.action_control(
                     tr(t"claims-view-reject = Reject"),
@@ -149,8 +144,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         if claim is None:
             return
         node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
-        if not await self._authorize(node):
-            await event.notice(tr(t"claims-resolve-forbidden = You are no longer allowed to resolve creator claims."))
+        if not await self.grants.confirm(event, node):
             return
 
         async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:

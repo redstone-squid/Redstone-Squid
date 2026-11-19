@@ -13,7 +13,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCapabilities, _BuildDetail
+from squid.bot.catalogue.browse import BuildBrowseScreen, _BuildDetail
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.results import SearchFocus
@@ -24,7 +24,12 @@ from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import Page, PageAnchor, PageSelector
 from squid.messages.domain import MessageRef
-from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_APPROVE,
+    BUILD_SUBMISSION_REJECT,
+    BUILD_SUBMISSION_VIEW_PENDING,
+    RECORD_ENTRY_INSPECT,
+)
 from squid.records.application import RecordService
 from squid.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
@@ -50,6 +55,7 @@ from squid_reactivity import LocalTopicBus
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage
 from squid_ui.testing import press_event, submit_event
+from tests.support.grants import grants
 from tests.unit.suggestions.test_services import RecordingProvider
 
 
@@ -82,9 +88,6 @@ def _screen(
     async def render_build(build: Build) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
 
-    async def authorize(_node: PermissionNode) -> bool:
-        return True
-
     async def refresh_posts(_build_id: int) -> None:
         pass
 
@@ -97,14 +100,8 @@ def _screen(
         topics=LocalTopicBus(),
         initial_id=initial_id,
         render_build=render_build,
-        capabilities=BuildCapabilities(
-            view_pending=True,
-            approve=True,
-            reject=True,
-            edit=False,
-        ),
+        grants=grants(BUILD_SUBMISSION_VIEW_PENDING, BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT),
         actor_account_id=1,
-        authorize=authorize,
         refresh_posts=refresh_posts,
         records=records,
         search=search,
@@ -454,7 +451,7 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
     records = AsyncMock()
     records.gaps.return_value = ()
     records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
         records.gaps.assert_not_awaited()
         await ui.press(ui.key_for("record-tools"))
@@ -498,7 +495,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
     records.title_gaps.return_value = tuple(
         TitleDiagnosticGap(index, title, ({"code": "unknown"},), BuildKind.DOOR) for index in range(count)
     )
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         if browser == "records":
@@ -536,7 +533,7 @@ async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
         RecordGap(1, "Smallest 2x2 door", None, BaseTitle.SMALLEST, (7,), ("width",), BuildKind.DOOR),
     )
     records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     async with stage(_screen(initial_id=None, record_tools=tools), owner=object()) as ui:
         await ui.press(ui.key_for("record-tools"))
         assert "## Records missing evidence" in ui.texts()
@@ -790,7 +787,7 @@ async def test_catalogue_shows_exactly_one_active_workspace() -> None:
     records = AsyncMock(spec=RecordService)
     records.gaps.return_value = ()
     records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     keys = ("all-builds", "all-records", "record-tools")
     async with stage(screen, owner=object()) as ui:
@@ -1279,7 +1276,7 @@ async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() 
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     records.gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         build_query = "  NOT (title:door AND width:5)  "
@@ -1341,7 +1338,7 @@ async def test_open_id_is_available_beside_record_tools() -> None:
     records = AsyncMock(spec=RecordService)
     records.gaps.return_value = ()
     records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), can_inspect=True, can_rebuild=False, authorize=AsyncMock())
+    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("record-tools"))

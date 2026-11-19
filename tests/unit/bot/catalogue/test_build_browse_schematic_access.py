@@ -10,6 +10,7 @@ from whenever import Instant
 
 import squid_ui as sl
 from squid.bot.catalogue.schematics.tools import SchematicTools
+from squid.bot.utils.permissions import Grants
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
@@ -81,7 +82,7 @@ def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]
         7,
         schematics=FeaturedSchematics(stored),
         actor_account_id=actor,
-        authorize=authorize,
+        grants=Grants(frozenset(), authorize),
     )
 
 

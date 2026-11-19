@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.core.actors import Actor
@@ -24,19 +23,14 @@ from squid.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
 from squid.permissions.domain.catalogue import PERM_GRANT_GUILD
 from squid.permissions.models import PermissionRole
 from squid_ui.runtime import transaction
+from squid_ui.testing import RecordingResponder, submit_event
 from tests.support.edits import bound_revisions
+from tests.support.grants import grants
 
 
-class Submission:
-    def __init__(self) -> None:
-        self.values: dict[str, object] = {
-            "operation": "allow",
-            "pattern": "squid.perm.node.view",
-            "scope": "guild",
-            "reason": "",
-        }
-        self.errors: tuple[sl.forms.FormIssue, ...] = ()
-        self.notice = AsyncMock()
+def submission(**values: object) -> sd.SubmitEvent:
+    defaults = {"operation": "allow", "pattern": "squid.perm.node.view", "scope": "guild", "reason": ""}
+    return cast(sd.SubmitEvent, submit_event(values or defaults))
 
 
 async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_history() -> None:
@@ -66,18 +60,17 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
         account_id=2,
         discord_role_id=None,
         subject_label="Member",
-        capabilities=frozenset({PERM_GRANT_GUILD}),
+        grants=grants(PERM_GRANT_GUILD, current=True),
         actor=AsyncMock(return_value=actor),
-        authorize=AsyncMock(return_value=True),
     )
     await screen.on_load()
     with transaction():
-        await screen._change_rule(cast(sl.SubmitEvent, Submission()), base_revision=7)
+        await screen._change_rule(submission(), base_revision=7)
     assert runner.execute.call_args.args[0].expected == (Revision(PERMISSION_GRAPH, 7),)
     assert screen._revision == 8
     assert len(screen.edits.undoable) == 1
     with transaction(), pytest.raises(RevisionConflictError):
-        await screen._change_rule(cast(sl.SubmitEvent, Submission()), base_revision=7)
+        await screen._change_rule(submission(), base_revision=7)
     # The modal sends the revision it displayed rather than rebasing onto the newer one.
     assert runner.execute.call_args.args[0].expected == (Revision(PERMISSION_GRAPH, 7),)
     assert len(screen.edits.undoable) == 1
@@ -98,16 +91,14 @@ async def test_selected_role_assignment_does_not_resolve_a_new_role_with_the_sam
         account_id=2,
         discord_role_id=None,
         subject_label="Member",
-        capabilities=frozenset(),
+        grants=grants(current=True),
         actor=AsyncMock(return_value=Actor(account_id=1)),
-        authorize=AsyncMock(return_value=True),
     )
     saved = AsyncMock()
     screen._save = saved
-    event = Submission()
-    event.values = {"operation": "assign", "scope": "guild", "reason": "", "slug": "replacement"}
+    event = submission(operation="assign", scope="guild", reason="", slug="replacement")
     await screen._change_assignment(
-        cast(sl.SubmitEvent, event), base_revision=7, role=PermissionRole(id=15, slug="original", name="Original")
+        event, base_revision=7, role=PermissionRole(id=15, slug="original", name="Original")
     )
     admin.role.assert_not_called()
     assert saved.call_args.args[1].role_id == 15
@@ -123,11 +114,10 @@ async def test_selected_rank_change_rechecks_permission() -> None:
         account_id=2,
         discord_role_id=None,
         subject_label="Member",
-        capabilities=frozenset(),
+        grants=grants(current=False),
         actor=AsyncMock(return_value=Actor(account_id=1)),
-        authorize=AsyncMock(return_value=False),
     )
-    await screen._rank_selected(15, 7, cast(sd.SubmitEvent, Submission()))
+    await screen._rank_selected(15, 7, submission())
     runner.execute.assert_not_called()
 
 
@@ -141,15 +131,13 @@ async def test_custom_role_pattern_uses_selected_identity_and_rechecks_permissio
         account_id=2,
         discord_role_id=None,
         subject_label="Member",
-        capabilities=frozenset(),
+        grants=grants(current=authorized),
         actor=AsyncMock(return_value=Actor(account_id=1)),
-        authorize=AsyncMock(return_value=authorized),
     )
     saved = AsyncMock()
     screen._save = saved
-    event = Submission()
-    event.values = {"operation": "exclude", "pattern": "build.*.view"}
-    await screen._custom_role_pattern(15, 7, cast(sd.SubmitEvent, event))
+    event = submission(operation="exclude", pattern="build.*.view")
+    await screen._custom_role_pattern(15, 7, event)
     admin.role.assert_not_called()
     if authorized:
         saved.assert_awaited_once()
@@ -158,7 +146,7 @@ async def test_custom_role_pattern_uses_selected_identity_and_rechecks_permissio
         assert saved.call_args.args[2] == 7
     else:
         saved.assert_not_awaited()
-        event.notice.assert_awaited_once()
+        assert len(cast(RecordingResponder, event.responder).notices) == 1
 
 
 @pytest.mark.parametrize(
@@ -175,13 +163,11 @@ async def test_role_creation_derives_available_slug(name: str, expected: str) ->
         account_id=2,
         discord_role_id=None,
         subject_label="Member",
-        capabilities=frozenset(),
+        grants=grants(current=True),
         actor=AsyncMock(return_value=Actor(account_id=1)),
-        authorize=AsyncMock(return_value=True),
     )
     saved = AsyncMock()
     screen._save = saved
-    event = Submission()
-    event.values = {"name": name, "slug": None, "rank": 0, "scope": "guild"}
-    await screen._create_role(cast(sl.SubmitEvent, event), base_revision=7)
+    event = submission(name=name, slug=None, rank=0, scope="guild")
+    await screen._create_role(event, base_revision=7)
     assert saved.call_args.args[1].slug == expected

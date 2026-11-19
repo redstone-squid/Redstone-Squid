@@ -13,12 +13,11 @@ from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilte
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.starboard.spec import StarboardExports, extension
-from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.messages.models import Message
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -215,13 +214,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         guild = request.guild
         assert guild is not None
 
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
-
-        granted: set[PermissionNode] = set()
-        for node in STARBOARD_CAPABILITIES:
-            if await authorize(node):
-                granted.add(node)
+        grants = await Grants.load(request, *STARBOARD_CAPABILITIES)
 
         async def validate_channel(channel_id: int) -> None:
             channel = guild.get_channel(channel_id)
@@ -244,8 +237,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return StarboardScreen(
             self.service,
             guild_id=guild.id,
-            capabilities=frozenset(granted),
-            authorize=authorize,
+            grants=grants,
             edits=self.bot.services.edits,
             actor=actor,
             validate_channel=validate_channel,

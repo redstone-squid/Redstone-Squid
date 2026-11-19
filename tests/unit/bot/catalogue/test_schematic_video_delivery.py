@@ -16,6 +16,7 @@ from squid.schematics.application.video import VideoRenderRequest
 from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.testing import InteractionHarness
+from tests.support.grants import grants
 
 
 @pytest.fixture
@@ -26,7 +27,7 @@ def delivery(monkeypatch: pytest.MonkeyPatch) -> tuple[SchematicTools, Mock, Moc
     service.public_base_url = "https://squid.example"
     schematics = Mock(spec=SchematicService)
     schematics.videos = service
-    component = SchematicTools(7, schematics=schematics, actor_account_id=10, authorize=AsyncMock(return_value=True))
+    component = SchematicTools(7, schematics=schematics, actor_account_id=10, grants=grants())
     request = Mock(spec=sd.Request)
     request.interaction = Mock(filesize_limit=100)
     request.interaction.is_expired.return_value = False
