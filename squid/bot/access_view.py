@@ -17,11 +17,13 @@ from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, requires_grant
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.edits.application import EditRunner
 from squid.core.permissions.application.administration import PermissionAdministrationService, effect_label
 from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
+    BULK_ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
     PATTERN_EDIT,
@@ -29,6 +31,7 @@ from squid.core.permissions.application.edits import (
     RANK_EDIT,
     ROLE_CREATE,
     ROLE_DELETE,
+    AssignmentBatch,
     AssignmentValues,
     GrantValues,
     IncludeValues,
@@ -48,7 +51,7 @@ from squid.core.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
-from squid.core.permissions.domain.models import PatternMode
+from squid.core.permissions.domain.models import NodeScope, PatternMode
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
@@ -91,6 +94,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     _selected_role: tuple[PermissionRole, int] | None = sl.state(None)
     _revision: int = sl.state(default=0)
     _review: AccessChange | None = sl.state(None)
+    _recipients: tuple[sl.entity.EntityRef, ...] = sl.state(())
+    _rank: int = sl.state(0)
     _role_tools: int | None = sl.state(None)
     _page: str = sl.state("home")
     _content: tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...] = sl.state(())
@@ -118,6 +123,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         grants: Grants,
         actor: ActorProvider,
     ) -> None:
+        self._actor = actor
         self._bot = bot
         self._target_chosen = target_chosen
         self._member_id = member_id
@@ -132,6 +138,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @override
     async def on_load(self) -> None:
+        if PERM_SUBJECT_INSPECT in self.grants or self._may_grant or self._may_manage_roles:
+            self._page = "edit"
         await self._refresh()
 
     async def _refresh(self) -> None:
@@ -139,10 +147,13 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         page = self._page
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         tasks = (
-            ("check", tr(t"access-check = Check access"), PERM_SUBJECT_INSPECT in self.grants),
-            ("edit", tr(t"access-edit = Give or remove access"), self._may_grant or self._may_manage_roles),
+            (
+                "edit",
+                tr(t"access-subject = Member or role access"),
+                PERM_SUBJECT_INSPECT in self.grants or self._may_grant or self._may_manage_roles,
+            ),
             ("roles", tr(t"access-view-internal-roles = Manage bot roles"), self._may_manage_roles),
-            ("audit", tr(t"access-history = Recent changes"), PERM_AUDIT_VIEW in self.grants),
+            ("audit", tr(t"access-history = Audit log"), PERM_AUDIT_VIEW in self.grants),
             (
                 "reference",
                 tr(t"access-permission-list = Find a bot action"),
@@ -163,7 +174,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                     ),
                 )
             )
-        elif page in {"check", "edit"}:
+        elif page == "edit":
             nodes.extend(self._target_controls())
             if not self._target_chosen:
                 nodes.append(
@@ -173,99 +184,48 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         )
                     )
                 )
-            elif page == "check":
-                nodes.append(
-                    sl.action_controls(
-                        sl.action_control(
-                            tr(t"access-list-rules = View existing rules and bot roles"),
-                            partial(self._open, "records"),
-                            key="view-rules",
-                        ),
-                        key="record-controls",
-                    )
-                )
-                nodes.append(
-                    sl.action_controls(
-                        sl.action_control(
-                            tr(t"access-find = Find a bot action"), self._choose_permission, key="action"
-                        ),
-                        key="action-controls",
-                    )
-                )
-                if self._action:
-                    nodes.extend(await self._result())
-                    if self._may_grant:
-                        nodes.append(
-                            sl.action_controls(
-                                sl.action_control(
-                                    tr(t"access-edit-result = Change this access"),
-                                    partial(self._open, "edit"),
-                                    key="edit-result",
-                                ),
-                                key="edit-result-controls",
-                            )
-                        )
             else:
-                if self._action and self._bot and PERM_SUBJECT_INSPECT in self.grants:
+                if PERM_SUBJECT_INSPECT in self.grants and self._bot and await self.grants.allows(PERM_SUBJECT_INSPECT):
                     nodes.extend(await self._result())
                 nodes.extend(self._subject_forms())
-                if (
-                    (self._selected_pattern or self._selected_role)
-                    and PERM_SUBJECT_INSPECT in self.grants
-                    and await self.grants.allows(PERM_SUBJECT_INSPECT)
-                ):
-                    target = dict(
-                        account_id=self._account_id, discord_role_id=self._discord_role_id, guild_id=self._guild_id
-                    )
-                    rules = await self._admin.rules_for(**target)
-                    assignments = await self._admin.assignments_for(**target)
+                if not self._may_grant and PERM_SUBJECT_INSPECT in self.grants:
                     nodes.append(
-                        self._subject_browser(
-                            tuple(
-                                r
-                                for r in rules
-                                if r.scope_guild_id == self._scope_id
-                                and self._selected_pattern
-                                and r.pattern == self._selected_pattern[0]
+                        sl.action_controls(
+                            sl.action_control(
+                                tr(t"access-find = Find a bot action"), self._choose_permission, key="action"
                             ),
-                            tuple(
-                                a
-                                for a in assignments
-                                if a.scope_guild_id == self._scope_id
-                                and self._selected_role
-                                and a.role_id == self._selected_role[0].id
-                            ),
+                            key="find-action",
                         )
                     )
-        elif page == "records":
-            if await self.grants.allows(PERM_SUBJECT_INSPECT):
-                target = dict(
-                    account_id=self._account_id, discord_role_id=self._discord_role_id, guild_id=self._guild_id
-                )
-                nodes.extend(
-                    (
-                        sl.heading(self._subject_label),
-                        self._subject_browser(
-                            await self._admin.rules_for(**target), await self._admin.assignments_for(**target)
-                        ),
-                    )
-                )
-            else:
-                nodes.append(sl.note(_DENIED))
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(tr(t"access-ui-back = Back"), partial(self._open, "check"), key="back"),
-                    key="records-back",
+        elif page == "recipients" and self._selected_role:
+            role, revision = self._selected_role
+            nodes.extend(
+                (
+                    sl.heading(role.name),
+                    sl.entities(
+                        key="recipients",
+                        entity_type=sl.entity.EntityType.MENTIONABLE,
+                        maximum=25,
+                        selection=sl.controlled(self._recipients, self._select_recipients),
+                        placeholder=tr(t"access-recipients = Select members and Discord roles"),
+                    ),
                 )
             )
+            if self._recipients:
+                names = self._recipient_names()
+                nodes.append(sl.note(", ".join(names)))
+                nodes.append(
+                    sl.form(
+                        tr(t"access-apply-role = Apply role assignment"),
+                        self._batch_form(role, names),
+                        key="apply-role",
+                        on_submit=partial(self._apply_role, role, revision, self._recipients),
+                    )
+                )
         elif page == "roles":
-            nodes.append(
-                sl.note(
-                    tr(
-                        t"access-role-guide = A bot role bundles actions. Assign it to a member or a Discord role to give them those permissions."
-                    )
-                )
-            )
+            if self._bot:
+                self._rank = (await self._admin.resolve_actor(await self._actor())).require_permission_rank()
+            nodes.append(sl.note(f"Your management rank: {self._rank}"))
             nodes.extend(self._role_forms())
             nodes.append(self._role_browser(await self._admin.roles(guild_id=self._guild_id)))
         elif page in {"role-settings", "role-actions"}:
@@ -298,21 +258,25 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 nodes.append(sl.note(CATALOGUE[self._action].description))
         elif page == "audit":
             if await self.grants.allows(PERM_AUDIT_VIEW):
-                nodes.append(self._audit(await self._admin.audit(guild_id=self._guild_id, limit=50)))
+                nodes.append(await self._audit(await self._admin.audit(guild_id=self._guild_id, limit=50)))
             else:
                 nodes.append(sl.note(_DENIED))
-        if page in {"edit", "check", "reference"} and (self._selected_role or self._selected_pattern):
+        if page in {"edit", "reference"} and (self._selected_role or self._selected_pattern):
             nodes.append(
                 sl.action_controls(
                     sl.action_control(tr(t"access-ui-back = Back"), self._go_back, key="back-selection"),
                     key="back-controls",
                 )
             )
-        if page != "home":
+        if page != "home" and any(allowed and key != page for key, _, allowed in tasks):
             nodes.append(
                 sl.action_controls(
-                    sl.action_control(tr(t"access-home-button = Home"), partial(self._open, "home"), key="home"),
-                    key="home-controls",
+                    *(
+                        sl.action_control(label, partial(self._open, key), key="nav-" + key)
+                        for key, label, allowed in tasks
+                        if allowed and key != page
+                    ),
+                    key="navigation",
                 )
             )
         self._content = tuple(nodes)
@@ -331,9 +295,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._refresh()
 
     async def _result(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        assert self._action and self._bot
-        if not await self.grants.allows(PERM_SUBJECT_INSPECT):
-            return (sl.note(_DENIED),)
+        assert self._bot
         guild = self._bot.get_guild(self._guild_id)
         if guild is None:
             return (sl.note(tr(t"access-ui-this-server-is-unavailable = This server is unavailable.")),)
@@ -350,11 +312,72 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             except discord.NotFound:
                 return (sl.note(tr(t"access-ui-this-member-has-left-the-server = This member has left the server.")),)
             actor = await self._bot.actors.resolve(member, account_id=self._account_id)
-        decision = (await self._bot.services.permissions.check(actor, self._action)).decisions[0]
-        return (
-            sl.heading(CATALOGUE[self._action].description),
-            sl.paragraph(_explanation(decision, self._discord_role_id is not None)),
+        global_admin = await self.grants.allows(PERM_GRANT_GLOBAL, ROLE_DEFINITION_MANAGE)
+        visible = tuple(n.name for n in CATALOGUE.values() if global_admin or n.scope is NodeScope.GUILD)
+        decisions = (await self._bot.services.permissions.check(actor, *visible)).decisions
+        role_only = self._discord_role_id is not None
+        allowed = tuple(d for d in decisions if d.allowed and (not role_only or d.decisive_rule))
+        target = dict(account_id=self._account_id, discord_role_id=self._discord_role_id)
+        rules = await self._admin.rules_for(**target)
+        assignments = tuple(
+            row
+            for row in await self._admin.assignments_for(**target)
+            if global_admin or row.scope_guild_id in (None, self._guild_id)
         )
+        rows = tuple(
+            r
+            for r in rules
+            if global_admin
+            or (
+                r.scope_guild_id in (None, self._guild_id)
+                and (any(n.scope is NodeScope.GUILD for n in CATALOGUE.expand(r.pattern)))
+            )
+        )
+        results: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+            sp.Browser(
+                sl.sources.list_source(allowed),
+                key="privileges",
+                identity=lambda d: d.node,
+                label=lambda d: CATALOGUE[d.node].description,
+                summary=lambda d: self._privilege_summary(d, guild),
+                detail=lambda d: sl.paragraph(_explanation(d, role_only)),
+                page_size=5,
+                title=f"Effective privileges in {self._guild_name} ({len(allowed)})",
+                empty="No allowed actions in your inspection scope.",
+            ),
+        ]
+        if rows or assignments:
+            authors = await self._account_names(
+                {r.granted_by_account_id for r in (*rows, *assignments) if r.granted_by_account_id is not None}
+            )
+            admin_account = (await self._actor()).account_id
+            if admin_account is not None:
+                authors[admin_account] = "you"
+            results.append(self._subject_browser(rows, assignments, authors))
+        else:
+            results.append(sl.note("No directly assigned permissions or bot roles."))
+        selected = next((d for d in decisions if d.node == self._action), None)
+        if selected:
+            results.append(sl.paragraph(_explanation(selected, role_only)))
+        return tuple(results)
+
+    @staticmethod
+    def _privilege_summary(decision: Decision, guild: discord.Guild) -> sl.TextLike:
+        action = CATALOGUE[decision.node].description
+        rule = decision.decisive_rule
+        if rule is None:
+            source = "Bot owner" if decision.reason is Reason.OWNER else "Default"
+        else:
+            kind, _, identity = rule.source.partition(":")
+            source = {"role": f"Bot role {identity}", "account": "Direct rule", "discord": "Manage Server"}.get(
+                kind, "Discord role"
+            )
+            role_id = rule.via or (rule.source if kind == "discord-role" else "")
+            if role_id.startswith("discord-role:"):
+                discord_role = guild.get_role(int(role_id.split(":")[1]))
+                if discord_role:
+                    source = f"{source} · {discord_role.name}"
+        return md_tr(t"access-effective-source = {action} — {source}")
 
     @property
     def _scope_id(self) -> int | None:
@@ -373,7 +396,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 key="access-target",
                 entity_type=sl.entity.EntityType.MENTIONABLE,
                 selection=sl.controlled((), self._change_subject),
-                placeholder=tr(t"access-target-picker = Choose a member or Discord role"),
+                placeholder=tr(t"access-change-subject = Change member or Discord role")
+                if self._target_chosen
+                else tr(t"access-target-picker = Choose a member or Discord role"),
             ),
             *(
                 (
@@ -539,20 +564,30 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await event.notice(label)
 
     def _subject_browser(
-        self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
+        self,
+        rules: tuple[PermissionGrant, ...],
+        assignments: tuple[PermissionRoleAssignment, ...],
+        authors: dict[int, str],
     ) -> sp.Browser[PermissionGrant | PermissionRoleAssignment, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        def scope(row: PermissionGrant | PermissionRoleAssignment) -> str:
+            if row.scope_guild_id is None:
+                return "All servers"
+            if row.scope_guild_id == self._guild_id:
+                return self._guild_name
+            guild = self._bot.get_guild(row.scope_guild_id) if self._bot else None
+            return guild.name if guild else "Another server"
+
         return sp.Browser(
             sl.sources.list_source((*rules, *assignments)),
             key="subject-access",
             identity=lambda row: f"{type(row).__name__}:{row.id}",
             label=_subject_item_label,
-            summary=_subject_item_summary,
-            detail=_subject_item_detail,
-            page_size=8,
-            title=tr(t"access-view-rules-and-assignments = Direct rules and assigned bot roles"),
-            empty=tr(
-                t"access-subject-rules-empty = No matching rule or assignment at this scope. Other rules may still apply."
+            summary=lambda row: (
+                f"{_subject_item_summary(row, scope(row))} · by {authors.get(row.granted_by_account_id or 0, 'System' if row.granted_by_account_id is None else 'Unknown account')}"
             ),
+            detail=lambda row: _subject_item_detail(row, scope(row)),
+            page_size=4,
+            title=tr(t"access-view-rules-and-assignments = Direct rules and assigned bot roles"),
         )
 
     def _subject_forms(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
@@ -560,11 +595,6 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             return ()
         target = (self._account_id, self._discord_role_id, self._scope_id)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
-            sl.note(
-                tr(
-                    t"access-edit-guide = Choose a permission to change one action. A bot role groups permissions you can assign together."
-                )
-            ),
             sl.action_controls(
                 self._may_grant
                 and sl.action_control(
@@ -592,8 +622,6 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 key="subject-forms",
             ),
         ]
-        if self._selected_pattern is not None or self._selected_role is not None:
-            nodes.clear()
         if self._may_grant and self._selected_pattern is not None:
             pattern, revision = self._selected_pattern
             nodes.extend(
@@ -619,6 +647,14 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             nodes.extend(
                 (
                     sl.note(role.name),
+                    sl.action_controls(
+                        sl.action_control(
+                            tr(t"access-bulk-assign = Choose multiple recipients"),
+                            partial(self._assign_selected, role),
+                            key="multi-assign",
+                        ),
+                        key="recipient-actions",
+                    ),
                     sl.form(
                         tr(t"access-view-change-role-assignment = Assign or remove this role"),
                         _without(_AssignmentForm().spec(), "slug"),
@@ -713,7 +749,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         key="view-actions",
                     ),
                     sl.action_control(
-                        tr(t"access-ui-assign-or-remove-this-role = Assign or remove this role"),
+                        tr(t"access-ui-assign-or-remove-this-role = Assign to members or Discord roles"),
                         partial(self._assign_selected, role),
                         key="assign-selected",
                     ),
@@ -738,6 +774,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                                 label=tr(t"access-view-management-rank = Management rank"),
                                 minimum=0,
                                 maximum=999,
+                                description=f"Your management rank is {self._rank}.",
                                 default=role.rank,
                             ),
                         ),
@@ -767,11 +804,81 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _assign_selected(self, role: PermissionRole, event: sd.PressEvent) -> None:
-        self._page = "edit"
+        self._page = "recipients"
+        self._recipients = ()
         self._action = None
         self._selected_pattern = None
         self._selected_role = (role, self._revision)
         await self._refresh()
+
+    def _recipient_names(self) -> tuple[str, ...]:
+        guild = self._bot.get_guild(self._guild_id) if self._bot else None
+        names = []
+        for ref in self._recipients:
+            if ref.kind is sl.entity.EntityKind.ROLE:
+                role = guild.get_role(int(ref.id)) if guild else None
+                names.append(role.name if role else f"<@&{ref.id}>")
+            else:
+                member = guild.get_member(int(ref.id)) if guild else None
+                names.append(member.display_name if member else f"<@{ref.id}>")
+        return tuple(names)
+
+    async def _select_recipients(self, event: sl.EntityEvent) -> None:
+        self._recipients = tuple(event.selected)
+        await self._refresh()
+
+    def _batch_form(self, role: PermissionRole, names: tuple[str, ...]) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
+        fields = _AssignmentForm().spec()
+        items = tuple(
+            field for field in fields.items if not isinstance(field, sl.forms.FormField) or field.key != "slug"
+        )
+        if PERM_GRANT_GLOBAL in self.grants:
+            items += (_scope_field(),)
+        return replace(fields, title=f"{role.name[:24]} · {len(names)} recipients", items=items)
+
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
+    async def _apply_role(
+        self,
+        role: PermissionRole,
+        revision: int,
+        recipients: tuple[sl.entity.EntityRef, ...],
+        event: sd.SubmitEvent[RedstoneSquid],
+    ) -> None:
+        guild = event.context.guild
+        assert guild is not None and guild.id == self._guild_id
+        values: dict[tuple[int | None, int | None], AssignmentValues] = {}
+        present = event.values["operation"] == "assign"
+        for ref in recipients:
+            member_id = int(ref.id)
+            role_id = None
+            account_id = None
+            if ref.kind is sl.entity.EntityKind.ROLE:
+                if guild.get_role(member_id) is None:
+                    await event.notice("A selected role was deleted. Update the recipients and try again.")
+                    return
+                role_id = member_id
+            else:
+                try:
+                    member = await guild.fetch_member(member_id)
+                except discord.NotFound:
+                    await event.notice("A selected member left the server. Update the recipients and try again.")
+                    return
+                account_id = await get_or_create_discord_account_id(event.context.client.services.accounts, member)
+            values[account_id, role_id] = AssignmentValues(
+                role_id=role.id,
+                present=present,
+                account_id=account_id,
+                discord_role_id=role_id,
+                guild_id=guild.id,
+                scope_guild_id=_scope(str(event.values.get("scope", "guild")), guild.id),
+                reason=str(event.values.get("reason") or "") or None,
+            )
+        label = f"{'Assigned' if present else 'Removed'} {role.name} for {len(values)} recipients."
+        await self._save(BULK_ASSIGNMENT_EDIT, AssignmentBatch(assignments=tuple(values.values())), revision, label)
+        self._selected_role = (role, self._revision)
+        self._recipients = ()
+        await self._refresh()
+        await event.notice(label)
 
     async def _show_role_tools(self, role_id: int, event: sd.PressEvent) -> None:
         self._role_tools = role_id
@@ -867,6 +974,16 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _create_role_form(self) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
         form = _CreateRoleForm().spec()
+        rank = self._rank
+        form = replace(
+            form,
+            items=tuple(
+                replace(field, description=tr(t"access-rank-limit = Your management rank is {rank}. Use a lower rank."))
+                if isinstance(field, sl.forms.IntField) and field.key == "rank"
+                else field
+                for field in form.items
+            ),
+        )
         if ROLE_DEFINITION_MANAGE in self.grants and ROLE_DEFINITION_MANAGE_GUILD in self.grants:
             return form
         return _without(form, "scope")
@@ -892,19 +1009,99 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"access-permission-catalogue-empty = This role grants no actions."),
         )
 
-    @staticmethod
-    def _audit(
+    async def _account_names(self, ids: set[int]) -> dict[int, str]:
+        if not self._bot or not ids:
+            return {}
+        accounts = await self._bot.services.accounts.get_accounts(tuple(ids))
+        guild = self._bot.get_guild(self._guild_id)
+        names = {}
+        for key, account in accounts.items():
+            identity = account.most_recent_identity_for(IdentityProvider.DISCORD)
+            member = guild.get_member(int(identity.subject)) if guild and identity else None
+            names[key] = (
+                member.display_name
+                if member
+                else next(
+                    (i.display_name for i in account.identities if i.display_name),
+                    f"<@{identity.subject}>" if identity else "Unlinked account",
+                )
+            )
+        return names
+
+    async def _audit(
+        self,
         rows: tuple[PermissionAuditEntry, ...],
     ) -> sp.Browser[PermissionAuditEntry, ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        accounts = await self._account_names(
+            {
+                identity
+                for row in rows
+                for identity in (row.actor_account_id, row.subject_id if row.subject_kind == "account" else None)
+                if identity is not None
+            }
+        )
+        roles = {role.id: role.name for role in await self._admin.roles(guild_id=self._guild_id)}
+        guild = self._bot.get_guild(self._guild_id) if self._bot else None
+
+        def subject(row: PermissionAuditEntry) -> str:
+            if row.subject_kind == "discord_role" and row.subject_id is not None:
+                role = guild.get_role(row.subject_id) if guild else None
+                return role.name if role else "deleted Discord role"
+            return accounts.get(row.subject_id or 0, "unknown member")
+
+        def action(row: PermissionAuditEntry) -> str:
+            details = row.details or {}
+            role = roles.get(row.role_id or 0) or str(details.get("slug") or "deleted bot role")
+            match row.action:
+                case "role_assign":
+                    return f"Assigned {role} to {subject(row)}"
+                case "role_unassign":
+                    return f"Removed {role} from {subject(row)}"
+                case "grant":
+                    return f"{effect_label(row.effect) if row.effect is not None else 'Grant'} {row.pattern} for {subject(row)}"
+                case "revoke":
+                    return f"Removed {row.pattern} rule for {subject(row)}"
+                case "role_rank":
+                    return f"Set {role} to rank {details.get('rank', 'unknown')}"
+                case "role_compose":
+                    return f"Added {details.get('included', 'a bot role')} to {role}"
+                case "role_decompose":
+                    return f"Removed {details.get('included', 'a bot role')} from {role}"
+                case "role_create":
+                    return f"Created {role}"
+                case "role_withdraw" | "role_delete":
+                    return f"Removed {role}"
+                case "role_include" | "role_exclude" | "role_pattern_remove":
+                    verb = {"role_include": "Included", "role_exclude": "Excluded", "role_pattern_remove": "Cleared"}[
+                        row.action
+                    ]
+                    return f"{verb} {row.pattern} on {role}"
+                case _:
+                    return f"{row.action.removeprefix('role_').replace('_', ' ').capitalize()} {role} {row.pattern or ''}".rstrip()
+
+        def audit_actor(row: PermissionAuditEntry) -> str:
+            return accounts.get(row.actor_account_id or 0, "Unknown account" if row.actor_account_id else "System")
+
         return sp.Browser(
             sl.sources.list_source(rows),
             key="permission-audit",
             identity=lambda row: str(row.id),
-            label=lambda row: row.action.replace("_", " ").capitalize(),
-            summary=_audit_summary,
-            detail=_audit_detail,
+            label=lambda row: action(row)[:100],
+            summary=lambda row: f"{action(row)} · {audit_actor(row)} · <t:{row.at.timestamp()}:d>",
+            detail=lambda row: sl.fields(
+                sl.field("Change", action(row)),
+                sl.field("Changed by", audit_actor(row)),
+                sl.field("When", f"<t:{row.at.timestamp()}:f>"),
+                sl.field("Reason", row.reason or "None recorded"),
+                sl.field(
+                    "Scope",
+                    self._guild_name
+                    if row.scope_guild_id or (not row.subject_kind and row.subject_guild_id)
+                    else "All servers",
+                ),
+            ),
             page_size=8,
-            title=tr(t"access-view-permission-audit = Recent changes"),
+            title=tr(t"access-view-permission-audit = Audit log"),
             empty=tr(t"access-audit-empty = No permission changes are recorded for this server."),
         )
 
@@ -1080,20 +1277,19 @@ def _subject_item_label(row: PermissionGrant | PermissionRoleAssignment) -> str:
     return row.pattern if isinstance(row, PermissionGrant) else row.role_slug
 
 
-def _subject_item_summary(row: PermissionGrant | PermissionRoleAssignment) -> str:
-    scope = "All servers" if row.scope_guild_id is None else "This server"
+def _subject_item_summary(row: PermissionGrant | PermissionRoleAssignment, scope: str) -> str:
     effect = effect_label(row.effect) if isinstance(row, PermissionGrant) else "Assigned bot role"
-    return f"{effect} · {scope}"
+    return f"{_subject_item_label(row)} · {effect} · {scope}"
 
 
-def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.semantic.Fields:
+def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment, scope: str) -> sl.semantic.Fields:
     if isinstance(row, PermissionGrant):
         return sl.fields(
             sl.field(tr(t"access-view-effect = Effect"), effect_label(row.effect)),
             sl.field(tr(t"access-view-pattern = Pattern"), row.pattern),
             sl.field(
                 tr(t"access-view-scope = Where this applies"),
-                "All servers" if row.scope_guild_id is None else "This server",
+                scope,
             ),
             sl.field(tr(t"access-view-reason = Reason"), row.reason or "—"),
         )
@@ -1101,7 +1297,7 @@ def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.
         sl.field(tr(t"access-view-internal-role = Internal role"), row.role_slug),
         sl.field(
             tr(t"access-view-scope = Where this applies"),
-            "All servers" if row.scope_guild_id is None else "This server",
+            scope,
         ),
     )
 
@@ -1109,7 +1305,8 @@ def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.
 def _role_summary(role: PermissionRole) -> str:
     scope = "global" if role.guild_id is None else "this server"
     protected = " · built-in" if role.protected else ""
-    return f"rank {role.rank} · {scope}{protected}"
+    description = f" — {role.description}" if role.description else ""
+    return f"{role.name}{description} · rank {role.rank} · {scope}{protected}"
 
 
 def _role_detail(role: PermissionRole, roles: tuple[PermissionRole, ...]) -> sl.semantic.Fields:
@@ -1121,25 +1318,6 @@ def _role_detail(role: PermissionRole, roles: tuple[PermissionRole, ...]) -> sl.
             tr(t"access-view-composed-roles = Also grants these bot roles"),
             ", ".join(by_id[item] for item in role.includes_roles if item in by_id) or "—",
         ),
-    )
-
-
-def _audit_summary(row: PermissionAuditEntry) -> str:
-    return f"{row.at} · {row.pattern or 'role change'}"
-
-
-def _audit_detail(row: PermissionAuditEntry) -> sl.semantic.Fields:
-    return sl.fields(
-        sl.field(tr(t"access-view-action = Action"), row.action.replace("_", " ")),
-        sl.field(tr(t"access-ui-subject = Subject"), f"{row.subject_kind} {row.subject_id}" if row.subject_id else "—"),
-        sl.field(tr(t"access-ui-bot-role-id = Bot role ID"), str(row.role_id or "—")),
-        sl.field(
-            tr(t"access-ui-scope = Scope"), f"Server {row.scope_guild_id}" if row.scope_guild_id else "All servers"
-        ),
-        sl.field(tr(t"access-ui-effect = Effect"), effect_label(row.effect) if row.effect is not None else "—"),
-        sl.field(tr(t"access-view-pattern = Pattern"), row.pattern or "—"),
-        sl.field(tr(t"access-view-reason = Reason"), row.reason or "—"),
-        sl.field(tr(t"access-view-actor-account = Actor account"), str(row.actor_account_id or "—")),
     )
 
 
@@ -1198,7 +1376,9 @@ class _CreateRoleForm(sl.forms.Form[sd.Request[Any, Any]]):
     name = sl.forms.TextField(label=tr(t"access-view-display-name = Display name"), maximum=100)
     rank = sl.forms.IntField(
         label=tr(t"access-view-management-rank = Management rank"),
-        description=tr(t"access-view-rank-help = Higher ranks can manage lower ranks. Choose a rank below your own."),
+        description=tr(
+            t"access-view-rank-help = Higher ranks can manage lower ranks. Rank controls who can manage this role."
+        ),
         default=0,
         minimum=0,
         maximum=999,

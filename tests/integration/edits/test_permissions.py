@@ -14,6 +14,7 @@ from squid.core.errors import AuthorizationError, ConflictError, InvalidStateErr
 from squid.core.permissions.application.administration import PermissionAdministrationService
 from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
+    BULK_ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
     PATTERN_EDIT,
@@ -21,10 +22,12 @@ from squid.core.permissions.application.edits import (
     RANK_EDIT,
     ROLE_CREATE,
     ROLE_DELETE,
+    AssignmentBatch,
     AssignmentValues,
     GrantValues,
     IncludeValues,
     PatternValues,
+    PermissionAssignmentBatchEdit,
     PermissionAssignmentEdit,
     PermissionGrantEdit,
     PermissionIncludeEdit,
@@ -61,6 +64,7 @@ async def setup(
         factory,
         {
             GRANT_EDIT: PermissionGrantEdit(admin),
+            BULK_ASSIGNMENT_EDIT: PermissionAssignmentBatchEdit(admin),
             ASSIGNMENT_EDIT: PermissionAssignmentEdit(admin),
             RANK_EDIT: PermissionRankEdit(admin),
             PATTERN_EDIT: PermissionPatternEdit(admin),
@@ -159,3 +163,23 @@ async def test_permission_commands_resolve_current_rank_and_authority_even_for_n
         await executor.execute(saved.receipt.undo(current), actor)
     with pytest.raises(AuthorizationError):
         await executor.execute(await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=10)), actor)
+
+
+async def test_multi_recipient_assignment_undo_preserves_existing_membership(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    _, admin, executor, owner, subject = await setup(migrated_session_factory)
+    role = await admin.create_role(owner, slug="reviewers", name="Reviewers", rank=1)
+    await admin.assign(owner, role, subject=AccountGrantSubject(subject), scope_guild_id=42)
+    values = AssignmentBatch(
+        assignments=(
+            AssignmentValues(account_id=subject, role_id=role.id, guild_id=42, scope_guild_id=42),
+            AssignmentValues(discord_role_id=99, role_id=role.id, guild_id=42, scope_guild_id=42),
+        )
+    )
+    result = await executor.execute(await command(admin, BULK_ASSIGNMENT_EDIT, values), owner)
+    assert result.receipt is not None
+    assert await admin.assignments_for(discord_role_id=99, guild_id=42)
+    await executor.execute(result.receipt.undo(result.outcome.revisions), owner)
+    assert await admin.assignments_for(account_id=subject, guild_id=42)
+    assert not await admin.assignments_for(discord_role_id=99, guild_id=42)

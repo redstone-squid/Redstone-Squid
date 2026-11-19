@@ -24,8 +24,8 @@ from squid.core.permissions.application.administration import PermissionAdminist
 from squid.core.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
 from squid.core.permissions.domain import CATALOGUE, Decision, PermissionCheck, Reason
 from squid.core.permissions.domain.catalogue import PERM_GRANT_GUILD, PERM_SUBJECT_INSPECT
-from squid.core.permissions.models import PermissionRole
-from squid_ui.ext.discord.testing import commit_render
+from squid.core.permissions.models import PermissionAuditEntry, PermissionRole, PermissionRoleAssignment
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from squid_ui.runtime import transaction
 from squid_ui.testing import RecordingResponder, choice_event, submit_event
 from tests.support.discord import make_layout_bot
@@ -217,7 +217,7 @@ async def test_rule_form_keeps_subject_and_scope_after_switching_targets() -> No
     assert (screen._account_id, screen._discord_role_id, screen._scope_id) == (None, 99, None)
 
 
-@pytest.mark.parametrize("page", ["home", "edit", "roles", "audit", "check"])
+@pytest.mark.parametrize("page", ["home", "edit", "roles", "audit"])
 async def test_access_tasks_render_in_discord(page: str) -> None:
     admin = AsyncMock(spec=PermissionAdministrationService)
     admin.roles.return_value = ()
@@ -240,12 +240,12 @@ async def test_access_tasks_render_in_discord(page: str) -> None:
     payload = str(commit_render(bot.ui.mount(screen, access=sd.Owner(7), timeout=300)).to_components())
     assert {
         "home": "What do you want to do?",
-        "check": "Find a bot action",
         "edit": "Change one action",
         "roles": "Create a bot role",
-        "audit": "Recent changes",
+        "audit": "Audit log",
     }[page] in payload
-    assert ("Home" in payload) == (page != "home")
+    assert "Home" not in payload
+    assert "Member or role access" in payload if page != "edit" else "Manage bot roles" in payload
 
 
 @pytest.mark.parametrize("role_id", [None, 99])
@@ -276,19 +276,21 @@ async def test_check_uses_selected_membership_or_only_the_selected_role(role_id:
         actor=AsyncMock(),
     )
     with transaction():
+        admin.assignments_for.return_value = ()
+        admin.rules_for.return_value = ()
         screen._action = node
-        await screen._open("check", AsyncMock())
+        await screen._open("edit", AsyncMock())
     rendered = str(commit_render(make_layout_bot().ui.mount(screen, access=sd.Owner(7), timeout=300)).to_components())
     assert "Redstone Lab" in rendered
     if role_id:
         client.services.permissions.check.assert_awaited_once_with(
-            Actor(guild_id=42, discord_role_ids=frozenset({99})), node
+            Actor(guild_id=42, discord_role_ids=frozenset({99})), *(n.name for n in CATALOGUE.values())
         )
         assert "contributes no rule" in rendered
         guild.fetch_member.assert_not_awaited()
     else:
         guild.fetch_member.assert_awaited_once_with(123)
-        client.services.permissions.check.assert_awaited_once_with(actor, node)
+        client.services.permissions.check.assert_awaited_once_with(actor, *(n.name for n in CATALOGUE.values()))
         assert "No. The default" in rendered
 
 
@@ -311,3 +313,122 @@ async def test_revoked_grant_cannot_confirm_review() -> None:
     screen.grants = grants(current=False)
     await screen._confirm_change(AsyncMock())
     runner.execute.assert_not_awaited()
+
+
+async def test_subject_overview_displays_inherited_privileges_next_to_recorded_assignments() -> None:
+    client = MagicMock()
+    guild = client.get_guild.return_value
+    guild.fetch_member = AsyncMock()
+    client.actors.resolve = AsyncMock(return_value=Actor(account_id=2, discord_user_id=123, guild_id=42))
+    client.services.permissions.check = AsyncMock(
+        return_value=PermissionCheck(tuple(Decision(node, allowed=True, reason=Reason.OWNER) for node in CATALOGUE))
+    )
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    admin.revision.return_value = 7
+    admin.rules_for.return_value = ()
+    admin.assignments_for.return_value = tuple(
+        PermissionRoleAssignment(id=i, role_id=i, role_slug=f"reviewers-{i}", scope_guild_id=42) for i in range(1, 6)
+    )
+    screen = AccessScreen(
+        admin,
+        AsyncMock(),
+        guild_id=42,
+        guild_name="Lab",
+        account_id=2,
+        discord_role_id=None,
+        member_id=123,
+        subject_label="Alex",
+        grants=grants(*ACCESS_NODES),
+        bot=client,
+        actor=AsyncMock(return_value=Actor(account_id=1)),
+    )
+    root = make_layout_bot().ui.mount(screen, access=sd.Owner(7), timeout=300)
+    await root.send(delivered_to(message_harness()))
+    view = commit_render(root)
+    assert_within_limits(view)
+    payload = str(view.to_components())
+    for phrase in (
+        "Effective privileges in Lab",
+        "Bot owner",
+        "reviewers-1",
+        "Change member or Discord role",
+        "Audit log",
+    ):
+        assert phrase in payload
+
+
+async def test_audit_list_and_picker_identify_role_and_recipient() -> None:
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    admin.roles.return_value = (PermissionRole(id=15, slug="review", name="Review Crew"),)
+    screen = AccessScreen(
+        admin,
+        AsyncMock(),
+        guild_id=42,
+        account_id=None,
+        discord_role_id=123,
+        subject_label="Helpers",
+        grants=grants(*ACCESS_NODES),
+        actor=AsyncMock(),
+    )
+    screen._account_names = AsyncMock(return_value={1: "Alex", 2: "Jamie"})
+    browser = await screen._audit(
+        (
+            PermissionAuditEntry(
+                id=3,
+                action="role_assign",
+                actor_account_id=1,
+                subject_kind="account",
+                subject_id=2,
+                role_id=15,
+                scope_guild_id=42,
+            ),
+        )
+    )
+    root = make_layout_bot().ui.mount(browser, access=sd.Owner(7), timeout=300)
+    await root.send(delivered_to(message_harness()))
+    payload = str(commit_render(root).to_components())
+    assert payload.count("Assigned Review Crew to Jamie") >= 2
+    assert "Alex" in payload
+
+
+async def test_multi_recipient_picker_saves_one_role_for_a_member_and_discord_role() -> None:
+    role = PermissionRole(id=7, slug="reviewers", name="Reviewers")
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    admin.revision.return_value = 9
+    screen = AccessScreen(
+        admin,
+        AsyncMock(),
+        guild_id=42,
+        account_id=1,
+        discord_role_id=None,
+        subject_label="Alex",
+        grants=grants(*ACCESS_NODES),
+        actor=AsyncMock(),
+    )
+    await screen.on_load()
+    refs = (sl.entity.EntityRef(sl.entity.EntityKind.USER, 123), sl.entity.EntityRef(sl.entity.EntityKind.ROLE, 456))
+    event = MagicMock()
+    event.selected = refs
+    with transaction():
+        await screen._assign_selected(role, AsyncMock())
+        await screen._select_recipients(event)
+    view = commit_render(make_layout_bot().ui.mount(screen, access=sd.Owner(7), timeout=300))
+    assert_within_limits(view)
+    assert "Apply role assignment" in str(view.to_components())
+    event = MagicMock(spec=sl.SubmitEvent)
+    guild = event.context.guild
+    guild.id = 42
+    guild.fetch_member = AsyncMock(return_value=123)
+    event.context.client.services.accounts.get_or_create_identity = AsyncMock(return_value=MagicMock(id=77))
+    event.values = {"operation": "assign", "scope": "global"}
+    event.notice = AsyncMock()
+    screen._save = save = AsyncMock()
+    with transaction():
+        await screen._apply_role(role, 9, refs, event)
+    assert save.await_args is not None
+    batch = save.await_args.args[1]
+    assert [(a.account_id, a.discord_role_id, a.scope_guild_id) for a in batch.assignments] == [
+        (77, None, None),
+        (None, 456, None),
+    ]
+    assert save.await_args.args[2] == 9
