@@ -3,7 +3,6 @@
 from typing import TYPE_CHECKING, Self
 
 import squid_ui.ext.discord as sd
-from squid.bot.routes import router
 from squid.bot.ui import text_node
 from squid.core.i18n import tr
 from squid_ui.routing import InvalidAddress
@@ -28,6 +27,7 @@ class NavigationCommands(sd.Cog):
         address = address.strip()
         if not address.startswith("/"):
             address = f"/{address}"
+        router = request.client.ui_router
         try:
             match = router.resolve(address)
         except InvalidAddress:

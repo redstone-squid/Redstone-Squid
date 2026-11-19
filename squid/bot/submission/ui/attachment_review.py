@@ -15,7 +15,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
 from squid.config import attachment_review_archive_root
@@ -24,6 +24,9 @@ from squid.core.builds.domain import Status
 from squid.core.builds.models import Build
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+
+router = AppRoutes()
+
 
 logger = logging.getLogger(__name__)
 

@@ -11,13 +11,16 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.routes import AppRequest, router
+from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.core.voting.domain import VoteRejection, VoteSessionSnapshot
 from squid_i18n import Text, md_tr
+
+router = AppRoutes()
+
 
 if TYPE_CHECKING:
     import squid.bot.app

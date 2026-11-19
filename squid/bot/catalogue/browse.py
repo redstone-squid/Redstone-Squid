@@ -21,7 +21,7 @@ from squid.bot.catalogue.search.help import search_help
 from squid.bot.catalogue.search.labels import filter_label, sort_label
 from squid.bot.catalogue.search.results import SearchFocus, SearchScreen
 from squid.bot.edit_controller import BoundEdit, EditController
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
@@ -66,6 +66,9 @@ from squid_ui.sources import window_fingerprint
 
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
+
+router = AppRoutes()
+
 
 _RECORD_TITLE_BUTTONS = (BaseTitle.SMALLEST, BaseTitle.FASTEST, BaseTitle.FIRST)
 _DEFAULT_RECORD_VERSION = VersionScope.ALL_TIME

@@ -15,7 +15,7 @@ from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_c
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
 from squid.bot.lookup import pick
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.accounts.application import AccountService
@@ -36,6 +36,9 @@ from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+
+router = AppRoutes()
+
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid

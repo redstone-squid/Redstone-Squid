@@ -81,8 +81,8 @@ a tree of regions supplies the joint alternative.
 
 ## Addressable destinations
 
-`squid.bot.routes.router` is the single registry for screen openings and persistent
-actions. Both use `@router.route(path)`, receive an `AppRequest`, and return either a
+Declare screen openings and persistent actions on a module-local `router = AppRoutes()`.
+Both use `@router.route(path)`, receive an `AppRequest`, and return either a
 `Screen`, a `Response`, or `None` after handling the request themselves.
 Screen classmethods inherit their screen's response policy; standalone actions can
 supply `policy=ResponseSpec(...)` on the decorator. Screens can set an instance's
@@ -105,6 +105,7 @@ The decorated attribute is a typed endpoint handle:
 await BuildBrowseScreen.open_detail(request, build_id=12)
 address = BuildBrowseScreen.open_detail.address(build_id=12)  # /builds/12
 custom_id = BuildBrowseScreen.open_detail.custom_id(build_id=12)  # ui:/builds/12
+router = request.client.ui_router
 await router.dispatch(request, router.resolve(address))
 ```
 
@@ -119,9 +120,9 @@ prefix and invokes the same endpoint. There is no forwarding navigation route or
 second screen registry. Session-bound callbacks keep their separate mount namespace.
 Old colon-form IDs are not accepted by the application adapter.
 
-Import endpoint modules before installing the adapter, which freezes route identities.
-Module reloads replace handlers on stable handles, so retained button references use
-the current handler. Reloads cannot add routes or change address parameters.
+At the end of extension setup, call `bot.ui_router.mount(__name__, *endpoints)`.
+In teardown, call `bot.ui_router.unmount(__name__)`. Persistent buttons and `/open`
+resolve addresses against the extensions currently loaded on that bot.
 
 An item can implement `sl.Focusable[Target]` to expose public locations through
 `focus_targets()` and reveal one with `focus(target)`. This capability is independent

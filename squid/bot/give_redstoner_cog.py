@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.routes import AppRequest, router
+from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import Grants, enforce, hide_unless, requires_grant
 from squid.core.community.application import RedstonerService
@@ -24,6 +24,9 @@ from squid_ui.ext.discord import send_to
 from squid_ui.ext.discord.i18n import to_locale_str
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.routing import Proceed, RouteMatch
+
+router = AppRoutes()
+
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -281,3 +284,8 @@ def _role_award_notice(member_id: int, role_id: int, destination: str) -> sl.Tex
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
     await bot.add_cog(GiveRedstoner(bot))
+    bot.ui_router.mount(__name__, remove_own_redstoner_role)
+
+
+async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:
+    bot.ui_router.unmount(__name__)

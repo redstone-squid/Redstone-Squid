@@ -8,11 +8,14 @@ from discord import TextChannel
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ConsentPrompt
-from squid.bot.routes import AppRequest, router
+from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid_i18n import md_tr
+
+router = AppRoutes()
+
 
 logger = logging.getLogger(__name__)
 

@@ -15,9 +15,17 @@ from squid.bot.catalogue.search.contextual import SEARCH_COMMAND_NAME, SEARCH_SC
 from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
+from squid.bot.submission.consent_banner import open_consent_prompt
 from squid.bot.submission.form import open_submission_form
 from squid.bot.submission.message_intake import BuildMessageIntake
-from squid.bot.submission.ui.attachment_review import AttachmentReview, warn_if_attachment_archive_unavailable
+from squid.bot.submission.ui.attachment_review import (
+    AttachmentReview,
+    review_attachments,
+    warn_if_attachment_archive_unavailable,
+)
+from squid.bot.submission.ui.controls import edit_build, recover_build_editor, reopen_revision
+from squid.bot.submission.ui.drafts import DraftEditorScreen
+from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
 from squid.core.builds.domain import DoorOrientationLiteral
@@ -347,3 +355,20 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load search and build commands."""
     await asyncio.to_thread(warn_if_attachment_archive_unavailable)
     await bot.add_cog(BuildCommands(bot))
+    bot.ui_router.mount(
+        __name__,
+        BuildBrowseScreen.open_index,
+        BuildBrowseScreen.open_detail,
+        open_consent_prompt,
+        review_attachments,
+        edit_build,
+        recover_build_editor,
+        reopen_revision,
+        DraftEditorScreen.open_draft,
+        reopen_inference,
+        SavedDraftsScreen.open_drafts,
+    )
+
+
+async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:
+    bot.ui_router.unmount(__name__)

@@ -1,11 +1,17 @@
 """Screens and persistent actions occupy one production endpoint registry."""
 
-from importlib import import_module, reload
+from importlib import import_module
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.bot.routes import router
+from squid.bot import give_redstoner_cog as roles
+from squid.bot.accounts import cog as accounts
+from squid.bot.routes import AppRequest
+from squid_ui.routing import InvalidAddress, MountedRouter
+from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 @pytest.mark.parametrize(
@@ -24,26 +30,22 @@ def test_production_actions_are_canonical_addresses(
     endpoint = getattr(import_module(module), name)
     assert endpoint.address(**params) == address
     assert endpoint.custom_id(**params) == "ui:" + address
-    match = router.resolve(address)
+    match = endpoint.router.resolve(address)
     assert match.endpoint is endpoint
     assert match.arguments == params
 
 
-def test_reloading_build_controls_keeps_imported_handles_current() -> None:
-    controls = import_module("squid.bot.submission.ui.controls")
-    imported = controls.edit_build
-    old_handler = imported.function
-    reload(controls)
-    assert controls.edit_build is imported
-    assert imported.function is not old_handler
-    assert router.resolve(imported.address(build_id=5)).endpoint is imported
-
-
-def test_reloading_role_controls_replaces_middleware_without_duplicating_it() -> None:
-    controls = import_module("squid.bot.give_redstoner_cog")
-    group = controls.redstoner_roles
-    previous = group.middleware[0]
-    reload(controls)
-    assert controls.redstoner_roles is group
-    assert len(group.middleware) == 1
-    assert group.middleware[0] is not previous
+async def test_extension_setup_and_teardown_own_their_addresses() -> None:
+    bot = make_layout_bot(add_cog=AsyncMock(), services=bot_services())
+    router = MountedRouter[AppRequest]()
+    bot.ui_router = router
+    await accounts.setup(bot)
+    await roles.setup(bot)
+    address = roles.remove_own_redstoner_role.address()
+    assert router.resolve(address).endpoint is roles.remove_own_redstoner_role
+    await roles.teardown(bot)
+    with pytest.raises(InvalidAddress):
+        router.resolve(address)
+    assert router.resolve("/account").endpoint is accounts.AccountWorkspace.open_account
+    await roles.setup(bot)
+    assert router.resolve(address).endpoint is roles.remove_own_redstoner_role

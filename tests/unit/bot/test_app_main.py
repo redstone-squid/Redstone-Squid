@@ -21,6 +21,7 @@ from squid_reactivity import EventLedger, transaction
 from squid_ui.content.text import Localization, current_localization
 from squid_ui.ext.discord.devtools import DevTools
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
+from squid_ui.routing import MountedRouter
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
 
@@ -219,6 +220,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     metrics_job = run()
     bot.interaction_metrics = cast(Any, UIRuntimeRecorder(metrics_job))
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
+    bot.ui_router = MountedRouter()
     install = mocker.patch.object(bot_app, "install_ui_router")
     mocker.patch.object(bot_app, "start_permission_epoch_watch")
 
@@ -229,9 +231,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
             (layout_job, "layout-runtime"),
             (metrics_job, "interaction-metrics"),
         ]
-        install.assert_called_once_with(
-            bot_app.ui_router, bot, on_error=bot._ui_route_error, profiler=bot.layout_profiler
-        )
+        install.assert_called_once_with(bot.ui_router, bot, on_error=bot._ui_route_error, profiler=bot.layout_profiler)
     finally:
         layout_job.close()
         metrics_job.close()

@@ -31,7 +31,7 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
 from squid.bot.recount.spec import extension as recount_extension
-from squid.bot.routes import router as ui_router
+from squid.bot.routes import AppRequest
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.uploads import CatboxClient
@@ -66,6 +66,7 @@ from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import Config, DiscordUIRuntime, SessionManager, install
 from squid_ui.ext.discord.routing.adapter import install as install_ui_router
 from squid_ui.profiling import MemoryProfiler
+from squid_ui.routing import MountedRouter
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -189,6 +190,7 @@ class RedstoneSquid(Bot):
         self.contextual_searches = ContextualSearches()
         self.interaction_metrics = InteractionMetrics()
         self.gateway_history = GatewayHistory()
+        self.ui_router = MountedRouter[AppRequest]()
         self.layout_profiler = MemoryProfiler()
         self.action_ledger = EventLedger(limit=200)
         self.topic_bus = LocalTopicBus()
@@ -391,11 +393,8 @@ class RedstoneSquid(Bot):
             self.topic_publisher = self.topic_bridge
             self.background_tasks.start(self.topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
 
+        install_ui_router(self.ui_router, self, on_error=self._ui_route_error, profiler=self.layout_profiler)
         await self.extension_manager.start(super().load_extension, super().unload_extension)
-
-        # After every extension, because loading is what imports the handler modules that
-        # register routes, and installing the router freezes the table.
-        install_ui_router(ui_router, self, on_error=self._ui_route_error, profiler=self.layout_profiler)
 
     async def _ui_route_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
         await handle_interaction_error(interaction, error, surface=source)

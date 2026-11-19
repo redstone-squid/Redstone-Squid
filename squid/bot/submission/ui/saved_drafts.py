@@ -6,7 +6,7 @@ from typing import Self, override
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.i18n import tr
@@ -18,6 +18,8 @@ from squid_i18n import Text, md_tr
 from squid_ui.content.text import md
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+
+router = AppRoutes()
 
 
 class SavedDraftsScreen(sd.Screen):

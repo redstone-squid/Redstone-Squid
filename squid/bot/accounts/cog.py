@@ -112,3 +112,8 @@ def _missing_creator_page(user: str) -> Text:
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))
+    bot.ui_router.mount(__name__, AccountWorkspace.open_account)
+
+
+async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:
+    bot.ui_router.unmount(__name__)

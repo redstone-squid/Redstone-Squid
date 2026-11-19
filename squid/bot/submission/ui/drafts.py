@@ -36,7 +36,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.edit_controller import EditController
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission import draft_intake
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
@@ -83,6 +83,9 @@ from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md
 from squid_ui.ext.discord.modal import FileField
 from squid_ui.ext.discord.target_types import ComponentsV2Target
+
+router = AppRoutes()
+
 
 MAX_FILES_PER_UPLOAD = 4
 """Files accepted by one Add files modal, matching the four file options of /build submit."""

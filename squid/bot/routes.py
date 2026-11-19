@@ -1,4 +1,4 @@
-"""The application's single registry for screen openings and persistent actions."""
+"""Endpoint declarations and delivery policy for Discord extensions."""
 
 from typing import TYPE_CHECKING, Any, cast
 
@@ -84,5 +84,7 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
         return result
 
 
-router = Router[AppRequest]()
-router.add_middleware(deliver)
+class AppRoutes(Router[AppRequest]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.add_middleware(deliver)

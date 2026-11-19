@@ -9,7 +9,7 @@ import pytest
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.navigation.cog import NavigationCommands
-from squid.bot.routes import ScreenUnavailable, router
+from squid.bot.routes import AppRequest, ScreenUnavailable
 from squid.bot.submission.ui import drafts
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
@@ -18,27 +18,33 @@ from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDIN
 from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import primitives
+from squid_ui.routing import MountedRouter
 from tests.support.grants import grants
 
 
+@pytest.fixture
+def router() -> MountedRouter[AppRequest]:
+    routes = MountedRouter[AppRequest]()
+    routes.mount(
+        "builds",
+        BuildBrowseScreen.open_index,
+        BuildBrowseScreen.open_detail,
+        DraftEditorScreen.open_draft,
+        SavedDraftsScreen.open_drafts,
+    )
+    routes.mount("accounts", AccountWorkspace.open_account)
+    return routes
+
+
 @pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#claims"])
-def test_screen_addresses_roundtrip_through_the_application_registry(address: str) -> None:
+def test_screen_addresses_roundtrip_through_the_application_registry(
+    router: MountedRouter[AppRequest], address: str
+) -> None:
     match = router.resolve(address)
     assert match.endpoint.address(**match.arguments) == address
 
 
-def test_every_screen_endpoint_belongs_to_the_application_router() -> None:
-    for endpoint in (
-        BuildBrowseScreen.open_index,
-        SavedDraftsScreen.open_drafts,
-        DraftEditorScreen.open_draft,
-        AccountWorkspace.open_account,
-    ):
-        assert endpoint.router is router
-        assert endpoint in router.endpoints()
-
-
-def test_persistent_button_addresses_the_screen_directly() -> None:
+def test_persistent_button_addresses_the_screen_directly(router: MountedRouter[AppRequest]) -> None:
     button = primitives.RoutedButton("Open", DraftEditorScreen.open_draft.custom_id(draft_id=UUID(int=1)))
     assert button.route_id == "ui:/drafts/00000000-0000-0000-0000-000000000001"
     assert router.resolve(button.route_id[3:]).endpoint is DraftEditorScreen.open_draft
@@ -100,10 +106,13 @@ async def test_account_tab_validation_and_current_request(monkeypatch: pytest.Mo
 
 
 @pytest.mark.parametrize("address", ["builds/12", "/builds/12", "  builds/12  ", "drafts?inbox=true", "account#claims"])
-async def test_navigation_accepts_optional_leading_slash(monkeypatch: pytest.MonkeyPatch, address: str) -> None:
+async def test_navigation_accepts_optional_leading_slash(
+    router: MountedRouter[AppRequest], monkeypatch: pytest.MonkeyPatch, address: str
+) -> None:
     dispatch = AsyncMock()
     monkeypatch.setattr(router, "dispatch", dispatch)
     request = MagicMock()
+    request.client.ui_router = router
     callback = inspect.unwrap(NavigationCommands.open_screen.callback)
     await callback(MagicMock(), request, address)
     expected = router.resolve("/" + address.strip().lstrip("/"))
@@ -111,9 +120,13 @@ async def test_navigation_accepts_optional_leading_slash(monkeypatch: pytest.Mon
 
 
 @pytest.mark.parametrize("address", ["", "  ", "https://example.com/builds", "//example.com/builds", "?inbox=true"])
-async def test_navigation_rejects_non_screen_addresses(monkeypatch: pytest.MonkeyPatch, address: str) -> None:
+async def test_navigation_rejects_non_screen_addresses(
+    router: MountedRouter[AppRequest], monkeypatch: pytest.MonkeyPatch, address: str
+) -> None:
     dispatch = AsyncMock()
     monkeypatch.setattr(router, "dispatch", dispatch)
+    request = MagicMock()
+    request.client.ui_router = router
     callback = inspect.unwrap(NavigationCommands.open_screen.callback)
-    await callback(MagicMock(), MagicMock(), address)
+    await callback(MagicMock(), request, address)
     dispatch.assert_not_awaited()

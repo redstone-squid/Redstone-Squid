@@ -2,9 +2,12 @@
 
 from uuid import UUID
 
-from squid.bot.routes import AppRequest, ScreenUnavailable, router
+from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.ui import opening, recalculation
 from squid.core.i18n import tr
+
+router = AppRoutes()
+
 
 builds = router.group("/builds")
 

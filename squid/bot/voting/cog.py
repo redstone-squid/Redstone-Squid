@@ -12,6 +12,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
+from squid.bot.voting.controls import close_poll, refresh_poll
 from squid.bot.voting.poll_wizard import (
     DEFAULT_POLL_CHOICES,
     SCOPE_CHOICES,
@@ -264,3 +265,8 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     cog = VoteCog(bot)
     await bot.add_cog(cog)
     ctx.publish(VotingExports(recount=cog.reactions))
+    bot.ui_router.mount(__name__, close_poll, refresh_poll)
+
+
+async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:
+    bot.ui_router.unmount(__name__)
