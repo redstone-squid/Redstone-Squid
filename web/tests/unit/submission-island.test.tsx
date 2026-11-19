@@ -85,15 +85,15 @@ const manifest: FormManifestResponse = {
           control: "choice",
           required: true,
           options: [
-            { value: "reviewer_only", label: "Reviewer only" },
-            { value: "public_download", label: "Public download" },
+            { value: "reviewer_only", label: "Reviewer only", value_type: null },
+            { value: "public_download", label: "Public download", value_type: null },
           ],
         }),
         field({
           id: "schematic_license",
           label: "Public schematic license",
           control: "choice",
-          options: [{ value: "cc0_1_0", label: "CC0 1.0" }],
+          options: [{ value: "cc0_1_0", label: "CC0 1.0", value_type: null }],
           visible_when: {
             field_id: "schematic_visibility",
             operator: "equals",
@@ -214,7 +214,7 @@ function fakeApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
         source,
         category,
         revision: 1,
-        options: [{ value: "locational", label: "Locational" }],
+        options: [{ value: "locational", label: "Locational", value_type: null }],
       }),
     ),
     createDraft: vi.fn((category) => {
