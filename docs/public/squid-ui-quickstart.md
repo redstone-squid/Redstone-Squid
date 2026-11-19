@@ -70,19 +70,10 @@ async def main() -> None:
     guild = discord.Object(id=int(os.environ["DISCORD_GUILD_ID"]))
     bot.tree.add_command(counter, guild=guild)
 
-    async with bot:
-        async with anyio.create_task_group() as tasks:
-            await tasks.start(runtime.run)
-            try:
-                await bot.login(os.environ["DISCORD_TOKEN"])
-                await bot.tree.sync(guild=guild)
-                await bot.connect()
-            finally:
-                with anyio.CancelScope(shield=True):
-                    try:
-                        await runtime.close()
-                    finally:
-                        tasks.cancel_scope.cancel()
+    async with bot, runtime.running():
+        await bot.login(os.environ["DISCORD_TOKEN"])
+        await bot.tree.sync(guild=guild)
+        await bot.connect()
 
 
 if __name__ == "__main__":

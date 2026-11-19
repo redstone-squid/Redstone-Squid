@@ -92,30 +92,18 @@ works without a topic bus. `sd.Config(bus=...)` is optional: supply it when reso
 external changes through `bus.topic("build", "42")`. The application publishes that topic after
 updating the database; incoming remote events need a host-owned bridge.
 
-`sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
-using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
-host. Await startup readiness, then finish the runtime before cancelling its runner:
+`sd.install()` prepares the runtime. Enter `runtime.running()` inside the bot context
+to start its services before opening panels and close live panels while the client is
+still available.
 
 ```python
-import anyio
-
-
 async def main(token: str) -> None:
-    async with bot:
-        async with anyio.create_task_group() as tasks:
-            await tasks.start(runtime.run)
-            try:
-                await bot.start(token)
-            finally:
-                with anyio.CancelScope(shield=True):
-                    try:
-                        await runtime.close()
-                    finally:
-                        tasks.cancel_scope.cancel()
+    async with bot, runtime.running():
+        await bot.start(token)
 ```
 
-The application owns its shutdown deadline. Shielding lets accepted cleanup finish when the
-caller is cancelled; resource-specific timeouts belong in that cleanup.
+Applications with their own task group can use `await tasks.start(runtime.run)` and
+`await runtime.close()` to manage shutdown themselves.
 
 Components V2 uses
 `sd.DISCORD_V2_DPY27`; classic messages use `sd.DISCORD_V1_DPY27` through `sd.classic`.
