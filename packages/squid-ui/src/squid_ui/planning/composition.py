@@ -245,6 +245,32 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     rejections: tuple[CandidateViolation, ...] = ()
     """Intrinsic failures that rule out this offer for every partition."""
 
+    def atomic_violations(self, context: PlanningContext) -> tuple[CandidateViolation, ...]:
+        """Check an opaque offer using its declared placement, capabilities, and costs."""
+        occurrence = self.occurrence
+        semantic = occurrence.graph.units[occurrence.reference].value
+        contract = self.atomic
+        if contract is None and not isinstance(semantic, AtomicNode):
+            return ()
+        if contract is None or self.children:
+            message = "opaque atomic offers require a contract and cannot expose invented children"
+            raise LayoutInvariantError(message)
+        if isinstance(semantic, AtomicNode) and self.effects != occurrence.scope_effects(semantic.effects):
+            message = "atomic offers must retain the author's declared effects"
+            raise LayoutInvariantError(message)
+        failures: list[CandidateViolation] = []
+        if missing := contract.capabilities - context.capabilities:
+            failures.append(
+                UnsupportedCapability(occurrence.identity, "atomic requirements: " + ", ".join(sorted(missing)))
+            )
+        if occurrence.placement not in contract.placements:
+            failures.append(ConstraintViolation(occurrence.identity, "atomic placement"))
+        failures.extend(
+            CapacityExceeded(occurrence.identity, axis, used, capacity)
+            for axis, used, capacity in contract.total.over(context.capacities)
+        )
+        return tuple(failures)
+
 
 class DiscoveryCompletion(StrEnum):
     COMPLETE = "complete"
@@ -594,25 +620,9 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         if isinstance(semantic, ComponentPlacement):
             visible_components.add(semantic.placement)
         if isinstance(semantic, AtomicNode) or part.offer.atomic is not None:
-            contract = part.offer.atomic
-            if contract is None or part.children:
-                message = "opaque atomic offers require a contract and cannot expose invented children"
-                raise LayoutInvariantError(message)
-            if isinstance(semantic, AtomicNode) and part.offer.effects != part.offer.occurrence.scope_effects(
-                semantic.effects
-            ):
-                message = "atomic offers must retain the author's declared effects"
-                raise LayoutInvariantError(message)
+            preflight.extend(part.offer.atomic_violations(context))
+        if (contract := part.offer.atomic) is not None:
             atoms[identity] = contract
-            if contract.capabilities - context.capabilities:
-                preflight.append(
-                    UnsupportedCapability(
-                        identity,
-                        "atomic requirements: " + ", ".join(sorted(contract.capabilities - context.capabilities)),
-                    )
-                )
-            if part.offer.occurrence.placement not in contract.placements:
-                preflight.append(ConstraintViolation(identity, "atomic placement"))
         if isinstance(semantic, Budget) and semantic.limits:
             budgets[identity] = semantic.limits
         character_budget = semantic if isinstance(semantic, Budgeted) else NativeTraits.of(semantic).budget

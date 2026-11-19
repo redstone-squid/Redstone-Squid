@@ -17,14 +17,16 @@ from squid_ui.planning.allocation_scoring import preference_tree
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,
+    CapacityExceeded,
     LocalCapacityExceeded,
     OccurrenceId,
+    Placement,
     PlanningContext,
     RealizationOffer,
     SemanticOccurrence,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
-from squid_ui.planning.resources import Axis
+from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost, ResourceIdentity
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,18 +93,44 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         offer = choices[occurrence.identity]
         return CandidateComposition(offer, tuple(self._candidate(child, choices) for child in offer.children))
 
-    def _region_trees(
+    def _inspect_tree(
         self, root: FragmentTree[RenderTargetT, ContextT, PayloadT]
-    ) -> tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...]:
+    ) -> tuple[tuple[FragmentTree[RenderTargetT, ContextT, PayloadT], ...], ResourceCost]:
+        """Find regions and count atomic costs that every partition must pay."""
         found: list[FragmentTree[RenderTargetT, ContextT, PayloadT]] = []
-        pending = [root]
+        costs: dict[Axis, int] = {}
+        shared: dict[tuple[ResourceIdentity, Axis], int] = {}
+        pending = [(root, True)]
         while pending:
             self.context.work.consume()
-            part = pending.pop()
-            if part.candidate.offer.region is not None:
+            part, always_visible = pending.pop()
+            offer = part.candidate.offer
+            if always_visible and (atom := offer.atomic) is not None:
+                self.context.work.consume(len(atom.cost.values) + len(atom.shared_costs))
+                for axis, used in atom.cost.values.items():
+                    costs[axis] = costs.get(axis, 0) + used
+                for resource, cost in atom.shared_costs.items():
+                    self.context.work.consume(len(cost.values))
+                    for axis, used in cost.values.items():
+                        key = (resource, axis)
+                        shared[key] = max(shared.get(key, 0), used)
+            if offer.region is not None:
                 found.append(part)
-            pending.extend(reversed(part.children))
-        return tuple(found)
+                # Descendants can land on different pages. Only explicitly
+                # repeated region chrome is guaranteed to stay visible.
+                pending.extend(
+                    (
+                        child,
+                        always_visible
+                        and child.candidate.offer.occurrence.placement in (Placement.HEADER, Placement.FOOTER),
+                    )
+                    for child in reversed(part.children)
+                )
+            else:
+                pending.extend((child, always_visible) for child in reversed(part.children))
+        for (_, axis), used in shared.items():
+            costs[axis] = costs.get(axis, 0) + used
+        return tuple(found), ResourceCost(costs) if costs else EMPTY_COST
 
     def expand(
         self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
@@ -188,9 +216,14 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         if self.selected.keys() - selected.keys():
             return
         candidate = self._candidate(self.root, selected)
-        regions = self._region_trees(fragment_tree(candidate, self.context))
+        regions, minimum = self._inspect_tree(fragment_tree(candidate, self.context))
         self.seen_regions.update(node.candidate.offer.occurrence.identity for node in regions)
         if self.fixed_cuts.keys() - {node.candidate.offer.occurrence.identity for node in regions}:
+            return
+        if minimum.values and (overflow := tuple(minimum.over(self.context.capacities))):
+            self.violations.extend(
+                CapacityExceeded(self.root.identity, axis, used, capacity) for axis, used, capacity in overflow
+            )
             return
         if retained:
             # Partitions cannot improve representation preferences or remove their

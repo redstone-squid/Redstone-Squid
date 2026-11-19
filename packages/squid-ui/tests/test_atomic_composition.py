@@ -14,18 +14,21 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
-from squid_ui.planning import CompositionRejectedError, FixedComposition
+from squid_ui.planning import AutomaticComposition, CompositionRejectedError, FixedComposition, JointInfeasibleError
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition import (
     AtomicContract,
     CandidateComposition,
+    CapacityExceeded,
     Evaluation,
     Placement,
     PlanningContext,
     RealizationOffer,
     ResourceIdentity,
     SemanticOccurrence,
+    UnsupportedCapability,
 )
+from squid_ui.planning.joint_search import JointUnsupportedError
 from squid_ui.planning.realizations import DownloadRealization, Realization, TextRealization
 from squid_ui.planning.resources import Axis, ResourceCost
 
@@ -151,6 +154,49 @@ def test_atomic_shared_resources_deduplicate_and_obey_enclosing_budgets() -> Non
     assert result.cost.get(Axis.ATTACHMENTS) == 1
     assert result.cost.get(Axis.COMPONENTS) == 2
     assert result.resources[f"asset:{asset.key}"] is asset
+
+
+def test_joint_search_rejects_atomic_capabilities_during_discovery() -> None:
+    rules = BadgeRules(requires=frozenset({"test.missing"}))
+    with pytest.raises(JointUnsupportedError) as caught:
+        sl.planning.plan(Badge("badge", "Ready"), target=TARGET, composition=AutomaticComposition(rules))
+
+    assert rules.calls == []
+    assert any(isinstance(violation, UnsupportedCapability) for violation in caught.value.diagnostics.violations)
+
+
+def test_joint_search_rejects_the_cost_of_atoms_that_must_coexist() -> None:
+    rules = BadgeRules()
+    content = sl.stack(*(Badge(f"badge-{index}", "Ready") for index in range(41)))
+    with pytest.raises(JointInfeasibleError) as caught:
+        sl.planning.plan(content, target=TARGET, composition=AutomaticComposition(rules))
+
+    assert rules.calls == []
+    assert any(
+        isinstance(violation, CapacityExceeded)
+        and (violation.axis, violation.used, violation.capacity) == (Axis.COMPONENTS, 41, 40)
+        for violation in caught.value.diagnostics.violations
+    )
+
+
+def test_joint_search_can_split_atoms_across_pages() -> None:
+    content = sl.region(Badge("first", "a" * 2500), Badge("second", "b" * 2500), key="badges", title="Badges")
+    result = sl.planning.plan(content, target=TARGET, composition=AutomaticComposition(BadgeRules()))
+
+    assert result.allocation is not None
+    (region,) = result.allocation.regions.values()
+    assert region.cuts == (1, 2)
+
+
+def test_joint_search_counts_shared_atomic_cost_once() -> None:
+    asset = sl.file(b"data", filename="report.txt")
+    content = sl.stack(FileBadge("one", asset), FileBadge("two", asset))
+    target = TARGET.reserve(ResourceCost({Axis.ATTACHMENTS: TARGET.limits.attachments - 1}))
+    result = sl.planning.plan(
+        content, target=target, composition=AutomaticComposition(BadgeRules(limits=target.limits))
+    )
+
+    assert result.cost.get(Axis.ATTACHMENTS) == 1
 
 
 def test_builtin_rules_do_not_guess_an_opaque_widgets_meaning() -> None:

@@ -126,10 +126,13 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 continue
             if self.context.strict and offer.effects:
                 continue
-            if offer.rejections:
+            rejections = offer.rejections or offer.atomic_violations(self.context)
+            if rejections:
                 self.pruned = True
                 if fresh:
-                    self.violations.extend(offer.rejections)
+                    self.violations.extend(rejections)
+                    if any(isinstance(violation, UnsupportedCapability) for violation in rejections):
+                        self.unsupported.add(occurrence.identity)
                 continue
             choice = (occurrence.identity, offer.key)
             if self.excluded and (patterns := self.exclusions_by_choice.get(choice)):
@@ -189,7 +192,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 (offer_rank, offer)
                 for offer, offer_rank in zip(domain, domain_ranks, strict=True)
                 if offer_rank > rank
-                and not offer.rejections
+                and not (offer.rejections or offer.atomic_violations(self.context))
                 and (not self.context.strict or not offer.effects)
                 and (not offer.effects or current.children or offer.children)
             ]
