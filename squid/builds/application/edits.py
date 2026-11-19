@@ -166,6 +166,11 @@ class BuildFieldsEdit:
         if build.revision != expected.value:
             raise RevisionConflictError(expected, build.revision)
         before = build_values(build)
+        # Undo replays every field, so judge the edit by what it changes, not by what it sends.
+        current_values = before.unpack()
+        showcase_only = all(
+            current_values.get(name) == value for name, value in values.items() if name != "showcase_tags"
+        ) and (unresolved is None or unresolved == current_values["unresolved_taxonomy"])
         attributes = patch.edit_attributes()
         if unresolved is not None:
             if not isinstance(unresolved, dict) or unresolved.keys() - {"unknown_restrictions", "unknown_patterns"}:
@@ -179,12 +184,14 @@ class BuildFieldsEdit:
             for name in RESTRICTION_FIELDS:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
-        await self._builds.prepare_edit(actor, build, BuildEditPatch.from_attributes(attributes))
+        await self._builds.prepare_edit(
+            actor, build, BuildEditPatch.from_attributes(attributes), showcase_only=showcase_only
+        )
         current = await uow.builds.get_for_update(build_id)
         if current is None:
             raise BuildNotFoundError(build_id)
         require_revision(expected, current.revision)
-        await self._builds.authorize_edit_in(uow, actor, current)
+        await self._builds.authorize_edit(actor, current, uow=uow, showcase_only=showcase_only)
         return PreparedBuildEdit(before, build_values(build), build=build, revisions=(expected,))
 
     async def apply(

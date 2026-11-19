@@ -189,39 +189,35 @@ class BuildService:
                 build.id, expected_revision=expected_revision, current_revision=build.revision
             )
 
-    async def authorize_edit(self, actor: Actor, build: Build) -> None:
-        """Require edit permission unless the actor owns this pending submission."""
-        if self._permissions is None:
-            msg = "Authorized editing requires a permission service."
-            raise InvalidStateError(msg)
-        owns = (
-            build.submission_status is Status.PENDING
-            and actor.account_id is not None
-            and build.submitter_account_id == actor.account_id
-        )
-        if not owns:
-            await self._permissions.require(actor, BUILD_SUBMISSION_EDIT)
+    async def authorize_edit(
+        self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None, showcase_only: bool = False
+    ) -> None:
+        """Require build-edit permission unless the actor submitted the build.
 
-    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: Actor, build: Build) -> None:
-        """Check edit permission using the caller's transaction and current build state."""
+        A submitter may edit their pending build freely, and may change the showcase tags of
+        their build in any status; pass `showcase_only` when the edit changes nothing else.
+        Pass `uow` to check within the caller's transaction.
+        """
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
         owns = (
-            build.submission_status is Status.PENDING
-            and actor.account_id is not None
+            actor.account_id is not None
             and build.submitter_account_id == actor.account_id
+            and (showcase_only or build.submission_status is Status.PENDING)
         )
         if not owns:
             await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
-    async def prepare_edit(self, actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
+    async def prepare_edit(
+        self, actor: Actor, build: Build, patch: BuildEditPatch, *, showcase_only: bool = False
+    ) -> Build:
         """Apply an authorized patch and prepare derived values without saving.
 
         The caller must recheck permissions and the revision when it later writes
         the build; this preparation does not reserve the current revision.
         """
-        await self.authorize_edit(actor, build)
+        await self.authorize_edit(actor, build, showcase_only=showcase_only)
         await self._apply_patch(build, patch)
         return build
 
@@ -342,7 +338,7 @@ class BuildService:
                 current = await self._get_for_update(uow, build.id)
                 self._check_revision(current, build.revision)
                 if actor is not None:
-                    await self.authorize_edit_in(uow, actor, current)
+                    await self.authorize_edit(actor, current, uow=uow)
                 await uow.builds.save(build)
                 await uow.commit()
         await self._embeddings.index(build)

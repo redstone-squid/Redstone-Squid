@@ -149,7 +149,7 @@ class RecalculationProposalService:
         )
         async with self._uow_factory() as uow:
             await self._require_read_access(uow, (proposal,), actor)
-            await self._builds.authorize_edit_in(uow, actor, build)
+            await self._builds.authorize_edit(actor, build, uow=uow)
             if renew:
                 matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
                 result = await uow.recalculation_proposals.create(matched)
@@ -231,7 +231,7 @@ class RecalculationProposalService:
                 build.submission_status,
             ) or retained.owner_account_id != build.submitter_account_id:
                 raise AuthorizationError
-            await self._builds.authorize_edit_in(uow, actor, current)
+            await self._builds.authorize_edit(actor, current, uow=uow)
             build.edited_time = Instant.now()
             await uow.builds.save(
                 build,

@@ -33,6 +33,7 @@ from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.tags.domain import TagModerationStatus, TagValueType
 from squid.versions.application import VersionService
 from tests.support.build_edits import build_edit_session
 from tests.support.submission_targets import seed_account_and_version
@@ -282,3 +283,49 @@ async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
     redone = await service.get(build.id)
     assert redone is not None
     assert redone.credits == credits
+
+
+async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirmed(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    service, executor, actor, build = await setup(sessions)
+    assert build.id is not None
+    assert actor.account_id is not None
+    async with partial(SqlAlchemyUnitOfWork, sessions)() as uow:
+        tag = await uow.tags.create_showcase(
+            stable_key="compact",
+            display_name="Compact",
+            normalized_name="compact",
+            value_type=TagValueType.NONE,
+            query_name=None,
+            created_by_account_id=actor.account_id,
+        )
+        await uow.tags.set_status(tag.id, TagModerationStatus.APPROVED)
+        await uow.commit()
+    build = await service.confirm(build.id, actor=actor.account_id, source="test")
+
+    tagged = await executor.execute(
+        EditCommand(
+            BUILD_EDIT,
+            (Revision(build_target(build.id), build.revision),),
+            patch_values(BuildEditPatch(showcase_tags=["compact"])),
+        ),
+        actor,
+    )
+    assert tagged.receipt is not None
+    # Undo replays every field, which still changes only the tags.
+    undone = await executor.execute(tagged.receipt.undo(tagged.outcome.revisions), actor)
+    current = await service.get(build.id)
+    assert current is not None
+    assert current.tags == []
+
+    with pytest.raises(AuthorizationError):
+        await executor.execute(
+            EditCommand(
+                BUILD_EDIT,
+                (Revision(build_target(build.id), undone.outcome.revisions[0].value),),
+                patch_values(BuildEditPatch(showcase_tags=["compact"], extra_user_info="edited")),
+            ),
+            actor,
+        )
