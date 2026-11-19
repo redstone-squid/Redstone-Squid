@@ -26,9 +26,8 @@ import anyio
 
 from squid_reactivity.transactions import Transaction
 from squid_ui.content.text import TextLike
-from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
-from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.lifetime import CloseReason, Lifetime
 from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.root import MessageRoot

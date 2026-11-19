@@ -19,12 +19,11 @@ import discord
 from discord.ext import commands
 from squid_ui.ext.discord.access import AccessPolicy
 from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.config import Config
 from squid_ui.ext.discord.contracts import LocalizationResolver
 from squid_ui.ext.discord.delivery import DeliveryResult, Replyable
 from squid_ui.ext.discord.facade import Scope
-from squid_ui.ext.discord.lifetime import DiscordUIRuntimeMissing, Lifetime
+from squid_ui.ext.discord.lifetime import CloseReason, DiscordUIRuntimeMissing, Lifetime
 from squid_ui.ext.discord.messages.contracts import MessageRootBehaviorOptions
 from squid_ui.ext.discord.messages.defaults import MessageRootDefaults
 from squid_ui.ext.discord.messages.root import MessageRoot

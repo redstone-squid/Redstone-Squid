@@ -54,10 +54,9 @@ from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.adapter import require_discord_py_target
 from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.classic import render_message as render_classic_message
-from squid_ui.ext.discord.closure import CloseReason
-from squid_ui.ext.discord.lifetime import DiscordUIRuntimeMissing, Lifetime
+from squid_ui.ext.discord.delivery import _MessageDelivery
+from squid_ui.ext.discord.lifetime import CloseReason, DiscordUIRuntimeMissing, Lifetime
 from squid_ui.ext.discord.messages.attachments import files_for
-from squid_ui.ext.discord.messages.authority import _MessageDelivery
 from squid_ui.ext.discord.messages.candidates import (
     _ApplicationCandidate,
     _BusyPaint,
@@ -108,9 +107,8 @@ from squid_ui.ext.discord.primitives.nodes import Button, Row
 from squid_ui.ext.discord.rendering.api import render_message
 from squid_ui.ext.discord.rendering.cache import RenderProgramCache
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
-from squid_ui.ext.discord.rendering.contracts import MountedRenderer
 from squid_ui.ext.discord.rendering.controls import RoutedItem, RoutedSelectItem
-from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.rendering.pipeline import MountedRenderer, RenderedMessage
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.discord.request import _resolve_request
 from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget

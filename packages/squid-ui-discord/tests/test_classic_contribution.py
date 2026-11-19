@@ -7,9 +7,8 @@ from squid_ui.authoring.semantic import Block, Heading, Paragraph
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import ExistingLayoutError, classic
 from squid_ui.ext.discord.inspection import measure
-from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis
+from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, DiscordAxis
 from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
-from squid_ui.ext.discord.resources import DiscordAxis
 
 
 def host(*, content=None, embeds=(), controls=()) -> MessagePayload:

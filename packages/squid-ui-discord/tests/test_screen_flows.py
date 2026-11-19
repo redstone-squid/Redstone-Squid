@@ -8,7 +8,7 @@ from anyio.abc import TaskStatus
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
+from squid_ui.ext.discord.screen import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI
 from squid_ui.runtime import ManagedService, transaction

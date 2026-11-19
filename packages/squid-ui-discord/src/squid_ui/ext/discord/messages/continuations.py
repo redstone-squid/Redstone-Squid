@@ -13,8 +13,7 @@ from dataclasses import dataclass
 
 import discord
 from squid_ui.ext.discord import delivery as deliver
-from squid_ui.ext.discord.delivery import _is_stale
-from squid_ui.ext.discord.messages.authority import _MessageDelivery
+from squid_ui.ext.discord.delivery import _is_stale, _MessageDelivery
 from squid_ui.ext.discord.messages.payload import MessagePayload
 
 logger = logging.getLogger(__name__)

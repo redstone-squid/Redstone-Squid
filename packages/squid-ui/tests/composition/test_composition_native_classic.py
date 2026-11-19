@@ -13,11 +13,10 @@ from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternative
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import scene as discord_scene
-from squid_ui.ext.discord.limits import ClassicLimits, EmbedLimits
+from squid_ui.ext.discord.limits import ClassicLimits, DiscordAxis, EmbedLimits
 from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
 from squid_ui.ext.discord.primitives import nodes as native
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.overflow import Paginate, Truncate
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan

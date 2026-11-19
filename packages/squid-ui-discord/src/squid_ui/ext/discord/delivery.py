@@ -13,6 +13,7 @@ other Discord failures, including permission errors, propagate. A permanent hand
 no interaction-token deadline, but the message or the bot's access can still disappear.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -26,6 +27,9 @@ from squid_ui.ext.discord.limits import LIMITS
 from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload, message_mode
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.profiling import OperationRecorder
+
+_logger = logging.getLogger(__name__)
 
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})
@@ -113,6 +117,62 @@ class EditHandle(Protocol):
             MessageModeError: The message cannot transition to the payload's mode.
         """
         ...
+
+
+@dataclass(slots=True)
+class _MessageDelivery:
+    """One message's standing authority, independent of its published render generation.
+
+    Interaction handles are attempted before standing authority. Renewal keeps permanent
+    authority and otherwise adopts both edit and delete capabilities of a fresh token.
+    """
+
+    message_id: int | None = None
+    handle: EditHandle | None = None
+    delete_handle: DeleteHandle | None = None
+
+    def renew(self, handle: EditHandle) -> None:
+        if self.handle is not None and self.handle.permanent:
+            return
+        self.adopt(handle)
+
+    def adopt(self, handle: EditHandle) -> bool:
+        """Accept replacement authority unless it would downgrade a permanent handle."""
+        if self.handle is not None and self.handle.permanent and not handle.permanent:
+            return False
+        self.handle = handle
+        if hasattr(handle, "delete"):
+            self.delete_handle = cast(DeleteHandle, handle)
+        return True
+
+    async def write(
+        self,
+        payload: MessagePayload,
+        *,
+        keep_attachments: bool,
+        through: EditHandle | None,
+        profile: OperationRecorder | None = None,
+    ) -> EditHandle | None:
+        """Try interaction then standing authority, forgetting a stale standing handle."""
+        candidates = (through,) if through is self.handle else (through, self.handle)
+        for handle in candidates:
+            if handle is None or handle.expired():
+                continue
+            try:
+                if profile is None:
+                    await handle.write(payload, keep_attachments=keep_attachments)
+                else:
+                    source = "interaction" if handle is through else "standing"
+                    handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
+                    with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
+                        await handle.write(payload, keep_attachments=keep_attachments)
+            except StaleHandleError:
+                _logger.debug("discarded a stale edit handle for message %s", self.message_id, exc_info=True)
+                if handle is self.handle:
+                    self.handle = None
+                continue
+            return handle
+        return None
 
 
 def no_mentions() -> discord.AllowedMentions:

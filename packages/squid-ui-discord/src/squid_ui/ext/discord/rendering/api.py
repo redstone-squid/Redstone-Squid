@@ -18,8 +18,7 @@ from squid_ui.ext.discord.adapter import require_discord_py_target
 from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePayload
-from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
-from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.rendering.pipeline import RenderedMessage, plan_and_draw
 from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPyAdapter

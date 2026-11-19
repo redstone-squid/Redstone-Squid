@@ -32,7 +32,7 @@ from squid_ui.ext.discord.primitives import (
 )
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.discord.target import NativeItem
-from squid_ui.ext.html.capabilities import HtmlAdapterCapability
+from squid_ui.ext.html.target_types import HtmlAdapterCapability
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError

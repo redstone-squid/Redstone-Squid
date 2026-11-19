@@ -49,7 +49,7 @@ from squid_ui.ext.discord.inspection import (
     measure,
     measure_classic,
 )
-from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits
+from squid_ui.ext.discord.limits import CLASSIC_LIMITS, Axis, ClassicLimits, DiscordAxis
 from squid_ui.ext.discord.messages.attachments import files_for
 from squid_ui.ext.discord.messages.payload import MessageMode, MessageModeError, MessagePayload
 from squid_ui.ext.discord.primitives.nodes import (
@@ -64,9 +64,7 @@ from squid_ui.ext.discord.primitives.nodes import (
     Text,
 )
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
-from squid_ui.ext.discord.rendering.pipeline import plan_and_draw
-from squid_ui.ext.discord.rendering.result import RenderedMessage
-from squid_ui.ext.discord.resources import DiscordAxis
+from squid_ui.ext.discord.rendering.pipeline import RenderedMessage, plan_and_draw
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
 from squid_ui.ext.discord.target_types import ClassicTarget, DiscordPyAdapter
 from squid_ui.overflow import Never, Overflow

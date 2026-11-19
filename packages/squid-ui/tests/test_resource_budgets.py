@@ -18,7 +18,7 @@ from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.ext.slack import scene as slack_scene
 from squid_ui.ext.slack.composition import SlackCompositionRules
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.limits import SlackAxis
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateComposition,

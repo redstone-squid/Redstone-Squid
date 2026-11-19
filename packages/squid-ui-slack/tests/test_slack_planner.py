@@ -10,7 +10,7 @@ import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.slack import scene as slack_scene
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.limits import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter, SlackMessageTarget
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost

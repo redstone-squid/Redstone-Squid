@@ -20,7 +20,7 @@ from squid_ui.ext.discord.messages.attachments import attachment_assets
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.wiring import AnyMountedView
 from squid_ui.ext.discord.navigation_controls import NavFactory
-from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.rendering.pipeline import RenderedMessage
 from squid_ui.ext.discord.target_types import DiscordTarget
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.interactions.forms import FormBinding, FormSpec

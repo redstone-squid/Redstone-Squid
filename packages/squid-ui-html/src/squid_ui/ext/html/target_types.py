@@ -1,6 +1,14 @@
-"""Static target and adapter vocabulary for Html."""
+"""Static target markers and adapter capability declarations for HTML."""
+
+from enum import StrEnum
 
 from squid_ui.target_types import RenderTarget
+
+
+class HtmlAdapterCapability(StrEnum):
+    """Behavior verified by this target's renderer adapters."""
+
+    RENDER_HTML = "adapter.html.render"
 
 
 class HtmlTarget(RenderTarget):

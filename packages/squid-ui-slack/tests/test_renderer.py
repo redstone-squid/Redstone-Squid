@@ -29,7 +29,7 @@ import squid_ui.ext.slack as ss
 from squid_ui import scene
 from squid_ui.content.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.ext.slack import scene as slack_scene
-from squid_ui.ext.slack.capabilities import SlackAdapterCapability
+from squid_ui.ext.slack.adapter import SlackAdapterCapability
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 
 

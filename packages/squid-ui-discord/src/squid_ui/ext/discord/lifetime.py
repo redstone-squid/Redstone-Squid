@@ -7,17 +7,33 @@ shutdown callbacks settle, so closing a parent also joins children already closi
 
 import weakref
 from collections.abc import Iterator
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import discord
 from discord.ext import commands
 from squid_ui.errors import SquidUiError
-from squid_ui.ext.discord.closure import CloseReason
 
 if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
     from squid_ui.ext.discord.messages.root import AnyMessageRoot
     from squid_ui.ext.discord.runtime import DiscordUIRuntime
+
+
+class CloseReason(StrEnum):
+    """The cause accepted with root closure, independent of a screen's result.
+
+    FAILURE means a service failure initiated closure. Cleanup failures are
+    reported by wait() and do not replace the original reason.
+    """
+
+    CLOSED = "closed"
+    TIMEOUT = "timeout"
+    PARENT_CLOSED = "parent_closed"
+    SCOPE_CLOSED = "scope_closed"
+    REPLACED = "replaced"
+    SHUTDOWN = "shutdown"
+    FAILURE = "failure"
 
 
 class DiscordUIRuntimeMissing(SquidUiError, LookupError):

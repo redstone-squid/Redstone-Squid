@@ -1,5 +1,6 @@
 """Verified Slack SDK adapter profile and boundary checks."""
 
+from enum import StrEnum
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 
@@ -7,9 +8,17 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import DrawInvariantError
-from squid_ui.ext.slack.capabilities import SlackAdapterCapability
 from squid_ui.ext.slack.target_types import SlackSdk343Adapter, SlackSdkAdapter
 from squid_ui.planning.adapter import AdapterProfile
+
+
+class SlackAdapterCapability(StrEnum):
+    """Behavior verified by this target's renderer adapters."""
+
+    RENDER_SLACK_HOME = "adapter.slack.render.home"
+    RENDER_SLACK_MESSAGE = "adapter.slack.render.message"
+    RENDER_SLACK_MODAL = "adapter.slack.render.modal"
+
 
 SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
     {

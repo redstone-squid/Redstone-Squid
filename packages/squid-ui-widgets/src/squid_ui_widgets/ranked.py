@@ -1,16 +1,88 @@
-"""A pure materialized ranking machine for component and router shells."""
+"""Ranked row projection and the state machine for materialized rankings."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.authoring.semantic import LayoutNode, List, ListItem
-from squid_ui.content.text import Text, TextLike
+from squid_ui.content.text import Text, TextLike, md
 from squid_ui.factories import heading, stack
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
-from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
+
+
+@dataclass(frozen=True, slots=True)
+class RankedEntry:
+    """An already-ranked row for callers that do not need projection callbacks."""
+
+    label: TextLike
+    value: object
+    key: str = ""
+
+
+type Projector[EntryT] = str | Callable[[EntryT], object]
+
+
+class RankedRows[EntryT]:
+    """Project arbitrary entries into stable ranked display rows."""
+
+    def __init__(
+        self,
+        label: Projector[EntryT] | None,
+        value: Projector[EntryT] | None,
+        identity: Projector[EntryT] | None,
+    ) -> None:
+        self.label = label
+        self.value = value
+        self.identity = identity
+
+    @staticmethod
+    def project(entry: EntryT, projector: Projector[EntryT]) -> object:
+        """Apply a callback, mapping key, or attribute projector."""
+        if callable(projector):
+            return projector(entry)
+        if isinstance(entry, Mapping):
+            try:
+                return entry[projector]
+            except KeyError as error:
+                message = f"ranked entry has no key {projector!r}"
+                raise ValueError(message) from error
+        try:
+            return getattr(entry, projector)
+        except AttributeError as error:
+            message = f"ranked entry has no attribute {projector!r}"
+            raise ValueError(message) from error
+
+    def values(self, entry: RankedEntry | EntryT) -> tuple[object, object]:
+        """Return the display label and value for one entry."""
+        if isinstance(entry, RankedEntry):
+            if self.label is not None or self.value is not None:
+                message = "projectors cannot be combined with RankedEntry values"
+                raise TypeError(message)
+            return entry.label, entry.value
+        if self.label is None or self.value is None:
+            if isinstance(entry, tuple) and len(entry) == 2:
+                return entry[0], entry[1]
+            message = "ranking needs label and value projectors for non-tuple entries"
+            raise TypeError(message)
+        return self.project(entry, self.label), self.project(entry, self.value)
+
+    def identity_of(self, entry: RankedEntry | EntryT) -> str:
+        """Return the entry identity used to anchor paging."""
+        if isinstance(entry, RankedEntry) and entry.key:
+            return entry.key
+        if self.identity is not None and not isinstance(entry, RankedEntry):
+            return str(self.project(entry, self.identity))
+        return repr(entry)
+
+    def lines(self, entries: tuple[RankedEntry | EntryT, ...], offset: int) -> tuple[TextLike, ...]:
+        """Format entries with ranks continuing after `offset`."""
+        return tuple(
+            md(t"{rank}. **{label}** — {value}")
+            for rank, entry in enumerate(entries, offset + 1)
+            for label, value in (self.values(entry),)
+        )
 
 
 @dataclass(frozen=True, slots=True)

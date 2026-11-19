@@ -7,7 +7,7 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.preview import DiscordPreviewRenderer
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer
-from squid_ui.ext.discord.rendering.contracts import MountedRenderer
+from squid_ui.ext.discord.rendering.pipeline import MountedRenderer
 from squid_ui.ext.discord.rendering.v2 import V2Renderer
 from squid_ui.ext.html import Renderer as HtmlRenderer
 from squid_ui.ext.html import scene as html_scene

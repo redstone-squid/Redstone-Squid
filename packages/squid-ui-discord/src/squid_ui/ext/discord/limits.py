@@ -16,9 +16,18 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Self, override
 
-from squid_ui.ext.discord.resources import TEXT_AXES as TEXT_AXES
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning.resources import Axis as Axis
+
+
+class DiscordAxis:
+    """Native message content and embed resources."""
+
+    CONTENT_TEXT = Axis("content_text")
+    EMBED_TEXT = Axis("embed_text")
+    EMBEDS = Axis("embeds")
+
+
+TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, DiscordAxis.CONTENT_TEXT, DiscordAxis.EMBED_TEXT})
 
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
 

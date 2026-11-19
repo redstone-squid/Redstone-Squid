@@ -11,7 +11,8 @@ not public reachability, and does not upload asset bytes.
 
 import hashlib
 from collections.abc import Sequence
-from typing import Any, override
+from dataclasses import dataclass
+from typing import Any, TypedDict, override
 from urllib.parse import urlsplit
 
 from slack_sdk.errors import SlackObjectFormationError
@@ -55,14 +56,32 @@ from squid_ui.content.assets import Asset, StoredAsset
 from squid_ui.content.entity import ConversationType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack import scene
-from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER, require_slack_sdk_capability
-from squid_ui.ext.slack.capabilities import SlackAdapterCapability
-from squid_ui.ext.slack.message_payload import MessagePayload
+from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER, SlackAdapterCapability, require_slack_sdk_capability
 from squid_ui.ext.slack.protocol import SLACK_HOME_LIMITS, SLACK_MESSAGE_LIMITS, SLACK_MODAL_LIMITS, SlackLimits
 from squid_ui.ext.slack.target_types import SlackSdkAdapter
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver, Renderer
+
+
+class MessagePayloadKwargs(TypedDict):
+    """Keyword arguments emitted for a Slack message client method."""
+
+    text: str
+    blocks: list[Block]
+
+
+@dataclass(frozen=True, slots=True)
+class MessagePayload:
+    """Screen-reader text and SDK blocks for one Slack message."""
+
+    text: str
+    blocks: tuple[Block, ...] = ()
+
+    def to_kwargs(self) -> MessagePayloadKwargs:
+        """Return message content kwargs; the caller supplies the channel and other delivery options."""
+        return {"text": self.text, "blocks": list(self.blocks)}
+
 
 type SdkText = PlainTextObject | MarkdownTextObject
 

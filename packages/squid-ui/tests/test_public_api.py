@@ -38,7 +38,7 @@ ROOT_NAMESPACES = (
 @pytest.mark.parametrize(
     ("package", "names"),
     (
-        ("authoring", ("document", "semantic", "presentations", "grids", "rosters", "tallies")),
+        ("authoring", ("document", "semantic", "presentations", "grids", "rosters")),
         ("content", ("assets", "emoji", "entity", "temporal", "text")),
         ("interactions", ("forms", "guards", "ownership")),
     ),
@@ -56,14 +56,10 @@ def test_namespaces_are_modules_not_shadowed_callables() -> None:
 
 
 def test_promoted_value_modules_do_not_shadow_their_factories() -> None:
-    """`grids`, `rosters` and `tallies` are plural precisely so they cannot do this.
-
-    `sl.grid`, `sl.roster` and `sl.tally` are factories. A submodule of the same name would be
-    bound onto the package by the import system on first import and shadow them.
-    """
-    import squid_ui.authoring.grids
-    import squid_ui.authoring.rosters
-    import squid_ui.authoring.tallies  # noqa: F401
+    """Importing authored collections preserves the matching factories."""
+    import_module("squid_ui.authoring.grids")
+    import_module("squid_ui.authoring.rosters")
+    import_module("squid_ui.factories.collections")
 
     assert callable(sl.grid) and callable(sl.roster) and callable(sl.tally)
 

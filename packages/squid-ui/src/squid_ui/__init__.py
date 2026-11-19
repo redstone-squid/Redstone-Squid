@@ -49,9 +49,6 @@ from squid_ui.authoring import (
 from squid_ui.authoring import (
     rosters as rosters,
 )
-from squid_ui.authoring import (
-    tallies as tallies,
-)
 from squid_ui.authoring.document import (
     Document,
     DocumentLike,

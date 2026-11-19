@@ -7,9 +7,8 @@ from typing import Self, overload
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
 from squid_ui.ext.html import scene
-from squid_ui.ext.html.capabilities import HtmlAdapterCapability
 from squid_ui.ext.html.composition import HtmlCompositionRules
-from squid_ui.ext.html.target_types import HtmlAdapter, HtmlTarget
+from squid_ui.ext.html.target_types import HtmlAdapter, HtmlAdapterCapability, HtmlTarget
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition_planner import RuleComposition
 from squid_ui.planning.dialect import InputPolicy, TargetComposition

@@ -17,11 +17,10 @@ from squid_ui import paragraph
 from squid_ui.content.text import Localization
 from squid_ui.ext.discord._shutdown import cleanup_outside_action
 from squid_ui.ext.discord.audience import Audience
-from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, RequestSource, SendDestination
 from squid_ui.ext.discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
-from squid_ui.ext.discord.lifetime import Lifetime
+from squid_ui.ext.discord.lifetime import CloseReason, Lifetime
 from squid_ui.ext.discord.messages.contracts import MessageRootBehaviorOptions, PauseUpdates, RenewEphemeral
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.messages.root import MessageRoot

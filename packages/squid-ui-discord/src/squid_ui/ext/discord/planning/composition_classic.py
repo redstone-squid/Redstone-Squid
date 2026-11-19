@@ -11,11 +11,10 @@ from squid_ui.content.text import resolve_text
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.capabilities import DiscordCapability
-from squid_ui.ext.discord.limits import ClassicLimits
+from squid_ui.ext.discord.limits import ClassicLimits, DiscordAxis
 from squid_ui.ext.discord.planning.composition_discord import discord_text, resolve_select, select_violations
 from squid_ui.ext.discord.planning.policy import DiscordOfferPolicy
 from squid_ui.ext.discord.planning.realizations import CardRealization, ClassicContentRealization, PremiumRealization
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning.composition import (
     CandidateComposition,
     CandidateViolation,

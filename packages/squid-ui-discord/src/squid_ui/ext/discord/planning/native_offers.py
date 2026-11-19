@@ -13,6 +13,7 @@ from squid_ui.authoring.presentations import (
 )
 from squid_ui.content.text import Text, resolve_text
 from squid_ui.ext.discord import scene
+from squid_ui.ext.discord.limits import DiscordAxis
 from squid_ui.ext.discord.planning.native import CardSlot, _timestamp_offers
 from squid_ui.ext.discord.planning.native_extensions import ComposableExtension
 from squid_ui.ext.discord.planning.policy import DiscordOfferScope
@@ -27,7 +28,6 @@ from squid_ui.ext.discord.planning.realizations import (
     ThumbnailRealization,
 )
 from squid_ui.ext.discord.primitives import nodes as primitive
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.native import NativeValue
 from squid_ui.overflow import (
     Alt,

@@ -7,8 +7,7 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui.ext.discord.delivery import EditHandle, StaleHandleError, handle_from
-from squid_ui.ext.discord.messages.authority import _MessageDelivery
+from squid_ui.ext.discord.delivery import EditHandle, StaleHandleError, _MessageDelivery, handle_from
 from squid_ui.ext.discord.messages.payload import MessagePayload
 from squid_ui.ext.discord.testing import http_error, interaction_harness
 

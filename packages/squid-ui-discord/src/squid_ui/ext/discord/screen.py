@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
 
@@ -11,11 +12,10 @@ from squid_reactivity.transactions import current_transaction
 from squid_ui.ext.discord._shutdown import cleanup_outside_action
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.audience import Private
-from squid_ui.ext.discord.closure import CloseReason
 from squid_ui.ext.discord.events import ActionEvent
+from squid_ui.ext.discord.lifetime import CloseReason
 from squid_ui.ext.discord.request import Request
 from squid_ui.ext.discord.response import Abandoned, Presented, Rejected, ResponseOverrides, ResponseSpec, invoker_only
-from squid_ui.ext.discord.screen_flow import Cancelled, Completed, ScreenCancelReason, ScreenResultEvent
 from squid_ui.ext.discord.session_specs import SessionSpec
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionEvent as PortableActionEvent
@@ -26,6 +26,38 @@ if TYPE_CHECKING:
     from squid_ui.ext.discord.facade import Scope
     from squid_ui.ext.discord.messages.root import MessageRoot
     from squid_ui.ext.discord.sessions import Session
+
+
+class ScreenCancelReason(StrEnum):
+    TIMEOUT = "timeout"
+    PARENT_CLOSED = "parent_closed"
+    SCOPE_CLOSED = "scope_closed"
+    REPLACED = "replaced"
+    CLOSED = "closed"
+    USER = "user"
+    SHUTDOWN = "shutdown"
+    FAILURE = "failure"
+
+
+@dataclass(frozen=True, slots=True)
+class Completed[ResultT]:
+    """A screen's accepted result."""
+
+    value: ResultT
+
+
+@dataclass(frozen=True, slots=True)
+class Cancelled:
+    """A screen ended without accepting a result."""
+
+    reason: ScreenCancelReason = ScreenCancelReason.CLOSED
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScreenResultEvent[ResultT](PortableActionEvent[Request[Any]]):
+    """A child result dispatched with fresh authority for the parent screen."""
+
+    value: ResultT
 
 
 @dataclass
@@ -422,4 +454,4 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
 
 Screen.__response_spec__ = Screen._screen_compile_response_spec()
 
-__all__ = ["Screen"]
+__all__ = ["Cancelled", "Completed", "Screen", "ScreenCancelReason", "ScreenResultEvent"]

@@ -9,9 +9,8 @@ from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord import V2_LIMITS as LIMITS
 from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
-from squid_ui.ext.discord.limits import Axis
+from squid_ui.ext.discord.limits import Axis, DiscordAxis
 from squid_ui.ext.discord.primitives import Never, Panel, Text, Variant, Variants
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.planning import plan
 from squid_ui.planning.resources import ResourceCost
 

@@ -4,7 +4,7 @@ import pytest
 
 from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.target_types import DiscordAdapter
-from squid_ui.ext.html.capabilities import HtmlAdapterCapability
+from squid_ui.ext.html.target_types import HtmlAdapterCapability
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost
 from squid_ui.planning.target import PreparedExtension

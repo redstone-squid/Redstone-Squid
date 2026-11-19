@@ -14,8 +14,7 @@ from squid_ui.content.text import resolve_text
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack import scene
 from squid_ui.ext.slack._forms import SlackFormRenderer, form_texts
-from squid_ui.ext.slack.limits import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.limits import SlackAxis, SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.planning import controls
 from squid_ui.planning.composition import (
     CandidateComposition,

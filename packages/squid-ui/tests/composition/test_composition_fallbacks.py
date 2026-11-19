@@ -10,9 +10,8 @@ import squid_ui.ext.html
 import squid_ui.ext.slack
 from squid_ui import scene
 from squid_ui.authoring.presentations import alternative, alternatives, budget, corresponds, equivalent
-from squid_ui.ext.discord.limits import ClassicLimits, V2Limits
+from squid_ui.ext.discord.limits import ClassicLimits, DiscordAxis, V2Limits
 from squid_ui.ext.discord.planning.discord import classic_target, components_v2_target
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan

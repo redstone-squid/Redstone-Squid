@@ -28,13 +28,13 @@ from squid_ui.sources import (
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
-from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
     source_navigation_state,
 )
 from squid_ui_widgets.browsing import BrowseSession, Movement
+from squid_ui_widgets.ranked import Projector, RankedEntry, RankedRows
 
 type SourceContentHook[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     ContentLike[RenderTargetT, ContextT] | Callable[[int | None], ContentLike[RenderTargetT, ContextT]]

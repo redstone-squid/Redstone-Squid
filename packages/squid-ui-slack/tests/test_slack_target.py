@@ -7,8 +7,8 @@ import pytest
 import squid_ui.ext.slack as slack
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.slack import scene as slack_scene
-from squid_ui.ext.slack.capabilities import SlackAdapterCapability
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.adapter import SlackAdapterCapability
+from squid_ui.ext.slack.limits import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis, ResourceCost

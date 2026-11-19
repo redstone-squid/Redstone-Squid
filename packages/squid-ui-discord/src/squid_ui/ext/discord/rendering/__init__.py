@@ -5,6 +5,6 @@ The public functions render Components V2. Classic composition uses
 """
 
 from squid_ui.ext.discord.rendering.api import render_item, render_message, render_static
-from squid_ui.ext.discord.rendering.result import RenderedMessage
+from squid_ui.ext.discord.rendering.pipeline import RenderedMessage
 
 __all__ = ["RenderedMessage", "render_item", "render_message", "render_static"]

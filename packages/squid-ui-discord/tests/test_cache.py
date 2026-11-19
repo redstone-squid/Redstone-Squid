@@ -33,7 +33,7 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.primitives import Button, Code, Paginate, Panel, Row, Text, Variant, Variants
-from squid_ui.ext.html.capabilities import HtmlAdapterCapability
+from squid_ui.ext.html.target_types import HtmlAdapterCapability
 from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.overflow import PageEvent

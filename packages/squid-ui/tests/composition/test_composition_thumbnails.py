@@ -14,7 +14,7 @@ from squid_ui.ext.discord.planning.discord import classic_target, components_v2_
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack import scene as slack_scene
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.limits import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUnsupportedError, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile

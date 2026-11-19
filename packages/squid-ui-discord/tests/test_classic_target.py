@@ -7,7 +7,7 @@ import squid_ui as sl
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V1_DPY27
 from squid_ui.ext.discord import scene as discord_scene
-from squid_ui.ext.discord.limits import CLASSIC_LIMITS
+from squid_ui.ext.discord.limits import CLASSIC_LIMITS, DiscordAxis
 from squid_ui.ext.discord.primitives import (
     Card,
     CardAuthor,
@@ -25,7 +25,6 @@ from squid_ui.ext.discord.primitives import (
     Thumbnail,
     Truncate,
 )
-from squid_ui.ext.discord.resources import DiscordAxis
 from squid_ui.ext.discord.target import classic
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError

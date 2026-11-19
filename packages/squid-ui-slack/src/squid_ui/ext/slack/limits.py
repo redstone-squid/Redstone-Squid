@@ -4,8 +4,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Any, Self
 
-from squid_ui.ext.slack.resources import SlackAxis
 from squid_ui.planning.resources import Axis
+
+
+class SlackAxis:
+    """Block Kit quantities measured by Slack composition."""
+
+    BLOCKS = Axis("blocks")
 
 
 @dataclass(frozen=True, slots=True)

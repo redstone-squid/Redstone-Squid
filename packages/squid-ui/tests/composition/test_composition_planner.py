@@ -17,7 +17,7 @@ from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.primitives import nodes as primitive
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.html import scene as html_scene
-from squid_ui.ext.slack.resources import SlackAxis
+from squid_ui.ext.slack.limits import SlackAxis
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.planning import CompositionOptions, CompositionRejectedError, PlanCache, PlanningSnapshot
 from squid_ui.planning.adapter import AdapterProfile
