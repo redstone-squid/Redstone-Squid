@@ -1,14 +1,17 @@
 """Group semantic children and define disclosure and pagination boundaries."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
 from squid_i18n import Text
+from squid_ui.authoring.document import DocumentLike, as_document
 from squid_ui.authoring.semantic import (
     CLOSED,
     Article,
     Aside,
     Block,
     Cluster,
+    Contextual,
     Details,
     DisclosureOwnership,
     Group,
@@ -21,10 +24,14 @@ from squid_ui.authoring.semantic import (
     Themed,
     Tone,
 )
+from squid_ui.boundary import Boundary
 from squid_ui.factories._inputs import ChildLike, TextValue, _children
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette, Role
 from squid_ui.target_types import RenderTarget
+
+if TYPE_CHECKING:
+    from squid_ui.layout import LayoutContext
 
 
 def group[RenderTargetT = RenderTarget, ContextT = object](
@@ -120,3 +127,20 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     """Allocate space jointly; page_size caps content units, including unbreakable rows."""
     title = Text(title)
     return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page, page_size)
+
+
+def context[R, C](
+    callback: Callable[[LayoutContext], DocumentLike[R, C]],
+    *,
+    key: str,
+    initial: DocumentLike[R, C] = (),
+    components: tuple[Boundary[R, C], ...] = (),
+) -> Contextual[R, C]:
+    if not key:
+        message = "a contextual occurrence requires a nonempty key"
+        raise ValueError(message)
+    document = as_document(initial)
+    if document.assets or document.key is not None:
+        message = "context initial content cannot declare document assets or identity"
+        raise ValueError(message)
+    return Contextual(document.children, key, callback=callback, components=components)

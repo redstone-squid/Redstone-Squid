@@ -21,7 +21,7 @@ from squid_ui.authoring.rosters import (
     RosterStatus,
     place_roster,
 )
-from squid_ui.authoring.tallies import TallyOption
+from squid_ui.factories.collections import TallyOption
 from squid_ui_widgets import guards, machines
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
 from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy

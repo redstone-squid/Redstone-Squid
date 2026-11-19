@@ -12,9 +12,9 @@ from squid_ui.routing.controls import MAX_ROUTE_ID_LENGTH as MAX_ROUTE_ID_LENGTH
 from squid_ui.routing.controls import Route as Route
 from squid_ui.routing.pattern import Converter as Converter
 from squid_ui.routing.pattern import RoutePattern as RoutePattern
+from squid_ui.routing.pattern import RouteTable as RouteTable
 from squid_ui.routing.router import Endpoint as Endpoint
 from squid_ui.routing.router import Middleware as Middleware
 from squid_ui.routing.router import Proceed as Proceed
 from squid_ui.routing.router import RouteMatch as RouteMatch
 from squid_ui.routing.router import Router as Router
-from squid_ui.routing.table import RouteTable as RouteTable

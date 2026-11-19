@@ -1,7 +1,7 @@
 """Occurrence indexes for authored UI and explicitly adapted trees."""
 
 from bisect import bisect_left
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass
 from threading import RLock
 from types import MappingProxyType
@@ -13,7 +13,7 @@ from squid_ui.boundary import Boundary
 from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tree import ComponentTree
-from squid_ui.selectors._scene import is_scene_node, scene_children
+from squid_ui.scene.base import SceneNode
 from squid_ui.target_types import Renderable
 
 # Query edges include controls and content values that layout rewriting treats as leaves.
@@ -59,13 +59,29 @@ type Children = Callable[[object], Iterable[tuple[str, object]]]
 """An adapter yields named child edges in display order; it must not render or mutate nodes."""
 
 
+def scene_children(node: object) -> Iterator[tuple[str, object]]:
+    """Follow the display fields declared by a scene node."""
+    if not isinstance(node, SceneNode):
+        return
+    for name in node.DISPLAY_FIELDS:
+        yield from _scene_values(name, getattr(node, name))
+
+
+def _scene_values(path: str, value: object) -> Iterator[tuple[str, object]]:
+    if isinstance(value, tuple):
+        for index, child in enumerate(value):
+            yield from _scene_values(f"{path}.{index}", child)
+    elif value is not None:
+        yield path, value
+
+
 def ui_children(node: object) -> Iterable[tuple[str, object]]:
     """Declared UI edges, including controls and all authored alternatives.
 
     Application records, callbacks, and state ownership objects are leaves. Custom
     trees can supply their own adapter to index_tree instead of exposing arbitrary fields.
     """
-    if is_scene_node(node):
+    if isinstance(node, SceneNode):
         yield from scene_children(node)
         return
     fields_to_visit = (

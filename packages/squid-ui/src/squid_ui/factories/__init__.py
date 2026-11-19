@@ -53,6 +53,7 @@ from squid_ui.factories.containers import (
     aside,
     block,
     cluster,
+    context,
     details,
     group,
     region,
@@ -75,7 +76,6 @@ from squid_ui.factories.content import (
     timestamp,
     zoned_timestamp,
 )
-from squid_ui.factories.contextual import context
 from squid_ui.factories.controls import (
     action_control,
     action_controls,

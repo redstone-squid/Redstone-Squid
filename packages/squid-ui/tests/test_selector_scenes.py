@@ -8,8 +8,9 @@ from squid_ui import scene as s
 from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack import scene as slack_scene
+from squid_ui.scene.base import SceneNode
 from squid_ui.selectors import index_tree, query, select
-from squid_ui.selectors._scene import is_scene_node, scene_children
+from squid_ui.selectors.tree import scene_children
 
 
 def test_discord_scene_queries_reach_nested_controls_and_options() -> None:
@@ -153,8 +154,8 @@ def test_scene_adapter_keeps_extension_payload_and_unrelated_records_opaque() ->
     tree = index_tree((Record((hidden,)), extension), children=scene_children)
 
     assert not query(tree, select(discord_scene.Text)).exists()
-    assert is_scene_node(extension)
-    assert not is_scene_node(Record((hidden,)))
+    assert isinstance(extension, SceneNode)
+    assert not isinstance(Record((hidden,)), SceneNode)
 
 
 def test_scene_adapter_does_not_reconstruct_nodes_and_preserves_occurrences() -> None:

@@ -16,7 +16,7 @@ from squid_ui.authoring.presentations import (
     SemanticRef,
 )
 from squid_ui.content.text import TextLike, resolve_text
-from squid_ui.factories.contextual import context as contextual
+from squid_ui.factories.containers import context as contextual
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.layout import Known, LayoutContext

@@ -6,7 +6,6 @@ traces and timing summaries; snapshot returns immutable values for inspection or
 export. NoOpProfiler accepts the same instrumentation when profiling is disabled.
 """
 
-from squid_ui.profiling.export import snapshot_json
 from squid_ui.profiling.model import (
     ActionStatus,
     ActiveSpanSnapshot,
@@ -35,6 +34,7 @@ from squid_ui.profiling.model import (
     TraceLink,
     TraceResult,
     TraceStatus,
+    snapshot_json,
 )
 from squid_ui.profiling.profiler import (
     DetachedSpanRecorder,

@@ -7,7 +7,7 @@ from typing import Any, Concatenate, cast, get_type_hints, overload
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.routing.address import AddressParts, AddressRoute, InvalidAddress
-from squid_ui.routing.table import RouteTable
+from squid_ui.routing.pattern import RouteTable
 
 type Proceed = Callable[[], Awaitable[Any]]
 type Middleware[Context] = Callable[[Context, RouteMatch[Context], Proceed], Awaitable[Any]]

@@ -7,6 +7,7 @@ are rejected before the shared control rules run.
 from collections.abc import Callable
 from typing import NoReturn
 
+from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord.limits import MessageLimits
 from squid_ui.ext.discord.primitives.nodes import (
@@ -25,8 +26,6 @@ from squid_ui.ext.discord.primitives.nodes import (
     Variants,
 )
 from squid_ui.overflow import Paginate
-from squid_ui.planning.resolved import optional_text as resolved_optional_text
-from squid_ui.planning.resolved import text as resolved_text
 
 type Walk = Callable[[Node, str], None]
 """How a dialect re-enters its own validator for a child it owns."""
@@ -134,3 +133,16 @@ def validate_component(node: Node, path: str, *, limits: MessageLimits, walk: Wa
                     walk(child, f"{path}.variant.{index}.{child_index}")
         case _:
             return
+
+
+def resolved_text(value: TextLike) -> str:
+    """Return lowered text, rejecting a primitive that escaped semantic resolution."""
+    if not isinstance(value, str):
+        message = f"semantic lowering left {type(value).__name__} text unresolved"
+        raise LayoutInvariantError(message)
+    return value
+
+
+def resolved_optional_text(value: TextLike | None) -> str | None:
+    """Return optional lowered text, rejecting an unresolved value."""
+    return None if value is None else resolved_text(value)
