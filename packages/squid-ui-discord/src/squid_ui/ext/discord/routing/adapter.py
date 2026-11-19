@@ -11,27 +11,34 @@ from squid_ui.ext.discord.request import Request, request
 from squid_ui.ext.discord.routing._dispatch import handle_error
 from squid_ui.factories import paragraph
 from squid_ui.profiling import NoOpProfiler, OperationKind, Profiler, TraceResult, TraceStatus
-from squid_ui.routing import InvalidAddress, Router
+from squid_ui.routing import InvalidAddress, MountedRouter, Router
 
-_INSTALLED: weakref.WeakKeyDictionary[discord.Client, Router[Request[Any, Any]]] = weakref.WeakKeyDictionary()
+_INSTALLED: weakref.WeakKeyDictionary[discord.Client, Router[Request[Any, Any]] | MountedRouter[Request[Any, Any]]] = (
+    weakref.WeakKeyDictionary()
+)
 _NOOP_PROFILER = NoOpProfiler()
 
 
-def installed_router(client: discord.Client) -> Router[Request[Any, Any]] | None:
+def installed_router(client: discord.Client) -> Router[Request[Any, Any]] | MountedRouter[Request[Any, Any]] | None:
     """Return the UI router attached to this client's persistent address adapter."""
     return _INSTALLED.get(client)
 
 
 def install[Bot: discord.Client](
-    router: Router[Request[Any, Bot]], client: Bot, *, on_error: ErrorHook, profiler: Profiler = _NOOP_PROFILER
+    router: Router[Request[Any, Bot]] | MountedRouter[Request[Any, Bot]],
+    client: Bot,
+    *,
+    on_error: ErrorHook,
+    profiler: Profiler = _NOOP_PROFILER,
 ) -> None:
-    """Install one address dispatcher after endpoint modules have been imported."""
+    """Install one address dispatcher for this client."""
     if existing := _INSTALLED.get(client):
         if existing is not router:
             message = "This client already has a UI router"
             raise ValueError(message)
         return
-    router.freeze()
+    if isinstance(router, Router):
+        router.freeze()
 
     class AddressControl(discord.ui.DynamicItem[discord.ui.Item[Any]], template=r"ui:.*"):
         @classmethod

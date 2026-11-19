@@ -92,7 +92,23 @@ class _Declare[Context]:
         return self.router._register(self.path, handler, self.fragment, self.policy, self.group)
 
 
-class Router[Context]:
+class AddressRegistry[Context]:
+    """Resolve addresses against the currently registered endpoints."""
+
+    def __init__(self) -> None:
+        self._table = RouteTable[Endpoint[Context, ...]]()
+
+    def resolve(self, address: str) -> RouteMatch[Context]:
+        parts = AddressParts.parse(address)
+        found = self._table.match(parts.path[1:])
+        if found is None:
+            message = "Unknown UI address"
+            raise InvalidAddress(message)
+        endpoint, arguments = found
+        return RouteMatch(endpoint, endpoint.address_route.decode(parts, arguments))
+
+
+class Router[Context](AddressRegistry[Context]):
     """Own endpoint identities, typed addresses, and the middleware invocation chain.
 
     Freeze after importing endpoint modules. Redeclaration replaces handlers on stable
@@ -101,8 +117,8 @@ class Router[Context]:
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._endpoints: dict[str, Endpoint[Context, ...]] = {}
-        self._table = RouteTable[Endpoint[Context, ...]]()
         self._middleware: list[Middleware[Context]] = []
         self._groups: dict[str, RouteGroup[Context]] = {}
         self._frozen = False
@@ -146,15 +162,6 @@ class Router[Context]:
 
     def endpoints(self) -> tuple[Endpoint[Context, ...], ...]:
         return tuple(self._endpoints.values())
-
-    def resolve(self, address: str) -> RouteMatch[Context]:
-        parts = AddressParts.parse(address)
-        found = self._table.match(parts.path[1:])
-        if found is None:
-            message = "Unknown UI address"
-            raise InvalidAddress(message)
-        endpoint, arguments = found
-        return RouteMatch(endpoint, endpoint.address_route.decode(parts, arguments))
 
     async def dispatch(self, request: Context, match: RouteMatch[Context]) -> Any:
         endpoint = match.endpoint
@@ -214,3 +221,35 @@ class RouteGroup[Context]:
         if key is not None:
             self._middleware_keys[key] = len(self.middleware)
         self.middleware.append(middleware)
+
+
+class MountedRouter[Context](AddressRegistry[Context]):
+    """Publish extension-owned endpoints as one address table per client."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._extensions: dict[str, tuple[Endpoint[Context, ...], ...]] = {}
+
+    def mount(self, extension: str, *endpoints: Endpoint[Context, ...]) -> None:
+        if extension in self._extensions:
+            message = f"Routes already mounted for {extension}"
+            raise ValueError(message)
+        self._replace({**self._extensions, extension: endpoints})
+
+    def unmount(self, extension: str) -> None:
+        if extension in self._extensions:
+            self._replace({key: value for key, value in self._extensions.items() if key != extension})
+
+    def _replace(self, extensions: dict[str, tuple[Endpoint[Context, ...], ...]]) -> None:
+        table = RouteTable[Endpoint[Context, ...]]()
+        for endpoints in extensions.values():
+            for endpoint in endpoints:
+                table.add(endpoint.address_route.pattern, endpoint)
+        self._extensions = extensions
+        self._table = table
+
+    def endpoints(self) -> tuple[Endpoint[Context, ...], ...]:
+        return tuple(endpoint for routes in self._extensions.values() for endpoint in routes)
+
+    async def dispatch(self, request: Context, match: RouteMatch[Context]) -> Any:
+        return await match.endpoint.router.dispatch(request, match)

@@ -15,6 +15,7 @@ from squid_ui.routing.pattern import RoutePattern as RoutePattern
 from squid_ui.routing.pattern import RouteTable as RouteTable
 from squid_ui.routing.router import Endpoint as Endpoint
 from squid_ui.routing.router import Middleware as Middleware
+from squid_ui.routing.router import MountedRouter as MountedRouter
 from squid_ui.routing.router import Proceed as Proceed
 from squid_ui.routing.router import RouteMatch as RouteMatch
 from squid_ui.routing.router import Router as Router
