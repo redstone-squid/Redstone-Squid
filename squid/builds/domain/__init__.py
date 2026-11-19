@@ -23,6 +23,7 @@ from squid.builds.domain.models import (
     parse_time_string,
     sort_restrictions,
 )
+from squid.builds.domain.showcase import ShowcaseTag, read_showcase_tags
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS, RestrictionField, UnresolvedTaxonomy, normalize_tag_name
 
 __all__ = [
@@ -49,11 +50,13 @@ __all__ = [
     "RestrictionField",
     "RestrictionTypeLiteral",
     "ServerInfo",
+    "ShowcaseTag",
     "Status",
     "UnresolvedTaxonomy",
     "creator_names",
     "name_credits",
     "normalize_tag_name",
     "parse_time_string",
+    "read_showcase_tags",
     "sort_restrictions",
 ]
