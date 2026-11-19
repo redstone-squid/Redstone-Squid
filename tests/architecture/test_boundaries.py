@@ -498,6 +498,19 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
     assert violations == []
 
 
+def test_core_features_are_independent_of_process_entry_points() -> None:
+    (
+        archrule("shared features stay independent of the processes that run them")
+        .match("squid.core*")
+        .should_not_import("squid.api*")
+        .should_not_import("squid.bot*")
+        .should_not_import("squid.worker*")
+        .should_not_import("squid.bootstrap")
+        .should_not_import("squid.runtime")
+        .check("squid", only_direct_imports=True)
+    )
+
+
 def test_exception_model_imports_no_transport() -> None:
     (
         archrule("application exceptions stay independent from transport adapters")
