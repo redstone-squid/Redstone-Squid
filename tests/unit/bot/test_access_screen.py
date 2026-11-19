@@ -1,11 +1,11 @@
 """Access forms keep the revision displayed before a modal or confirmation opens."""
 
-from typing import cast
-from unittest.mock import AsyncMock
+from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import squid_ui.ext.discord as sd
+import squid_ui as sl
 from squid.bot.access_view import AccessScreen
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -23,14 +23,14 @@ from squid.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
 from squid.permissions.domain.catalogue import PERM_GRANT_GUILD
 from squid.permissions.models import PermissionRole
 from squid_ui.runtime import transaction
-from squid_ui.testing import RecordingResponder, submit_event
+from squid_ui.testing import RecordingResponder, choice_event, submit_event
 from tests.support.edits import bound_revisions
 from tests.support.grants import grants
 
 
-def submission(**values: object) -> sd.SubmitEvent:
+def submission(**values: object) -> sl.SubmitEvent[Any]:
     defaults = {"operation": "allow", "pattern": "squid.perm.node.view", "scope": "guild", "reason": ""}
-    return cast(sd.SubmitEvent, submit_event(values or defaults))
+    return submit_event(values or defaults)
 
 
 async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_history() -> None:
@@ -171,3 +171,33 @@ async def test_role_creation_derives_available_slug(name: str, expected: str) ->
     event = submission(name=name, slug=None, rank=0, scope="guild")
     await screen._create_role(event, base_revision=7)
     assert saved.call_args.args[1].slug == expected
+
+
+async def test_rule_form_keeps_subject_and_scope_after_switching_targets() -> None:
+    admin = AsyncMock(spec=PermissionAdministrationService)
+    admin.revision.return_value = 7
+    screen = AccessScreen(
+        admin,
+        AsyncMock(spec=EditRunner),
+        guild_id=42,
+        account_id=2,
+        discord_role_id=None,
+        subject_label="Member",
+        grants=grants(PERM_GRANT_GUILD),
+        actor=AsyncMock(),
+    )
+    screen._save = saved = AsyncMock()
+    await screen.on_load()
+    controls = next(node for node in screen._subject_forms() if isinstance(node, sl.semantic.ActionControls))
+    original = next(item for item in controls.items if isinstance(item, sl.semantic.FormTrigger))
+    selection = MagicMock()
+    selection.selected = (sl.entity.EntityRef(sl.entity.EntityKind.ROLE, 99),)
+    selection.context.guild.get_role.return_value.id = 99
+    selection.context.guild.get_role.return_value.name = "Moderators"
+    with transaction():
+        await screen._change_subject(selection)
+        await screen._change_scope(choice_event("global"))
+        await original.on_submit(submission())
+    previous = saved.call_args.args[1]
+    assert (previous.account_id, previous.discord_role_id, previous.scope_guild_id) == (2, None, 42)
+    assert (screen._account_id, screen._discord_role_id, screen._scope_id) == (None, 99, None)

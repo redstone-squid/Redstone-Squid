@@ -13,10 +13,11 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
+from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
+from squid.permissions.application.administration import PermissionAdministrationService, effect_label
 from squid.permissions.application.edits import (
     ASSIGNMENT_EDIT,
     GRANT_EDIT,
@@ -65,6 +66,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     """
 
     policy = sd.ResponseSpec(nav=sd.navigation_controls.page_jump_nav, timeout=300, session=sd.SessionSpec("access"))
+    _account_id: int | None = sl.state(None)
+    _discord_role_id: int | None = sl.state(None)
+    _subject_label: str = sl.state("")
+    _scope_key: str = sl.state("guild")
     _selected_pattern: tuple[str, int] | None = sl.state(None)
     _selected_role: tuple[PermissionRole, int] | None = sl.state(None)
     _revision: int = sl.state(default=0)
@@ -115,33 +120,95 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 guild_id=self._guild_id,
             )
             tabs.append(
-                sp.Tab("subject", tr(t"access-view-subject = Subject"), self._subject_browser(rules, assignments))
+                sp.Tab(
+                    "subject",
+                    tr(t"access-current = Current access"),
+                    (
+                        *self._target_controls(),
+                        self._subject_browser(
+                            tuple(row for row in rules if row.scope_guild_id == self._scope_id),
+                            tuple(row for row in assignments if row.scope_guild_id == self._scope_id),
+                        ),
+                    ),
+                )
             )
         subject_forms = self._subject_forms()
         if subject_forms:
             tabs.append(
                 sp.Tab(
                     "assignments",
-                    tr(t"access-view-rules-and-assignments = Rules and assignments"),
-                    subject_forms,
+                    tr(t"access-edit = Change access"),
+                    (*self._target_controls(), *subject_forms),
                 )
             )
         if self._may_manage_roles:
             roles = await self._admin.roles(guild_id=self._guild_id)
-            tabs.append(sp.Tab("roles", tr(t"access-view-internal-roles = Internal roles"), self._role_browser(roles)))
-            tabs.append(sp.Tab("role-editor", tr(t"access-view-edit-roles = Edit roles"), self._role_forms()))
+            tabs.append(
+                sp.Tab("roles", tr(t"access-view-internal-roles = Manage bot roles"), self._role_browser(roles))
+            )
+            tabs.append(sp.Tab("role-editor", tr(t"access-create-role-tab = Create a bot role"), self._role_forms()))
         if PERM_NODE_VIEW in self.grants:
-            tabs.append(sp.Tab("catalogue", tr(t"access-view-catalogue = Catalogue"), self._catalogue()))
+            tabs.append(sp.Tab("catalogue", tr(t"access-permission-list = Permission reference"), self._catalogue()))
         if PERM_AUDIT_VIEW in self.grants:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
-            tabs.append(sp.Tab("audit", tr(t"access-view-audit = Audit"), self._audit(audit)))
-        subject_label = self._subject_label
+            tabs.append(sp.Tab("audit", tr(t"access-history = Change history"), self._audit(audit)))
         self._tabs = sp.Tabs(
             tabs,
             key="access-tabs",
-            title=md_tr(t"access-view-access-for = Access for {subject_label}"),
+            title=tr(t"access-workspace = Manage bot access"),
             initial_state=None if self._tabs is None else self._tabs.machine_state,
         )
+
+    @property
+    def _scope_id(self) -> int | None:
+        return _scope(self._scope_key, self._guild_id)
+
+    def _target_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        subject = self._subject_label
+        return (
+            sl.heading(md_tr(t"access-target = Access for {subject}")),
+            sl.entities(
+                key="access-target",
+                entity_type=sl.entity.EntityType.MENTIONABLE,
+                selection=sl.controlled((), self._change_subject),
+                placeholder=tr(t"access-target-picker = Choose a member or Discord role"),
+            ),
+            sl.choices(
+                sl.choice(tr(t"access-view-this-server = This server"), key="guild"),
+                sl.choice(tr(t"access-all-servers = All servers"), key="global"),
+                key="access-scope",
+                selection=sl.controlled((self._scope_key,), self._change_scope),
+            ),
+        )
+
+    async def _change_subject(self, event: sl.EntityEvent[sd.Request[Any, RedstoneSquid]]) -> None:
+        target = event.selected[0]
+        guild = event.context.guild
+        if guild is None or not isinstance(target.id, int):
+            return
+        if target.kind is sl.entity.EntityKind.ROLE:
+            role = guild.get_role(target.id)
+            if role is None:
+                await event.notice(tr(t"access-role-unavailable = That role is no longer available."))
+                return
+            self._account_id, self._discord_role_id = None, role.id
+            self._subject_label = role.name
+        else:
+            account = await get_or_create_discord_account_id(event.context.client.services.accounts, target.id)
+            self._account_id, self._discord_role_id = account, None
+            member = guild.get_member(target.id)
+            self._subject_label = member.display_name if member else f"<@{target.id}>"
+        await self._reset_selection()
+
+    async def _change_scope(self, event: sl.ChoiceEvent) -> None:
+        self._scope_key = event.selected[0]
+        await self._reset_selection()
+
+    async def _reset_selection(self) -> None:
+        self._selected_role = None
+        self._selected_pattern = None
+        self.edits.forget((PERMISSION_GRAPH.identity,))
+        await self._refresh()
 
     @property
     def _may_grant(self) -> bool:
@@ -180,15 +247,23 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=_subject_item_label,
             summary=_subject_item_summary,
             detail=_subject_item_detail,
-            page_size=15,
-            title=tr(t"access-view-rules-and-assignments = Rules and assignments"),
-            empty=tr(t"access-subject-rules-empty = This subject has no explicit access rules or internal roles."),
+            page_size=8,
+            title=tr(t"access-view-rules-and-assignments = Direct rules and assigned bot roles"),
+            empty=tr(
+                t"access-subject-rules-empty = No direct rules or bot roles here. Access can still come from defaults or Discord roles."
+            ),
         )
 
     def _subject_forms(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._may_grant or self._may_manage_roles):
             return ()
+        target = (self._account_id, self._discord_role_id, self._scope_id)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+            sl.note(
+                tr(
+                    t"access-edit-guide = Choose a permission to change one action. A bot role groups permissions you can assign together."
+                )
+            ),
             sl.action_controls(
                 self._may_grant
                 and sl.action_control(
@@ -198,17 +273,17 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 ),
                 self._may_manage_roles
                 and sl.action_control(
-                    tr(t"access-choose-role = Choose internal role"), self._choose_role, key="choose-role"
+                    tr(t"access-choose-role = Choose a bot role"), self._choose_role, key="choose-role"
                 ),
                 self._may_grant
                 and sl.form(
                     tr(t"access-custom-pattern = Custom permission pattern"),
                     self._rule_form(),
                     key="custom-pattern",
-                    on_submit=partial(self._change_rule, base_revision=self._revision),
+                    on_submit=partial(self._change_rule, target=target, base_revision=self._revision),
                 ),
                 key="subject-forms",
-            )
+            ),
         ]
         if self._may_grant and self._selected_pattern is not None:
             pattern, revision = self._selected_pattern
@@ -216,10 +291,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 (
                     sl.note(pattern),
                     sl.form(
-                        tr(t"access-view-change-direct-rule = Change direct rule"),
+                        tr(t"access-view-change-direct-rule = Set or remove this permission"),
                         _without(_RuleForm().spec(), "pattern"),
                         key="rule",
-                        on_submit=partial(self._change_rule, base_revision=revision, pattern=pattern),
+                        on_submit=partial(self._change_rule, target=target, base_revision=revision, pattern=pattern),
                     ),
                 )
             )
@@ -229,10 +304,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 (
                     sl.note(role.name),
                     sl.form(
-                        tr(t"access-view-change-role-assignment = Change role assignment"),
+                        tr(t"access-view-change-role-assignment = Assign or remove this role"),
                         _without(_AssignmentForm().spec(), "slug"),
                         key="assignment",
-                        on_submit=partial(self._change_assignment, base_revision=revision, role=role),
+                        on_submit=partial(self._change_assignment, target=target, base_revision=revision, role=role),
                     ),
                 )
             )
@@ -260,7 +335,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._selected_role = (role, revision)
             await self._refresh()
 
-        await pick(event, "permission_role_ids", tr(t"access-choose-role = Choose internal role"), selected)
+        await pick(event, "permission_role_ids", tr(t"access-choose-role = Choose a bot role"), selected)
 
     @staticmethod
     def _rule_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
@@ -281,8 +356,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda role: role.name,
             summary=_role_summary,
             detail=lambda role: self._role_editor(role, roles),
-            page_size=15,
-            title=tr(t"access-view-internal-roles = Internal roles"),
+            page_size=8,
+            title=tr(t"access-view-internal-roles = Manage bot roles"),
             empty=tr(t"access-role-list-empty = No internal roles are visible in this server."),
         )
 
@@ -440,11 +515,11 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda node: node.name,
             summary=lambda node: f"{node.scope.value} · {node.default.value}",
             detail=lambda node: sl.fields(
-                sl.field(tr(t"access-view-scope = Scope"), node.scope.value),
+                sl.field(tr(t"access-view-scope = Where this applies"), node.scope.value),
                 sl.field(tr(t"access-view-default = Default"), node.default.value),
                 sl.field(tr(t"access-view-description = Description"), node.description),
             ),
-            page_size=15,
+            page_size=8,
             title=tr(t"access-view-permission-catalogue = Permission catalogue"),
             empty=tr(t"access-permission-catalogue-empty = No permission nodes are registered."),
         )
@@ -460,7 +535,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda row: row.action,
             summary=_audit_summary,
             detail=_audit_detail,
-            page_size=15,
+            page_size=8,
             title=tr(t"access-view-permission-audit = Permission audit"),
             empty=tr(t"access-audit-empty = No permission changes are recorded for this server."),
         )
@@ -472,8 +547,14 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @requires_grant(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, denied=_DENIED)
     async def _change_rule(
-        self, event: sl.SubmitEvent, *, base_revision: int | None = None, pattern: str | None = None
+        self,
+        event: sl.SubmitEvent,
+        *,
+        target: tuple[int | None, int | None, int | None] | None = None,
+        base_revision: int | None = None,
+        pattern: str | None = None,
     ) -> None:
+        account, discord_role, scope = target or (self._account_id, self._discord_role_id, self._scope_id)
         effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(
             str(event.values["operation"])
         )
@@ -483,10 +564,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             GrantValues(
                 pattern=pattern or str(event.values["pattern"]),
                 effect=effect,
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
+                account_id=account,
+                discord_role_id=discord_role,
                 guild_id=self._guild_id,
-                scope_guild_id=_scope(str(event.values["scope"]), self._guild_id),
+                scope_guild_id=scope,
                 reason=str(event.values.get("reason") or "") or None,
             ),
             base_revision,
@@ -496,8 +577,14 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
     async def _change_assignment(
-        self, event: sl.SubmitEvent, *, base_revision: int | None = None, role: PermissionRole | None = None
+        self,
+        event: sl.SubmitEvent,
+        *,
+        target: tuple[int | None, int | None, int | None] | None = None,
+        base_revision: int | None = None,
+        role: PermissionRole | None = None,
     ) -> None:
+        account, discord_role, scope = target or (self._account_id, self._discord_role_id, self._scope_id)
         if role is None:
             role = await self._admin.role(str(event.values["slug"]), guild_id=self._guild_id)
         label = tr(t"access-view-internal-role-assignment-updated = Internal role assignment updated.")
@@ -506,10 +593,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             AssignmentValues(
                 role_id=role.id,
                 present=event.values["operation"] == "assign",
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
+                account_id=account,
+                discord_role_id=discord_role,
                 guild_id=self._guild_id,
-                scope_guild_id=_scope(str(event.values["scope"]), self._guild_id),
+                scope_guild_id=scope,
                 reason=str(event.values.get("reason") or "") or None,
             ),
             base_revision,
@@ -565,16 +652,17 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await event.source.notice(label)
 
 
-def _without(form: sl.forms.FormSpec[sd.Request[Any, Any]], key: str) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
+def _without(form: sl.forms.FormSpec[sd.Request[Any, Any]], *keys: str) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
     return replace(
-        form, items=tuple(item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != key)
+        form,
+        items=tuple(item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key not in keys),
     )
 
 
 def _scope_field() -> sl.forms.ChoiceField[str]:
     return sl.forms.ChoiceField(
         key="scope",
-        label=tr(t"access-view-scope = Scope"),
+        label=tr(t"access-view-scope = Where this applies"),
         default="guild",
         options=(
             sl.forms.ChoiceOption("guild", tr(t"access-view-this-server = This server"), "guild"),
@@ -593,8 +681,8 @@ def _subject_item_label(row: PermissionGrant | PermissionRoleAssignment) -> str:
 
 def _subject_item_summary(row: PermissionGrant | PermissionRoleAssignment) -> str:
     if isinstance(row, PermissionGrant):
-        return f"{effect_label(row.effect)} · {scope_label(row.scope_guild_id)}"
-    return f"internal role · {scope_label(row.scope_guild_id)}"
+        return effect_label(row.effect)
+    return "Assigned bot role"
 
 
 def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.semantic.Fields:
@@ -602,12 +690,18 @@ def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.
         return sl.fields(
             sl.field(tr(t"access-view-effect = Effect"), effect_label(row.effect)),
             sl.field(tr(t"access-view-pattern = Pattern"), row.pattern),
-            sl.field(tr(t"access-view-scope = Scope"), scope_label(row.scope_guild_id)),
+            sl.field(
+                tr(t"access-view-scope = Where this applies"),
+                "All servers" if row.scope_guild_id is None else "This server",
+            ),
             sl.field(tr(t"access-view-reason = Reason"), row.reason or "—"),
         )
     return sl.fields(
         sl.field(tr(t"access-view-internal-role = Internal role"), row.role_slug),
-        sl.field(tr(t"access-view-scope = Scope"), scope_label(row.scope_guild_id)),
+        sl.field(
+            tr(t"access-view-scope = Where this applies"),
+            "All servers" if row.scope_guild_id is None else "This server",
+        ),
     )
 
 
@@ -623,7 +717,7 @@ def _role_detail(role: PermissionRole, roles: tuple[PermissionRole, ...]) -> sl.
         sl.field(tr(t"access-view-includes = Includes"), ", ".join(role.includes) or "—"),
         sl.field(tr(t"access-view-excludes = Excludes"), ", ".join(role.excludes) or "—"),
         sl.field(
-            tr(t"access-view-composed-roles = Composed roles"),
+            tr(t"access-view-composed-roles = Also grants these bot roles"),
             ", ".join(by_id[item] for item in role.includes_roles if item in by_id) or "—",
         ),
     )
@@ -657,16 +751,17 @@ class _RuleForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-change-direct-permission-rule = Change direct permission rule")
 
     operation = sl.forms.ChoiceField(
-        label=tr(t"access-view-operation = Operation"),
+        label=tr(t"access-view-operation = What should change?"),
         options=(
             sl.forms.ChoiceOption("allow", tr(t"access-view-allow = Allow"), "allow"),
             sl.forms.ChoiceOption("deny", tr(t"access-view-deny = Deny"), "deny"),
-            sl.forms.ChoiceOption("forbid", tr(t"access-view-forbid = Forbid"), "forbid"),
-            sl.forms.ChoiceOption("revoke", tr(t"access-view-revoke = Revoke"), "revoke"),
+            sl.forms.ChoiceOption(
+                "forbid", tr(t"access-view-forbid = Always deny, even if another rule allows"), "forbid"
+            ),
+            sl.forms.ChoiceOption("revoke", tr(t"access-view-revoke = Remove this rule"), "revoke"),
         ),
     )
     pattern = sl.forms.TextField(label=tr(t"access-view-permission-pattern = Permission pattern"), maximum=200)
-    scope = _scope_field()
     reason = sl.forms.TextField(label=tr(t"access-view-reason = Reason"), required=False, maximum=500)
 
 
@@ -674,14 +769,13 @@ class _AssignmentForm(sl.forms.Form[sd.Request[Any, Any]]):
     title = tr(t"access-view-change-internal-role-assignment = Change internal role assignment")
 
     operation = sl.forms.ChoiceField(
-        label=tr(t"access-view-operation = Operation"),
+        label=tr(t"access-view-operation = What should change?"),
         options=(
             sl.forms.ChoiceOption("assign", tr(t"access-view-assign = Assign"), "assign"),
             sl.forms.ChoiceOption("unassign", tr(t"access-view-unassign = Unassign"), "unassign"),
         ),
     )
     slug = sl.forms.TextField(label=tr(t"access-view-internal-role-slug = Internal role slug"), maximum=100)
-    scope = _scope_field()
     reason = sl.forms.TextField(label=tr(t"access-view-reason = Reason"), required=False, maximum=500)
 
 
@@ -716,6 +810,6 @@ class _RolePatternForm(sl.forms.Form[sd.Request[Any, Any]]):
         maximum=200,
     )
     operation = sl.forms.ChoiceField(
-        label=tr(t"access-view-operation = Operation"),
+        label=tr(t"access-view-operation = What should change?"),
         options=tuple(sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS[:3]),
     )

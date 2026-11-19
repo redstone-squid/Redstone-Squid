@@ -1,209 +1,224 @@
-# squid/bot/access_view.py:465
+# squid/bot/access_view.py:178
+access-all-servers = All servers
+
+# squid/bot/access_view.py:540
 access-audit-empty = No permission changes are recorded for this server.
 
-# squid/bot/access_view.py:424
+# squid/bot/access_view.py:499
 access-cancel = Cancel
 
-# squid/bot/access_view.py:56
+# squid/bot/access_view.py:57
 access-change-forbidden = You are no longer allowed to change access controls.
 
-# squid/bot/access_view.py:195, squid/bot/access_view.py:248
+# squid/bot/access_view.py:270, squid/bot/access_view.py:323
 access-choose-permission = Choose permission
 
-# squid/bot/access_view.py:201, squid/bot/access_view.py:263
-access-choose-role = Choose internal role
+# squid/bot/access_view.py:276, squid/bot/access_view.py:338
+access-choose-role = Choose a bot role
 
-# squid/bot/access_view.py:205, squid/bot/access_view.py:340, squid/bot/access_view.py:709
+# squid/bot/access_view.py:149
+access-create-role-tab = Create a bot role
+
+# squid/bot/access_view.py:125
+access-current = Current access
+
+# squid/bot/access_view.py:280, squid/bot/access_view.py:415, squid/bot/access_view.py:803
 access-custom-pattern = Custom permission pattern
 
-# squid/bot/access_view.py:713
+# squid/bot/access_view.py:807
 access-custom-pattern-help = For example, build.*.view matches view permissions across build resources.
 
-# squid/bot/access_view.py:449
+# squid/bot/access_view.py:140
+access-edit = Change access
+
+# squid/bot/access_view.py:263
+access-edit-guide = Choose a permission to change one action. A bot role groups permissions you can assign together.
+
+# squid/bot/access_view.py:154
+access-history = Change history
+
+# squid/bot/access_view.py:524
 access-permission-catalogue-empty = No permission nodes are registered.
 
-# squid/bot/access_view.py:421
+# squid/bot/access_view.py:151
+access-permission-list = Permission reference
+
+# squid/bot/access_view.py:496
 access-role-delete-warning = Deleting an internal role removes every assignment of it.
 
-# squid/bot/access_view.py:286
+# squid/bot/access_view.py:361
 access-role-list-empty = No internal roles are visible in this server.
 
-# squid/bot/access_view.py:258, squid/bot/access_view.py:387
+# squid/bot/access_view.py:192, squid/bot/access_view.py:333, squid/bot/access_view.py:462
 access-role-unavailable = That role is no longer available.
 
-# squid/bot/access_view.py:185
-access-subject-rules-empty = This subject has no explicit access rules or internal roles.
+# squid/bot/access_view.py:252
+access-subject-rules-empty = No direct rules or bot roles here. Access can still come from defaults or Discord roles.
 
-# squid/bot/access_view.py:142
-access-view-access-for = Access for { $subject_label }
+# squid/bot/access_view.py:169
+access-target = Access for { $subject }
 
-# squid/bot/access_view.py:638
+# squid/bot/access_view.py:174
+access-target-picker = Choose a member or Discord role
+
+# squid/bot/access_view.py:732
 access-view-action = Action
 
-# squid/bot/access_view.py:641
+# squid/bot/access_view.py:735
 access-view-actor-account = Actor account
 
-# squid/bot/access_view.py:662
+# squid/bot/access_view.py:756
 access-view-allow = Allow
 
-# squid/bot/access_view.py:679
+# squid/bot/access_view.py:774
 access-view-assign = Assign
 
-# squid/bot/access_view.py:137
-access-view-audit = Audit
-
-# squid/bot/access_view.py:134
-access-view-catalogue = Catalogue
-
-# squid/bot/access_view.py:657
+# squid/bot/access_view.py:751
 access-view-change-direct-permission-rule = Change direct permission rule
 
-# squid/bot/access_view.py:219
-access-view-change-direct-rule = Change direct rule
+# squid/bot/access_view.py:294
+access-view-change-direct-rule = Set or remove this permission
 
-# squid/bot/access_view.py:674
+# squid/bot/access_view.py:769
 access-view-change-internal-role-assignment = Change internal role assignment
 
-# squid/bot/access_view.py:232
-access-view-change-role-assignment = Change role assignment
+# squid/bot/access_view.py:307
+access-view-change-role-assignment = Assign or remove this role
 
-# squid/bot/access_view.py:626
-access-view-composed-roles = Composed roles
+# squid/bot/access_view.py:720
+access-view-composed-roles = Also grants these bot roles
 
-# squid/bot/access_view.py:293, squid/bot/access_view.py:689
+# squid/bot/access_view.py:368, squid/bot/access_view.py:783
 access-view-create-internal-role = Create internal role
 
-# squid/bot/access_view.py:537
+# squid/bot/access_view.py:624
 access-view-created-internal-role = Created internal role **{ $slug }**.
 
-# squid/bot/access_view.py:444
+# squid/bot/access_view.py:519
 access-view-default = Default
 
-# squid/bot/access_view.py:162
+# squid/bot/access_view.py:229
 access-view-delete-and-its-assignments = Delete **{ $slug }** and its assignments?
 
-# squid/bot/access_view.py:160
+# squid/bot/access_view.py:227
 access-view-delete-internal-role = Delete internal role
 
-# squid/bot/access_view.py:332, squid/bot/access_view.py:423, squid/bot/access_view.py:652
+# squid/bot/access_view.py:407, squid/bot/access_view.py:498, squid/bot/access_view.py:746
 access-view-delete-role = Delete role
 
-# squid/bot/access_view.py:563
+# squid/bot/access_view.py:650
 access-view-deleted-internal-role = Deleted internal role **{ $slug }**.
 
-# squid/bot/access_view.py:663
+# squid/bot/access_view.py:757
 access-view-deny = Deny
 
-# squid/bot/access_view.py:445
+# squid/bot/access_view.py:520
 access-view-description = Description
 
-# squid/bot/access_view.py:480
+# squid/bot/access_view.py:561
 access-view-direct-permission-rule-updated = Direct permission rule updated.
 
-# squid/bot/access_view.py:697
+# squid/bot/access_view.py:791
 access-view-display-name = Display name
 
-# squid/bot/access_view.py:132
-access-view-edit-roles = Edit roles
-
-# squid/bot/access_view.py:603
+# squid/bot/access_view.py:691
 access-view-effect = Effect
 
-# squid/bot/access_view.py:581
+# squid/bot/access_view.py:669
 access-view-everywhere = Everywhere
 
-# squid/bot/access_view.py:647
+# squid/bot/access_view.py:741
 access-view-exclude-pattern = Exclude pattern
 
-# squid/bot/access_view.py:624
+# squid/bot/access_view.py:718
 access-view-excludes = Excludes
 
-# squid/bot/access_view.py:664
-access-view-forbid = Forbid
+# squid/bot/access_view.py:759
+access-view-forbid = Always deny, even if another rule allows
 
-# squid/bot/access_view.py:646
+# squid/bot/access_view.py:740
 access-view-include-pattern = Include pattern
 
-# squid/bot/access_view.py:649
+# squid/bot/access_view.py:743
 access-view-include-role = Include role
 
-# squid/bot/access_view.py:623
+# squid/bot/access_view.py:717
 access-view-includes = Includes
 
-# squid/bot/access_view.py:609
+# squid/bot/access_view.py:700
 access-view-internal-role = Internal role
 
-# squid/bot/access_view.py:503
+# squid/bot/access_view.py:590
 access-view-internal-role-assignment-updated = Internal role assignment updated.
 
-# squid/bot/access_view.py:683
+# squid/bot/access_view.py:778
 access-view-internal-role-slug = Internal role slug
 
-# squid/bot/access_view.py:358, squid/bot/access_view.py:367, squid/bot/access_view.py:380
+# squid/bot/access_view.py:433, squid/bot/access_view.py:442, squid/bot/access_view.py:455
 access-view-internal-role-updated = Internal role updated.
 
-# squid/bot/access_view.py:131, squid/bot/access_view.py:285
-access-view-internal-roles = Internal roles
+# squid/bot/access_view.py:147, squid/bot/access_view.py:360
+access-view-internal-roles = Manage bot roles
 
-# squid/bot/access_view.py:170
+# squid/bot/access_view.py:237
 access-view-loading-access-controls = Loading access controls.
 
-# squid/bot/access_view.py:316, squid/bot/access_view.py:699
+# squid/bot/access_view.py:391, squid/bot/access_view.py:793
 access-view-management-rank = Management rank
 
-# squid/bot/access_view.py:660, squid/bot/access_view.py:677, squid/bot/access_view.py:719
-access-view-operation = Operation
+# squid/bot/access_view.py:754, squid/bot/access_view.py:772, squid/bot/access_view.py:813
+access-view-operation = What should change?
 
-# squid/bot/access_view.py:604, squid/bot/access_view.py:639
+# squid/bot/access_view.py:692, squid/bot/access_view.py:733
 access-view-pattern = Pattern
 
-# squid/bot/access_view.py:464
+# squid/bot/access_view.py:539
 access-view-permission-audit = Permission audit
 
-# squid/bot/access_view.py:448
+# squid/bot/access_view.py:523
 access-view-permission-catalogue = Permission catalogue
 
-# squid/bot/access_view.py:668, squid/bot/access_view.py:712
+# squid/bot/access_view.py:764, squid/bot/access_view.py:806
 access-view-permission-pattern = Permission pattern
 
-# squid/bot/access_view.py:700
+# squid/bot/access_view.py:794
 access-view-rank-help = Higher ranks can manage lower ranks. Choose a rank below your own.
 
-# squid/bot/access_view.py:606, squid/bot/access_view.py:640, squid/bot/access_view.py:670, squid/bot/access_view.py:685
+# squid/bot/access_view.py:697, squid/bot/access_view.py:734, squid/bot/access_view.py:765, squid/bot/access_view.py:779
 access-view-reason = Reason
 
-# squid/bot/access_view.py:650
+# squid/bot/access_view.py:744
 access-view-remove-included-role = Remove included role
 
-# squid/bot/access_view.py:648
+# squid/bot/access_view.py:742
 access-view-remove-pattern = Remove pattern
 
-# squid/bot/access_view.py:665
-access-view-revoke = Revoke
+# squid/bot/access_view.py:761
+access-view-revoke = Remove this rule
 
-# squid/bot/access_view.py:125, squid/bot/access_view.py:184
-access-view-rules-and-assignments = Rules and assignments
+# squid/bot/access_view.py:251
+access-view-rules-and-assignments = Direct rules and assigned bot roles
 
-# squid/bot/access_view.py:443, squid/bot/access_view.py:577, squid/bot/access_view.py:605, squid/bot/access_view.py:610
-access-view-scope = Scope
+# squid/bot/access_view.py:518, squid/bot/access_view.py:665, squid/bot/access_view.py:694, squid/bot/access_view.py:702
+access-view-scope = Where this applies
 
-# squid/bot/access_view.py:310, squid/bot/access_view.py:651
+# squid/bot/access_view.py:385, squid/bot/access_view.py:745
 access-view-set-rank = Set rank
 
-# squid/bot/access_view.py:693
+# squid/bot/access_view.py:787
 access-view-slug-help = Leave empty to generate a unique identifier from the display name.
 
-# squid/bot/access_view.py:692
+# squid/bot/access_view.py:786
 access-view-slug-override = Advanced: slug override
 
-# squid/bot/access_view.py:118
-access-view-subject = Subject
-
-# squid/bot/access_view.py:580
+# squid/bot/access_view.py:177, squid/bot/access_view.py:668
 access-view-this-server = This server
 
-# squid/bot/access_view.py:680
+# squid/bot/access_view.py:775
 access-view-unassign = Unassign
+
+# squid/bot/access_view.py:158
+access-workspace = Manage bot access
 
 # squid/bot/accounts/presentation.py:59
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
