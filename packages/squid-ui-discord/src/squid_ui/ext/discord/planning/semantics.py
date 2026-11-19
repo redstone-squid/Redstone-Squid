@@ -109,27 +109,6 @@ class DiscordSemantics:
             content_axis=isinstance(value, p.Content),
             live=isinstance(value, p.Extension | p.RawItem),
             fallback=value.fallback if isinstance(value, p.Extension) else None,
-            layout_fields=("children",)
-            if isinstance(value, p.Panel | p.Budget | p.Break | p.Card)
-            else ("fallback",)
-            if isinstance(value, p.Extension)
-            else (),
-            nested_layout_fields=(("variants", "nodes"),) if isinstance(value, p.Variants) else (),
-            query_fields=("children",)
-            if isinstance(value, p.Panel | p.Budget | p.Break | p.Card)
-            else ("fallback",)
-            if isinstance(value, p.Extension)
-            else ("variants",)
-            if isinstance(value, p.Variants)
-            else ("nodes",)
-            if isinstance(value, p.Variant)
-            else ("items",)
-            if isinstance(value, p.Row | p.ControlGroup | p.Gallery | p.MediaCollection)
-            else ("texts", "accessory")
-            if isinstance(value, p.Section)
-            else ("options",)
-            if isinstance(value, p.SelectMenu | p.RoutedSelect)
-            else (),
         )
 
     def alternatives(self, value: NativeValue) -> Alternatives[Any, Any] | None:

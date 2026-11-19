@@ -41,9 +41,6 @@ class NativeTraits:
     content_axis: bool = False
     live: bool = False
     fallback: Renderable[Any, Any] | None = None
-    layout_fields: tuple[str, ...] = ()
-    query_fields: tuple[str, ...] = ()
-    nested_layout_fields: tuple[tuple[str, str], ...] = ()
 
     @classmethod
     def of(cls, value: object) -> NativeTraits:

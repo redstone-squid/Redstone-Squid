@@ -7,12 +7,13 @@ referenced units and interactions survive, but cannot prove prose equivalent.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Literal
+from typing import ClassVar, Literal
 
+from squid_ui.authoring.semantic import Wrapper
 from squid_ui.content.text import Text, TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.resources import Axis
-from squid_ui.target_types import Renderable, RenderTarget
+from squid_ui.target_types import Renderable, RenderTarget, Structure
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +140,8 @@ def corresponds(presentation: SemanticRef | str, *content: SemanticRef | str) ->
 
 @dataclass(frozen=True, slots=True)
 class Alternative[RenderTargetT = RenderTarget, ContextT = object]:
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("node",))
+
     node: Renderable[RenderTargetT, ContextT]
     key: str
     fidelity: Fidelity
@@ -155,6 +158,9 @@ class Alternative[RenderTargetT = RenderTarget, ContextT = object]:
 @dataclass(frozen=True, slots=True)
 class Alternatives[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Presentations of a semantic reference that is not itself additional output."""
+
+    # Selectors see the group as one leaf: every choice restates `content`.
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("content",), nested=(("choices", "node"),), query=())
 
     content: Renderable[RenderTargetT, ContextT]
     choices: tuple[Alternative[RenderTargetT, ContextT], ...]
@@ -218,7 +224,7 @@ def present_text(*parts: TextLike | SemanticRef | Shortening, key: str) -> TextP
 
 
 @dataclass(frozen=True, slots=True)
-class Budget[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Budget[RenderTargetT = RenderTarget, ContextT = object](Wrapper[RenderTargetT, ContextT]):
     """Additional resource limits for the selected presentation of this subtree.
 
     Each axis uses the target's protocol counting rules. Limits never relax platform

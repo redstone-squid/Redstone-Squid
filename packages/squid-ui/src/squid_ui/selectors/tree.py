@@ -2,7 +2,7 @@
 
 from bisect import bisect_left
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from threading import RLock
 from types import MappingProxyType
 from typing import Any
@@ -10,50 +10,10 @@ from typing import Any
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.authoring import semantic as s
 from squid_ui.boundary import Boundary
-from squid_ui.native import NativeTraits, NativeValue
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.tree import ComponentTree
 from squid_ui.scene.base import SceneNode
-from squid_ui.target_types import Renderable
-
-# Query edges include controls and content values that layout rewriting treats as leaves.
-_UI_FIELDS: tuple[tuple[type, tuple[str, ...]], ...] = (
-    (s.Contextual, ("children", "_prepared")),
-    (s.Group, ("children",)),
-    (s.Stack, ("children",)),
-    (s.Cluster, ("children",)),
-    (s.Themed, ("children",)),
-    (s.Block, ("children",)),
-    (s.Section, ("heading", "children")),
-    (s.Article, ("heading", "children")),
-    (s.Aside, ("children",)),
-    (s.Truncated, ("node",)),
-    (s.Spilled, ("node",)),
-    (s.OptionalContent, ("node",)),
-    (s.BestEffort, ("node",)),
-    (s.Budgeted, ("node",)),
-    (s.Unbreakable, ("node",)),
-    (s.KeepWithNext, ("node",)),
-    (s.Paged, ("node",)),
-    (s.FallbackContent, ("primary", "alternates")),
-    (s.ActionControls, ("items",)),
-    (s.ControlGroup, ("controls",)),
-    (s.Items, ("items",)),
-    (s.Item, ("label", "children")),
-    (s.Choices, ("choices",)),
-    (s.Entities, ("choices",)),
-    (s.RoutedChoices, ("choices",)),
-    (s.Navigation, ("options",)),
-    (s.List, ("items",)),
-    (s.Fields, ("fields",)),
-    (s.Table, ("columns", "rows")),
-    (s.Columns, ("columns",)),
-    (s.Region, ("header", "children", "footer")),
-    (s.Media, ("items",)),
-    (s.Grid, ("cells",)),
-    (s.Figure, ("media",)),
-    (s.Details, ("summary", "children")),
-)
+from squid_ui.target_types import Structure
 
 type Children = Callable[[object], Iterable[tuple[str, object]]]
 """An adapter yields named child edges in display order; it must not render or mutate nodes."""
@@ -76,31 +36,20 @@ def _scene_values(path: str, value: object) -> Iterator[tuple[str, object]]:
 
 
 def ui_children(node: object) -> Iterable[tuple[str, object]]:
-    """Declared UI edges, including controls and all authored alternatives.
+    """The query edges each class declares in `Structure`, including controls and authored alternatives.
 
-    Application records, callbacks, and state ownership objects are leaves. Custom
-    trees can supply their own adapter to index_tree instead of exposing arbitrary fields.
+    Application records, callbacks, and state ownership objects are leaves. Custom trees
+    can also supply their own adapter to index_tree.
     """
     if isinstance(node, SceneNode):
         yield from scene_children(node)
         return
-    fields_to_visit = (
-        ((type(node), NativeTraits.of(node).query_fields),) if isinstance(node, NativeValue) else _UI_FIELDS
-    )
-    for kind, names in fields_to_visit:
-        if isinstance(node, kind):
-            for name in names:
-                value = getattr(node, name)
-                if isinstance(value, tuple | list):
-                    yield from ((f"{name}.{index}", item) for index, item in enumerate(value))
-                elif value is not None:
-                    yield name, value
-            return
-    if isinstance(node, Renderable) and is_dataclass(node):
-        structural = {"children", "node", "primary", "alternates", "fallback", "variants"}
-        if structural.intersection(entry.name for entry in fields(node)):
-            msg = f"{type(node).__name__} has unregistered query edges; supply a children adapter"
-            raise ValueError(msg)
+    for name in Structure.of(node).query_fields:
+        value = getattr(node, name)
+        if isinstance(value, tuple | list):
+            yield from ((f"{name}.{index}", item) for index, item in enumerate(value))
+        elif value is not None:
+            yield name, value
 
 
 @dataclass(frozen=True, slots=True)

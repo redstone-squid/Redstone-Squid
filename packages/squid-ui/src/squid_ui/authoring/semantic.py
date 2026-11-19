@@ -12,10 +12,11 @@ These declarations are frozen, but referenced application objects need not be.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import Field as DataclassField
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
 from squid_ui._dataclass import immutable
 from squid_ui.authoring.grids import GridCell, validate_grid
@@ -32,7 +33,7 @@ from squid_ui.interactions.ownership import Controlled, Ownership, Uncontrolled
 from squid_ui.native import NativeNode
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette, Role, Tone
-from squid_ui.target_types import Renderable, RenderTarget
+from squid_ui.target_types import Renderable, RenderTarget, Structure
 
 if TYPE_CHECKING:
     from squid_ui.authoring.document import DocumentLike
@@ -199,8 +200,37 @@ class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rend
         )
 
 
+class Container[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+    """A node that arranges ``children`` without adding semantics of its own.
+
+    Section and Article also carry a heading, and Region carries header and footer slots.
+    """
+
+    __slots__ = ()
+    __dataclass_fields__: ClassVar[dict[str, DataclassField[Any]]]
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",))
+
+    if TYPE_CHECKING:
+        # Read-only to match the frozen subclasses. A runtime property would become their default.
+        @property
+        def children(self) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]: ...
+
+
+class Wrapper[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    """A node that wraps exactly one ``node`` with a layout constraint or permission."""
+
+    __slots__ = ()
+    __dataclass_fields__: ClassVar[dict[str, DataclassField[Any]]]
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("node",))
+
+    if TYPE_CHECKING:
+
+        @property
+        def node(self) -> LayoutNode[RenderTargetT, ContextT]: ...
+
+
 @immutable
-class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Group[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     key: str | None = None
@@ -209,6 +239,8 @@ class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
 @immutable
 class Contextual[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
     """Pure contextual content with component placements declared before planning."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",), nested=(("_prepared", "children"),))
 
     callback: Callable[[LayoutContext], DocumentLike[RenderTargetT, ContextT]] = field(kw_only=True)
     components: tuple[Boundary[RenderTargetT, ContextT], ...] = field(default=(), kw_only=True)
@@ -230,19 +262,19 @@ class PreparedSlot[RenderTargetT = RenderTarget, ContextT = object](ComponentPla
 
 
 @immutable
-class Stack[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Stack[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     key: str | None = None
 
 
 @immutable
-class Cluster[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Cluster[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
 
 @immutable
-class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Themed[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     """A subtree planned with a presentation palette override."""
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -250,7 +282,7 @@ class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
 
 
 @immutable
-class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Block[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     """An untitled semantic region with a palette role, exact colour, or inherited accent."""
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -260,7 +292,7 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTar
 
 
 @immutable
-class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Section[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     """A titled block of related content.
 
     ``accent`` accepts a `Tone`, custom `Role`, or `AccentRole.BRAND`, resolved through the active palette.
@@ -269,6 +301,8 @@ class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
 
     ``thumbnail`` is a lead image shown beside the required heading.
     """
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",), query=("heading", "children"))
 
     heading: Heading
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -279,8 +313,10 @@ class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
 
 
 @immutable
-class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Article[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     """A self-contained block that stands on its own; see `Section` for the extras."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",), query=("heading", "children"))
 
     heading: Heading
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -289,7 +325,7 @@ class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderT
 
 
 @immutable
-class Aside[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Aside[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     tone: Tone | Role = Tone.NEUTRAL
 
@@ -324,6 +360,8 @@ class List(Adaptable[RenderTarget]):
     fixes consecutive groups: each group must fit using permitted adaptations
     or planning fails. Ordered numbering spans the full list.
     """
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
 
     items: tuple[ListItem, ...]
     key: str
@@ -368,6 +406,8 @@ class Field:
 
 @immutable
 class Fields(Adaptable[RenderTarget]):
+    STRUCTURE: ClassVar[Structure] = Structure(query=("fields",))
+
     fields: tuple[Field, ...]
 
 
@@ -379,6 +419,8 @@ class Column:
 
 @immutable
 class Columns:
+    STRUCTURE: ClassVar[Structure] = Structure(query=("columns",))
+
     columns: tuple[Column, ...]
 
 
@@ -390,6 +432,8 @@ class TableRow:
 
 @immutable
 class Table(Adaptable[RenderTarget]):
+    STRUCTURE: ClassVar[Structure] = Structure(query=("columns", "rows"))
+
     columns: Columns
     rows: tuple[TableRow, ...]
     key: str
@@ -436,12 +480,16 @@ class MediaItem:
 
 @immutable
 class Figure(Adaptable[RenderTarget]):
+    STRUCTURE: ClassVar[Structure] = Structure(query=("media",))
+
     media: MediaItem
     caption: TextLike | None = None
 
 
 @immutable
 class Media(Adaptable[RenderTarget]):
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
+
     items: tuple[MediaItem, ...]
     key: str
     display: MediaDisplay = MediaDisplay.AUTO
@@ -455,6 +503,8 @@ class Summary:
 
 @immutable
 class Details[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",), query=("summary", "children"))
+
     key: str
     summary: Summary
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -534,6 +584,8 @@ class Roster[ContextT = object](Adaptable[RenderTarget, ContextT]):
 @immutable
 class Grid[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A selectable spatial collection with target-shaped fallback strategies."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("cells",))
 
     key: str
     cells: tuple[GridCell, ...]
@@ -639,6 +691,8 @@ class RoutedActionControl:
 
 @immutable
 class ControlGroup[ContextT = object]:
+    STRUCTURE: ClassVar[Structure] = Structure(query=("controls",))
+
     key: str
     controls: tuple[ActionControl[ContextT] | Link | RoutedActionControl, ...]
     label: TextLike | None = None
@@ -653,6 +707,8 @@ class ActionControls[ContextT = object](Adaptable[RenderTarget, ContextT]):
     short, the planner may fold plain actions into a select menu; links, routed controls,
     toggles, and forms always stay buttons.
     """
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
 
     items: tuple[
         ActionControl[ContextT]
@@ -722,6 +778,8 @@ class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
     always select one option. Other targets choose their own representation.
     """
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("choices",))
+
     key: str
     choices: tuple[Choice, ...]
     selection: ChoiceOwnership[ContextT] = UNSELECTED
@@ -733,6 +791,8 @@ class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
 @immutable
 class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A picker over frontend-resolved entities with an optional enumerated fallback."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("choices",))
 
     key: str
     entity_type: EntityType
@@ -757,6 +817,8 @@ class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
 class RoutedChoices(Adaptable[RenderTarget]):
     """An explicitly stateless picker whose values are submitted to one route."""
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("choices",))
+
     key: str
     choices: tuple[Choice, ...]
     route_id: str
@@ -774,6 +836,8 @@ class ItemLabel:
 
 @immutable
 class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",), query=("label", "children"))
+
     key: str
     label: ItemLabel
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -782,6 +846,8 @@ class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTar
 
 @immutable
 class Items[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+    STRUCTURE: ClassVar[Structure] = Structure(nested=(("items", "children"),))
+
     key: str
     items: tuple[Item[RenderTargetT, ContextT], ...]
     opened: ItemOwnership[ContextT] = UNOPENED
@@ -803,6 +869,8 @@ class NavigateEvent[ContextT = object](ActionEvent[ContextT]):
 
 @immutable
 class Navigation[ContextT = object](Adaptable[RenderTarget, ContextT]):
+    STRUCTURE: ClassVar[Structure] = Structure(query=("options",))
+
     key: str
     options: tuple[NavOption, ...]
     current: NavOwnership[ContextT] = FIRST_OPTION
@@ -812,18 +880,24 @@ class Navigation[ContextT = object](Adaptable[RenderTarget, ContextT]):
 
 
 @immutable
-class Truncated[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Truncated[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     node: LayoutNode[RenderTargetT, ContextT]
     keep: Literal["head", "tail"] = "head"
 
 
 @immutable
-class Spilled[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Spilled[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @immutable
-class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     node: LayoutNode[RenderTargetT, ContextT]
     importance: Importance = Importance.LOW
 
@@ -831,6 +905,8 @@ class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable
 @immutable
 class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Complete author-supplied representations of one region, best first."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("primary", "alternates"))
 
     primary: LayoutNode[RenderTargetT, ContextT]
     alternates: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -842,12 +918,16 @@ class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable
 
 
 @immutable
-class BestEffort[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class BestEffort[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @immutable
-class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Budgeted[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     """Reserve and cap the character grant for one logical region."""
 
     node: LayoutNode[RenderTargetT, ContextT]
@@ -865,26 +945,32 @@ class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Adaptable[Render
 
 
 @immutable
-class Unbreakable[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Unbreakable[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     """Keep every primitive produced by ``node`` together on a region page."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @immutable
-class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     """Forbid a region page break immediately after ``node``."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @immutable
-class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Region[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTargetT, ContextT]):
     """A jointly allocated page region with persistent content and independent position.
 
     Headers and footers repeat within this region. Nested regions retain their own
     positions; their maximum page costs count against the containing region.
     """
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("header", "children", "footer"))
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     key: str
@@ -904,7 +990,9 @@ class Region[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTa
 
 
 @immutable
-class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
+class Paged[RenderTargetT = RenderTarget, ContextT = object](
+    Wrapper[RenderTargetT, ContextT], Adaptable[RenderTargetT, ContextT]
+):
     """Paginate a keyed region's children, resolving `page` after measuring their sizes."""
 
     node: LayoutNode[RenderTargetT, ContextT]

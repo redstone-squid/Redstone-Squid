@@ -1,11 +1,9 @@
 """Structural traversal shared by component expansion and contextual planning."""
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import Any, cast
+from dataclasses import dataclass, replace
+from typing import cast
 
-from squid_ui.authoring import semantic as sem
-from squid_ui.authoring.presentations import Alternatives, Budget
 from squid_ui.authoring.semantic import (
     ActionControl as SemanticActionControl,
 )
@@ -14,29 +12,10 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.authoring.semantic import (
     AnyLayoutNode,
-    Article,
-    Aside,
-    BestEffort,
-    Block,
-    Budgeted,
-    Cluster,
     Contextual,
-    Details,
-    FallbackContent,
-    Group,
-    Items,
-    KeepWithNext,
     LayoutNode,
-    OptionalContent,
-    Paged,
     PreparedSlot,
     Region,
-    Section,
-    Spilled,
-    Stack,
-    Themed,
-    Truncated,
-    Unbreakable,
 )
 from squid_ui.authoring.semantic import (
     Choices as SemanticChoices,
@@ -73,8 +52,8 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.authoring.semantic import Toggle as SemanticToggle
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.native import NativeTraits, NativeValue
-from squid_ui.target_types import Renderable
+from squid_ui.native import NativeValue
+from squid_ui.target_types import Structure
 
 type LayoutTransform[RenderTargetT, ContextT = object] = Callable[
     [LayoutNode[RenderTargetT, ContextT], str], Sequence[LayoutNode[RenderTargetT, ContextT]]
@@ -83,8 +62,6 @@ type _LayoutRoute = tuple[_FieldStep | _IndexStep | _SequenceStep, ...]
 type _RoutedLayoutTransform[RenderTargetT, ContextT = object] = Callable[
     [LayoutNode[RenderTargetT, ContextT], str, _LayoutRoute], Sequence[LayoutNode[RenderTargetT, ContextT]]
 ]
-
-_CHILD_FIELD_NAMES = frozenset({"children", "node", "primary", "alternates", "fallback", "variants"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +84,7 @@ class _SequenceStep:
 def map_layout_children[RenderTargetT, ContextT = object](
     node: LayoutNode[RenderTargetT, ContextT], path: str, transform: LayoutTransform[RenderTargetT, ContextT]
 ) -> LayoutNode[RenderTargetT, ContextT]:
-    """Rebuild ``node`` after transforming each of its direct layout children.
+    """Rebuild ``node`` after transforming each layout child its class declares in `Structure`.
 
     Sequence positions accept a transform that splices zero or more nodes. Singular positions
     require exactly one result. ``path`` is diagnostic only and is extended consistently for
@@ -125,159 +102,45 @@ def _map_layout_children_routed[RenderTargetT, ContextT = object](
 ) -> LayoutNode[RenderTargetT, ContextT]:
     """Rebuild a node while identifying where each transformed child lands."""
 
-    def many(
-        children: Sequence[LayoutNode[RenderTargetT, ContextT]], parent_path: str, field: str
-    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-        transformed: list[LayoutNode[RenderTargetT, ContextT]] = []
-        for index, child in enumerate(children):
-            transformed.extend(
-                transform(child, f"{parent_path}.{index}", (*route, _SequenceStep(field, len(transformed))))
+    structure = Structure.of(node)
+    updates: dict[str, object] = {}
+    for field in structure.layout:
+        value = getattr(node, field)
+        if value is None:
+            continue
+        if isinstance(value, tuple):
+            # Children positions join the path directly; other slots are named.
+            prefix = path if field == "children" else f"{path}.{field}"
+            updates[field] = _map_many_at(value, prefix, route, field, transform)
+        else:
+            updates[field] = _map_one(value, f"{path}.{field}", (*route, _FieldStep(field)), transform)
+    for field, child in structure.nested:
+        records = []
+        for index, record in enumerate(getattr(node, field)):
+            record_path = f"{path}.{field}.{index}"
+            record_route = (*route, _IndexStep(field, index))
+            value = getattr(record, child)
+            mapped = (
+                _map_many_at(value, record_path, record_route, child, transform)
+                if isinstance(value, tuple)
+                else _map_one(value, record_path, (*record_route, _FieldStep(child)), transform)
             )
-        return tuple(transformed)
+            records.append(replace(record, **{child: mapped}))
+        updates[field] = tuple(records)
+    return cast(LayoutNode[RenderTargetT, ContextT], replace(node, **updates)) if updates else node  # type: ignore[arg-type]
 
-    def one(
-        child: LayoutNode[RenderTargetT, ContextT], child_path: str, child_route: _LayoutRoute
-    ) -> LayoutNode[RenderTargetT, ContextT]:
-        transformed = tuple(transform(child, child_path, child_route))
-        if len(transformed) != 1:
-            message = f"{child_path}: this structural position requires exactly one node"
-            raise LayoutInvariantError(message)
-        return transformed[0]
 
-    if isinstance(node, NativeValue):
-        traits = NativeTraits.of(node)
-        updates = {}
-        for field in traits.layout_fields:
-            children = getattr(node, field)
-            updates[field] = (
-                many(children, path, field)
-                if isinstance(children, tuple)
-                else one(children, f"{path}.{field}", (*route, _FieldStep(field)))
-            )
-        for field, child_field in traits.nested_layout_fields:
-            updates[field] = tuple(
-                replace(
-                    group,
-                    **{
-                        child_field: _map_many_at(
-                            getattr(group, child_field),
-                            f"{path}.{field}.{index}",
-                            (*route, _IndexStep(field, index)),
-                            child_field,
-                            transform,
-                        )
-                    },
-                )
-                for index, group in enumerate(getattr(node, field))
-            )
-        return cast(LayoutNode[RenderTargetT, ContextT], replace(node, **updates)) if updates else node
-
-    match node:
-        case Alternatives(content=content, choices=choices):
-            return replace(
-                node,
-                content=one(content, f"{path}.content", (*route, _FieldStep("content"))),
-                choices=tuple(
-                    replace(
-                        choice,
-                        node=one(
-                            choice.node, f"{path}.choices.{i}", (*route, _IndexStep("choices", i), _FieldStep("node"))
-                        ),
-                    )
-                    for i, choice in enumerate(choices)
-                ),
-            )
-        case Budget(node=child):
-            return replace(node, node=one(child, f"{path}.node", (*route, _FieldStep("node"))))
-        case Contextual(children=children, _prepared=prepared):
-            return replace(
-                node,
-                children=many(children, path, "children"),
-                _prepared=tuple(
-                    replace(
-                        group,
-                        children=_map_many_at(
-                            group.children,
-                            f"{path}.prepared.{i}",
-                            (*route, _IndexStep("_prepared", i)),
-                            "children",
-                            transform,
-                        ),
-                    )
-                    for i, group in enumerate(prepared)
-                ),
-            )
-        case Region(children=children, header=header, footer=footer):
-            return replace(
-                node,
-                children=many(children, path, "children"),
-                header=many(header, f"{path}.header", "header"),
-                footer=many(footer, f"{path}.footer", "footer"),
-            )
-        case (
-            Group(children=children)
-            | Stack(children=children)
-            | Cluster(children=children)
-            | Themed(children=children)
-            | Block(children=children)
-            | Section(children=children)
-            | Article(children=children)
-            | Aside(children=children)
-            | Details(children=children)
-        ):
-            return replace(node, children=many(children, path, "children"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-        case Items(items=items):
-            return replace(
-                node,
-                items=tuple(
-                    replace(
-                        item,
-                        children=_map_many_at(
-                            item.children,
-                            f"{path}.item.{index}",
-                            (*route, _IndexStep("items", index)),
-                            "children",
-                            transform,
-                        ),
-                    )
-                    for index, item in enumerate(items)
-                ),
-            )
-        case (
-            Truncated(node=child)
-            | Spilled(node=child)
-            | OptionalContent(node=child)
-            | BestEffort(node=child)
-            | Budgeted(node=child)
-            | Unbreakable(node=child)
-            | KeepWithNext(node=child)
-            | Paged(node=child)
-        ):
-            return replace(node, node=one(child, f"{path}.node", (*route, _FieldStep("node"))))
-        case FallbackContent(primary=primary, alternates=alternates):
-            return replace(
-                node,
-                primary=one(primary, f"{path}.primary", (*route, _FieldStep("primary"))),
-                alternates=tuple(
-                    one(
-                        alternate,
-                        f"{path}.alternate.{index}",
-                        (*route, _IndexStep("alternates", index)),
-                    )
-                    for index, alternate in enumerate(alternates)
-                ),
-            )
-        case _:
-            structural_fields = (
-                _CHILD_FIELD_NAMES.intersection(field.name for field in fields(node))
-                if is_dataclass(node) and not isinstance(node, type)
-                else frozenset()
-            )
-            if structural_fields:
-                names = ", ".join(sorted(structural_fields))
-                message = f"{path}: {type(node).__name__} has unregistered layout fields: {names}"
-                raise LayoutInvariantError(message)
-            return node
+def _map_one[RenderTargetT, ContextT = object](
+    child: LayoutNode[RenderTargetT, ContextT],
+    path: str,
+    route: _LayoutRoute,
+    transform: _RoutedLayoutTransform[RenderTargetT, ContextT],
+) -> LayoutNode[RenderTargetT, ContextT]:
+    transformed = tuple(transform(child, path, route))
+    if len(transformed) != 1:
+        message = f"{path}: this structural position requires exactly one node"
+        raise LayoutInvariantError(message)
+    return transformed[0]
 
 
 def _map_many_at[RenderTargetT, ContextT = object](
@@ -367,37 +230,3 @@ def _namespace[RenderTargetT, ContextT = object](
     # carry a target, and returns the same nodes rekeyed. That costs the local walker's
     # precision, not the caller's, so the target the caller passed in is what comes back.
     return cast(list[LayoutNode[RenderTargetT, ContextT]], [rewrite(node) for node in nodes])
-
-
-LAYOUT_CONTAINERS = (
-    sem.Group,
-    sem.Stack,
-    sem.Cluster,
-    sem.Themed,
-    sem.Block,
-    sem.Section,
-    sem.Article,
-    sem.Aside,
-    sem.Region,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class LayoutParts:
-    children: tuple[Renderable[Any, Any], ...]
-    heading: Renderable[Any, Any] | None = None
-    header: tuple[Renderable[Any, Any], ...] = ()
-    footer: tuple[Renderable[Any, Any], ...] = ()
-
-
-def layout_parts(value: Renderable[Any, Any]) -> LayoutParts:
-    """Return the named slots and ordinary children of a layout container."""
-    if not isinstance(value, LAYOUT_CONTAINERS):
-        message = f"{type(value).__name__} is not a layout container"
-        raise TypeError(message)
-    return LayoutParts(
-        value.children,
-        value.heading if isinstance(value, sem.Section | sem.Article) else None,
-        value.header if isinstance(value, sem.Region) else (),
-        value.footer if isinstance(value, sem.Region) else (),
-    )

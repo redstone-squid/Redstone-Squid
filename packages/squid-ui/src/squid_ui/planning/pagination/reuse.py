@@ -12,7 +12,7 @@ from typing import Any
 from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
-from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
+from squid_ui.authoring.presentations import Alternatives, TextPresentation
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.native import NativeNode
 from squid_ui.overflow import PageOwnership
@@ -74,53 +74,11 @@ class _AllocationComparison:
                 return replace(left, page=self._page_configuration(left.page)) == replace(
                     right, page=self._page_configuration(right.page)
                 )
-            case (
-                (
-                    sem.Group()
-                    | sem.Stack()
-                    | sem.Block()
-                    | sem.Section()
-                    | sem.Article()
-                    | sem.Aside()
-                    | sem.Cluster()
-                    | sem.Themed()
-                ),
-                (
-                    sem.Group()
-                    | sem.Stack()
-                    | sem.Block()
-                    | sem.Section()
-                    | sem.Article()
-                    | sem.Aside()
-                    | sem.Cluster()
-                    | sem.Themed()
-                ),
-            ):
+            case sem.Container(), sem.Container():
                 return replace(left, children=()) == replace(right, children=()) and self.same_children(
                     left.children, right.children
                 )
-            case (
-                (
-                    sem.Unbreakable()
-                    | sem.KeepWithNext()
-                    | sem.Budgeted()
-                    | sem.OptionalContent()
-                    | sem.Truncated()
-                    | sem.Spilled()
-                    | sem.BestEffort()
-                    | Budget()
-                ),
-                (
-                    sem.Unbreakable()
-                    | sem.KeepWithNext()
-                    | sem.Budgeted()
-                    | sem.OptionalContent()
-                    | sem.Truncated()
-                    | sem.Spilled()
-                    | sem.BestEffort()
-                    | Budget()
-                ),
-            ):
+            case sem.Wrapper(), sem.Wrapper():
                 return replace(left, node=sem.Group(())) == replace(right, node=sem.Group(())) and self.same_node(
                     left.node, right.node
                 )

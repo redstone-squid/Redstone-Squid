@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import field
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, cast, overload
 
 from squid_ui._dataclass import immutable
 from squid_ui.boundary import Boundary
@@ -33,7 +33,7 @@ from squid_ui.interactions.guards import Guard
 from squid_ui.native import NativeNode, NativeValue
 from squid_ui.overflow import Alt, Never, Overflow, Spill, Truncate
 from squid_ui.styles import ActionStyle, Color
-from squid_ui.target_types import Renderable
+from squid_ui.target_types import Renderable, Structure
 
 if TYPE_CHECKING:
     from squid_ui.authoring.presentations import Correspondence
@@ -227,6 +227,8 @@ class Option(DiscordValue):
 class SelectMenu[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """A string select; occupies its own row when materialized."""
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("options",))
+
     options: tuple[Option, ...]
     on_select: SelectionHandler[ContextT]
     key: str
@@ -265,6 +267,8 @@ class EntitySelect[ContextT = object](DiscordValue, NativeNode[DiscordTarget, Co
 @immutable
 class RoutedSelect(DiscordValue, NativeNode[DiscordTarget]):
     """A string select dispatched by its stable route id rather than a mount binding."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("options",))
 
     options: tuple[Option, ...]
     route_id: str
@@ -366,6 +370,8 @@ class Card(DiscordValue, NativeNode[ClassicTarget]):
     URL it unfurls — are not offered, because Squid cannot own what it did not write.
     """
 
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",))
+
     children: tuple[Node, ...] = ()
     title: CardText | None = None
     url: str | None = None
@@ -382,6 +388,8 @@ class Card(DiscordValue, NativeNode[ClassicTarget]):
 class Extension[PayloadT = object, RenderTargetT = DiscordTarget](DiscordValue, NativeNode[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("fallback",))
+
     kind: ExtensionKind[PayloadT, Any]
     version: int
     payload: PayloadT
@@ -392,12 +400,16 @@ class Extension[PayloadT = object, RenderTargetT = DiscordTarget](DiscordValue, 
 class Row[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """An exact target row; invalid local structure is a planning error."""
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
+
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
 @immutable
 class ControlGroup[ContextT = object](DiscordValue, NativeNode[DiscordTarget, ContextT]):
     """Buttons automatically arranged into as many valid target rows as needed."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
 
     items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
@@ -428,6 +440,8 @@ def normalize_gallery_item(value: str | GalleryItem) -> GalleryItem:
 class Gallery(DiscordValue, NativeNode[ComponentsV2Target]):
     """One exact target gallery."""
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
+
     items: tuple[str | GalleryItem, ...]
 
     def __post_init__(self) -> None:
@@ -437,6 +451,8 @@ class Gallery(DiscordValue, NativeNode[ComponentsV2Target]):
 @immutable
 class MediaCollection(DiscordValue, NativeNode[ComponentsV2Target]):
     """Media automatically arranged into valid target galleries."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
 
     items: tuple[str | GalleryItem, ...]
 
@@ -451,6 +467,8 @@ class Section[ContextT = object](DiscordValue, NativeNode[ComponentsV2Target, Co
     Planning rejects excess text slots.
     """
 
+    STRUCTURE: ClassVar[Structure] = Structure(query=("texts", "accessory"))
+
     texts: tuple[Text | Heading | Footer, ...]
     accessory: Thumbnail | LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem
 
@@ -458,6 +476,8 @@ class Section[ContextT = object](DiscordValue, NativeNode[ComponentsV2Target, Co
 @immutable
 class Panel[ContextT = object](DiscordValue, NativeNode[ComponentsV2Target, ContextT]):
     """A Container: children grouped under an optional accent colour."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",))
 
     children: tuple[Node[ContextT], ...]
     accent: Color | None = None
@@ -474,6 +494,8 @@ class Budget[RenderTargetT = DiscordTarget, ContextT = object](DiscordValue, Nat
     additional permission to shorten or omit children.
     """
 
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",))
+
     children: tuple[Node[ContextT], ...]
     minimum: int
     preferred: int
@@ -484,6 +506,8 @@ class Budget[RenderTargetT = DiscordTarget, ContextT = object](DiscordValue, Nat
 @immutable
 class Break[RenderTargetT = DiscordTarget, ContextT = object](DiscordValue, NativeNode[RenderTargetT, ContextT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children",))
 
     children: tuple[Node[ContextT], ...]
     unbreakable: bool = False
@@ -519,6 +543,8 @@ class Variant[RenderTargetT = DiscordTarget](DiscordValue):
     cannot be matched structurally. A lossy rung needs that explicit contract.
     """
 
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("nodes",))
+
     nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
     fidelity: Fidelity = Fidelity.EXACT
@@ -550,6 +576,10 @@ class Variants[RenderTargetT = DiscordTarget](DiscordValue, NativeNode[RenderTar
     search is bounded, so exhausting the search budget can select the best fit
     found rather than the best possible combination; the plan reports this.
     """
+
+    STRUCTURE: ClassVar[Structure] = Structure(
+        layout=("content",), nested=(("variants", "nodes"),), query=("variants",)
+    )
 
     variants: tuple[Variant[Any], ...]
     priority: int = 0

@@ -8,7 +8,7 @@ from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
-from squid_ui.authoring.traversal import LAYOUT_CONTAINERS, layout_parts
+from squid_ui.authoring.traversal import map_layout_children
 from squid_ui.content.text import Localization, resolve_text
 from squid_ui.native import NativeNode, NativeTraits
 from squid_ui.planning.adapter import ExtensionAdapter
@@ -54,20 +54,12 @@ class InputPreparation:
 
     def visit(self, node: Renderable[Any]) -> Renderable[Any]:
         match node:
-            case sem.Region() | sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
+            case sem.Paged() | sem.List() | sem.Navigation() | sem.Grid():
                 if isinstance(node, sem.Paged):
                     if not self.policy.character_axis:
                         msg = "Paged requires one shared character axis; use regions with this target's resource limits"
                         raise UnsupportedSemanticError(msg)
                     return replace(node, node=self.visit(node.node))
-                if isinstance(node, sem.Region):
-                    parts = layout_parts(node)
-                    return replace(
-                        node,
-                        children=tuple(map(self.visit, parts.children)),
-                        header=tuple(map(self.visit, parts.header)),
-                        footer=tuple(map(self.visit, parts.footer)),
-                    )
                 if isinstance(node, sem.Grid):
                     self.combinations = max(self.combinations, len(node.cells))
                 if isinstance(node, sem.List) and node.page_size is not None:
@@ -84,12 +76,8 @@ class InputPreparation:
                     node,
                     items=tuple(replace(item, children=tuple(map(self.visit, item.children))) for item in node.items),
                 )
-            case sem.Details():
-                return replace(node, children=tuple(map(self.visit, node.children)))
-            case _ if isinstance(node, LAYOUT_CONTAINERS):
-                return replace(node, children=tuple(map(self.visit, layout_parts(node).children)))
-            case sem.OptionalContent():
-                return replace(node, node=self.visit(node.node))
+            case sem.Container() | sem.Details() | sem.OptionalContent() | sem.FallbackContent():
+                return map_layout_children(node, "$", lambda child, _path: (self.visit(child),))
             case sem.Truncated() | sem.Spilled() | sem.BestEffort():
                 self.shortening_depth += 1
                 try:
@@ -141,10 +129,6 @@ class InputPreparation:
             case sem.ActionControls():
                 self.combinations = max(self.combinations, len(node.items) * 16)
                 return node
-            case sem.FallbackContent():
-                return replace(
-                    node, primary=self.visit(node.primary), alternates=tuple(map(self.visit, node.alternates))
-                )
             case NativeNode() if self.native is None and (fallback := NativeTraits.of(node).fallback) is not None:
                 self.visit(fallback)
                 return node

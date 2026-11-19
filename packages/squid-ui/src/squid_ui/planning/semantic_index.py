@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import (
@@ -14,7 +14,6 @@ from squid_ui.authoring.presentations import (
     TextPresentation,
 )
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot
-from squid_ui.authoring.traversal import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.native import NativeValue
@@ -268,18 +267,9 @@ def semantic_graph[RenderTargetT, ContextT](
                 root = add(value, path, parent, atomic=False)
                 for i, branch in enumerate((value.primary, *value.alternates)):
                     visit(sem.Group((branch,), key=f"@fallback-{i}"), root, i)
-            case (
-                sem.Unbreakable()
-                | sem.KeepWithNext()
-                | sem.Budgeted()
-                | sem.Paged()
-                | sem.OptionalContent()
-                | sem.Truncated()
-                | sem.Spilled()
-                | sem.BestEffort()
-                | Budget()
-            ):
-                root = add(value, path, parent, atomic=False)
+            case sem.Wrapper():
+                # Every Wrapper and Container subclass is a member of the closed SemanticValue.
+                root = add(cast(SemanticValue[RenderTargetT, ContextT], value), path, parent, atomic=False)
                 visit(value.node, root, 0)
             case sem.Roster():
                 root = add(value, path, parent, atomic=False)
@@ -405,17 +395,16 @@ def semantic_graph[RenderTargetT, ContextT](
                     add(sem.Paragraph(value.label), (*path, "@label"), root, atomic=True)
                 for i, control in enumerate(value.controls):
                     visit(control, root, i)
-            case _ if isinstance(value, LAYOUT_CONTAINERS):
-                root = add(value, path, parent, atomic=False)
-                parts = layout_parts(value)
-                if parts.heading is not None:
-                    visit(parts.heading, root, 0, name="@heading")
-                for i, child in enumerate(parts.children):
+            case sem.Container():
+                root = add(cast(SemanticValue[RenderTargetT, ContextT], value), path, parent, atomic=False)
+                if isinstance(value, sem.Section | sem.Article):
+                    visit(value.heading, root, 0, name="@heading")
+                for i, child in enumerate(value.children):
                     visit(child, root, i)
                 if isinstance(value, sem.Region):
                     for part, children in (
-                        (StructuralGroup("header"), parts.header),
-                        (StructuralGroup("footer"), parts.footer),
+                        (StructuralGroup("header"), value.header),
+                        (StructuralGroup("footer"), value.footer),
                     ):
                         slot = add(part, (*path, f"@{part.part}"), root, atomic=False)
                         for i, child in enumerate(children):
