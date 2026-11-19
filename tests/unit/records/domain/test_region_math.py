@@ -6,8 +6,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid.builds.domain.expansion_math import ExpressionParser, Polynomial
-from squid.records.domain.region_math import (
+from squid.core.builds.domain.expansion_math import ExpressionParser, Polynomial
+from squid.core.records.domain.region_math import (
     ArithmeticBudget,
     RegionArithmeticError,
     RegionLimitError,

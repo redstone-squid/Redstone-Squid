@@ -1,7 +1,7 @@
 """Conversion releases retain distinct identities when formats share a number."""
 
-from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.versions import ConversionVersionProvider
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.providers.versions import ConversionVersionProvider
 
 
 class ConversionVersions:

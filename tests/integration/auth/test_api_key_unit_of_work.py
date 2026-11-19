@@ -7,15 +7,15 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.auth.application import ApiKeyService
-from squid.auth.models.entities import ApiKey
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
+from squid.core.auth.application import ApiKeyService
+from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError
-from squid.permissions.application import PermissionService, SubjectRuleCache
-from squid.permissions.application.ports import AuditEntry
-from squid.permissions.domain.models import AuditAction, AuditSubjectKind
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.permissions.application import PermissionService, SubjectRuleCache
+from squid.core.permissions.application.ports import AuditEntry
+from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 async def test_issuance_checks_current_authority_despite_a_cached_grant(

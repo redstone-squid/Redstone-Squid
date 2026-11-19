@@ -11,18 +11,17 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.models import Build
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
-from squid.messages.models import Message
-from squid.persistence.alembic_entities import current_entities
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.posts.models import DiscordPost
-from squid.settings.models import ServerSetting
-from squid.unit_of_work import UnitOfWorkFactory
-from squid.voting.domain import (
+from squid.core.messages.models import Message
+from squid.core.persistence.alembic_entities import current_entities
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.posts.models import DiscordPost
+from squid.core.settings.models import ServerSetting
+from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
     StoredVoteMutation,
@@ -33,7 +32,7 @@ from squid.voting.domain import (
     VoteStatus,
     VoteVisibility,
 )
-from squid.voting.models import (
+from squid.core.voting.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
     GenericVoteSession,
@@ -41,6 +40,7 @@ from squid.voting.models import (
     VoteSession,
     VoteSessionOption,
 )
+from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_tables, with_foreign_key_targets
 from tests.support.unit_of_work import transact
 from tests.support.voting import (

@@ -10,9 +10,9 @@ from pydantic import ValidationError
 from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
-from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import ShowcaseTag, Status
-from squid.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildEditPatch, BuildService
+from squid.core.builds.domain import ShowcaseTag, Status
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
 from tests.support.build_edit_runner import BuildEditRecorder

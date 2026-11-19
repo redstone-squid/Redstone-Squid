@@ -4,9 +4,9 @@ import re
 
 from sqlalchemy import CheckConstraint, Table
 
-from squid.submissions.domain import DraftStatus, FinalizationJobStatus, SubmissionOrigin
-from squid.submissions.models.entities import SubmissionDraft
-from squid.submissions.models.finalization import SubmissionFinalizationJob
+from squid.core.submissions.domain import DraftStatus, FinalizationJobStatus, SubmissionOrigin
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.finalization import SubmissionFinalizationJob
 from tests.support.schema import model_table
 
 

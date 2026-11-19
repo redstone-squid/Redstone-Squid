@@ -2,11 +2,11 @@
 
 import pytest
 
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, Status
-from squid.builds.domain.expansion import DoorExpansion
-from squid.builds.models import DoorBuild
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, Status
+from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.models import DoorBuild
 from squid.core.errors import ValidationError
-from squid.submissions.application.recalculation_values import RecalculationFacts, recalculation_values
+from squid.core.submissions.application.recalculation_values import RecalculationFacts, recalculation_values
 
 
 def test_missing_inferred_dimensions_preserve_existing_values() -> None:

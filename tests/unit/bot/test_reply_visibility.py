@@ -13,7 +13,7 @@ from discord.ext.commands import Context
 
 import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
-from squid.settings.application import SettingsService
+from squid.core.settings.application import SettingsService
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services

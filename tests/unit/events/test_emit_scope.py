@@ -2,7 +2,7 @@
 
 from alembic_utils.pg_trigger import PGTrigger
 
-from squid.persistence.alembic_entities import current_entities
+from squid.core.persistence.alembic_entities import current_entities
 
 EMITTING_TABLES = {"public.builds", "public.vote_sessions"}
 """Tables allowed to emit domain events.

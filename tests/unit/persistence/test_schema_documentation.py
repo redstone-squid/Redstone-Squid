@@ -5,10 +5,10 @@ from typing import ClassVar
 from sqlalchemy import BigInteger, ForeignKey, Integer, MetaData, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-import squid.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
-from squid.persistence.base import Base
-from squid.persistence.docs import extract_attribute_docstrings
-from squid.persistence.mixins import SlugMixin
+import squid.core.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
+from squid.core.persistence.base import Base
+from squid.core.persistence.docs import extract_attribute_docstrings
+from squid.core.persistence.mixins import SlugMixin
 from tests.support.schema import model_table
 
 

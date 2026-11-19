@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid.core.i18n import tr
-from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
-from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
+from squid.core.schematics.domain.formats import SCHEMATIC_EXTENSIONS
+from squid.core.schematics.errors import InvalidSchematicError, SchematicTooLargeError
 from squid_i18n import md_tr
 
 type AttachmentKind = Literal["image", "video", "schematic"]

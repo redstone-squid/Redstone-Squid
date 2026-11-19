@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.types import InstantUTC
+from squid.core.persistence.types import InstantUTC
 
 revision: str = "970f592fd57c"
 down_revision: str | Sequence[str] | None = "c9d0e1f2a3b8"

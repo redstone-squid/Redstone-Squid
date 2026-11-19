@@ -52,17 +52,16 @@ from squid.bot.submission.ui.sections import (
     problem_text,
     section_text,
 )
-from squid.builds.models import Build
 from squid.core.actors import Actor
+from squid.core.builds.models import Build
 from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
-from squid.runtime import BotServices
-from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
-from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
-from squid.submissions.application.build_target import preview_build
-from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
-from squid.submissions.application.intake import SuppliedAttachment, classify_supplied_file
-from squid.submissions.domain import (
+from squid.core.submissions.application import FinalizationJobSnapshot, StoredDraft
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
+from squid.core.submissions.application.build_target import preview_build
+from squid.core.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
+from squid.core.submissions.application.intake import SuppliedAttachment, classify_supplied_file
+from squid.core.submissions.domain import (
     ChoiceOption,
     DraftStatus,
     FormField,
@@ -70,14 +69,15 @@ from squid.submissions.domain import (
     FormSection,
     SubmissionOrigin,
 )
-from squid.submissions.domain.finalization import (
+from squid.core.submissions.domain.finalization import (
     FinalizationJobStatus,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
 )
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.domain.schematics import DraftSchematicState
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.schematics import DraftSchematicState
+from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
+from squid.runtime import BotServices
 from squid_i18n import NUMBER, Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md

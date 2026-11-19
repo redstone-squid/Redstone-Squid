@@ -14,8 +14,8 @@ from squid.api.v1.schemas.capabilities import (
     SanitizationCapabilities,
     UploadCapabilities,
 )
-from squid.media.domain import MediaLimits
-from squid.submissions.application import CURRENT_SUBMISSION_PROTOCOL
+from squid.core.media.domain import MediaLimits
+from squid.core.submissions.application import CURRENT_SUBMISSION_PROTOCOL
 
 
 @get(

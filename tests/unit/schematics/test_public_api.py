@@ -15,12 +15,12 @@ from squid.api.v1.schematics import (
     render_build_schematic,
     router,
 )
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.errors import BuildNotFoundError
-from squid.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.errors import BuildNotFoundError
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
-from squid.schematics.application import (
+from squid.core.schematics.application import (
     RenderedSchematic,
     RenderRequest,
     RenderSkipReason,
@@ -28,9 +28,9 @@ from squid.schematics.application import (
     SchematicService,
     StoredSchematic,
 )
-from squid.schematics.application.attachments import PublicSchematicDownload
-from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
-from squid.schematics.errors import SchematicRenderRefusedError
+from squid.core.schematics.application.attachments import PublicSchematicDownload
+from squid.core.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
+from squid.core.schematics.errors import SchematicRenderRefusedError
 from tests.unit.schematics.fakes import make_analysis
 
 

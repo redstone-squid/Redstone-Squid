@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 
-from squid.persistence.queue import BASE_RETRY_DELAY, MAX_RETRY_DELAY, retry_delay
+from squid.core.persistence.queue import BASE_RETRY_DELAY, MAX_RETRY_DELAY, retry_delay
 
 
 def test_the_backoff_doubles_from_the_base_delay() -> None:

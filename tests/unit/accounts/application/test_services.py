@@ -7,10 +7,10 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.application.ports import VerificationLinkResult
-from squid.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
-from squid.accounts.domain import (
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.ports import VerificationLinkResult
+from squid.core.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     MERGE_PROOF_MAX_AGE_SECONDS,
     MERGE_TICKET_TTL_SECONDS,
@@ -29,7 +29,7 @@ from squid.accounts.domain import (
     RecentAccountProof,
     fold_creator_name,
 )
-from squid.accounts.errors import (
+from squid.core.accounts.errors import (
     AccountAlreadyLinkedError,
     AccountIdentityNotFoundError,
     AccountNotFoundError,
@@ -44,7 +44,7 @@ from squid.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
-from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from tests.support.identity_uow import AccountScope
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")

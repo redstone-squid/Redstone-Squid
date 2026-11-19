@@ -10,8 +10,8 @@ import squid_ui.ext.discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.permissions_cog import ACCESS_NODES
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -20,11 +20,11 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.application.administration import PermissionAdministrationService
-from squid.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
-from squid.permissions.domain import CATALOGUE, Decision, PermissionCheck, Reason
-from squid.permissions.domain.catalogue import PERM_GRANT_GUILD, PERM_SUBJECT_INSPECT
-from squid.permissions.models import PermissionRole
+from squid.core.permissions.application.administration import PermissionAdministrationService
+from squid.core.permissions.application.edits import PERMISSION_GRAPH, ROLE_DELETE
+from squid.core.permissions.domain import CATALOGUE, Decision, PermissionCheck, Reason
+from squid.core.permissions.domain.catalogue import PERM_GRANT_GUILD, PERM_SUBJECT_INSPECT
+from squid.core.permissions.models import PermissionRole
 from squid_ui.ext.discord.testing import commit_render
 from squid_ui.runtime import transaction
 from squid_ui.testing import RecordingResponder, choice_event, submit_event

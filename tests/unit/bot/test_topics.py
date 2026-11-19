@@ -9,8 +9,8 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
-from squid.posts.application import PostService
-from squid.posts.domain import ResourceKind
+from squid.core.posts.application import PostService
+from squid.core.posts.domain import ResourceKind
 from squid_reactivity import CellAddress, Topic
 from squid_ui.ext.discord import Everyone
 from squid_ui.ext.discord.testing import delivered_to, message_harness

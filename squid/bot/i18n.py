@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from squid.bot.chrome import CHROME
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
-from squid.settings.application import SettingsService
+from squid.core.settings.application import SettingsService
 from squid_i18n import Localization, Text, localization_scope
 from squid_ui.ext.discord.contracts import RequestSource
 from squid_ui.ext.discord.i18n import to_locale_str as to_locale_str

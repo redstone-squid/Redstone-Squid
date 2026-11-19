@@ -6,15 +6,15 @@ even when the search parser rejects the whole query.
 
 import pytest
 
-from squid.search.application.completion import (
+from squid.core.search.application.completion import (
     CompletionKind,
     analyze,
     completes_values,
     render_value,
 )
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.search.application.parser import QuerySyntaxError, SearchQueryParser
-from squid.search.domain import FieldExpression
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
+from squid.core.search.application.parser import QuerySyntaxError, SearchQueryParser
+from squid.core.search.domain import FieldExpression
 
 
 @pytest.mark.parametrize("query", ["restriction:", 'creator:"Nu', "width:[1 TO ", "restriction:*"])

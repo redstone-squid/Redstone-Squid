@@ -11,11 +11,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
 from squid.bot.notifications_cog import render_delivery
-from squid.events.models import DomainEvent
-from squid.notifications.domain import (
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.events.models import DomainEvent
+from squid.core.notifications.domain import (
     InboxVisibility,
     NotificationCandidate,
     NotificationKind,
@@ -23,23 +23,23 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.infrastructure.repository import (
+from squid.core.notifications.infrastructure.repository import (
     _is_durable_staff_notification_recipient,
 )
-from squid.notifications.models import (
+from squid.core.notifications.models import (
     InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationSubscription,
 )
-from squid.permissions.domain import BuiltinRoleKeys
-from squid.permissions.models import (
+from squid.core.permissions.domain import BuiltinRoleKeys
+from squid.core.permissions.models import (
     PermissionRole,
     PermissionRoleAssignment,
     PermissionRolePattern,
 )
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.database import record_queries
 from tests.support.unit_of_work import transact

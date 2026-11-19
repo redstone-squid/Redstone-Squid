@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from squid.media.application import MediaProcessingRequest, MediaProcessingService
-from squid.media.domain import MediaKind, MediaProcessingAction
-from squid.media.errors import InvalidMediaError, MediaFailureReason
-from squid.media.infrastructure import FfmpegMediaProcessor
+from squid.core.media.application import MediaProcessingRequest, MediaProcessingService
+from squid.core.media.domain import MediaKind, MediaProcessingAction
+from squid.core.media.errors import InvalidMediaError, MediaFailureReason
+from squid.core.media.infrastructure import FfmpegMediaProcessor
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")

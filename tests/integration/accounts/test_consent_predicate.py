@@ -7,10 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, consent_refresh_required
-from squid.accounts.infrastructure.consent import account_consent_current
-from squid.accounts.models import Account as AccountModel
-from squid.persistence.base import Base
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, consent_refresh_required
+from squid.core.accounts.infrastructure.consent import account_consent_current
+from squid.core.accounts.models import Account as AccountModel
+from squid.core.persistence.base import Base
 
 SUPERSEDED = "1970-01-01"
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)

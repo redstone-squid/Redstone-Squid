@@ -16,17 +16,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-import squid.persistence.model_registry  # noqa: F401
-from squid.accounts.models import Account
-from squid.artifacts import ArtifactMetadata
-from squid.artifacts.infrastructure import LocalArtifactStore
-from squid.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
+import squid.core.persistence.model_registry  # noqa: F401
+from squid.core.accounts.models import Account
+from squid.core.artifacts import ArtifactMetadata
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.errors import DataIntegrityError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import SchematicPublication, SchematicService
-from squid.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
-from squid.schematics.application.storage import SchematicStorageService
-from squid.schematics.domain.models import (
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application import SchematicPublication, SchematicService
+from squid.core.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
+from squid.core.schematics.application.storage import SchematicStorageService
+from squid.core.schematics.domain.models import (
     SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     FingerprintPreset,
     SchematicFormat,

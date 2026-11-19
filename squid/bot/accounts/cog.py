@@ -6,7 +6,6 @@ from uuid import UUID
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.accounts.domain import IdentityProvider
 from squid.bot.accounts.profile_render import (
     public_profile_fields,
 )
@@ -14,8 +13,9 @@ from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.follows import FollowCard
 from squid.bot.ui import card_node, text_node
 from squid.bot.utils.autocomplete import suggests
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.i18n import tr
-from squid.notifications.domain import SubscriptionKind
+from squid.core.notifications.domain import SubscriptionKind
 from squid_i18n import md_tr
 from squid_ui.content.text import Text
 

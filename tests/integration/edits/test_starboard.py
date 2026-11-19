@@ -8,13 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, ConflictError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
-from squid.messages.models import Message
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.starboard.application.edits import (
+from squid.core.messages.models import Message
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.starboard.application.edits import (
     STARBOARD_CREATE,
     STARBOARD_DELETE,
     STARBOARD_EDIT,
@@ -26,9 +26,9 @@ from squid.starboard.application.edits import (
     StarboardEdit,
     starboard_target,
 )
-from squid.starboard.application.services import StarboardService
-from squid.starboard.application.snapshots import StarboardSnapshot
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
+from squid.core.starboard.application.services import StarboardService
+from squid.core.starboard.application.snapshots import StarboardSnapshot
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 from tests.support.starboard_setup import create_starboard
 
 ACTOR = Actor(guild_id=10, is_bot_owner=True, discord_user_id=42)

@@ -5,16 +5,16 @@ from functools import partial
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.domain import AccountConsent
-from squid.builds.application.restrictions import RestrictionService
+from squid.core.accounts.domain import AccountConsent
 from squid.core.actors import Actor
+from squid.core.builds.application.restrictions import RestrictionService
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, ConflictError, InvalidStateError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, Revision, RevisionConflictError
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.tags.application import TagService
-from squid.tags.application.edits import (
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.tags.application import TagService
+from squid.core.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
@@ -26,8 +26,8 @@ from squid.tags.application.edits import (
     TagProposalEdit,
     tag_target,
 )
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAlias, TagDefinition
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAlias, TagDefinition
 
 
 async def test_alias_history_fences_legacy_writers_and_current_permissions(

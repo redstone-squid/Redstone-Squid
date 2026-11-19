@@ -10,13 +10,13 @@ from litestar.types import Scope
 
 from squid.api.security import current_caller
 from squid.core.errors import AuthenticationError
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.domain import (
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
 )
-from squid.minecraft_auth.errors import InvalidInstallationCredentialError
+from squid.core.minecraft_auth.errors import InvalidInstallationCredentialError
 from tests.unit.api.fakes import TEST_CONFIG
 
 GRANT_ID = UUID("139533d8-3172-4b0f-bb86-c76603cd75af")

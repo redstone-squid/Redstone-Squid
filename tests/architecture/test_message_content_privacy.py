@@ -10,7 +10,7 @@ from pathlib import Path
 from tests.support.source_tree import source_tree
 
 API_ROOT = Path(__file__).resolve().parents[2] / "squid" / "api"
-MESSAGE_MODULES = {"squid.messages", "squid.messages.application", "squid.messages.domain"}
+MESSAGE_MODULES = {"squid.core.messages", "squid.core.messages.application", "squid.core.messages.domain"}
 
 
 def test_the_api_never_imports_the_message_context() -> None:
@@ -25,7 +25,7 @@ def test_the_api_never_imports_the_message_context() -> None:
                 module = next((alias.name for alias in node.names), "")
             else:
                 continue
-            if module in MESSAGE_MODULES or module.startswith("squid.messages."):
+            if module in MESSAGE_MODULES or module.startswith("squid.core.messages."):
                 offenders.append(f"{path.relative_to(API_ROOT.parent.parent)}: {module}")
 
     assert offenders == [], "\n".join(offenders)

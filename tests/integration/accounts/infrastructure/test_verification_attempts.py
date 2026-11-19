@@ -8,9 +8,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant, patch_current_time
 
-from squid.accounts.domain import IdentityProvider
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 

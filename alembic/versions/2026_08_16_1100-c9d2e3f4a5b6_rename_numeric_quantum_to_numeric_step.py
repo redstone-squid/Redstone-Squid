@@ -1,7 +1,7 @@
 """Rename tag_definitions.numeric_quantum to numeric_step.
 
 A "quantum" is a physics word. The column holds the increment a numeric tag value must align
-to -- `squid/search/application/fields.py` rejects a value whose modulus against it is non-zero
+to -- `squid/core/search/application/fields.py` rejects a value whose modulus against it is non-zero
 -- which is a step, and every UI that renders it calls it one.
 
 The API field is renamed with it rather than mapped across, because a split vocabulary between

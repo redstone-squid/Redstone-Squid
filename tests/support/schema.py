@@ -5,8 +5,8 @@ from typing import cast
 from sqlalchemy import Table
 from sqlalchemy.orm import DeclarativeBase
 
-import squid.persistence.model_registry  # noqa: F401  # every model must be mapped before the walk
-from squid.persistence.base import Base
+import squid.core.persistence.model_registry  # noqa: F401  # every model must be mapped before the walk
+from squid.core.persistence.base import Base
 
 
 def model_table(model: type[DeclarativeBase]) -> Table:

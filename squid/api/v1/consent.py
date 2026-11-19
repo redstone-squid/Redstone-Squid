@@ -6,11 +6,11 @@ creates an account.
 
 from litestar import Request, Response, Router, get
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, PRIVACY_NOTICE_TITLE
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.v1.schemas.consent import PrivacyNoticeDetail
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, PRIVACY_NOTICE_TITLE
 from squid.core.i18n import localization_for
 from squid_i18n import localization_scope
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, Reason
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, Reason
 
 
 @pytest.mark.parametrize(("mode", "allowed"), [("all", False), ("any", True)])

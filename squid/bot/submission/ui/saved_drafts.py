@@ -10,8 +10,8 @@ from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.i18n import tr
-from squid.submissions.application import StoredDraft
-from squid.submissions.domain import (
+from squid.core.submissions.application import StoredDraft
+from squid.core.submissions.domain import (
     DraftStatus,
 )
 from squid_i18n import Text, md_tr

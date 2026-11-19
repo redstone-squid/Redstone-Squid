@@ -10,9 +10,10 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.application.edits import (
+from squid.core.accounts.models import Account
+from squid.core.actors import Actor
+from squid.core.builds.application import BuildEditPatch, BuildService
+from squid.core.builds.application.edits import (
     BUILD_EDIT,
     BUILD_STATUS_EDIT,
     BuildFieldsEdit,
@@ -21,21 +22,20 @@ from squid.builds.application.edits import (
     build_values,
     patch_values,
 )
-from squid.builds.application.locks import BuildLockService
-from squid.builds.application.restrictions import RestrictionService
-from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
-from squid.builds.domain.credits import Credit, CreditKind, CreditRole
-from squid.builds.history_models import BuildHistoryEntry
-from squid.builds.models import Build, OtherBuild
-from squid.core.actors import Actor
+from squid.core.builds.application.locks import BuildLockService
+from squid.core.builds.application.restrictions import RestrictionService
+from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
+from squid.core.builds.history_models import BuildHistoryEntry
+from squid.core.builds.models import Build, OtherBuild
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.tags.domain import TagModerationStatus, TagValueType
-from squid.versions.application import VersionService
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.tags.domain import TagModerationStatus, TagValueType
+from squid.core.versions.application import VersionService
 from tests.support.build_edits import build_edit_session
 from tests.support.submission_targets import seed_account_and_version
 

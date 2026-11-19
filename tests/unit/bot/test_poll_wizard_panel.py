@@ -10,8 +10,8 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import render_payload
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
-from squid.voting.domain import PollScope, VoteVisibility
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.domain import PollScope, VoteVisibility
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_ui import testing as st
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness

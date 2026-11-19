@@ -7,10 +7,10 @@ from litestar import Litestar, Response, get
 
 from squid.api.v1.submission_intake import SuppliedFileDTO
 from squid.api.v1.submission_schematics import DraftSchematicDTO
-from squid.submissions.application.intake import SuppliedAttachment
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.application.intake import SuppliedAttachment
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from tests.support.litestar import asgi_transport
 
 SOURCE_ID = UUID("6d9a5b5f-4b5b-4b31-b148-e56d478ca862")

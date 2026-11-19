@@ -4,13 +4,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
-from squid.builds.domain.expansion_evaluation import (
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
+from squid.core.builds.domain.expansion_evaluation import (
     NormalizedExpansion,
     PointStatus,
 )
-from squid.builds.domain.expansion_math import ExpressionError
-from squid.records.domain import Candidate, TimingVariant, resolve_fastest, resolve_smallest
+from squid.core.builds.domain.expansion_math import ExpressionError
+from squid.core.records.domain import Candidate, TimingVariant, resolve_fastest, resolve_smallest
 
 
 def parameter(name: str = "n", /, **changes: object) -> ExpansionParameter:

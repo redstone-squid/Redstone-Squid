@@ -9,19 +9,19 @@ import squid_ui.ext.discord as sd
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
 from squid.core.actors import Actor
-from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import (
+from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
     STARBOARD_BOARD_EDIT,
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.starboard.application import StarboardService
-from squid.starboard.application.edits import STARBOARD_CREATE, STARBOARD_DELETE, BoardPresence, BoardValues
-from squid.starboard.application.snapshots import StarboardSnapshot
-from squid.starboard.models import StarboardConfig, StarboardEmoji
+from squid.core.starboard.application import StarboardService
+from squid.core.starboard.application.edits import STARBOARD_CREATE, STARBOARD_DELETE, BoardPresence, BoardValues
+from squid.core.starboard.application.snapshots import StarboardSnapshot
+from squid.core.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.runtime import transaction
 from squid_ui.testing import RecordingResponder, labels, submit_event
 from tests.support.edits import bound_revisions

@@ -1,6 +1,6 @@
 """Expandable source facts shared by persistence and ingestion regression tests."""
 
-from squid.builds.domain.expansion import (
+from squid.core.builds.domain.expansion import (
     DoorExpansion,
     ExpansionBranch,
     ExpansionEvidence,

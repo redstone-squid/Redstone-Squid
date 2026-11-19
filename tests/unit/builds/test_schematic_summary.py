@@ -5,9 +5,9 @@ from dataclasses import replace
 import pytest
 from whenever import Instant
 
-from squid.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
-from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
-from squid.schematics.domain.models import SchematicLicense, SchematicVisibility
+from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
+from squid.core.schematics.application import SchematicPublication, SchematicService, StoredSchematic
+from squid.core.schematics.domain.models import SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer, FakeSchematicStore, FakeVersionResolver, make_analysis
 
 

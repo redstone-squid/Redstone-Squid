@@ -9,13 +9,13 @@ from unittest.mock import create_autospec
 import anyio
 import pytest
 
-from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
-from squid.builds.domain.expansion_evaluation import PointStatus
+from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
+from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.live import DoorRecordLookup
-from squid.records.application.models import (
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.live import DoorRecordLookup
+from squid.core.records.application.models import (
     CandidateBuild,
     CandidateFacet,
     CategoryIdentity,
@@ -25,10 +25,10 @@ from squid.records.application.models import (
     RecordLookupRequest,
     TitleDiagnosticGap,
 )
-from squid.records.application.ports import DoorRangeAnalyzer, RecomputeLease
-from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
-from squid.records.application.snapshots import RecordSnapshot
-from squid.records.domain import (
+from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease
+from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application.snapshots import RecordSnapshot
+from squid.core.records.domain import (
     BaseTitle,
     BuildKind,
     Candidate,
@@ -38,10 +38,10 @@ from squid.records.domain import (
     TimingVariant,
     VersionScope,
 )
-from squid.records.domain.models import FacetKind
-from squid.records.domain.regions import RegionAnalysisStatus
-from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.records.domain.models import FacetKind
+from squid.core.records.domain.regions import RegionAnalysisStatus
+from squid.core.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from tests.support.record_uow import RecordQueryScope, RecordScope
 
 

@@ -2,12 +2,12 @@
 
 import pytest
 
-from squid.submissions.application import CheckedInFormManifestRegistry
-from squid.submissions.domain import ChoiceOption
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog, _content_revision
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
-from squid.versions.domain import MinecraftVersion
+from squid.core.submissions.application import CheckedInFormManifestRegistry
+from squid.core.submissions.domain import ChoiceOption
+from squid.core.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog, _content_revision
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.domain import MinecraftVersion
 
 
 class FakeTags:

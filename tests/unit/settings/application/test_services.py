@@ -2,8 +2,8 @@
 
 from functools import partial
 
-from squid.settings.application import SettingsService
-from squid.settings.models import ServerSetting
+from squid.core.settings.application import SettingsService
+from squid.core.settings.models import ServerSetting
 from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
 

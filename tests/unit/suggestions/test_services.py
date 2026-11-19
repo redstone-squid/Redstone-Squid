@@ -5,7 +5,7 @@ import pytest
 
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
-from squid.suggestions.application import (
+from squid.core.suggestions.application import (
     Candidate,
     SuggestionRegistry,
     SuggestionService,
@@ -13,7 +13,7 @@ from squid.suggestions.application import (
     UnknownSuggestionSourceError,
     content_revision,
 )
-from squid.suggestions.domain import (
+from squid.core.suggestions.domain import (
     MAX_QUERY_LENGTH,
     MAX_QUERY_SUGGESTIONS,
     SourceKind,
@@ -22,7 +22,7 @@ from squid.suggestions.domain import (
     SuggestionResult,
     Visibility,
 )
-from squid.suggestions.infrastructure.providers import StaticProvider
+from squid.core.suggestions.infrastructure.providers import StaticProvider
 
 NAMES = [f"restriction_{index:02d}" for index in range(40)]
 

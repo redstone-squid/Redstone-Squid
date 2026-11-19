@@ -4,7 +4,7 @@ from typing import override
 
 import pytest
 
-from squid.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.application import ErrorReportService
 from squid.runtime import BotServices, WorkerServices
 from tests.support.services import bot_services, is_configured, worker_services
 

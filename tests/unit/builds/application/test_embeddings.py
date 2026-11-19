@@ -6,11 +6,11 @@ from functools import partial
 from sqlalchemy import inspect
 from sqlalchemy.orm import make_transient_to_detached
 
-from squid.builds.application import BuildEmbeddingService
-from squid.builds.domain.credits import name_credits
-from squid.builds.models import DoorBuild, OtherBuild
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.core.builds.application import BuildEmbeddingService
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.models import DoorBuild, OtherBuild
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 

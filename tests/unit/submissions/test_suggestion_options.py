@@ -9,14 +9,14 @@ from typing import Any, cast
 
 import pytest
 
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
-from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
-from squid.suggestions.application import SuggestionService
-from squid.suggestions.infrastructure.catalogue import build_registry
-from squid.suggestions.infrastructure.repository import TaxonomyEntry
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
-from squid.versions.domain import MinecraftVersion
+from squid.core.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
+from squid.core.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
+from squid.core.suggestions.application import SuggestionService
+from squid.core.suggestions.infrastructure.catalogue import build_registry
+from squid.core.suggestions.infrastructure.repository import TaxonomyEntry
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.domain import MinecraftVersion
 
 TAGS = (
     ("seamless", "Seamless", TagSemanticKind.PATTERN, TagValueType.NONE),

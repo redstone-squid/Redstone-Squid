@@ -4,11 +4,11 @@ from typing import Any, cast
 
 import pytest
 
-from squid.submissions.infrastructure.options import _SOURCES as FORM_OPTION_SOURCES
-from squid.suggestions.application import SuggestionRegistry, SuggestionSource
-from squid.suggestions.domain import SourceKind, Visibility
-from squid.suggestions.infrastructure.catalogue import build_registry
-from squid.suggestions.infrastructure.providers.static import StaticProvider
+from squid.core.submissions.infrastructure.options import _SOURCES as FORM_OPTION_SOURCES
+from squid.core.suggestions.application import SuggestionRegistry, SuggestionSource
+from squid.core.suggestions.domain import SourceKind, Visibility
+from squid.core.suggestions.infrastructure.catalogue import build_registry
+from squid.core.suggestions.infrastructure.providers.static import StaticProvider
 
 
 def registry(*, discord: bool = False) -> SuggestionRegistry:
@@ -81,7 +81,7 @@ def test_enumerable_sources_are_the_ones_that_can_be_listed() -> None:
 )
 def test_id_valued_sources_are_declared_integer(source_id: str) -> None:
     """A slash parameter typed as an integer rejects a string choice value."""
-    from squid.suggestions.domain import ValueType
+    from squid.core.suggestions.domain import ValueType
 
     assert registry(discord=True).resolve(source_id).value_type is ValueType.INTEGER
 

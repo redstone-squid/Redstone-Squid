@@ -10,9 +10,9 @@ from typing import Any
 import pytest
 from whenever import Instant
 
-from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
-from squid.schematics.application.jobs import (
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.schematics.application.jobs import (
     ClaimedSchematicJob,
     SchematicCleanupClaim,
     SchematicJobErrorKind,
@@ -20,8 +20,8 @@ from squid.schematics.application.jobs import (
     SchematicJobService,
     SchematicJobSnapshot,
 )
-from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
-from squid.schematics.infrastructure.durable import SchematicJobRunner, _job_failure
+from squid.core.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
+from squid.core.schematics.infrastructure.durable import SchematicJobRunner, _job_failure
 from tests.support.schematic_job_uow import JobScope
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 

@@ -9,11 +9,6 @@ from uuid import UUID, uuid4
 import pytest
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import AccountEditorSnapshot
-from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
-from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
-from squid.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
 from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import (
@@ -27,6 +22,11 @@ from squid.api.v1.me import (
     update_profile,
 )
 from squid.api.v1.schemas.me import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import AccountEditorSnapshot
+from squid.core.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
+from squid.core.accounts.errors import InvalidMergeCodeError, LastIdentityError
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
 from squid.core.errors import AuthenticationError
 from squid.core.sentinel import UNSET
 from tests.support.account_edits import AccountEditRecorder

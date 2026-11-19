@@ -8,10 +8,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild, OtherBuild
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild, OtherBuild
 from squid.core.errors import DataIntegrityError
-from squid.search.infrastructure.projection import (
+from squid.core.search.infrastructure.projection import (
     ProjectionFacet,
     RecordHolderProjectionSource,
     RecordProjectionSource,
@@ -25,8 +25,8 @@ from squid.search.infrastructure.projection import (
     parse_projection_key,
     projection_source_hash,
 )
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAlias, TagAssignment, TagDefinition
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 
 
 def test_loader_rejects_retired_legacy_record_keys() -> None:

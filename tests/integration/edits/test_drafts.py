@@ -9,19 +9,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import OperationReuseError, RevisionConflictError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
-from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit, change_command
-from squid.submissions.application.forms import (
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import OperationReuseError, RevisionConflictError
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
+from squid.core.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit, change_command
+from squid.core.submissions.application.forms import (
     CURRENT_SUBMISSION_SCHEMA,
     CURRENT_SUBMISSION_SCHEMA_REVISION,
     CheckedInFormManifestRegistry,
 )
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
     DraftSnapshot,
@@ -29,7 +29,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
-from squid.submissions.models.entities import SubmissionDraftChange
+from squid.core.submissions.models.entities import SubmissionDraftChange
 
 
 async def test_answers_undo_replay_and_external_change_conflict(

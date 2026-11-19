@@ -7,7 +7,7 @@ from sqlalchemy import event, inspect
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.base import Base
+from squid.core.persistence.base import Base
 
 
 def assert_loaded_detached(entity: Base, *, attributes: Collection[str] | None = None) -> None:

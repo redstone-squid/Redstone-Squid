@@ -7,13 +7,13 @@ import pytest
 
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
-from squid.permissions.application import PermissionService
-from squid.permissions.application.cache import SubjectRuleCache
-from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, CheckMode, Effect, Origin, Reason
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.errors import PermissionDeniedError
-from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.cache import SubjectRuleCache
+from squid.core.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
+from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, CheckMode, Effect, Origin, Reason
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.errors import PermissionDeniedError
+from squid.core.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
 GUILD = 555

@@ -17,8 +17,8 @@ from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.poll_wizard import parse_option_lines
-from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
-from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
+from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
+from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:

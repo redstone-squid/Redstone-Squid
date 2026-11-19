@@ -7,10 +7,10 @@ share vocabulary. This page defines each term and shows how the pieces fit.
 
 | Term | Meaning | Where |
 |---|---|---|
-| Revision | A counter on a stored record that increases with every change | `revision` columns, `squid/persistence/revisions.py`, `squid/edits/domain.py` |
-| Edit | One change requested by a user, checked against revisions and committed in one transaction | `squid/edits` |
+| Revision | A counter on a stored record that increases with every change | `revision` columns, `squid/core/persistence/revisions.py`, `squid/core/edits/domain.py` |
+| Edit | One change requested by a user, checked against revisions and committed in one transaction | `squid/core/edits` |
 | Session history | The undo and redo stack of one open editor | `squid_ui.runtime.History`, `squid/bot/edit_controller.py` |
-| Build history | A permanent log of every change to a build | `build_edit_history`, `squid/builds/history.py` |
+| Build history | A permanent log of every change to a build | `build_edit_history`, `squid/core/builds/history.py` |
 
 ## Revisions
 
@@ -99,7 +99,7 @@ clients retry with the same idempotency key. The bot does not retry; it drops se
 history for the targets and reloads, so the user sees what was actually saved.
 
 The handlers are registered by kind in `squid/bootstrap.py` (`_ServiceGraph.edits`).
-Most are `FieldCommand` subclasses (`squid/edits/fields.py`), which edit the fields
+Most are `FieldCommand` subclasses (`squid/core/edits/fields.py`), which edit the fields
 declared by a Pydantic model on one record.
 
 ## Session history
@@ -150,8 +150,8 @@ edit adds a new history entry rather than removing one.
   answer change so a client retry returns the same result. `schema_revision` is the
   version of the form a draft answers, not a revision counter.
 - **Recalculation proposals.** Inferred corrections to an existing build, held for
-  review (`squid/submissions/application/recalculation.py`). Their HTTP routes and
+  review (`squid/core/submissions/application/recalculation.py`). Their HTTP routes and
   table still use the older name "revision proposal".
-- **Minecraft versions.** `squid/versions` handles the game versions a build works in.
-- **Snapshots.** `squid/starboard/application/snapshots.py` holds detached copies of
+- **Minecraft versions.** `squid/core/versions` handles the game versions a build works in.
+- **Snapshots.** `squid/core/starboard/application/snapshots.py` holds detached copies of
   records that handlers compare before replacing.

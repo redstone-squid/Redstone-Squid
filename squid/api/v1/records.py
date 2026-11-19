@@ -29,13 +29,13 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import requires
-from squid.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
-from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
-from squid.records.application.live import DoorRecordLookup, LiveDoorRecord
-from squid.records.application.models import PublicRecordDetail, PublishedTitle
-from squid.records.application.published_points import PublishedDoorPoint
-from squid.records.application.range_snapshots import RangePublication
-from squid.records.errors import RecordNotFoundError
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
+from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
+from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
+from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.published_points import PublishedDoorPoint
+from squid.core.records.application.range_snapshots import RangePublication
+from squid.core.records.errors import RecordNotFoundError
 
 
 class PublicRecordDTO(DataclassDTO[PublishedTitle]):

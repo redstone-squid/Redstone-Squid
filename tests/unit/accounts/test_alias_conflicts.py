@@ -4,9 +4,9 @@ from uuid import UUID
 
 import pytest
 
-from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.api.errors import ProblemDetail, _status_for_error
 from squid.bot.errors import build_error_notice
+from squid.core.accounts.errors import AliasAlreadyClaimedError
 from squid_ui.content.text import Text
 
 PUBLIC_CREATOR = UUID("33333333-3333-3333-3333-333333333333")

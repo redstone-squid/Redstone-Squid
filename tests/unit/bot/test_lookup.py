@@ -10,9 +10,9 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.lookup import LookupScreen, SuggestionSource, pick
-from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
-from squid.suggestions.application import SuggestionSource as RegisteredSource
-from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
+from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
+from squid.core.suggestions.application import SuggestionSource as RegisteredSource
+from squid.core.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage
 from tests.unit.suggestions.test_services import AllowingAuthorizer, RecordingProvider

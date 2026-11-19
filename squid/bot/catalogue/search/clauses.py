@@ -3,8 +3,8 @@
 from dataclasses import dataclass, replace
 from typing import Self
 
-from squid.search.application.parser import SearchQueryParser
-from squid.search.domain.query import (
+from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
     BuildQuery,
@@ -15,7 +15,7 @@ from squid.search.domain.query import (
     TextExpression,
     expression_applies_to,
 )
-from squid.search.domain.scope import SearchScope
+from squid.core.search.domain.scope import SearchScope
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,16 +14,16 @@ from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditValues
-from squid.permissions.domain.catalogue import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditValues
+from squid.core.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
     STARBOARD_BOARD_EDIT,
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.starboard.application.edits import (
+from squid.core.starboard.application.edits import (
     STARBOARD_CREATE,
     STARBOARD_DELETE,
     STARBOARD_EDIT,
@@ -31,9 +31,9 @@ from squid.starboard.application.edits import (
     BoardValues,
     starboard_target,
 )
-from squid.starboard.application.snapshots import StarboardSnapshot
-from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
-from squid.starboard.models import StarboardConfig, StarboardEmoji
+from squid.core.starboard.application.snapshots import StarboardSnapshot
+from squid.core.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
+from squid.core.starboard.models import StarboardConfig, StarboardEmoji
 from squid_i18n import Text, emoji_text, md_tr
 from squid_ui.ext.discord.form_fields import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target

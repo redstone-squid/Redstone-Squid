@@ -11,8 +11,8 @@ from decimal import Decimal
 
 import squid_ui as sl
 from squid.bot.ui import tr, truncate_display_text
-from squid.search.domain.fields import FieldDefinition, FieldType
-from squid.search.domain.query import (
+from squid.core.search.domain.fields import FieldDefinition, FieldType
+from squid.core.search.domain.query import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,

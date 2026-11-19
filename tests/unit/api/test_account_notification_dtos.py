@@ -6,13 +6,13 @@ from litestar import Litestar, Response, get
 from litestar.testing import TestClient
 from whenever import Instant
 
-from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview
-from squid.accounts.models import AccountIdentity
 from squid.api.pagination import Page
 from squid.api.v1.me import AccountMergeDTO, LinkedIdentityDTO, MergePreviewDTO
 from squid.api.v1.notifications import InboxNotificationDTO
-from squid.notifications.domain import NotificationKind
-from squid.notifications.models import InboxNotification
+from squid.core.accounts.domain import AccountMerge, IdentityProvider, MergePreview
+from squid.core.accounts.models import AccountIdentity
+from squid.core.notifications.domain import NotificationKind
+from squid.core.notifications.models import InboxNotification
 
 NOW = Instant.parse_iso("2026-08-10T12:00:00Z")
 CREATOR_ID = UUID("22222222-2222-4222-8222-222222222222")

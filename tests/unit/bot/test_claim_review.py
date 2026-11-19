@@ -11,13 +11,13 @@ from whenever import Instant
 import squid.bot.accounts.claims as claims_view
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import ClaimStatus
-from squid.accounts.errors import AliasAlreadyClaimedError
-from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import ConsentedAccountWork
-from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import ClaimStatus
+from squid.core.accounts.errors import AliasAlreadyClaimedError
+from squid.core.accounts.models import Account, AccountIdentity, AliasClaim
+from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     commit_render,

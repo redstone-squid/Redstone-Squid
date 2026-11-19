@@ -8,9 +8,6 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.application.presentation import claimant_label
-from squid.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
-from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.bot.accounts.presentation import (
     link_conflict,
     link_message,
@@ -18,8 +15,11 @@ from squid.bot.accounts.presentation import (
     refresh_message,
 )
 from squid.bot.accounts.profile_render import present_claimant
-from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.records import AliasClaimProvider
+from squid.core.accounts.application.presentation import claimant_label
+from squid.core.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
+from squid.core.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.providers.records import AliasClaimProvider
 from squid_i18n import NEUTRAL, discord_text, resolve_text
 from squid_ui.content.text import source_text
 

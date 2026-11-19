@@ -11,9 +11,9 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.tools import SchematicTools, _video_failure_reason
 from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.core.actors import Actor
-from squid.schematics.application.services import SchematicService
-from squid.schematics.application.video import VideoRenderRequest
-from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
+from squid.core.schematics.application.services import SchematicService
+from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.application.video_service import SchematicVideoService, VideoStatus
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.testing import InteractionHarness
 from tests.support.grants import grants

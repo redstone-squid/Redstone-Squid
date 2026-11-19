@@ -10,8 +10,8 @@ import pytest
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.domain import BuildKind
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.domain import BuildKind
 from tests.support.unit_of_work import transact
 
 

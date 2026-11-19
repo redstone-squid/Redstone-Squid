@@ -13,11 +13,11 @@ from litestar.params import SkipValidation
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.security import ANONYMOUS
 from squid.api.v1.search import search
-from squid.builds.application import BuildQueryService
-from squid.idempotency.application import IdempotencyService
-from squid.idempotency.domain import PendingRequest
-from squid.search.application import SearchService
-from squid.search.domain import SearchPage, SearchScope
+from squid.core.builds.application import BuildQueryService
+from squid.core.idempotency.application import IdempotencyService
+from squid.core.idempotency.domain import PendingRequest
+from squid.core.search.application import SearchService
+from squid.core.search.domain import SearchPage, SearchScope
 
 
 async def test_edit_operation_id_waits_for_dependency_reservation() -> None:

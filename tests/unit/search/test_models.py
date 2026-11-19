@@ -4,7 +4,7 @@ import pytest
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET
-from squid.search.domain import (
+from squid.core.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
     RecordSearchHit,

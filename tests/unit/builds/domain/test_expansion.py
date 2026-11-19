@@ -1,13 +1,13 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from squid.builds.application.edit_schema import BuildPatch
-from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
-from squid.builds.domain.expansion import DoorExpansion, ExpansionParameter
-from squid.builds.errors import InvalidBuildError
-from squid.builds.models import DoorBuild, OtherBuild
-from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
+from squid.core.builds.application.edit_schema import BuildPatch
+from squid.core.builds.application.editing import BuildEditPatch
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionParameter
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.models import DoorBuild, OtherBuild
+from squid.core.submissions.infrastructure.inference_payloads import BuildDraftPayload
 from tests.support.expansion import expansion_document
 
 

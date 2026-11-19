@@ -11,11 +11,11 @@ from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.ui import tr
-from squid.builds.domain import BuildCategory
+from squid.core.builds.domain import BuildCategory
 from squid.core.errors import SquidError
+from squid.core.submissions.application.inference_runs import InferenceCandidate
+from squid.core.submissions.application.inferred_drafts import materialize_candidate
 from squid.runtime import BotServices
-from squid.submissions.application.inference_runs import InferenceCandidate
-from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target

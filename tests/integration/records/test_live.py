@@ -6,19 +6,19 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
-from squid.builds.models import BuildVersion, DoorBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.expansion_regions import DoorRangeQuery
-from squid.records.application.live import DoorRecordLookup
-from squid.records.application.services import RecordComputationService, RecordService
-from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TimingVariant
-from squid.records.domain.regions import RegionAnalysisStatus
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
-from squid.records.infrastructure.repository import PostgresRecordRepository
-from squid.records.models import (
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
+from squid.core.builds.models import BuildVersion, DoorBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.expansion_regions import DoorRangeQuery
+from squid.core.records.application.live import DoorRecordLookup
+from squid.core.records.application.services import RecordComputationService, RecordService
+from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, TimingVariant
+from squid.core.records.domain.regions import RegionAnalysisStatus
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.records.infrastructure.repository import PostgresRecordRepository
+from squid.core.records.models import (
     ComputationRun,
     DoorTimingVariant,
     RecordRecomputeQueueItem,
@@ -26,7 +26,7 @@ from squid.records.models import (
     RulesRevision,
     TitleDefinition,
 )
-from squid.versions.models import Version
+from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.database import record_queries
 

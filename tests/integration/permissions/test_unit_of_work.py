@@ -6,13 +6,13 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
-from squid.permissions.application.administration import PermissionAdministrationService
-from squid.permissions.application.ports import AuditEntry
-from squid.permissions.domain.models import AuditAction, AuditSubjectKind, ExternalRoleGrantSubject, PatternMode
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
+from squid.core.permissions.application.administration import PermissionAdministrationService
+from squid.core.permissions.application.ports import AuditEntry
+from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind, ExternalRoleGrantSubject, PatternMode
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 @pytest.mark.parametrize("commit", [False, True])

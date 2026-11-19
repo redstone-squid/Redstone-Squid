@@ -1,7 +1,7 @@
 """Shared suggestion ranking tests."""
 
-from squid.suggestions.application.matching import Candidate, MatchTier, rank
-from squid.suggestions.domain import Suggestion
+from squid.core.suggestions.application.matching import Candidate, MatchTier, rank
+from squid.core.suggestions.domain import Suggestion
 
 RESTRICTIONS = [
     Candidate.create("seamless", "Seamless"),

@@ -12,21 +12,20 @@ import discord
 import pytest
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
 from squid.bot.actors import AccountIdCache
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.voting.cog import VoteCog
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
-from squid.runtime import BackgroundTaskSupervisor
-from squid.settings.application import SettingsService
-from squid.voting.application import VoteService
-from squid.voting.application.ports import VoteActorResolver
-from squid.voting.domain import (
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.settings.application import SettingsService
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.ports import VoteActorResolver
+from squid.core.voting.domain import (
     CastVoteResult,
     VoteKind,
     VoteMessage,
@@ -35,7 +34,8 @@ from squid.voting.domain import (
     VoteSessionSnapshot,
     VoteVisibility,
 )
-from squid.voting.infrastructure.discord_cards import DiscordVoteCards
+from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
+from squid.runtime import BackgroundTaskSupervisor
 from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.services import bot_services

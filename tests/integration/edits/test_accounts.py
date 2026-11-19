@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.application.edits import (
+from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
     PROFILE_EDIT,
     UNLINK_EDIT,
@@ -19,15 +19,15 @@ from squid.accounts.application.edits import (
     AccountVisibilityEdit,
     account_target,
 )
-from squid.accounts.domain import AccountConsent, ProfileUpdate
-from squid.accounts.errors import ConsentRequiredError, LastIdentityError
-from squid.accounts.models import AccountIdentity, ProfileClearAudit
+from squid.core.accounts.domain import AccountConsent, ProfileUpdate
+from squid.core.accounts.errors import ConsentRequiredError, LastIdentityError
+from squid.core.accounts.models import AccountIdentity, ProfileClearAudit
 from squid.core.actors import Actor
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_current_consent(

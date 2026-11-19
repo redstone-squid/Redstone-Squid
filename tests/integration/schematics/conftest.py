@@ -11,7 +11,7 @@ from collections.abc import Callable
 
 import pytest
 
-from squid.schematics.domain.models import SchematicFormat
+from squid.core.schematics.domain.models import SchematicFormat
 
 nucleation = pytest.importorskip("nucleation", reason="requires the optional 'schematics' extra")
 

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, override
 from discord.ext.commands import Cog
 
 from squid.bot.events.handlers import DomainEventHandler, build_handler_registry
-from squid.events import DomainEventDelivery, UnsupportedEventVersionError
+from squid.core.events import DomainEventDelivery, UnsupportedEventVersionError
 from squid.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 

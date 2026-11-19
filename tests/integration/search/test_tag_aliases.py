@@ -11,16 +11,16 @@ from sqlalchemy import Connection, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.models import OtherBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application import SearchService
-from squid.search.domain import BuildSearchHit, SearchPage, SearchRequest, SearchScope, SearchSort
-from squid.search.infrastructure.projection import SearchProjectionWorker
-from squid.search.models import SearchDocument, SearchProjectionQueueItem
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAlias, TagAssignment, TagDefinition
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.models import OtherBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.search.application import SearchService
+from squid.core.search.domain import BuildSearchHit, SearchPage, SearchRequest, SearchScope, SearchSort
+from squid.core.search.infrastructure.projection import SearchProjectionWorker
+from squid.core.search.models import SearchDocument, SearchProjectionQueueItem
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 from tests.support.build_edits import build_edit_session
 
 

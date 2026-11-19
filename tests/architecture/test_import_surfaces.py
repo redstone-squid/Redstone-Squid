@@ -19,19 +19,24 @@ NO_NATIVE_ENGINE = ("nucleation", "sqlalchemy", "discord")
         # Litestar imports its installed ORM integration; application persistence stays unloaded.
         pytest.param(
             "squid.api.errors",
-            ("squid.persistence.engine", "squid.bootstrap", "squid.runtime", "discord"),
+            ("squid.core.persistence.engine", "squid.bootstrap", "squid.runtime", "discord"),
             id="api-errors",
         ),
-        pytest.param("squid.posts.domain", ("sqlalchemy", "discord"), id="post-values"),
+        pytest.param("squid.core.posts.domain", ("sqlalchemy", "discord"), id="post-values"),
         pytest.param(
-            "squid.posts.models",
-            ("squid.persistence.engine", "squid.bootstrap", "squid.posts.infrastructure.repository", "discord"),
+            "squid.core.posts.models",
+            (
+                "squid.core.persistence.engine",
+                "squid.bootstrap",
+                "squid.core.posts.infrastructure.repository",
+                "discord",
+            ),
             id="post-entity",
         ),
         pytest.param("squid.bot.utils.permissions", ("squid.bot.app",), id="bot-permissions"),
-        pytest.param("squid.schematics.domain", NO_NATIVE_ENGINE, id="schematic-domain"),
-        pytest.param("squid.schematics.application", NO_NATIVE_ENGINE, id="schematic-application"),
-        pytest.param("squid.schematics.infrastructure.capability", ("nucleation",), id="schematic-capability"),
+        pytest.param("squid.core.schematics.domain", NO_NATIVE_ENGINE, id="schematic-domain"),
+        pytest.param("squid.core.schematics.application", NO_NATIVE_ENGINE, id="schematic-application"),
+        pytest.param("squid.core.schematics.infrastructure.capability", ("nucleation",), id="schematic-capability"),
     ],
 )
 def test_narrow_transport_imports_do_not_load_application_graph(

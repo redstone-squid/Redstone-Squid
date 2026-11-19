@@ -6,14 +6,14 @@ import pytest
 from pydantic import TypeAdapter
 from whenever import Instant
 
-from squid.builds.domain import BuildCategory, BuildDraft
+from squid.core.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import JSONValue
-from squid.messages.domain import MessageSnapshot
-from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
-from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
-from squid.submissions.infrastructure.inference_runs import _candidates
-from squid.submissions.models.inference import SubmissionInferenceRun
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from squid.core.submissions.infrastructure.inference_payloads import BuildDraftPayload
+from squid.core.submissions.infrastructure.inference_runs import _candidates
+from squid.core.submissions.models.inference import SubmissionInferenceRun
 
 
 def test_legacy_source_files_reencode_without_changing_retained_input() -> None:

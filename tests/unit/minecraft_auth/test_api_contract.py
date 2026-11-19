@@ -11,7 +11,6 @@ from pydantic import AnyHttpUrl
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.app import create_api_app
 from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.openapi import openapi_document
@@ -23,10 +22,11 @@ from squid.api.v1.schemas.minecraft_auth import (
     InstallationCreateRequest,
     PaperChallengeCreateRequest,
 )
+from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.errors import AuthenticationError
-from squid.idempotency import IdempotencyService, PendingRequest
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.domain import (
+from squid.core.idempotency import IdempotencyService, PendingRequest
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
     IssuedPlayerChallenge,
@@ -34,8 +34,8 @@ from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
-from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
+from squid.core.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
+from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from tests.support.litestar import DependencyOverrides, asgi_transport, route_app
 from tests.unit.api.fakes import TEST_CONFIG
 

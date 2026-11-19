@@ -23,7 +23,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
-from squid.persistence.types import InstantUTC
+from squid.core.persistence.types import InstantUTC
 
 revision: str = "b1c2d3e4f5a7"
 down_revision: str | Sequence[str] | None = "a6b1c2d3e4f5"

@@ -8,10 +8,10 @@ import pytest
 from whenever import Instant
 
 from squid.bot.events.handlers import DeleteVotedMessageHandler
-from squid.builds.application import BuildService
-from squid.events import DomainEvent
-from squid.voting.application import VoteService
-from squid.voting.domain import (
+from squid.core.builds.application import BuildService
+from squid.core.events import DomainEvent
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import (
     BuildVoteTarget,
     DeleteLogVoteTarget,
     VoteKind,
@@ -20,7 +20,7 @@ from squid.voting.domain import (
     VoteStatus,
     VoteTarget,
 )
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
 from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.discord import make_layout_bot

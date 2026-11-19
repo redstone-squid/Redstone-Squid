@@ -10,9 +10,9 @@ from typing import override
 
 import pytest
 
-from squid.artifacts.infrastructure import LocalArtifactStore
-from squid.schematics.application import ClaimedRenderJob, SchematicPreviewService, SchematicRenderJobService
-from squid.schematics.application.previews import (
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.schematics.application import ClaimedRenderJob, SchematicPreviewService, SchematicRenderJobService
+from squid.core.schematics.application.previews import (
     CachedRender,
     FreshRender,
     PreviewObjectReservation,

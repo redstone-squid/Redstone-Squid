@@ -9,9 +9,9 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
-from squid.suggestions.application import Candidate, SuggestionService, rank
-from squid.suggestions.application.ports import SuggestionAuthorizer
-from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
+from squid.core.suggestions.application import Candidate, SuggestionService, rank
+from squid.core.suggestions.application.ports import SuggestionAuthorizer
+from squid.core.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:

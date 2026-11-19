@@ -13,7 +13,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.bot.utils.autocomplete import AUTOCOMPLETE_CHOICE_LIMIT
-from squid.suggestions.application import Candidate, rank
+from squid.core.suggestions.application import Candidate, rank
 from squid_i18n import md, md_tr
 from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.target_types import ComponentsV2Target

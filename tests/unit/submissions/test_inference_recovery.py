@@ -9,20 +9,20 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from squid.artifacts.infrastructure import LocalArtifactStore
-from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
-from squid.builds.domain import BuildDraft, DoorDraftDetails
 from squid.core.actors import Actor
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
+from squid.core.builds.domain import BuildDraft, DoorDraftDetails
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
-from squid.permissions.application.ports import PermissionRepository
-from squid.submissions.application.inference_runs import (
+from squid.core.permissions.application.ports import PermissionRepository
+from squid.core.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
     InferenceRunRepository,
     SubmissionInferenceRuns,
     candidate_id,
 )
-from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from squid.core.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid_ui.ext.discord.testing import AsyncCallRecorder, CallRecord
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 

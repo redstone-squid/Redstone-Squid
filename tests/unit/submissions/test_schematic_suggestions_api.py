@@ -7,8 +7,8 @@ from pytest_mock import MockerFixture
 
 from squid.api.v1.submission_schematics import router, schematic_service
 from squid.api.v1.submissions import authenticated_account
-from squid.submissions.application.schematic_inference import SchematicDetection, SchematicSubmissionSuggestions
-from squid.submissions.domain.schematics import DraftSchematicState
+from squid.core.submissions.application.schematic_inference import SchematicDetection, SchematicSubmissionSuggestions
+from squid.core.submissions.domain.schematics import DraftSchematicState
 from tests.support.litestar import asgi_transport, route_app
 
 

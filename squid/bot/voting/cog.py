@@ -8,7 +8,6 @@ import discord
 from discord import app_commands
 
 import squid_ui.ext.discord as sd
-from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.ui import error_node, info_node, text_node
@@ -25,10 +24,11 @@ from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.bot.voting.spec import VotingExports, extension
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
 

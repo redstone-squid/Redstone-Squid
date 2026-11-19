@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.engine import default
 
-from squid.persistence.types import StrEnumText
-from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
-from squid.records.models import (
+from squid.core.persistence.types import StrEnumText
+from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.records.models import (
     ComputationRun,
     ComputationStatus,
     DefinitionFacet,

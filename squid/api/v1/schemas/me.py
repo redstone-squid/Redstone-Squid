@@ -5,14 +5,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
-from squid.accounts.domain import (
+from squid.core.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     ProfileLink,
     ProfileUpdate,
     avatar_url_for,
 )
-from squid.accounts.models import Account, AccountIdentity, AccountProfile
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.sentinel import UNSET
 
 

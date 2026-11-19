@@ -5,9 +5,9 @@ from functools import partial
 
 from whenever import Instant
 
-from squid.messages.application import MessageService
-from squid.messages.domain import MessageSnapshot
-from squid.messages.models import Message
+from squid.core.messages.application import MessageService
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.messages.models import Message
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 

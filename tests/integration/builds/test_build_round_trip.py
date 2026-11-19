@@ -19,21 +19,21 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
-from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import BuildCategory, ShowcaseTag, Status
-from squid.builds.domain.credits import name_credits
-from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
+from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
+from squid.core.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
+from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.domain import BuildCategory, ShowcaseTag, Status
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.infrastructure.repository import BuildRepository
+from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
-from squid.messages.domain import MessageRef, MessageSnapshot
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.models import ServerSetting
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.core.messages.domain import MessageRef, MessageSnapshot
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.models import ServerSetting
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.core.versions.models import Version
 from squid.unit_of_work import UnitOfWorkFactory
-from squid.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

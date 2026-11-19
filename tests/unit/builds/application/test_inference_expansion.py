@@ -2,8 +2,8 @@
 
 import pytest
 
-from squid.builds.application.inference_expansion import InferredDoorExpansion, InferredExpansionParameter
-from squid.builds.domain.expansion import ExpansionBranch, ExpansionEvidence
+from squid.core.builds.application.inference_expansion import InferredDoorExpansion, InferredExpansionParameter
+from squid.core.builds.domain.expansion import ExpansionBranch, ExpansionEvidence
 
 SOURCES = {10: "3-high expandable door. 40+20x blocks, x=1-14 wide; breaks record at: n=5-14 wide"}
 

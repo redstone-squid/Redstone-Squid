@@ -16,9 +16,9 @@ import squid_ui.ext.discord as sd
 from squid.bot import notifications_cog as notification_module
 from squid.bot.app import RedstoneSquid
 from squid.bot.notifications_cog import NotificationCog
-from squid.notifications import NotificationService, PendingNotificationDelivery
-from squid.notifications.application import NotificationRepository
-from squid.notifications.domain import NotificationKind
+from squid.core.notifications import NotificationService, PendingNotificationDelivery
+from squid.core.notifications.application import NotificationRepository
+from squid.core.notifications.domain import NotificationKind
 from tests.support.delivery_uow import NotificationUnitOfWork
 from tests.support.services import bot_services
 

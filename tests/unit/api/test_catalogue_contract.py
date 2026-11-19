@@ -8,15 +8,15 @@ import pytest
 
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetails, GeneralDetails
-from squid.builds.application import PublicBuildPreview, PublicBuildSummary
-from squid.builds.domain import MediaTypeLiteral, Status
-from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
-from squid.records.application.models import PublicRecordDetail, PublishedTitle
-from squid.records.application.services import PublicRecordQueryService
-from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.builds.application import PublicBuildPreview, PublicBuildSummary
+from squid.core.builds.domain import MediaTypeLiteral, Status
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
+from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.services import PublicRecordQueryService
+from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from squid.sponsors import PublicSponsor
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
 
 
 def catalogue_build(build_id: int, **changes: Any) -> Build:

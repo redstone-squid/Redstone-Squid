@@ -17,10 +17,10 @@ from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
-from squid.submissions.application.schematic_inference import SchematicSubmissionSuggestions
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.schematics import DraftSchematic
+from squid.core.submissions.application.attachment_edits import AttachmentValues, FileMembership
+from squid.core.submissions.application.schematic_inference import SchematicSubmissionSuggestions
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain.schematics import DraftSchematic
 
 
 class DraftSchematicDTO(DataclassDTO[DraftSchematic]):

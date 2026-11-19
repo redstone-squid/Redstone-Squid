@@ -9,10 +9,10 @@ import discord
 import pytest
 
 from squid.bot.voting.sessions import ensure_build_review
-from squid.builds.domain import Status
-from squid.builds.models import OtherBuild
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.voting.domain import VoteKind
+from squid.core.builds.domain import Status
+from squid.core.builds.models import OtherBuild
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.voting.domain import VoteKind
 from tests.support.settings import RuntimeSettingsStub
 
 

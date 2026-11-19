@@ -18,10 +18,10 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants, requires_grant
-from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
-from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
-from squid.records.domain import BuildKind
-from squid.suggestions.domain import Suggestion
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
+from squid.core.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
+from squid.core.records.domain import BuildKind
+from squid.core.suggestions.domain import Suggestion
 from squid_i18n import Text, md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

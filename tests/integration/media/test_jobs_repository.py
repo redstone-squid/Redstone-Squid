@@ -16,9 +16,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.artifacts.infrastructure import LocalArtifactStore
-from squid.media.application.jobs import (
+from squid.core.accounts.models import Account
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
     MediaProcessingJobService,
@@ -27,10 +27,10 @@ from squid.media.application.jobs import (
     StoredMediaArtifact,
     TerminalMediaSource,
 )
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
-from squid.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
-from squid.media.models import (
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
+from squid.core.media.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,
@@ -38,11 +38,11 @@ from squid.media.models import (
     MediaProcessingJobRecord,
     MediaUploadRecord,
 )
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.domain import DraftStatus, SubmissionOrigin
-from squid.submissions.models.entities import SubmissionDraft
-from squid.submissions.models.intake import SubmissionSuppliedAttachment
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.domain import DraftStatus, SubmissionOrigin
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact

@@ -9,9 +9,6 @@ import pytest
 from whenever import Instant
 
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
 from squid.bot.accounts.consent import ConsentPrompt
 from squid.bot.routes import AppRequest
 from squid.bot.submission.consent_banner import (
@@ -20,9 +17,12 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.message_intake import BuildMessageIntake
-from squid.settings.application import SettingsService
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.submissions.errors import DraftCapacityExceededError
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.submissions.errors import DraftCapacityExceededError
 from squid_ui.ext.discord import Cancelled, Completed
 from squid_ui.ext.discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot

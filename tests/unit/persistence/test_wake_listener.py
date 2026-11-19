@@ -4,7 +4,7 @@ import pytest
 from pydantic import SecretStr
 from sqlalchemy import make_url
 
-from squid.persistence.wake_listener import asyncpg_dsn
+from squid.core.persistence.wake_listener import asyncpg_dsn
 
 
 @pytest.mark.parametrize("driver", ["postgresql", "postgres", "postgresql+asyncpg", "postgresql+psycopg"])

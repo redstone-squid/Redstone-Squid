@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.versions.domain import parse_version_string
+from squid.core.versions.domain import parse_version_string
 
 
 @pytest.mark.parametrize(

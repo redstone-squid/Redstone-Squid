@@ -14,8 +14,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsPanel
 from squid.bot.utils.permissions import Grants
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError
-from squid.edits.domain import (
+from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -24,14 +23,15 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
-from squid.settings.application import SettingsService
-from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
-from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
-from squid.voting.application import VoteService
-from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
-from squid.voting.domain.models import VoteConfiguration
+from squid.core.errors import AuthorizationError
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
+from squid.core.voting.domain.models import VoteConfiguration
 from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import readonly_transaction
 from squid_ui.ext.discord.testing import commit_render, delivered_to, http_error, interaction_harness, message_harness

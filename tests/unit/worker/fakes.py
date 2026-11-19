@@ -5,13 +5,13 @@ from dataclasses import dataclass, field
 from typing import cast, override
 
 from squid.config import WorkerConfig
-from squid.diagnostics.application import ErrorReportService
-from squid.events import DomainEventService
-from squid.media.application.jobs import MediaStorageCleanup
-from squid.notifications import NotificationService
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.events import DomainEventService
+from squid.core.media.application.jobs import MediaStorageCleanup
+from squid.core.notifications import NotificationService
+from squid.core.schematics.infrastructure.durable import SchematicJobRunner
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.runtime import BackgroundTaskSupervisor, JobHandle, WorkerServices
-from squid.schematics.infrastructure.durable import SchematicJobRunner
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.worker.app import DatabaseWorker
 from squid.worker.rendering import SchematicPreviewWorker
 from tests.support.services import unconfigured

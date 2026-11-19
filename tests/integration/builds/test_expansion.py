@@ -8,17 +8,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.history_models import BuildHistorySnapshot
-from squid.builds.models import DoorBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.domain import BuildKind
-from squid.records.infrastructure.repository import PostgresRecordRepository
-from squid.submissions.application.drafts import StoredDraft
-from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
-from squid.submissions.infrastructure.repository import _to_model, _to_stored
-from squid.submissions.models.entities import SubmissionDraft
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.history_models import BuildHistorySnapshot
+from squid.core.builds.models import DoorBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.domain import BuildKind
+from squid.core.records.infrastructure.repository import PostgresRecordRepository
+from squid.core.submissions.application.drafts import StoredDraft
+from squid.core.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.core.submissions.infrastructure.repository import _to_model, _to_stored
+from squid.core.submissions.models.entities import SubmissionDraft
 from tests.support.build_edits import build_edit_session
 from tests.support.expansion import expansion_document
 

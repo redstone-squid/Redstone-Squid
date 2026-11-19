@@ -9,7 +9,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.sql.elements import TextClause
 
-from squid.persistence.alembic_entities import current_entities
+from squid.core.persistence.alembic_entities import current_entities
 
 _CREATE_SCHEMA = """
 CREATE TABLE builds (

@@ -9,25 +9,25 @@ import discord
 import pytest
 
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.models import Account
 from squid.bot.routes import AppRequest
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.submission.ui.controls import edit_build, recover_build_editor
 from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application import BuildService
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
-from squid.settings.application import SettingsService
-from squid.submissions.application import FormOptionSet, SubmissionFormService
-from squid.submissions.application.forms import build_edit_manifest
-from squid.submissions.domain import FormManifest
+from squid.core.builds.application import BuildService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.settings.application import SettingsService
+from squid.core.submissions.application import FormOptionSet, SubmissionFormService
+from squid.core.submissions.application.forms import build_edit_manifest
+from squid.core.submissions.domain import FormManifest
 from squid_ui.ext.discord.testing import InteractionHarness
 from squid_ui.routing import Endpoint
 from squid_ui.testing import RecordingResponder, press_event

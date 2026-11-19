@@ -3,8 +3,8 @@
 from uuid import uuid4
 
 from squid.bot.submission.ui.inference import InferenceCandidatesScreen
-from squid.builds.domain import BuildDraft
-from squid.submissions.application.inference_runs import InferenceCandidate
+from squid.core.builds.domain import BuildDraft
+from squid.core.submissions.application.inference_runs import InferenceCandidate
 from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services
 

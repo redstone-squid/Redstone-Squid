@@ -19,17 +19,16 @@ from pydantic import ValidationError
 from pytest_mock import MockerFixture
 from pythonjsonlogger.json import JsonFormatter
 
-from squid.artifacts import ArtifactStore
 from squid.config import LogConfig, LoggingConfig, ObservabilityConfig, SchematicConfig
-from squid.logging_config import build_logging_config
-from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
-from squid.schematics.domain.models import AnalyzerCapabilities
-from squid.schematics.errors import InvalidSchematicError
-from squid.schematics.infrastructure import worker as worker_module
-from squid.schematics.infrastructure import worker_main
-from squid.schematics.infrastructure.durable import SchematicJobRunner
-from squid.schematics.infrastructure.wire import Frame
-from squid.schematics.infrastructure.worker import (
+from squid.core.artifacts import ArtifactStore
+from squid.core.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
+from squid.core.schematics.domain.models import AnalyzerCapabilities
+from squid.core.schematics.errors import InvalidSchematicError
+from squid.core.schematics.infrastructure import worker as worker_module
+from squid.core.schematics.infrastructure import worker_main
+from squid.core.schematics.infrastructure.durable import SchematicJobRunner
+from squid.core.schematics.infrastructure.wire import Frame
+from squid.core.schematics.infrastructure.worker import (
     SchematicWorkerPool,
     _emit_child_record,
     _record_worker_failure,
@@ -37,7 +36,8 @@ from squid.schematics.infrastructure.worker import (
     _worker_log_record,
     current_schematic_job_id,
 )
-from squid.schematics.infrastructure.worker_contracts import WorkerLimits
+from squid.core.schematics.infrastructure.worker_contracts import WorkerLimits
+from squid.logging_config import build_logging_config
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import unconfigured
 
@@ -57,7 +57,7 @@ def test_worker_log_record_preserves_child_identity_and_fields() -> None:
             {
                 "created": 1234.5,
                 "levelname": "DEBUG",
-                "name": "squid.schematics.infrastructure.worker_main",
+                "name": "squid.core.schematics.infrastructure.worker_main",
                 "message": "Could not lower worker priority.",
                 "pathname": "/worker_main.py",
                 "lineno": 70,
@@ -70,7 +70,7 @@ def test_worker_log_record_preserves_child_identity_and_fields() -> None:
 
     assert record is not None
     assert record.levelno == logging.DEBUG
-    assert record.name == "squid.schematics.infrastructure.worker_main"
+    assert record.name == "squid.core.schematics.infrastructure.worker_main"
     assert record.getMessage() == "Could not lower worker priority."
     assert record.created == 1234.5
     assert record.exc_text == "Traceback (most recent call last): ..."
@@ -161,7 +161,7 @@ async def child_process() -> AsyncIterator[ChildProcessFactory]:
 
 
 def child_record(message: str, *, level: str = "INFO") -> bytes:
-    return (json.dumps({"levelname": level, "name": "squid.schematics.child", "message": message}) + "\n").encode()
+    return (json.dumps({"levelname": level, "name": "squid.core.schematics.child", "message": message}) + "\n").encode()
 
 
 async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(
@@ -169,12 +169,12 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(
 ) -> None:
     process = await child_process(child_record("Structured child record", level="DEBUG") + b"native panic output\n")
 
-    with anyio.fail_after(5), caplog.at_level(logging.DEBUG, logger="squid.schematics"):
+    with anyio.fail_after(5), caplog.at_level(logging.DEBUG, logger="squid.core.schematics"):
         await unowned_worker()._pump_stderr(process)
 
     structured, fallback = caplog.records
     assert (structured.name, structured.levelno, structured.getMessage()) == (
-        "squid.schematics.child",
+        "squid.core.schematics.child",
         logging.DEBUG,
         "Structured child record",
     )
@@ -188,7 +188,7 @@ async def test_stderr_pump_survives_an_oversized_line(
 ) -> None:
     process = await child_process(b"x" * 4096 + b"\n" + child_record("still alive"), stream_limit=128)
 
-    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.schematics"):
+    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.core.schematics"):
         await unowned_worker()._pump_stderr(process)
 
     assert [record.getMessage() for record in caplog.records] == [
@@ -223,7 +223,7 @@ async def test_terminate_drains_buffered_stderr_and_logs_the_exit(
     process = await child_process(child_record("dying words", level="ERROR"), returncode=returncode)
     with anyio.fail_after(5):
         await process.wait()
-    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.schematics"):
+    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.core.schematics"):
         async with anyio.create_task_group() as pumps:
 
             def spawn(pump: Callable[[], Coroutine[Any, Any, None]]) -> None:
@@ -246,7 +246,7 @@ def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
     line = json.dumps(
         {
             "levelname": "WARNING",
-            "name": "squid.schematics.infrastructure.worker_main",
+            "name": "squid.core.schematics.infrastructure.worker_main",
             "message": "Schematic operation render failed: boom",
             "service_name": "redstone-squid-schematic-worker",
         }
@@ -270,7 +270,7 @@ def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
 
 def test_child_records_obey_parent_side_levels_for_their_logger(caplog: pytest.LogCaptureFixture) -> None:
     """The point of routing by name: silencing a chatty child module from the parent works."""
-    child = logging.getLogger("squid.schematics.child")
+    child = logging.getLogger("squid.core.schematics.child")
     record = _worker_log_record(json.dumps({"levelname": "DEBUG", "name": child.name, "message": "noisy detail"}), 2718)
     assert record is not None
     previous = child.level

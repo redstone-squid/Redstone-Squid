@@ -5,9 +5,9 @@ from decimal import Decimal
 
 import pytest
 
-from squid.records.infrastructure.repository import _restriction_facets
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition, UnitDefinition, convert_display_value
+from squid.core.records.infrastructure.repository import _restriction_facets
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition, UnitDefinition, convert_display_value
 
 
 def test_display_conversion_and_category_thresholds() -> None:

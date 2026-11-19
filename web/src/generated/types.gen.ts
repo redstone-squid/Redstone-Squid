@@ -1361,7 +1361,7 @@ export type PageSquidApiV1SchemasVersionsVersionDetail = {
 /**
  * Page[PublicBuildSummary]
  */
-export type PageSquidBuildsApplicationQueriesPublicBuildSummary = {
+export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
     items: Array<PublicBuildSummary>;
     total: number;
     next: PageAnchor | null;
@@ -2931,7 +2931,7 @@ export type BuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSquidBuildsApplicationQueriesPublicBuildSummary;
+    200: PageSquidCoreBuildsApplicationQueriesPublicBuildSummary;
 };
 
 export type BuildsListResponse = BuildsListResponses[keyof BuildsListResponses];
@@ -4167,7 +4167,7 @@ export type AccountBuildsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSquidBuildsApplicationQueriesPublicBuildSummary;
+    200: PageSquidCoreBuildsApplicationQueriesPublicBuildSummary;
 };
 
 export type AccountBuildsListResponse = AccountBuildsListResponses[keyof AccountBuildsListResponses];

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, override
 import discord
 
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
-from squid.posts.domain import ResourceKind
+from squid.core.posts.domain import ResourceKind
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid

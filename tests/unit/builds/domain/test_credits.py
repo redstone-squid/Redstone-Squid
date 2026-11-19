@@ -2,7 +2,14 @@
 
 import pytest
 
-from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, creator_names, name_credits
+from squid.core.builds.domain.credits import (
+    Credit,
+    CreditAttribution,
+    CreditKind,
+    CreditRole,
+    creator_names,
+    name_credits,
+)
 from squid.core.errors import ValidationError
 
 

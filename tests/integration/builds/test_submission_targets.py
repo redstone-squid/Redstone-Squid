@@ -13,41 +13,40 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
-from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.builds.application import BuildService
-from squid.builds.application.locks import BuildLockService
-from squid.builds.application.restrictions import RestrictionService
-from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import BuildCategory, Status
-from squid.builds.errors import InvalidBuildError
-from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.models import Build, BuildLink, DoorBuild, ExtenderBuild
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.builds.application import BuildService
+from squid.core.builds.application.locks import BuildLockService
+from squid.core.builds.application.restrictions import RestrictionService
+from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.domain import BuildCategory, Status
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.infrastructure.repository import BuildRepository
+from squid.core.builds.models import Build, BuildLink, DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError
-from squid.events.models import DomainEvent
-from squid.minecraft_auth.domain.models import MinecraftClientOrigin
-from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
-from squid.notifications.models import (
+from squid.core.events.models import DomainEvent
+from squid.core.minecraft_auth.domain.models import MinecraftClientOrigin
+from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
+from squid.core.notifications.models import (
     InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
 )
-from squid.permissions.domain import BuiltinRoleKeys
-from squid.permissions.models import (
+from squid.core.permissions.domain import BuiltinRoleKeys
+from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
     PermissionRole,
     PermissionRoleAssignment,
     PermissionRolePattern,
 )
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.models import BuildSchematic, SchematicFile
-from squid.sponsors import PublicSponsor
-from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
-from squid.submissions.application.build_target import SubmissionBuildPreparation
-from squid.submissions.application.commit import BuildSubmissionExecutor
-from squid.submissions.domain import (
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.models import BuildSchematic, SchematicFile
+from squid.core.submissions.application import ClaimedFinalizationJob, StoredDraft
+from squid.core.submissions.application.build_target import SubmissionBuildPreparation
+from squid.core.submissions.application.commit import BuildSubmissionExecutor
+from squid.core.submissions.domain import (
     BuildSubmissionRejected,
     DoorOrientation,
     DoorSubmissionDetails,
@@ -67,15 +66,16 @@ from squid.submissions.domain import (
     SubmissionOrigin,
     SubmissionTaxonomy,
 )
-from squid.submissions.domain.links import SubmissionLink
-from squid.submissions.infrastructure.finalization_repository import (
+from squid.core.submissions.domain.links import SubmissionLink
+from squid.core.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
-from squid.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
-from squid.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
-from squid.submissions.payload_integrity import submission_payload_digest
-from squid.tags.models import TagDefinition
-from squid.versions.application import VersionService
+from squid.core.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
+from squid.core.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
+from squid.core.submissions.payload_integrity import submission_payload_digest
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.application import VersionService
+from squid.sponsors import PublicSponsor
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 from tests.support.expansion import expansion_document

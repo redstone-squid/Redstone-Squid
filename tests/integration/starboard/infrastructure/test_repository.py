@@ -7,11 +7,11 @@ from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.models import Message
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.models import ServerSetting
-from squid.starboard.application import PendingVote
-from squid.starboard.models import (
+from squid.core.messages.models import Message
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.models import ServerSetting
+from squid.core.starboard.application import PendingVote
+from squid.core.starboard.models import (
     OriginMessage,
     StarboardConfig,
     StarboardEmoji,
@@ -20,7 +20,7 @@ from squid.starboard.models import (
     StarboardSource,
     StarboardVote,
 )
-from squid.starboard.models import (
+from squid.core.starboard.models import (
     StarboardEmoji as StarboardEmojiRow,
 )
 from tests.support.schema import model_tables

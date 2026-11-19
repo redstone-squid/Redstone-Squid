@@ -8,8 +8,8 @@ from typing import cast
 
 import pytest
 
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.log_capture import (
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.log_capture import (
     ErrorReportLogHandler,
     captured,
     install_log_capture,
@@ -45,7 +45,7 @@ def _throw(message: str) -> None:
 
 def log_record(
     *,
-    name: str = "squid.search.infrastructure.projection",
+    name: str = "squid.core.search.infrastructure.projection",
     level: int = logging.ERROR,
     message: str = "Dead-lettered a search projection",
     error: BaseException | None = None,
@@ -87,7 +87,7 @@ async def test_a_logged_exception_becomes_a_report() -> None:
     assert call["correlation_id"] == "a" * 32
     assert call["reference"] == "a" * 12
     assert call["surface"] == "log"
-    assert call["origin"] == "squid.search.infrastructure.projection"
+    assert call["origin"] == "squid.core.search.infrastructure.projection"
     assert call["work_lost"] is False
 
 
@@ -127,7 +127,7 @@ async def test_failures_from_this_package_are_ignored() -> None:
     """Storing a report logs when it fails, and following that would never terminate."""
     handler = ErrorReportLogHandler()
     service = RecordingService()
-    handler.handle(log_record(name="squid.diagnostics.application", error=raised(), request_id="e" * 32))
+    handler.handle(log_record(name="squid.core.diagnostics.application", error=raised(), request_id="e" * 32))
 
     await drain(handler, service)
 

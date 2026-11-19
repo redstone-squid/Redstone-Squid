@@ -11,9 +11,9 @@ import inspect
 
 import pytest
 
-from squid.accounts.application.services import generate_verification_code
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.bootstrap import _ServiceGraph
+from squid.core.accounts.application.services import generate_verification_code
+from squid.core.accounts.infrastructure.repository import AccountRepository
 
 PEPPER = "pepper-for-tests"
 
@@ -53,7 +53,7 @@ def test_the_generated_code_covers_ten_digit_bounds(
         requested_bounds.append(bound)
         return randbelow_result
 
-    monkeypatch.setattr("squid.accounts.application.services.secrets.randbelow", fake_randbelow)
+    monkeypatch.setattr("squid.core.accounts.application.services.secrets.randbelow", fake_randbelow)
 
     code = generate_verification_code()
 

@@ -9,27 +9,27 @@ import pytest
 from whenever import Instant
 
 from squid.bot.submission import ingestion
-from squid.builds.application.inference import BuildInferenceInput
-from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.actors import Actor
-from squid.runtime import BotServices
-from squid.submissions.application.drafts import StoredDraft
-from squid.submissions.application.finalization import (
+from squid.core.builds.application.inference import BuildInferenceInput
+from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.submissions.application.drafts import StoredDraft
+from squid.core.submissions.application.finalization import (
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
     SubmissionFinalizationService,
 )
-from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
-from squid.submissions.domain import (
+from squid.core.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
+from squid.core.submissions.domain import (
     DraftSnapshot,
     DraftStatus,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
 )
-from squid.submissions.domain.finalization import FinalizationJobStatus
-from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.errors import DraftCapacityExceededError
+from squid.core.submissions.domain.finalization import FinalizationJobStatus
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.errors import DraftCapacityExceededError
+from squid.runtime import BotServices
 from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.services import bot_services
 

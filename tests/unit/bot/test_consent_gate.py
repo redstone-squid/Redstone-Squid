@@ -15,8 +15,14 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import (
+from squid.bot.accounts.consent import (
+    ConsentPrompt,
+    ensure_consented_account,
+    prompt_for_consent,
+    request_consent,
+)
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     PRIVACY_NOTICE,
     AccountConsent,
@@ -24,13 +30,7 @@ from squid.accounts.domain import (
     IdentityProvider,
     LinkPreview,
 )
-from squid.accounts.models import Account, AccountIdentity
-from squid.bot.accounts.consent import (
-    ConsentPrompt,
-    ensure_consented_account,
-    prompt_for_consent,
-    request_consent,
-)
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.sentinel import NOT_ASKED
 from squid_ui.content.text import NEUTRAL, resolve_text
 from squid_ui.ext.discord import Everyone, SessionKey, primitives

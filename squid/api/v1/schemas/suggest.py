@@ -2,8 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.suggestions.application import SuggestionSource
-from squid.suggestions.domain import (
+from squid.core.suggestions.application import SuggestionSource
+from squid.core.suggestions.domain import (
     ReplacementSpan,
     SourceKind,
     Suggestion,

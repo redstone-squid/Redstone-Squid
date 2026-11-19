@@ -12,7 +12,7 @@ import squid_ui_widgets as sp
 from squid.bot.edit_history import history_actions, track_local_edits
 from squid.bot.ui import tr
 from squid.bot.voting.poll_display import poll_choices, poll_question
-from squid.voting.domain import (
+from squid.core.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
     PollScope,
@@ -20,7 +20,7 @@ from squid.voting.domain import (
     VoteOption,
     VoteVisibility,
 )
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import Text, md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

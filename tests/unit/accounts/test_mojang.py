@@ -7,8 +7,8 @@ from uuid import UUID
 import aiohttp
 import pytest
 
-from squid.accounts.errors import MinecraftServiceUnavailableError
-from squid.accounts.infrastructure.mojang import MojangClient
+from squid.core.accounts.errors import MinecraftServiceUnavailableError
+from squid.core.accounts.infrastructure.mojang import MojangClient
 
 
 class FakeContent:

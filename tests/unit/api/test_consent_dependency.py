@@ -6,9 +6,9 @@ from typing import Literal
 
 import pytest
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Caller, current_browser_account_id
 from squid.api.v1.submissions import _submission_origin
+from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import credential_nodes
 

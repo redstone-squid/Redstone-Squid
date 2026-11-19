@@ -9,11 +9,11 @@ from typing import override
 
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import AccountConsent, IdentityDetails, IdentityProvider
-from squid.accounts.models import Account
-from squid.auth.domain.sessions import WebSessionIdentity
-from squid.auth.models.sessions import OAuthState
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import AccountConsent, IdentityDetails, IdentityProvider
+from squid.core.accounts.models import Account
+from squid.core.auth.domain.sessions import WebSessionIdentity
+from squid.core.auth.models.sessions import OAuthState
 
 
 @dataclass

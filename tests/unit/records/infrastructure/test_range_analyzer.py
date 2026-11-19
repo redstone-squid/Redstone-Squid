@@ -9,10 +9,10 @@ import anyio
 import pytest
 
 from squid.core.errors import ServiceUnavailableError
-from squid.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
-from squid.records.domain.regions import RegionAnalysisStatus
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
-from squid.records.infrastructure.range_limits import RangeProcessLimits
+from squid.core.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
+from squid.core.records.domain.regions import RegionAnalysisStatus
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.records.infrastructure.range_limits import RangeProcessLimits
 from tests.unit.records.application.test_expansion_regions import branch, family, fixed
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Workers require POSIX resource limits.")
@@ -91,8 +91,8 @@ async def test_cancellation_terminates_and_reaps_child(monkeypatch: pytest.Monke
 async def test_worker_enforces_cpu_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     # Keep the real limit installation but replace arithmetic with an infinite loop.
     code = (
-        "from squid.records.infrastructure.range_worker import install_limits; "
-        "from squid.records.infrastructure.range_limits import RangeProcessLimits; "
+        "from squid.core.records.infrastructure.range_worker import install_limits; "
+        "from squid.core.records.infrastructure.range_limits import RangeProcessLimits; "
         "install_limits(RangeProcessLimits(cpu_seconds=1)); "
         "exec('while True: pass')"
     )

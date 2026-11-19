@@ -8,7 +8,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsPanel
 from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
-from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
+from squid.core.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
 from squid_i18n import tr
 from squid_ui.ext.discord.i18n import to_locale_str
 

@@ -9,10 +9,10 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import Decision, PermissionCheck, Reason
-from squid.permissions.errors import PermissionDeniedError, require_check
-from squid.submissions.application import (
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import Decision, PermissionCheck, Reason
+from squid.core.permissions.errors import PermissionDeniedError, require_check
+from squid.core.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
     CheckedInFormManifestRegistry,
@@ -20,7 +20,7 @@ from squid.submissions.application import (
     StoredDraft,
     SubmissionDraftService,
 )
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
     DraftRevisionConflictError,
@@ -30,7 +30,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
-from squid.submissions.errors import (
+from squid.core.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
     DraftSchemaUnsupportedError,
@@ -715,7 +715,7 @@ async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_th
 
 
 async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> None:
-    from squid.permissions.domain import PermissionNode
+    from squid.core.permissions.domain import PermissionNode
 
     class Permissions:
         allowed = True

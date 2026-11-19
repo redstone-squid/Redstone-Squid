@@ -15,27 +15,27 @@ from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
 from squid.bot.ui import CardField, tr
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditValues
 from squid.core.i18n import SUPPORTED_LOCALES
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditValues
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
     SETTINGS_SERVER_VIEW,
     SETTINGS_VOTING_EDIT,
     STARBOARD_BOARD_VIEW,
 )
-from squid.settings.application.edits import GUILD_EDIT, guild_target
-from squid.settings.domain import ScalarChannelSetting
-from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
-from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
-from squid.voting.domain.models import DEFAULT_VOTE_OPTIONS, VoteConfiguration
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.settings.application.edits import GUILD_EDIT, guild_target
+from squid.core.settings.domain import ScalarChannelSetting
+from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
+from squid.core.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
+from squid.core.voting.domain.models import DEFAULT_VOTE_OPTIONS, VoteConfiguration
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import NUMBER, Text, emoji_text, md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
-    from squid.settings.application import SettingsService
+    from squid.core.settings.application import SettingsService
 
 type SettingsRequest = sd.Request[Any, RedstoneSquid]
 

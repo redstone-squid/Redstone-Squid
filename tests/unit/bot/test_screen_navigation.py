@@ -13,9 +13,9 @@ from squid.bot.routes import ScreenUnavailable, router
 from squid.bot.submission.ui import drafts
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
-from squid.builds.domain import Status
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
+from squid.core.builds.domain import Status
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import primitives
 from tests.support.grants import grants

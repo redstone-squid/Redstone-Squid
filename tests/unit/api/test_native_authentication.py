@@ -7,7 +7,7 @@ from litestar.testing import TestClient
 from pytest_mock import MockerFixture
 
 from squid.api.security import Caller, requires
-from squid.idempotency import IdempotencyService
+from squid.core.idempotency import IdempotencyService
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, TEST_UUID, build_app
 
 

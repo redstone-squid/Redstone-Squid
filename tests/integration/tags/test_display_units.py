@@ -5,14 +5,14 @@ from functools import partial
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.application.queries import PublicBuildSummary
-from squid.builds.domain import Status
-from squid.builds.models import OtherBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.infrastructure.projection import SearchProjectionLoader
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition, UnitDefinition
+from squid.core.accounts.models import Account
+from squid.core.builds.application.queries import PublicBuildSummary
+from squid.core.builds.domain import Status
+from squid.core.builds.models import OtherBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.search.infrastructure.projection import SearchProjectionLoader
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition, UnitDefinition
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

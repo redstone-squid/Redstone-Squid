@@ -1,4 +1,4 @@
-from squid.records.models import RecordTitle, TitleDefinition, TitleResult
+from squid.core.records.models import RecordTitle, TitleDefinition, TitleResult
 
 
 def test_record_vocabulary_preserves_physical_tables() -> None:

@@ -20,7 +20,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 
-import squid.persistence.types
+import squid.core.persistence.types
 from alembic import op
 
 revision: str = "b1c2d3e4f5a6"
@@ -52,18 +52,24 @@ def upgrade() -> None:
         ),
     )
 
-    op.add_column("messages", sa.Column("created_at", squid.persistence.types.InstantUTC(timezone=True), nullable=True))
+    op.add_column(
+        "messages", sa.Column("created_at", squid.core.persistence.types.InstantUTC(timezone=True), nullable=True)
+    )
     op.add_column(
         "messages",
         sa.Column(
             "observed_at",
-            squid.persistence.types.InstantUTC(timezone=True),
+            squid.core.persistence.types.InstantUTC(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
         ),
     )
-    op.add_column("messages", sa.Column("edited_at", squid.persistence.types.InstantUTC(timezone=True), nullable=True))
-    op.add_column("messages", sa.Column("deleted_at", squid.persistence.types.InstantUTC(timezone=True), nullable=True))
+    op.add_column(
+        "messages", sa.Column("edited_at", squid.core.persistence.types.InstantUTC(timezone=True), nullable=True)
+    )
+    op.add_column(
+        "messages", sa.Column("deleted_at", squid.core.persistence.types.InstantUTC(timezone=True), nullable=True)
+    )
 
     # DMs are legitimate message facts, and a fact row no longer has to justify itself
     # with a tracking role, so both of these stop being required.

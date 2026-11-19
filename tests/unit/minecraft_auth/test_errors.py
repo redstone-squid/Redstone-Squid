@@ -9,7 +9,7 @@ from squid.core.errors import (
     SquidError,
     ValidationError,
 )
-from squid.minecraft_auth.errors import (
+from squid.core.minecraft_auth.errors import (
     AccountConsentRequiredError,
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,

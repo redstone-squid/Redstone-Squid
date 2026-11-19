@@ -17,17 +17,17 @@ from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.submission.ui.sections import SectionEditorScreen
 from squid.bot.utils.autocomplete import BotInteraction
-from squid.builds.application import BuildService
-from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
-from squid.builds.domain.credits import name_credits
-from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
+from squid.core.builds.application import BuildService
+from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
-from squid.submissions.domain import ChoiceOption, FormManifest
-from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
-from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
-from squid.suggestions.infrastructure.providers import StaticProvider
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.core.submissions.domain import ChoiceOption, FormManifest
+from squid.core.submissions.domain.forms import VisibilityOperator, VisibilityRule
+from squid.core.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
+from squid.core.suggestions.infrastructure.providers import StaticProvider
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from squid_ui.ext.discord.testing import InteractionHarness, assert_within_limits, commit_render, payload_texts, stage
 from squid_ui.testing import press_event, texts
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace

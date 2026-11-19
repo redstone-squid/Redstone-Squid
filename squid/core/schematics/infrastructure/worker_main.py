@@ -1,0 +1,311 @@
+"""Serve native schematic operations in a child process.
+
+Run with python -m squid.core.schematics.infrastructure.worker_main. Request and response frames
+use stdin and stdout; JSON logs use stderr so the supervisor can forward them separately.
+
+Process isolation contains native aborts. Before importing the engine, the child attempts to
+apply POSIX resource limits; unsupported or rejected limits do not prevent startup.
+"""
+
+import faulthandler
+import logging
+import os
+import sys
+from collections.abc import Mapping
+from pathlib import Path
+from typing import IO, Any, override
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows has no rlimits
+    resource = None  # type: ignore[assignment]
+
+from squid.config import load_worker_log_config, load_worker_observability_config
+from squid.core.errors import DomainError, SquidError
+from squid.core.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.errors import (
+    AmbiguousSimulationInputError,
+    InvalidSchematicError,
+    SchematicSupportUnavailableError,
+    SchematicTooLargeError,
+)
+from squid.core.schematics.infrastructure import wire
+from squid.core.schematics.infrastructure.wire import ErrorKind, Frame, Operation
+from squid.core.schematics.infrastructure.worker_contracts import WorkerLimits
+from squid.logging_config import configure_worker_logging
+from squid.observability import configure_observability, extracted_trace_span
+
+logger = logging.getLogger(__name__)
+
+
+class _RequestContextFilter(logging.Filter):
+    """Add the current request's identifiers to records passing through the log handler.
+
+    serve handles one request at a time, so one shared set of fields also associates native
+    background-thread logs with the active request.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fields: dict[str, Any] = {}
+
+    @override
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in self.fields.items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
+        return True
+
+
+_request_context = _RequestContextFilter()
+
+STATM_PATH = Path("/proc/self/statm")
+
+_RESOURCE_PACK: VerifiedResourcePack | None = None
+"""Reuse pack bytes across requests; native pack handles are cached separately by the adapter."""
+
+
+def apply_guardrails(limits: Mapping[str, int]) -> None:
+    """Enable crash tracebacks and attempt resource limits before importing the engine.
+
+    On POSIX, cap address space above the startup baseline, total process CPU time, and individual
+    file size. Failed limit changes are logged; platforms without resource support rely on the
+    supervisor's deadlines.
+
+    RLIMIT_NPROC is omitted because it counts processes and threads per real UID, which can block
+    the engine's thread pools on a busy host. The supervisor kills the worker's process group on
+    timeout to stop its helper processes too.
+    """
+    faulthandler.enable()
+    if resource is None:  # pragma: no cover - Windows
+        return
+
+    _set_limit(resource.RLIMIT_AS, limits["memory_bytes"] + _current_address_space_bytes())  # pyrefly: ignore[missing-attribute]
+    _set_limit(resource.RLIMIT_CPU, limits["cpu_seconds"])  # pyrefly: ignore[missing-attribute]
+    _set_limit(resource.RLIMIT_FSIZE, limits["file_size_bytes"])  # pyrefly: ignore[missing-attribute]
+    try:
+        os.nice(5)  # pyrefly: ignore[missing-attribute]
+    except OSError:  # pragma: no cover - permitted to fail in restricted sandboxes
+        logger.debug("Could not lower worker priority.", exc_info=True)
+
+
+def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
+    """Return mapped address-space bytes, or zero when procfs is unavailable or unreadable.
+
+    Add this baseline to `RLIMIT_AS`: Android's allocator reserves gigabytes before the
+    engine starts. RSS cannot measure these virtual reservations.
+    """
+    assert resource is not None
+    try:
+        with statm_path.open("rb") as handle:
+            size_pages = int(handle.readline().split()[0])
+    except OSError, ValueError, IndexError:
+        return 0
+    return size_pages * resource.getpagesize()  # pyrefly: ignore[missing-attribute]
+
+
+def _set_limit(which: int, soft: int) -> None:
+    """Set a soft resource ceiling no higher than the inherited hard limit, logging failures."""
+    assert resource is not None
+    try:
+        _, hard = resource.getrlimit(which)  # pyrefly: ignore[missing-attribute]
+        ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)  # pyrefly: ignore[missing-attribute]
+        resource.setrlimit(which, (ceiling, hard))  # pyrefly: ignore[missing-attribute]
+    except OSError, ValueError:  # pragma: no cover - depends on host policy
+        logger.warning("Could not apply resource limit %s.", which, exc_info=True)
+
+
+def handle(
+    operation: Operation, params: Mapping[str, Any], payloads: tuple[bytes, ...]
+) -> tuple[Mapping[str, Any], bytes]:
+    """Dispatch one request, returning its JSON result and any binary payload.
+
+    Imported lazily so that :func:`apply_guardrails` has already run by the time the native
+    extension is loaded.
+    """
+    from squid.core.schematics.infrastructure import nucleation_adapter as engine
+
+    if operation == "capabilities":
+        return {"capabilities": wire.encode_capabilities(engine.capabilities())}, b""
+
+    if operation == "analyze":
+        limits, with_lattice, source_format, lattice_max_block_count = wire.decode_analyze_params(params)
+        analysis = engine.analyze(
+            payloads[0],
+            limits=limits,
+            with_lattice=with_lattice,
+            source_format=source_format,
+            lattice_max_block_count=lattice_max_block_count,
+        )
+        return {"analysis": wire.encode_analysis(analysis)}, b""
+
+    if operation == "convert":
+        target, data_version = wire.decode_convert_params(params)
+        converted, losses = engine.convert(
+            payloads[0],
+            target=target,
+            data_version=data_version,
+        )
+        return {"losses": wire.encode_losses(losses)}, converted
+
+    if operation == "compare":
+        comparison = engine.compare(payloads[0], payloads[1], preset=wire.decode_compare_params(params))
+        return {"comparison": wire.encode_comparison(comparison)}, b""
+
+    if operation == "render":
+        return {}, engine.render(
+            payloads[0],
+            request=wire.decode_render_request(params.get("request")),
+            resource_pack=_resource_pack(params),
+        )
+
+    if operation == "render_video":
+        return {}, engine.render_video(
+            payloads[0],
+            request=wire.decode_video_request(params.get("request")),
+            resource_pack=_resource_pack(params),
+            scratch=Path(params["scratch"]),
+            helper=str(params["helper"]),
+        )
+
+    if operation == "simulate":
+        result = engine.simulate(
+            payloads[0],
+            request=wire.decode_simulation_request(params.get("request")),
+        )
+        return {"simulation": wire.encode_simulation(result)}, b""
+
+    if operation == "autostack":
+        lattice, counts = wire.decode_autostack_params(params)
+        stacked = engine.autostack(
+            payloads[0],
+            lattice=lattice,
+            counts=counts,
+        )
+        return {}, stacked
+
+    msg = f"Unknown schematic worker operation {operation!r}."
+    raise InvalidSchematicError(msg, developer_action="The supervisor sent an operation this worker cannot handle.")
+
+
+def _resource_pack(params: Mapping[str, Any]) -> VerifiedResourcePack:
+    """Return the cached resource pack, accepting a fresh one when the supervisor sends it."""
+    global _RESOURCE_PACK
+    encoded = params.get("resource_pack_b64")
+    if encoded is not None:
+        _RESOURCE_PACK = wire.decode_resource_pack(
+            params.get("resource_pack"), wire.decode_base64(encoded, "resource-pack payload")
+        )
+    if _RESOURCE_PACK is None:
+        msg = "No resource pack has been supplied to this worker."
+        raise InvalidSchematicError(msg, developer_action="Send resource_pack_b64 with the first render request.")
+    return _RESOURCE_PACK
+
+
+def _error_payload(exc: Exception) -> Mapping[str, Any]:
+    """Describe a failure in terms the supervisor can turn back into a typed exception."""
+    kind: ErrorKind = "internal"
+    context: dict[str, Any] = {}
+    if isinstance(exc, SchematicTooLargeError):
+        kind = "too_large"
+        context = {"actual": exc.actual, "limit": exc.limit, "measure": exc.measure}
+    elif isinstance(exc, AmbiguousSimulationInputError):
+        # Checked before its `InvalidSchematicError` base, so the candidate coordinates the
+        # caller needs survive the pipe instead of collapsing into a generic rejection.
+        kind = "ambiguous_simulation_input"
+        context = dict(wire.encode_simulation_input_error(exc))
+    elif isinstance(exc, InvalidSchematicError):
+        kind = "invalid"
+        context = dict(exc.context)
+    elif isinstance(exc, SchematicSupportUnavailableError):
+        kind = "unavailable"
+        context = dict(exc.context)
+    elif isinstance(exc, SquidError):
+        context = dict(exc.context)
+    return {"kind": kind, "message": str(exc), "context": context}
+
+
+def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
+    """Handle framed requests until the supervisor closes stdin.
+
+    One request at a time, matching the supervisor's per-worker lock. Concurrency comes from
+    running several workers, not from interleaving inside one.
+    """
+    while True:
+        frame = wire.read_frame_sync(stdin)
+        if frame is None:
+            return
+        request = wire.WorkerRequest.from_frame(frame)
+        header = frame.header
+        request_id = request.request_id
+        operation = request.operation
+        params = request.params
+        attributes: dict[str, str] = {"squid.schematic.operation": operation}
+        schematic_format = params.get("source_format") or params.get("target")
+        if isinstance(schematic_format, str):
+            attributes["squid.schematic.format"] = schematic_format
+        context: dict[str, Any] = {
+            "squid.schematic.request_id": request_id,
+            "squid.schematic.operation": operation,
+        }
+        if request.job_id is not None:
+            context["squid.schematic.job_id"] = request.job_id
+        _request_context.fields = context
+        try:
+            with extracted_trace_span(f"schematic.worker {operation}", _trace_headers(header), attributes) as span:
+                try:
+                    result, output = handle(operation, params, frame.payloads)
+                    response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
+                except Exception as exc:
+                    if isinstance(exc, SquidError):
+                        span.set_attribute("squid.error.code", exc.code.value)
+                    # A rejected upload is an ordinary outcome, not an incident: the supervisor
+                    # re-raises it as a typed error and the user sees a translated message. Only
+                    # failures we did not anticipate deserve a stderr traceback.
+                    expected = isinstance(exc, DomainError)
+                    if not expected:
+                        span.set_error(exc)
+                    logger.log(
+                        logging.DEBUG if expected else logging.WARNING,
+                        "Schematic operation %s failed: %s",
+                        operation,
+                        exc,
+                        exc_info=not expected,
+                    )
+                    response = Frame({"id": request_id, "ok": False, "error": _error_payload(exc)})
+        finally:
+            _request_context.fields = {}
+
+        stdout.write(response.encode())
+        stdout.flush()
+
+
+def _trace_headers(header: Mapping[str, Any]) -> Mapping[str, str]:
+    """Accept only a string-to-string trace carrier from the untrusted request frame."""
+    trace = header.get("trace")
+    if not isinstance(trace, Mapping):
+        return {}
+    return {name: value for name, value in trace.items() if isinstance(name, str) and isinstance(value, str)}
+
+
+def main() -> None:
+    """Read limits from the command-line JSON argument, configure the child, and serve requests."""
+    log_config = load_worker_log_config()
+    # "INFO" matches WorkerProcessConfig.logging, so the child's floor is the supervisor's.
+    configure_worker_logging(level=log_config.level, root_level=log_config.root_level or "INFO")
+    stderr_handler = logging.getHandlerByName("stderr")
+    if stderr_handler is not None:
+        stderr_handler.addFilter(_request_context)
+    limits = WorkerLimits.model_validate_json(sys.argv[1]) if len(sys.argv) > 1 else WorkerLimits()
+    apply_guardrails(limits.model_dump())
+    # Not "worker": that is the supervising database worker, and sharing a service.name makes
+    # a schematic child's spans and metrics indistinguishable from its parent's.
+    observability = configure_observability(load_worker_observability_config(), service_name="schematic-worker")
+    try:
+        serve(sys.stdin.buffer, sys.stdout.buffer)
+    finally:
+        observability.shutdown()
+
+
+if __name__ == "__main__":
+    main()

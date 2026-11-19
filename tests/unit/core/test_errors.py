@@ -2,8 +2,8 @@
 
 from uuid import UUID
 
-from squid.accounts.errors import AccountAlreadyLinkedError
-from squid.builds.errors import BuildNotFoundError, InvalidBuildError
+from squid.core.accounts.errors import AccountAlreadyLinkedError
+from squid.core.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
 from squid.core.i18n import localization_for, tr
 from squid_ui.content.text import Text, localization_scope
@@ -71,7 +71,7 @@ def test_semantic_errors_retain_builtin_compatibility() -> None:
 
 
 def test_deferred_message_params_render_in_backend_and_public_detail() -> None:
-    from squid.builds.errors import RestrictionNotFoundError
+    from squid.core.builds.errors import RestrictionNotFoundError
 
     error = RestrictionNotFoundError("no-pistons")
 
@@ -80,7 +80,7 @@ def test_deferred_message_params_render_in_backend_and_public_detail() -> None:
 
 
 def test_ambient_title_and_public_detail_fall_back_to_english() -> None:
-    from squid.builds.errors import BuildNotFoundError as _BuildNotFoundError
+    from squid.core.builds.errors import BuildNotFoundError as _BuildNotFoundError
 
     error = _BuildNotFoundError(42)
 

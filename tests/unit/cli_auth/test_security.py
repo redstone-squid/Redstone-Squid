@@ -9,9 +9,9 @@ from litestar import Litestar, Request
 from litestar.types import Scope
 
 from squid.api.security import current_caller
-from squid.cli_auth.application import CliAuthorizationService
-from squid.cli_auth.domain import CliIdentity
-from squid.cli_auth.errors import InvalidCliSessionError
+from squid.core.cli_auth.application import CliAuthorizationService
+from squid.core.cli_auth.domain import CliIdentity
+from squid.core.cli_auth.errors import InvalidCliSessionError
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import TEST_CONFIG
 

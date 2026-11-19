@@ -5,8 +5,8 @@ from sqlalchemy import CheckConstraint, Integer, UniqueConstraint, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from whenever import Instant
 
-from squid.permissions.models import PermissionRole
-from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
+from squid.core.permissions.models import PermissionRole
+from squid.core.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from tests.support.schema import model_table
 
 

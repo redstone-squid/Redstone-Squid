@@ -9,8 +9,8 @@ from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import render_payload, text_node
-from squid.community.domain import WelcomeRelayDecision, WelcomeRelayPolicy
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.community.domain import WelcomeRelayDecision, WelcomeRelayPolicy
+from squid.core.settings.domain.runtime import RuntimeSettings
 from squid_i18n import Text, mention
 from squid_ui.ext.discord import send_to
 

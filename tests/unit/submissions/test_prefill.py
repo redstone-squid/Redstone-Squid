@@ -2,13 +2,13 @@
 
 from uuid import uuid4
 
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
-from squid.builds.models import BuildLink
-from squid.submissions.application.forms import build_submission_manifest
-from squid.submissions.application.prefill import project_submission
-from squid.submissions.domain import ChoiceOption, DraftSnapshot, SubmissionOrigin
-from squid.submissions.domain.finalization import SubmissionArtifactReadiness
-from squid.submissions.domain.normalization import normalize_submission
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.models import BuildLink
+from squid.core.submissions.application.forms import build_submission_manifest
+from squid.core.submissions.application.prefill import project_submission
+from squid.core.submissions.domain import ChoiceOption, DraftSnapshot, SubmissionOrigin
+from squid.core.submissions.domain.finalization import SubmissionArtifactReadiness
+from squid.core.submissions.domain.normalization import normalize_submission
 
 
 def test_missing_category_is_retained_for_correction() -> None:

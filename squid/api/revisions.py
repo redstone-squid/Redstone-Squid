@@ -2,9 +2,9 @@
 
 import re
 
+from squid.core.edits.domain import EditTarget, LatestRevision, Revision
 from squid.core.errors import ConflictError, DomainError
 from squid.core.i18n import tr
-from squid.edits.domain import EditTarget, LatestRevision, Revision
 
 
 class RevisionRequiredError(DomainError):

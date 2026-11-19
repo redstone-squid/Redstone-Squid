@@ -16,16 +16,16 @@ from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, allows
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SCHEMATIC_VIEW_PRIVATE,
 )
-from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
-from squid.schematics.application.video import VideoRenderRequest
-from squid.schematics.domain.models import SchematicFormat
-from squid.schematics.errors import SchematicRenderRefusedError
-from squid.suggestions.domain import Suggestion
+from squid.core.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
+from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.models import SchematicFormat
+from squid.core.schematics.errors import SchematicRenderRefusedError
+from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

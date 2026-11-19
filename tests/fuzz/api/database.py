@@ -22,9 +22,9 @@ from psycopg2 import sql
 from psycopg2.extensions import connection as PsycopgConnection
 from sqlalchemy import URL
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION
-from squid.auth.application.services import hash_api_key_secret
-from squid.auth.application.web import hash_web_session_token
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.core.auth.application.services import hash_api_key_secret
+from squid.core.auth.application.web import hash_web_session_token
 from tests.fuzz.api.environment import RunIdentity, SeededIds, SyntheticSecrets, UnsafeEnvironmentError
 
 POSTGRES_USER = "postgres"

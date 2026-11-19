@@ -6,8 +6,8 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
 
 JAVA_UUID = UUID("069a79f4-44e9-4726-a5be-fca90e38aaf5")
 

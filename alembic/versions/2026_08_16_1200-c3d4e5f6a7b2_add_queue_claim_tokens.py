@@ -43,9 +43,9 @@ from alembic_utils.pg_function import PGFunction
 from alembic_utils.replaceable_entity import ReplaceableEntity
 from sqlalchemy.dialects import postgresql
 
-import squid.persistence.types
+import squid.core.persistence.types
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c3d4e5f6a7b2"
 down_revision: str | Sequence[str] | None = "c9d2e3f4a5b6"
@@ -74,7 +74,7 @@ _DISCORD_SYNC_QUEUE_COMMENT = (
     "\n"
     "Not an event queue, despite the shape. Rows are coalesced on\n"
     "`(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO\n"
-    "UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where\n"
+    "UPDATE` triggers in `squid/core/persistence/postgres_entities.sql` — that is where\n"
     "the coalescing actually happens — deleted on acknowledgement, and carry a\n"
     "`generation` compared against a post's applied revision as a staleness token\n"
     "rather than read as an ordering. An event log would be append-only and\n"
@@ -122,7 +122,7 @@ def upgrade() -> None:
             table,
             sa.Column(
                 "available_at",
-                squid.persistence.types.InstantUTC(timezone=True),
+                squid.core.persistence.types.InstantUTC(timezone=True),
                 server_default=sa.text("now()"),
                 nullable=False,
             ),

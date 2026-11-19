@@ -159,7 +159,7 @@ def test_submission_domain_does_not_import_pydantic() -> None:
     """Manifest policy stays independent of application command and transport schemas."""
     violations = [
         f"{path}:{node.lineno}"
-        for path in Path("squid/submissions/domain").rglob("*.py")
+        for path in Path("squid/core/submissions/domain").rglob("*.py")
         for node in ast.walk(source_tree(path))
         if (isinstance(node, ast.Import) and any(alias.name == "pydantic" for alias in node.names))
         or (isinstance(node, ast.ImportFrom) and node.module == "pydantic")
@@ -526,15 +526,15 @@ def test_i18n_core_imports_no_transport() -> None:
 def test_domain_layers_are_framework_and_persistence_independent() -> None:
     (
         archrule("domain layers stay independent from frameworks and outer layers")
-        .match("squid.*.domain*")
+        .match("squid.core.*.domain*")
         .should_not_import("sqlalchemy*")
         .should_not_import("discord*")
         .should_not_import("fastapi*")
         .should_not_import("litestar*")
         .should_not_import("nucleation*")
         .should_not_import("opentelemetry*")
-        .should_not_import("squid.*.application*")
-        .should_not_import("squid.*.infrastructure*")
+        .should_not_import("squid.core.*.application*")
+        .should_not_import("squid.core.*.infrastructure*")
         .check("squid", only_direct_imports=True)
     )
 
@@ -542,14 +542,14 @@ def test_domain_layers_are_framework_and_persistence_independent() -> None:
 def test_application_layers_are_framework_and_infrastructure_independent() -> None:
     (
         archrule("application layers depend on ports rather than adapters")
-        .match("squid.*.application*")
+        .match("squid.core.*.application*")
         .should_not_import("sqlalchemy*")
         .should_not_import("discord*")
         .should_not_import("fastapi*")
         .should_not_import("litestar*")
         .should_not_import("nucleation*")
         .should_not_import("opentelemetry*")
-        .should_not_import("squid.*.infrastructure*")
+        .should_not_import("squid.core.*.infrastructure*")
         .check("squid", only_direct_imports=True)
     )
 
@@ -561,8 +561,8 @@ def test_transports_do_not_import_persistence_adapters() -> None:
             .match(transport)
             .should_not_import("sqlalchemy*")
             .should_not_import("nucleation*")
-            .should_not_import("squid.persistence*")
-            .should_not_import("squid.*.infrastructure*")
+            .should_not_import("squid.core.persistence*")
+            .should_not_import("squid.core.*.infrastructure*")
             .check("squid", only_direct_imports=True)
         )
 
@@ -587,9 +587,9 @@ def test_production_modules_do_not_import_fuzz_engines() -> None:
 # a string handed to importlib, which an import-graph rule would not see.
 ENGINE_REFERENCE_ALLOWLIST = frozenset(
     {
-        Path("squid/schematics/infrastructure/capability.py"),
-        Path("squid/schematics/infrastructure/nucleation_adapter.py"),
-        Path("squid/schematics/infrastructure/worker_main.py"),
+        Path("squid/core/schematics/infrastructure/capability.py"),
+        Path("squid/core/schematics/infrastructure/nucleation_adapter.py"),
+        Path("squid/core/schematics/infrastructure/worker_main.py"),
     }
 )
 
@@ -623,10 +623,10 @@ ENVIRONMENT_ALLOWLIST = frozenset(
         # Settings are read from the environment here and nowhere else.
         Path("squid/config.py"),
         # Only forwards interpreter search paths to a sanitized subprocess environment.
-        Path("squid/records/infrastructure/range_analyzer.py"),
+        Path("squid/core/records/infrastructure/range_analyzer.py"),
         # Passes the worker's environment on to the native video helper with thread limits
         # added; it reads no setting from it.
-        Path("squid/schematics/infrastructure/nucleation_adapter.py"),
+        Path("squid/core/schematics/infrastructure/nucleation_adapter.py"),
     }
 )
 
@@ -742,8 +742,8 @@ BUILTIN_EXCEPTIONS = frozenset(
 # or translate.
 # Pydantic validators require ValueError to produce field validation errors.
 BARE_RAISE_ALLOWLIST = {
-    "squid/records/application/expansion_regions.py": 3,
-    "squid/records/application/live.py": 2,
+    "squid/core/records/application/expansion_regions.py": 3,
+    "squid/core/records/application/live.py": 2,
 }
 
 
@@ -800,7 +800,7 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
 def test_minecraft_authorization_does_not_import_account_persistence() -> None:
     """Minecraft authorization consumes the account-owned application port, never its tables."""
     violations: list[str] = []
-    for path in Path("squid/minecraft_auth").rglob("*.py"):
+    for path in Path("squid/core/minecraft_auth").rglob("*.py"):
         for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 imports = (alias.name for alias in node.names)
@@ -811,7 +811,7 @@ def test_minecraft_authorization_does_not_import_account_persistence() -> None:
             violations.extend(
                 f"{path}:{node.lineno}: {imported}"
                 for imported in imports
-                if imported.startswith("squid.accounts.infrastructure")
+                if imported.startswith("squid.core.accounts.infrastructure")
             )
 
     assert violations == []
@@ -878,15 +878,15 @@ assert 'anyio' not in sys.modules
 def test_shared_models_do_not_import_services_or_adapters() -> None:
     (
         archrule("shared entities depend on values and mapping infrastructure")
-        .match("squid.*.models*")
-        .exclude("squid.*.application.*")
-        .exclude("squid.*.domain.*")
-        .should_not_import("squid.*.application*")
-        .should_not_import("squid.*.infrastructure*")
+        .match("squid.core.*.models*")
+        .exclude("squid.core.*.application.*")
+        .exclude("squid.core.*.domain.*")
+        .should_not_import("squid.core.*.application*")
+        .should_not_import("squid.core.*.infrastructure*")
         .should_not_import("squid.bot*")
         .should_not_import("squid.api*")
         .should_not_import("squid.bootstrap*")
-        .should_not_import("squid.persistence.engine*")
+        .should_not_import("squid.core.persistence.engine*")
         .should_not_import("nucleation*")
         .check("squid", only_direct_imports=True)
     )

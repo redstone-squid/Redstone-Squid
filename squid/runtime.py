@@ -20,24 +20,55 @@ import discord
 from anyio.abc import TaskGroup
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.artifacts import ArtifactStore
-from squid.auth.application import ApiKeyService
-from squid.auth.application.web import WebSessionService
-from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
-from squid.builds.application.ports import BuildSchematicSummaryProvider
-from squid.cli_auth import CliAuthorizationService
-from squid.community.application import WelcomeRelayService
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.log_capture import captured, install_log_capture
-from squid.edits.application import EditRunner
-from squid.events.application import DomainEventService
-from squid.events.infrastructure.listener import DomainEventWakeListener
-from squid.idempotency import IdempotencyService
-from squid.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
-from squid.messages.application import MessageService
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.notifications import NotificationService
+from squid.core.accounts.application import AccountService
+from squid.core.artifacts import ArtifactStore
+from squid.core.auth.application import ApiKeyService
+from squid.core.auth.application.web import WebSessionService
+from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
+from squid.core.builds.application.ports import BuildSchematicSummaryProvider
+from squid.core.cli_auth import CliAuthorizationService
+from squid.core.community.application import WelcomeRelayService
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.log_capture import captured, install_log_capture
+from squid.core.edits.application import EditRunner
+from squid.core.events.application import DomainEventService
+from squid.core.events.infrastructure.listener import DomainEventWakeListener
+from squid.core.idempotency import IdempotencyService
+from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
+from squid.core.messages.application import MessageService
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.notifications import NotificationService
+from squid.core.permissions.application import (
+    PermissionAdministrationService,
+    PermissionEpochWatcher,
+    PermissionService,
+)
+from squid.core.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
+from squid.core.posts.application import PostService
+from squid.core.records.application import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
+from squid.core.search.application import SearchEmbeddingService, SearchService
+from squid.core.settings.application import SettingsService
+from squid.core.starboard.application import StarboardService
+from squid.core.submissions.application import (
+    SubmissionDraftService,
+    SubmissionFinalizationService,
+    SubmissionFinalizationWorker,
+    SubmissionFormService,
+)
+from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
+from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.suggestions.application import SuggestionService
+from squid.core.sync import DiscordReconciliationService
+from squid.core.tags.application import TagService
+from squid.core.versions.application.services import VersionService
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.ports import InteractiveVoteActorResolver
+from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
 from squid.observability import (
     add_counter,
     correlated_log_buffer,
@@ -46,37 +77,6 @@ from squid.observability import (
     record_gauge,
     record_histogram,
 )
-from squid.permissions.application import (
-    PermissionAdministrationService,
-    PermissionEpochWatcher,
-    PermissionService,
-)
-from squid.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
-from squid.posts.application import PostService
-from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
-from squid.records.application.range_publication import RangePublicationService
-from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
-from squid.search.application import SearchEmbeddingService, SearchService
-from squid.settings.application import SettingsService
-from squid.starboard.application import StarboardService
-from squid.submissions.application import (
-    SubmissionDraftService,
-    SubmissionFinalizationService,
-    SubmissionFinalizationWorker,
-    SubmissionFormService,
-)
-from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
-from squid.submissions.application.inference_runs import SubmissionInferenceRuns
-from squid.submissions.application.intake import SubmissionAttachmentIntake
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.suggestions.application import SuggestionService
-from squid.sync import DiscordReconciliationService
-from squid.tags.application import TagService
-from squid.versions.application.services import VersionService
-from squid.voting.application import VoteService
-from squid.voting.application.ports import InteractiveVoteActorResolver
-from squid.voting.application.recount import BallotRecounter, VoteCardReactions
 
 logger = logging.getLogger(__name__)
 

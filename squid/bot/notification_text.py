@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 
 from squid.core.i18n import tr
-from squid.notifications.domain import NotificationKind
+from squid.core.notifications.domain import NotificationKind
 from squid_i18n import Text, md_tr
 
 

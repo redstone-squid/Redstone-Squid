@@ -7,9 +7,9 @@ import pytest
 from litestar.testing import TestClient
 from whenever import Instant
 
+from squid.core.diagnostics.domain import ErrorReportNotFoundError
+from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
-from squid.diagnostics.domain import ErrorReportNotFoundError
-from squid.diagnostics.models import ErrorReport
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 OCCURRED = Instant.from_utc(2026, 8, 17, 12, 0, 0)

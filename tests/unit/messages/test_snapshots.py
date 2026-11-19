@@ -4,8 +4,8 @@ import pytest
 from pydantic import TypeAdapter
 from whenever import Instant
 
-from squid.messages.domain import MessageSnapshot
-from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.submissions.infrastructure.inference_payloads import BuildDraftPayload
 
 
 def test_legacy_draft_source_messages_load_and_reserialize() -> None:

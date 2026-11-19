@@ -6,8 +6,8 @@ from pathlib import Path
 from tests.support.source_tree import source_tree
 
 SESSION_FACTORY_OWNERS = {
-    Path("squid/persistence/engine.py"),
-    Path("squid/persistence/unit_of_work.py"),
+    Path("squid/core/persistence/engine.py"),
+    Path("squid/core/persistence/unit_of_work.py"),
     # Queue metrics are an infrastructure read, independent of business workflows.
     Path("squid/worker/queue_health.py"),
 }
@@ -34,7 +34,7 @@ def test_session_factories_stay_with_database_lifetime_owners() -> None:
 def test_sql_adapters_leave_commit_and_rollback_to_the_unit_of_work() -> None:
     violations: list[str] = []
     for path in Path("squid").rglob("*.py"):
-        if path == Path("squid/persistence/unit_of_work.py"):
+        if path == Path("squid/core/persistence/unit_of_work.py"):
             continue
         tree = source_tree(path)
         imports_sqlalchemy = any(
@@ -51,7 +51,9 @@ def test_sql_adapters_leave_commit_and_rollback_to_the_unit_of_work() -> None:
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr in {"commit", "rollback"}
                 # Scope failures abort even when caught by the caller. Commit still belongs to the UoW.
-                and not (path == Path("squid/builds/infrastructure/edit_scope.py") and node.func.attr == "rollback")
+                and not (
+                    path == Path("squid/core/builds/infrastructure/edit_scope.py") and node.func.attr == "rollback"
+                )
             )
         )
     assert not violations, f"Transaction completion belongs to the application UoW: {violations}"

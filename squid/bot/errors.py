@@ -17,13 +17,13 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.errors import ConsentRequiredError
 from squid.bot.limits import CommandLimits
 from squid.bot.ui import error_node
+from squid.core.accounts.errors import ConsentRequiredError
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.log_capture import captured
 from squid.core.errors import DomainError, JSONValue, RateLimitedError, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.log_capture import captured
 from squid.observability import (
     TraceSurface,
     correlated_log_buffer,

@@ -5,16 +5,16 @@ from sqlalchemy import CheckConstraint, Index
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.builds.models import ExtenderBuild
-from squid.records.application.models import CategoryIdentity
-from squid.records.domain import (
+from squid.core.builds.models import ExtenderBuild
+from squid.core.records.application.models import CategoryIdentity
+from squid.core.records.domain import (
     BaseTitle,
     BuildKind,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
 )
-from squid.records.infrastructure.repository import (
+from squid.core.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
     PostgresRecordRepository,
@@ -22,7 +22,7 @@ from squid.records.infrastructure.repository import (
     _gap_from_row,
     parse_category_key,
 )
-from squid.records.models import (
+from squid.core.records.models import (
     ComputationRun,
     MaterializationSource,
     RecordTitle,

@@ -8,9 +8,9 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.models import Message
-from squid.posts.models import DiscordPost
-from squid.voting.domain import (
+from squid.core.messages.models import Message
+from squid.core.posts.models import DiscordPost
+from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
     DeleteLogVoteTarget,
@@ -27,7 +27,7 @@ from squid.voting.domain import (
     VoteTarget,
     VoteVisibility,
 )
-from squid.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
+from squid.core.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 GUILD_ID = 503

@@ -10,11 +10,6 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import account_target
-from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
-from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
-from squid.accounts.models import Account
 from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
@@ -23,16 +18,21 @@ from squid.bot.lookup import pick
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import account_target
+from squid.core.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
+from squid.core.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.permissions.domain.catalogue import (
+from squid.core.edits.application import EditRunner
+from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
 )
-from squid.suggestions.domain import Suggestion
+from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.modal import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target

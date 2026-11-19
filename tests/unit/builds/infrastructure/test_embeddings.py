@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.builds.infrastructure.embeddings import PostgresBuildIndex
+from squid.core.builds.infrastructure.embeddings import PostgresBuildIndex
 
 
 def unused_session() -> AsyncSession:

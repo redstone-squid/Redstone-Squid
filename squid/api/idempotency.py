@@ -25,7 +25,7 @@ from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.contract import iter_contract_routes
 from squid.api.security import Caller, current_caller
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
+from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 
 _UNSAFE_METHODS = frozenset(UnsafeHttpMethod)
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})

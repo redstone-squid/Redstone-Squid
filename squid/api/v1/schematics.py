@@ -22,9 +22,9 @@ from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
-from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
-from squid.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
-from squid.schematics.errors import SchematicSupportUnavailableError
+from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
+from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
+from squid.core.schematics.errors import SchematicSupportUnavailableError
 
 
 @get(

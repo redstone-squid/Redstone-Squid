@@ -44,13 +44,13 @@ from squid.api.v1.schemas.minecraft_auth import (
     ServerProfileSchema,
 )
 from squid.core.errors import NotFoundError, ServiceUnavailableError
-from squid.minecraft_auth.application.crypto import (
+from squid.core.minecraft_auth.application.crypto import (
     MAX_INSTALLATION_ID_CHARS,
     MAX_INSTALLATION_SECRET_CHARS,
     MIN_INSTALLATION_ID_CHARS,
     MIN_INSTALLATION_SECRET_CHARS,
 )
-from squid.minecraft_auth.domain import (
+from squid.core.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
 )
 

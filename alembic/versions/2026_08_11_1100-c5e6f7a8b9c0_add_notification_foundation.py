@@ -13,7 +13,7 @@ from alembic_utils.pg_trigger import PGTrigger
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c5e6f7a8b9c0"
 down_revision: str | Sequence[str] | None = "b4d5e6f7a8b9"

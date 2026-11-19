@@ -7,10 +7,10 @@ from typing import cast
 from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import dialect
 
-from squid.notifications.domain import NotificationKind, SubscriptionKind
-from squid.notifications.infrastructure.repository import _exact_value
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.persistence.types import StrEnumText
+from squid.core.notifications.domain import NotificationKind, SubscriptionKind
+from squid.core.notifications.infrastructure.repository import _exact_value
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.persistence.types import StrEnumText
 from tests.support.schema import model_table
 
 

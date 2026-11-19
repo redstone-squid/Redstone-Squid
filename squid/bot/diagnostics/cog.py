@@ -7,7 +7,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.diagnostics.screen import ErrorReportScreen
 from squid.bot.ui import CardField, card_node
 from squid.bot.utils.permissions import allows, enforce, hide_unless
-from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
+from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid_i18n import Text, tr
 
 if TYPE_CHECKING:

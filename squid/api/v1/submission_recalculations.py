@@ -15,8 +15,8 @@ from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
 from squid.api.idempotency import reserve_idempotent_request
 from squid.core.errors import JSONValue
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
 
 
 class RecalculationProposalResponse(BaseModel):

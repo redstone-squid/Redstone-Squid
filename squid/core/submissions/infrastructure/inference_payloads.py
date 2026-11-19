@@ -1,0 +1,201 @@
+"""The stored inference draft format, independent of live mapped entities."""
+
+import uuid
+from dataclasses import dataclass, field, fields
+from decimal import Decimal
+from typing import Any
+
+from whenever import Instant
+
+from squid.core.builds.domain import (
+    BuildCategory,
+    BuildDraft,
+    DoorDraftDetails,
+    DoorOrientationLiteral,
+    ExtenderDraftDetails,
+    Info,
+    MediaTypeLiteral,
+    Status,
+)
+from squid.core.builds.domain.credits import Credit, name_credits
+from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.models import BuildLink
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.tags.domain import (
+    RecordOperator,
+    TagAuthority,
+    TagModerationStatus,
+    TagSemanticKind,
+    TagValue,
+    TagValueType,
+)
+from squid.core.tags.models import TagAssignment, TagDefinition
+from squid.sponsors import PublicSponsor
+
+
+@dataclass(frozen=True)
+class BuildLinkPayload:
+    """A media link captured in an inference result."""
+
+    url: str
+    media_type: MediaTypeLiteral
+
+
+@dataclass(frozen=True, slots=True)
+class TagDefinitionPayload:
+    """Tag metadata captured when inference completed."""
+
+    id: int
+    stable_key: str
+    display_name: str
+    authority: TagAuthority
+    semantic_kind: TagSemanticKind
+    value_type: TagValueType
+    moderation_status: TagModerationStatus
+    query_name: str | None = None
+    restriction_type: str | None = None
+    record_operator: RecordOperator | None = None
+    canonical_unit: str | None = None
+    default_display_unit: str | None = None
+    numeric_step: Decimal | None = None
+    render_template: str = "{name}"
+    default_display_order: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class TagAssignmentPayload:
+    """A tag assignment captured in an inference result."""
+
+    definition: TagDefinitionPayload
+    value: TagValue = None
+    display_unit: str | None = None
+    display_order: int | None = None
+    evidence: str | None = None
+    origin: str = "submitted"
+
+
+@dataclass(kw_only=True)
+class BuildDraftPayload:
+    """Stored inference facts without SQLAlchemy relationships or session state.
+
+    Missing facts retain their defaults so a candidate can be reopened for editing.
+    Links and tag assignments use plain payload values and are reconstructed by
+    to_draft; this payload does not finalize or save a build.
+    """
+
+    category: BuildCategory | None = None
+    submission_status: Status | None = None
+    versions: list[str] = field(default_factory=list)
+    version_spec: str | None = None
+
+    width: int | None = None
+    height: int | None = None
+    depth: int | None = None
+
+    patterns: list[str] = field(default_factory=list)
+    wiring_placement_restrictions: list[str] = field(default_factory=list)
+    animated_restrictions: list[str] = field(default_factory=list)
+    component_restrictions: list[str] = field(default_factory=list)
+    miscellaneous_restrictions: list[str] = field(default_factory=list)
+    tags: list[TagAssignmentPayload] = field(default_factory=list)
+
+    extra_info: Info = field(default_factory=Info)
+    creators_ign: list[str] = field(default_factory=list)
+    credits: list[Credit] = field(default_factory=list)
+    links: list[BuildLinkPayload] = field(default_factory=list)
+
+    display_name: str | None = None
+    source_submission_draft_id: uuid.UUID | None = None
+    sponsor: PublicSponsor | None = None
+    submitter_account_id: int | None = None
+    completion_time: str | None = None
+    completion_at: Instant | None = None
+    completion_evidence: str | None = None
+    description: str | None = None
+
+    source_messages: tuple[MessageSnapshot, ...] = ()
+
+    ai_generated: bool | None = None
+
+    # The durable wire shape remains flat; conversion owns category discrimination.
+    door_orientation: DoorOrientationLiteral | None = None
+    door_expansion: DoorExpansion | None = None
+    door_width: int | None = None
+    door_height: int | None = None
+    door_depth: int | None = None
+    normal_opening_time: int | None = None
+    normal_closing_time: int | None = None
+    visible_opening_time: int | None = None
+    visible_closing_time: int | None = None
+    extender_orientation: str | None = None
+    extension_length: int | None = None
+    extender_type: str | None = None
+    extension_time: int | None = None
+    retraction_time: int | None = None
+
+    @classmethod
+    def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:
+        """Capture inferred values without storing SQLAlchemy state."""
+        detail_names = {item.name for kind in (DoorDraftDetails, ExtenderDraftDetails) for item in fields(kind)}
+        values: dict[str, Any] = {
+            item.name: getattr(draft.details, item.name, None)
+            if item.name in detail_names
+            else getattr(draft, item.name)
+            for item in fields(cls)
+        }
+        values["creators_ign"] = []
+        values["links"] = [
+            BuildLinkPayload(link.url, link.media_type) for link in draft.links if link.media_type is not None
+        ]
+        values["tags"] = [
+            TagAssignmentPayload(
+                definition=TagDefinitionPayload(
+                    **{item.name: getattr(tag.definition, item.name) for item in fields(TagDefinitionPayload)}
+                ),
+                value=tag.value,
+                display_unit=tag.display_unit,
+                display_order=tag.display_order,
+                evidence=tag.evidence,
+                origin=tag.origin,
+            )
+            for tag in draft.tags
+        ]
+        return cls(**values)
+
+    def to_draft(self) -> BuildDraft:
+        """Restore editable facts from the captured payload."""
+        values = {item.name: getattr(self, item.name) for item in fields(self)}
+        legacy_names = values.pop("creators_ign")
+        values["credits"] = self.credits or name_credits(legacy_names, legacy=True)
+        values["links"] = [BuildLink(link.url, link.media_type) for link in self.links]
+        values["tags"] = [
+            TagAssignment(
+                definition=TagDefinition(
+                    **{item.name: getattr(tag.definition, item.name) for item in fields(TagDefinitionPayload)}
+                ),
+                value=tag.value,
+                display_unit=tag.display_unit,
+                display_order=tag.display_order,
+                evidence=tag.evidence,
+                origin=tag.origin,
+            )
+            for tag in self.tags
+        ]
+        door_values = {item.name: values.pop(item.name) for item in fields(DoorDraftDetails)}
+        extender_values = {item.name: values.pop(item.name) for item in fields(ExtenderDraftDetails)}
+        match self.category:
+            case BuildCategory.DOOR:
+                values["details"] = DoorDraftDetails(**door_values)
+            case BuildCategory.EXTENDER:
+                values["details"] = ExtenderDraftDetails(**extender_values)
+            case None:
+                has_door = any(value is not None for value in door_values.values())
+                has_extender = any(value is not None for value in extender_values.values())
+                if has_door and has_extender:
+                    message = "An undecided draft cannot contain both door and extender details."
+                    raise ValueError(message)
+                if has_door:
+                    values["details"] = DoorDraftDetails(**door_values)
+                elif has_extender:
+                    values["details"] = ExtenderDraftDetails(**extender_values)
+        return BuildDraft(**values)

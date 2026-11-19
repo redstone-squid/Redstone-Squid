@@ -5,8 +5,8 @@ from uuid import uuid4
 import pytest
 
 from squid.core.errors import ValidationError
-from squid.submissions.application import build_submission_manifest
-from squid.submissions.domain import (
+from squid.core.submissions.application import build_submission_manifest
+from squid.core.submissions.domain import (
     CategoryForm,
     ControlKind,
     DraftChange,
@@ -21,7 +21,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
     ValueKind,
 )
-from squid.submissions.domain.drafts import MAX_DRAFT_OPERATION_VALUE_BYTES, MAX_DRAFT_OPERATIONS
+from squid.core.submissions.domain.drafts import MAX_DRAFT_OPERATION_VALUE_BYTES, MAX_DRAFT_OPERATIONS
 
 
 def operation(field_id: str, value: object) -> FieldOperation:

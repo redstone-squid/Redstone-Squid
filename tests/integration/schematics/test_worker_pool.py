@@ -16,9 +16,9 @@ import anyio
 import pytest
 
 from squid.config import SchematicConfig
-from squid.schematics.application.commands import SimulationRequest
-from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SchematicLimits
-from squid.schematics.errors import (
+from squid.core.schematics.application.commands import SimulationRequest
+from squid.core.schematics.domain.models import FingerprintPreset, SchematicFormat, SchematicLimits
+from squid.core.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
@@ -26,7 +26,7 @@ from squid.schematics.errors import (
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
 )
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
 
 pytestmark = [pytest.mark.schematic, pytest.mark.asyncio]
 
@@ -306,7 +306,7 @@ async def test_a_clean_shutdown_does_not_look_like_a_failure(
     """Orderly shutdown should not produce warnings that suggest a worker failure."""
     await pool.capabilities()
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.infrastructure.worker"):
+    with caplog.at_level(logging.INFO, logger="squid.core.schematics.infrastructure.worker"):
         await pool.aclose()
 
     assert [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING] == []
@@ -343,7 +343,7 @@ async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_for
         )
     )
     async with pool.running():
-        with caplog.at_level(logging.ERROR, logger="squid.schematics.infrastructure.worker"):
+        with caplog.at_level(logging.ERROR, logger="squid.core.schematics.infrastructure.worker"):
             for _ in range(2):
                 with pytest.raises(SchematicTimeoutError):
                     await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)

@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
-from squid.schematics.application import (
+from squid.core.schematics.application import (
     CachedRender,
     ConvertRequest,
     FreshRender,
@@ -19,8 +19,8 @@ from squid.schematics.application import (
     SchematicService,
     SkippedRender,
 )
-from squid.schematics.application.services import summarise_losses
-from squid.schematics.domain.models import (
+from squid.core.schematics.application.services import summarise_losses
+from squid.core.schematics.domain.models import (
     SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AutostackLattice,
     FingerprintPreset,
@@ -32,8 +32,8 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     VersionLossEntry,
 )
-from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
-from squid.schematics.errors import (
+from squid.core.schematics.domain.values import RgbaColor, VerifiedResourcePack
+from squid.core.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
     SchematicNotFoundError,
@@ -556,7 +556,7 @@ async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureF
     stored = await schematics.featured_for_build(7)
     assert stored is not None
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
+    with caplog.at_level(logging.INFO, logger="squid.core.schematics.application.preview_service"):
         assert await schematics.explain_render_skip(stored) is None
 
     assert analyzer.render_calls == []
@@ -669,7 +669,7 @@ async def test_render_skips_a_schematic_over_a_budget(
         publication=original_publication(),
     )
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
+    with caplog.at_level(logging.INFO, logger="squid.core.schematics.application.preview_service"):
         assert await schematics.prepare_render(7) == SkippedRender(reason)
 
     assert analyzer.render_calls == []

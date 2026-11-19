@@ -49,9 +49,9 @@ from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config, load_or_exit
+from squid.core.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
-from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
 from squid.runtime import (
     ApiServices,
     ApplicationRuntime,

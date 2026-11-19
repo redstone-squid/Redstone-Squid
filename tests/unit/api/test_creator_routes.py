@@ -9,16 +9,16 @@ from litestar import Litestar, get
 from litestar.di import Provide
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import (
+from squid.api.openapi import ApplicationValueSchemaPlugin
+from squid.api.v1.creators import PublicCreatorDTO, get_creator_profile
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import (
     CreditedAlias,
     IdentityDetails,
     IdentityProvider,
     ProfileLink,
     PublicCreatorProfile,
 )
-from squid.api.openapi import ApplicationValueSchemaPlugin
-from squid.api.v1.creators import PublicCreatorDTO, get_creator_profile
 
 CREATOR_ID = UUID("11111111-1111-4111-8111-111111111111")
 CANONICAL_ID = UUID("22222222-2222-4222-8222-222222222222")

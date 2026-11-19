@@ -3,7 +3,7 @@
 import discord
 from whenever import Instant
 
-from squid.messages.domain import MessageSnapshot
+from squid.core.messages.domain import MessageSnapshot
 
 
 def to_message_snapshot(message: discord.Message) -> MessageSnapshot:

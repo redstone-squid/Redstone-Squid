@@ -7,8 +7,8 @@ from pydantic import ValidationError as PydanticValidationError
 from squid.api.app import create_api_app
 from squid.api.openapi import openapi_document
 from squid.api.v1.schemas.submission_media import DraftMediaListResponse, DraftMediaResponse
-from squid.media.application.jobs import StoredMediaArtifact
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.application.jobs import StoredMediaArtifact
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from tests.support.litestar import asgi_transport
 from tests.unit.submissions.media_api_fakes import (
     DRAFT_ID,

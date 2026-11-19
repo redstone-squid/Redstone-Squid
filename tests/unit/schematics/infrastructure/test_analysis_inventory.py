@@ -6,8 +6,8 @@ import pytest
 
 pytest.importorskip("nucleation")
 
-from squid.schematics.domain.models import SchematicLimits
-from squid.schematics.infrastructure import nucleation_adapter, wire
+from squid.core.schematics.domain.models import SchematicLimits
+from squid.core.schematics.infrastructure import nucleation_adapter, wire
 
 
 def test_native_inventory_round_trips_without_counting_unused_palette_entries() -> None:

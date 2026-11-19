@@ -8,9 +8,9 @@ import pytest
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
-from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
-from squid.voting.domain import VoteChoice, VoteKind, VoteOption
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_ui.ext.discord.testing import stage
 
 

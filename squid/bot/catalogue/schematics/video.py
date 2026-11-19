@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid.schematics.application.video import VideoInteraction, VideoPosition, VideoRenderRequest
+from squid.core.schematics.application.video import VideoInteraction, VideoPosition, VideoRenderRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type VideoSubmit = Callable[[sd.ActionEvent, VideoRenderRequest], Awaitable[None]]

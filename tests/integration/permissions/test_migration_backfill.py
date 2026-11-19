@@ -12,8 +12,8 @@ from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.permissions.application import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 BACKFILL_DATABASE = "redstone_squid_backfill"
 TABLES_REVISION = "d8e9f0a1b2c3"

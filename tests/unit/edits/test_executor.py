@@ -11,9 +11,8 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError, ValidationError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import (
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import (
     EditCommand,
     EditCommitUncertainError,
     EditExpiredError,
@@ -26,7 +25,8 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.edits.fields import Aggregate, FieldCommand
+from squid.core.edits.fields import Aggregate, FieldCommand
+from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError, ValidationError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 TARGET = EditTarget("example", "1")

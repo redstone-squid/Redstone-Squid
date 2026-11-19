@@ -10,8 +10,8 @@ from squid.api.dependencies import Tags, get_tags
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.core.pagination import offset_page
-from squid.tags.errors import TagNotFoundError
-from squid.tags.models import TagDefinition
+from squid.core.tags.errors import TagNotFoundError
+from squid.core.tags.models import TagDefinition
 
 
 class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):

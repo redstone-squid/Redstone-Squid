@@ -10,23 +10,30 @@ from litestar import Litestar, Request
 from litestar.di import Provide
 from litestar.testing import TestClient
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CreditedAlias, PublicCreatorProfile
-from squid.accounts.models import CreatorAlias
 from squid.api.v1.schemas.votes import VoteSessionDetail
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, DoorBuild
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CreditedAlias, PublicCreatorProfile
+from squid.core.accounts.models import CreatorAlias
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, DoorBuild
+from squid.core.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
+from squid.core.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
+from squid.core.tags.application import TagService
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.application.services import VersionService
+from squid.core.versions.domain import MinecraftVersion
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import (
+    VoteChoice,
+    VoteKind,
+    VoteOption,
+    VoteSelection,
+    VoteSessionSnapshot,
+    VoteVisibility,
+)
 from squid.runtime import ApiServices
-from squid.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
-from squid.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
-from squid.tags.application import TagService
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
-from squid.versions.application.services import VersionService
-from squid.versions.domain import MinecraftVersion
-from squid.voting.application import VoteService
-from squid.voting.domain import VoteChoice, VoteKind, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
 from tests.support.voting import build_snapshot, poll_snapshot
 from tests.unit.api.fakes import MockDatabaseManager
 

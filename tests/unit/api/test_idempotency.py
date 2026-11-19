@@ -30,11 +30,11 @@ from squid.api.idempotency import (
     reserve_idempotent_request,
 )
 from squid.api.security import current_caller
+from squid.core.edits.application import EditExecutor
 from squid.core.errors import ErrorCode
-from squid.edits.application import EditExecutor
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
-from squid.idempotency.application import IdempotencyRepository
-from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
+from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse
+from squid.core.idempotency.application import IdempotencyRepository
+from squid.core.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
 from tests.support.unit_of_work import CommittedState, PublishingFakeUnitOfWork
 from tests.unit.api.fakes import (
     TEST_CONFIG,

@@ -7,15 +7,15 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
-from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.domain import (
+from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
+from squid.core.minecraft_auth.domain import (
     IssuedInstallationCredential,
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
     PublicServerProfile,
 )
-from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
+from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 
 InstallationLabel = Annotated[str, Field(min_length=1, max_length=80)]
 DeviceCode = Annotated[str, Field(min_length=32, max_length=256, pattern=r"^[A-Za-z0-9_-]+$")]

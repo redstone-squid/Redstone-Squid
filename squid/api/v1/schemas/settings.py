@@ -4,7 +4,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.domain.runtime import RuntimeSettings
 
 
 class RuntimeSettingsDetail(BaseModel):

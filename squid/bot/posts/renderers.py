@@ -9,8 +9,8 @@ from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.ui import render_payload
-from squid.builds.domain import Status
-from squid.posts.domain import ResourceKind
+from squid.core.builds.domain import Status
+from squid.core.posts.domain import ResourceKind
 
 if TYPE_CHECKING:
     import squid.bot.app

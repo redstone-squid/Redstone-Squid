@@ -13,8 +13,8 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.models import ErrorReport
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.models import ErrorReport
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )

@@ -1,0 +1,231 @@
+"""SQLAlchemy models for durable submission finalization."""
+
+import uuid
+
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+from whenever import Instant
+
+from squid.core.persistence.base import Base
+from squid.core.persistence.types import InstantUTC, StrEnumText
+from squid.core.submissions.domain import FinalizationJobStatus
+
+_LEGACY_SPONSOR_FORBIDDEN_SQL = """
+payload IS NULL OR NOT (
+    payload ->> 'payload_schema' = '2'
+    AND payload ->> 'sponsor_attribution' = 'true'
+)
+"""
+
+_FINALIZATION_STATE_SHAPE_SQL = """
+(
+    status = 'pending'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'claimed'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NOT NULL
+    AND claim_token IS NOT NULL
+    AND claim_expires_at IS NOT NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'needs_attention'
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NOT NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) > 0
+) OR (
+    status = 'completed'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NOT NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'dead'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NOT NULL
+    AND jsonb_array_length(attention_issues) > 0
+)
+"""
+
+
+class SubmissionFinalizationJob(Base, kw_only=True):
+    """A finalization attempt retained with its current worker claim and retry count."""
+
+    __tablename__ = "submission_finalization_jobs"
+    __table_args__ = (
+        UniqueConstraint("draft_id", "attempt_number", name="submission_finalization_jobs_draft_attempt_key"),
+        Index(
+            "submission_finalization_jobs_actor_idx",
+            "requested_by_account_id",
+            postgresql_where=text("requested_by_account_id IS NOT NULL"),
+        ),
+        CheckConstraint("attempt_number > 0", name="submission_finalization_jobs_attempt_number_positive"),
+        Index(
+            "submission_finalization_jobs_one_active_attempt",
+            "draft_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'claimed')"),
+        ),
+        CheckConstraint("draft_revision >= 0", name="submission_finalization_jobs_revision_nonnegative"),
+        CheckConstraint("attempts >= 0", name="submission_finalization_jobs_attempts_nonnegative"),
+        CheckConstraint(
+            "payload_sha256 IS NULL OR payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="submission_finalization_jobs_payload_sha256_check",
+        ),
+        CheckConstraint(
+            _LEGACY_SPONSOR_FORBIDDEN_SQL,
+            name="submission_finalization_jobs_legacy_sponsor_forbidden",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'claimed', 'needs_attention', 'completed', 'dead')",
+            name="submission_finalization_jobs_status_check",
+        ),
+        CheckConstraint(
+            _FINALIZATION_STATE_SHAPE_SQL,
+            name="submission_finalization_jobs_state_shape",
+        ),
+        Index(
+            "submission_finalization_jobs_ready_idx",
+            "available_at",
+            postgresql_where=text("status IN ('pending', 'claimed')"),
+        ),
+        Index(
+            "submission_finalization_jobs_attention_idx",
+            "attention_at",
+            postgresql_where=text("status = 'needs_attention'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_drafts.id", name="submission_finalization_jobs_draft_id_fkey", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # A new submission gets a new attempt_number; worker retries increment attempts.
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    requested_by_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        default=None,
+    )
+    draft_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    payload_sha256: Mapped[str | None] = mapped_column(Text, default=None)
+    status: Mapped[FinalizationJobStatus] = mapped_column(StrEnumText(FinalizationJobStatus), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    claim_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    attention_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    attention_issues: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default_factory=list)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    updated_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class SubmissionFinalizationResult(Base, kw_only=True):
+    """Immutable build identity retained after successful finalization."""
+
+    __tablename__ = "submission_finalization_results"
+    __table_args__ = (
+        CheckConstraint("build_id > 0", name="submission_finalization_results_build_id_positive"),
+        Index("submission_finalization_results_build_idx", "build_id"),
+    )
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "submission_finalization_jobs.id", name="submission_finalization_results_job_id_fkey", ondelete="CASCADE"
+        ),
+        primary_key=True,
+    )
+    build_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class SubmissionFinalizationInput(Base, kw_only=True):
+    """Original normalized input retained independently of mutable execution state."""
+
+    __tablename__ = "submission_finalization_inputs"
+    __table_args__ = (
+        CheckConstraint(
+            "payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="submission_finalization_inputs_payload_sha256_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(payload) = 'object'",
+            name="submission_finalization_inputs_payload_object_check",
+        ),
+    )
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_jobs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class SubmissionReceiptMedia(Base, kw_only=True):
+    """Normalized uploads retained by a committed submission receipt."""
+
+    __tablename__ = "submission_receipt_media"
+    __table_args__ = (Index("submission_receipt_media_upload_idx", "upload_id"),)
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_results.job_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    upload_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("media_uploads.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )

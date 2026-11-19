@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "b7d1f4a9c2e5"
 down_revision: str = "a6c0e3f8b1d4"

@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic_utils.pg_function import PGFunction
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "a3c4e5f6a7b8"
 down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"

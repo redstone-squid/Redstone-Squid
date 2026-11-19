@@ -7,13 +7,13 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
-from squid.builds.application.edit_schema import BuildPatch as BuildPatch
-from squid.builds.application.edit_schema import DoorPatch as DoorPatch
-from squid.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
-from squid.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
-from squid.builds.domain import Status
-from squid.builds.domain.expansion import DoorExpansion
-from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.builds.application.edit_schema import BuildPatch as BuildPatch
+from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
+from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
+from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
+from squid.core.builds.domain import Status
+from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 
 
 class BuildStatusFilter(StrEnum):

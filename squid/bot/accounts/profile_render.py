@@ -4,10 +4,16 @@ Public rendering accepts the account service's already-filtered view. Private
 rendering can include the caller's hidden identities and avatar.
 """
 
-from squid.accounts.application.presentation import claimant_label
-from squid.accounts.domain import IdentityDetails, IdentityProvider, ProfileLink, PublicCreatorProfile, avatar_url_for
-from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
+from squid.core.accounts.application.presentation import claimant_label
+from squid.core.accounts.domain import (
+    IdentityDetails,
+    IdentityProvider,
+    ProfileLink,
+    PublicCreatorProfile,
+    avatar_url_for,
+)
+from squid.core.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid_i18n import Text, md_tr, text_link
 from squid_ui.content.text import TextLike
 from squid_ui.content.text import mention as text_mention

@@ -14,10 +14,10 @@ from squid.api.revisions import InvalidRevisionError, expected_revision
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.api.v1.settings import update_runtime_settings
+from squid.core.edits.domain import EditValues, LatestRevision, Revision
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditValues, LatestRevision, Revision
-from squid.settings.application.edits import RUNTIME_TARGET
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.application.edits import RUNTIME_TARGET
+from squid.core.settings.domain.runtime import RuntimeSettings
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 

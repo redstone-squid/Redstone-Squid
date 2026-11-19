@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 
-from squid.accounts.application import AccountService
-from squid.accounts.models import Account, AccountIdentity
 from squid.bot.app import RedstoneSquid
 from squid.bot.voting.cog import VoteCog
-from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionCheck
-from squid.voting.domain import VoteKind
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain import PermissionCheck
+from squid.core.voting.domain import VoteKind
 from tests.support.services import bot_services
 
 

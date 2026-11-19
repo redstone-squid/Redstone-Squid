@@ -32,7 +32,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
-from squid.accounts.domain import fold_creator_name
+from squid.core.accounts.domain import fold_creator_name
 
 revision: str = "e5f6a7b8c9d2"
 down_revision: str | Sequence[str] | None = "b1c2d3e4f5a7"

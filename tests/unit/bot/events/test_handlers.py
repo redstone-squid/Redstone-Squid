@@ -11,10 +11,10 @@ import pytest
 from whenever import Instant
 
 from squid.bot.events.handlers import PostSubmittedBuildHandler
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, OtherBuild
-from squid.events import DomainEvent, UnsupportedEventVersionError
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, OtherBuild
+from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.runtime import BotServices
 from tests.support.services import bot_services
 

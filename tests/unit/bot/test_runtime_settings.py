@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.accounts.domain import IdentityProvider
 from squid.bot.admin_cog import Admin
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
+from squid.core.edits.domain import EditValues, LatestRevision, Revision
 from squid.core.errors import AuthorizationError
-from squid.edits.domain import EditValues, LatestRevision, Revision
-from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
-from squid.settings.application.edits import RUNTIME_TARGET
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
+from squid.core.settings.application.edits import RUNTIME_TARGET
+from squid.core.settings.domain.runtime import RuntimeSettings
 
 
 @pytest.mark.parametrize("revision", [None, 1])

@@ -13,15 +13,15 @@ from discord.ext.commands import Greedy
 from pydantic import ValidationError
 
 import squid_ui.ext.discord as sd
-from squid.accounts.domain import IdentityProvider
 from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import Grants, enforce, requires
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.core.i18n import tr
-from squid.edits.domain import EditCommand, EditValues, LatestRevision, Revision
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
     RESTRICTION_ALIAS_CREATE,
     SETTINGS_RUNTIME_EDIT,
@@ -31,7 +31,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
+from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
 

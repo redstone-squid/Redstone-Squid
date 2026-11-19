@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from squid.builds.domain import BuildCategory
-from squid.events.models import DomainEvent
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.models import (
+from squid.core.builds.domain import BuildCategory
+from squid.core.events.models import DomainEvent
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.models import (
     CandidateFacet,
     CategoryCandidates,
     CategoryIdentity,
@@ -20,7 +20,7 @@ from squid.records.application.models import (
     ComputedRecord,
     HolderHistoryEntry,
 )
-from squid.records.domain import (
+from squid.core.records.domain import (
     BaseTitle,
     BuildKind,
     Candidate,
@@ -29,8 +29,8 @@ from squid.records.domain import (
     TitleResolution,
     VersionScope,
 )
-from squid.records.domain.models import FacetKind
-from squid.records.models import (
+from squid.core.records.domain.models import FacetKind
+from squid.core.records.models import (
     ComputationRun,
     DefinitionFacet,
     MaterializationSource,
@@ -38,9 +38,9 @@ from squid.records.models import (
     TitleDefinition,
     TitleHolderHistory,
 )
-from squid.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
-from squid.versions.models import Version
+from squid.core.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 from tests.support.database import record_queries

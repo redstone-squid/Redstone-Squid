@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from squid.media.application import (
+from squid.core.media.application import (
     MediaProcessingRequest,
     MediaProcessingResult,
     MediaProcessingService,
 )
-from squid.media.domain import (
+from squid.core.media.domain import (
     MediaArtifact,
     MediaBatchTotals,
     MediaKind,
@@ -17,7 +17,7 @@ from squid.media.domain import (
     MediaProcessingAction,
     MediaProcessingReport,
 )
-from squid.media.errors import InvalidMediaError, MediaFailureReason, MediaLimitExceededError
+from squid.core.media.errors import InvalidMediaError, MediaFailureReason, MediaLimitExceededError
 
 
 def video_probe(

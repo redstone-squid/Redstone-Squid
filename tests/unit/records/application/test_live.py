@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
-from squid.builds.domain.expansion_evaluation import PointStatus
-from squid.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
-from squid.records.application.models import CandidateBuild
-from squid.records.domain import BaseTitle, BuildKind, Candidate, ResolutionStatus, TimingVariant
-from squid.records.domain.door_evidence import DoorRecordEvidence
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
+from squid.core.builds.domain.expansion_evaluation import PointStatus
+from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
+from squid.core.records.application.models import CandidateBuild
+from squid.core.records.domain import BaseTitle, BuildKind, Candidate, ResolutionStatus, TimingVariant
+from squid.core.records.domain.door_evidence import DoorRecordEvidence
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 

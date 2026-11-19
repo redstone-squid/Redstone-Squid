@@ -1,0 +1,558 @@
+"""PostgreSQL starboard repository."""
+
+from collections.abc import Callable, Collection, Mapping, Sequence
+
+from sqlalchemy import case, delete, func, or_, select, union, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from squid.core.edits.domain import EditTarget, Revision
+from squid.core.messages.models import Message
+from squid.core.persistence.revisions import flush_revision
+from squid.core.scores import round_score
+from squid.core.settings.infrastructure.repository import ensure_server_settings
+from squid.core.starboard.application.ports import EntryKey, EntryState, PendingVote
+from squid.core.starboard.models import (
+    OriginMessage,
+    StarboardConfig,
+    StarboardEmoji,
+    StarboardEntry,
+    StarboardRoleMultiplier,
+    StarboardSource,
+    StarboardVote,
+)
+
+
+class PostgresStarboardRepository:
+    """Stage starboard writes in the caller's transaction.
+
+    Vote changes and score refreshes share an advisory lock per origin message,
+    preventing concurrent mutations from publishing a score based on partial votes.
+    The lock lasts until the caller commits or rolls back.
+    """
+
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+
+    @staticmethod
+    async def _lock_active_boards(session: AsyncSession, ids: set[int]) -> set[int]:
+        return set(
+            await session.scalars(
+                select(StarboardConfig.id)
+                .where(
+                    StarboardConfig.id.in_(ids),
+                    ~StarboardConfig.archived,
+                )
+                .order_by(StarboardConfig.id)
+                .with_for_update()
+            )
+        )
+
+    async def relevant_emojis(self, guild_id: int) -> frozenset[str]:
+        session = self._session()
+        values = await session.scalars(
+            select(StarboardEmoji.emoji)
+            .join(StarboardConfig, StarboardConfig.id == StarboardEmoji.starboard_id)
+            .join(StarboardSource, StarboardSource.starboard_id == StarboardConfig.id)
+            .where(StarboardConfig.enabled, ~StarboardConfig.archived, StarboardSource.guild_id == guild_id)
+            .distinct()
+        )
+        return frozenset(values)
+
+    async def configs_for_source(self, guild_id: int, channel_id: int) -> Sequence[StarboardConfig]:
+        """Lock the matched configurations until their votes finish using these rules."""
+        session = self._session()
+        sources = select(StarboardSource.starboard_id).where(
+            StarboardSource.guild_id == guild_id,
+            or_(StarboardSource.channel_id == 0, StarboardSource.channel_id == channel_id),
+        )
+        rows = (
+            await session.scalars(
+                select(StarboardConfig)
+                .where(
+                    StarboardConfig.id.in_(sources),
+                    StarboardConfig.enabled,
+                    ~StarboardConfig.archived,
+                )
+                .order_by(StarboardConfig.id)
+                .with_for_update()
+            )
+        ).all()
+        return await self._configs(session, rows)
+
+    async def role_multipliers(self, starboard_id: int) -> Mapping[int, float]:
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(StarboardRoleMultiplier).where(StarboardRoleMultiplier.starboard_id == starboard_id)
+            )
+        ).all()
+        return {row.role_id: row.multiplier for row in rows}
+
+    async def record_votes(
+        self, origin: OriginMessage, user_id: int, votes: Sequence[PendingVote]
+    ) -> Sequence[EntryKey]:
+        session = self._session()
+        if not votes:
+            return ()
+        active = await self._lock_active_boards(session, {vote.config.id for vote in votes})
+        await self._lock(session, origin.id)
+        votes = tuple(vote for vote in votes if vote.config.id in active)
+        await self._upsert_origin(session, origin)
+        for vote in votes:
+            await session.execute(
+                pg_insert(StarboardVote)
+                .values(
+                    starboard_id=vote.config.id,
+                    origin_message_id=origin.id,
+                    user_id=user_id,
+                    emoji=vote.emoji,
+                    direction=vote.direction,
+                    weight=vote.weight,
+                    target_author_id=origin.author_id,
+                )
+                .on_conflict_do_update(
+                    index_elements=[
+                        StarboardVote.starboard_id,
+                        StarboardVote.origin_message_id,
+                        StarboardVote.user_id,
+                    ],
+                    set_={"emoji": vote.emoji, "direction": vote.direction, "weight": vote.weight},
+                )
+            )
+            await session.execute(
+                pg_insert(StarboardEntry)
+                .values(starboard_id=vote.config.id, origin_message_id=origin.id)
+                .on_conflict_do_nothing()
+            )
+        return await self._refresh_locked(
+            session, origin.id, {vote.config.id for vote in votes}, force=False, origin=origin
+        )
+
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryKey]:
+        session = self._session()
+        await self._lock(session, origin_message_id)
+        starboard_ids = set(
+            await session.scalars(
+                delete(StarboardVote)
+                .where(
+                    StarboardVote.origin_message_id == origin_message_id,
+                    StarboardVote.user_id == user_id,
+                    StarboardVote.emoji == emoji,
+                )
+                .returning(StarboardVote.starboard_id)
+            )
+        )
+        return await self._refresh_locked(session, origin_message_id, starboard_ids, force=False)
+
+    async def recount_votes(
+        self, origin: OriginMessage, votes: Sequence[tuple[int, PendingVote]]
+    ) -> Sequence[EntryKey]:
+        session = self._session()
+        active = await self._lock_active_boards(session, {vote.config.id for _, vote in votes})
+        await self._lock(session, origin.id)
+        votes = tuple((user_id, vote) for user_id, vote in votes if vote.config.id in active)
+        await self._upsert_origin(session, origin)
+        starboard_ids = set(
+            await session.scalars(
+                delete(StarboardVote)
+                .where(StarboardVote.origin_message_id == origin.id)
+                .returning(StarboardVote.starboard_id)
+            )
+        )
+        for user_id, vote in votes:
+            starboard_ids.add(vote.config.id)
+            await session.execute(
+                pg_insert(StarboardVote).values(
+                    starboard_id=vote.config.id,
+                    origin_message_id=origin.id,
+                    user_id=user_id,
+                    emoji=vote.emoji,
+                    direction=vote.direction,
+                    weight=vote.weight,
+                    target_author_id=origin.author_id,
+                )
+            )
+            await session.execute(
+                pg_insert(StarboardEntry)
+                .values(starboard_id=vote.config.id, origin_message_id=origin.id)
+                .on_conflict_do_nothing()
+            )
+        return await self._refresh_locked(session, origin.id, starboard_ids, force=True, origin=origin)
+
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryKey]:
+        session = self._session()
+        await self._lock(session, origin_message_id)
+        statement = delete(StarboardVote).where(StarboardVote.origin_message_id == origin_message_id)
+        if emoji is not None:
+            statement = statement.where(StarboardVote.emoji == emoji)
+        starboard_ids = set(await session.scalars(statement.returning(StarboardVote.starboard_id)))
+        return await self._refresh_locked(session, origin_message_id, starboard_ids, force=False)
+
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryKey]:
+        session = self._session()
+        await self._lock(session, origin_message_id)
+        return await self._refresh_locked(session, origin_message_id, None, force=force)
+
+    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryKey]:
+        session = self._session()
+        await self._lock(session, origin_message_id)
+        changed = await session.execute(
+            update(Message)
+            .where(Message.id == origin_message_id)
+            .values(deleted_at=func.coalesce(Message.deleted_at, func.now()))
+            .returning(Message.id)
+        )
+        if changed.scalar_one_or_none() is None:
+            return ()
+        return await self._refresh_locked(session, origin_message_id, None, force=True)
+
+    async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
+        session = self._session()
+        await session.execute(
+            update(StarboardEntry)
+            .where(
+                StarboardEntry.starboard_id == starboard_id,
+                StarboardEntry.origin_message_id == origin_message_id,
+            )
+            .values(last_rendered_score=score, updated_at=func.now())
+        )
+
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
+        """Load one entry with its board configuration and origin facts."""
+        session = self._session()
+        entry_row = await session.get(StarboardEntry, (starboard_id, origin_message_id))
+        origin_row = await session.get(OriginMessage, origin_message_id, options=[selectinload(OriginMessage.message)])
+        if entry_row is None or origin_row is None:
+            return None
+        starboard_row = await session.get(StarboardConfig, starboard_id)
+        if starboard_row is None or starboard_row.archived:
+            return None
+        config = await self._with_emojis(session, starboard_row)
+        return EntryState(config, origin_row, entry_row)
+
+    async def referenced_channels(self, guild_id: int) -> frozenset[int]:
+        session = self._session()
+        destinations = select(StarboardConfig.channel_id).where(
+            StarboardConfig.guild_id == guild_id, StarboardConfig.enabled, ~StarboardConfig.archived
+        )
+        sources = select(StarboardSource.channel_id).where(
+            StarboardSource.guild_id == guild_id, StarboardSource.channel_id != 0
+        )
+        return frozenset(await session.scalars(union(destinations, sources)))
+
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> bool:
+        """Remove vanished channels while advancing each affected board's revision."""
+        session = self._session()
+        destinations = select(StarboardConfig.id).where(
+            StarboardConfig.guild_id == guild_id,
+            StarboardConfig.channel_id.in_(channel_ids),
+            StarboardConfig.enabled,
+            ~StarboardConfig.archived,
+        )
+        sources = select(StarboardSource.starboard_id).where(
+            StarboardSource.guild_id == guild_id, StarboardSource.channel_id.in_(channel_ids)
+        )
+        rows = (
+            await session.scalars(
+                select(StarboardConfig)
+                .where(StarboardConfig.id.in_(union(destinations, sources)))
+                .order_by(StarboardConfig.id)
+                .with_for_update()
+            )
+        ).all()
+        for row in rows:
+            expected = Revision(EditTarget("starboard", str(row.id)), row.revision)
+            if row.guild_id == guild_id and row.channel_id in channel_ids:
+                row.enabled = False
+            await session.execute(
+                delete(StarboardSource).where(
+                    StarboardSource.starboard_id == row.id,
+                    StarboardSource.guild_id == guild_id,
+                    StarboardSource.channel_id.in_(channel_ids),
+                )
+            )
+            await flush_revision(session, row, expected)
+        return bool(rows)
+
+    async def get_by_id(
+        self, starboard_id: int, *, for_update: bool = False, include_archived: bool = False
+    ) -> StarboardConfig | None:
+        session = self._session()
+        statement = select(StarboardConfig).where(StarboardConfig.id == starboard_id)
+        if not include_archived:
+            statement = statement.where(~StarboardConfig.archived)
+        if for_update:
+            statement = statement.with_for_update()
+        row = await session.scalar(statement)
+        return None if row is None else await self._with_emojis(session, row)
+
+    async def lock_names(self, guild_id: int) -> None:
+        await self._session().execute(
+            select(func.pg_advisory_xact_lock(func.hashtextextended(f"starboard-names:{guild_id}", 0)))
+        )
+
+    async def reserve_id(self) -> int:
+        value = await self._session().scalar(select(func.nextval(func.pg_get_serial_sequence("starboards", "id"))))
+        assert isinstance(value, int)
+        return value
+
+    async def flush_revision(self, config: StarboardConfig, expected: Revision) -> Revision:
+        return await flush_revision(self._session(), config, expected)
+
+    async def create_reserved(self, config: StarboardConfig) -> None:
+        session = self._session()
+        await self.lock_names(config.guild_id)
+        await ensure_server_settings(session, (config.guild_id,))
+        session.add(config)
+        await session.flush()
+        await session.execute(
+            pg_insert(StarboardSource).values(starboard_id=config.id, guild_id=config.guild_id, channel_id=0)
+        )
+        await self._replace_emojis(session, config.id, config.emojis)
+
+    async def is_unused(self, starboard_id: int) -> bool:
+        session = self._session()
+        if (
+            await session.scalar(
+                select(StarboardEntry.starboard_id).where(StarboardEntry.starboard_id == starboard_id).limit(1)
+            )
+            is not None
+        ):
+            return False
+        sources = (
+            await session.scalars(select(StarboardSource).where(StarboardSource.starboard_id == starboard_id))
+        ).all()
+        return len(sources) == 1 and sources[0].channel_id == 0
+
+    async def create(self, config: StarboardConfig) -> StarboardConfig:
+        """Assign an ID and subscribe the new board to all channels in its guild."""
+        session = self._session()
+        await self.lock_names(config.guild_id)
+        await ensure_server_settings(session, (config.guild_id,))
+        del config.id
+        session.add(config)
+        await session.flush()
+        starboard_id = config.id
+        await session.execute(
+            pg_insert(StarboardSource).values(starboard_id=starboard_id, guild_id=config.guild_id, channel_id=0)
+        )
+        await self._replace_emojis(session, starboard_id, config.emojis)
+        return await self._get_by_id(session, starboard_id)
+
+    async def delete(self, guild_id: int, name: str) -> bool:
+        row = await self.get(guild_id, name, for_update=True)
+        if row is None:
+            return False
+        row.archived = True
+        await self._session().flush()
+        return True
+
+    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]:
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(StarboardConfig)
+                .where(StarboardConfig.guild_id == guild_id, ~StarboardConfig.archived)
+                .order_by(StarboardConfig.name)
+            )
+        ).all()
+        return await self._configs(session, rows)
+
+    async def get(self, guild_id: int, name: str, *, for_update: bool = False) -> StarboardConfig | None:
+        session = self._session()
+        statement = select(StarboardConfig).where(
+            StarboardConfig.guild_id == guild_id,
+            func.lower(StarboardConfig.name) == name.lower(),
+            ~StarboardConfig.archived,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        row = await session.scalar(statement)
+        return await self._with_emojis(session, row) if row is not None else None
+
+    async def set_emojis(self, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None:
+        session = self._session()
+        row = await session.get(StarboardConfig, starboard_id, with_for_update=True)
+        assert row is not None
+        expected = Revision(EditTarget("starboard", str(starboard_id)), row.revision)
+        await self._replace_emojis(session, starboard_id, emojis)
+        await flush_revision(session, row, expected)
+
+    async def set_role_multiplier(self, starboard_id: int, role_id: int, multiplier: float | None) -> None:
+        session = self._session()
+        row = await session.get(StarboardConfig, starboard_id, with_for_update=True)
+        assert row is not None
+        expected = Revision(EditTarget("starboard", str(starboard_id)), row.revision)
+        if multiplier is None:
+            await session.execute(
+                delete(StarboardRoleMultiplier).where(
+                    StarboardRoleMultiplier.starboard_id == starboard_id,
+                    StarboardRoleMultiplier.role_id == role_id,
+                )
+            )
+            await flush_revision(session, row, expected)
+            return
+        await session.execute(
+            pg_insert(StarboardRoleMultiplier)
+            .values(starboard_id=starboard_id, role_id=role_id, multiplier=multiplier)
+            .on_conflict_do_update(
+                index_elements=[StarboardRoleMultiplier.starboard_id, StarboardRoleMultiplier.role_id],
+                set_={"multiplier": multiplier},
+            )
+        )
+        await flush_revision(session, row, expected)
+
+    async def _refresh_locked(
+        self,
+        session: AsyncSession,
+        origin_message_id: int,
+        starboard_ids: set[int] | None,
+        *,
+        force: bool,
+        origin: OriginMessage | None = None,
+    ) -> Sequence[EntryKey]:
+        """Recalculate scores while the caller holds the origin's advisory lock.
+
+        `None` selects all existing entries; an empty set selects none. Return keys
+        whose score differs from the last rendered score, or every selected key
+        when forced. Raw count includes both upvotes and downvotes.
+        """
+        if starboard_ids is not None and not starboard_ids:
+            return ()
+        statement = select(StarboardEntry).where(StarboardEntry.origin_message_id == origin_message_id)
+        if starboard_ids is not None:
+            statement = statement.where(StarboardEntry.starboard_id.in_(starboard_ids))
+        entries = (await session.scalars(statement.order_by(StarboardEntry.starboard_id))).all()
+        if origin is None:
+            origin_row = await session.get(
+                OriginMessage, origin_message_id, options=[selectinload(OriginMessage.message)]
+            )
+            if origin_row is None:
+                return ()
+            origin = origin_row
+        keys: list[EntryKey] = []
+        for entry_row in entries:
+            score, raw_count = (
+                await session.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(
+                                case(
+                                    (StarboardVote.direction == "up", StarboardVote.weight), else_=-StarboardVote.weight
+                                )
+                            ),
+                            0.0,
+                        ),
+                        func.count(StarboardVote.user_id),
+                    ).where(
+                        StarboardVote.starboard_id == entry_row.starboard_id,
+                        StarboardVote.origin_message_id == origin_message_id,
+                    )
+                )
+            ).one()
+            entry_row.score = round_score(float(score))
+            entry_row.raw_count = int(raw_count)
+            if force or entry_row.last_rendered_score != entry_row.score:
+                keys.append((entry_row.starboard_id, origin_message_id))
+        return keys
+
+    @staticmethod
+    async def _upsert_origin(session: AsyncSession, origin: OriginMessage) -> None:
+        """Ensure canonical message facts before writing starboard metadata.
+
+        A later reaction must not erase a deletion or previously captured content.
+        """
+        await ensure_server_settings(session, (origin.guild_id,))
+        statement = pg_insert(Message).values(
+            id=origin.id,
+            guild_id=origin.guild_id,
+            channel_id=origin.channel_id,
+            author_id=origin.author_id,
+            created_at=origin.posted_at,
+        )
+        await session.scalar(
+            statement.on_conflict_do_update(
+                index_elements=[Message.id],
+                set_={
+                    "guild_id": statement.excluded.guild_id,
+                    "channel_id": statement.excluded.channel_id,
+                    "author_id": statement.excluded.author_id,
+                    "created_at": statement.excluded.created_at,
+                },
+            ).returning(Message),
+            execution_options={"populate_existing": True},
+        )
+        statement = pg_insert(OriginMessage).values(
+            id=origin.id,
+            author_is_bot=origin.author_is_bot,
+            is_nsfw=origin.is_nsfw,
+            has_image=origin.has_image,
+        )
+        await session.scalar(
+            statement.on_conflict_do_update(
+                index_elements=[OriginMessage.id],
+                set_={
+                    "author_is_bot": origin.author_is_bot,
+                    "is_nsfw": origin.is_nsfw,
+                    "has_image": origin.has_image,
+                    "seen_at": func.now(),
+                },
+            )
+            .returning(OriginMessage)
+            .options(selectinload(OriginMessage.message)),
+            execution_options={"populate_existing": True},
+        )
+
+    @staticmethod
+    async def _lock(session: AsyncSession, origin_message_id: int) -> None:
+        key = f"starboard:{origin_message_id}"
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
+
+    async def _get_by_id(self, session: AsyncSession, starboard_id: int) -> StarboardConfig:
+        row = await session.get(StarboardConfig, starboard_id)
+        if row is None:
+            msg = f"Starboard {starboard_id} no longer exists."
+            raise LookupError(msg)
+        return await self._with_emojis(session, row)
+
+    async def _configs(self, session: AsyncSession, rows: Sequence[StarboardConfig]) -> tuple[StarboardConfig, ...]:
+        if not rows:
+            return ()
+        emojis = (
+            await session.scalars(
+                select(StarboardEmoji)
+                .where(StarboardEmoji.starboard_id.in_([row.id for row in rows]))
+                .order_by(StarboardEmoji.position)
+            )
+        ).all()
+        grouped: dict[int, list[StarboardEmoji]] = {}
+        for emoji in emojis:
+            emoji.validate()
+            grouped.setdefault(emoji.starboard_id, []).append(emoji)
+        for row in rows:
+            row.emojis = tuple(grouped.get(row.id, ()))
+            row.validate()
+        return tuple(rows)
+
+    async def _with_emojis(self, session: AsyncSession, row: StarboardConfig) -> StarboardConfig:
+        return (await self._configs(session, [row]))[0]
+
+    @staticmethod
+    async def _replace_emojis(session: AsyncSession, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None:
+        await session.execute(delete(StarboardEmoji).where(StarboardEmoji.starboard_id == starboard_id))
+        if emojis:
+            await session.execute(
+                pg_insert(StarboardEmoji),
+                [
+                    {
+                        "starboard_id": starboard_id,
+                        "emoji": item.emoji,
+                        "direction": item.direction,
+                        "multiplier": item.multiplier,
+                        "position": position,
+                    }
+                    for position, item in enumerate(emojis)
+                ],
+            )

@@ -3,17 +3,17 @@
 from dataclasses import fields
 from typing import Protocol, override
 
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import (
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import (
     UNLINK_EDIT,
     AccountEditorSnapshot,
     ProfileValues,
 )
-from squid.accounts.domain import ProfileUpdate
-from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.models import AccountIdentity, AccountProfile
+from squid.core.accounts.domain import ProfileUpdate
+from squid.core.accounts.errors import AccountNotFoundError
+from squid.core.accounts.models import AccountIdentity, AccountProfile
 from squid.core.actors import Actor
-from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 
 
 class SnapshotAccountService(AccountService):

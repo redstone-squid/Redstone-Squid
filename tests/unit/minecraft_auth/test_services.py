@@ -8,10 +8,10 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile
-from squid.minecraft_auth.errors import (
+from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
+from squid.core.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile
+from squid.core.minecraft_auth.errors import (
     AccountConsentRequiredError,
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,

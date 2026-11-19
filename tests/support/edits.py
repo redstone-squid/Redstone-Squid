@@ -1,6 +1,6 @@
 """Helpers for fake edit runners."""
 
-from squid.edits.domain import EditCommand, Revision
+from squid.core.edits.domain import EditCommand, Revision
 
 
 def bound_revisions(command: EditCommand) -> tuple[Revision, ...]:

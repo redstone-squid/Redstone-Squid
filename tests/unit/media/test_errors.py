@@ -6,11 +6,11 @@ from uuid import UUID
 import pytest
 from fluent.syntax import ast as fluent_ast
 
-import squid.media.errors as media_errors
+import squid.core.media.errors as media_errors
 from squid.core.errors import SquidError
 from squid.core.i18n import locales_dir, localization_for
-from squid.media.domain import MediaLimitMeasure, MediaViolation
-from squid.media.errors import (
+from squid.core.media.domain import MediaLimitMeasure, MediaViolation
+from squid.core.media.errors import (
     DraftMediaConflictError,
     DraftMediaNotFoundError,
     DraftMediaRequestError,

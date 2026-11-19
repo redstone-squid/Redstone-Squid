@@ -1,6 +1,6 @@
 import pytest
 
-from squid.catalogue.domain import (
+from squid.core.catalogue.domain import (
     DoorCategory,
     ExtenderCategory,
     RulesTitleFormatter,
@@ -8,7 +8,7 @@ from squid.catalogue.domain import (
     TitleSection,
     TrapdoorPlacement,
 )
-from squid.records.domain.models import BaseTitle
+from squid.core.records.domain.models import BaseTitle
 
 
 def test_formats_door_title_in_rules_order() -> None:

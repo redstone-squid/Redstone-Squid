@@ -12,21 +12,21 @@ import anyio
 import pytest
 from whenever import Instant
 
-from squid.builds.application import BuildEditPatch, RestrictionDefinition
-from squid.builds.application.services import (
+from squid.core.actors import Actor
+from squid.core.builds.application import BuildEditPatch, RestrictionDefinition
+from squid.core.builds.application.services import (
     BuildService,
 )
-from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
-from squid.builds.domain import BuildCategory, ShowcaseTag, Status, normalize_tag_name
-from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
-from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
-from squid.core.actors import Actor
+from squid.core.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
+from squid.core.builds.domain import BuildCategory, ShowcaseTag, Status, normalize_tag_name
+from squid.core.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
+from squid.core.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionRepository, SubjectRecords
-from squid.permissions.models import PermissionGrant
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
+from squid.core.permissions.models import PermissionGrant
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from tests.support.permissions import permission_uow_factory
 from tests.support.unit_of_work import FakeBuildEditing, PublishingFakeUnitOfWork
 

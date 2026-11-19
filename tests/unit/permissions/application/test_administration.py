@@ -14,17 +14,22 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import ConflictError, ValidationError
-from squid.permissions.application import PermissionService
-from squid.permissions.application.administration import (
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.administration import (
     PermissionAdministrationService,
     PermissionAuthorityError,
     PermissionRankError,
     ProtectedRoleError,
 )
-from squid.permissions.application.ports import AuditEntry, SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
-from squid.permissions.domain.models import AccountGrantSubject, PatternMode
-from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.core.permissions.application.ports import AuditEntry, SubjectRecords
+from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
+from squid.core.permissions.domain.models import AccountGrantSubject, PatternMode
+from squid.core.permissions.models import (
+    PermissionAuditEntry,
+    PermissionGrant,
+    PermissionRole,
+    PermissionRoleAssignment,
+)
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 from ..domain.strategies import patterns as domain_patterns

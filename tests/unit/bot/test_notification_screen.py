@@ -12,8 +12,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.notifications_view import NotificationScreen
 from squid.core.actors import Actor
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
-from squid.notifications import (
+from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
     NotificationPreferences,
@@ -21,11 +20,12 @@ from squid.notifications import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.application import NotificationEditorSnapshot
-from squid.notifications.domain import NotificationKind
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.suggestions.domain import Suggestion
-from squid.tags.domain import TagValueType
+from squid.core.notifications.application import NotificationEditorSnapshot
+from squid.core.notifications.domain import NotificationKind
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.suggestions.domain import Suggestion
+from squid.core.tags.domain import TagValueType
 from squid_ui.ext.discord import SessionSpec, primitives
 from squid_ui.ext.discord.testing import stage
 from squid_ui.selectors import query, select

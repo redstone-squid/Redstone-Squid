@@ -7,9 +7,9 @@ from typing import override
 import pytest
 
 from squid.core.actors import Actor
-from squid.voting.application import VoteService
-from squid.voting.application.recount import BallotRecounter, CardReactions
-from squid.voting.domain import (
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.recount import BallotRecounter, CardReactions
+from squid.core.voting.domain import (
     CastVoteResult,
     VoteKind,
     VoteMessage,

@@ -13,23 +13,29 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import PROFILE_EDIT, UNLINK_EDIT, VISIBILITY_EDIT, ProfileValues, account_target
-from squid.accounts.domain import (
-    AccountConsent,
-    IdentityProvider,
-    LinkPreview,
-    ProfileUpdate,
-)
-from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.profile_render import identity_label as _identity_label
 from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import CardField, tr
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import (
+    PROFILE_EDIT,
+    UNLINK_EDIT,
+    VISIBILITY_EDIT,
+    ProfileValues,
+    account_target,
+)
+from squid.core.accounts.domain import (
+    AccountConsent,
+    IdentityProvider,
+    LinkPreview,
+    ProfileUpdate,
+)
+from squid.core.accounts.models import AccountIdentity, AccountProfile
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditValues, Revision, RevisionConflictError
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditValues, Revision, RevisionConflictError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

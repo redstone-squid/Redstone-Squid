@@ -23,11 +23,11 @@ if __package__ in {None, ""}:
 import anyio
 import discord
 
-from squid.accounts.domain import IdentityProvider
 from squid.bootstrap import create_bot_runtime
 from squid.bot.submission.ingestion import ingest_message_bundle, message_bundle_run_id
 from squid.bot.submission.message_context import assemble_bundle
 from squid.config import load_bot_process_config
+from squid.core.accounts.domain import IdentityProvider
 from squid.runtime import BotServices
 
 logger = logging.getLogger(__name__)

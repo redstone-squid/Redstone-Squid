@@ -9,11 +9,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse, UnsafeHttpMethod
-from squid.idempotency.infrastructure.crypto import IdempotencyCiphertextError, IdempotencyResponseCipher
-from squid.idempotency.models import IdempotencyRequest
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse, UnsafeHttpMethod
+from squid.core.idempotency.infrastructure.crypto import IdempotencyCiphertextError, IdempotencyResponseCipher
+from squid.core.idempotency.models import IdempotencyRequest
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 

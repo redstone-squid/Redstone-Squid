@@ -10,7 +10,7 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.voting.domain import VoteChoice, VoteKind, VoteOption, normalize_vote_options
+from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption, normalize_vote_options
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 

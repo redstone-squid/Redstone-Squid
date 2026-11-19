@@ -8,20 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import AccountConsent, ClaimMethod
-from squid.accounts.models import CreatorAlias
+from squid.core.accounts.domain import AccountConsent, ClaimMethod
+from squid.core.accounts.models import CreatorAlias
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
-from squid.events.models import DomainEvent
-from squid.notifications.application import NotificationService
-from squid.notifications.domain import (
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
+from squid.core.events.models import DomainEvent
+from squid.core.notifications.application import NotificationService
+from squid.core.notifications.domain import (
     NotificationKind,
     NotificationSource,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.edits import (
+from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
@@ -32,13 +32,13 @@ from squid.notifications.edits import (
     inbox_target,
     notification_target,
 )
-from squid.notifications.errors import NotificationNotFoundError
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.domain import BaseTitle, BuildKind, VersionScope
-from squid.records.domain.models import MaterializationSource
-from squid.records.models import RecordTitle, RulesRevision, TitleDefinition
+from squid.core.notifications.errors import NotificationNotFoundError
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain.models import MaterializationSource
+from squid.core.records.models import RecordTitle, RulesRevision, TitleDefinition
 
 
 async def test_follow_labels_resolve_public_names_and_latest_titles(

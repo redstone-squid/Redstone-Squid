@@ -1,0 +1,832 @@
+"""Refresh search documents from queued changes to builds, records, and metadata.
+
+The loader assembles a SearchProjection: display text, result data, and typed
+filter values called facets. The store replaces the document and its facets
+together. A document can have several values for one field, such as its creators.
+
+The worker processes each queued resource in a savepoint, so one failed refresh
+can be retried without losing the other refreshes in the batch. refresh_search_index
+commits the batch. Embedding jobs are queued here but run separately, because
+their model calls should not keep this database transaction open.
+"""
+
+import hashlib
+import json
+import logging
+import uuid
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from decimal import Decimal
+
+from sqlalchemy import case, delete, func, literal_column, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from whenever import Instant
+
+from squid.core.accounts.models import CreatorAlias
+from squid.core.builds.domain.titles import format_build_category
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.infrastructure.loading import BuildLoader
+from squid.core.builds.models import (
+    Build,
+    BuildCredit,
+    BuildVersion,
+    DoorBuild,
+)
+from squid.core.diagnostics.log_capture import work_lost
+from squid.core.errors import DataIntegrityError
+from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.core.records.models import (
+    ComputationRun,
+    TitleDefinition,
+    TitleHolder,
+    TitleResult,
+)
+from squid.core.search.models import (
+    SearchDocument,
+    SearchDocumentFacet,
+    SearchEmbeddingQueueItem,
+    SearchProjectionQueueItem,
+)
+from squid.core.tags.domain import TagSemanticKind
+from squid.core.tags.infrastructure.loading import assignment_units
+from squid.core.tags.models import TagAlias, TagDefinition
+from squid.core.tags.models import TagAssignment as TagAssignment
+from squid.core.versions.models import Version
+
+logger = logging.getLogger(__name__)
+PROJECTION_MAX_ATTEMPTS = 5
+
+SEARCH_PROJECTION_QUEUE_SPEC = QueueSpec(
+    name="search_projections",
+    model=SearchProjectionQueueItem,
+    key=(SearchProjectionQueueItem.id,),
+    available_at=SearchProjectionQueueItem.available_at,
+    enqueued_at=SearchProjectionQueueItem.enqueued_at,
+    claimed_at=SearchProjectionQueueItem.claimed_at,
+    claim_token=SearchProjectionQueueItem.claim_token,
+    attempts=SearchProjectionQueueItem.attempts,
+    last_error=SearchProjectionQueueItem.last_error,
+    dead_at=SearchProjectionQueueItem.dead_at,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionFacet:
+    """One typed filter value emitted by a search projection."""
+
+    field_name: str
+    value: str | Decimal | Instant | bool
+
+
+@dataclass(frozen=True, slots=True)
+class SearchProjection:
+    """The complete replacement state of one search document."""
+
+    resource_kind: str
+    source_key: str
+    title: str
+    subtitle: str | None = None
+    description: str | None = None
+    status: str | None = None
+    tags: tuple[str, ...] = ()
+    search_aliases: tuple[str, ...] = ()
+    document_data: dict[str, object] = field(default_factory=dict)
+    facets: tuple[ProjectionFacet, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RecordProjectionSource:
+    """Record fields needed to build its search document."""
+
+    result_id: int
+    definition_id: int
+    status: str
+    history_complete: bool
+    gap_reasons: dict[str, object]
+    base_title: str
+    build_kind: str
+    version_scope: str
+    category_key: str
+    title: str
+    subtitle: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecordHolderProjectionSource:
+    """Searchable fields from one ranked record holder."""
+
+    build_id: int
+    title: str
+    subtitle: str | None
+    metric: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class TagProjectionSource:
+    """Tag fields needed to build its search document."""
+
+    tag_id: int
+    display_name: str
+    semantic_kind: str
+    moderation_status: str
+    authority: str
+    value_type: str
+    query_name: str | None
+    aliases: tuple[str, ...] = ()
+
+
+class SearchProjectionRepository:
+    """Claim projection work and atomically replace indexed documents."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        # Claims, document updates, and acknowledgements share the caller's
+        # transaction so a rollback cannot leave the queue ahead of the index.
+        self._queue = ClaimedRowQueue(SEARCH_PROJECTION_QUEUE_SPEC)
+
+    async def claim(self, *, limit: int = 50) -> tuple[SearchProjectionQueueItem, ...]:
+        """Lock and mark the oldest available queue items for this worker."""
+        return await self._queue.claim(limit=limit, session=self._session)
+
+    async def complete(self, item_id: int, claim_token: uuid.UUID) -> bool:
+        """Remove a processed item and return True if its claim token still matches."""
+        outcome = await self._queue.complete(
+            (SearchProjectionQueueItem.id == item_id,),
+            claim_token,
+            session=self._session,
+        )
+        return outcome.applied
+
+    async def retry(
+        self,
+        item_id: int,
+        claim_token: uuid.UUID,
+        attempts: int,
+        error: Exception,
+        *,
+        max_attempts: int = PROJECTION_MAX_ATTEMPTS,
+    ) -> bool:
+        """Schedule another attempt, or retain exhausted work as a dead letter.
+
+        Return True only when this call marks the item as a dead letter. A stale
+        claim token leaves the item unchanged.
+        """
+        if max_attempts < 1:
+            msg = "Projection max_attempts must be positive."
+            raise ValueError(msg)
+        outcome = await self._queue.fail(
+            (SearchProjectionQueueItem.id == item_id,),
+            claim_token,
+            attempts=attempts,
+            error=str(error),
+            max_attempts=max_attempts,
+            session=self._session,
+        )
+        return outcome.dead_lettered
+
+    def token_of(self, item: SearchProjectionQueueItem) -> uuid.UUID:
+        """Return the claim token from a row this store just claimed."""
+        return self._queue.token_of(item)
+
+    async def delete_document(self, resource_kind: str, source_key: str) -> None:
+        """Delete the document; database cascades remove its facets and embedding job."""
+        await self._session.execute(
+            delete(SearchDocument).where(
+                SearchDocument.resource_kind == resource_kind,
+                SearchDocument.source_key == source_key,
+            )
+        )
+
+    async def replace(self, projection: SearchProjection) -> int:
+        """Insert or update a document and replace its facets; return its database ID.
+
+        A changed source hash clears the old embedding. Builds and records also
+        enqueue embedding work. An existing queue item with the same hash is left
+        alone so that refreshing a projection does not reset its claim or retries.
+        The caller owns the transaction.
+        """
+        normalized_title = normalize_search_text(projection.title)
+        tags = sorted({normalize_search_text(tag) for tag in projection.tags if tag.strip()})
+        search_terms = sorted(
+            {*tags, *(normalize_search_text(alias) for alias in projection.search_aliases if alias.strip())}
+        )
+        fuzzy_text = " ".join(
+            part for part in (normalized_title, normalize_search_text(projection.subtitle or ""), *search_terms) if part
+        )
+        source_hash = projection_source_hash(projection)
+        title_vector = func.to_tsvector(literal_column("'simple'"), func.unaccent(projection.title))
+        description_vector = func.to_tsvector(
+            literal_column("'simple'"),
+            func.unaccent(projection.description or ""),
+        )
+        tag_text = " ".join(search_terms)
+        combined_vector = (
+            func.setweight(title_vector, literal_column("'A'"))
+            .op("||")(
+                func.setweight(
+                    func.to_tsvector(literal_column("'simple'"), func.unaccent(tag_text)),
+                    literal_column("'A'"),
+                )
+            )
+            .op("||")(
+                func.setweight(
+                    func.to_tsvector(
+                        literal_column("'simple'"),
+                        func.unaccent(projection.subtitle or ""),
+                    ),
+                    literal_column("'B'"),
+                )
+            )
+            .op("||")(func.setweight(description_vector, literal_column("'C'")))
+        )
+        statement = insert(SearchDocument).values(
+            resource_kind=projection.resource_kind,
+            source_key=projection.source_key,
+            title=projection.title,
+            subtitle=projection.subtitle,
+            description=projection.description,
+            status=projection.status,
+            normalized_title=func.unaccent(normalized_title),
+            fuzzy_text=func.unaccent(fuzzy_text),
+            tags=tags,
+            title_vector=title_vector,
+            description_vector=description_vector,
+            combined_vector=combined_vector,
+            document_data=projection.document_data,
+            source_hash=source_hash,
+            refreshed_at=func.now(),
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="search_documents_resource_key",
+            set_={
+                "title": statement.excluded.title,
+                "subtitle": statement.excluded.subtitle,
+                "description": statement.excluded.description,
+                "status": statement.excluded.status,
+                "normalized_title": statement.excluded.normalized_title,
+                "fuzzy_text": statement.excluded.fuzzy_text,
+                "tags": statement.excluded.tags,
+                "title_vector": statement.excluded.title_vector,
+                "description_vector": statement.excluded.description_vector,
+                "combined_vector": statement.excluded.combined_vector,
+                "document_data": statement.excluded.document_data,
+                "source_hash": statement.excluded.source_hash,
+                "embedding": case(
+                    (SearchDocument.source_hash == statement.excluded.source_hash, SearchDocument.embedding),
+                    else_=None,
+                ),
+                "embedding_model": case(
+                    (SearchDocument.source_hash == statement.excluded.source_hash, SearchDocument.embedding_model),
+                    else_=None,
+                ),
+                "refreshed_at": func.now(),
+            },
+        ).returning(SearchDocument.id)
+        document_id = (await self._session.execute(statement)).scalar_one()
+        await self._session.execute(delete(SearchDocumentFacet).where(SearchDocumentFacet.document_id == document_id))
+        self._session.add_all(build_facet_models(document_id, projection.facets))
+        if projection.resource_kind in {"build", "record"}:
+            embedding_statement = insert(SearchEmbeddingQueueItem).values(
+                document_id=document_id,
+                source_hash=source_hash,
+                enqueued_at=func.now(),
+                available_at=func.now(),
+                attempts=0,
+                claimed_at=None,
+                claim_token=None,
+                dead_at=None,
+                last_error=None,
+            )
+            await self._session.execute(
+                embedding_statement.on_conflict_do_update(
+                    index_elements=[SearchEmbeddingQueueItem.document_id],
+                    set_={
+                        "source_hash": embedding_statement.excluded.source_hash,
+                        "enqueued_at": func.now(),
+                        "available_at": func.now(),
+                        "attempts": 0,
+                        "claimed_at": None,
+                        "claim_token": None,
+                        "dead_at": None,
+                        "last_error": None,
+                    },
+                    where=SearchEmbeddingQueueItem.source_hash != embedding_statement.excluded.source_hash,
+                )
+            )
+        await self._session.flush()
+        return document_id
+
+
+class SearchProjectionLoader:
+    """Build search documents from current builds, active records, and approved metadata."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._build_mapper = BuildLoader()
+
+    async def load(self, resource_kind: str, source_key: str) -> SearchProjection | None:
+        """Load a searchable resource, or return None for missing, ineligible, or invalid keys."""
+        parsed = parse_projection_key(resource_kind, source_key)
+        if parsed is None:
+            return None
+        subtype, source_id = parsed
+        if resource_kind == "build":
+            return await self._build(source_id)
+        if resource_kind == "record":
+            return await self._computed_record(source_id)
+        if resource_kind == "metadata":
+            return await self._metadata(subtype, source_id)
+        return None
+
+    async def _build(self, build_id: int) -> SearchProjection | None:
+        # Gather the resource and related names needed for both display text and filters.
+        build = await self._session.scalar(
+            select(Build)
+            .where(Build.id == build_id)
+            .options(
+                selectinload(Build.tags).options(*assignment_units()),
+                selectinload(Build.tags).joinedload(TagAssignment.definition).selectinload(TagDefinition.aliases),
+                selectinload(Build.links),
+            )
+        )
+        if build is None:
+            return None
+        creators = tuple(
+            (
+                await self._session.scalars(
+                    select(BuildCredit).where(BuildCredit.build_id == build_id).order_by(BuildCredit.position)
+                )
+            ).all()
+        )
+        versions = tuple(
+            (
+                await self._session.scalars(
+                    select(Version)
+                    .join(BuildVersion, BuildVersion.version_id == Version.id)
+                    .where(BuildVersion.build_id == build_id)
+                    .order_by(Version.edition, Version.major_version, Version.minor_version, Version.patch_number)
+                )
+            ).all()
+        )
+        canonical_title: str | None = None
+        canonical_subtitle: str | None = None
+        title_diagnostics: list[dict[str, str | list[str]]] = []
+        # Keep imperfect builds searchable even when the category formatter cannot describe them.
+        try:
+            domain_build = await self._build_mapper.load(self._session, build)
+            formatted = format_build_category(domain_build)
+            # The one-line title adds the restrictions the display title leaves out, so they
+            # can match and be highlighted, and results read like catalogue rows.
+            title = domain_build.one_line_title
+            canonical_title = formatted.title
+            canonical_subtitle = formatted.subtitle
+            title_diagnostics = [diagnostic.as_dict() for diagnostic in formatted.diagnostics]
+        except DataIntegrityError, InvalidBuildError, NotImplementedError, TypeError, ValueError:
+            title = f"{build.category or 'Build'} #{build.id}"
+        description = build.description
+        approved_assignments = tuple(
+            assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
+        )
+        assigned_tag_names = tuple(assignment.rendered for assignment in approved_assignments)
+        search_aliases = tuple(
+            sorted({alias.alias for assignment in approved_assignments for alias in assignment.definition.aliases})
+        )
+        restriction_names = tuple(
+            assignment.definition.display_name
+            for assignment in approved_assignments
+            if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "restriction"
+        )
+        type_names = tuple(
+            assignment.definition.display_name
+            for assignment in approved_assignments
+            if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "pattern"
+        )
+        creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
+        version_names = tuple(_version_name(version) for version in versions)
+        dimensions = {
+            name: value
+            for name, value in (("width", build.width), ("height", build.height), ("depth", build.depth))
+            if value is not None
+        }
+        assert build.submission_status is not None
+        assert build.submission_time is not None and build.edited_time is not None
+        # Facets preserve typed values; the text tags above support lexical matching instead.
+        facets = [
+            *build_tag_name_facets(approved_assignments),
+            *(ProjectionFacet("creator", name) for name in creator_names),
+            *(ProjectionFacet("version", name) for name in version_names),
+            ProjectionFacet("status", build.submission_status.name.lower()),
+            ProjectionFacet("kind", build.category or "unknown"),
+            *(ProjectionFacet(name, Decimal(value)) for name, value in dimensions.items()),
+            *(
+                ProjectionFacet(f"tag:{assignment.tag_id}", value)
+                for assignment in approved_assignments
+                if (value := _assignment_value(assignment)) is not None
+            ),
+        ]
+        if isinstance(build, DoorBuild):
+            facets.extend(
+                ProjectionFacet(name, Decimal(value))
+                for name, value in (
+                    ("door_width", build.door_width),
+                    ("door_height", build.door_height),
+                    ("door_depth", build.door_depth),
+                )
+                if value is not None
+            )
+        for name in (
+            "normal_opening_time",
+            "visible_opening_time",
+            "normal_closing_time",
+            "visible_closing_time",
+        ):
+            value = getattr(build, name, None)
+            if value is not None:
+                facets.append(ProjectionFacet(name.removeprefix("normal_"), Decimal(value)))
+        if build.completion_at is not None:
+            facets.append(ProjectionFacet("completion_at", build.completion_at))
+        facets.append(ProjectionFacet("created_at", build.submission_time))
+        facets.append(ProjectionFacet("updated_at", build.edited_time))
+        return SearchProjection(
+            resource_kind="build",
+            source_key=str(build.id),
+            title=title,
+            subtitle=canonical_subtitle,
+            description=description,
+            status=build.submission_status.name.lower(),
+            tags=(*assigned_tag_names, *creator_names, *version_names),
+            search_aliases=search_aliases,
+            document_data={
+                "build_id": build.id,
+                "canonical_title": canonical_title,
+                "canonical_subtitle": canonical_subtitle,
+                "title_diagnostics": title_diagnostics,
+                "category": build.category,
+                "dimensions": dimensions,
+                "creators": creator_names,
+                "restrictions": restriction_names,
+                "types": type_names,
+                "tags": assigned_tag_names,
+                "versions": version_names,
+            },
+            facets=tuple(facets),
+        )
+
+    async def _computed_record(self, result_id: int) -> SearchProjection | None:
+        row = (
+            await self._session.execute(
+                select(TitleResult, TitleDefinition)
+                .options(selectinload(TitleDefinition.record_title))
+                .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+                .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
+                .where(TitleResult.id == result_id, ComputationRun.is_active.is_(True))
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        result, definition = row
+        holders = tuple(
+            (
+                await self._session.scalars(
+                    select(TitleHolder)
+                    .where(TitleHolder.result_id == result_id)
+                    .order_by(TitleHolder.rank, TitleHolder.build_id)
+                )
+            ).all()
+        )
+        return build_record_projection(
+            RecordProjectionSource(
+                result_id=result.id,
+                definition_id=definition.id,
+                status=result.status,
+                history_complete=result.history_complete,
+                gap_reasons=result.gap_reasons,
+                base_title=definition.base_title,
+                build_kind=definition.build_kind,
+                version_scope=definition.version_scope,
+                category_key=definition.category_key,
+                title=definition.title,
+                subtitle=definition.subtitle,
+            ),
+            tuple(
+                RecordHolderProjectionSource(
+                    build_id=holder.build_id,
+                    title=holder.title,
+                    subtitle=holder.subtitle,
+                    metric=holder.metric_snapshot,
+                )
+                for holder in holders
+            ),
+        )
+
+    async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
+        if subtype == "tag":
+            definition = await self._session.get(TagDefinition, source_id)
+            if definition is None or definition.moderation_status != "approved":
+                return None
+            aliases = tuple(
+                (
+                    await self._session.scalars(
+                        select(TagAlias.alias).where(TagAlias.tag_id == source_id).order_by(TagAlias.alias)
+                    )
+                ).all()
+            )
+            return build_tag_projection(
+                TagProjectionSource(
+                    tag_id=source_id,
+                    display_name=definition.display_name,
+                    semantic_kind=TagSemanticKind(definition.semantic_kind).value,
+                    moderation_status=definition.moderation_status,
+                    authority=definition.authority,
+                    value_type=definition.value_type,
+                    query_name=definition.query_name,
+                    aliases=aliases,
+                )
+            )
+        if subtype == "creator":
+            creator = await self._session.get(CreatorAlias, source_id)
+            if creator is None:
+                return None
+            creator_name = _mapped_text(creator, "name")
+            if creator_name is None:
+                return None
+            # The claiming account's identifiers stay out of the public index;
+            # only whether the credit has been claimed is searchable.
+            return _metadata_projection(
+                source_key=f"creator:{source_id}",
+                title=creator_name,
+                subtype="creator",
+                data={"alias_id": source_id, "claimed": creator.account_id is not None},
+            )
+        if subtype == "version":
+            version = await self._session.get(Version, source_id)
+            if version is None:
+                return None
+            title = _version_name(version)
+            return _metadata_projection(
+                source_key=f"version:{source_id}",
+                title=title,
+                subtype="version",
+                data={"version_id": source_id, "edition": version.edition},
+            )
+        return None
+
+
+class SearchProjectionWorker:
+    """Process one bounded batch of projection refresh work."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._store = SearchProjectionRepository(session)
+        self._loader = SearchProjectionLoader(session)
+
+    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
+        """Process queue items and return successful and failed counts."""
+        succeeded = 0
+        failed = 0
+        for item in await self._store.claim(limit=limit):
+            # Keep plain values for retry handling. Rolling back the savepoint can
+            # expire ORM attributes, whose later access would require an async reload.
+            item_id = item.id
+            token = self._store.token_of(item)
+            attempts = item.attempts
+            resource_kind = item.resource_kind
+            source_key = item.source_key
+            try:
+                async with self._session.begin_nested():
+                    if item.action == "delete":
+                        await self._store.delete_document(resource_kind, source_key)
+                    else:
+                        projection = await self._loader.load(resource_kind, source_key)
+                        if projection is None:
+                            await self._store.delete_document(resource_kind, source_key)
+                        else:
+                            await self._store.replace(projection)
+                    await self._store.complete(item_id, token)
+                succeeded += 1
+            except Exception as error:
+                dead_lettered = await self._store.retry(item_id, token, attempts, error)
+                if dead_lettered:
+                    logger.exception(
+                        "Dead-lettered a search projection after repeated failures",
+                        extra={
+                            "squid.search.resource_kind": resource_kind,
+                            "squid.search.source_key": source_key,
+                            **work_lost(),
+                        },
+                    )
+                failed += 1
+        return succeeded, failed
+
+
+class PostgresSearchProjection:
+    """Run projection work in the transaction supplied by the unit of work."""
+
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+
+    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
+        return await SearchProjectionWorker(self._session()).process_batch(limit=limit)
+
+
+def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:
+    """Return the subtype and numeric ID encoded by a queue key.
+
+    Builds use a bare ID, records use `result:ID`, and metadata uses `subtype:ID`.
+    Return None for an unsupported resource kind or malformed key. Metadata
+    subtypes are checked later by the loader.
+    """
+    if resource_kind == "build" and source_key.isdecimal():
+        return "build", int(source_key)
+    if resource_kind == "record":
+        subtype, separator, raw_id = source_key.partition(":")
+        if separator and subtype == "result" and raw_id.isdecimal():
+            return subtype, int(raw_id)
+        return None
+    if resource_kind == "metadata":
+        subtype, separator, raw_id = source_key.partition(":")
+        if separator and raw_id.isdecimal():
+            return subtype, int(raw_id)
+    return None
+
+
+def build_record_projection(
+    source: RecordProjectionSource,
+    holders: Sequence[RecordHolderProjectionSource] = (),
+) -> SearchProjection:
+    """Index the record title and retain its ranked holders separately."""
+    first_holder = holders[0] if holders else None
+    holder_ids = tuple(holder.build_id for holder in holders)
+    tags = (source.base_title, source.build_kind, source.version_scope)
+    return SearchProjection(
+        resource_kind="record",
+        source_key=f"result:{source.result_id}",
+        title=source.title,
+        subtitle=source.subtitle,
+        status=source.status,
+        tags=tags,
+        document_data={
+            "result_id": source.result_id,
+            "definition_id": source.definition_id,
+            "base_title": source.base_title,
+            "build_kind": source.build_kind,
+            "version_scope": source.version_scope,
+            "category_key": source.category_key,
+            "holder_build_ids": holder_ids,
+            "build_title": first_holder.title if first_holder is not None else source.title,
+            "holder_metrics": {str(holder.build_id): holder.metric for holder in holders},
+            "metric": first_holder.metric if first_holder is not None else {},
+            "history_complete": source.history_complete,
+            "gap_reasons": source.gap_reasons,
+        },
+        facets=(
+            ProjectionFacet("base_title", source.base_title),
+            ProjectionFacet("record_state", "current"),
+            ProjectionFacet("kind", source.build_kind),
+            ProjectionFacet("version_scope", source.version_scope),
+            *(ProjectionFacet("holder", str(build_id)) for build_id in holder_ids),
+        ),
+    )
+
+
+def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None:
+    """Build a tag document, or return None when the tag is not approved."""
+    if source.moderation_status != "approved":
+        return None
+    # The semantic kind makes `kind:pattern` and `kind:restriction` answerable;
+    # `kind:tag` remains alongside for clients that used the original taxonomy query.
+    return _metadata_projection(
+        source_key=f"tag:{source.tag_id}",
+        title=source.display_name,
+        subtype=source.semantic_kind,
+        tags=source.aliases,
+        extra_facets=(
+            ProjectionFacet("kind", "tag"),
+            *(ProjectionFacet(source.semantic_kind, alias) for alias in source.aliases),
+            *(ProjectionFacet("tag", name) for name in (source.display_name, *source.aliases)),
+        ),
+        data={
+            "tag_id": source.tag_id,
+            "aliases": source.aliases,
+            "authority": source.authority,
+            "semantic_kind": source.semantic_kind,
+            "value_type": source.value_type,
+            "query_name": source.query_name,
+        },
+    )
+
+
+def _metadata_projection(
+    *,
+    source_key: str,
+    title: str,
+    subtype: str,
+    tags: Sequence[str] = (),
+    extra_facets: Sequence[ProjectionFacet] = (),
+    data: dict[str, object],
+) -> SearchProjection:
+    return SearchProjection(
+        resource_kind="metadata",
+        source_key=source_key,
+        title=title,
+        tags=tuple(tags),
+        document_data={"metadata_kind": subtype, **data},
+        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title), *extra_facets),
+    )
+
+
+def build_facet_models(document_id: int, facets: Sequence[ProjectionFacet]) -> list[SearchDocumentFacet]:
+    """Create typed facet rows, numbering repeated values separately for each field."""
+    models: list[SearchDocumentFacet] = []
+    ordinals: dict[str, int] = {}
+    for facet in facets:
+        ordinal = ordinals.get(facet.field_name, 0)
+        ordinals[facet.field_name] = ordinal + 1
+        text_value: str | None = None
+        numeric_value: Decimal | None = None
+        timestamp_value: Instant | None = None
+        boolean_value: bool | None = None
+        if isinstance(facet.value, bool):
+            boolean_value = facet.value
+        elif isinstance(facet.value, Decimal):
+            numeric_value = facet.value
+        elif isinstance(facet.value, Instant):
+            timestamp_value = facet.value
+        else:
+            text_value = facet.value
+        models.append(
+            SearchDocumentFacet(
+                document_id=document_id,
+                field_name=facet.field_name,
+                ordinal=ordinal,
+                text_value=text_value,
+                numeric_value=numeric_value,
+                timestamp_value=timestamp_value,
+                boolean_value=boolean_value,
+            )
+        )
+    return models
+
+
+def normalize_search_text(value: str) -> str:
+    """Case-fold text and collapse whitespace to single spaces."""
+    return " ".join(value.casefold().split())
+
+
+def build_tag_name_facets(assignments: Sequence[TagAssignment]) -> tuple[ProjectionFacet, ...]:
+    """Index assigned names and aliases without changing the displayed tags."""
+    facets: list[ProjectionFacet] = []
+    for assignment in assignments:
+        definition = assignment.definition
+        names = tuple(dict.fromkeys((definition.display_name, *(alias.alias for alias in definition.aliases))))
+        tag_names = tuple(dict.fromkeys((assignment.rendered, *names)))
+        facets.extend(ProjectionFacet("tag", name) for name in tag_names)
+        if definition.authority == "official":
+            fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
+            facets.extend(ProjectionFacet(field, name) for field in fields for name in names)
+    return tuple(facets)
+
+
+def projection_source_hash(projection: SearchProjection) -> str:
+    """Hash document content to detect changes that invalidate an embedding.
+
+    Dictionary keys are sorted, but tag and facet order remains significant.
+    Resource identity is excluded because the hash tracks content within a document.
+    """
+    serialized = json.dumps(
+        {
+            "title": projection.title,
+            "subtitle": projection.subtitle,
+            "description": projection.description,
+            "status": projection.status,
+            "tags": projection.tags,
+            "search_aliases": projection.search_aliases,
+            "document_data": projection.document_data,
+            "facets": tuple((facet.field_name, facet.value) for facet in projection.facets),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(serialized.encode()).hexdigest()
+
+
+def _version_name(version: Version) -> str:
+    return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
+
+
+def _mapped_text(model: object, attribute: str) -> str | None:
+    value = vars(model).get(attribute)
+    return value if isinstance(value, str) else None
+
+
+def _assignment_value(assignment: TagAssignment) -> str | Decimal | bool | None:
+    value_type = assignment.value_type
+    attribute = {
+        "numeric": "numeric_value",
+        "text": "text_value",
+        "boolean": "boolean_value",
+    }.get(value_type)
+    return None if attribute is None else getattr(assignment, attribute)

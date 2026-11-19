@@ -11,12 +11,12 @@ from pytest_mock import MockerFixture
 
 pytest.importorskip("nucleation")
 
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.video import VideoRenderRequest
-from squid.schematics.domain.models import SchematicFormat
-from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
-from squid.schematics.errors import InvalidSchematicError
-from squid.schematics.infrastructure import nucleation_adapter
+from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.models import SchematicFormat
+from squid.core.schematics.domain.values import RgbaColor, VerifiedResourcePack
+from squid.core.schematics.errors import InvalidSchematicError
+from squid.core.schematics.infrastructure import nucleation_adapter
 
 
 class RecordingRenderConfig:

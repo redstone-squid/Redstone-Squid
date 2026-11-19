@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.builds.domain.expansion_math import ExpressionError, ExpressionParser, substitute_formula
+from squid.core.builds.domain.expansion_math import ExpressionError, ExpressionParser, substitute_formula
 
 
 @given(st.integers(1, 10000), st.integers(1, 10000), st.integers(1, 10000))

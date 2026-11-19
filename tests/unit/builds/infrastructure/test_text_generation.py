@@ -9,8 +9,8 @@ import pytest
 from openai import AsyncOpenAI
 from pytest_mock import MockerFixture
 
-from squid.builds.application import InferenceResult, InlineImage
-from squid.builds.infrastructure.text_generation import OpenAITextGenerator
+from squid.core.builds.application import InferenceResult, InlineImage
+from squid.core.builds.infrastructure.text_generation import OpenAITextGenerator
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +98,7 @@ async def test_generate_falls_back_to_lenient_json() -> None:
 
 async def test_generate_counts_provider_failures(mocker: MockerFixture) -> None:
     generator = OpenAITextGenerator(fake_client(FakeCompletions(fail=True)))
-    counter = mocker.patch("squid.builds.infrastructure.text_generation.add_counter")
+    counter = mocker.patch("squid.core.builds.infrastructure.text_generation.add_counter")
 
     with pytest.raises(openai.APIConnectionError):
         await generator.generate("system", "user", InferenceResult, model="model")

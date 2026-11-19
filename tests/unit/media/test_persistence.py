@@ -6,10 +6,10 @@ from typing import cast
 from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.dialects.postgresql import dialect
 
-from squid.media.domain import MediaKind
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
-from squid.media.models import MediaArtifactRecord, MediaProcessingJobRecord, MediaUploadRecord
-from squid.persistence.types import StrEnumText
+from squid.core.media.domain import MediaKind
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.models import MediaArtifactRecord, MediaProcessingJobRecord, MediaUploadRecord
+from squid.core.persistence.types import StrEnumText
 from tests.support.schema import model_table
 
 

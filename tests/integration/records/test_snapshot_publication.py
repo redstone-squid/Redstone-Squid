@@ -8,16 +8,16 @@ import anyio
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.models import ComputationBatch, RebuildSummary
-from squid.records.application.services import RecordComputationService
-from squid.records.application.snapshots import RecordSnapshot
-from squid.records.domain import BuildKind
-from squid.records.models import ComputationRun, RecordInputGeneration, RecordRecomputeQueueItem, TitleHolder
-from squid.tags.models import UnitDefinition
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.models import ComputationBatch, RebuildSummary
+from squid.core.records.application.services import RecordComputationService
+from squid.core.records.application.snapshots import RecordSnapshot
+from squid.core.records.domain import BuildKind
+from squid.core.records.models import ComputationRun, RecordInputGeneration, RecordRecomputeQueueItem, TitleHolder
+from squid.core.tags.models import UnitDefinition
 from tests.support.build_edits import build_edit_session
 
 

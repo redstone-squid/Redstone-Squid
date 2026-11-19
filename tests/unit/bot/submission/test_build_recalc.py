@@ -10,25 +10,25 @@ import pytest
 from whenever import Instant
 
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
-from squid.accounts.models import Account
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.builds.application.inference import BuildInferenceInput
-from squid.builds.domain import BuildCategory, BuildDraft
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
-from squid.settings.application import SettingsService
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
-from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.builds.application.inference import BuildInferenceInput
+from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
     ContextHarness,

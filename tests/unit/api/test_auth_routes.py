@@ -11,11 +11,11 @@ import pytest
 from litestar.testing import TestClient
 from pydantic import AnyHttpUrl, SecretStr
 
-from squid.accounts.domain import IdentityProvider
-from squid.auth.application.providers import DiscordOAuthProvider
-from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.auth.application.providers import DiscordOAuthProvider
+from squid.core.auth.application.web import WebSessionService
+from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 from tests.support.identity_uow import WebScope
 from tests.unit.api.fakes import TEST_CONFIG, build_app
 from tests.unit.auth.application.fakes import AccountServiceRecorder, SessionRepository

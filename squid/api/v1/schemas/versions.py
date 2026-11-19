@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion
 
 
 class VersionDetail(BaseModel):

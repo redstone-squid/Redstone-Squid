@@ -11,27 +11,27 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import (
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     AccountConsent,
     ClaimMethod,
     ClaimStatus,
     IdentityProvider,
 )
-from squid.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
-from squid.accounts.models import (
+from squid.core.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
+from squid.core.accounts.models import (
     Account as AccountModel,
 )
-from squid.accounts.models import (
+from squid.core.accounts.models import (
     AccountIdentity,
     AliasClaim,
     CreatorAlias,
     PublicCreatorRedirect,
     VerificationCode,
 )
-from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 

@@ -4,9 +4,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from squid.builds.application.queries import PublicBuildSummary
+from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
-from squid.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
+from squid.core.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
 
 
 class SearchSuggestions(BaseModel):

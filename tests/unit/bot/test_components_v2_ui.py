@@ -16,19 +16,19 @@ from squid.bot.submission.build_card import build_description, build_metadata_fi
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application import BuildService
-from squid.builds.application.edits import build_target
-from squid.builds.application.ports import BuildSchematicSummary
-from squid.builds.domain import Status
-from squid.builds.domain.credits import name_credits
-from squid.builds.models import Build, BuildLink, DoorBuild
-from squid.edits.domain import Revision, RevisionConflictError
-from squid.messages.domain import MessageRef
-from squid.search.application import SearchService
-from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
+from squid.core.builds.application import BuildService
+from squid.core.builds.application.edits import build_target
+from squid.core.builds.application.ports import BuildSchematicSummary
+from squid.core.builds.domain import Status
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.models import Build, BuildLink, DoorBuild
+from squid.core.edits.domain import Revision, RevisionConflictError
+from squid.core.messages.domain import MessageRef
+from squid.core.search.application import SearchService
+from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 from squid.sponsors import PublicSponsor
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
 from squid_i18n import source_text
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.target_types import ComponentsV2Target

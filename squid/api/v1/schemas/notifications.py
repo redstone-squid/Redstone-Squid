@@ -5,8 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from squid.notifications import NotificationPreferences, RecordSubscriptionFilter, SubscriptionKind, TagPredicate
-from squid.notifications.models import NotificationSubscription
+from squid.core.notifications import NotificationPreferences, RecordSubscriptionFilter, SubscriptionKind, TagPredicate
+from squid.core.notifications.models import NotificationSubscription
 
 
 class NotificationPreferencesDetail(BaseModel):

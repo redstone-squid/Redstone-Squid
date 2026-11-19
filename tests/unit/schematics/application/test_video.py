@@ -4,8 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from squid.api.v1.schemas.schematics import VideoCreateRequest
-from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
-from squid.schematics.infrastructure.wire import decode_video_request
+from squid.core.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.core.schematics.infrastructure.wire import decode_video_request
 
 
 @pytest.mark.parametrize(

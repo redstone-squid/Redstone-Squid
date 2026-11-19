@@ -1,7 +1,7 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
+from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
 
 
 @given(

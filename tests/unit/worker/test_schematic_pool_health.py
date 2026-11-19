@@ -4,8 +4,8 @@
 from pytest_mock import MockerFixture
 
 from squid.config import SchematicConfig, WorkerConfig
-from squid.schematics.infrastructure import worker as worker_module
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.core.schematics.infrastructure import worker as worker_module
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
 from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
 
 

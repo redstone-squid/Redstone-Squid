@@ -6,12 +6,12 @@ from typing import cast
 from pydantic import JsonValue
 
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditValues, LatestRevision
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.application import SettingsService
-from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditValues, LatestRevision
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.application import SettingsService
+from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
 from squid.unit_of_work import UnitOfWorkFactory
 
 

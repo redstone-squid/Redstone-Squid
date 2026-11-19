@@ -34,25 +34,25 @@ from squid.api.pagination import (
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
-from squid.builds.application import (
+from squid.core.builds.application import (
     BUILD_SORT_FIELDS,
     BuildEditPatch,
     BuildListSort,
     BuildSortField,
     PublicBuildSummary,
 )
-from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.builds.errors import (
+from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
+from squid.core.builds.errors import (
     BuildNotFoundError,
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
-from squid.builds.models import Build
+from squid.core.builds.models import Build
+from squid.core.edits.domain import EditCommand, LatestRevision, Revision
 from squid.core.errors import ValidationError
-from squid.edits.domain import EditCommand, LatestRevision, Revision
-from squid.permissions.application import PermissionService
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')

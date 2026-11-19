@@ -6,7 +6,7 @@ Read the committed queue row to verify backoff and rejection of stale claim toke
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.search.infrastructure.projection import SearchProjectionRepository
+from squid.core.search.infrastructure.projection import SearchProjectionRepository
 
 
 async def _enqueue(session: AsyncSession, source_key: str = "42", *, attempts: int = 0) -> None:

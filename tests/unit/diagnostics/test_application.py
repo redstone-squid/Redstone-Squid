@@ -9,11 +9,11 @@ from typing import override
 import pytest
 from whenever import Instant
 
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.domain import ErrorReportNotFoundError
+from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode, InvalidStateError
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.domain import ErrorReportNotFoundError
-from squid.diagnostics.models import ErrorReport
-from squid.records.errors import RecordNotFoundError
+from squid.core.records.errors import RecordNotFoundError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 FROZEN = Instant.from_utc(2026, 8, 17, 12, 0, 0)

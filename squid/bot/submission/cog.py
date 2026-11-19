@@ -20,9 +20,9 @@ from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.submission.ui.attachment_review import AttachmentReview, warn_if_attachment_archive_unavailable
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
-from squid.builds.domain import DoorOrientationLiteral
-from squid.builds.domain.models import BuildCategoryLiteral
-from squid.search.domain import SearchMode
+from squid.core.builds.domain import DoorOrientationLiteral
+from squid.core.builds.domain.models import BuildCategoryLiteral
+from squid.core.search.domain import SearchMode
 from squid_i18n import md_tr, tr
 
 if TYPE_CHECKING:

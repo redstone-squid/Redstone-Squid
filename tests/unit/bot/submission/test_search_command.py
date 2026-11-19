@@ -13,16 +13,15 @@ from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.search.entry import SearchTarget
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
 from squid.bot.submission.cog import BuildCommands, SearchModeChoice
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
-from squid.records.application import RecordService
-from squid.runtime import BotServices
-from squid.search.application import SearchService
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.domain import (
+from squid.core.records.application import RecordService
+from squid.core.search.application import SearchService
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+from squid.core.search.domain import (
     BuildSearchHit,
     RecordSearchHit,
     SearchMode,
@@ -32,8 +31,9 @@ from squid.search.domain import (
     SearchText,
     SortDirection,
 )
-from squid.search.domain.fields import FieldDefinition, FieldType
-from squid.settings.application import SettingsService
+from squid.core.search.domain.fields import FieldDefinition, FieldType
+from squid.core.settings.application import SettingsService
+from squid.runtime import BotServices
 from squid_i18n import source_text
 from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services

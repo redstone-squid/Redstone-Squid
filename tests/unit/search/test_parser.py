@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from squid.records.domain import BaseTitle, ResolutionStatus
-from squid.search.application import (
+from squid.core.records.domain import BaseTitle, ResolutionStatus
+from squid.core.search.application import (
     DEFAULT_FIELD_REGISTRY,
     FieldDefinition,
     FieldRegistry,
@@ -13,8 +13,8 @@ from squid.search.application import (
     QuerySyntaxError,
     SearchQueryParser,
 )
-from squid.search.application.fields import BuildSearchStatus
-from squid.search.domain import (
+from squid.core.search.application.fields import BuildSearchStatus
+from squid.core.search.domain import (
     BooleanExpression,
     BooleanOperator,
     BuildQuery,

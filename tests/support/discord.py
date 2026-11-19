@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
 from squid.bot.actors import DiscordActorResolver
 from squid.bot.errors import UI_ERRORS
 from squid.bot.i18n import localization_resolver
@@ -16,13 +15,14 @@ from squid.bot.limits import CommandLimits
 from squid.bot.members import DiscordMembers
 from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.autocomplete import BotInteraction
+from squid.core.accounts.application import AccountService
 from squid.core.actors import Actor
-from squid.diagnostics.application import ErrorReportService
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.suggestions.application import SuggestionService
 from squid.runtime import BotServices
-from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.ext.discord.testing import AsyncCallRecorder

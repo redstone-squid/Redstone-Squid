@@ -22,10 +22,10 @@ from squid.api.v1.schemas.search import (
     SearchResult,
     SearchSuggestions,
 )
-from squid.builds.application import BuildQueryService, PublicBuildSummary
+from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.errors import DataIntegrityError
-from squid.search.application.fields import FieldDefinition
-from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.search.application.fields import FieldDefinition
+from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
 

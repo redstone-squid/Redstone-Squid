@@ -6,14 +6,14 @@ from datetime import UTC, datetime
 import pytest
 
 from squid.core.errors import DataIntegrityError, ValidationError
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.published_points import (
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.published_points import (
     PublishedDoorPoint,
     PublishedPointStatus,
 )
-from squid.records.application.range_snapshots import RangeAttempt, RangePublication
-from squid.records.domain import ResolutionStatus
-from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
+from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
+from squid.core.records.domain import ResolutionStatus
+from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 from tests.unit.records.application.test_expansion_regions import branch, family, fixed, parameter
 
 NOW = datetime(2026, 11, 14, tzinfo=UTC)

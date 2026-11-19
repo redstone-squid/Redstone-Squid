@@ -6,8 +6,8 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Mapper
 
-from squid.persistence import model_registry  # noqa: F401
-from squid.persistence.base import Base
+from squid.core.persistence import model_registry  # noqa: F401
+from squid.core.persistence.base import Base
 
 
 @pytest.mark.parametrize(

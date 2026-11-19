@@ -3,12 +3,12 @@
 import logging
 from typing import Protocol
 
-from squid.builds.history import BuildEditActor, HistoryOperation
-from squid.diagnostics.log_capture import work_lost
-from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
-from squid.notifications import NotificationService
-from squid.voting.application.services import VoteService
-from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
+from squid.core.builds.history import BuildEditActor, HistoryOperation
+from squid.core.diagnostics.log_capture import work_lost
+from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.core.notifications import NotificationService
+from squid.core.voting.application.services import VoteService
+from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
 CORE_CONSUMER = "core"

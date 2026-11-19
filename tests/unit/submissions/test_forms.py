@@ -7,14 +7,14 @@ import pytest
 from anyio.lowlevel import checkpoint
 
 from squid.core.errors import JSONValue, ValidationError
-from squid.submissions.application import (
+from squid.core.submissions.application import (
     CURRENT_SUBMISSION_PROTOCOL,
     CheckedInFormManifestRegistry,
     FormOptionSet,
     SubmissionFormService,
     build_submission_manifest,
 )
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     ChoiceOption,
     ControlKind,
     DraftChange,
@@ -148,7 +148,7 @@ async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pyte
         prefix = locale or "default"
         return Localization(locale="fr", resources=(f"submissions-name-and-credits = {prefix}:Build identity",))
 
-    monkeypatch.setattr("squid.submissions.application.forms.localization_for", prefixed_localization)
+    monkeypatch.setattr("squid.core.submissions.application.forms.localization_for", prefixed_localization)
     titles: dict[str, str] = {}
 
     async def build_for(locale: str) -> None:

@@ -4,10 +4,10 @@ import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.search.application import SearchQueryParser
-from squid.search.domain import SearchRequest, SearchScope
-from squid.search.infrastructure.compiler import compile_query
-from squid.search.infrastructure.repository import PostgresSearchBackend
+from squid.core.search.application import SearchQueryParser
+from squid.core.search.domain import SearchRequest, SearchScope
+from squid.core.search.infrastructure.compiler import compile_query
+from squid.core.search.infrastructure.repository import PostgresSearchBackend
 
 
 def _compile(query: str) -> tuple[str, dict[str, object]]:

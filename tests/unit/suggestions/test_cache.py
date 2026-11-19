@@ -2,7 +2,7 @@
 
 import anyio
 
-from squid.suggestions.infrastructure.cache import TtlCache
+from squid.core.suggestions.infrastructure.cache import TtlCache
 
 
 class CountingLoader:

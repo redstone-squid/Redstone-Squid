@@ -17,16 +17,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.domain.credits import name_credits
+from squid.core.accounts.models import Account
+from squid.core.builds.domain.credits import name_credits
 from squid.core.errors import DataIntegrityError
-from squid.media.domain import MediaKind
-from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
-from squid.submissions.domain import (
+from squid.core.media.domain import MediaKind
+from squid.core.media.domain.jobs import MediaJobStatus
+from squid.core.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.application import DraftPreparationSnapshot, StoredDraft
+from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
     DraftSnapshot,
@@ -47,24 +47,24 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
-from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
-from squid.submissions.infrastructure.finalization_repository import (
+from squid.core.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
+from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.core.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
-from squid.submissions.models.entities import (
+from squid.core.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
-from squid.submissions.models.finalization import (
+from squid.core.submissions.models.finalization import (
     SubmissionFinalizationInput,
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
-from squid.submissions.models.intake import SubmissionSuppliedAttachment
-from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
-from squid.submissions.payload_integrity import submission_payload_digest
+from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
+from squid.core.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
+from squid.core.submissions.payload_integrity import submission_payload_digest
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 

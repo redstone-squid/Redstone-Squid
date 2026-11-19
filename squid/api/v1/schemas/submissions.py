@@ -21,14 +21,14 @@ from pydantic import (
 
 from squid.core.errors import JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
-from squid.submissions.application import (
+from squid.core.submissions.application import (
     AppliedDraftUpgrade,
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
     FormOptionSet,
     StoredDraft,
 )
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
     DRAFT_CHANGE_KEY_MIN_LENGTH,
     DRAFT_CHANGE_KEY_PATTERN,

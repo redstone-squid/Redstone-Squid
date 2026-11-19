@@ -2,7 +2,7 @@ from itertools import islice
 
 import pytest
 
-from squid.records.domain.categories import CategorySemantics, generate_category_subsets
+from squid.core.records.domain.categories import CategorySemantics, generate_category_subsets
 
 
 def test_generate_category_subsets_streams_all_subsets_up_to_limit() -> None:

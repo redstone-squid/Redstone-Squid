@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.domain.runtime import RuntimeSettings
 
 
 @pytest.mark.parametrize(

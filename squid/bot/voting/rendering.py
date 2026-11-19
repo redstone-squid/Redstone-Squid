@@ -11,7 +11,7 @@ from squid.bot.chrome import CHROME
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.bot.voting.poll_display import poll_choices, poll_question
-from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
+from squid.core.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid_i18n import discord_markup
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target

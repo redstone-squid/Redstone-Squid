@@ -1,15 +1,15 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from squid.records.application.live import DoorRecordLookup, evaluate_door_record
-from squid.records.application.models import (
+from squid.core.records.application.live import DoorRecordLookup, evaluate_door_record
+from squid.core.records.application.models import (
     CandidateBuild,
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
 )
-from squid.records.domain import (
+from squid.core.records.domain import (
     BaseTitle,
     BuildKind,
     Candidate,
@@ -18,8 +18,8 @@ from squid.records.domain import (
     TitleResolution,
     VersionScope,
 )
-from squid.records.domain.door_evidence import DoorRecordEvidence
-from squid.records.infrastructure.fingerprint import publication_fingerprint
+from squid.core.records.domain.door_evidence import DoorRecordEvidence
+from squid.core.records.infrastructure.fingerprint import publication_fingerprint
 
 
 def batch() -> ComputationBatch:

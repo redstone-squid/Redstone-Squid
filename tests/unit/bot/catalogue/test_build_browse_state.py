@@ -19,25 +19,25 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.results import SearchFocus
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application import BuildQueryService, BuildService
-from squid.builds.domain import Status
-from squid.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, DoorBuild
+from squid.core.messages.domain import MessageRef
 from squid.core.pagination import Page, PageAnchor, PageSelector
-from squid.messages.domain import MessageRef
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_REJECT,
     BUILD_SUBMISSION_VIEW_PENDING,
     RECORD_ENTRY_INSPECT,
 )
-from squid.records.application import RecordService
-from squid.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
-from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
-from squid.schematics.application import SchematicService
-from squid.search.application import SearchService
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.search.application.parser import SearchQueryParser
-from squid.search.domain import (
+from squid.core.records.application import RecordService
+from squid.core.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
+from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.schematics.application import SchematicService
+from squid.core.search.application import SearchService
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
+from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain import (
     BuildQuery,
     BuildSearchHit,
     RecordQuery,
@@ -48,9 +48,9 @@ from squid.search.domain import (
     SearchResultAnchor,
     SearchScope,
 )
-from squid.search.domain.query import TextExpression
-from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
-from squid.suggestions.application import SuggestionSource as RegisteredSource
+from squid.core.search.domain.query import TextExpression
+from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
+from squid.core.suggestions.application import SuggestionSource as RegisteredSource
 from squid_reactivity import LocalTopicBus
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage

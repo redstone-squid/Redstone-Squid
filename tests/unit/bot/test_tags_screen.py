@@ -8,24 +8,24 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.admin_cog import Admin
 from squid.bot.tags_view import TagsScreen
-from squid.builds.application.restrictions import RestrictionService
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import (
+from squid.core.builds.application.restrictions import RestrictionService
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
     EditReceipt,
     EditResult,
     Revision,
 )
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
     TAG_PROPOSAL_APPROVE,
     TAG_PROPOSAL_LIST,
 )
-from squid.tags.application import TagService
-from squid.tags.application.edits import (
+from squid.core.tags.application import TagService
+from squid.core.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
@@ -34,8 +34,8 @@ from squid.tags.application.edits import (
     ProposalValues,
     tag_target,
 )
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
 from squid_ui.runtime import transaction
 from squid_ui.testing import RecordingResponder, labels, submit_event
 from tests.support.edits import bound_revisions

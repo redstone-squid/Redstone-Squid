@@ -18,7 +18,7 @@ does not establish useful ownership. Locations below refer to the reviewed revis
 
 ### Field validation belongs with the field
 
-In `squid/submissions/domain/forms.py`, move `_validate_value` (473) to
+In `squid/core/submissions/domain/forms.py`, move `_validate_value` (473) to
 `FormField.validate_value(value)` and `_field_for` (462) to
 `FormField.for_purpose(purpose)`. The former reads the field's kind, constraints,
 options, and ID; the latter applies its edit rules. `FormField` already owns
@@ -30,7 +30,7 @@ manifest. Dynamic option validation remains separate. Preserve the reason codes.
 
 ### Repository operations should use their repository's dependencies
 
-In `squid/submissions/infrastructure/finalization_repository.py`, move
+In `squid/core/submissions/infrastructure/finalization_repository.py`, move
 `_locked_job` (475), `_claimed_job` (485), `_complete` (560), and
 `_current_schematics` (605) into `PostgresFinalizationJobRepository`.
 Fold `_require_current_media` (450) into the existing `require_current_media`
@@ -44,13 +44,13 @@ and `_require_expected_draft` shared: other repositories import them.
 
 The same argument applies to `_membership_changed` (618),
 `_lock_mutable_submission_draft` (632), and `_active_totals` (661) in
-`squid/media/infrastructure/repository.py`. Only `PostgresMediaJobRepository`
+`squid/core/media/infrastructure/repository.py`. Only `PostgresMediaJobRepository`
 operations use them, through `enqueue`, `discard`, and `attach`. They enforce
 draft mutation and capacity rules under lifecycle locks.
 
 ### A compiled expansion should expose its evaluation
 
-In `squid/builds/domain/expansion_evaluation.py`, move `evaluate_expansion` (278)
+In `squid/core/builds/domain/expansion_evaluation.py`, move `evaluate_expansion` (278)
 to `NormalizedExpansion.evaluate(opening)` and `normalize_expansion` (147) to
 `NormalizedExpansion.from_source(source)`. The compiled type's principal operation
 and constructor currently sit beside it.
@@ -67,9 +67,9 @@ the solver. This improves API cohesion; the existing functional API is also viab
 | `squid/bot/voting/poll_wizard.py:326` `_draft` | `PollDraft.from_answers` | `_review` and `PollScreen._finish` construct the same bot-local type, which already owns normalization and validation. |
 | `squid/bot/voting/publisher.py:182` `_emoji_is_usable` | `DiscordPollPublisher._emoji_is_usable` | `resolve_options` wraps it in a lambda to supply `self._bot`; a bound method uses the existing dependency directly. |
 | `squid/bot/submission/ui/drafts.py:997` `draft_editor` | Async `DraftEditorScreen.load` | `open_draft` and `BuildSubmitCommands` use this factory to load a manifest and initialize one screen. Keep consent and presentation orchestration outside the constructor. |
-| `squid/accounts/domain/profiles.py:264` `present_public_profile` | `PublicCreatorProfile.from_record` | `AccountService` constructs this public projection. Both types already live in the same layer; retain hidden-profile and avatar privacy rules. |
-| `squid/records/application/published_points.py:67` `published_door_point` | `PublishedDoorPoint.from_publication` | The range-publication service constructs this projection; adjacent `RangeAttemptSummary.from_attempt` uses the same pattern. Preserve unpublished and outside-query distinctions. |
-| `squid/schematics/infrastructure/wire.py:165` `decode_worker_request` | `WorkerRequest.from_frame` | `worker_main` validates and constructs this wire-layer type. Keep payload validation and `FrameStreamClosed` translation intact. |
+| `squid/core/accounts/domain/profiles.py:264` `present_public_profile` | `PublicCreatorProfile.from_record` | `AccountService` constructs this public projection. Both types already live in the same layer; retain hidden-profile and avatar privacy rules. |
+| `squid/core/records/application/published_points.py:67` `published_door_point` | `PublishedDoorPoint.from_publication` | The range-publication service constructs this projection; adjacent `RangeAttemptSummary.from_attempt` uses the same pattern. Preserve unpublished and outside-query distinctions. |
+| `squid/core/schematics/infrastructure/wire.py:165` `decode_worker_request` | `WorkerRequest.from_frame` | `worker_main` validates and constructs this wire-layer type. Keep payload validation and `FrameStreamClosed` translation intact. |
 
 These constructor moves improve discoverability more than encapsulation. They
 can be independent small commits, with imports and direct test calls migrated.
@@ -80,10 +80,10 @@ In particular, the poll publisher test imports `_emoji_is_usable` directly.
 - `squid/bot/accounts/consent.py:140` `_consent_prompt` could become named
   `ConsentPrompt` constructors for account consent and identity linking. Keep
   continuation orchestration standalone; tests directly import the factory.
-- `squid/builds/infrastructure/taxonomy.py:124` `_resolve_official_tag_rows`
+- `squid/core/builds/infrastructure/taxonomy.py:124` `_resolve_official_tag_rows`
   could become a private `PostgresBuildTaxonomy` method. Its only caller is
   `resolve_official`; pure name-matching helpers should remain separate.
-- `squid/records/infrastructure/repository.py:782,806` `_door_timings` and
+- `squid/core/records/infrastructure/repository.py:782,806` `_door_timings` and
   `_extender_timings` could become private `PostgresRecordRepository` loaders.
   Only its listing methods call them; the practical benefit is modest.
 - `squid/bot/submission/draft_intake.py` could become a `DiscordDraftIntake`

@@ -6,7 +6,7 @@ architecture rule now rejects new bare builtin raises.
 
 ## Extender fastest records never resolve
 
-`_extender_candidate` (`squid/records/infrastructure/repository.py`) takes its timings only from
+`_extender_candidate` (`squid/core/records/infrastructure/repository.py`) takes its timings only from
 `extender_timing_variants`, and nothing writes that table. Every extender therefore gets an empty
 timing tuple, and no extender fastest record can be computed. Doors avoid this because
 `_door_candidate` falls back to the `doors` timing columns; extenders have no such fallback.
@@ -36,7 +36,7 @@ it — the check it guards against is already handled two lines below.
 `on_message` listener that calls `ingest_message_bundle` → `BuildInferenceService.infer` →
 `VersionService.resolve_spec` with nothing catching exceptions along the way. When the AI-inferred
 `version_spec` names both editions, `VersionService._edition_from_spec`
-(`squid/versions/application/services.py:66-73`) raises `InvalidVersionError`, which propagates
+(`squid/core/versions/application/services.py:66-73`) raises `InvalidVersionError`, which propagates
 straight out of the listener; discord.py's default handling just logs "Ignoring exception in
 on_message" and drops it. The user who posted the build gets no card, no error message, and no
 indication anything went wrong — the message is silently never turned into a submission. Caught in
@@ -55,7 +55,7 @@ drop, so it is still the fix that matters.
 ## `VersionService.resolve_spec` leaks bare `ValueError` on non-numeric version text
 
 `resolve_spec` parses version numbers with `tuple(map(int, value.split(".")))` at three sites —
-inline at `squid/versions/application/services.py:56`, and in `_parse_version_numbers` (line 85)
+inline at `squid/core/versions/application/services.py:56`, and in `_parse_version_numbers` (line 85)
 and `_parse_range_end` (line 99). None of them validate first, so any token that is not an integer
 escapes as a raw `ValueError` from `int()`. Each of those functions raises `InvalidVersionError`
 two lines later for the *wrong arity* case, so the module already knows what the right error is;
@@ -97,7 +97,7 @@ Line 66 is a second, latent fault on the same path: `self.bot.get_channel(channe
 `anyio.move_on_after(RESPONSE_BUDGET_SECONDS)` so a slow source degrades to an empty dropdown. The
 budget works, but the cancellation lands inside an in-flight SQLAlchemy query: on 2026-08-18
 05:58:55 UTC a `build submit` autocomplete was cut off in `VersionRepository.list`
-(`squid/versions/infrastructure/repository.py:42`) and the `CancelledError` — "Cancelled via cancel
+(`squid/core/versions/infrastructure/repository.py:42`) and the `CancelledError` — "Cancelled via cancel
 scope 74eb80be8730; reason: deadline exceeded" — propagated out through `greenlet_spawn` into
 `AsyncAdaptedQueuePool`, which logged it (reference `eda0731f0cb6`). The `except Exception` at line
 82 cannot see it, by design; the pool is where it surfaces.
@@ -113,8 +113,8 @@ result on deadline, or give the query its own statement timeout instead of cance
 
 ## `_ServerSettingModelRepository` assumes default `id` attribute, crashing all `ServerSetting` updates
 
-`ServerSetting` (`squid/settings/infrastructure/models.py:18`) defines `server_id` as its primary key.
-`_ServerSettingModelRepository` (`squid/settings/infrastructure/repository.py:13-15`) subclasses
+`ServerSetting` (`squid/core/settings/infrastructure/models.py:18`) defines `server_id` as its primary key.
+`_ServerSettingModelRepository` (`squid/core/settings/infrastructure/repository.py:13-15`) subclasses
 `BaseAsyncRepository[ServerSetting]` (Advanced-Alchemy's `SQLAlchemyAsyncRepository`), which defaults
 `id_attribute = "id"`. When `repository.update(row)` is called (`SettingsRepository.set`, `set_locale`,
 or `on_guild_remove`), Advanced-Alchemy calls `self.get_id_attribute_value(data, id_attribute=id_attribute)`
@@ -131,8 +131,8 @@ The `/search` command (`squid/bot/submission/search.py:175-191`) accepts a `scop
 (`SearchTarget`: `records`, `builds`, `patterns`, `restrictions`, `everything`) alongside `query`, `sort`,
 and `mode`. Autocomplete for `query` is wired with `@autocompletes(sort="search_sorts", query="search_query")`.
 
-`SearchQueryProvider` (`squid/suggestions/infrastructure/providers/search_query.py:42-105`) completes query
-tokens against `DEFAULT_FIELD_REGISTRY` (`squid/search/application/fields.py:97-132`) and queries `build`
+`SearchQueryProvider` (`squid/core/suggestions/infrastructure/providers/search_query.py:42-105`) completes query
+tokens against `DEFAULT_FIELD_REGISTRY` (`squid/core/search/application/fields.py:97-132`) and queries `build`
 facet values. It receives no `scope` context from the Discord interaction options, nor does `SearchQueryProvider`
 or `FieldRegistry` filter fields and facet completions by `SearchScope`.
 

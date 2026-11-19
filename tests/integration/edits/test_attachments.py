@@ -9,31 +9,31 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import ConflictError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
-from squid.media.application.jobs import MediaUploadMetadata
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaProcessingJobRecord
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import IngestedSchematic
-from squid.submissions.application.attachment_edits import (
+from squid.core.media.application.jobs import MediaUploadMetadata
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaJobStatus
+from squid.core.media.models import MediaProcessingJobRecord
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application import IngestedSchematic
+from squid.core.submissions.application.attachment_edits import (
     DRAFT_ATTACHMENTS,
     AttachmentValues,
     DraftAttachmentsEdit,
     FileMembership,
 )
-from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
-from squid.submissions.application.drafts import SubmissionDraftService
-from squid.submissions.application.edits import draft_target
-from squid.submissions.application.forms import CheckedInFormManifestRegistry
-from squid.submissions.application.intake import SuppliedAttachment
-from squid.submissions.domain import DraftStatus
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.submissions.models.entities import SubmissionDraft
-from squid.submissions.models.schematics import DraftSchematicSource
+from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
+from squid.core.submissions.application.drafts import SubmissionDraftService
+from squid.core.submissions.application.edits import draft_target
+from squid.core.submissions.application.forms import CheckedInFormManifestRegistry
+from squid.core.submissions.application.intake import SuppliedAttachment
+from squid.core.submissions.domain import DraftStatus
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.schematics import DraftSchematicSource
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version
 from tests.unit.schematics.fakes import make_analysis

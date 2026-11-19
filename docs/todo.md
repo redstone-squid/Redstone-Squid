@@ -51,7 +51,7 @@
 ## Observability
 
 - [x] Add a Discord command and API endpoint to retrieve a logged error by its reference/correlation ID.
-  - `squid/diagnostics/` stores every captured failure in `error_reports` with the traceback, the redacted
+  - `squid/core/diagnostics/` stores every captured failure in `error_reports` with the traceback, the redacted
     context, and the log lines the process emitted under the same correlation ID. `/error <reference>`,
     `GET /v1/diagnostics/errors/{reference}`, and `squid errors show` all resolve it, gated on
     `diagnostics.error.read`.

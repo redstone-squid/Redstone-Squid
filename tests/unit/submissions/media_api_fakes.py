@@ -14,22 +14,22 @@ from squid.api.security import Caller, current_caller
 from squid.api.v1.submission_media import router
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditOutcome, EditResult, Revision
-from squid.media.application.jobs import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditCommand, EditOutcome, EditResult, Revision
+from squid.core.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
     MediaUploadMetadata,
     StagedMediaUploadSubmission,
     StoredMediaArtifact,
 )
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaJobStatus
-from squid.media.errors import DraftMediaNotFoundError
-from squid.submissions.application import DraftAttachmentService, StoredDraft
-from squid.submissions.application.attachment_edits import AttachmentValues
-from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
-from squid.submissions.errors import DraftAccessDeniedError
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaJobStatus
+from squid.core.media.errors import DraftMediaNotFoundError
+from squid.core.submissions.application import DraftAttachmentService, StoredDraft
+from squid.core.submissions.application.attachment_edits import AttachmentValues
+from squid.core.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.core.submissions.errors import DraftAccessDeniedError
 from tests.support.edits import bound_revisions
 from tests.support.litestar import DependencyOverrides, route_app
 

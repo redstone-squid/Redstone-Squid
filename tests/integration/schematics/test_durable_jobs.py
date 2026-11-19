@@ -10,21 +10,21 @@ import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.artifacts.application import ArtifactMetadata
-from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
+from squid.core.artifacts.application import ArtifactMetadata
+from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import RateLimitedError
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
-from squid.schematics.application.video import VideoRenderRequest
-from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
-from squid.schematics.domain.values import VerifiedResourcePack
-from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
-from squid.schematics.infrastructure import wire
-from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
-from squid.schematics.models import SchematicJob
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
+from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
+from squid.core.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
+from squid.core.schematics.infrastructure import wire
+from squid.core.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
+from squid.core.schematics.models import SchematicJob
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
 pytestmark = pytest.mark.asyncio

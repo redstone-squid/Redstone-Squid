@@ -7,11 +7,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.auth.application import ApiKeyService
-from squid.auth.models.entities import ApiKey
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.accounts.models import Account
+from squid.core.auth.application import ApiKeyService
+from squid.core.auth.models.entities import ApiKey
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.schema import model_tables
 
 _TABLES = model_tables(Account, ApiKey)

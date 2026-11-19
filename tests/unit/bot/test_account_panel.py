@@ -14,7 +14,15 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.accounts.domain import (
+from squid.bot.accounts.cog import VerifyCog
+from squid.bot.accounts.consent import ConsentPrompt, request_consent
+from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
+from squid.bot.accounts.presentation import refresh_message
+from squid.bot.accounts.profile_editor import ProfileEditor
+from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
+from squid.bot.follows import FollowCard
+from squid.bot.utils.permissions import Grants
+from squid.core.accounts.domain import (
     AccountConsent,
     AccountMerge,
     ClaimStatus,
@@ -27,19 +35,11 @@ from squid.accounts.domain import (
     ProfileUpdate,
     PublicCreatorProfile,
 )
-from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
-from squid.bot.accounts.cog import VerifyCog
-from squid.bot.accounts.consent import ConsentPrompt, request_consent
-from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
-from squid.bot.accounts.presentation import refresh_message
-from squid.bot.accounts.profile_editor import ProfileEditor
-from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
-from squid.bot.follows import FollowCard
-from squid.bot.utils.permissions import Grants
+from squid.core.accounts.errors import AccountNotFoundError
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.actors import Actor
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_ui.content.text import NEUTRAL, resolve_text, source_text
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.interactions import Visibility

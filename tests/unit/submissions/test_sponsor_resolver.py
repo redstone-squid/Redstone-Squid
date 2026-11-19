@@ -7,8 +7,8 @@ import pytest
 from whenever import Instant
 
 from squid.config import MinecraftAuthConfig
-from squid.minecraft_auth.domain import PublicServerProfile, PublishedPaperServer
-from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.core.minecraft_auth.domain import PublicServerProfile, PublishedPaperServer
+from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
 
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000701")
 NOW = Instant.parse_iso("2026-08-11T20:00:00Z")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.posts.domain import StarboardEntryKey
+from squid.core.posts.domain import StarboardEntryKey
 
 
 def test_starboard_key_round_trip() -> None:

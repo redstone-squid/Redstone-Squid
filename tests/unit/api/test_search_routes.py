@@ -7,13 +7,13 @@ import pytest
 
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import build_hit_id, search, suggest_terms
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, DoorBuild
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
-from squid.search.application import SearchService
-from squid.search.domain import (
+from squid.core.search.application import SearchService
+from squid.core.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
     RecordSearchHit,

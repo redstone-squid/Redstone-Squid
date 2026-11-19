@@ -16,7 +16,7 @@ from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.voting.domain import VoteRejection, VoteSessionSnapshot
+from squid.core.voting.domain import VoteRejection, VoteSessionSnapshot
 from squid_i18n import Text, md_tr
 
 if TYPE_CHECKING:

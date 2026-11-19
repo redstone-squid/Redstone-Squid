@@ -4,9 +4,15 @@ from decimal import Decimal
 
 import pytest
 
-from squid.tags.application.edits import ProposalValues
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType, coerce_assignment_value
-from squid.tags.models import TagDefinition
+from squid.core.tags.application.edits import ProposalValues
+from squid.core.tags.domain import (
+    TagAuthority,
+    TagModerationStatus,
+    TagSemanticKind,
+    TagValueType,
+    coerce_assignment_value,
+)
+from squid.core.tags.models import TagDefinition
 
 
 def test_proposal_normalizes_public_names_and_generates_an_opaque_key() -> None:

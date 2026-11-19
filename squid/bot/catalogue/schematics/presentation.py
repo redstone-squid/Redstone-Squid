@@ -2,9 +2,9 @@
 
 from squid.bot.ui import truncate_display_text
 from squid.core.i18n import tr
-from squid.schematics.application import RenderSkipReason, StoredSchematic
-from squid.schematics.domain.models import SchematicFormat, SimulationResult, Vector3
-from squid.schematics.errors import AmbiguousSimulationInputError
+from squid.core.schematics.application import RenderSkipReason, StoredSchematic
+from squid.core.schematics.domain.models import SchematicFormat, SimulationResult, Vector3
+from squid.core.schematics.errors import AmbiguousSimulationInputError
 from squid_i18n import Text, md, md_tr, text_link
 from squid_ui.content.text import TextLike
 

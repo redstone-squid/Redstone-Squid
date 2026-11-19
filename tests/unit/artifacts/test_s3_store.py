@@ -9,8 +9,8 @@ from unittest.mock import Mock
 import anyio
 import pytest
 
-from squid.artifacts.infrastructure import ArtifactTooLargeError, S3ArtifactStore
 from squid.config import ObjectStorageConfig
+from squid.core.artifacts.infrastructure import ArtifactTooLargeError, S3ArtifactStore
 from squid.core.errors import InvalidStateError
 
 

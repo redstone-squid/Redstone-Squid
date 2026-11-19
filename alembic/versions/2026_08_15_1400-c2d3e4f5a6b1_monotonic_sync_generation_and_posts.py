@@ -29,9 +29,9 @@ import sqlalchemy as sa
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.replaceable_entity import ReplaceableEntity
 
-import squid.persistence.types
+import squid.core.persistence.types
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c2d3e4f5a6b1"
 down_revision: str | Sequence[str] | None = "b1c2d3e4f5a6"
@@ -77,12 +77,12 @@ def upgrade() -> None:
         sa.Column("applied_revision", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
         sa.Column(
             "posted_at",
-            squid.persistence.types.InstantUTC(timezone=True),
+            squid.core.persistence.types.InstantUTC(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("rendered_at", squid.persistence.types.InstantUTC(timezone=True), nullable=True),
-        sa.Column("suppressed_at", squid.persistence.types.InstantUTC(timezone=True), nullable=True),
+        sa.Column("rendered_at", squid.core.persistence.types.InstantUTC(timezone=True), nullable=True),
+        sa.Column("suppressed_at", squid.core.persistence.types.InstantUTC(timezone=True), nullable=True),
         sa.CheckConstraint(
             "resource_kind IN ('build', 'vote_session', 'starboard_entry')",
             name="discord_posts_resource_kind_check",

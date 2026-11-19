@@ -29,7 +29,7 @@ from squid.bot.utils.permissions import enforce
 from squid.bot.voting.spec import VoteRecount
 from squid.bot.voting.spec import extension as voting_extension
 from squid.core.i18n import tr
-from squid.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
+from squid.core.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_i18n import md_tr
 from squid_ui.content.text import Text
 

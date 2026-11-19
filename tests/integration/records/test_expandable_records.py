@@ -7,15 +7,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.models import RecordLookupRequest
-from squid.records.application.services import RecordComputationService, RecordService
-from squid.records.domain import BaseTitle, BuildKind
-from squid.records.models import TitleHolder, TitleResult
-from squid.search.infrastructure.projection import SearchProjectionLoader
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.models import RecordLookupRequest
+from squid.core.records.application.services import RecordComputationService, RecordService
+from squid.core.records.domain import BaseTitle, BuildKind
+from squid.core.records.models import TitleHolder, TitleResult
+from squid.core.search.infrastructure.projection import SearchProjectionLoader
 from tests.integration.records.test_live import document
 from tests.support.build_edits import build_edit_session
 

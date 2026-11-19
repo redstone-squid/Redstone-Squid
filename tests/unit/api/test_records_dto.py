@@ -19,19 +19,19 @@ from squid.api.v1.records import (
     lookup_door,
     lookup_door_ranges,
 )
-from squid.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
-from squid.builds.domain.expansion_evaluation import PointStatus
+from squid.core.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
+from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
-from squid.records.application import PublicRecordQueryService, RecordService
-from squid.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
-from squid.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
-from squid.records.application.models import PublicRecordDetail, PublishedTitle
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.application.range_snapshots import RangeAttempt, RangePublication
-from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
-from squid.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
-from squid.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
+from squid.core.records.application import PublicRecordQueryService, RecordService
+from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
+from squid.core.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
+from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
+from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
+from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
+from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
 _RECORD = PublishedTitle(
     id=7,

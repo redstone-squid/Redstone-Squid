@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING, final, override
 
 import discord
 
-from squid.accounts.domain import IdentityProvider
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, TaskFailure, settle_all
-from squid.posts.domain import ResourceKind
-from squid.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, PollScope, VoteSessionSnapshot
+from squid.core.posts.domain import ResourceKind
+from squid.core.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, PollScope, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app

@@ -15,12 +15,12 @@ from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
-from squid.notifications import (
+from squid.core.notifications import (
     InboxVisibility,
     PendingNotificationDelivery,
 )
-from squid.notifications.domain import NotificationKind
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.notifications.domain import NotificationKind
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_i18n import discord_text, md_tr, resolve_text
 from squid_ui.content.text import Text, localization_scope

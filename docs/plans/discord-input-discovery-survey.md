@@ -165,8 +165,8 @@ use one universal “record ID” picker for all three.
 Sources: [cog.py](../../squid/bot/submission/cog.py),
 [form.py](../../squid/bot/submission/form.py),
 [sections.py](../../squid/bot/submission/ui/sections.py),
-[forms.py](../../squid/submissions/application/forms.py),
-[credit_text.py](../../squid/submissions/application/credit_text.py), and
+[forms.py](../../squid/core/submissions/application/forms.py),
+[credit_text.py](../../squid/core/submissions/application/credit_text.py), and
 [schematic_tools.py](../../squid/bot/catalogue/schematics/tools.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
@@ -280,7 +280,7 @@ and in a small adapter between domain lookups and shared widgets.
   detail, paged choices, and structured collections. The profile link editor
   demonstrates a collection editor; submission sections demonstrate retaining
   selections across pages.
-- [The suggestion registry](../../squid/suggestions/infrastructure/catalogue.py)
+- [The suggestion registry](../../squid/core/suggestions/infrastructure/catalogue.py)
   already provides `creator_profiles`, `record_titles`, `showcase_tag_ids`,
   `restriction_ids`, `permission_roles`, `permission_nodes`,
   `permission_patterns`, `starboard_names`, `version_ids`, `title_definitions`,

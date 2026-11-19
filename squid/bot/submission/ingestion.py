@@ -19,14 +19,14 @@ from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.core.actors import Actor
 from squid.core.errors import SquidError
+from squid.core.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS
+from squid.core.submissions.application.finalization import DraftPreparationSnapshot
+from squid.core.submissions.application.inference_runs import InferenceCandidate
+from squid.core.submissions.application.inferred_drafts import materialize_candidate
+from squid.core.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.errors import DraftCapacityExceededError
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS
-from squid.submissions.application.finalization import DraftPreparationSnapshot
-from squid.submissions.application.inference_runs import InferenceCandidate
-from squid.submissions.application.inferred_drafts import materialize_candidate
-from squid.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
-from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.errors import DraftCapacityExceededError
 
 logger = logging.getLogger(__name__)
 

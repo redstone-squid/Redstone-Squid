@@ -17,10 +17,10 @@ import pytest
 from anyio import CancelScope, Event, create_task_group, fail_after, sleep
 from whenever import Instant
 
-import squid.media.application.jobs as media_jobs
-from squid.artifacts import ArtifactMetadata
-from squid.media.application.commands import MediaProcessingRequest
-from squid.media.application.jobs import (
+import squid.core.media.application.jobs as media_jobs
+from squid.core.artifacts import ArtifactMetadata
+from squid.core.media.application.commands import MediaProcessingRequest
+from squid.core.media.application.jobs import (
     MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ArtifactCleanupClaim,
     ClaimedMediaJob,
@@ -39,9 +39,9 @@ from squid.media.application.jobs import (
     StoredMediaArtifact,
     TerminalMediaSource,
 )
-from squid.media.application.models import MediaProcessingResult
-from squid.media.application.services import MediaProcessingService
-from squid.media.domain import (
+from squid.core.media.application.models import MediaProcessingResult
+from squid.core.media.application.services import MediaProcessingService
+from squid.core.media.domain import (
     MediaArtifact,
     MediaBatchTotals,
     MediaKind,
@@ -50,8 +50,8 @@ from squid.media.domain import (
     MediaProcessingAction,
     MediaProcessingReport,
 )
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
-from squid.media.errors import (
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.errors import (
     InvalidMediaError,
     MediaDraftNotFoundError,
     MediaDraftStateConflictError,
@@ -990,7 +990,7 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
     failure = MediaProcessingError(MediaFailureReason.TOOL_FAILED, operation="normalize_image", exit_code=-9)
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE, failure=failure), tmp_path)
 
-    with caplog.at_level(logging.WARNING, logger="squid.media.application.jobs"):
+    with caplog.at_level(logging.WARNING, logger="squid.core.media.application.jobs"):
         await runner.process_batch()
 
     [record] = [item for item in caplog.records if "Media processing failed for upload" in item.getMessage()]

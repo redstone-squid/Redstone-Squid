@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
-from squid.builds.domain import Status
-from squid.events import DomainEvent, UnsupportedEventVersionError
-from squid.voting.domain import DeleteLogVoteTarget, VoteSessionResult
+from squid.core.builds.domain import Status
+from squid.core.events import DomainEvent, UnsupportedEventVersionError
+from squid.core.voting.domain import DeleteLogVoteTarget, VoteSessionResult
 
 if TYPE_CHECKING:
     import squid.bot.app

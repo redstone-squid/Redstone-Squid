@@ -4,9 +4,9 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.minecraft_auth.domain import MinecraftClientOrigin
-from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
-from squid.minecraft_auth.models import PlayerAuthorizationChallenge, PlayerGrant
+from squid.core.minecraft_auth.domain import MinecraftClientOrigin
+from squid.core.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
+from squid.core.minecraft_auth.models import PlayerAuthorizationChallenge, PlayerGrant
 
 
 def test_grant_mismatch_raises_a_structured_secret_free_invariant_error() -> None:

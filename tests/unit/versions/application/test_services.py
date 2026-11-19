@@ -4,9 +4,9 @@ from functools import partial
 
 import pytest
 
-from squid.versions.application.services import VersionService
-from squid.versions.domain import Edition, MinecraftVersion
-from squid.versions.errors import VersionCatalogUnavailableError
+from squid.core.versions.application.services import VersionService
+from squid.core.versions.domain import Edition, MinecraftVersion
+from squid.core.versions.errors import VersionCatalogUnavailableError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 

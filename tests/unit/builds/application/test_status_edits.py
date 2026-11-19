@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.builds.application.edits import BUILD_STATUS_EDIT, BuildEditUnitOfWork, BuildStatusEdit, build_target
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
 from squid.core.actors import Actor
+from squid.core.builds.application.edits import BUILD_STATUS_EDIT, BuildEditUnitOfWork, BuildStatusEdit, build_target
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
+from squid.core.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, InvalidStateError
-from squid.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
-from squid.permissions.application.services import PermissionService
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
 
 
 @pytest.mark.parametrize("status", [Status.CONFIRMED, Status.DENIED])

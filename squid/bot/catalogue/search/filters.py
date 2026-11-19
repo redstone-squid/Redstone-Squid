@@ -17,11 +17,11 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, 
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
-from squid.search.application import SearchService
-from squid.search.application.fields import FieldRegistry
-from squid.search.application.parser import SearchQueryParser
-from squid.search.domain.fields import FieldDefinition, FieldType
-from squid.search.domain.query import (
+from squid.core.search.application import SearchService
+from squid.core.search.application.fields import FieldRegistry
+from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain.fields import FieldDefinition, FieldType
+from squid.core.search.domain.query import (
     BooleanOperator,
     ComparisonOperator,
     FieldExpression,
@@ -30,8 +30,8 @@ from squid.search.domain.query import (
     RangeValue,
     TextExpression,
 )
-from squid.search.domain.scope import SearchScope
-from squid.suggestions.domain import Suggestion, SuggestionRequest
+from squid.core.search.domain.scope import SearchScope
+from squid.core.suggestions.domain import Suggestion, SuggestionRequest
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 # Suggestion sources for fields whose values are names from a catalogue.

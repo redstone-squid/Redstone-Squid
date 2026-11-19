@@ -19,10 +19,10 @@ import squid_ui.ext.discord as sd
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
-from squid.builds.application import BuildEditPatch
-from squid.builds.domain import Status
-from squid.builds.models import Build
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.builds.application import BuildEditPatch
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)

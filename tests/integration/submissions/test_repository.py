@@ -11,15 +11,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.edits.domain import OperationReuseError
-from squid.media.domain import MediaKind
-from squid.media.domain.jobs import MediaJobStatus
-from squid.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
-from squid.messages.domain import MessageSnapshot
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application import StoredDraft
-from squid.submissions.domain import (
+from squid.core.accounts.models import Account
+from squid.core.edits.domain import OperationReuseError
+from squid.core.media.domain import MediaKind
+from squid.core.media.domain.jobs import MediaJobStatus
+from squid.core.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.application import StoredDraft
+from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
     DraftRevisionConflictError,
@@ -30,15 +30,15 @@ from squid.submissions.domain import (
     FinalizationJobStatus,
     SubmissionOrigin,
 )
-from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.errors import DraftStateConflictError
-from squid.submissions.models.entities import (
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.errors import DraftStateConflictError
+from squid.core.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
-from squid.submissions.models.finalization import SubmissionFinalizationJob
-from squid.submissions.models.intake import SubmissionSuppliedAttachment
+from squid.core.submissions.models.finalization import SubmissionFinalizationJob
+from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
@@ -473,7 +473,7 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
 ) -> None:
     from anyio import create_task_group
 
-    from squid.submissions.errors import DraftCapacityExceededError
+    from squid.core.submissions.errors import DraftCapacityExceededError
 
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     now = Instant.now()
@@ -554,7 +554,7 @@ async def test_inferred_capacity_is_global_and_expiry_releases_it(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    from squid.submissions.errors import DraftCapacityExceededError
+    from squid.core.submissions.errors import DraftCapacityExceededError
 
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     async with async_session_factory.begin() as session:

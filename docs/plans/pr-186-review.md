@@ -76,35 +76,35 @@ Whole-project Pyrefly reports zero errors. Commit hooks format/lint changed file
 ### 1. Comment 4433154892 (P1)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4433154892).
-Original path: `squid/search/application/services.py`, line 35.
+Original path: `squid/core/search/application/services.py`, line 35.
 
 > why are we passing the same information in request into two other arguments
 
 ### 2. Comment 4433227882 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4433227882).
-Original path: `squid/suggestions/application/services.py`, line 1.
+Original path: `squid/core/suggestions/application/services.py`, line 1.
 
 > This seem to work but it is very confusing
 
 ### 3. Comment 4433228733 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4433228733).
-Original path: `squid/suggestions/domain/models.py`, line 12.
+Original path: `squid/core/suggestions/domain/models.py`, line 12.
 
 > but we are not discord specific, aso this desnt seem like a hard cap despite the name
 
 ### 4. Comment 4433230613 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4433230613).
-Original path: `squid/suggestions/domain/models.py`, line 50.
+Original path: `squid/core/suggestions/domain/models.py`, line 50.
 
 > do we really need another dataclass for a User but slightly different
 
 ### 5. Comment 4433252707 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4433252707).
-Original path: `squid/suggestions/infrastructure/catalogue.py`, line 63.
+Original path: `squid/core/suggestions/infrastructure/catalogue.py`, line 63.
 
 > I feel like we shouldn't register centrally
 
@@ -118,7 +118,7 @@ Original path: `squid/bot/utils/autocomplete.py`, line 87.
 ### 7. Comment 4447080538 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4447080538).
-Original path: `squid/suggestions/infrastructure/providers/taxonomy.py`, line 138.
+Original path: `squid/core/suggestions/infrastructure/providers/taxonomy.py`, line 138.
 
 > I wonder if we should sort once in the db then once in python, to speed up the sorting on the python side
 

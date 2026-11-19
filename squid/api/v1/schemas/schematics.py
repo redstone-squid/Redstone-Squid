@@ -5,10 +5,10 @@ from typing import Literal, Self, override
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from squid.api.v1.schemas import FromDomain
-from squid.schematics.application.attachments import StoredSchematic
-from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
-from squid.schematics.application.video_service import VideoStatus
-from squid.schematics.domain import SchematicDimensions
+from squid.core.schematics.application.attachments import StoredSchematic
+from squid.core.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.core.schematics.application.video_service import VideoStatus
+from squid.core.schematics.domain import SchematicDimensions
 
 
 class SchematicSize(FromDomain[SchematicDimensions]):

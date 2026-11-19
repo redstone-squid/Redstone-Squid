@@ -14,7 +14,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.i18n import locale_for_request
 from squid.api.request_context import resolve_request_id
 from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
-from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
+from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
+from squid.core.diagnostics.log_capture import captured
+from squid.core.edits.domain import ConcurrentEditError, RevisionConflictError
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -29,8 +31,6 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import localization_for, tr
-from squid.diagnostics.log_capture import captured
-from squid.edits.domain import ConcurrentEditError, RevisionConflictError
 from squid.observability import correlated_log_buffer, correlation_id, correlation_reference
 from squid_i18n import localization_scope
 

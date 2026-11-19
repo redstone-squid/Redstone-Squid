@@ -11,9 +11,6 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
@@ -21,12 +18,15 @@ from squid.bot.utils.permissions import (
     requires,
     requires_grant,
 )
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.runtime import BotServices
 from squid_ui.testing import RecordingResponder, press_event
 from tests.support.grants import grants
@@ -191,7 +191,7 @@ class TestRequires:
         assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
 
     def test_an_unknown_node_fails_at_import_time(self) -> None:
-        from squid.permissions.domain import UnknownPermissionNodeError
+        from squid.core.permissions.domain import UnknownPermissionNodeError
 
         with pytest.raises(UnknownPermissionNodeError):
             requires("build.submission.aprove")

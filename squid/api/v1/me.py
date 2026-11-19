@@ -10,18 +10,6 @@ from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, SkipValidation
 
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import (
-    PROFILE_CLEAR,
-    PROFILE_EDIT,
-    UNLINK_EDIT,
-    VISIBILITY_EDIT,
-    ProfileValues,
-    account_target,
-)
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview
-from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
-from squid.accounts.models import AccountIdentity
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
@@ -47,11 +35,23 @@ from squid.api.v1.schemas.me import (
     ProfileUpdateRequest,
     UserMe,
 )
-from squid.builds.application import PublicBuildSummary
-from squid.builds.domain import Status
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import (
+    PROFILE_CLEAR,
+    PROFILE_EDIT,
+    UNLINK_EDIT,
+    VISIBILITY_EDIT,
+    ProfileValues,
+    account_target,
+)
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview
+from squid.core.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
+from squid.core.accounts.models import AccountIdentity
+from squid.core.builds.application import PublicBuildSummary
+from squid.core.builds.domain import Status
+from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditCommand, EditValues, Revision
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
     ACCOUNT_PROFILE_MODERATE,

@@ -7,7 +7,7 @@ on:
     branches: [master]
     paths:
       - "alembic/**"
-      - "squid/persistence/**"
+      - "squid/core/persistence/**"
       - ".github/workflows/schema-artifacts.yml"
       - "scripts/export_schema.sh"
       - "uv.lock"
@@ -15,7 +15,7 @@ on:
   pull_request:
     paths:
       - "alembic/**"
-      - "squid/persistence/**"
+      - "squid/core/persistence/**"
       - ".github/workflows/schema-artifacts.yml"
       - "scripts/export_schema.sh"
       - "uv.lock"

@@ -7,15 +7,15 @@ from uuid import uuid4
 import pytest
 from whenever import Instant
 
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.core.actors import Actor
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.core.errors import ValidationError
-from squid.messages.domain import MessageSnapshot
-from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
-from squid.submissions.application.forms import FormOptionSet, SubmissionFormService, build_submission_manifest
-from squid.submissions.application.inference_runs import InferenceCandidate
-from squid.submissions.application.inferred_drafts import materialize_candidate
-from squid.submissions.domain import DraftChange, DraftSnapshot, SubmissionOrigin
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
+from squid.core.submissions.application.forms import FormOptionSet, SubmissionFormService, build_submission_manifest
+from squid.core.submissions.application.inference_runs import InferenceCandidate
+from squid.core.submissions.application.inferred_drafts import materialize_candidate
+from squid.core.submissions.domain import DraftChange, DraftSnapshot, SubmissionOrigin
 from tests.support.expansion import expansion_document
 
 

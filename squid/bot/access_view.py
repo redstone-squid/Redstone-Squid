@@ -18,9 +18,9 @@ from squid.bot.ui import tr
 from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.permissions.application.administration import PermissionAdministrationService, effect_label
-from squid.permissions.application.edits import (
+from squid.core.edits.application import EditRunner
+from squid.core.permissions.application.administration import PermissionAdministrationService, effect_label
+from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
@@ -38,8 +38,8 @@ from squid.permissions.application.edits import (
     RoleDeletionValues,
     RolePresenceValues,
 )
-from squid.permissions.domain import CATALOGUE, Decision, Effect, Reason
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain import CATALOGUE, Decision, Effect, Reason
+from squid.core.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
     PERM_GRANT_GUILD,
@@ -48,9 +48,14 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
-from squid.permissions.domain.models import PatternMode
-from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
-from squid.suggestions.domain import Suggestion
+from squid.core.permissions.domain.models import PatternMode
+from squid.core.permissions.models import (
+    PermissionAuditEntry,
+    PermissionGrant,
+    PermissionRole,
+    PermissionRoleAssignment,
+)
+from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

@@ -2,13 +2,13 @@
 
 from pytest_archon import archrule
 
-from squid.accounts.infrastructure.account_merge import CREATOR_CREDIT_REFERENCES, IDENTITY_PROFILE_REFERENCES
-from squid.permissions.infrastructure.account_merge import PERMISSION_PROVENANCE_REFERENCES
-from squid.persistence.account_merge import AccountReference
-from squid.persistence.base import Base
-from squid.persistence.model_registry import account_models
-from squid.submissions.infrastructure.account_merge import SUBMISSION_REFERENCES
-from squid.voting.infrastructure.account_merge import VOTING_REFERENCES
+from squid.core.accounts.infrastructure.account_merge import CREATOR_CREDIT_REFERENCES, IDENTITY_PROFILE_REFERENCES
+from squid.core.permissions.infrastructure.account_merge import PERMISSION_PROVENANCE_REFERENCES
+from squid.core.persistence.account_merge import AccountReference
+from squid.core.persistence.base import Base
+from squid.core.persistence.model_registry import account_models
+from squid.core.submissions.infrastructure.account_merge import SUBMISSION_REFERENCES
+from squid.core.voting.infrastructure.account_merge import VOTING_REFERENCES
 
 
 def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
@@ -59,11 +59,11 @@ def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
 def test_account_crud_delegates_cross_feature_merge_policy() -> None:
     (
         archrule("cross-feature merge policy belongs outside routine account persistence")
-        .match("squid.accounts.infrastructure.repository")
-        .should_not_import("squid.notifications*")
-        .should_not_import("squid.submissions*")
-        .should_not_import("squid.voting*")
-        .should_not_import("squid.permissions*")
+        .match("squid.core.accounts.infrastructure.repository")
+        .should_not_import("squid.core.notifications*")
+        .should_not_import("squid.core.submissions*")
+        .should_not_import("squid.core.voting*")
+        .should_not_import("squid.core.permissions*")
         .check("squid", only_direct_imports=True)
     )
 
@@ -71,8 +71,8 @@ def test_account_crud_delegates_cross_feature_merge_policy() -> None:
 def test_feature_merge_phases_do_not_depend_on_the_account_coordinator() -> None:
     (
         archrule("feature merge phases participate through the caller-owned session")
-        .match("squid.*.infrastructure.account_merge")
-        .exclude("squid.accounts.infrastructure.account_merge")
-        .should_not_import("squid.accounts.infrastructure*")
+        .match("squid.core.*.infrastructure.account_merge")
+        .exclude("squid.core.accounts.infrastructure.account_merge")
+        .should_not_import("squid.core.accounts.infrastructure*")
         .check("squid", only_direct_imports=True)
     )

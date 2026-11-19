@@ -24,13 +24,12 @@ from squid.bot.submission.ui.drafts import (
     Phase,
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
-from squid.builds.application.input import parse_build_ticks
-from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
-from squid.builds.models import Build, DoorBuild
 from squid.core.actors import Actor
-from squid.edits.domain import Revision, RevisionConflictError
-from squid.runtime import BotServices
-from squid.submissions.application import (
+from squid.core.builds.application.input import parse_build_ticks
+from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
+from squid.core.builds.models import Build, DoorBuild
+from squid.core.edits.domain import Revision, RevisionConflictError
+from squid.core.submissions.application import (
     AppliedDraftChange,
     FinalizationJobSnapshot,
     FormOptionSet,
@@ -40,11 +39,11 @@ from squid.submissions.application import (
     SubmissionFormService,
     build_submission_manifest,
 )
-from squid.submissions.application.edits import draft_target
-from squid.submissions.application.finalization import SubmissionRequestResult
-from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.domain import (
+from squid.core.submissions.application.edits import draft_target
+from squid.core.submissions.application.finalization import SubmissionRequestResult
+from squid.core.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.domain import (
     ChoiceOption,
     DraftChange,
     DraftSnapshot,
@@ -52,17 +51,18 @@ from squid.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
-from squid.submissions.domain.finalization import (
+from squid.core.submissions.domain.finalization import (
     FinalizationJobStatus,
     FinalizedBuild,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
 )
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.errors import DraftAccessDeniedError
-from squid.tags.application import TagService
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.errors import DraftAccessDeniedError
+from squid.core.tags.application import TagService
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.runtime import BotServices
 from squid_reactivity import LocalTopicBus
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.modal import build_form_modal

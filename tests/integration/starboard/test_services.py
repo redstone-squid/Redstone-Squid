@@ -10,10 +10,10 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
-from squid.messages.models import Message
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.starboard.application import PendingVote, StarboardService
-from squid.starboard.models import OriginMessage
+from squid.core.messages.models import Message
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.starboard.application import PendingVote, StarboardService
+from squid.core.starboard.models import OriginMessage
 from tests.support.starboard_setup import create_starboard
 
 

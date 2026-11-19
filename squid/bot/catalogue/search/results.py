@@ -11,9 +11,9 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
-from squid.builds.domain import Status
-from squid.builds.models import Build
-from squid.search.domain import (
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build
+from squid.core.search.domain import (
     BuildSearchHit,
     RecordSearchHit,
     SearchHit,
@@ -29,7 +29,7 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import Position, WindowLoader, window_fingerprint
 
 if TYPE_CHECKING:
-    from squid.search.application import SearchService
+    from squid.core.search.application import SearchService
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]

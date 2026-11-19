@@ -6,8 +6,8 @@ import anyio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.edits.domain import EditOutcome, EditTarget, Revision
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.edits.domain import EditOutcome, EditTarget, Revision
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 async def test_outcome_rollback_and_retention(migrated_session_factory: async_sessionmaker[AsyncSession]) -> None:

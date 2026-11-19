@@ -1,0 +1,102 @@
+"""Starboard application ports and transport plans."""
+
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Protocol
+
+from squid.core.edits.domain import Revision
+from squid.core.starboard.domain import StarboardDirection
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji, StarboardEntry
+from squid.unit_of_work import UnitOfWork
+
+
+@dataclass(frozen=True, slots=True)
+class PendingVote:
+    """A policy-approved vote ready for atomic persistence."""
+
+    config: StarboardConfig
+    emoji: str
+    direction: StarboardDirection
+    weight: float
+
+
+type EntryKey = tuple[int, int]
+"""One entry, as (starboard id, origin message id)."""
+
+
+@dataclass(frozen=True, slots=True)
+class EntryState:
+    """A board's configuration, source-message details, and current score.
+
+    Post existence is read separately from the posts service when deciding whether
+    the entry crosses a publication threshold.
+    """
+
+    config: StarboardConfig
+    origin: OriginMessage
+    entry: StarboardEntry
+
+
+class StarboardRepository(Protocol):
+    """Starboard reads and writes within the caller's unit-of-work transaction."""
+
+    async def relevant_emojis(self, guild_id: int) -> frozenset[str]: ...
+
+    async def configs_for_source(self, guild_id: int, channel_id: int) -> Sequence[StarboardConfig]: ...
+
+    async def role_multipliers(self, starboard_id: int) -> Mapping[int, float]: ...
+
+    async def record_votes(
+        self, origin: OriginMessage, user_id: int, votes: Sequence[PendingVote]
+    ) -> Sequence[EntryKey]: ...
+
+    async def recount_votes(
+        self, origin: OriginMessage, votes: Sequence[tuple[int, PendingVote]]
+    ) -> Sequence[EntryKey]: ...
+
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryKey]: ...
+
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryKey]: ...
+
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryKey]: ...
+
+    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryKey]: ...
+
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None: ...
+
+    async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None: ...
+
+    async def referenced_channels(self, guild_id: int) -> frozenset[int]: ...
+
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> bool: ...
+
+    async def get_by_id(
+        self, starboard_id: int, *, for_update: bool = False, include_archived: bool = False
+    ) -> StarboardConfig | None: ...
+
+    async def lock_names(self, guild_id: int) -> None: ...
+
+    async def reserve_id(self) -> int: ...
+
+    async def create_reserved(self, config: StarboardConfig) -> None: ...
+
+    async def flush_revision(self, config: StarboardConfig, expected: Revision) -> Revision: ...
+
+    async def is_unused(self, starboard_id: int) -> bool: ...
+
+    async def create(self, config: StarboardConfig) -> StarboardConfig: ...
+
+    async def delete(self, guild_id: int, name: str) -> bool: ...
+
+    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
+
+    async def get(self, guild_id: int, name: str, *, for_update: bool = False) -> StarboardConfig | None: ...
+
+    async def set_emojis(self, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None: ...
+
+    async def set_role_multiplier(self, starboard_id: int, role_id: int, multiplier: float | None) -> None: ...
+
+
+class StarboardUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def starboards(self) -> StarboardRepository: ...

@@ -8,9 +8,9 @@ Prerequisites:
 Steps:
 
 1. Update the SQLAlchemy models in `squid/<context>/models.py` (or its `models/` package), then register the module in
-   `squid/persistence/model_registry.py`. A new models module that is not registered there is invisible to
+   `squid/core/persistence/model_registry.py`. A new models module that is not registered there is invisible to
    `Base.metadata`, so `alembic autogenerate` emits a *drop* for its tables rather than a create.
-2. For a PostgreSQL function or trigger, edit its SQL file under `squid/persistence/postgres_entities/`.
+2. For a PostgreSQL function or trigger, edit its SQL file under `squid/core/persistence/postgres_entities/`.
    Put new functions in `functions/` and triggers in `triggers/`, with exactly one definition per `.sql` file.
    Both directories support arbitrary subfolders; triggers are currently grouped by table.
 3. Run `just db-revision "<short description>"`.
@@ -75,7 +75,7 @@ FAILED: 1 already-applied revision(s) have been edited since this database ran t
 
 The fix is a new revision that applies whatever the edit was going to do. Once you have confirmed
 the edits changed no DDL an existing database already ran — a reformat, a corrected docstring —
-accept the new digests with `squid.persistence.migration_history.repair_script_digests()` inside a database transaction.
+accept the new digests with `squid.core.persistence.migration_history.repair_script_digests()` inside a database transaction.
 
 That appends a `stamp` row per repaired revision rather than rewriting the original, because
 nothing in this table is ever edited: the repair is itself part of the history.

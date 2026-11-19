@@ -9,9 +9,9 @@ import pytest
 import squid_ui as sl
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.utils.permissions import Grants
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
-from squid.records.application import (
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
+from squid.core.records.application import (
     RebuildSummary,
     RecordComputationService,
     RecordGap,
@@ -19,8 +19,8 @@ from squid.records.application import (
     RecordService,
     TitleDiagnosticGap,
 )
-from squid.records.domain import BaseTitle, BuildKind
-from squid.suggestions.domain import Suggestion
+from squid.core.records.domain import BaseTitle, BuildKind
+from squid.core.suggestions.domain import Suggestion
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
 
 

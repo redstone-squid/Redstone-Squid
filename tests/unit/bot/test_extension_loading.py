@@ -28,9 +28,9 @@ from squid.bot.help_cog import DIRECTORY_CATEGORIES
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.cog import BuildCommands
 from squid.config import BuildConfig
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.ports import VoteActorResolver
 from squid.runtime import BackgroundTaskSupervisor
-from squid.voting.application import VoteService
-from squid.voting.application.ports import VoteActorResolver
 from squid_i18n import Text, source_text
 from squid_reactivity import EventLedger, LocalTopicBus
 from tests.support.runtime import SchedulingRecorder

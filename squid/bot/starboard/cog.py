@@ -17,8 +17,8 @@ from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.messages.models import Message
-from squid.permissions.domain.catalogue import (
+from squid.core.messages.models import Message
+from squid.core.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
     STARBOARD_BOARD_EDIT,
@@ -27,8 +27,8 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.posts.domain import StarboardEntryKey
-from squid.starboard.models import OriginMessage
+from squid.core.posts.domain import StarboardEntryKey
+from squid.core.starboard.models import OriginMessage
 from squid_ui.ext.discord.i18n import to_locale_str
 
 if TYPE_CHECKING:

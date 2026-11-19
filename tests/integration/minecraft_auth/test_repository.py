@@ -12,26 +12,26 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.models import Account, AccountIdentity
-from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.domain import PublicServerProfile
-from squid.minecraft_auth.errors import (
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
+from squid.core.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.domain import PublicServerProfile
+from squid.core.minecraft_auth.errors import (
     ChallengeAlreadyExchangedError,
     InvalidInstallationCredentialError,
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.models import (
+from squid.core.minecraft_auth.models import (
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
 )
-from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.core.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 

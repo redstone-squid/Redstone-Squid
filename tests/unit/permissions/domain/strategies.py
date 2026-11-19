@@ -9,7 +9,7 @@ import itertools
 
 from hypothesis import strategies as st
 
-from squid.permissions.domain import CATALOGUE, Effect, Origin, Pattern, Rule, SubjectKind
+from squid.core.permissions.domain import CATALOGUE, Effect, Origin, Pattern, Rule, SubjectKind
 
 NODE_NAMES: tuple[str, ...] = CATALOGUE.names
 GUILD_ID = 4242

@@ -9,7 +9,7 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.builds.domain.credits import Credit, CreditKind, CreditRole, read_credits
+from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole, read_credits
 from squid_ui.ext.discord.form_fields import EntityField
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

@@ -6,15 +6,15 @@ from functools import partial
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.models import CandidateBuild, ComputationBatch
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.application.services import RecordComputationService
-from squid.records.domain import BuildKind
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
-from squid.records.models import DoorRangeRecomputeQueueItem, RecordRecomputeQueueItem, RecordSettings
-from squid.versions.models import Version
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.models import CandidateBuild, ComputationBatch
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.services import RecordComputationService
+from squid.core.records.domain import BuildKind
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.records.models import DoorRangeRecomputeQueueItem, RecordRecomputeQueueItem, RecordSettings
+from squid.core.versions.models import Version
 
 
 async def test_pin_invalidates_both_kinds_and_is_not_changed_by_fixed_publications(

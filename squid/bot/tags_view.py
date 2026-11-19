@@ -16,19 +16,19 @@ from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
-from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import Revision
-from squid.permissions.domain.catalogue import (
+from squid.core.builds.errors import AliasAlreadyAddedError
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import Revision
+from squid.core.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
     TAG_PROPOSAL_APPROVE,
     TAG_PROPOSAL_ARCHIVE,
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.suggestions.domain import Suggestion
-from squid.tags.application.edits import (
+from squid.core.suggestions.domain import Suggestion
+from squid.core.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
@@ -37,8 +37,8 @@ from squid.tags.application.edits import (
     ProposalValues,
     tag_target,
 )
-from squid.tags.domain import TagModerationStatus, TagValueType
-from squid.tags.models import TagDefinition
+from squid.core.tags.domain import TagModerationStatus, TagValueType
+from squid.core.tags.models import TagDefinition
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

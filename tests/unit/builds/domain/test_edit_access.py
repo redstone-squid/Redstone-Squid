@@ -2,8 +2,8 @@
 
 import pytest
 
-from squid.builds.domain import EditAccess, Status
-from squid.builds.models import OtherBuild
+from squid.core.builds.domain import EditAccess, Status
+from squid.core.builds.models import OtherBuild
 
 
 @pytest.mark.parametrize(

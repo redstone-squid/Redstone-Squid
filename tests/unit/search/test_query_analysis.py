@@ -1,12 +1,12 @@
 """Search query analysis tests."""
 
-from squid.search.application import (
+from squid.core.search.application import (
     DEFAULT_FIELD_REGISTRY,
     SearchQueryParser,
     is_filter_only,
     positive_text_expressions,
 )
-from squid.search.domain import ComparisonOperator, FieldExpression, TextExpression
+from squid.core.search.domain import ComparisonOperator, FieldExpression, TextExpression
 
 
 def test_only_positive_text_clauses_participate_in_ranking() -> None:

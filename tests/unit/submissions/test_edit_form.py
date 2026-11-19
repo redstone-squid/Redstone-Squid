@@ -1,7 +1,7 @@
 """The build form's two projections: submitting a new build and editing a saved one."""
 
-from squid.submissions.application.forms import build_edit_manifest, build_submission_manifest
-from squid.submissions.domain import FormManifest
+from squid.core.submissions.application.forms import build_edit_manifest, build_submission_manifest
+from squid.core.submissions.domain import FormManifest
 
 SUBMISSION_ONLY = {
     "schematic_visibility",

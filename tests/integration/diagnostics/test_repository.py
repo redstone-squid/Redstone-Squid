@@ -7,11 +7,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.diagnostics.infrastructure.repository import PostgresErrorReportRepository
+from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
-from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
-from squid.diagnostics.models import ErrorReport
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 _TABLES = [Base.metadata.tables["error_reports"]]
 

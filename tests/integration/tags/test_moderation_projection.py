@@ -4,12 +4,12 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.accounts.models import AccountIdentity as AccountIdentityModel
-from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
+from squid.core.accounts.models import Account
+from squid.core.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
 from tests.support.build_edits import build_edit_session
 
 

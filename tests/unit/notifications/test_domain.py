@@ -10,8 +10,8 @@ from squid.bot.notification_text import notification_build_id, notification_deta
 from squid.bot.notifications_cog import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import localization_for
-from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
-from squid.notifications.domain import NotificationKind
+from squid.core.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
+from squid.core.notifications.domain import NotificationKind
 from squid_i18n import discord_text, resolve_text
 from squid_ui.content.text import Localization
 

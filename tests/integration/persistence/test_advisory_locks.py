@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key, lock_uuid
+from squid.core.persistence.advisory_locks import AdvisoryLockNamespace, lock_key, lock_uuid
 
 
 async def test_minecraft_lock_preserves_legacy_sha256_identifier(async_engine: AsyncEngine) -> None:

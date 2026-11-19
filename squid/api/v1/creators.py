@@ -9,12 +9,12 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, PathParameter
 from litestar.typing import FieldDefinition
 
-from squid.accounts.domain import PublicCreatorProfile
-from squid.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Accounts, get_accounts
 from squid.api.errors import responses
 from squid.api.v1.schemas.creators import CreatorAliasDetail
+from squid.core.accounts.domain import PublicCreatorProfile
+from squid.core.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
 
 
 class PublicCreatorDTO(DataclassDTO[PublicCreatorProfile]):

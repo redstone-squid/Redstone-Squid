@@ -6,8 +6,8 @@ isolation of in-place mutations to nested state.
 
 from copy import copy
 
-from squid.schematics.application.jobs import SchematicJobRepository
-from squid.schematics.application.render_jobs import SchematicRenderJobRepository
+from squid.core.schematics.application.jobs import SchematicJobRepository
+from squid.core.schematics.application.render_jobs import SchematicRenderJobRepository
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 

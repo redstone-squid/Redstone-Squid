@@ -8,10 +8,10 @@ import pytest
 
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
-from squid.search.application import SearchQueryParser, SearchService, SearchSlice
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.application.ports import QueryEmbedding
-from squid.search.domain import (
+from squid.core.search.application import SearchQueryParser, SearchService, SearchSlice
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+from squid.core.search.application.ports import QueryEmbedding
+from squid.core.search.domain import (
     BuildQuery,
     BuildSearchHit,
     FieldDefinition,

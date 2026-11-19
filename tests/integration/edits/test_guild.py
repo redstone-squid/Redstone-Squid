@@ -7,16 +7,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.actors import Actor
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
-from squid.events.models import DomainEvent, DomainEventDeliveryRecord
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.application.edits import GUILD_EDIT, GuildSettingsEdit, guild_target
-from squid.settings.application.services import SettingsService
-from squid.voting.domain import RoleWeight, VoteKind
-from squid.voting.domain.models import VoteConfiguration
+from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.application.edits import GUILD_EDIT, GuildSettingsEdit, guild_target
+from squid.core.settings.application.services import SettingsService
+from squid.core.voting.domain import RoleWeight, VoteKind
+from squid.core.voting.domain.models import VoteConfiguration
 
 GUILD = 70001
 

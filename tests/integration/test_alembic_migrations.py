@@ -17,16 +17,16 @@ from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
-from squid.persistence.alembic_entities import current_entities
-from squid.persistence.migration_history import (
+from squid.core.persistence.alembic_entities import current_entities
+from squid.core.persistence.migration_history import (
     HISTORY_TABLE,
     adopt_script_digests,
     divergent_revisions,
     repair_script_digests,
     script_digest,
 )
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.submissions.payload_integrity import submission_payload_digest
+from squid.core.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.submissions.payload_integrity import submission_payload_digest
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -48,7 +48,7 @@ pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to inclu
 """Autogenerate cannot compare an index expression carrying an operator class.
 
 `search_document_facets_text_prefix_idx` declares `text_pattern_ops` inline in
-`squid/search/models.py`. Suppress the comparison warning for that known limitation;
+`squid/core/search/models.py`. Suppress the comparison warning for that known limitation;
 these drift checks do not verify the skipped index expression.
 """
 

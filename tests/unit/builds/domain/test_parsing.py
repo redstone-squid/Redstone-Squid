@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from squid.builds.domain import parse_time_string
+from squid.core.builds.domain import parse_time_string
 
 
 @pytest.mark.parametrize(

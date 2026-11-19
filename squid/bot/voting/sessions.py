@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.builds.domain import Status
-from squid.builds.models import Build
-from squid.voting.domain import VoteKind
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build
+from squid.core.voting.domain import VoteKind
 
 if TYPE_CHECKING:
     import squid.bot.app

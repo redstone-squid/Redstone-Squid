@@ -25,8 +25,8 @@ class _Atheris(Protocol):
 
 atheris = cast(_Atheris, importlib.import_module("atheris"))
 
-with atheris.instrument_imports(include=["squid.search.application"]):
-    from squid.search.application import QuerySyntaxError, SearchQueryParser
+with atheris.instrument_imports(include=["squid.core.search.application"]):
+    from squid.core.search.application import QuerySyntaxError, SearchQueryParser
 
 
 def test_one_input(data: bytes) -> None:

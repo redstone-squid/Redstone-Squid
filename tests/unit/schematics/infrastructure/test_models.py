@@ -2,8 +2,8 @@
 
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint
 
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.schematics.models import SchematicFile, SchematicPreviewObject, SchematicRender
+from squid.core.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.schematics.models import SchematicFile, SchematicPreviewObject, SchematicRender
 from tests.support.schema import model_table
 
 

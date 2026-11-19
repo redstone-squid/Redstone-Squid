@@ -7,9 +7,9 @@ must enforce access and return an empty response for provider failures and timeo
 import anyio
 
 from squid.bot.utils.autocomplete import CHOICE_NAME_LIMIT, suggests
-from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService, SuggestionSource
-from squid.suggestions.domain import Suggestion, SuggestionRequest, ValueType, Visibility
-from squid.suggestions.infrastructure.providers import StaticProvider
+from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService, SuggestionSource
+from squid.core.suggestions.domain import Suggestion, SuggestionRequest, ValueType, Visibility
+from squid.core.suggestions.infrastructure.providers import StaticProvider
 from tests.support.discord import make_autocomplete_interaction
 
 VIEW_PENDING = "build.submission.view_pending"

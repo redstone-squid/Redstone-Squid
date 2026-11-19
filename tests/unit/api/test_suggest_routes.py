@@ -11,17 +11,17 @@ from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.suggest import list_sources, suggest
 from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
-from squid.suggestions.application import (
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.suggestions.application import (
     Candidate,
     SuggestionRegistry,
     SuggestionService,
     SuggestionSource,
 )
-from squid.suggestions.domain import SourceKind, SuggestionRequest, ValueType, Visibility
-from squid.suggestions.infrastructure.providers import StaticProvider
+from squid.core.suggestions.domain import SourceKind, SuggestionRequest, ValueType, Visibility
+from squid.core.suggestions.infrastructure.providers import StaticProvider
 
 VIEW_PENDING = "build.submission.view_pending"
 

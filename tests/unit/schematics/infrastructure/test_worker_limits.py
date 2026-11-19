@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from squid.schematics.infrastructure import worker_main
-from squid.schematics.infrastructure.worker_main import _current_address_space_bytes
+from squid.core.schematics.infrastructure import worker_main
+from squid.core.schematics.infrastructure.worker_main import _current_address_space_bytes
 
 pytestmark = pytest.mark.skipif(worker_main.resource is None, reason="rlimits are POSIX-only")
 

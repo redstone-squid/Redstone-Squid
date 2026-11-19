@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import ConflictError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application.intake import SuppliedAttachment
-from squid.submissions.domain.intake import IntakeStatus
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.application.intake import SuppliedAttachment
+from squid.core.submissions.domain.intake import IntakeStatus
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
@@ -93,7 +93,7 @@ async def test_source_manifest_blocks_even_if_process_dies_before_reserving_down
 ) -> None:
     from dataclasses import replace
 
-    from squid.submissions.domain.source_files import SubmissionSourceFile
+    from squid.core.submissions.domain.source_files import SubmissionSourceFile
 
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)

@@ -17,9 +17,9 @@ from squid.api.security import Caller
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
 from squid.core.actors import Actor
 from squid.core.i18n import negotiate_locale
-from squid.permissions.domain.catalogue import CATALOGUE
-from squid.suggestions.application import SuggestionService
-from squid.suggestions.domain import MAX_QUERY_SUGGESTIONS, SourceKind, SuggestionRequest
+from squid.core.permissions.domain.catalogue import CATALOGUE
+from squid.core.suggestions.application import SuggestionService
+from squid.core.suggestions.domain import MAX_QUERY_SUGGESTIONS, SourceKind, SuggestionRequest
 
 SourceId = Annotated[str, PathParameter(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 CACHE_SECONDS = 30

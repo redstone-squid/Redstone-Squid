@@ -12,15 +12,15 @@ from litestar.di import NamedDependency
 from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
 
-from squid.accounts.errors import ConsentRequiredError
-from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
-from squid.cli_auth.errors import CliAuthorizationError
+from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
+from squid.core.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
+from squid.core.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError, DomainError
-from squid.minecraft_auth.application.crypto import PLAYER_TOKEN_PREFIX
-from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode
-from squid.permissions.errors import CredentialPermissionDeniedError, PermissionDeniedError
+from squid.core.minecraft_auth.application.crypto import PLAYER_TOKEN_PREFIX
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain import CATALOGUE, Pattern, PermissionNode
+from squid.core.permissions.errors import CredentialPermissionDeniedError, PermissionDeniedError
 
 
 @dataclass(frozen=True, slots=True)

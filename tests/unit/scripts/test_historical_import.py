@@ -15,8 +15,8 @@ import openai
 import pytest
 
 from scripts import populate_db_with_logs_historical_messages as importer
+from squid.core.submissions.application.inference_runs import InferenceStatus
 from squid.runtime import BotServices
-from squid.submissions.application.inference_runs import InferenceStatus
 
 
 def message(identifier: int, author: int = 1, *, bot: bool = False, reply: int | None = None) -> discord.Message:

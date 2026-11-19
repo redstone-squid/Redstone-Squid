@@ -5,10 +5,10 @@ import pytest
 from pydantic import AnyHttpUrl, SecretStr
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
-from squid.auth.application.providers import DiscordOAuthProvider, OAuthProvider
-from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.auth.application.providers import DiscordOAuthProvider, OAuthProvider
+from squid.core.auth.application.web import WebSessionService
 from squid.core.errors import AuthenticationError, NotFoundError
 from tests.support.identity_uow import WebScope
 from tests.unit.auth.application.fakes import AccountServiceRecorder, FakeXboxOAuthProvider, SessionRepository

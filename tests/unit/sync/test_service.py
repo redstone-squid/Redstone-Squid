@@ -8,15 +8,15 @@ from typing import override
 import pytest
 
 from squid.core.errors import DataIntegrityError, InvalidStateError
-from squid.sync import (
+from squid.core.sync import (
     DiscordReconciliationService,
     ReconciliationAction,
     ReconciliationJob,
     ReconciliationQueue,
     ReconciliationResource,
 )
-from squid.sync.infrastructure.repository import _job as map_row
-from squid.sync.models import DiscordSyncQueueItem
+from squid.core.sync.infrastructure.repository import _job as map_row
+from squid.core.sync.models import DiscordSyncQueueItem
 from tests.support.delivery_uow import ReconciliationUnitOfWork
 
 CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")

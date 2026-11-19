@@ -16,13 +16,13 @@ from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFoun
 from discord.http import HTTPClient, Route
 
 from squid.core.actors import Actor
-from squid.discord_rest import RestOnlyClient, rebased_url, rest_client
-from squid.permissions.domain import Decision, PermissionCheck, Reason
-from squid.voting.domain import VoteKind
-from squid.voting.errors import DiscordMemberServiceUnavailableError
-from squid.voting.infrastructure.discord_rest import (
+from squid.core.permissions.domain import Decision, PermissionCheck, Reason
+from squid.core.voting.domain import VoteKind
+from squid.core.voting.errors import DiscordMemberServiceUnavailableError
+from squid.core.voting.infrastructure.discord_rest import (
     DiscordRestActorResolver,
 )
+from squid.discord_rest import RestOnlyClient, rebased_url, rest_client
 
 
 class StubResponse:

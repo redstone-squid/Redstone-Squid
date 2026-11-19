@@ -34,8 +34,8 @@ from squid.api.v1.schemas.cli_auth import (
     IssuedCliSessionResponse,
     UserCode,
 )
-from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
-from squid.cli_auth.models import CliDevice, CliDeviceEnrollment
+from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
+from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 
 

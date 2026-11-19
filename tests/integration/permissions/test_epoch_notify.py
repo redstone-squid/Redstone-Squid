@@ -13,8 +13,8 @@ from alembic_utils.pg_trigger import PGTrigger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.permissions.infrastructure.repository import EPOCH_CHANNEL
-from squid.persistence.alembic_entities import current_entities
+from squid.core.permissions.infrastructure.repository import EPOCH_CHANNEL
+from squid.core.persistence.alembic_entities import current_entities
 
 _CREATE_SCHEMA = """
 CREATE TABLE permission_epoch (

@@ -15,13 +15,13 @@ import pytest
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.media.application.jobs import MediaProcessingJobService
-from squid.media.domain import MediaLimits
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.media.application.jobs import MediaProcessingJobService
+from squid.core.media.domain import MediaLimits
+from squid.core.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.interactions.forms import UploadedFile
 from tests.support.services import bot_services
 

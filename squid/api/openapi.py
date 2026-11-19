@@ -21,7 +21,7 @@ from squid.api.contract import iter_contract_routes, validate_contract
 from squid.api.errors import ProblemDetail, responses
 from squid.api.v1.schemas.submissions import StoredDraftResponse
 from squid.core.errors import JSONValue
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
     DRAFT_CHANGE_KEY_MIN_LENGTH,
     DRAFT_CHANGE_KEY_PATTERN,

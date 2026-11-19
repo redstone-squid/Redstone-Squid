@@ -9,14 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import ConflictError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import IngestedSchematic
-from squid.submissions.application import StoredDraft
-from squid.submissions.domain import DraftSnapshot, DraftStatus, SubmissionOrigin
-from squid.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.submissions.models.entities import SubmissionDraft
-from squid.submissions.models.schematics import DraftSchematicSource
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application import IngestedSchematic
+from squid.core.submissions.application import StoredDraft
+from squid.core.submissions.domain import DraftSnapshot, DraftStatus, SubmissionOrigin
+from squid.core.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.schematics import DraftSchematicSource
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
 from tests.unit.schematics.fakes import make_analysis

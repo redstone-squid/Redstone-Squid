@@ -13,41 +13,40 @@ from uuid import UUID
 
 from litestar import Litestar
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CreatorProfile
-from squid.accounts.domain.profiles import PublicCreatorProfile
-from squid.accounts.errors import MinecraftAccountNotFoundError
-from squid.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
 from squid.api.app import create_api_app
-from squid.auth.application.web import WebSessionService
-from squid.builds.application import BuildQueryService, BuildService
-from squid.builds.application.editing import BuildEditPatch
-from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
-from squid.builds.domain.models import Status
-from squid.builds.errors import BuildNotFoundError
-from squid.builds.models import Build
-from squid.cli_auth.application import CliAuthorizationService
-from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
-from squid.cli_auth.errors import InvalidCliEnrollmentError
-from squid.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.config import ApiProcessConfig
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CreatorProfile
+from squid.core.accounts.domain.profiles import PublicCreatorProfile
+from squid.core.accounts.errors import MinecraftAccountNotFoundError
+from squid.core.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
 from squid.core.actors import Actor
+from squid.core.auth.application.web import WebSessionService
+from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.builds.application.editing import BuildEditPatch
+from squid.core.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
+from squid.core.builds.domain.models import Status
+from squid.core.builds.errors import BuildNotFoundError
+from squid.core.builds.models import Build
+from squid.core.cli_auth.application import CliAuthorizationService
+from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
+from squid.core.cli_auth.errors import InvalidCliEnrollmentError
+from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditCommand, EditResult
 from squid.core.errors import NotFoundError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
-from squid.diagnostics.application import ErrorReportService
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, EditResult
-from squid.idempotency import IdempotencyService, PendingRequest
-from squid.idempotency.domain import StoredResponse, UnsafeHttpMethod
-from squid.media.application.jobs import (
+from squid.core.idempotency import IdempotencyService, PendingRequest
+from squid.core.idempotency.domain import StoredResponse, UnsafeHttpMethod
+from squid.core.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
     MediaProcessingJobService,
     StagedMediaUploadSubmission,
 )
-from squid.media.domain import MediaLimits
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.domain.models import (
+from squid.core.media.domain import MediaLimits
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.domain.models import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
     IssuedPlayerChallenge,
@@ -55,53 +54,54 @@ from squid.minecraft_auth.domain.models import (
     MinecraftPlayerContext,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
-from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
-from squid.notifications import NotificationPreferences, NotificationService
-from squid.notifications.domain import (
+from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
+from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
+from squid.core.notifications import NotificationPreferences, NotificationService
+from squid.core.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
 )
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.permissions.application import PermissionService, SubjectRecords
-from squid.permissions.application.epoch import PermissionEpochWatcher, WakeListener
-from squid.permissions.domain import Pattern
-from squid.records.application import PublicRecordQueryService, RecordService
-from squid.records.application.models import PublicRecordDetail, PublishedTitle
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.application.range_snapshots import RangePublication
-from squid.records.domain import VersionScope
-from squid.runtime import ApiServices, ApplicationRuntime
-from squid.schematics.application import SchematicService
-from squid.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
-from squid.schematics.application.commands import RenderRequest
-from squid.schematics.application.previews import RenderedSchematic
-from squid.schematics.domain import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.schematics.errors import SchematicNotFoundError
-from squid.search.application import SearchService
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.search.domain import SearchPage, SearchRequest
-from squid.search.domain.query import SearchQuery
-from squid.submissions.application import FormOptionSet, SubmissionFormService, build_submission_manifest
-from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
-from squid.submissions.application.finalization import (
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.permissions.application import PermissionService, SubjectRecords
+from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
+from squid.core.permissions.domain import Pattern
+from squid.core.records.application import PublicRecordQueryService, RecordService
+from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.range_snapshots import RangePublication
+from squid.core.records.domain import VersionScope
+from squid.core.schematics.application import SchematicService
+from squid.core.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
+from squid.core.schematics.application.commands import RenderRequest
+from squid.core.schematics.application.previews import RenderedSchematic
+from squid.core.schematics.domain import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.schematics.errors import SchematicNotFoundError
+from squid.core.search.application import SearchService
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
+from squid.core.search.domain import SearchPage, SearchRequest
+from squid.core.search.domain.query import SearchQuery
+from squid.core.submissions.application import FormOptionSet, SubmissionFormService, build_submission_manifest
+from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
+from squid.core.submissions.application.finalization import (
     FinalizationJobSnapshot,
     SubmissionFinalizationService,
     SubmissionRequestResult,
 )
-from squid.submissions.application.inference_runs import SubmissionInferenceRuns
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.recalculation_values import RecalculationProposal
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.schematics import DraftSchematic
-from squid.submissions.errors import DraftNotFoundError
-from squid.suggestions.application import SuggestionRegistry, SuggestionService
-from squid.tags.application import TagService
-from squid.tags.models import TagDefinition
-from squid.versions.application.services import VersionService
-from squid.voting.application import VoteService
-from squid.voting.domain.models import VoteSessionSnapshot
+from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.recalculation_values import RecalculationProposal
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain.schematics import DraftSchematic
+from squid.core.submissions.errors import DraftNotFoundError
+from squid.core.suggestions.application import SuggestionRegistry, SuggestionService
+from squid.core.tags.application import TagService
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.application.services import VersionService
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain.models import VoteSessionSnapshot
+from squid.runtime import ApiServices, ApplicationRuntime
 from tests.support.permissions import permission_uow_factory
 from tests.support.settings import RuntimeSettingsStub
 

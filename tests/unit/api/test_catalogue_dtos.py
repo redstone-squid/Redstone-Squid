@@ -9,11 +9,11 @@ from litestar.di import Provide
 
 from squid.api.v1.search import PublicSearchFieldDTO, list_search_fields
 from squid.api.v1.tags import PublicTagDTO, get_tag, list_tags
-from squid.search.application import SearchService
-from squid.search.application.fields import FieldDefinition, FieldRegistry, FieldType
-from squid.tags.application import TagService
-from squid.tags.domain import RecordOperator, TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
+from squid.core.search.application import SearchService
+from squid.core.search.application.fields import FieldDefinition, FieldRegistry, FieldType
+from squid.core.tags.application import TagService
+from squid.core.tags.domain import RecordOperator, TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
 from tests.support.litestar import asgi_transport
 
 

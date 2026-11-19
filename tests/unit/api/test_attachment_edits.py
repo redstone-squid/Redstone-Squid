@@ -14,9 +14,9 @@ from squid.api.v1.submission_intake import router as intake_router
 from squid.api.v1.submission_schematics import router as schematics_router
 from squid.api.v1.submission_schematics import schematic_service
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
-from squid.edits.domain import LatestRevision, Revision
-from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
-from squid.submissions.application.edits import draft_target
+from squid.core.edits.domain import LatestRevision, Revision
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
+from squid.core.submissions.application.edits import draft_target
 from tests.support.litestar import DependencyOverrides, route_app
 
 

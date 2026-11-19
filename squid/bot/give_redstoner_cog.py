@@ -15,9 +15,9 @@ from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes import AppRequest, router
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import Grants, enforce, hide_unless, requires_grant
-from squid.community.application import RedstonerService
-from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
-from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
+from squid.core.community.application import RedstonerService
+from squid.core.community.domain import RedstonerDecisionKind, RedstonerPolicy
+from squid.core.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_i18n import md_tr
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to

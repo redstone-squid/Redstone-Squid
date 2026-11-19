@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from squid.artifacts.infrastructure import ArtifactTooLargeError, LocalArtifactStore
+from squid.core.artifacts.infrastructure import ArtifactTooLargeError, LocalArtifactStore
 from squid.core.errors import InvalidStateError
 
 pytestmark = pytest.mark.asyncio

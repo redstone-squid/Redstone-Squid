@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.permissions.domain import CATALOGUE, InvalidPatternError, Pattern
+from squid.core.permissions.domain import CATALOGUE, InvalidPatternError, Pattern
 
 from .strategies import node_names, patterns, selectors_for
 

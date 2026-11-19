@@ -7,10 +7,10 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.versions.application.services import VersionService
-from squid.versions.domain import MinecraftVersion
-from squid.versions.models import Version
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.versions.application.services import VersionService
+from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.models import Version
 
 
 async def test_version_service_commits_and_lists_versions_in_numeric_order(

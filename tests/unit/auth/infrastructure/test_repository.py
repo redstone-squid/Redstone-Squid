@@ -3,9 +3,9 @@
 import pytest
 from sqlalchemy.dialects.postgresql import dialect
 
-from squid.auth.models.types import PermissionPatterns
+from squid.core.auth.models.types import PermissionPatterns
 from squid.core.errors import DataIntegrityError
-from squid.permissions.domain import Pattern
+from squid.core.permissions.domain import Pattern
 
 
 def test_stored_patterns_are_parsed_once() -> None:

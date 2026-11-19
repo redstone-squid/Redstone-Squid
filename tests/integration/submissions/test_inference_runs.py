@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.expansion import expansion_document
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
@@ -103,7 +103,7 @@ async def test_reclaimed_run_fences_late_completion_and_failure(
 async def test_completed_empty_run_releases_admission_capacity(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    from squid.submissions.errors import DraftCapacityExceededError
+    from squid.core.submissions.errors import DraftCapacityExceededError
 
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)

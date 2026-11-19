@@ -9,29 +9,29 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
-from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
+from squid.core.accounts.errors import AccountNotFoundError
+from squid.core.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.errors import DataIntegrityError
-from squid.events.models import DomainEvent
-from squid.notifications.domain import (
+from squid.core.events.models import DomainEvent
+from squid.core.notifications.domain import (
     NotificationCandidate,
     NotificationKind,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.models import (
+from squid.core.notifications.models import (
     InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationSubscription,
 )
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.models import RuntimeSettingChange, ServerSetting
-from squid.submissions.domain import SubmissionOrigin
-from squid.submissions.models.entities import SubmissionDraft
-from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
-from squid.voting.models import GenericVoteSession, Vote, VoteSession, VoteSessionOption
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.models import RuntimeSettingChange, ServerSetting
+from squid.core.submissions.domain import SubmissionOrigin
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.core.voting.models import GenericVoteSession, Vote, VoteSession, VoteSessionOption
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

@@ -36,10 +36,10 @@ from squid.api.v1.schemas.submission_media import (
 )
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
 from squid.core.actors import Actor
-from squid.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
-from squid.media.errors import DraftMediaRequestError, MediaLimitExceededError
-from squid.submissions.application import StagedUpload
-from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
+from squid.core.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
+from squid.core.media.errors import DraftMediaRequestError, MediaLimitExceededError
+from squid.core.submissions.application import StagedUpload
+from squid.core.submissions.application.attachment_edits import AttachmentValues, FileMembership
 
 _NO_STORE = "no-store"
 _MAX_UPLOAD_HEADER = "Squid-Max-Upload-Bytes"

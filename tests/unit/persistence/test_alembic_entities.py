@@ -6,7 +6,7 @@ import pytest
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
 
-from squid.persistence.alembic_entities import alembic_util_entities, current_entities, load_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities, current_entities, load_entities
 
 FUNCTION = """CREATE FUNCTION public.touch() RETURNS trigger LANGUAGE plpgsql AS $body$
 BEGIN

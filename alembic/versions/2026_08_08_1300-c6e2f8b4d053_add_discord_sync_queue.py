@@ -14,7 +14,7 @@ from alembic_utils.pg_trigger import PGTrigger
 from alembic_utils.replaceable_entity import ReplaceableEntity
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c6e2f8b4d053"
 down_revision: str | Sequence[str] | None = "b5d1e7a3c942"

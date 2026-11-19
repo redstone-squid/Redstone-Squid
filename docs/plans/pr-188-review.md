@@ -69,14 +69,14 @@ is unchanged; no profile schema migration was needed.
 ### 1. Comment 4518184058 (P1)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/188#discussion_r4518184058).
-Original path: `squid/accounts/domain/profiles.py`, file-level comment.
+Original path: `squid/core/accounts/domain/profiles.py`, file-level comment.
 
 > so much verbosity and calsses that look kind of the same here, dont really like how large this file is
 
 ### 2. Comment 4526456696 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/188#discussion_r4526456696).
-Original path: `squid/accounts/application/services.py`, file-level comment.
+Original path: `squid/core/accounts/application/services.py`, file-level comment.
 
 > confusing
 

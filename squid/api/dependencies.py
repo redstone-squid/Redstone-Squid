@@ -6,27 +6,27 @@ from litestar import Request
 from litestar.di import NamedDependency, Provide
 from litestar.params import SkipValidation
 
-from squid.accounts.application import AccountService
 from squid.api.security import Caller, current_caller
-from squid.auth.application.web import WebSessionService
-from squid.builds.application import BuildQueryService, BuildService
+from squid.core.accounts.application import AccountService
+from squid.core.auth.application.web import WebSessionService
+from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import ServiceUnavailableError
-from squid.diagnostics.application import ErrorReportService
-from squid.media.errors import DraftMediaUnavailableError
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.notifications import NotificationService
-from squid.permissions.application import PermissionService
-from squid.records.application import PublicRecordQueryService, RecordService
-from squid.records.application.range_publication import RangePublicationService
+from squid.core.media.errors import DraftMediaUnavailableError
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.notifications import NotificationService
+from squid.core.permissions.application import PermissionService
+from squid.core.records.application import PublicRecordQueryService, RecordService
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.schematics.application import SchematicService
+from squid.core.search.application import SearchService
+from squid.core.submissions.application import DraftAttachmentService, draft_attachment_service
+from squid.core.suggestions.application import SuggestionService
+from squid.core.tags.application import TagService
+from squid.core.versions.application.services import VersionService
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.runtime import ApiServices, ApplicationRuntime
-from squid.schematics.application import SchematicService
-from squid.search.application import SearchService
-from squid.submissions.application import DraftAttachmentService, draft_attachment_service
-from squid.suggestions.application import SuggestionService
-from squid.tags.application import TagService
-from squid.versions.application.services import VersionService
-from squid.voting.application import VoteService
-from squid.voting.application.ports import InteractiveVoteActorResolver
 
 
 async def get_services(request: Request) -> ApiServices:

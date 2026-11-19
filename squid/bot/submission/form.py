@@ -16,11 +16,11 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.ui import error_node
-from squid.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, DoorOrientationLiteral
-from squid.builds.domain.models import BuildCategoryLiteral
-from squid.submissions.application.credit_text import parse_credit_lines
-from squid.submissions.application.prefill import prefill_submission
-from squid.submissions.domain import (
+from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, DoorOrientationLiteral
+from squid.core.builds.domain.models import BuildCategoryLiteral
+from squid.core.submissions.application.credit_text import parse_credit_lines
+from squid.core.submissions.application.prefill import prefill_submission
+from squid.core.submissions.domain import (
     DraftChange,
     DraftChangeKey,
     FieldOperation,

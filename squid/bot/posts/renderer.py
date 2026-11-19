@@ -7,7 +7,7 @@ from typing import Protocol
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.posts.domain import ResourceKind, Surface
+from squid.core.posts.domain import ResourceKind, Surface
 
 
 @dataclass(frozen=True, slots=True)

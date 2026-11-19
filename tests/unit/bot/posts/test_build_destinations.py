@@ -11,12 +11,12 @@ import pytest
 from squid.bot.posts.renderers import BuildCardRenderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, OtherBuild
-from squid.settings.application import SettingsService
-from squid.settings.domain import Setting
-from squid.voting.domain import BuildVoteTarget, VoteStatus
+from squid.core.builds.application import BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, OtherBuild
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain import Setting
+from squid.core.voting.domain import BuildVoteTarget, VoteStatus
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot

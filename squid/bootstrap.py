@@ -18,8 +18,9 @@ from importlib import resources
 import httpx
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.application.edits import (
+from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
     PROFILE_EDIT,
     UNLINK_EDIT,
@@ -29,46 +30,44 @@ from squid.accounts.application.edits import (
     AccountUnlinkEdit,
     AccountVisibilityEdit,
 )
-from squid.accounts.application.services import generate_verification_code
-from squid.accounts.infrastructure.mojang import MojangClient
-from squid.artifacts import ArtifactStore
-from squid.artifacts.infrastructure import create_artifact_store
-from squid.auth.application import ApiKeyService
-from squid.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
-from squid.auth.application.web import WebSessionService
-from squid.builds.application import (
+from squid.core.accounts.application.services import generate_verification_code
+from squid.core.accounts.infrastructure.mojang import MojangClient
+from squid.core.artifacts import ArtifactStore
+from squid.core.artifacts.infrastructure import create_artifact_store
+from squid.core.auth.application import ApiKeyService
+from squid.core.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
+from squid.core.auth.application.web import WebSessionService
+from squid.core.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
     BuildQueryService,
     BuildService,
     RestrictionService,
 )
-from squid.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildFieldsEdit, BuildStatusEdit
-from squid.builds.application.locks import BuildLockService
-from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
-from squid.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
-from squid.builds.infrastructure.text_generation import OpenAITextGenerator
-from squid.cli_auth import CliAuthorizationService, CliSecretCodec
-from squid.community.application import WelcomeRelayService
-from squid.community.domain import WelcomeRelayPolicy
-from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
-from squid.diagnostics.application import ErrorReportService
-from squid.discord_rest import RestOnlyClient, rest_client
-from squid.edits.application import EditExecutor
-from squid.events.application import DomainEventService
-from squid.events.infrastructure.listener import DomainEventWakeListener
-from squid.idempotency import IdempotencyService
-from squid.idempotency.infrastructure import IdempotencyResponseCipher
-from squid.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
-from squid.media.application.services import MediaProcessingService
-from squid.media.domain import MediaLimits
-from squid.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
-from squid.messages.application import MessageService
-from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
-from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.notifications import NotificationService
-from squid.notifications.edits import (
+from squid.core.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildFieldsEdit, BuildStatusEdit
+from squid.core.builds.application.locks import BuildLockService
+from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.infrastructure.embeddings import OpenAIEmbeddingModel
+from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
+from squid.core.builds.infrastructure.text_generation import OpenAITextGenerator
+from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
+from squid.core.community.application import WelcomeRelayService
+from squid.core.community.domain import WelcomeRelayPolicy
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.edits.application import EditExecutor
+from squid.core.events.application import DomainEventService
+from squid.core.events.infrastructure.listener import DomainEventWakeListener
+from squid.core.idempotency import IdempotencyService
+from squid.core.idempotency.infrastructure import IdempotencyResponseCipher
+from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
+from squid.core.media.application.services import MediaProcessingService
+from squid.core.media.domain import MediaLimits
+from squid.core.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
+from squid.core.messages.application import MessageService
+from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
+from squid.core.notifications import NotificationService
+from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
@@ -76,13 +75,13 @@ from squid.notifications.edits import (
     NotificationPreferencesEdit,
     NotificationSubscriptionsEdit,
 )
-from squid.permissions.application import (
+from squid.core.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
     PermissionService,
     SubjectRuleCache,
 )
-from squid.permissions.application.edits import (
+from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
@@ -98,36 +97,35 @@ from squid.permissions.application.edits import (
     PermissionRoleCreation,
     PermissionRoleDeletion,
 )
-from squid.permissions.infrastructure.repository import (
+from squid.core.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
 )
-from squid.persistence.engine import DatabaseEngine
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.persistence.wake_listener import PostgresWakeListener
-from squid.posts.application import PostService
-from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
-from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
-from squid.schematics.application import (
+from squid.core.persistence.engine import DatabaseEngine
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.wake_listener import PostgresWakeListener
+from squid.core.posts.application import PostService
+from squid.core.records.application import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.schematics.application import (
     RenderRequest,
     SchematicJobService,
     SchematicRenderJobService,
     SchematicService,
 )
-from squid.schematics.application.preview_storage import SchematicPreviewStorage
-from squid.schematics.application.storage import SchematicStorageService
-from squid.schematics.application.video_service import SchematicVideoService
-from squid.schematics.domain.models import SchematicLimits
-from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
-from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
-from squid.search.application import SearchEmbeddingService, SearchService
-from squid.search.application.projection import refresh_search_index
-from squid.settings.application import SettingsService
-from squid.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.starboard.application import StarboardService
-from squid.starboard.application.edits import (
+from squid.core.schematics.application.preview_storage import SchematicPreviewStorage
+from squid.core.schematics.application.storage import SchematicStorageService
+from squid.core.schematics.application.video_service import SchematicVideoService
+from squid.core.schematics.domain.models import SchematicLimits
+from squid.core.schematics.infrastructure.durable import QueuedSchematicAnalyzer
+from squid.core.schematics.infrastructure.resource_pack import ResourcePackLoader
+from squid.core.search.application import SearchEmbeddingService, SearchService
+from squid.core.search.application.projection import refresh_search_index
+from squid.core.settings.application import SettingsService
+from squid.core.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.starboard.application import StarboardService
+from squid.core.starboard.application.edits import (
     STARBOARD_CREATE,
     STARBOARD_DELETE,
     STARBOARD_EDIT,
@@ -135,7 +133,7 @@ from squid.starboard.application.edits import (
     StarboardDeletion,
     StarboardEdit,
 )
-from squid.submissions.application import (
+from squid.core.submissions.application import (
     CheckedInFormManifestRegistry,
     SubmissionDraftService,
     SubmissionFinalizationService,
@@ -143,28 +141,28 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
-from squid.submissions.application.artifact_readiness import (
+from squid.core.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
-from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
-from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
-from squid.submissions.application.build_target import SubmissionBuildPreparation
-from squid.submissions.application.commit import BuildSubmissionExecutor
-from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
-from squid.submissions.application.inference_runs import SubmissionInferenceRuns
-from squid.submissions.application.intake import SubmissionAttachmentIntake
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.schematic_inference import SchematicSubmissionInference
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
-from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
-from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
-from squid.suggestions.application import SuggestionService
-from squid.suggestions.application.queries import SuggestionQueryService
-from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
-from squid.sync import DiscordReconciliationService
-from squid.tags.application import TagService
-from squid.tags.application.edits import (
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
+from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
+from squid.core.submissions.application.build_target import SubmissionBuildPreparation
+from squid.core.submissions.application.commit import BuildSubmissionExecutor
+from squid.core.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
+from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.schematic_inference import SchematicSubmissionInference
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.core.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
+from squid.core.suggestions.application import SuggestionService
+from squid.core.suggestions.application.queries import SuggestionQueryService
+from squid.core.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
+from squid.core.sync import DiscordReconciliationService
+from squid.core.tags.application import TagService
+from squid.core.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
@@ -172,13 +170,15 @@ from squid.tags.application.edits import (
     TagModerationEdit,
     TagProposalEdit,
 )
+from squid.core.versions.application.services import VersionService
+from squid.core.voting.application import VoteService
+from squid.core.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
+from squid.core.voting.application.recount import BallotRecounter
+from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
+from squid.core.voting.infrastructure.discord_rest import DiscordRestActorResolver
+from squid.discord_rest import RestOnlyClient, rest_client
+from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.unit_of_work import UnitOfWorkFactory
-from squid.versions.application.services import VersionService
-from squid.voting.application import VoteService
-from squid.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
-from squid.voting.application.recount import BallotRecounter
-from squid.voting.infrastructure.discord_cards import DiscordVoteCards
-from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -360,7 +360,7 @@ class _ServiceGraph:
 
     @cached_property
     def build_inference(self) -> BuildInferenceService:
-        prompt = resources.files("squid.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8")
+        prompt = resources.files("squid.core.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8")
         return BuildInferenceService(
             self.text_generator,
             self.build_taxonomy,

@@ -10,16 +10,16 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import (
+from squid.api.security import UNBOUNDED, Caller
+from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     AccountConsent,
     ClaimStatus,
     IdentityProvider,
     IdentityRefresh,
 )
-from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
-from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.errors import AuthenticationError
 from tests.support.account_edits import SnapshotAccountService
 

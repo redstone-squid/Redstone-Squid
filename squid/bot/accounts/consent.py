@@ -13,15 +13,15 @@ from typing import Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import (
+from squid.bot.ui import CardField, text_node, tr
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     PRIVACY_NOTICE,
     AccountConsent,
     IdentityProvider,
     LinkPreview,
 )
-from squid.bot.ui import CardField, text_node, tr
 from squid.core.sentinel import NOT_ASKED
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target

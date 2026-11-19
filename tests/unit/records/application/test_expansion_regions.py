@@ -9,12 +9,12 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.live import DoorRecordLookup, evaluate_door_record
-from squid.records.application.models import CandidateBuild
-from squid.records.domain import BuildKind, Candidate, ResolutionStatus
-from squid.records.domain.regions import RegionAnalysisStatus, RegionLimits
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.live import DoorRecordLookup, evaluate_door_record
+from squid.core.records.application.models import CandidateBuild
+from squid.core.records.domain import BuildKind, Candidate, ResolutionStatus
+from squid.core.records.domain.regions import RegionAnalysisStatus, RegionLimits
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 

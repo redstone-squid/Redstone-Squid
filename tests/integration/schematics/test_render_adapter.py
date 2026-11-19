@@ -7,9 +7,9 @@ import zipfile
 import nucleation
 import pytest
 
-from squid.schematics.application.commands import RenderRequest
-from squid.schematics.domain.values import VerifiedResourcePack
-from squid.schematics.infrastructure import nucleation_adapter
+from squid.core.schematics.application.commands import RenderRequest
+from squid.core.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.infrastructure import nucleation_adapter
 
 pytestmark = pytest.mark.schematic
 

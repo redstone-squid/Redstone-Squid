@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from whenever import Instant
 
-from squid.cli_auth.application import (
+from squid.core.cli_auth.application import (
     CliAuthorizationService,
     CliSecretCodec,
     CliSecretPurpose,
@@ -17,8 +17,8 @@ from squid.cli_auth.application import (
     public_key_fingerprint,
     session_proof_message,
 )
-from squid.cli_auth.errors import InvalidCliDeviceProofError, InvalidCliSessionError
-from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
+from squid.core.cli_auth.errors import InvalidCliDeviceProofError, InvalidCliSessionError
+from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 from tests.support.identity_uow import CliScope
 
 NOW = Instant.parse_iso("2026-08-11T22:00:00Z")

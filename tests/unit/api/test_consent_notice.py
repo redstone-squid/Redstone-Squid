@@ -2,8 +2,8 @@
 
 from litestar import Request, Response
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.api.v1.consent import get_notice
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
 from tests.support.litestar import make_request
 
 

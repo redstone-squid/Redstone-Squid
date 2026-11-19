@@ -9,8 +9,8 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
-from squid.starboard.models import StarboardConfig
+from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
+from squid.core.starboard.models import StarboardConfig
 from squid_i18n import Text, tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

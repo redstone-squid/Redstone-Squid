@@ -8,9 +8,9 @@ from squid.bot.catalogue.search.clauses import query_leaves
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
-from squid.search.application.parser import SearchQueryParser
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid.search.domain.query import FieldExpression, NotExpression
+from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.search.domain.query import FieldExpression, NotExpression
 
 
 class SearchTarget(StrEnum):

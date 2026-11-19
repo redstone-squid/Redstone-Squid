@@ -6,9 +6,9 @@ from hypothesis import strategies as st
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.messages.models import Message
-from squid.starboard.domain import entry_should_be_posted, evaluate_vote
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
+from squid.core.messages.models import Message
+from squid.core.starboard.domain import entry_should_be_posted, evaluate_vote
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
 NOW = Instant.parse_iso("2026-08-04T12:00:00Z")
 

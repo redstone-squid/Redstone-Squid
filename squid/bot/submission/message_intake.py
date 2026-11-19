@@ -8,7 +8,6 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.domain import IdentityProvider
 from squid.bot.routes import AppRequest
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -17,9 +16,10 @@ from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.i18n import tr
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
-from squid.submissions.errors import DraftCapacityExceededError
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
+from squid.core.submissions.errors import DraftCapacityExceededError
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 

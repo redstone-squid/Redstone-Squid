@@ -6,12 +6,12 @@ from functools import partial
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.application.queries import BuildListSort
-from squid.builds.domain import Status
-from squid.builds.models import OtherBuild
+from squid.core.accounts.models import Account
+from squid.core.builds.application.queries import BuildListSort
+from squid.core.builds.domain import Status
+from squid.core.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageSelector
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact

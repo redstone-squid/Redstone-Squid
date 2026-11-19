@@ -61,7 +61,7 @@ The editing-scope migration preserves existing history and requires all writers 
 Retain history indefinitely.
 Disabling the append-only guards is an explicit maintenance operation, not an application write path.
 
-Persisted editor changes use `EditCommand` and `EditExecutor` in `squid/edits`. A command carries the revisions the
+Persisted editor changes use `EditCommand` and `EditExecutor` in `squid/core/edits`. A command carries the revisions the
 caller read. Its handler checks current authority and captures the values needed to reverse it before writing.
 `FieldCommand` supplies the common projection, validation, and write flow from an explicit Pydantic value schema;
 `Aggregate` supplies the domain's locking and revision policy. Override those steps for domain rules, rather than

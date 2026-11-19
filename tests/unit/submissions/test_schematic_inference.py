@@ -8,12 +8,12 @@ from pytest_mock import MockerFixture
 
 from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
-from squid.submissions.application.forms import CheckedInFormManifestRegistry, FormOptionSet, SubmissionFormService
-from squid.submissions.application.schematic_inference import SchematicSubmissionInference
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain import ChoiceOption, SubmissionOrigin
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.submissions.errors import DraftAccessDeniedError
+from squid.core.submissions.application.forms import CheckedInFormManifestRegistry, FormOptionSet, SubmissionFormService
+from squid.core.submissions.application.schematic_inference import SchematicSubmissionInference
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain import ChoiceOption, SubmissionOrigin
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.submissions.errors import DraftAccessDeniedError
 from tests.unit.schematics.fakes import make_analysis
 from tests.unit.submissions.test_api_contract import stored_draft
 

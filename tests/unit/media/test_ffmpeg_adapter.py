@@ -11,16 +11,16 @@ from unittest.mock import AsyncMock
 import pytest
 from anyio import CancelScope, create_task_group, fail_after, sleep
 
-from squid.media.application.commands import MediaProcessingRequest
-from squid.media.domain.models import MediaKind, MediaLimits, MediaProbe
-from squid.media.errors import (
+from squid.core.media.application.commands import MediaProcessingRequest
+from squid.core.media.domain.models import MediaKind, MediaLimits, MediaProbe
+from squid.core.media.errors import (
     InvalidMediaError,
     MediaFailureReason,
     MediaProcessingTimeoutError,
     MediaToolUnavailableError,
 )
-from squid.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits, parse_ffprobe_output
-from squid.media.infrastructure.ffmpeg import _staged_outputs
+from squid.core.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits, parse_ffprobe_output
+from squid.core.media.infrastructure.ffmpeg import _staged_outputs
 
 
 @pytest.fixture

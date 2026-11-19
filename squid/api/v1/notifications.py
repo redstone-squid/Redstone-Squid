@@ -30,10 +30,10 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionCreate,
     NotificationSubscriptionDetail,
 )
+from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditCommand, EditValues, Revision
-from squid.notifications import InboxVisibility
-from squid.notifications.edits import (
+from squid.core.notifications import InboxVisibility
+from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
@@ -41,9 +41,9 @@ from squid.notifications.edits import (
     inbox_target,
     notification_target,
 )
-from squid.notifications.errors import NotificationSubscriptionNotFoundError
-from squid.notifications.models import InboxNotification
-from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.core.notifications.models import InboxNotification
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 
 
 class InboxNotificationDTO(SQLAlchemyDTO[InboxNotification]):

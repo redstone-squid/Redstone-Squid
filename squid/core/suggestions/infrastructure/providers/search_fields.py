@@ -1,0 +1,71 @@
+"""Suggestion providers over the public search grammar.
+
+The field registry is already the published contract for what may be queried
+(`GET /v1/search/fields`); these turn it into completions so the vocabulary does not have to be
+memorized from documentation.
+"""
+
+from squid.core.search.domain.scope import SearchScope
+from squid.core.suggestions.application import Candidate
+from squid.core.suggestions.application.ports import SearchFields
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.cache import TtlCache
+
+
+class SearchFieldProvider:
+    """Suggest queryable field names."""
+
+    def __init__(self, search: SearchFields) -> None:
+        self._search = search
+        self._cache = TtlCache[SearchScope, tuple[Candidate, ...]](self._load)
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        return await self._cache.get(suggestion_search_scope(request))
+
+    async def _load(self, scope: SearchScope) -> tuple[Candidate, ...]:
+        registry = (await self._search.fields()).for_scope(scope)
+        return tuple(
+            Candidate.create(
+                value=field.name,
+                label=field.name.replace("_", " ").title(),
+                description=f"{field.value_type.value}, ranges supported"
+                if field.supports_range
+                else field.value_type.value,
+                kind="field",
+                terms=(field.name, *field.aliases),
+            )
+            for field in sorted(registry.definitions, key=lambda item: item.name)
+        )
+
+
+class SearchSortProvider:
+    """Suggest the fields a search may be sorted on, in both directions.
+
+    Sort values are emitted in the `field` / `-field` form the API already parses, so picking one
+    is a complete answer rather than a fragment the user still has to punctuate.
+    """
+
+    def __init__(self, search: SearchFields) -> None:
+        self._search = search
+        self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        del request
+        return await self._cache.get(None)
+
+    async def _load(self, _key: None) -> tuple[Candidate, ...]:
+        registry = await self._search.fields()
+        sortable = sorted(
+            (field for field in registry.definitions if field.supports_sort),
+            key=lambda item: item.name,
+        )
+        results: list[Candidate] = []
+        for field in sortable:
+            results.append(Candidate.create(field.name, f"{field.name} (ascending)", kind="sort"))
+            results.append(Candidate.create(f"-{field.name}", f"{field.name} (descending)", kind="sort"))
+        return tuple(results)
+
+
+def suggestion_search_scope(request: SuggestionRequest) -> SearchScope:
+    scope = request.context.get("scope", SearchScope.ALL)
+    return SearchScope(scope) if scope in SearchScope else SearchScope.ALL

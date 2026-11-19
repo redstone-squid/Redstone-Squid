@@ -14,8 +14,8 @@ import squid_ui_widgets as sp
 from squid.bot.voting.cog import VoteCog
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen, parse_option_lines
 from squid.bot.voting.publisher import DiscordPollPublisher
-from squid.voting.domain import PollScope, VoteVisibility
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.domain import PollScope, VoteVisibility
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from tests.support.voting import GENERIC_OPTIONS
 
 

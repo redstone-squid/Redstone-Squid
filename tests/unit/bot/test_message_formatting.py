@@ -8,10 +8,10 @@ import pytest
 import squid_ui.ext.discord as sd
 from squid.bot.starboard.render import starboard_layout
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
-from squid.messages.models import Message
-from squid.starboard.application import EntryState
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
-from squid.voting.domain import VoteChoice, VoteKind, VoteOption, VoteSessionResult, VoteStatus
+from squid.core.messages.models import Message
+from squid.core.starboard.application import EntryState
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
+from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption, VoteSessionResult, VoteStatus
 from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.voting import build_snapshot, poll_snapshot
 

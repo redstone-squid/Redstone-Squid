@@ -1,0 +1,62 @@
+"""Suggestion provider over the caller's own notification subscriptions."""
+
+from collections.abc import Sequence
+from typing import Protocol
+
+from squid.core.notifications.models import NotificationSubscription
+from squid.core.suggestions.application import Candidate
+from squid.core.suggestions.application.registry import SuggestionSource
+from squid.core.suggestions.domain import SuggestionRequest, ValueType, Visibility
+
+
+class AccountSubscriptions(Protocol):
+    """Read the subscriptions an account owns."""
+
+    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
+
+
+class SubscriptionProvider:
+    """Suggest the caller's subscriptions so unfollowing does not require reading an id back.
+
+    The transport must set the viewer from the authenticated account. This provider
+    filters by that account ID and returns no candidates when it is absent.
+    """
+
+    def __init__(self, notifications: AccountSubscriptions) -> None:
+        self._notifications = notifications
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        account_id = request.viewer.account_id
+        if account_id is None:
+            return ()
+        return tuple(
+            Candidate.create(
+                str(subscription.id),
+                label=f"#{subscription.id} · {subscription.kind.value}",
+                description=_target(subscription),
+                kind="subscription",
+            )
+            for subscription in await self._notifications.subscriptions(account_id)
+        )
+
+
+def _target(subscription: NotificationSubscription) -> str | None:
+    if subscription.subject_id is not None:
+        return str(subscription.subject_id)
+    if subscription.record_filter is None:
+        return None
+    return ", ".join(f"{name}={value}" for name, value in sorted(subscription.record_filter.as_dict().items()))
+
+
+def notification_sources(notifications: AccountSubscriptions | None) -> tuple[SuggestionSource, ...]:
+    if notifications is None:
+        return ()
+    return (
+        SuggestionSource(
+            id="notification_subscriptions",
+            provider=SubscriptionProvider(notifications),
+            visibility=Visibility.VIEWER_SCOPED,
+            value_type=ValueType.INTEGER,
+            kind_label="subscription",
+        ),
+    )

@@ -30,9 +30,9 @@ from squid.config import (
     load_worker_process_config,
 )
 from squid.core.errors import ConfigurationError
-from squid.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
-from squid.permissions.domain import Pattern
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
+from squid.core.permissions.domain import Pattern
+from squid.core.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",

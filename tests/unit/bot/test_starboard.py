@@ -13,9 +13,9 @@ import discord
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.core.actors import Actor
+from squid.core.starboard.application import StarboardService
+from squid.core.starboard.models import OriginMessage
 from squid.runtime import BackgroundTaskSupervisor
-from squid.starboard.application import StarboardService
-from squid.starboard.models import OriginMessage
 from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 
 

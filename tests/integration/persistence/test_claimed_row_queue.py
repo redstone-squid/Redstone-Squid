@@ -12,11 +12,11 @@ import pytest
 from sqlalchemy import literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.queue import ClaimedRowQueue, retry_delay, retry_delay_sql
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
-from squid.sync.application import DiscordReconciliationService, ReconciliationJob
-from squid.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
+from squid.core.persistence.queue import ClaimedRowQueue, retry_delay, retry_delay_sql
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
+from squid.core.sync.application import DiscordReconciliationService, ReconciliationJob
+from squid.core.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
 from tests.support.unit_of_work import transact
 
 
@@ -117,8 +117,8 @@ async def test_a_lost_fence_is_logged_and_counted(
     await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
     with (
-        caplog.at_level(logging.WARNING, logger="squid.persistence.queue"),
-        patch("squid.persistence.queue.add_counter") as counter,
+        caplog.at_level(logging.WARNING, logger="squid.core.persistence.queue"),
+        patch("squid.core.persistence.queue.add_counter") as counter,
     ):
         assert await transact(queue, lambda uow: uow.reconciliation.complete(stale), commit=True) is False
 

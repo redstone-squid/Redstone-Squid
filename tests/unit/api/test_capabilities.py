@@ -6,8 +6,8 @@ from pydantic import ValidationError
 from squid.api.capabilities import API_FEATURES, API_VERSION
 from squid.api.v1.capabilities import capabilities
 from squid.api.v1.schemas.capabilities import ProtocolInterval
-from squid.submissions.application import CURRENT_SUBMISSION_PROTOCOL
-from squid.submissions.domain import ControlKind
+from squid.core.submissions.application import CURRENT_SUBMISSION_PROTOCOL
+from squid.core.submissions.domain import ControlKind
 
 
 def test_protocol_interval_checks_both_compatibility_boundaries() -> None:

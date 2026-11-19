@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from squid.records.domain.models import (
+from squid.core.records.domain.models import (
     DOOR_TIMING_METHODS,
     EXTENDER_TIMING_METHODS,
     Candidate,
@@ -10,7 +10,7 @@ from squid.records.domain.models import (
     ResolutionStatus,
     TimingVariant,
 )
-from squid.records.domain.resolution import (
+from squid.core.records.domain.resolution import (
     reduce_timing_variants,
     resolve_fastest,
     resolve_fastest_smallest,

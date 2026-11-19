@@ -8,10 +8,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
-from squid.messages.application.services import MessageService
-from squid.messages.domain import MessageSnapshot
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.posts.application.services import PostService
+from squid.core.messages.application.services import MessageService
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.posts.application.services import PostService
 from tests.support.database import assert_loaded_detached
 
 CHANNEL = 5000

@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any, override
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.builds.domain import ShowcaseTag, read_showcase_tags
+from squid.core.builds.domain import ShowcaseTag, read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
-from squid.submissions.domain import ChoiceOption, FormField
-from squid.tags.domain import TagValueType
-from squid.tags.domain.values import assignment_value, coerce_assignment_value
+from squid.core.submissions.domain import ChoiceOption, FormField
+from squid.core.tags.domain import TagValueType
+from squid.core.tags.domain.values import assignment_value, coerce_assignment_value
 from squid_i18n import Text, md_tr
 from squid_ui.content.text import md
 from squid_ui.ext.discord.target_types import ComponentsV2Target

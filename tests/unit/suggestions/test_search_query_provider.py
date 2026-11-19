@@ -4,10 +4,10 @@ from collections.abc import Sequence
 
 import pytest
 
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
-from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.search_fields import SearchFieldProvider
-from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.providers.search_fields import SearchFieldProvider
+from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 
 class StaticFields:

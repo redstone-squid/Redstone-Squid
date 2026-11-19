@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.builds.application.taxonomy import TaxonomyResolution
-from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAlias, TagAssignment, TagDefinition
+from squid.core.builds.application.taxonomy import TaxonomyResolution
+from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 
 
 def definition(name: str, kind: TagSemanticKind, restriction_type: str | None, *aliases: str) -> TagDefinition:

@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.domain.models import (
+from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
     FingerprintPreset,
@@ -23,16 +23,16 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
-from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
-from squid.schematics.errors import (
+from squid.core.schematics.domain.values import RgbaColor, VerifiedResourcePack
+from squid.core.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
 )
-from squid.schematics.infrastructure import wire
-from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed
-from squid.schematics.infrastructure.worker import _translate
-from squid.schematics.infrastructure.worker_main import _error_payload
+from squid.core.schematics.infrastructure import wire
+from squid.core.schematics.infrastructure.wire import Frame, FrameStreamClosed
+from squid.core.schematics.infrastructure.worker import _translate
+from squid.core.schematics.infrastructure.worker_main import _error_payload
 from tests.unit.schematics.fakes import make_analysis
 
 

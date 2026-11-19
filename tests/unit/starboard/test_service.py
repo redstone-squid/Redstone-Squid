@@ -7,9 +7,9 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError
-from squid.messages.models import Message
-from squid.starboard.application import PendingVote, StarboardService
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
+from squid.core.messages.models import Message
+from squid.core.starboard.application import PendingVote, StarboardService
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 

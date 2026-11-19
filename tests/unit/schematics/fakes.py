@@ -2,10 +2,10 @@
 
 from whenever import Instant
 
-from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
-from squid.schematics.domain.models import (
+from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
+from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
+from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
     FingerprintPreset,
@@ -20,7 +20,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
-from squid.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.domain.values import VerifiedResourcePack
 
 
 def make_analysis(

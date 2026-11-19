@@ -9,18 +9,17 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import BuildCategory, BuildDraft, ShowcaseTag, Status
-from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
-from squid.builds.domain.taxonomy import RestrictionField
-from squid.builds.domain.titles import format_build_display_title
-from squid.builds.errors import InvalidBuildError
-from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.builds.domain import BuildCategory, BuildDraft, ShowcaseTag, Status
+from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
+from squid.core.builds.domain.taxonomy import RestrictionField
+from squid.core.builds.domain.titles import format_build_display_title
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError, JSONValue, ValidationError
-from squid.sponsors import PublicSponsor
-from squid.submissions.application.build_target import SubmissionBuildPreparation, preview_build
-from squid.submissions.application.forms import build_submission_manifest
-from squid.submissions.application.prefill import project_submission
-from squid.submissions.domain import (
+from squid.core.submissions.application.build_target import SubmissionBuildPreparation, preview_build
+from squid.core.submissions.application.forms import build_submission_manifest
+from squid.core.submissions.application.prefill import project_submission
+from squid.core.submissions.domain import (
     BuildSubmissionRejected,
     ChoiceOption,
     DoorOrientation,
@@ -43,13 +42,14 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.domain.links import SubmissionLink
-from squid.submissions.domain.normalization import normalize_submission
-from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagDefinition
-from squid.versions.domain import MinecraftVersion
-from squid.versions.errors import InvalidVersionError
+from squid.core.submissions.domain.links import SubmissionLink
+from squid.core.submissions.domain.normalization import normalize_submission
+from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.errors import InvalidVersionError
+from squid.sponsors import PublicSponsor
 from tests.support.expansion import expansion_document
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")

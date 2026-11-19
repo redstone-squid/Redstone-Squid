@@ -10,9 +10,9 @@ import discord
 import pytest
 
 from squid.bot.guild_state_cog import GuildStateCog
-from squid.settings.application import SettingsService
-from squid.settings.domain import Setting
-from squid.starboard.application import StarboardService
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain import Setting
+from squid.core.starboard.application import StarboardService
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 

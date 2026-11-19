@@ -3,7 +3,7 @@ on:
   pull_request:
     paths:
       - 'native/schematic-video/**'
-      - 'squid/schematics/**'
+      - 'squid/core/schematics/**'
       - 'tests/integration/schematics/test_video_worker.py'
       - '.github/workflows/schematic-video.yml'
   workflow_dispatch:

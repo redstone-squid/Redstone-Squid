@@ -11,7 +11,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.app import MessageLookup, RedstoneSquid
-from squid.messages.application import MessageService
+from squid.core.messages.application import MessageService
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services

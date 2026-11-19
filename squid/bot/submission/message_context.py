@@ -16,7 +16,7 @@ import discord
 
 from squid.bot.submission.attachments import classify_attachment
 from squid.bot.utils.web import extract_video_preview
-from squid.builds.application import BuildInferenceInput, ContextIdentity, ContextMessage, InlineImage
+from squid.core.builds.application import BuildInferenceInput, ContextIdentity, ContextMessage, InlineImage
 from squid.core.errors import SquidError
 
 logger = logging.getLogger(__name__)

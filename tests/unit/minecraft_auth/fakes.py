@@ -5,8 +5,8 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile, PublishedPaperServer
-from squid.minecraft_auth.errors import (
+from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile, PublishedPaperServer
+from squid.core.minecraft_auth.errors import (
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
     ChallengeApprovalDeniedError,
@@ -15,7 +15,7 @@ from squid.minecraft_auth.errors import (
     InvalidInstallationCredentialError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
+from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 
 
 class FakeAccounts:

@@ -43,13 +43,13 @@ from pydantic_settings.exceptions import SettingsError
 from pydantic_settings.sources import PydanticBaseSettingsSource
 from sqlalchemy import make_url
 
-from squid.accounts.domain import IdentityProvider
+from squid.core.accounts.domain import IdentityProvider
 from squid.core.errors import ConfigurationError
-from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.schematics.domain.values import RgbaColor
+from squid.core.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.core.schematics.domain.values import RgbaColor
 
 if TYPE_CHECKING:
-    from squid.permissions.domain import Pattern
+    from squid.core.permissions.domain import Pattern
 
 logger = logging.getLogger(__name__)
 EMBEDDING_DIMENSION = 1536
@@ -405,9 +405,9 @@ class ApiConfig(_FrozenModel):
     @field_validator("secret_nodes")
     @classmethod
     def _require_parsable_secret_nodes(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        # Imported here rather than at module scope: `squid.permissions` reaches
+        # Imported here rather than at module scope: `squid.core.permissions` reaches
         # `squid.observability`, which reads `ObservabilityConfig` from this module.
-        from squid.permissions.domain import InvalidPatternError, Pattern
+        from squid.core.permissions.domain import InvalidPatternError, Pattern
 
         for raw in value:
             try:
@@ -420,7 +420,7 @@ class ApiConfig(_FrozenModel):
     @cached_property
     def secret_patterns(self) -> frozenset[Pattern]:
         """Return the cached permission patterns parsed from secret_nodes."""
-        from squid.permissions.domain import Pattern
+        from squid.core.permissions.domain import Pattern
 
         return frozenset(Pattern.parse(raw) for raw in self.secret_nodes)
 

@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock
 import pytest
 from whenever import Instant
 
-from squid.builds.application import BuildService
-from squid.builds.history import BuildEditActor, HistoryOperation
-from squid.builds.models import Build
 from squid.config import WorkerConfig
-from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
-from squid.notifications import NotificationService
-from squid.voting.application import VoteService
-from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
+from squid.core.builds.application import BuildService
+from squid.core.builds.history import BuildEditActor, HistoryOperation
+from squid.core.builds.models import Build
+from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.core.notifications import NotificationService
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,
     CoreDomainEventRunner,

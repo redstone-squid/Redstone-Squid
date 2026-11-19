@@ -7,7 +7,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from types import TracebackType
 from typing import Self, override
 
-from squid.builds.history import BuildEditActor, HistoryOperation
+from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 

@@ -7,7 +7,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
 from squid.core.i18n import tr
-from squid.starboard.application import EntryState
+from squid.core.starboard.application import EntryState
 from squid_i18n import Text, discord_markup, emoji_text, md, md_tr, mention
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

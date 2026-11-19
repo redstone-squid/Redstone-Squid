@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.events import DomainEvent, DomainEventDelivery, DomainEventRepository, DomainEventService
+from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventRepository, DomainEventService
 from tests.support.delivery_uow import DomainEventUnitOfWork
 
 

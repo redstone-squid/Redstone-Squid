@@ -10,15 +10,15 @@ from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.builds import list_builds
 from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
-from squid.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
-from squid.builds.domain import Status
-from squid.builds.models import Build, DoorBuild
 from squid.core.actors import Actor
+from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from tests.unit.api.fakes import credential_nodes
 
 # This credential can read submissions but does not carry a moderation-view permission.

@@ -3,7 +3,7 @@
 import pytest
 
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
-from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
+from squid.core.schematics.errors import InvalidSchematicError, SchematicTooLargeError
 
 MAX_BYTES = 2 * 1024 * 1024
 

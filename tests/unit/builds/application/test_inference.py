@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from squid.builds.application import (
+from squid.core.builds.application import (
     BuildInferenceInput,
     BuildInferenceService,
     ContextIdentity,
@@ -17,14 +17,14 @@ from squid.builds.application import (
     InferredBuild,
     InlineImage,
 )
-from squid.builds.domain import GeneralDraftDetails, RestrictionTypeLiteral
-from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
-from squid.builds.domain.models import DoorDraftDetails, ExtenderDraftDetails
-from squid.submissions.application.forms import build_submission_manifest
-from squid.submissions.application.prefill import project_submission
-from squid.submissions.domain import SubmissionOrigin
-from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
-from squid.versions.errors import InvalidVersionError
+from squid.core.builds.domain import GeneralDraftDetails, RestrictionTypeLiteral
+from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
+from squid.core.builds.domain.models import DoorDraftDetails, ExtenderDraftDetails
+from squid.core.submissions.application.forms import build_submission_manifest
+from squid.core.submissions.application.prefill import project_submission
+from squid.core.submissions.domain import SubmissionOrigin
+from squid.core.submissions.infrastructure.inference_payloads import BuildDraftPayload
+from squid.core.versions.errors import InvalidVersionError
 from tests.support.expansion import expansion_document
 
 

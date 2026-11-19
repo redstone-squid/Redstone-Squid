@@ -1,7 +1,7 @@
 """Text-only credit editing preserves identity references and distinguishes namespaces."""
 
-from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
-from squid.submissions.application.credit_text import format_credit, parse_credit_lines
+from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
+from squid.core.submissions.application.credit_text import format_credit, parse_credit_lines
 
 
 def test_explicit_provider_prefixes_and_roles() -> None:

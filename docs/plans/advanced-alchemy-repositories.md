@@ -18,9 +18,9 @@ This is a design assessment, not an implementation decision. Runtime code and de
 - `uv.lock` already selects Advanced Alchemy 1.12.0 and SQLAlchemy 2.1.6.
 - BaseAsyncRepository already subclasses
   `SQLAlchemyAsyncRepository`. Versions, settings, and voting use private model repositories built on it.
-- The [shared entity base](../../squid/persistence/base.py) already includes Advanced Alchemy's
+- The [shared entity base](../../squid/core/persistence/base.py) already includes Advanced Alchemy's
   `BasicAttributes`, alongside `MappedAsDataclass`. Adoption does not require replacing our models.
-- The [database engine](../../squid/persistence/engine.py) owns the session factories and uses
+- The [database engine](../../squid/core/persistence/engine.py) owns the session factories and uses
   `expire_on_commit=False`. Most repositories open short sessions and return loaded, detached entities.
 - Entity unification is implemented; its second phase,
   application-owned units of work, has not started. The current contract is documented in
@@ -65,23 +65,23 @@ while keeping an explicit PostgreSQL statement for its write.
 
 ## Semantics that must survive
 
-- [Message upserts](../../squid/messages/infrastructure/repository.py) preserve the original
+- [Message upserts](../../squid/core/messages/infrastructure/repository.py) preserve the original
   `observed_at`; deletion records only the first deletion time.
-- [Post writes](../../squid/posts/infrastructure/repository.py) advance revisions only when newer,
+- [Post writes](../../squid/core/posts/infrastructure/repository.py) advance revisions only when newer,
   and distinguish a duplicate message ID from a conflicting live post.
-- [API-key usage updates](../../squid/auth/infrastructure/repository.py) include the throttling predicate
+- [API-key usage updates](../../squid/core/auth/infrastructure/repository.py) include the throttling predicate
   in the update itself. Replacing that with read, mutate, and generic update would change concurrency behavior.
-- [OAuth state consumption](../../squid/auth/infrastructure/sessions.py) uses `DELETE ... RETURNING`
+- [OAuth state consumption](../../squid/core/auth/infrastructure/sessions.py) uses `DELETE ... RETURNING`
   so a credential is consumed once.
-- [Diagnostics lookup](../../squid/diagnostics/infrastructure/repository.py) chooses the newest match
+- [Diagnostics lookup](../../squid/core/diagnostics/infrastructure/repository.py) chooses the newest match
   when several reports share a short reference. A uniqueness-assuming lookup would change that contract.
-- [Account merging](../../squid/accounts/infrastructure/repository.py) and
-  [submission finalization](../../squid/submissions/infrastructure/finalization_repository.py) coordinate
+- [Account merging](../../squid/core/accounts/infrastructure/repository.py) and
+  [submission finalization](../../squid/core/submissions/infrastructure/finalization_repository.py) coordinate
   multiple writes in a transaction. Library helpers must not commit individual steps.
-- [ClaimedRowQueue](../../squid/persistence/queue.py) explicitly supports caller-owned sessions after
+- [ClaimedRowQueue](../../squid/core/persistence/queue.py) explicitly supports caller-owned sessions after
   an earlier implementation committed a transaction it did not own. Its
   [integration tests](../../tests/integration/persistence/test_claimed_row_queue.py) cover rollback.
-- [Notification claims](../../squid/notifications/infrastructure/repository.py) return recipient
+- [Notification claims](../../squid/core/notifications/infrastructure/repository.py) return recipient
   details in one statement, with a [query-count test](../../tests/integration/notifications/test_repository.py).
   Loading entities and then updating each one would lose that guarantee.
 
@@ -106,7 +106,7 @@ multi-step application transactions.
 Inspection of the installed 1.12.0 implementation adds several practical qualifications:
 
 - `get_or_upsert` and single-object `upsert` still look up before writing. They cannot mechanically
-  replace [idempotency reservation](../../squid/idempotency/infrastructure/repository.py), whose
+  replace [idempotency reservation](../../squid/core/idempotency/infrastructure/repository.py), whose
   `ON CONFLICT DO NOTHING RETURNING` decides the winning caller in the database.
 - `get_or_upsert(with_for_update=True)` does not pass that lock to its initial lookup; it passes it
   to the later refresh. Audit each method's behavior rather than inferring locking from its signature.
@@ -135,8 +135,8 @@ The failure reproduces with the locked dependencies and no running database:
 import anyio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from squid.settings.infrastructure.repository import _ServerSettingModelRepository
-from squid.settings.models import ServerSetting
+from squid.core.settings.infrastructure.repository import _ServerSettingModelRepository
+from squid.core.settings.models import ServerSetting
 
 
 async def main() -> None:

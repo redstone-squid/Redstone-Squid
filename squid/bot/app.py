@@ -48,10 +48,10 @@ from squid.config import (
     load_or_exit,
 )
 from squid.core.errors import RateLimitedError
+from squid.core.posts.domain import ResourceKind
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
-from squid.posts.domain import ResourceKind
 from squid.runtime import (
     BackgroundTaskSupervisor,
     BotServices,

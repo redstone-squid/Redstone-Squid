@@ -4,8 +4,8 @@ from typing import Protocol, override
 from uuid import UUID
 
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -13,9 +13,9 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.submissions.application.drafts import AppliedDraftChange, StoredDraft
-from squid.submissions.application.edits import answer_change, captured_answers
-from squid.submissions.domain import DraftChange
+from squid.core.submissions.application.drafts import AppliedDraftChange, StoredDraft
+from squid.core.submissions.application.edits import answer_change, captured_answers
+from squid.core.submissions.domain import DraftChange
 from tests.support.edits import bound_revisions
 
 

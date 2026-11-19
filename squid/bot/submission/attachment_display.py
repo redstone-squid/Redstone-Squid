@@ -1,6 +1,6 @@
 """Attachment issue text shared by build cards and the review queue."""
 
-from squid.builds.domain.models import AttachmentFailureInfo
+from squid.core.builds.domain.models import AttachmentFailureInfo
 
 
 def attachment_issue_line(issue: AttachmentFailureInfo, *, resolution: str | None = None) -> str:

@@ -8,9 +8,9 @@ import squid_ui_widgets as sp
 from squid.bot.catalogue.record_display import record_standings
 from squid.bot.submission.build_card import build_card
 from squid.bot.ui import tr
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
-from squid.records.domain.models import BaseTitle, BuildKind, VersionScope
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
+from squid.core.records.domain.models import BaseTitle, BuildKind, VersionScope
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 

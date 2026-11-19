@@ -6,14 +6,14 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
-from squid.submissions.application.artifact_readiness import (
+from squid.core.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
     DraftSchematicSnapshot,
 )
-from squid.submissions.domain import (
+from squid.core.submissions.domain import (
     SchematicArtifactState,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,

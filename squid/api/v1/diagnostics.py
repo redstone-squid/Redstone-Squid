@@ -14,9 +14,9 @@ from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import Page, PageSizeParam
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
+from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH
 from squid.core.pagination import offset_page
-from squid.diagnostics.domain import MAX_REFERENCE_LENGTH
-from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
+from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
 # Reading and clearing reports require different permissions, declared per route.
 

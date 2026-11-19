@@ -20,7 +20,7 @@ from squid.bot.utils.autocomplete import (
     SuggestionChoice,
     suggests,
 )
-from squid.suggestions.domain import Suggestion, SuggestionRequest
+from squid.core.suggestions.domain import Suggestion, SuggestionRequest
 from squid_i18n import Text, discord_markup, discord_text, inline_code, resolve_text, source_text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

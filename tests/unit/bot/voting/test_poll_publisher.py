@@ -14,10 +14,10 @@ import pytest
 from whenever import Instant
 
 from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication, PollPublicationError
-from squid.messages.application.services import MessageService
-from squid.messages.domain import MessageSnapshot
-from squid.voting.application import VoteService
-from squid.voting.domain import PollScope, VoteOption, VoteVisibility
+from squid.core.messages.application.services import MessageService
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import PollScope, VoteOption, VoteVisibility
 from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS
 

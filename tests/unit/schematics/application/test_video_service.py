@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, create_autospec
 import pytest
 from whenever import Instant
 
-from squid.artifacts.infrastructure import LocalArtifactStore
+from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import AuthorizationError, NotFoundError
-from squid.schematics.application.attachments import StoredSchematic
-from squid.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
-from squid.schematics.application.ports import SchematicResourcePackProvider
-from squid.schematics.application.video import VideoRenderRequest
-from squid.schematics.application.video_service import SchematicVideoService
-from squid.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.application.attachments import StoredSchematic
+from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
+from squid.core.schematics.application.ports import SchematicResourcePackProvider
+from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.application.video_service import SchematicVideoService
+from squid.core.schematics.domain.values import VerifiedResourcePack
 from tests.unit.schematics.fakes import FakeSchematicStore, make_analysis
 
 type Components = tuple[SchematicVideoService, FakeSchematicStore, AsyncMock, LocalArtifactStore]

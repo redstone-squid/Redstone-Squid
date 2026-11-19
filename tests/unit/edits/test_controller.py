@@ -7,8 +7,8 @@ import pytest
 
 from squid.bot.edit_controller import EditController
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommitUncertainError, EditValues, RevisionConflictError
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommitUncertainError, EditValues, RevisionConflictError
 from squid_ui.testing import RecordingResponder, control, keys, press_event
 from tests.support.unit_of_work import CommittedState
 from tests.unit.edits.test_executor import ACTOR, TARGET, Handler, Store, Work, command

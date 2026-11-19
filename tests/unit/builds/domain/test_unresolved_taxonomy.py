@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.builds.domain import Info, UnresolvedTaxonomy
+from squid.core.builds.domain import Info, UnresolvedTaxonomy
 from squid.core.errors import DataIntegrityError
 
 

@@ -6,7 +6,7 @@ from functools import partial
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.records.domain.models import BaseTitle
+from squid.core.records.domain.models import BaseTitle
 from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

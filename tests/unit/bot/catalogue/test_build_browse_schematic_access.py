@@ -11,12 +11,12 @@ from whenever import Instant
 import squid_ui as sl
 from squid.bot.catalogue.schematics.tools import SchematicTools
 from squid.bot.utils.permissions import Grants
-from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
-from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
-from squid.schematics.domain import SchematicLicense, SchematicVisibility
-from squid.schematics.domain.models import SchematicFormat
-from squid.suggestions.domain import Suggestion
+from squid.core.permissions.domain import PermissionNode
+from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
+from squid.core.schematics.application import SchematicPublication, SchematicService, StoredSchematic
+from squid.core.schematics.domain import SchematicLicense, SchematicVisibility
+from squid.core.schematics.domain.models import SchematicFormat
+from squid.core.suggestions.domain import Suggestion
 from squid_ui.testing import press_event, submit_event
 from tests.support.discord import make_layout_bot
 from tests.unit.schematics.fakes import make_analysis

@@ -8,9 +8,9 @@ from sqlalchemy import Column, MetaData, Table, create_engine, insert, select
 from sqlalchemy.dialects import sqlite
 from whenever import Instant
 
-from squid.builds.domain import Status
-from squid.builds.models import Build
-from squid.persistence.types import InstantUTC, IntEnumSmallInt
+from squid.core.builds.domain import Status
+from squid.core.builds.models import Build
+from squid.core.persistence.types import InstantUTC, IntEnumSmallInt
 
 
 class _Colour(IntEnum):

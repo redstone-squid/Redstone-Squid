@@ -8,11 +8,14 @@ from uuid import uuid4
 import pytest
 
 from squid.core.actors import Actor
-from squid.submissions.application.intake import SuppliedAttachment
-from squid.submissions.application.schematic_inference import SchematicFieldSuggestion, SchematicSubmissionSuggestions
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.submissions.application.intake import SuppliedAttachment
+from squid.core.submissions.application.schematic_inference import (
+    SchematicFieldSuggestion,
+    SchematicSubmissionSuggestions,
+)
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
 from tests.unit.bot.submission.test_draft_editor import Intake, open_editor, setup

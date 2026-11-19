@@ -4,14 +4,14 @@ from decimal import Decimal
 
 import pytest
 
-from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
-from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
+from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
-from squid.submissions.application.build_answers import answers_from_build, patch_from_answers
-from squid.submissions.application.forms import build_edit_manifest
-from squid.submissions.domain import ChoiceOption
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.core.submissions.application.build_answers import answers_from_build, patch_from_answers
+from squid.core.submissions.application.forms import build_edit_manifest
+from squid.core.submissions.domain import ChoiceOption
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 
 OPTIONS = {
     "approved_restrictions": (ChoiceOption("seamless", "Seamless"), ChoiceOption("flush", "Flush")),

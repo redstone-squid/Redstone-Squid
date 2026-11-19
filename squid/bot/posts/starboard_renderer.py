@@ -11,8 +11,8 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.starboard.render import starboard_layout
-from squid.posts.domain import ResourceKind, StarboardEntryKey
-from squid.starboard.domain import entry_should_be_posted
+from squid.core.posts.domain import ResourceKind, StarboardEntryKey
+from squid.core.starboard.domain import entry_should_be_posted
 
 if TYPE_CHECKING:
     import squid.bot.app

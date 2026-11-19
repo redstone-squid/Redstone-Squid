@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from squid.builds.domain import (
+from squid.core.builds.domain import (
     BuildCategory,
     BuildDraft,
     DoorDraftDetails,
@@ -12,10 +12,10 @@ from squid.builds.domain import (
     GeneralDraftDetails,
     Status,
 )
-from squid.builds.domain.credits import name_credits
-from squid.builds.domain.titles import format_build_category, format_build_display_title
-from squid.builds.errors import InvalidBuildError
-from squid.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.domain.titles import format_build_category, format_build_display_title
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.core.errors import InvalidStateError
 
 
@@ -89,7 +89,7 @@ class TestBuildDraft:
     """Drafts acquire their category-specific fields and defaults during finalization."""
 
     def test_finalize_requires_a_category(self) -> None:
-        from squid.builds.errors import InvalidBuildError
+        from squid.core.builds.errors import InvalidBuildError
 
         with pytest.raises(InvalidBuildError, match="category"):
             BuildDraft().finalize()

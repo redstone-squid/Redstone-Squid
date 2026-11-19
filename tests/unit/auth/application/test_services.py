@@ -7,14 +7,14 @@ from typing import Literal
 import pytest
 from whenever import Instant
 
-from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
-from squid.auth.models.entities import ApiKey
 from squid.core.actors import Actor
+from squid.core.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
+from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionRepository, SubjectRecords
-from squid.permissions.domain import InvalidPatternError, Pattern
-from squid.permissions.models import PermissionGrant
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
+from squid.core.permissions.domain import InvalidPatternError, Pattern
+from squid.core.permissions.models import PermissionGrant
 from tests.support.permissions import permission_uow_factory
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 

@@ -10,8 +10,8 @@ from litestar import Request
 from squid.api.v1.submission_intake import upload_file
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.domain.intake import IntakeStatus
 from tests.support.litestar import make_request
 
 

@@ -11,8 +11,8 @@ from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.permissions.application.administration import PermissionAdministrationService
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.application.administration import PermissionAdministrationService
+from squid.core.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
     PERM_GRANT_GUILD,

@@ -9,10 +9,10 @@ import squid_ui.ext.discord as sd
 from squid.bot import notifications_cog as notifications
 from squid.bot.diagnostics import cog as diagnostics
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.models import ErrorReport
-from squid.permissions.domain import Decision, Reason
-from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
+from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.models import ErrorReport
+from squid.core.permissions.domain import Decision, Reason
+from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
 from squid_ui.ext.discord.testing import AsyncCallRecorder, interaction_harness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services

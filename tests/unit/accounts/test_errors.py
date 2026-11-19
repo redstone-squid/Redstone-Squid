@@ -8,8 +8,8 @@ from uuid import UUID
 
 import pytest
 
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.errors import (
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.errors import (
     AccountAlreadyLinkedError,
     AccountNotFoundError,
     ConsentRequiredError,

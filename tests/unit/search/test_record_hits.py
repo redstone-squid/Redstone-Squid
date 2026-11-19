@@ -2,9 +2,9 @@
 
 from unittest.mock import Mock
 
-from squid.search.domain import BuildSearchHit, RecordSearchHit
-from squid.search.infrastructure.hits import document_hit
-from squid.search.models import SearchDocument
+from squid.core.search.domain import BuildSearchHit, RecordSearchHit
+from squid.core.search.infrastructure.hits import document_hit
+from squid.core.search.models import SearchDocument
 
 
 def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:

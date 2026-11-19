@@ -14,9 +14,9 @@ import nucleation
 import pytest
 
 from squid.config import SchematicConfig
-from squid.schematics.application.video import VideoInteraction, VideoRenderRequest
-from squid.schematics.domain.values import VerifiedResourcePack
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.core.schematics.application.video import VideoInteraction, VideoRenderRequest
+from squid.core.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
 
 pytestmark = pytest.mark.schematic
 

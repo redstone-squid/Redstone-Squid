@@ -2,11 +2,11 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 
-from squid.records.application.models import CandidateBuild, CandidateFacet
-from squid.records.application.services import RecordComputationService
-from squid.records.application.snapshots import RecordSnapshot
-from squid.records.domain import BuildKind, Candidate, DoorCategory
-from squid.records.domain.models import FacetKind
+from squid.core.records.application.models import CandidateBuild, CandidateFacet
+from squid.core.records.application.services import RecordComputationService
+from squid.core.records.application.snapshots import RecordSnapshot
+from squid.core.records.domain import BuildKind, Candidate, DoorCategory
+from squid.core.records.domain.models import FacetKind
 
 
 def test_captured_inputs_preserve_facet_types_and_compute_deterministically() -> None:

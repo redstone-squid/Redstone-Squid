@@ -7,16 +7,16 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid.builds.domain.expansion_math import ExpressionParser
-from squid.records.domain.models import Candidate, ResolutionStatus
-from squid.records.domain.regions import (
+from squid.core.builds.domain.expansion_math import ExpressionParser
+from squid.core.records.domain.models import Candidate, ResolutionStatus
+from squid.core.records.domain.regions import (
     IntegerProgression,
     RegionAnalysisStatus,
     RegionLimits,
     SmallestRegionCandidate,
     smallest_record_regions,
 )
-from squid.records.domain.resolution import resolve_smallest
+from squid.core.records.domain.resolution import resolve_smallest
 
 PARSER = ExpressionParser(("n",))
 

@@ -9,12 +9,12 @@ from pytest_mock import MockerFixture
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError
-from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Decision, Effect, Reason
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
-from squid.permissions.errors import CredentialPermissionDeniedError, PermissionDeniedError
-from squid.permissions.models import PermissionGrant
+from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain import Decision, Effect, Reason
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.permissions.errors import CredentialPermissionDeniedError, PermissionDeniedError
+from squid.core.permissions.models import PermissionGrant
 
 
 @pytest.mark.parametrize("account_id", [None, 7])

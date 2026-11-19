@@ -18,20 +18,20 @@ def test_native_engine_is_loaded_on_first_operation() -> None:
 
                 class MissingEngine(MetaPathFinder):
                     def find_spec(self, fullname, path=None, target=None):
-                        if fullname == 'squid.schematics.infrastructure.nucleation_adapter':
+                        if fullname == 'squid.core.schematics.infrastructure.nucleation_adapter':
                             raise ModuleNotFoundError('optional engine unavailable', name=fullname)
 
                 sys.meta_path.insert(0, MissingEngine())
                 from squid.config import SchematicConfig
-                from squid.schematics.infrastructure.threaded import ThreadedSchematicAnalyzer
+                from squid.core.schematics.infrastructure.threaded import ThreadedSchematicAnalyzer
 
-                assert 'squid.schematics.infrastructure.nucleation_adapter' not in sys.modules
+                assert 'squid.core.schematics.infrastructure.nucleation_adapter' not in sys.modules
                 analyzer = ThreadedSchematicAnalyzer(SchematicConfig())
-                assert 'squid.schematics.infrastructure.nucleation_adapter' not in sys.modules
+                assert 'squid.core.schematics.infrastructure.nucleation_adapter' not in sys.modules
                 try:
                     asyncio.run(analyzer.capabilities())
                 except ModuleNotFoundError as error:
-                    assert error.name == 'squid.schematics.infrastructure.nucleation_adapter'
+                    assert error.name == 'squid.core.schematics.infrastructure.nucleation_adapter'
                 else:
                     raise AssertionError('The first operation must attempt to load the engine')
             """),

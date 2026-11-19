@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.search.application import (
+from squid.core.search.application import (
     RankedCandidate,
     RankingBranch,
     reciprocal_rank_fusion,

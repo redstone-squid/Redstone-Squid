@@ -7,11 +7,11 @@ from litestar import Litestar, get
 from litestar.testing import TestClient
 from pytest_mock import MockerFixture
 
-from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
-from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.config import ApiConfig, ApiProcessConfig
+from squid.core.accounts.errors import MinecraftServiceUnavailableError
+from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,

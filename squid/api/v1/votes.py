@@ -12,9 +12,9 @@ from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.security import requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
-from squid.permissions.domain.catalogue import VOTE_POLL_CAST
-from squid.voting.domain import CastVoteResult, VoteRejection
-from squid.voting.errors import VoteSessionNotFoundError
+from squid.core.permissions.domain.catalogue import VOTE_POLL_CAST
+from squid.core.voting.domain import CastVoteResult, VoteRejection
+from squid.core.voting.errors import VoteSessionNotFoundError
 
 UserVoter = CurrentCaller
 

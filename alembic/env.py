@@ -9,12 +9,12 @@ from sqlalchemy import Connection, engine_from_config, make_url, pool
 from sqlalchemy.engine import URL
 from sqlalchemy.schema import SchemaItem
 
-import squid.persistence.model_registry  # noqa: F401
+import squid.core.persistence.model_registry  # noqa: F401
 from alembic import context
 from squid.config import load_database_config
-from squid.persistence.alembic_entities import current_entities
-from squid.persistence.base import Base
-from squid.persistence.migration_history import (
+from squid.core.persistence.alembic_entities import current_entities
+from squid.core.persistence.base import Base
+from squid.core.persistence.migration_history import (
     HISTORY_TABLE,
     MigrationStepRecorder,
     create_history_table,

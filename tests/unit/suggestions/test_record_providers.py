@@ -2,8 +2,8 @@
 
 from collections.abc import Sequence
 
-from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.records import RecordDefinitionProvider, RecordTitleProvider
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.providers.records import RecordDefinitionProvider, RecordTitleProvider
 
 
 class FakeDefinitions:

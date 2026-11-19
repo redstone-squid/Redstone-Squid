@@ -17,11 +17,11 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
-from squid.messages.application import MessageService
-from squid.messages.domain import MessageSnapshot
-from squid.posts.application import PostService
-from squid.posts.domain import ResourceKind, Surface
-from squid.posts.models import DiscordPost
+from squid.core.messages.application import MessageService
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.posts.application import PostService
+from squid.core.posts.domain import ResourceKind, Surface
+from squid.core.posts.models import DiscordPost
 from tests.support.services import bot_services
 
 GUILD = 500

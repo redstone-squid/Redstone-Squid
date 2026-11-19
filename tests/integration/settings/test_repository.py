@@ -10,16 +10,16 @@ from sqlalchemy import delete, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
+from squid.core.accounts.models import Account
 from squid.core.errors import InvalidStateError, ValidationError
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.application import SettingsService
-from squid.settings.domain import Setting
-from squid.settings.domain.guild import CHANNEL_FIELDS
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.settings.infrastructure.repository import ensure_server_settings
-from squid.settings.models import RuntimeSettingChange, ServerSetting
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain import Setting
+from squid.core.settings.domain.guild import CHANNEL_FIELDS
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.infrastructure.repository import ensure_server_settings
+from squid.core.settings.models import RuntimeSettingChange, ServerSetting
 from tests.support.runtime_edits import edit_runtime
 
 _TABLES = [

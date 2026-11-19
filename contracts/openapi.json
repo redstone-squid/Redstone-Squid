@@ -1486,7 +1486,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_squid.builds.application.queries.PublicBuildSummary_"
+                  "$ref": "#/components/schemas/Page_squid.core.builds.application.queries.PublicBuildSummary_"
                 }
               }
             }
@@ -5296,7 +5296,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_squid.builds.application.queries.PublicBuildSummary_"
+                  "$ref": "#/components/schemas/Page_squid.core.builds.application.queries.PublicBuildSummary_"
                 }
               }
             }
@@ -23021,7 +23021,7 @@
         ],
         "title": "Page[VersionDetail]"
       },
-      "Page_squid.builds.application.queries.PublicBuildSummary_": {
+      "Page_squid.core.builds.application.queries.PublicBuildSummary_": {
         "properties": {
           "items": {
             "items": {

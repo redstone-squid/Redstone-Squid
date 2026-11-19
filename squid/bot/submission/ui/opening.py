@@ -6,12 +6,12 @@ import squid_ui.ext.discord as sd
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr
-from squid.builds.application import BuildService
-from squid.builds.domain import EditAccess
-from squid.builds.models import Build
 from squid.core.actors import Actor
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.submissions.domain import ChoiceOption
+from squid.core.builds.application import BuildService
+from squid.core.builds.domain import EditAccess
+from squid.core.builds.models import Build
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.submissions.domain import ChoiceOption
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid

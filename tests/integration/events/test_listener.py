@@ -8,7 +8,7 @@ from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from squid.events.infrastructure.listener import CHANNEL, DomainEventWakeListener
+from squid.core.events.infrastructure.listener import CHANNEL, DomainEventWakeListener
 
 
 async def test_listener_delivers_commit_hints_reconnects_and_closes_on_cancellation(async_engine: AsyncEngine) -> None:

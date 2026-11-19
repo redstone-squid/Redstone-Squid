@@ -5,8 +5,8 @@ import math
 import pytest
 
 from squid.core.errors import ValidationError
-from squid.schematics.application.commands import RenderRequest
-from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
+from squid.core.schematics.application.commands import RenderRequest
+from squid.core.schematics.domain.values import RgbaColor, VerifiedResourcePack
 
 
 @pytest.mark.parametrize(

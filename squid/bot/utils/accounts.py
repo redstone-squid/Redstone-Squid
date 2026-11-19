@@ -5,8 +5,8 @@ Permission checks use the read-only `AccountIdCache` instead.
 
 import discord
 
-from squid.accounts.application.services import AccountService
-from squid.accounts.domain import IdentityProvider
+from squid.core.accounts.application.services import AccountService
+from squid.core.accounts.domain import IdentityProvider
 
 
 async def get_or_create_discord_account_id(

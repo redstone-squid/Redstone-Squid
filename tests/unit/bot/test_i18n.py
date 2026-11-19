@@ -12,9 +12,9 @@ import squid_ui.ext.discord as sd
 from squid.bot import i18n as bot_i18n
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.bot.ui import CHROME
+from squid.core.settings.application import SettingsService
+from squid.core.settings.models import ServerSetting
 from squid.runtime import BotServices
-from squid.settings.application import SettingsService
-from squid.settings.models import ServerSetting
 from squid_ui.chrome import Chrome
 from tests.support.services import bot_services
 from tests.support.settings import FakeSettingsUnitOfWork, settings_state

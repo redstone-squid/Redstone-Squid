@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import (
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import (
     ConcurrentEditError,
     EditCommand,
     EditResult,
@@ -19,12 +19,12 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
-from squid.settings.application.services import SettingsService
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.settings.models import RuntimeSettingChange
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
+from squid.core.settings.application.services import SettingsService
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.models import RuntimeSettingChange
 from tests.support.runtime_edits import edit_runtime
 
 

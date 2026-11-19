@@ -10,11 +10,11 @@ import squid_ui_widgets as sp
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text
+from squid.core.notifications.domain import SubscriptionKind
 from squid.core.pagination import PageSelector
-from squid.notifications.domain import SubscriptionKind
-from squid.records.application import RecordService
-from squid.records.application.models import PublishedTitle
-from squid.records.domain.models import VersionScope
+from squid.core.records.application import RecordService
+from squid.core.records.application.models import PublishedTitle
+from squid.core.records.domain.models import VersionScope
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.sources import window_fingerprint

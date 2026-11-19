@@ -11,7 +11,6 @@ from httpx import AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
@@ -32,9 +31,10 @@ from squid.api.v1.submissions import (
     get_submission_forms,
     router,
 )
+from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError
-from squid.submissions.application import (
+from squid.core.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
     FinalizationJobSnapshot,
@@ -42,8 +42,8 @@ from squid.submissions.application import (
     StoredDraft,
     build_submission_manifest,
 )
-from squid.submissions.application.drafts import draft_actor_id
-from squid.submissions.domain import (
+from squid.core.submissions.application.drafts import draft_actor_id
+from squid.core.submissions.domain import (
     ChoiceOption,
     DraftChange,
     DraftSnapshot,

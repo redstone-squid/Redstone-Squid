@@ -2,8 +2,8 @@
 
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, consent_refresh_required
-from squid.accounts.models import Account
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, consent_refresh_required
+from squid.core.accounts.models import Account
 
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)

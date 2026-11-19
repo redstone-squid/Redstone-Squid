@@ -10,19 +10,19 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION
-from squid.accounts.models import Account
-from squid.cli_auth import CliAuthorizationService, CliSecretCodec
-from squid.cli_auth.application import enrollment_proof_message, session_proof_message
-from squid.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError
-from squid.cli_auth.models import (
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.core.accounts.models import Account
+from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
+from squid.core.cli_auth.application import enrollment_proof_message, session_proof_message
+from squid.core.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError
+from squid.core.cli_auth.models import (
     CliDevice,
     CliDeviceEnrollment,
     CliSession,
     CliSessionChallenge,
 )
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.schema import model_tables
 
 pytestmark = pytest.mark.asyncio

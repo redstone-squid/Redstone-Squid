@@ -7,7 +7,7 @@ bot, API and worker processes invalidate their rule-set caches.
 Nothing reads these tables yet; see docs/plans/rbac.md.
 
 Built-in roles are inserted with no pattern rows. Their pattern lists live in
-`squid.permissions.domain.catalogue.BUILTIN_ROLES` on purpose: a list seeded here
+`squid.core.permissions.domain.catalogue.BUILTIN_ROLES` on purpose: a list seeded here
 would freeze the catalogue as it looked the day this ran, so every node added
 afterwards would silently fall outside `global-admin`.
 
@@ -26,7 +26,7 @@ from alembic_utils.replaceable_entity import ReplaceableEntity
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "d8e9f0a1b2c3"
 down_revision: str | Sequence[str] | None = "c7d8e9f0a1b2"

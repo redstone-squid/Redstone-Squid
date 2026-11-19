@@ -9,9 +9,9 @@ from litestar.di import Provide
 from squid.api.errors import exception_handlers
 from squid.api.security import Caller
 from squid.api.v1.schematics import get_schematic_video, get_schematic_video_content, submit_schematic_video
-from squid.permissions.application import PermissionService
-from squid.schematics.application import SchematicService
-from squid.schematics.application.video_service import SchematicVideoService, VideoStatus
+from squid.core.permissions.application import PermissionService
+from squid.core.schematics.application import SchematicService
+from squid.core.schematics.application.video_service import SchematicVideoService, VideoStatus
 from tests.unit.schematics.test_public_api import ConfirmedBuilds
 
 

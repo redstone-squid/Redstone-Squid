@@ -10,10 +10,10 @@ from litestar.params import FromPath, HeaderParameter, SkipValidation
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.v1.submissions import AccountId
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, LatestRevision, Revision
-from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
-from squid.submissions.application.edits import draft_target
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditCommand, LatestRevision, Revision
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
+from squid.core.submissions.application.edits import draft_target
 
 
 @dataclass(frozen=True, slots=True)

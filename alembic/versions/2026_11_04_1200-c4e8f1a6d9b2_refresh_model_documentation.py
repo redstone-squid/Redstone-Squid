@@ -42,7 +42,7 @@ _TABLE_COMMENTS: dict[str, tuple[str | None, str]] = {
         "\n"
         "Not an event queue, despite the shape. Rows are coalesced on\n"
         "`(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO\n"
-        "UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is "
+        "UPDATE` triggers in `squid/core/persistence/postgres_entities.sql` — that is "
         "where\n"
         "the coalescing actually happens — deleted on acknowledgement, and carry "
         "a\n"

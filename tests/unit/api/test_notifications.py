@@ -19,8 +19,7 @@ from squid.api.v1.notifications import (
 )
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
 from squid.core.actors import Actor
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
-from squid.notifications import (
+from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
     NotificationPreferences,
@@ -29,11 +28,12 @@ from squid.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
-from squid.notifications.domain import NotificationKind
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.notifications.domain import NotificationKind
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
 

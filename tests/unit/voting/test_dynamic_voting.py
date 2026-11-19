@@ -10,10 +10,9 @@ from whenever import Instant
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_choices, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.core.actors import Actor
-from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
-from squid.runtime import BotServices
-from squid.voting.application import RoleVoteWeightPolicy, VoteService
-from squid.voting.domain import (
+from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
+from squid.core.voting.application import RoleVoteWeightPolicy, VoteService
+from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
     DeleteLogVoteTarget,
@@ -31,7 +30,8 @@ from squid.voting.domain import (
     normalize_vote_options,
     validate_thresholds,
 )
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.errors import InvalidVoteConfigurationError
+from squid.runtime import BotServices
 from squid_ui.content.text import NEUTRAL, resolve_text
 from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot

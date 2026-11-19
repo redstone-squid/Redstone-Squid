@@ -12,34 +12,34 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.bootstrap import create_schematic_service
 from squid.config import SchematicConfig
 from squid.core.actors import Actor
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import IngestedSchematic, IngestRequest
-from squid.schematics.application.jobs import SchematicJobService
-from squid.schematics.application.storage import SchematicStorageService
-from squid.schematics.errors import InvalidSchematicError
-from squid.schematics.infrastructure.durable import SchematicJobRunner
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
-from squid.schematics.models import BuildSchematic, SchematicRenderQueueItem
-from squid.submissions.application import CheckedInFormManifestRegistry, SubmissionDraftService
-from squid.submissions.application.commit import BuildSubmissionExecutor
-from squid.submissions.application.finalization import ClaimedFinalizationJob
-from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain import DraftStatus
-from squid.submissions.domain.finalization import (
+from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application import IngestedSchematic, IngestRequest
+from squid.core.schematics.application.jobs import SchematicJobService
+from squid.core.schematics.application.storage import SchematicStorageService
+from squid.core.schematics.errors import InvalidSchematicError
+from squid.core.schematics.infrastructure.durable import SchematicJobRunner
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.core.schematics.models import BuildSchematic, SchematicRenderQueueItem
+from squid.core.submissions.application import CheckedInFormManifestRegistry, SubmissionDraftService
+from squid.core.submissions.application.commit import BuildSubmissionExecutor
+from squid.core.submissions.application.finalization import ClaimedFinalizationJob
+from squid.core.submissions.application.schematics import DraftSchematicService
+from squid.core.submissions.domain import DraftStatus
+from squid.core.submissions.domain.finalization import (
     FinalizedBuild,
     SchematicArtifactState,
     SchematicRightsPolicy,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
 )
-from squid.submissions.domain.schematics import DraftSchematicState
-from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.models.entities import SubmissionDraft
-from squid.submissions.models.schematics import DraftSchematicSource
+from squid.core.submissions.domain.schematics import DraftSchematicState
+from squid.core.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.schematics import DraftSchematicSource
 from tests.integration.submissions.test_commit import PreparedBuilds
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import normalized_submission, seed_account_and_version

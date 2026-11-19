@@ -5,12 +5,11 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.domain import BuildCategory, Status
-from squid.builds.domain.credits import name_credits
-from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
-from squid.sponsors import PublicSponsor
-from squid.submissions.domain import (
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import BuildCategory, Status
+from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
+from squid.core.submissions.domain import (
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -21,7 +20,8 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.versions.models import Version
+from squid.core.versions.models import Version
+from squid.sponsors import PublicSponsor
 
 
 async def seed_account_and_version(session_factory: async_sessionmaker[AsyncSession]) -> int:

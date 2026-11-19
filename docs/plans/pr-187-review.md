@@ -70,14 +70,14 @@ cases skipped. Whole-project Pyrefly reports zero errors.
 ### 1. Comment 4516694585 (P1)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/187#discussion_r4516694585).
-Original path: `squid/voting/infrastructure/discord_rest.py`, file-level comment.
+Original path: `squid/core/voting/infrastructure/discord_rest.py`, file-level comment.
 
 > seems like a mess
 
 ### 2. Comment 4516718316 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/187#discussion_r4516718316).
-Original path: `squid/builds/application/services.py`, lines 27–37.
+Original path: `squid/core/builds/application/services.py`, lines 27–37.
 
 > there seems to be so fucking many access control "Actors" dataclass
 

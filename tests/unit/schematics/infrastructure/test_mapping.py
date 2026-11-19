@@ -6,9 +6,9 @@ from collections.abc import Callable
 import pytest
 
 from squid.core.errors import DataIntegrityError
-from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.wire import decode_simulation
-from squid.schematics.models import BuildSchematic
+from squid.core.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
+from squid.core.schematics.infrastructure.wire import decode_simulation
+from squid.core.schematics.models import BuildSchematic
 
 
 def row() -> BuildSchematic:

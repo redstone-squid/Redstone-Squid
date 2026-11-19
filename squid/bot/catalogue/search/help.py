@@ -7,8 +7,8 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid.builds.domain import BuildCategory
-from squid.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.builds.domain import BuildCategory
+from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
 from squid_i18n import md_tr
 from squid_ui.authoring.semantic import Fields, Paragraph
 from squid_ui.content.text import Text

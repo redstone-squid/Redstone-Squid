@@ -17,9 +17,9 @@ from squid.bot.lookup import pick
 from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
 from squid.bot.ui import tr
 from squid.core.actors import Actor
-from squid.edits.application import EditRunner
-from squid.edits.domain import EditValues, Revision
-from squid.notifications import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import EditValues, Revision
+from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
     NotificationPreferences,
@@ -27,23 +27,23 @@ from squid.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
-from squid.notifications.edits import (
+from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
     inbox_target,
     notification_target,
 )
-from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.records.domain import BaseTitle, BuildKind, VersionScope
-from squid.suggestions.domain import Suggestion
-from squid.tags.domain import TagValueType
+from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.suggestions.domain import Suggestion
+from squid.core.tags.domain import TagValueType
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
-    from squid.notifications.application import NotificationService
+    from squid.core.notifications.application import NotificationService
 
 SESSION_SECONDS = 300
 

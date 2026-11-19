@@ -5,8 +5,8 @@ from functools import partial
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.events.application import DomainEventDelivery
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.events.application import DomainEventDelivery
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.unit_of_work import transact
 
 

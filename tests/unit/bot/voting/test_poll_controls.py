@@ -2,7 +2,7 @@
 
 import squid_ui.ext.discord as sd
 from squid.bot.voting.rendering import render_generic_poll
-from squid.voting.domain import VoteSessionResult, VoteStatus
+from squid.core.voting.domain import VoteSessionResult, VoteStatus
 from tests.support.voting import poll_snapshot
 
 

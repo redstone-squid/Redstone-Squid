@@ -5,9 +5,9 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.schematics.application import IngestedSchematic
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.schematics.application import IngestedSchematic
+from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact

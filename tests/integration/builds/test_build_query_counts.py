@@ -6,14 +6,14 @@ import pytest
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.builds.domain import Status
-from squid.builds.domain.credits import Credit, CreditKind, CreditRole, name_credits
-from squid.builds.models import OtherBuild
-from squid.messages.domain import MessageSnapshot
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.versions.models import Version
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
+from squid.core.builds.domain import Status
+from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole, name_credits
+from squid.core.builds.models import OtherBuild
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 from tests.support.database import record_queries

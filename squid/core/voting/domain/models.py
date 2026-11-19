@@ -1,0 +1,491 @@
+"""Describe voting sessions and the ballots that determine their outcomes.
+
+A voting session is one build review, deletion vote, or generic poll. It may appear
+in several Discord messages, all sharing one set of ballots. Each account has at
+most one ballot in that voting session, identified by a stable option ID rather
+than by the emoji used to select it.
+
+A ballot's weight is a positive magnitude. Build and deletion votes turn it into
+a signed score: approve adds weight and deny subtracts it. They close when the net
+score reaches a threshold. Generic polls total weights by option and close on a
+deadline or an authorized request instead.
+"""
+
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from enum import StrEnum
+from math import isfinite
+
+from whenever import Instant
+
+from squid.core.actors import Actor
+from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
+from squid.core.scores import round_score
+from squid.core.voting.errors import InvalidVoteConfigurationError
+
+type VoteChange = tuple[str, object, object]
+
+
+class VoteKind(StrEnum):
+    """What a vote session decides, and therefore how it closes."""
+
+    BUILD = "build"
+    DELETE_LOG = "delete_log"
+    GENERIC = "generic"
+
+    @property
+    def is_threshold_vote(self) -> bool:
+        """Whether this kind closes itself once a signed net score is reached."""
+        return self is not VoteKind.GENERIC
+
+
+class VoteStatus(StrEnum):
+    """Whether a session still accepts ballots."""
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+class VoteSessionResult(StrEnum):
+    """A session's outcome, or PENDING while it remains undecided."""
+
+    APPROVED = "approved"
+    DENIED = "denied"
+    CANCELLED = "cancelled"
+    PENDING = "pending"
+
+
+class VoteVisibility(StrEnum):
+    """How much of a generic poll's state is disclosed while it is open."""
+
+    ANONYMOUS_LIVE = "anonymous_live"
+    VISIBLE_LIVE = "visible_live"
+    ANONYMOUS_HIDDEN = "anonymous_hidden"
+
+
+class PollScope(StrEnum):
+    """How far a generic poll is published."""
+
+    GUILD = "guild"
+    NETWORK = "network"
+
+
+class VoteRejection(StrEnum):
+    """Why a ballot or closure request was refused."""
+
+    NOT_FOUND = "not_found"
+    CLOSED = "closed"
+    NOT_ELIGIBLE = "not_eligible"
+    INVALID_OPTION = "invalid_option"
+    WRONG_GUILD = "wrong_guild"
+    NOT_AUTHORIZED = "not_authorized"
+
+
+class VoteChoice(StrEnum):
+    """The scoring behavior of a session option."""
+
+    APPROVE = "approve"
+    DENY = "deny"
+    GENERIC = "generic"
+
+
+@dataclass(frozen=True, slots=True)
+class VoteOption:
+    """One emoji alias for a stable selectable option.
+
+    For example, the default 👍 and ✅ aliases both select the `approve` option.
+    Selecting either after already choosing `approve` toggles the same ballot off.
+    `guild_id` limits where the alias appears. None defines a global alias, used
+    where the voting session has no guild-specific aliases.
+    """
+
+    emoji: str
+    choice: VoteChoice
+    multiplier: float = 1.0
+    identifier: str | None = None
+    guild_id: int | None = None
+    label: str | None = None
+    position: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.emoji.strip():
+            msg = "Vote option emoji cannot be empty."
+            raise InvalidVoteConfigurationError(msg)
+        if not isfinite(self.multiplier) or self.multiplier <= 0:
+            msg = "Vote option multiplier must be finite and greater than zero."
+            raise InvalidVoteConfigurationError(msg, context={"multiplier": self.multiplier})
+        identifier = self.identifier or (self.choice.value if self.choice is not VoteChoice.GENERIC else self.emoji)
+        if not identifier.strip():
+            msg = "Vote option identifier cannot be empty."
+            raise InvalidVoteConfigurationError(msg)
+        object.__setattr__(self, "identifier", identifier)
+        if self.choice is VoteChoice.GENERIC and not (self.label or "").strip():
+            msg = "Generic vote options require a label."
+            raise InvalidVoteConfigurationError(msg)
+
+    @property
+    def id(self) -> str:
+        """The stable identifier, independent of Discord, which `__post_init__` always fills."""
+        assert self.identifier is not None
+        return self.identifier
+
+
+@dataclass(frozen=True, slots=True)
+class VoteSelection:
+    """One account's ballot, including its cached positive weight.
+
+    `guild_id` records where it was cast, which identifies the applicable emoji
+    alias. The voting session's owner guild determines role weights separately.
+    """
+
+    account_id: int
+    guild_id: int | None
+    option_id: str
+    emoji: str
+    weight: float
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.weight) or self.weight <= 0:
+            msg = "Cached vote weight must be finite and greater than zero."
+            raise InvalidVoteConfigurationError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class BuildVoteTarget:
+    """The build a review session confirms or rejects."""
+
+    build_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteLogVoteTarget:
+    """The Discord message a moderation session votes to delete."""
+
+    message_id: int
+    channel_id: int
+    server_id: int
+
+
+type VoteTarget = BuildVoteTarget | DeleteLogVoteTarget | None
+"""What a closing session acts on. Generic polls act on nothing and carry `None`."""
+
+
+@dataclass(frozen=True, slots=True)
+class VoteMessage:
+    """Discord message location required to restore a vote view."""
+
+    id: int
+    channel_id: int
+    guild_id: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class GenericPoll:
+    """Question, deadline, and publication settings for a generic poll.
+
+    `guild_id` identifies the owner guild, whose role weights govern all ballots,
+    including those cast in another guild. With no owner guild, role multipliers
+    are not applied. A poll can exist before any Discord message is attached.
+    """
+
+    question: str
+    visibility: VoteVisibility
+    deadline: Instant
+    guild_id: int | None = None
+    scope: PollScope = PollScope.GUILD
+    """Whether publication is limited to the owning guild or spans configured vote channels.
+
+    The owning guild determines role weights even for ballots cast elsewhere.
+    """
+
+
+def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_threshold: int | None) -> None:
+    """Require positive pass and negative fail thresholds for build and deletion votes.
+
+    Generic polls use deadlines and must have neither threshold.
+    """
+    if kind.is_threshold_vote:
+        if pass_threshold is None or fail_threshold is None:
+            msg = f"{kind.value} vote sessions require both thresholds."
+            raise InvalidVoteConfigurationError(msg, context={"kind": kind.value})
+        if pass_threshold <= 0 or fail_threshold >= 0:
+            msg = "Pass thresholds must be positive and fail thresholds negative."
+            raise InvalidVoteConfigurationError(
+                msg, context={"pass_threshold": pass_threshold, "fail_threshold": fail_threshold}
+            )
+    elif pass_threshold is not None or fail_threshold is not None:
+        msg = "Generic polls must not carry vote thresholds."
+        raise InvalidVoteConfigurationError(msg, context={"kind": kind.value})
+
+
+def validate_session_payload(
+    kind: VoteKind,
+    target: VoteTarget,
+    poll: GenericPoll | None,
+    options: Sequence[VoteOption],
+) -> None:
+    """Enforce the discriminated target, poll, and option contract for one vote kind."""
+    match kind:
+        case VoteKind.BUILD:
+            valid_target = isinstance(target, BuildVoteTarget)
+            requires_poll = False
+            valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
+        case VoteKind.DELETE_LOG:
+            valid_target = isinstance(target, DeleteLogVoteTarget)
+            requires_poll = False
+            valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
+        case VoteKind.GENERIC:
+            valid_target = target is None
+            requires_poll = True
+            valid_choices = {VoteChoice.GENERIC}
+    if not valid_target:
+        msg = f"{kind.value} vote session has the wrong target payload."
+        raise InvalidVoteConfigurationError(
+            msg,
+            context={"kind": kind.value, "target_type": type(target).__name__},
+        )
+    if (poll is not None) is not requires_poll:
+        msg = f"{kind.value} vote session has the wrong poll payload."
+        raise InvalidVoteConfigurationError(msg, context={"kind": kind.value})
+    invalid_choices = sorted({option.choice.value for option in options if option.choice not in valid_choices})
+    if invalid_choices:
+        msg = f"{kind.value} vote session has incompatible option choices."
+        raise InvalidVoteConfigurationError(
+            msg,
+            context={"kind": kind.value, "invalid_choices": invalid_choices},
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VoteSessionSnapshot:
+    """Validated session state used by application and presentation adapters.
+
+    `votes` maps account IDs to signed weights for score calculations. `selections`
+    retains the ballots with positive weights and stable option IDs for tallies
+    and refreshes. For example, a deny ballot of weight 2 appears as -2 in `votes`
+    and as weight 2 with the default option ID `deny` in `selections`.
+    """
+
+    id: int
+    author_account_id: int
+    kind: VoteKind
+    status: VoteStatus
+    result: VoteSessionResult
+    pass_threshold: int | None
+    fail_threshold: int | None
+    votes: Mapping[int, float]
+    messages: tuple[VoteMessage, ...]
+    options: tuple[VoteOption, ...]
+    target: VoteTarget = None
+    selections: tuple[VoteSelection, ...] = ()
+    poll: GenericPoll | None = None
+
+    def __post_init__(self) -> None:
+        validate_thresholds(self.kind, self.pass_threshold, self.fail_threshold)
+        validate_session_payload(self.kind, self.target, self.poll, self.options)
+
+    @property
+    def is_open(self) -> bool:
+        return self.status is VoteStatus.OPEN
+
+    @property
+    def upvotes(self) -> float:
+        return round_score(sum(weight for weight in self.votes.values() if weight > 0))
+
+    @property
+    def downvotes(self) -> float:
+        return round_score(-sum(weight for weight in self.votes.values() if weight < 0))
+
+    @property
+    def net_votes(self) -> float:
+        return round_score(sum(self.votes.values()))
+
+    @property
+    def visibility(self) -> VoteVisibility | None:
+        """The poll's disclosure mode, or None for kinds that are always anonymous."""
+        return self.poll.visibility if self.poll is not None else None
+
+    @property
+    def is_anonymous(self) -> bool:
+        """Whether voter identities are hidden; only visible live polls expose them."""
+        return self.visibility is not VoteVisibility.VISIBLE_LIVE
+
+    @property
+    def shows_tallies(self) -> bool:
+        """Whether current totals may be disclosed to viewers."""
+        return self.visibility is not VoteVisibility.ANONYMOUS_HIDDEN or not self.is_open
+
+    def should_remove_reaction_on_cast(self) -> bool:
+        """Return whether the transport should remove the reaction to hide the voter's choice."""
+        return self.is_anonymous
+
+    def can_close(self, actor: Actor) -> VoteRejection | None:
+        """Return why `actor` may not close this session, or None when they may."""
+        if self.kind is not VoteKind.GENERIC or self.poll is None:
+            return VoteRejection.NOT_AUTHORIZED
+        author = actor.account_id == self.author_account_id
+        elsewhere = self.poll.guild_id is not None and actor.guild_id and self.poll.guild_id != actor.guild_id
+        # Only the author may close a network poll from another guild. Other
+        # actors must use capabilities resolved in the poll's owning guild.
+        if elsewhere and not (author and self.poll.scope is PollScope.NETWORK):
+            return VoteRejection.WRONG_GUILD
+        if not author and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
+            return VoteRejection.NOT_AUTHORIZED
+        return None
+
+    def options_for_guild(self, guild_id: int) -> tuple[VoteOption, ...]:
+        """Return guild-specific options, falling back to global options only when none exist."""
+        scoped = tuple(option for option in self.options if option.guild_id == guild_id)
+        return scoped or tuple(option for option in self.options if option.guild_id is None)
+
+    def option_by_emoji(self, emoji: str, guild_id: int) -> VoteOption | None:
+        return next((option for option in self.options_for_guild(guild_id) if option.emoji == emoji), None)
+
+    def option_by_id(self, option_id: str, guild_id: int, *, emoji: str | None = None) -> VoteOption | None:
+        """Return the guild's alias for an option: the one using `emoji` if given, otherwise the first."""
+        return next(
+            (
+                option
+                for option in self.options_for_guild(guild_id)
+                if option.id == option_id and (emoji is None or option.emoji == emoji)
+            ),
+            None,
+        )
+
+    def selection_for(self, account_id: int) -> VoteSelection | None:
+        return next((selection for selection in self.selections if selection.account_id == account_id), None)
+
+    def raw_tallies(self) -> Mapping[str, int]:
+        """Return selection counts by stable option identifier."""
+        result: defaultdict[str, int] = defaultdict(int)
+        for selection in self.selections:
+            result[selection.option_id] += 1
+        return dict(result)
+
+    def weighted_tallies(self) -> Mapping[str, float]:
+        """Return positive weighted totals by stable option identifier."""
+        result: defaultdict[str, float] = defaultdict(float)
+        for selection in self.selections:
+            result[selection.option_id] += selection.weight
+        return dict(result)
+
+
+@dataclass(frozen=True, slots=True)
+class StoredVoteMutation:
+    """Result of the repository's atomic vote mutation."""
+
+    session: VoteSessionSnapshot
+    previous_weight: float | None
+    current_weight: float | None
+    just_closed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CastVoteResult:
+    """Result returned to the caller after a ballot or closure request.
+
+    `just_closed` is true only when this request closed the voting session; a
+    session already closed by another request does not set it.
+    """
+
+    session: VoteSessionSnapshot | None
+    rejection: VoteRejection | None = None
+    previous_weight: float | None = None
+    current_weight: float | None = None
+    just_closed: bool = False
+
+    @property
+    def accepted(self) -> bool:
+        return self.rejection is None
+
+
+@dataclass(frozen=True, slots=True)
+class VoteRefreshResult:
+    """Outcome of recomputing cached weights."""
+
+    session: VoteSessionSnapshot | None
+    unresolved_account_ids: tuple[int, ...] = ()
+    just_closed: bool = False
+
+    @property
+    def complete(self) -> bool:
+        return not self.unresolved_account_ids
+
+
+@dataclass(frozen=True, slots=True)
+class EmojiPreset:
+    """Default emoji options for one guild and voting kind."""
+
+    guild_id: int
+    kind: VoteKind
+    options: tuple[VoteOption, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RoleWeight:
+    """A Discord role's multiplier for one guild and voting kind."""
+
+    guild_id: int
+    kind: VoteKind
+    role_id: int
+    multiplier: float
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.multiplier) or self.multiplier <= 0:
+            msg = "Role weight must be finite and greater than zero."
+            raise InvalidVoteConfigurationError(msg)
+
+
+DEFAULT_VOTE_OPTIONS = (
+    VoteOption("👍", VoteChoice.APPROVE, position=0),
+    VoteOption("✅", VoteChoice.APPROVE, position=1),
+    VoteOption("👎", VoteChoice.DENY, position=2),
+    VoteOption("❌", VoteChoice.DENY, position=3),
+)
+DEFAULT_GENERIC_EMOJIS = ("1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟")
+MIN_POLL_DURATION_SECONDS = 60
+MAX_POLL_DURATION_SECONDS = 30 * 86400
+
+
+def normalize_vote_options(options: Sequence[VoteOption], *, kind: VoteKind = VoteKind.BUILD) -> tuple[VoteOption, ...]:
+    """Validate options and preserve their order in a tuple.
+
+    Emoji aliases must be unique within each guild. Generic polls require 2 to 10
+    options with distinct IDs and generic choices. Threshold votes require approve
+    and deny choices in each configured guild.
+    """
+    normalized = tuple(options)
+    if not normalized:
+        msg = "Vote options cannot be empty."
+        raise InvalidVoteConfigurationError(msg)
+    aliases = [(option.guild_id, option.emoji) for option in normalized]
+    if len(aliases) != len(set(aliases)):
+        msg = "Vote option emojis must be unique within a guild session."
+        raise InvalidVoteConfigurationError(msg)
+    if kind is VoteKind.GENERIC:
+        identifiers = [option.identifier for option in normalized]
+        if len(identifiers) != len(set(identifiers)):
+            msg = "Generic option identifiers must be unique."
+            raise InvalidVoteConfigurationError(msg)
+        if not 2 <= len(normalized) <= 10:
+            msg = "Generic polls require between 2 and 10 options."
+            raise InvalidVoteConfigurationError(msg)
+        if any(option.choice is not VoteChoice.GENERIC for option in normalized):
+            msg = "Generic poll options must use the generic choice type."
+            raise InvalidVoteConfigurationError(msg)
+    else:
+        for guild_id in {option.guild_id for option in normalized}:
+            choices = {option.choice for option in normalized if option.guild_id == guild_id}
+            if choices != {VoteChoice.APPROVE, VoteChoice.DENY}:
+                msg = "Vote sessions require at least one approve and one deny option."
+                raise InvalidVoteConfigurationError(msg)
+    return normalized
+
+
+@dataclass(frozen=True, slots=True)
+class VoteConfiguration:
+    """Stored overrides for one guild and vote kind; None means default emojis."""
+
+    preset: EmojiPreset | None
+    weights: tuple[RoleWeight, ...]

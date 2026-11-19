@@ -1,7 +1,7 @@
 """Editing a build form's sections in Discord, shared by draft and saved-build editors.
 
 A build form groups its fields into sections such as "Name and creators" or "Door size and type"
-(see `squid.submissions.application.forms`). An editor shows one row per section with an Edit
+(see `squid.core.submissions.application.forms`). An editor shows one row per section with an Edit
 button. Editing a section opens either a modal, when its fields fit one (at most five typed
 fields), or a separate private message (SectionEditorScreen) with paged select menus for
 catalogue fields, which can hold more options than a modal or one select menu allows.
@@ -25,13 +25,13 @@ import squid_ui.ext.discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui.credits import CreditEditor
 from squid.bot.submission.ui.showcase_tags import ShowcaseTagEditor, read_answer, tags_text
-from squid.builds.application.input import parse_build_ticks
-from squid.builds.domain import ShowcaseTag
-from squid.builds.domain.credits import read_credits
+from squid.core.builds.application.input import parse_build_ticks
+from squid.core.builds.domain import ShowcaseTag
+from squid.core.builds.domain.credits import read_credits
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
-from squid.submissions.application.credit_text import format_credit, parse_credit_lines
-from squid.submissions.domain import (
+from squid.core.submissions.application.credit_text import format_credit, parse_credit_lines
+from squid.core.submissions.domain import (
     ChoiceOption,
     FormField,
     FormManifest,
@@ -39,7 +39,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
     ValueKind,
 )
-from squid.submissions.domain.finalization import (
+from squid.core.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid_i18n import Text, md_tr

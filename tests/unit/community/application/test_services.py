@@ -5,8 +5,8 @@ from typing import override
 
 import pytest
 
-from squid.community.application import RedstonerService, WelcomeRelayService
-from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy, WelcomeRelayDecision, WelcomeRelayPolicy
+from squid.core.community.application import RedstonerService, WelcomeRelayService
+from squid.core.community.domain import RedstonerDecisionKind, RedstonerPolicy, WelcomeRelayDecision, WelcomeRelayPolicy
 from squid.core.errors import ConfigurationError
 
 

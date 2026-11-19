@@ -11,11 +11,11 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
-from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.accounts.models import CreatorAlias
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
+from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.accounts.models import CreatorAlias
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.database import assert_loaded_detached, record_queries
 from tests.support.unit_of_work import transact

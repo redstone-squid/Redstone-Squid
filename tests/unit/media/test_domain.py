@@ -1,12 +1,12 @@
 import pytest
 
-from squid.media.domain import (
+from squid.core.media.domain import (
     MediaArtifact,
     MediaBatchTotals,
     MediaLimitMeasure,
     MediaLimits,
 )
-from squid.media.errors import MediaLimitExceededError
+from squid.core.media.errors import MediaLimitExceededError
 
 
 def test_default_limits_match_the_advertised_submission_policy() -> None:

@@ -5,8 +5,8 @@ import struct
 
 import pytest
 
-from squid.schematics.domain.models import SchematicLimits
-from squid.schematics.infrastructure.java_structure import JavaStructureDecodeError, decode_java_structure
+from squid.core.schematics.domain.models import SchematicLimits
+from squid.core.schematics.infrastructure.java_structure import JavaStructureDecodeError, decode_java_structure
 
 
 def _tag(kind: int, name: str, payload: bytes) -> bytes:

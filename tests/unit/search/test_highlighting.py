@@ -2,8 +2,8 @@
 
 import pytest
 
-from squid.search.application import SearchQueryParser
-from squid.search.application.highlighting import highlight_title
+from squid.core.search.application import SearchQueryParser
+from squid.core.search.application.highlighting import highlight_title
 
 
 @pytest.mark.parametrize(

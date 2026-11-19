@@ -45,10 +45,10 @@ from squid.api.v1.schemas.submissions import (
     SubmissionAttemptResponse,
 )
 from squid.core.actors import Actor
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
-from squid.edits.application import EditRunner
-from squid.edits.domain import Revision
-from squid.submissions.application import (
+from squid.core.submissions.application import (
     AppliedDraftUpgrade,
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
@@ -56,8 +56,8 @@ from squid.submissions.application import (
     StoredDraft,
     SubmissionRequestResult,
 )
-from squid.submissions.application.edits import change_command, draft_target
-from squid.submissions.domain import FormManifest, SubmissionOrigin
+from squid.core.submissions.application.edits import change_command, draft_target
+from squid.core.submissions.domain import FormManifest, SubmissionOrigin
 
 
 class SubmissionFormReader(Protocol):

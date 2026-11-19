@@ -11,11 +11,11 @@ import anyio
 import pytest
 
 from squid.config import SchematicConfig
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
-from squid.schematics.errors import SchematicTimeoutError
-from squid.schematics.infrastructure.wire import Frame, Operation
-from squid.schematics.infrastructure.worker import SchematicWorkerPool, _Worker
+from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
+from squid.core.schematics.errors import SchematicTimeoutError
+from squid.core.schematics.infrastructure.wire import Frame, Operation
+from squid.core.schematics.infrastructure.worker import SchematicWorkerPool, _Worker
 
 
 class CallObserved(Exception):

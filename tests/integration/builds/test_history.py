@@ -10,17 +10,17 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from alembic import command
-from squid.accounts.infrastructure.account_merge import merge_accounts
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.history import BuildEditContext
-from squid.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot, PendingBuildEdit
-from squid.builds.infrastructure.edit_scope import build_edit_scope
-from squid.builds.models import OtherBuild
+from squid.core.accounts.infrastructure.account_merge import merge_accounts
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.errors import BuildRevisionMismatchError
+from squid.core.builds.history import BuildEditContext
+from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot, PendingBuildEdit
+from squid.core.builds.infrastructure.edit_scope import build_edit_scope
+from squid.core.builds.models import OtherBuild
 from squid.core.pagination import PageSelector
-from squid.persistence.account_merge import AccountMergeContext
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.persistence.account_merge import AccountMergeContext
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
 def edit_context() -> BuildEditContext:

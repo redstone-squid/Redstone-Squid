@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.application.locks import BuildLockTracker
+from squid.core.builds.application.locks import BuildLockTracker
 from squid.core.errors import InvalidStateError
 
 TOKEN = UUID("12345678-1234-5678-1234-567812345678")

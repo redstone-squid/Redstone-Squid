@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.voting.domain import (
+from squid.core.voting.domain import (
     BuildVoteTarget,
     PollScope,
     VoteKind,

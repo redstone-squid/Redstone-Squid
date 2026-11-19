@@ -8,9 +8,9 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError
-from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
-from squid.voting.application import VoteService
-from squid.voting.domain import (
+from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
     EmojiPreset,
@@ -29,7 +29,7 @@ from squid.voting.domain import (
     VoteStatus,
     VoteVisibility,
 )
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.core.voting.errors import InvalidVoteConfigurationError
 from tests.support.voting import DEFAULT_BUILD_TARGET, GENERIC_OPTIONS, VoteUnitOfWork, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
@@ -323,7 +323,7 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
         actor_resolver=MissingActorResolver(), uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(initial))
     )
 
-    with caplog.at_level(logging.WARNING, logger="squid.voting.application.services"):
+    with caplog.at_level(logging.WARNING, logger="squid.core.voting.application.services"):
         await service.refresh(12)
 
     record_fields = vars(caplog.records[-1])

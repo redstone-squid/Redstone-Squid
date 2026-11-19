@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from squid.schematics.domain.values import VerifiedResourcePack
-from squid.schematics.errors import SchematicRenderUnavailableError
-from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
+from squid.core.schematics.domain.values import VerifiedResourcePack
+from squid.core.schematics.errors import SchematicRenderUnavailableError
+from squid.core.schematics.infrastructure.resource_pack import ResourcePackLoader
 
 
 async def test_local_pack_is_verified_and_loaded_once(tmp_path: Path) -> None:
@@ -41,7 +41,7 @@ async def test_verified_remote_pack_cache_prevents_a_fetch(tmp_path: Path, monke
     def fail_if_fetched(*_args: object, **_kwargs: object) -> None:
         pytest.fail("A verified cached pack must not be fetched again.")
 
-    monkeypatch.setattr("squid.schematics.infrastructure.resource_pack.aiohttp.ClientSession", fail_if_fetched)
+    monkeypatch.setattr("squid.core.schematics.infrastructure.resource_pack.aiohttp.ClientSession", fail_if_fetched)
     loader = ResourcePackLoader(
         path=None,
         url="https://packs.example/vanilla.zip",

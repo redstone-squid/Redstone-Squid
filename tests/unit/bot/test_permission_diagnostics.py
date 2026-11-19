@@ -7,9 +7,9 @@ import discord
 import pytest
 
 from squid.bot.diagnostics.permissions import GuildPermissionDiagnostics
-from squid.settings.domain.guild import GuildSettings
-from squid.voting.domain import VoteKind
-from squid.voting.domain.models import VoteConfiguration
+from squid.core.settings.domain.guild import GuildSettings
+from squid.core.voting.domain import VoteKind
+from squid.core.voting.domain.models import VoteConfiguration
 
 
 def test_vote_channel_reports_effective_missing_permissions() -> None:

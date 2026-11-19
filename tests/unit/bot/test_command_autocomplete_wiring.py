@@ -12,8 +12,8 @@ import pytest
 from discord import app_commands
 from discord.ext import commands as ext_commands
 
-from squid.suggestions.application import SuggestionRegistry
-from squid.suggestions.infrastructure.catalogue import build_registry
+from squid.core.suggestions.application import SuggestionRegistry
+from squid.core.suggestions.infrastructure.catalogue import build_registry
 
 COMMAND_MODULES = [
     "squid.bot.admin_cog",

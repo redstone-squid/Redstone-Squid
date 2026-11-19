@@ -6,9 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.media.application.jobs import MediaJobSnapshot
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.application.jobs import MediaJobSnapshot
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 
 
 class StrictSchema(BaseModel):

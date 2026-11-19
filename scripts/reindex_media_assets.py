@@ -26,14 +26,14 @@ import anyio
 import discord
 from sqlalchemy import text
 
-from squid.artifacts import ArtifactStore
-from squid.artifacts.infrastructure import create_artifact_store
 from squid.config import load_bot_process_config
-from squid.media.application import MediaProcessingRequest, MediaProcessingService
-from squid.media.application.jobs import _encode_report
-from squid.media.domain import MediaKind
-from squid.media.infrastructure import FfmpegMediaProcessor
-from squid.persistence.engine import DatabaseEngine
+from squid.core.artifacts import ArtifactStore
+from squid.core.artifacts.infrastructure import create_artifact_store
+from squid.core.media.application import MediaProcessingRequest, MediaProcessingService
+from squid.core.media.application.jobs import _encode_report
+from squid.core.media.domain import MediaKind
+from squid.core.media.infrastructure import FfmpegMediaProcessor
+from squid.core.persistence.engine import DatabaseEngine
 
 INVENTORY = """
 SELECT u.*, j.status, d.source_messages, d.source_files,

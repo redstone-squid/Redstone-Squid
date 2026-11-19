@@ -11,13 +11,13 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.labels import filter_label
 from squid.core.actors import Actor
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.search.application.parser import SearchQueryParser
-from squid.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
-from squid.search.domain.scope import SearchScope
-from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
-from squid.suggestions.application import SuggestionSource as RegisteredSource
-from squid.suggestions.domain import SourceKind
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
+from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
+from squid.core.search.domain.scope import SearchScope
+from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
+from squid.core.suggestions.application import SuggestionSource as RegisteredSource
+from squid.core.suggestions.domain import SourceKind
 from squid_i18n import Text
 from squid_ui.ext.discord.testing import StagedUI, iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider

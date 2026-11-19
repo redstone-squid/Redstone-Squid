@@ -1,7 +1,7 @@
 """Draft service scopes with commit-visible repository state."""
 
-from squid.permissions.application.ports import PermissionRepository
-from squid.submissions.application.drafts import DraftRepository
+from squid.core.permissions.application.ports import PermissionRepository
+from squid.core.submissions.application.drafts import DraftRepository
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 

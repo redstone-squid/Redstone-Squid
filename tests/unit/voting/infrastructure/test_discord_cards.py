@@ -11,9 +11,9 @@ from aiohttp import ClientResponse
 from discord.errors import Forbidden, HTTPException, NotFound
 from discord.http import HTTPClient
 
+from squid.core.voting.domain import VoteMessage
+from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
 from squid.discord_rest import RestOnlyClient
-from squid.voting.domain import VoteMessage
-from squid.voting.infrastructure.discord_cards import DiscordVoteCards
 
 
 class StubResponse:

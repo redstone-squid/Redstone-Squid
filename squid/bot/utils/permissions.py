@@ -17,8 +17,8 @@ from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.core.i18n import tr
-from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
-from squid.permissions.errors import PermissionDeniedError, require_check
+from squid.core.permissions.domain import CATALOGUE, CheckMode, PermissionNode
+from squid.core.permissions.errors import PermissionDeniedError, require_check
 from squid_ui.content.text import TextLike
 
 if TYPE_CHECKING:

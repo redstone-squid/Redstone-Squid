@@ -6,9 +6,9 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.types import TypeEngine
 
-import squid.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
-from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+import squid.core.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
+from squid.core.persistence.base import Base
+from squid.core.persistence.types import InstantUTC
 
 
 def _mapped_models() -> list[type[DeclarativeBase]]:

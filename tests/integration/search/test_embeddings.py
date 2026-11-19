@@ -14,12 +14,12 @@ import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application import SearchEmbeddingService, SearchQueryParser
-from squid.search.application.ports import QueryEmbedding
-from squid.search.domain import SearchMode, SearchRequest, SearchScope
-from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.search.application import SearchEmbeddingService, SearchQueryParser
+from squid.core.search.application.ports import QueryEmbedding
+from squid.core.search.domain import SearchMode, SearchRequest, SearchScope
+from squid.core.search.models import SearchDocument, SearchEmbeddingQueueItem
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio

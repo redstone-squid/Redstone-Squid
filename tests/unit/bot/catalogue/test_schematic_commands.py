@@ -2,8 +2,8 @@
 """Text rendered by the `/build schematic` and `/build measure-timing` commands."""
 
 from squid.bot.catalogue.schematics.presentation import _CANDIDATE_LIMIT, _describe, _describe_input_refusal
-from squid.schematics.application import RenderSkipReason, SchematicPublication, StoredSchematic
-from squid.schematics.errors import AmbiguousSimulationInputError
+from squid.core.schematics.application import RenderSkipReason, SchematicPublication, StoredSchematic
+from squid.core.schematics.errors import AmbiguousSimulationInputError
 from squid_ui.content.text import source_text
 from tests.unit.schematics.fakes import make_analysis
 

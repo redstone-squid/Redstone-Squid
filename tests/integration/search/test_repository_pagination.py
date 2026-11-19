@@ -12,11 +12,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-import squid.search.infrastructure.repository as search_repository
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
-from squid.search.domain import (
+import squid.core.search.infrastructure.repository as search_repository
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
+from squid.core.search.domain import (
     BuildSearchHit,
     SearchMode,
     SearchRequest,
@@ -25,7 +25,7 @@ from squid.search.domain import (
     SearchSort,
     SortDirection,
 )
-from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.search.models import SearchDocument, SearchDocumentFacet
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 

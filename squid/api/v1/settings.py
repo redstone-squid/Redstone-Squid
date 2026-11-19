@@ -14,10 +14,10 @@ from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
-from squid.edits.domain import EditCommand, EditValues, Revision
-from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
-from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.edits.domain import EditCommand, EditValues, Revision
+from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
+from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
+from squid.core.settings.domain.runtime import RuntimeSettings
 
 ViewCaller = NamedDependency[SkipValidation[Caller]]
 EditCaller = NamedDependency[SkipValidation[Caller]]

@@ -10,9 +10,6 @@ import pytest
 from whenever import Instant
 
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
-from squid.accounts.models import Account
 from squid.bot.actors import AccountIdCache
 from squid.bot.errors import build_error_notice
 from squid.bot.routes import AppRequest
@@ -20,17 +17,20 @@ from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
-from squid.builds.application import BuildService
-from squid.builds.domain.expansion import DoorExpansion
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
-from squid.messages.domain import MessageSnapshot
-from squid.permissions.application import PermissionService, SubjectRecords
-from squid.permissions.domain import Effect
-from squid.permissions.errors import PermissionDeniedError
-from squid.permissions.models import PermissionGrant
-from squid.schematics.application.services import SchematicService
-from squid.settings.application import SettingsService
-from squid.submissions.application import (
+from squid.core.builds.application import BuildService
+from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.messages.domain import MessageSnapshot
+from squid.core.permissions.application import PermissionService, SubjectRecords
+from squid.core.permissions.domain import Effect
+from squid.core.permissions.errors import PermissionDeniedError
+from squid.core.permissions.models import PermissionGrant
+from squid.core.schematics.application.services import SchematicService
+from squid.core.settings.application import SettingsService
+from squid.core.submissions.application import (
     AppliedDraftChange,
     CheckedInFormManifestRegistry,
     FormOptionSet,
@@ -40,11 +40,11 @@ from squid.submissions.application import (
     SubmissionFormService,
     build_submission_manifest,
 )
-from squid.submissions.application.finalization import SubmissionRequestResult
-from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.domain import DraftChange, DraftSnapshot, DraftStatus, FormManifest, SubmissionOrigin
-from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.core.submissions.application.finalization import SubmissionRequestResult
+from squid.core.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.domain import DraftChange, DraftSnapshot, DraftStatus, FormManifest, SubmissionOrigin
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.content.text import source_text
 from squid_ui.ext.discord.testing import InteractionHarness, iter_component_payloads, stage
 from tests.support.discord import make_layout_bot

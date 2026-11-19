@@ -10,7 +10,7 @@ from pytest_mock import MockerFixture
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.permissions.domain import (
+from squid.core.permissions.domain import (
     CATALOGUE,
     Decision,
     Default,

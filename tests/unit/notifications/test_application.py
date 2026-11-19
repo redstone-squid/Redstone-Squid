@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import JsonValue
 
-from squid.accounts.errors import ConsentRequiredError
+from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
-from squid.edits.domain import EditCommand, EditValues, Revision
-from squid.notifications import NotificationPreferences, NotificationService
-from squid.notifications.application import NotificationRepository
-from squid.notifications.edits import (
+from squid.core.edits.domain import EditCommand, EditValues, Revision
+from squid.core.notifications import NotificationPreferences, NotificationService
+from squid.core.notifications.application import NotificationRepository
+from squid.core.notifications.edits import (
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
     NotificationEditUnitOfWork,
@@ -19,9 +19,9 @@ from squid.notifications.edits import (
     NotificationSubscriptionsEdit,
     notification_target,
 )
-from squid.notifications.errors import NotificationSubscriptionNotFoundError
-from squid.permissions.application.services import PermissionService
-from squid.settings.domain.runtime import RuntimeSettings
+from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.core.permissions.application.services import PermissionService
+from squid.core.settings.domain.runtime import RuntimeSettings
 from tests.support.delivery_uow import NotificationUnitOfWork
 from tests.support.settings import RuntimeSettingsStub
 

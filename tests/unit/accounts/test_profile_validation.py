@@ -4,14 +4,14 @@ from copy import deepcopy
 
 import pytest
 
-from squid.accounts.domain import (
+from squid.core.accounts.domain import (
     MAX_BIO_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
     MAX_PROFILE_LINKS,
     ProfileLink,
     ProfileUpdate,
 )
-from squid.accounts.models import AccountProfile
+from squid.core.accounts.models import AccountProfile
 from squid.core.errors import ValidationError
 from squid.core.sentinel import UNSET
 

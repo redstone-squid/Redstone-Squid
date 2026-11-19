@@ -7,14 +7,14 @@ import pytest
 
 from squid.bot.recount_cog import RecountCog
 from squid.bot.voting.spec import VoteRecount
-from squid.messages.models import Message
-from squid.posts.application import PostService
-from squid.posts.domain import PostReference
-from squid.starboard.application import StarboardService
-from squid.starboard.application.ports import EntryState
-from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
-from squid.voting.application import VoteService
-from squid.voting.domain import VoteMessage, VoteSessionSnapshot, VoteStatus
+from squid.core.messages.models import Message
+from squid.core.posts.application import PostService
+from squid.core.posts.domain import PostReference
+from squid.core.starboard.application import StarboardService
+from squid.core.starboard.application.ports import EntryState
+from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import VoteMessage, VoteSessionSnapshot, VoteStatus
 from squid_ui.content.text import NEUTRAL, resolve_text
 from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.discord import make_layout_bot

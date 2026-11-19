@@ -4,8 +4,8 @@ import pytest
 
 from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, ValidationError
-from squid.reactions.application import RoleWeightPolicy
-from squid.reactions.domain import RoleMultiplier, WeightScope
+from squid.core.reactions.application import RoleWeightPolicy
+from squid.core.reactions.domain import RoleMultiplier, WeightScope
 
 
 async def test_role_policy_uses_highest_matching_multiplier() -> None:

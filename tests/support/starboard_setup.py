@@ -1,20 +1,20 @@
 """Create starboards through the production edit handlers in integration fixtures."""
 
 from squid.core.actors import Actor
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, Revision
-from squid.permissions.application.services import PermissionService
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.starboard.application.edits import (
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, Revision
+from squid.core.permissions.application.services import PermissionService
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.starboard.application.edits import (
     STARBOARD_CREATE,
     BoardPresence,
     BoardValues,
     StarboardCreation,
     starboard_target,
 )
-from squid.starboard.application.services import StarboardService
-from squid.starboard.application.snapshots import StarboardSnapshot
-from squid.starboard.models import StarboardConfig, StarboardEmoji
+from squid.core.starboard.application.services import StarboardService
+from squid.core.starboard.application.snapshots import StarboardSnapshot
+from squid.core.starboard.models import StarboardConfig, StarboardEmoji
 from squid.unit_of_work import UnitOfWorkFactory
 
 

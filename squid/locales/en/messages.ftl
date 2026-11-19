@@ -571,49 +571,49 @@ account-workspace-review-claims = Review claims
 # squid/bot/accounts/workspace.py:251
 account-workspace-review-privacy-notice = Review privacy notice
 
-# squid/accounts/errors.py:179
+# squid/core/accounts/errors.py:179
 accounts-account-already-linked = Your account is already linked to a different Minecraft account.
 
-# squid/accounts/errors.py:22
+# squid/core/accounts/errors.py:22
 accounts-account-data-invalid = The account data is invalid.
 
-# squid/accounts/application/presentation.py:27
+# squid/core/accounts/application/presentation.py:27
 accounts-application-presentation-creator = creator { $creator_id }
 
-# squid/accounts/application/presentation.py:32
+# squid/core/accounts/application/presentation.py:32
 accounts-application-presentation-discord-user = Discord user { $discord_id }
 
-# squid/accounts/models.py:208
+# squid/core/accounts/models.py:208
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject }.
 
-# squid/accounts/errors.py:370
+# squid/core/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/accounts/infrastructure/repository.py:659
+# squid/core/accounts/infrastructure/repository.py:659
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
-# squid/accounts/errors.py:330
+# squid/core/accounts/errors.py:330
 accounts-creator-already-credited = **{ $name }** is already credited to the creator known as **{ $holder_name }**.
 
-# squid/accounts/errors.py:294
+# squid/core/accounts/errors.py:294
 accounts-creator-name-already-claimed = Creator name already claimed
 
-# squid/accounts/errors.py:260
+# squid/core/accounts/errors.py:260
 accounts-creator-name-check = Check the spelling against the creator list on a build you worked on.
 
-# squid/accounts/errors.py:293
+# squid/core/accounts/errors.py:293
 accounts-creator-name-claimed = That creator name is already claimed by another account.
 
-# squid/accounts/errors.py:257
+# squid/core/accounts/errors.py:257
 accounts-creator-name-not-found = Creator name not found
 
-# squid/accounts/errors.py:273
+# squid/core/accounts/errors.py:273
 accounts-creator-not-found-title = Creator not found
 
-# squid/accounts/models.py:199
+# squid/core/accounts/models.py:199
 accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject }.
 
-# squid/accounts/domain/consent.py:19
+# squid/core/accounts/domain/consent.py:19
 accounts-discord-user-id-stored =
     Redstone Squid stores your Discord user ID, plus your Minecraft UUID and username if you link one, so it can recognise you across both.
 
@@ -625,187 +625,187 @@ accounts-discord-user-id-stored =
 
     Agreeing records this notice's version and the time. Cancelling stores nothing.
 
-# squid/accounts/domain/consent.py:17
+# squid/core/accounts/domain/consent.py:17
 accounts-domain-consent-privacy-notice = Privacy notice
 
-# squid/accounts/domain/profiles.py:154
+# squid/core/accounts/domain/profiles.py:154
 accounts-domain-profiles-bio = Bio
 
-# squid/accounts/domain/profiles.py:148
+# squid/core/accounts/domain/profiles.py:148
 accounts-domain-profiles-display-name = Display name
 
-# squid/accounts/domain/profiles.py:88
+# squid/core/accounts/domain/profiles.py:88
 accounts-domain-profiles-link-label = Link label
 
-# squid/accounts/domain/profiles.py:98
+# squid/core/accounts/domain/profiles.py:98
 accounts-domain-profiles-link-url = Link URL
 
-# squid/accounts/domain/profiles.py:160
+# squid/core/accounts/domain/profiles.py:160
 accounts-domain-profiles-pronouns = Pronouns
 
-# squid/accounts/errors.py:182
+# squid/core/accounts/errors.py:182
 accounts-errors-account-already-linked = Account already linked
 
-# squid/accounts/errors.py:45
+# squid/core/accounts/errors.py:45
 accounts-errors-account-not-found = Account not found.
 
-# squid/accounts/errors.py:297
+# squid/core/accounts/errors.py:297
 accounts-errors-ask-staff-to-review-the-claim-if = Ask staff to review the claim if you believe the name is yours.
 
-# squid/accounts/errors.py:276
+# squid/core/accounts/errors.py:276
 accounts-errors-check-the-creator-id-and-try-again = Check the creator ID and try again.
 
-# squid/accounts/errors.py:341
+# squid/core/accounts/errors.py:341
 accounts-errors-claim-not-found = Claim not found
 
-# squid/accounts/errors.py:209
+# squid/core/accounts/errors.py:209
 accounts-errors-consent-required = Consent required
 
-# squid/accounts/errors.py:272
+# squid/core/accounts/errors.py:272
 accounts-errors-creator-not-found = Creator not found.
 
-# squid/accounts/errors.py:144
+# squid/core/accounts/errors.py:144
 accounts-errors-generate-a-new-code-and-try-again = Generate a new code and try again.
 
-# squid/accounts/errors.py:118
+# squid/core/accounts/errors.py:118
 accounts-errors-generate-a-new-merge-code-from-the = Generate a new merge code from the account you want to absorb, then try again.
 
-# squid/accounts/errors.py:70
+# squid/core/accounts/errors.py:70
 accounts-errors-identity-not-found = Identity not found
 
-# squid/accounts/errors.py:115
+# squid/core/accounts/errors.py:115
 accounts-errors-invalid-merge-code = Invalid merge code
 
-# squid/accounts/errors.py:106
+# squid/core/accounts/errors.py:106
 accounts-errors-invalid-profile = Invalid profile
 
-# squid/accounts/errors.py:141
+# squid/core/accounts/errors.py:141
 accounts-errors-invalid-verification-code = Invalid verification code
 
-# squid/accounts/errors.py:90
+# squid/core/accounts/errors.py:90
 accounts-errors-last-identity = Last identity
 
-# squid/accounts/errors.py:254
+# squid/core/accounts/errors.py:254
 accounts-errors-no-build-credits-a-creator-by-that = No build credits a creator by that name.
 
-# squid/accounts/errors.py:153
+# squid/core/accounts/errors.py:153
 accounts-errors-prompt-expired = Prompt expired
 
-# squid/accounts/errors.py:167
+# squid/core/accounts/errors.py:167
 accounts-errors-too-many-attempts = Too many attempts
 
-# squid/accounts/errors.py:170
+# squid/core/accounts/errors.py:170
 accounts-errors-wait-for-the-cooling-off-period-to = Wait for the cooling-off period to pass, then generate a new code in game.
 
-# squid/accounts/models.py:221
+# squid/core/accounts/models.py:221
 accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject }.
 
-# squid/accounts/errors.py:89
+# squid/core/accounts/errors.py:89
 accounts-last-identity-required = You cannot unlink your only remaining identity.
 
-# squid/accounts/domain/profiles.py:112
+# squid/core/accounts/domain/profiles.py:112
 accounts-link-credentials-forbidden = Links may not carry credentials.
 
-# squid/accounts/errors.py:93
+# squid/core/accounts/errors.py:93
 accounts-link-identity-before-unlink = Link another identity first, then unlink this one.
 
-# squid/accounts/domain/profiles.py:103
+# squid/core/accounts/domain/profiles.py:103
 accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 
-# squid/accounts/domain/profiles.py:91
+# squid/core/accounts/domain/profiles.py:91
 accounts-link-label-required = Every link needs a label.
 
-# squid/accounts/errors.py:357
+# squid/core/accounts/errors.py:357
 accounts-link-minecraft-first = Link a Minecraft account first, then try again.
 
-# squid/accounts/errors.py:152
+# squid/core/accounts/errors.py:152
 accounts-link-prompt-expired = The linking prompt expired before you answered it.
 
-# squid/accounts/errors.py:156
+# squid/core/accounts/errors.py:156
 accounts-link-restart = Run /account link again with a fresh code from the game.
 
-# squid/accounts/domain/profiles.py:94
+# squid/core/accounts/domain/profiles.py:94
 accounts-link-url-required = Every link needs a URL.
 
-# squid/accounts/domain/profiles.py:97
+# squid/core/accounts/domain/profiles.py:97
 accounts-link-url-too-long = Link URLs may be at most { $limit } characters.
 
-# squid/accounts/errors.py:69
+# squid/core/accounts/errors.py:69
 accounts-linked-identity-not-owned = That linked identity does not belong to your account.
 
-# squid/accounts/domain/profiles.py:108
+# squid/core/accounts/domain/profiles.py:108
 accounts-links-include-hostname = Links must include a hostname.
 
-# squid/accounts/errors.py:73
+# squid/core/accounts/errors.py:73
 accounts-list-linked-identities = List your linked identities and try again with one of those.
 
-# squid/accounts/errors.py:114
+# squid/core/accounts/errors.py:114
 accounts-merge-code-invalid = That merge code is invalid or expired.
 
-# squid/accounts/errors.py:127
+# squid/core/accounts/errors.py:127
 accounts-merge-proof-required = Both accounts must be authenticated again before they can be merged.
 
-# squid/accounts/errors.py:132
+# squid/core/accounts/errors.py:132
 accounts-merge-reauthenticate = Authenticate both accounts again, then retry the merge.
 
-# squid/accounts/errors.py:367
+# squid/core/accounts/errors.py:367
 accounts-minecraft-account-not-found = Minecraft account not found.
 
-# squid/accounts/errors.py:353
+# squid/core/accounts/errors.py:353
 accounts-minecraft-account-required = You do not have a Minecraft account linked.
 
-# squid/accounts/errors.py:384
+# squid/core/accounts/errors.py:384
 accounts-minecraft-account-service = The Minecraft account service is temporarily unavailable.
 
-# squid/accounts/errors.py:354
+# squid/core/accounts/errors.py:354
 accounts-no-minecraft-account-linked = No Minecraft account linked
 
-# squid/accounts/errors.py:340
+# squid/core/accounts/errors.py:340
 accounts-no-pending-claim-matches-id = No pending claim matches that ID.
 
-# squid/accounts/errors.py:205
+# squid/core/accounts/errors.py:205
 accounts-privacy-consent-required = You need to accept the current privacy notice before completing this action.
 
-# squid/accounts/errors.py:212
+# squid/core/accounts/errors.py:212
 accounts-privacy-notice-consent = Review and accept the current privacy notice, then try again.
 
-# squid/accounts/errors.py:235
+# squid/core/accounts/errors.py:235
 accounts-privacy-notice-outdated = Privacy notice out of date
 
-# squid/accounts/errors.py:238
+# squid/core/accounts/errors.py:238
 accounts-privacy-notice-refresh = Re-read the current privacy notice, then accept it again.
 
-# squid/accounts/errors.py:234
+# squid/core/accounts/errors.py:234
 accounts-privacy-notice-updated = The privacy notice has changed since this one was shown.
 
-# squid/accounts/domain/profiles.py:50
+# squid/core/accounts/domain/profiles.py:50
 accounts-profile-control-characters = { $field } may not contain control characters.
 
-# squid/accounts/errors.py:105
+# squid/core/accounts/errors.py:105
 accounts-profile-data-invalid = The profile data is invalid.
 
-# squid/accounts/domain/profiles.py:69
+# squid/core/accounts/domain/profiles.py:69
 accounts-profile-field-too-long = { $field } may be at most { $limit } characters, got { $length }.
 
-# squid/accounts/domain/profiles.py:168
+# squid/core/accounts/domain/profiles.py:168
 accounts-profile-link-limit = A profile may have at most { $limit } links, got { $count }.
 
-# squid/accounts/errors.py:130
+# squid/core/accounts/errors.py:130
 accounts-recent-account-proof-required = Recent account proof required
 
-# squid/accounts/errors.py:389
+# squid/core/accounts/errors.py:389
 accounts-retry-soon = Try again in a few minutes.
 
-# squid/accounts/application/presentation.py:15
+# squid/core/accounts/application/presentation.py:15
 accounts-unidentified-account-internal = unidentified account (internal ID { $account_id })
 
-# squid/accounts/errors.py:185
+# squid/core/accounts/errors.py:185
 accounts-unlink-before-link = Unlink the current account before linking a new one.
 
-# squid/accounts/errors.py:166
+# squid/core/accounts/errors.py:166
 accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 
-# squid/accounts/errors.py:140
+# squid/core/accounts/errors.py:140
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
 # squid/bot/admin_cog.py:338
@@ -874,19 +874,19 @@ api-request-validation-failed = The request did not pass validation.
 # squid/api/errors.py:44
 api-service-unavailable = A required service is temporarily unavailable. Please try again later.
 
-# squid/artifacts/infrastructure.py:107, squid/artifacts/infrastructure.py:255
+# squid/core/artifacts/infrastructure.py:107, squid/core/artifacts/infrastructure.py:255
 artifacts-artifact-keys-non = Artifact keys must be non-empty relative paths without traversal.
 
-# squid/artifacts/infrastructure.py:361, squid/artifacts/infrastructure.py:367
+# squid/core/artifacts/infrastructure.py:361, squid/core/artifacts/infrastructure.py:367
 artifacts-artifact-sources-regular = Artifact sources must be regular files.
 
-# squid/artifacts/infrastructure.py:448
+# squid/core/artifacts/infrastructure.py:448
 artifacts-artifact-transfer-budgets = Artifact transfer budgets must be positive.
 
-# squid/artifacts/infrastructure.py:141
+# squid/core/artifacts/infrastructure.py:141
 artifacts-artifactstore-requires-object = S3ArtifactStore requires an S3 object-storage configuration.
 
-# squid/auth/application/services.py:66
+# squid/core/auth/application/services.py:66
 auth-key-pepper-required = API key pepper must not be empty.
 
 # squid/bot/accounts/claims.py:203
@@ -1862,34 +1862,34 @@ build-drafts-state-needs-changes = Needs changes
 # squid/bot/submission/ui/saved_drafts.py:84
 build-drafts-state-waiting = Waiting for files
 
-# squid/submissions/application/forms.py:436
+# squid/core/submissions/application/forms.py:436
 build-edit-form-about = About this build
 
-# squid/submissions/application/forms.py:684
+# squid/core/submissions/application/forms.py:684
 build-edit-form-command = Command to get there
 
-# squid/submissions/application/forms.py:683
+# squid/core/submissions/application/forms.py:683
 build-edit-form-coordinates = Coordinates
 
-# squid/submissions/application/forms.py:679
+# squid/core/submissions/application/forms.py:679
 build-edit-form-images = Image links
 
-# squid/submissions/application/forms.py:675, squid/submissions/application/forms.py:677
+# squid/core/submissions/application/forms.py:675, squid/core/submissions/application/forms.py:677
 build-edit-form-links-location = Links and location
 
-# squid/submissions/application/forms.py:649
+# squid/core/submissions/application/forms.py:649
 build-edit-form-one-per-line = One link per line.
 
-# squid/submissions/application/forms.py:682
+# squid/core/submissions/application/forms.py:682
 build-edit-form-server = Server address
 
-# squid/submissions/application/forms.py:286
+# squid/core/submissions/application/forms.py:286
 build-edit-form-versions = Minecraft versions
 
-# squid/submissions/application/forms.py:680
+# squid/core/submissions/application/forms.py:680
 build-edit-form-videos = Video links
 
-# squid/submissions/application/forms.py:681
+# squid/core/submissions/application/forms.py:681
 build-edit-form-world-downloads = World download links
 
 # squid/bot/submission/ui/build_edit.py:171
@@ -1955,16 +1955,16 @@ build-editor-unlisted = Not in the catalogue: { $names }
 # squid/bot/catalogue/browse.py:659, squid/bot/catalogue/browse.py:832
 build-id-not-visible = No visible build has that ID.
 
-# squid/builds/application/input.py:46
+# squid/core/builds/application/input.py:46
 build-input-extender-orientation = Choose Horizontal, Up, or Down.
 
-# squid/builds/application/input.py:54
+# squid/core/builds/application/input.py:54
 build-input-extension-length = Extension length must be between 1 and 512 blocks.
 
-# squid/builds/application/input.py:23
+# squid/core/builds/application/input.py:23
 build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 
-# squid/builds/application/input.py:19
+# squid/core/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
 # squid/bot/catalogue/browse.py:451
@@ -2021,70 +2021,70 @@ build-search-sort-help = Order results by a field, ascending or descending.
 # squid/bot/submission/cog.py:75
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
-# squid/builds/errors.py:109
+# squid/core/builds/errors.py:109
 builds-alias-restriction = That alias is already on this restriction.
 
-# squid/builds/errors.py:126
+# squid/core/builds/errors.py:126
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/builds/domain/models.py:158
+# squid/core/builds/domain/models.py:158
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
-# squid/builds/errors.py:11
+# squid/core/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/builds/models.py:225
+# squid/core/builds/models.py:225
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildDraft.
 
-# squid/builds/errors.py:22
+# squid/core/builds/errors.py:22
 builds-check-id-action = Check the build ID and try again.
 
-# squid/builds/errors.py:36
+# squid/core/builds/errors.py:36
 builds-edit-in-progress = This build is currently being edited by someone else.
 
-# squid/builds/errors.py:110
+# squid/core/builds/errors.py:110
 builds-errors-alias-already-added = Alias already added
 
-# squid/builds/errors.py:127
+# squid/core/builds/errors.py:127
 builds-errors-alias-in-use = Alias in use
 
-# squid/builds/errors.py:37
+# squid/core/builds/errors.py:37
 builds-errors-build-busy = Build busy
 
-# squid/builds/errors.py:19
+# squid/core/builds/errors.py:19
 builds-errors-build-not-found = Build not found.
 
-# squid/builds/errors.py:74
+# squid/core/builds/errors.py:74
 builds-errors-build-revision-mismatch = Build revision mismatch
 
-# squid/builds/errors.py:56
+# squid/core/builds/errors.py:56
 builds-errors-build-revision-required = Build revision required
 
-# squid/builds/errors.py:59
+# squid/core/builds/errors.py:59
 builds-errors-fetch-the-build-again-and-retry-with = Fetch the build again and retry with its ETag.
 
-# squid/builds/errors.py:93
+# squid/core/builds/errors.py:93
 builds-errors-restriction-not-found = Restriction not found.
 
-# squid/builds/errors.py:40
+# squid/core/builds/errors.py:40
 builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to finish and try again.
 
-# squid/builds/errors.py:55
+# squid/core/builds/errors.py:55
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/builds/domain/models.py:182
+# squid/core/builds/domain/models.py:182
 builds-not-dataclass = { $class_name } is not a dataclass
 
-# squid/builds/errors.py:99
+# squid/core/builds/errors.py:99
 builds-restriction-does-not-exist = Restriction '{ $name }' does not exist.
 
-# squid/builds/errors.py:73
+# squid/core/builds/errors.py:73
 builds-revision-conflict = The build changed after it was read.
 
-# squid/builds/errors.py:77
+# squid/core/builds/errors.py:77
 builds-revision-conflict-action = Fetch the latest build, merge the changes, and try again.
 
-# squid/catalogue/domain/titles.py:147
+# squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
 # squid/bot/catalogue/browse.py:742, squid/bot/catalogue/search/help.py:185
@@ -2093,7 +2093,7 @@ catalogue-search-help = Search help
 # squid/bot/catalogue/browse.py:562
 catalogue-search-help-close = Close help
 
-# squid/catalogue/domain/titles.py:67
+# squid/core/catalogue/domain/titles.py:67
 catalogue-title-token-blank = A title token cannot be blank.
 
 # squid/bot/accounts/claims.py:184
@@ -2132,52 +2132,52 @@ claims-view-reject = Reject
 # squid/bot/accounts/claims.py:103
 claims-view-take-the-name = Take the name
 
-# squid/cli_auth/errors.py:66
+# squid/core/cli_auth/errors.py:66
 cli-auth-account-approve-cli = This account cannot approve the CLI enrollment.
 
-# squid/cli_auth/application.py:141
+# squid/core/cli_auth/application.py:141
 cli-auth-cli-authorization-limits = CLI authorization limits must be positive.
 
-# squid/cli_auth/application.py:58
+# squid/core/cli_auth/application.py:58
 cli-auth-cli-authorization-pepper = CLI authorization pepper must contain at least 32 bytes.
 
-# squid/cli_auth/application.py:460
+# squid/core/cli_auth/application.py:460
 cli-auth-cli-device-label = CLI device label must contain 1 to 80 characters.
 
-# squid/cli_auth/errors.py:101
+# squid/core/cli_auth/errors.py:101
 cli-auth-cli-device-unavailable = The CLI device is unavailable.
 
-# squid/cli_auth/errors.py:52
+# squid/core/cli_auth/errors.py:52
 cli-auth-cli-enrollment-awaiting = The CLI enrollment is awaiting browser approval.
 
-# squid/cli_auth/errors.py:59
+# squid/core/cli_auth/errors.py:59
 cli-auth-cli-enrollment-exchanged = The CLI enrollment was already exchanged.
 
-# squid/cli_auth/errors.py:45
+# squid/core/cli_auth/errors.py:45
 cli-auth-cli-enrollment-expired = The CLI enrollment has expired.
 
-# squid/cli_auth/errors.py:38
+# squid/core/cli_auth/errors.py:38
 cli-auth-cli-enrollment-invalid = The CLI enrollment is invalid.
 
-# squid/cli_auth/errors.py:87
+# squid/core/cli_auth/errors.py:87
 cli-auth-cli-session-challenge = The CLI session challenge has expired.
 
-# squid/cli_auth/errors.py:94
+# squid/core/cli_auth/errors.py:94
 cli-auth-cli-session-invalid = The CLI session is invalid.
 
-# squid/cli_auth/application.py:238
+# squid/core/cli_auth/application.py:238
 cli-auth-persisted-cli-session = Persisted CLI session does not belong to its device.
 
-# squid/cli_auth/errors.py:80
+# squid/core/cli_auth/errors.py:80
 cli-auth-session-challenge-invalid = The CLI session challenge is invalid.
 
-# squid/cli_auth/application.py:467
+# squid/core/cli_auth/application.py:467
 cli-auth-signed-cli-proof = Signed CLI proof component is too long.
 
-# squid/cli_auth/errors.py:108
+# squid/core/cli_auth/errors.py:108
 cli-auth-too-many-cli = Too many CLI authorization requests are active.
 
-# squid/cli_auth/errors.py:73
+# squid/core/cli_auth/errors.py:73
 cli-cli-device-proof-invalid = The CLI device proof is invalid.
 
 # squid/bot/permissions_cog.py:50
@@ -2849,16 +2849,16 @@ diagnostics-controls-not-owner = These error controls belong to someone else.
 # squid/bot/diagnostics/screen.py:195
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
-# squid/diagnostics/domain.py:23
+# squid/core/diagnostics/domain.py:23
 diagnostics-error-report-not-found = Error report not found
 
-# squid/diagnostics/application.py:63
+# squid/core/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
 # squid/bot/diagnostics/screen.py:230
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
-# squid/diagnostics/domain.py:22
+# squid/core/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
 # squid/bot/diagnostics/screen.py:159
@@ -3269,28 +3269,28 @@ editor-detail-closed = Done. You can dismiss this message.
 # squid/bot/submission/ui/sections.py:357
 editor-detail-locked = These answers can no longer be edited here.
 
-# squid/edits/domain.py:219
+# squid/core/edits/domain.py:219
 edits-commit-uncertain = The change may not have been saved. Check the values and try again.
 
-# squid/edits/domain.py:233
+# squid/core/edits/domain.py:233
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
 
-# squid/edits/domain.py:163
+# squid/core/edits/domain.py:163
 edits-final = This operation cannot be undone.
 
 # squid/api/revisions.py:15
 edits-invalid-revision = This revision does not match the item being edited.
 
-# squid/edits/domain.py:229
+# squid/core/edits/domain.py:229
 edits-operation-expired = This edit has expired. Reload the item before editing again.
 
-# squid/edits/domain.py:209
+# squid/core/edits/domain.py:209
 edits-operation-reused = This operation identifier was already used for another edit.
 
 # squid/bot/edit_controller.py:248
 edits-refresh = Refresh saved values
 
-# squid/edits/domain.py:191
+# squid/core/edits/domain.py:191
 edits-revision-conflict = This item changed elsewhere. Reload it before editing.
 
 # squid/api/revisions.py:11
@@ -3323,7 +3323,7 @@ errors-invalid-arguments-hint = Check the command arguments and try again.
 # squid/bot/errors.py:212, squid/bot/errors.py:217
 errors-invalid-command-input = Invalid command input
 
-# squid/bot/errors.py:184, squid/permissions/errors.py:61
+# squid/bot/errors.py:184, squid/core/permissions/errors.py:61
 errors-missing-permission = Missing permission
 
 # squid/bot/errors.py:218
@@ -3341,7 +3341,7 @@ errors-owner-only-hint = Only the bot owner can use this command.
 # squid/bot/errors.py:185
 errors-permission-required = You do not have permission to use this command.
 
-# squid/permissions/errors.py:59
+# squid/core/permissions/errors.py:59
 errors-permission-withheld = Permission withheld
 
 # squid/bot/errors.py:179
@@ -3356,13 +3356,13 @@ errors-try-again-in-seconds = Try again in { NUMBER($seconds, minimumFractionDig
 # squid/bot/errors.py:251
 errors-unexpected-reference = An unexpected error occurred. Reference: `{ $error_id }`
 
-# squid/events/application.py:77
+# squid/core/events/application.py:77
 events-claim-limit-out-of-range = claim limit must be between 1 and 100
 
-# squid/events/application.py:74
+# squid/core/events/application.py:74
 events-consumer-non-empty = consumer must be a non-empty name
 
-# squid/events/application.py:60
+# squid/core/events/application.py:60
 events-max-attempts-positive = max_attempts must be positive
 
 # squid/bot/give_redstoner_cog.py:236
@@ -3539,25 +3539,25 @@ help-submission-form = Submission form
 # squid/bot/help_cog.py:210
 help-the-command-to-get-help-for = The command to get help for.
 
-# squid/idempotency/infrastructure/crypto.py:61
+# squid/core/idempotency/infrastructure/crypto.py:61
 idempotency-active-idempotency-encryption = The active idempotency encryption key is absent from the keyring.
 
-# squid/idempotency/domain.py:63
+# squid/core/idempotency/domain.py:63
 idempotency-domain-idempotency-key-conflict = Idempotency key conflict
 
-# squid/idempotency/infrastructure/crypto.py:67
+# squid/core/idempotency/infrastructure/crypto.py:67
 idempotency-idempotency-encryption-keys = Idempotency encryption keys must be exactly 32 bytes.
 
-# squid/idempotency/domain.py:60
+# squid/core/idempotency/domain.py:60
 idempotency-idempotency-key-used = The idempotency key was already used for a different request.
 
-# squid/idempotency/application.py:67
+# squid/core/idempotency/application.py:67
 idempotency-idempotency-retention = Idempotency retention must be at least one hour.
 
-# squid/idempotency/domain.py:70
+# squid/core/idempotency/domain.py:70
 idempotency-request-idempotency-key = A request with this idempotency key is still in progress.
 
-# squid/idempotency/domain.py:73
+# squid/core/idempotency/domain.py:73
 idempotency-request-in-progress = Idempotent request in progress
 
 # squid/bot/submission/ui/inference.py:186
@@ -3799,277 +3799,277 @@ lookup-cancel = Cancel
 # squid/bot/lookup.py:147
 lookup-use-selection = Use selection
 
-# squid/media/application/jobs.py:181
+# squid/core/media/application/jobs.py:181
 media-artifact-dimensions-either = Media artifact dimensions must either both be present or both be absent.
 
-# squid/media/errors.py:42
+# squid/core/media/errors.py:42
 media-attachment-exceeds-processing = The attachment exceeds one or more processing limits.
 
-# squid/media/errors.py:145
+# squid/core/media/errors.py:145
 media-attachment-upload-identifier = The attachment upload identifier is already in use.
 
-# squid/media/errors.py:122
+# squid/core/media/errors.py:122
 media-check-attachment-type = Check the attachment type and upload it again.
 
-# squid/media/errors.py:45
+# squid/core/media/errors.py:45
 media-choose-fewer-smaller = Choose fewer, smaller, or less resource-intensive attachments and try again.
 
-# squid/media/application/jobs.py:212
+# squid/core/media/application/jobs.py:212
 media-claimed-media-job = Claimed media job metadata is invalid.
 
-# squid/media/errors.py:131
+# squid/core/media/errors.py:131
 media-draft-attachment-not-found = Draft attachment not found.
 
-# squid/media/errors.py:157
+# squid/core/media/errors.py:157
 media-draft-attachment-processing = Draft attachment processing is temporarily unavailable.
 
-# squid/media/errors.py:119
+# squid/core/media/errors.py:119
 media-draft-attachment-upload = The draft attachment upload request is invalid.
 
-# squid/media/errors.py:132
+# squid/core/media/errors.py:132
 media-errors-attachment-not-found = Attachment not found
 
-# squid/media/errors.py:158
+# squid/core/media/errors.py:158
 media-errors-attachment-processing-unavailable = Attachment processing unavailable
 
-# squid/media/errors.py:146
+# squid/core/media/errors.py:146
 media-errors-attachment-upload-conflict = Attachment upload conflict
 
-# squid/media/errors.py:91
+# squid/core/media/errors.py:91
 media-errors-draft-changed = Draft changed
 
-# squid/media/errors.py:75
+# squid/core/media/errors.py:75
 media-errors-draft-media-locked = Draft media locked
 
-# squid/media/errors.py:106
+# squid/core/media/errors.py:106
 media-errors-draft-not-found = Draft not found
 
-# squid/media/errors.py:202
+# squid/core/media/errors.py:202
 media-errors-export-the-file-again-and-retry-or = Export the file again and retry, or remove it from the submission.
 
-# squid/media/errors.py:171
+# squid/core/media/errors.py:171
 media-errors-export-the-file-again-in-a-common = Export the file again in a common image or video format and retry.
 
-# squid/media/errors.py:120
+# squid/core/media/errors.py:120
 media-errors-invalid-attachment-upload = Invalid attachment upload
 
-# squid/media/errors.py:200
+# squid/core/media/errors.py:200
 media-errors-media-processing-failed = Media processing failed.
 
-# squid/media/errors.py:134
+# squid/core/media/errors.py:134
 media-errors-reload-the-draft-and-choose-one-of = Reload the draft and choose one of its current attachments.
 
-# squid/media/errors.py:77
+# squid/core/media/errors.py:77
 media-errors-reload-the-draft-before-trying-again = Reload the draft before trying again.
 
-# squid/media/domain/models.py:86
+# squid/core/media/domain/models.py:86
 media-every-media-limit = Every media limit must be positive.
 
-# squid/media/errors.py:168
+# squid/core/media/errors.py:168
 media-file-processing-failed = The media file cannot be normalized.
 
-# squid/media/application/commands.py:34
+# squid/core/media/application/commands.py:34
 media-image-not-accept = Image processing does not accept a poster path.
 
-# squid/media/errors.py:285
+# squid/core/media/errors.py:285
 media-job-claim-expired = The media job claim is no longer valid.
 
-# squid/media/errors.py:160
+# squid/core/media/errors.py:160
 media-keep-attachment-locally = Keep the attachment locally and try uploading it again later.
 
-# squid/media/application/jobs.py:178
+# squid/core/media/application/jobs.py:178
 media-media-artifact-byte = Media artifact byte size must be positive.
 
-# squid/media/application/jobs.py:592
+# squid/core/media/application/jobs.py:592
 media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and { $maximum }.
 
-# squid/media/application/jobs.py:187
+# squid/core/media/application/jobs.py:187
 media-media-artifact-dimensions = Media artifact dimensions must be positive.
 
-# squid/media/application/jobs.py:360
+# squid/core/media/application/jobs.py:360
 media-media-attempts-positive = Media processing attempts must be positive.
 
-# squid/media/domain/models.py:62
+# squid/core/media/domain/models.py:62
 media-media-batch-totals = Media batch totals cannot be negative.
 
-# squid/media/errors.py:72
+# squid/core/media/errors.py:72
 media-media-changed-submission = Media cannot be changed while this submission draft is locked.
 
-# squid/media/application/jobs.py:1001
+# squid/core/media/application/jobs.py:1001
 media-media-content-types = Media content types must be 1-255 printable characters without surrounding whitespace.
 
-# squid/media/domain/models.py:122
+# squid/core/media/domain/models.py:122
 media-media-dimensions-positive = Media dimensions must be positive.
 
-# squid/media/application/jobs.py:91
+# squid/core/media/application/jobs.py:91
 media-media-draft-upload = Media draft upload authorization is invalid.
 
-# squid/media/domain/models.py:128
+# squid/core/media/domain/models.py:128
 media-media-duration-negative = Media duration cannot be negative.
 
-# squid/media/domain/models.py:131
+# squid/core/media/domain/models.py:131
 media-media-frame-count = Media frame count cannot be negative.
 
-# squid/media/domain/models.py:125
+# squid/core/media/domain/models.py:125
 media-media-frame-rate = Media frame rate must be non-negative with a positive denominator.
 
-# squid/media/application/jobs.py:502
+# squid/core/media/application/jobs.py:502
 media-media-job-claim = Media job claim limit must be between 1 and { $maximum }.
 
-# squid/media/application/jobs.py:670
+# squid/core/media/application/jobs.py:670
 media-media-job-heartbeat = Media job heartbeat interval must be positive.
 
-# squid/media/application/jobs.py:995
+# squid/core/media/application/jobs.py:995
 media-media-object-keys = Media object keys must be non-empty relative paths without traversal.
 
-# squid/media/errors.py:187
+# squid/core/media/errors.py:187
 media-media-processing-temporarily = Media processing is temporarily unavailable.
 
-# squid/media/application/jobs.py:667
+# squid/core/media/application/jobs.py:667
 media-media-queue-processor = Media queue and processor limits must match.
 
-# squid/media/application/jobs.py:988
+# squid/core/media/application/jobs.py:988
 media-media-sha-lowercase = Media SHA-256 values must be lowercase hexadecimal.
 
-# squid/media/application/jobs.py:154
+# squid/core/media/application/jobs.py:154
 media-media-source-byte = Media source byte size must be positive.
 
-# squid/media/application/jobs.py:554
+# squid/core/media/application/jobs.py:554
 media-media-source-cleanup = Media source cleanup limit must be between 1 and { $maximum }.
 
-# squid/media/application/commands.py:29
+# squid/core/media/application/commands.py:29
 media-media-source-normalized = Media source, normalized output, and poster paths must be distinct.
 
-# squid/media/application/jobs.py:915
+# squid/core/media/application/jobs.py:915
 media-media-upload-changed = Media upload changed while it was being staged.
 
-# squid/media/application/jobs.py:108, squid/media/application/jobs.py:129
+# squid/core/media/application/jobs.py:108, squid/core/media/application/jobs.py:129
 media-media-upload-draft = Media upload and draft identifiers cannot be nil UUIDs.
 
-# squid/media/application/jobs.py:408, squid/media/application/jobs.py:894
+# squid/core/media/application/jobs.py:408, squid/core/media/application/jobs.py:894
 media-media-upload-exceeds = Media upload exceeds the { $limit }-byte source limit.
 
-# squid/media/errors.py:232
+# squid/core/media/errors.py:232
 media-media-upload-exists = Media upload { $upload_id } already exists with different metadata.
 
-# squid/media/application/jobs.py:151
+# squid/core/media/application/jobs.py:151
 media-media-upload-identifiers = Media upload identifiers cannot be nil UUIDs.
 
-# squid/media/application/jobs.py:111, squid/media/application/jobs.py:889
+# squid/core/media/application/jobs.py:111, squid/core/media/application/jobs.py:889
 media-media-uploads-empty = Media uploads cannot be empty.
 
-# squid/media/application/jobs.py:886
+# squid/core/media/application/jobs.py:886
 media-media-uploads-staged = Media uploads must be staged as regular files.
 
-# squid/media/domain/models.py:172
+# squid/core/media/domain/models.py:172
 media-normalized-artifact-dimensions = Normalized artifact dimensions and size are invalid.
 
-# squid/media/domain/models.py:175
+# squid/core/media/domain/models.py:175
 media-normalized-artifact-sha = Normalized artifact SHA-256 must be lowercase hexadecimal.
 
-# squid/media/domain/models.py:205
+# squid/core/media/domain/models.py:205
 media-normalized-images-png = Processed images must use a supported raster format.
 
-# squid/media/errors.py:274
+# squid/core/media/errors.py:274
 media-normalized-media-object = A normalized media object is being cleaned up.
 
-# squid/media/domain/models.py:193
+# squid/core/media/domain/models.py:193
 media-normalized-media-source = Normalized media source size cannot be negative.
 
-# squid/media/errors.py:265
+# squid/core/media/errors.py:265
 media-normalized-object-unconfirmed = Object storage did not confirm a normalized media artifact.
 
-# squid/media/domain/models.py:199
+# squid/core/media/domain/models.py:199
 media-normalized-video-poster = A normalized video must have a poster artifact.
 
-# squid/media/domain/models.py:196
+# squid/core/media/domain/models.py:196
 media-normalized-videos-poster = Only normalized videos have a poster artifact.
 
-# squid/media/errors.py:258
+# squid/core/media/errors.py:258
 media-queued-raw-media = The queued raw media object is inconsistent with its metadata.
 
-# squid/media/errors.py:93
+# squid/core/media/errors.py:93
 media-reload-draft-upload = Reload the draft and upload the attachment again.
 
-# squid/media/errors.py:108
+# squid/core/media/errors.py:108
 media-reload-uploading-attachment = Reload your drafts before uploading the attachment again.
 
-# squid/media/domain/models.py:202
+# squid/core/media/domain/models.py:202
 media-report-actions-duplicate = Normalization report actions cannot contain duplicates.
 
-# squid/media/application/jobs.py:190
+# squid/core/media/application/jobs.py:190
 media-reports-not-pixel = Normalization reports do not have pixel dimensions.
 
-# squid/media/errors.py:148
+# squid/core/media/errors.py:148
 media-retry-upload-attachment = Retry the upload with a new attachment identifier.
 
-# squid/media/errors.py:88
+# squid/core/media/errors.py:88
 media-submission-draft-changed = The submission draft changed while its attachment was uploading.
 
-# squid/media/errors.py:105
+# squid/core/media/errors.py:105
 media-submission-draft-not-found = Submission draft not found.
 
-# squid/media/domain/models.py:212
+# squid/core/media/domain/models.py:212
 media-video-format-unsupported = Processed videos must contain a supported video and JPEG thumbnail.
 
-# squid/media/application/commands.py:37
+# squid/core/media/application/commands.py:37
 media-video-requires-poster = Video processing requires a poster destination.
 
-# squid/media/application/jobs.py:193
+# squid/core/media/application/jobs.py:193
 media-visual-media-artifacts = Visual media artifacts require pixel dimensions.
 
-# squid/messages/errors.py:10
+# squid/core/messages/errors.py:10
 messages-tracked-message-not-found = Tracked message not found.
 
-# squid/minecraft_auth/errors.py:119
+# squid/core/minecraft_auth/errors.py:119
 minecraft-auth-account-approve-requested = This account cannot approve the requested Java identity.
 
-# squid/minecraft_auth/errors.py:87
+# squid/core/minecraft_auth/errors.py:87
 minecraft-auth-challenge-awaiting-approval = The authorization challenge is awaiting approval.
 
-# squid/minecraft_auth/errors.py:109
+# squid/core/minecraft_auth/errors.py:109
 minecraft-auth-challenge-exchanged = The authorization challenge was already exchanged.
 
-# squid/minecraft_auth/errors.py:99
+# squid/core/minecraft_auth/errors.py:99
 minecraft-auth-challenge-expired = The authorization challenge has expired.
 
-# squid/minecraft_auth/errors.py:77
+# squid/core/minecraft_auth/errors.py:77
 minecraft-auth-challenge-invalid = The authorization challenge is invalid.
 
-# squid/minecraft_auth/errors.py:55
+# squid/core/minecraft_auth/errors.py:55
 minecraft-auth-current-privacy-required = Current privacy consent is required.
 
-# squid/minecraft_auth/errors.py:143
+# squid/core/minecraft_auth/errors.py:143
 minecraft-auth-fabric-pkce-proof = The Fabric PKCE proof is invalid.
 
-# squid/minecraft_auth/application/services.py:543
+# squid/core/minecraft_auth/application/services.py:543
 minecraft-auth-installation-label-length = Installation label must contain 1 to 80 characters.
 
-# squid/minecraft_auth/application/services.py:252
+# squid/core/minecraft_auth/application/services.py:252
 minecraft-auth-minecraft-authorization-limits = Minecraft authorization limits must be positive.
 
-# squid/minecraft_auth/application/crypto.py:49
+# squid/core/minecraft_auth/application/crypto.py:49
 minecraft-auth-minecraft-authorization-pepper = Minecraft authorization pepper must not be empty.
 
-# squid/minecraft_auth/errors.py:153
+# squid/core/minecraft_auth/errors.py:153
 minecraft-auth-minecraft-player-token = The Minecraft player token is invalid.
 
-# squid/minecraft_auth/errors.py:65
+# squid/core/minecraft_auth/errors.py:65
 minecraft-auth-paper-installation-credential = The Paper installation credential is invalid.
 
-# squid/minecraft_auth/errors.py:45
+# squid/core/minecraft_auth/errors.py:45
 minecraft-auth-paper-installation-unavailable = The Paper installation is unavailable.
 
-# squid/minecraft_auth/domain/models.py:50
+# squid/core/minecraft_auth/domain/models.py:50
 minecraft-auth-public-sponsor-opt-in-required = Sponsor opt-in requires an enabled public server profile.
 
-# squid/minecraft_auth/domain/models.py:68
+# squid/core/minecraft_auth/domain/models.py:68
 minecraft-auth-published-paper-server = A published Paper server must have its public profile enabled.
 
-# squid/minecraft_auth/domain/models.py:43
+# squid/core/minecraft_auth/domain/models.py:43
 minecraft-auth-server-profile-length = Server profile { $label } must contain 1 to { $maximum } characters.
 
-# squid/minecraft_auth/errors.py:131
+# squid/core/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
 # squid/bot/catalogue/browse.py:543
@@ -4135,7 +4135,7 @@ notifications-confirmed-summary = { $build } was confirmed.
 # squid/bot/notification_text.py:26
 notifications-creator-summary = { $build } by a creator you follow was confirmed.
 
-# squid/notifications/application.py:224
+# squid/core/notifications/application.py:224
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
 # squid/bot/notifications_view.py:162
@@ -4150,13 +4150,13 @@ notifications-denied-summary = { $build } was denied.
 # squid/bot/notifications_view.py:204
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
-# squid/notifications/domain.py:230
+# squid/core/notifications/domain.py:230
 notifications-domain-invalid-tag-predicate = invalid tag predicate
 
-# squid/notifications/domain.py:298
+# squid/core/notifications/domain.py:298
 notifications-domain-unsupported = unsupported { $name }: { $value }
 
-# squid/notifications/domain.py:165
+# squid/core/notifications/domain.py:165
 notifications-exact-predicate-value-required = exact predicates require a value
 
 # squid/bot/notifications_view.py:412
@@ -4183,10 +4183,10 @@ notifications-inbox-heading = Recent notifications
 # squid/bot/notifications_view.py:541
 notifications-inbox-help = Select a notification to see details and open its build, or select several to change their read state.
 
-# squid/notifications/domain.py:232
+# squid/core/notifications/domain.py:232
 notifications-invalid-exact-tag-value = invalid exact tag value
 
-# squid/notifications/domain.py:284, squid/notifications/domain.py:289
+# squid/core/notifications/domain.py:284, squid/core/notifications/domain.py:289
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
 # squid/bot/notifications_cog.py:183
@@ -4201,28 +4201,28 @@ notifications-open-build = Open build
 # squid/bot/notifications_cog.py:175
 notifications-open-in-discord = Open it in Discord with `/build browse id:{ $build_id }`.
 
-# squid/notifications/application.py:175
+# squid/core/notifications/application.py:175
 notifications-page-size = page_size must be between 1 and 100
 
-# squid/notifications/domain.py:251
+# squid/core/notifications/domain.py:251
 notifications-persisted-record-filter = persisted record filter violates the notification contract
 
-# squid/notifications/domain.py:237
+# squid/core/notifications/domain.py:237
 notifications-persisted-tag-predicate = persisted tag predicate violates the notification contract
 
-# squid/notifications/domain.py:161
+# squid/core/notifications/domain.py:161
 notifications-presence-predicates-include = presence predicates cannot include a value
 
 # squid/bot/notification_text.py:54
 notifications-record-detail = • { $title }
 
-# squid/notifications/domain.py:192
+# squid/core/notifications/domain.py:192
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
 # squid/bot/notifications_view.py:396
 notifications-record-filter-required = Choose at least one record filter.
 
-# squid/notifications/domain.py:199
+# squid/core/notifications/domain.py:199
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
 # squid/bot/notification_text.py:34
@@ -4235,7 +4235,7 @@ notifications-record-summary =
 # squid/bot/notification_text.py:32
 notifications-record-summary-unknown = { $build } gained records.
 
-# squid/notifications/application.py:120
+# squid/core/notifications/application.py:120
 notifications-retention-days-positive = retention_days must be positive
 
 # squid/bot/notification_text.py:28
@@ -4250,16 +4250,16 @@ notifications-tab-delivery = Delivery
 # squid/bot/notifications_view.py:89
 notifications-tab-inbox = Inbox
 
-# squid/notifications/domain.py:154
+# squid/core/notifications/domain.py:154
 notifications-tag-id-positive = tag_id must be positive
 
-# squid/notifications/domain.py:157
+# squid/core/notifications/domain.py:157
 notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'
 
-# squid/notifications/domain.py:224
+# squid/core/notifications/domain.py:224
 notifications-tag-predicates-objects = tag predicates must be objects
 
-# squid/notifications/domain.py:219
+# squid/core/notifications/domain.py:219
 notifications-tags-list = tags must be a list
 
 # squid/bot/notification_text.py:40
@@ -4328,220 +4328,220 @@ permission-thread-closed = Channel { $channel_id }: the thread is archived or lo
 # squid/bot/diagnostics/permissions.py:80
 permission-view-channel = View Channel
 
-# squid/permissions/errors.py:35
+# squid/core/permissions/errors.py:35
 permissions-action-requirement = This action requires { $node }, but { $detail }.
 
-# squid/permissions/domain/catalogue.py:255
+# squid/core/permissions/domain/catalogue.py:255
 permissions-add-alias-restriction = Add an alias for a restriction.
 
-# squid/permissions/domain/catalogue.py:274
+# squid/core/permissions/domain/catalogue.py:274
 permissions-approve-creator-alias = Approve a creator alias claim.
 
-# squid/permissions/domain/catalogue.py:173
+# squid/core/permissions/domain/catalogue.py:173
 permissions-approve-pending-build = Approve pending build submissions.
 
-# squid/permissions/domain/catalogue.py:236
+# squid/core/permissions/domain/catalogue.py:236
 permissions-approve-tag-proposal = Approve a tag proposal.
 
-# squid/permissions/domain/catalogue.py:439
+# squid/core/permissions/domain/catalogue.py:439
 permissions-archive-channel-messages = Archive a channel's messages.
 
-# squid/permissions/domain/catalogue.py:248
+# squid/core/permissions/domain/catalogue.py:248
 permissions-archive-tag = Archive a tag.
 
-# squid/permissions/domain/catalogue.py:488
+# squid/core/permissions/domain/catalogue.py:488
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
-# squid/permissions/application/administration.py:75
+# squid/core/permissions/application/administration.py:75
 permissions-built-role = Built-in role
 
-# squid/permissions/domain/catalogue.py:387
+# squid/core/permissions/domain/catalogue.py:387
 permissions-change-server-bot = Change this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:392
+# squid/core/permissions/domain/catalogue.py:392
 permissions-change-server-voting = Change this server's voting emojis and role weights.
 
-# squid/permissions/domain/catalogue.py:409
+# squid/core/permissions/domain/catalogue.py:409
 permissions-change-starboard-configuration = Change a starboard's configuration.
 
-# squid/permissions/domain/catalogue.py:433
+# squid/core/permissions/domain/catalogue.py:433
 permissions-change-starboard-per = Change a starboard's per-role vote weights.
 
-# squid/permissions/domain/catalogue.py:428
+# squid/core/permissions/domain/catalogue.py:428
 permissions-change-which-emojis = Change which emojis count towards a starboard.
 
-# squid/permissions/domain/catalogue.py:368
+# squid/core/permissions/domain/catalogue.py:368
 permissions-change-wide-settings = Change application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:316
+# squid/core/permissions/domain/catalogue.py:316
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/permissions/domain/catalogue.py:472
+# squid/core/permissions/domain/catalogue.py:472
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
-# squid/permissions/domain/catalogue.py:328
+# squid/core/permissions/domain/catalogue.py:328
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/permissions/domain/catalogue.py:512
+# squid/core/permissions/domain/catalogue.py:512
 permissions-create-edit-server = Create and edit this server's permission roles.
 
-# squid/permissions/domain/catalogue.py:462
+# squid/core/permissions/domain/catalogue.py:462
 permissions-create-poll = Create a poll.
 
-# squid/permissions/domain/catalogue.py:467
+# squid/core/permissions/domain/catalogue.py:467
 permissions-create-poll-carded = Create a poll carded in every server's vote channel.
 
-# squid/permissions/domain/catalogue.py:404
+# squid/core/permissions/domain/catalogue.py:404
 permissions-create-starboard = Create a starboard.
 
-# squid/permissions/errors.py:79
+# squid/core/permissions/errors.py:79
 permissions-credential-scope = This action requires { $node }, but your credential does not include that permission.
 
-# squid/permissions/domain/catalogue.py:340
+# squid/core/permissions/domain/catalogue.py:340
 permissions-delete-every-stored = Delete every stored error report.
 
-# squid/permissions/domain/catalogue.py:414
+# squid/core/permissions/domain/catalogue.py:414
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
 
-# squid/permissions/errors.py:13
+# squid/core/permissions/errors.py:13
 permissions-deny-reason = an explicit deny rule blocks that permission
 
-# squid/permissions/domain/catalogue.py:196
+# squid/core/permissions/domain/catalogue.py:196
 permissions-download-convert-schematics = Download or convert non-public schematics you did not upload.
 
-# squid/permissions/domain/catalogue.py:310
+# squid/core/permissions/domain/catalogue.py:310
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
 
-# squid/permissions/domain/catalogue.py:168
+# squid/core/permissions/domain/catalogue.py:168
 permissions-edit-unsubmitted-builds = Edit builds you did not submit.
 
-# squid/permissions/application/epoch.py:61
+# squid/core/permissions/application/epoch.py:61
 permissions-epoch-watcher-built = This watcher was built without a wake listener.
 
-# squid/permissions/errors.py:11
+# squid/core/permissions/errors.py:11
 permissions-forbid-reason = an explicit forbid rule blocks that permission
 
-# squid/permissions/errors.py:14
+# squid/core/permissions/errors.py:14
 permissions-grant-reason = your current permissions do not grant it
 
-# squid/permissions/domain/catalogue.py:323
+# squid/core/permissions/domain/catalogue.py:323
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/permissions/domain/catalogue.py:507
+# squid/core/permissions/domain/catalogue.py:507
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
-# squid/permissions/domain/catalogue.py:495
+# squid/core/permissions/domain/catalogue.py:495
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
-# squid/permissions/domain/catalogue.py:201
+# squid/core/permissions/domain/catalogue.py:201
 permissions-inspect-nonpublic-schematics = Inspect and render schematics that are not publicly downloadable, without receiving the file.
 
-# squid/permissions/domain/catalogue.py:217
+# squid/core/permissions/domain/catalogue.py:217
 permissions-inspect-record-gaps = Inspect record gaps, lookups and title issues.
 
-# squid/permissions/domain/models.py:84
+# squid/core/permissions/domain/models.py:84
 permissions-invalid-permission-pattern = Invalid permission pattern
 
-# squid/permissions/domain/catalogue.py:268
+# squid/core/permissions/domain/catalogue.py:268
 permissions-list-pending-creator = List pending creator alias claims.
 
-# squid/permissions/domain/catalogue.py:230
+# squid/core/permissions/domain/catalogue.py:230
 permissions-list-pending-tag = List pending tag proposals.
 
-# squid/permissions/domain/catalogue.py:210
+# squid/core/permissions/domain/catalogue.py:210
 permissions-measure-schematic-timing = Measure a schematic's timing.
 
-# squid/permissions/domain/models.py:83
+# squid/core/permissions/domain/models.py:83
 permissions-not-valid-permission = That is not a valid permission pattern.
 
-# squid/permissions/application/administration.py:63
+# squid/core/permissions/application/administration.py:63
 permissions-outside-authority = Outside your authority
 
-# squid/permissions/domain/catalogue.py:445
+# squid/core/permissions/domain/catalogue.py:445
 permissions-post-manage-redstoner = Post and manage the Redstoner self-assign panel.
 
-# squid/permissions/domain/catalogue.py:298
+# squid/core/permissions/domain/catalogue.py:298
 permissions-re-read-linked = Re-read your linked Minecraft name after a rename.
 
-# squid/permissions/domain/catalogue.py:304
+# squid/core/permissions/domain/catalogue.py:304
 permissions-re-read-user = Re-read another user's linked Minecraft name.
 
-# squid/permissions/domain/catalogue.py:291
+# squid/core/permissions/domain/catalogue.py:291
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/permissions/domain/catalogue.py:501
+# squid/core/permissions/domain/catalogue.py:501
 permissions-read-permission-audit = Read the permission audit log.
 
-# squid/permissions/domain/catalogue.py:334
+# squid/core/permissions/domain/catalogue.py:334
 permissions-read-stored-error = Read a stored error report by the reference its user was shown.
 
-# squid/permissions/domain/catalogue.py:223
+# squid/core/permissions/domain/catalogue.py:223
 permissions-rebuild-record-table = Rebuild the record table from scratch.
 
-# squid/permissions/domain/catalogue.py:191
+# squid/core/permissions/domain/catalogue.py:191
 permissions-recompute-build-derived = Recompute a build's derived attributes.
 
-# squid/permissions/domain/catalogue.py:423
+# squid/core/permissions/domain/catalogue.py:423
 permissions-recount-starboard-reactions = Recount a starboard's reactions.
 
-# squid/permissions/domain/catalogue.py:262
+# squid/core/permissions/domain/catalogue.py:262
 permissions-register-minecraft-version = Register a new Minecraft version.
 
-# squid/permissions/domain/catalogue.py:280
+# squid/core/permissions/domain/catalogue.py:280
 permissions-reject-creator-alias = Reject a creator alias claim.
 
-# squid/permissions/domain/catalogue.py:179
+# squid/core/permissions/domain/catalogue.py:179
 permissions-reject-pending-build = Reject pending build submissions.
 
-# squid/permissions/domain/catalogue.py:242
+# squid/core/permissions/domain/catalogue.py:242
 permissions-reject-tag-proposal = Reject a tag proposal.
 
-# squid/permissions/domain/catalogue.py:286
+# squid/core/permissions/domain/catalogue.py:286
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
-# squid/permissions/errors.py:41
+# squid/core/permissions/errors.py:41
 permissions-require-all = This action requires all of these permissions:
 
-# squid/permissions/errors.py:39
+# squid/core/permissions/errors.py:39
 permissions-require-any = This action requires at least one of these permissions:
 
-# squid/permissions/domain/catalogue.py:450
+# squid/core/permissions/domain/catalogue.py:450
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
-# squid/permissions/application/administration.py:69
+# squid/core/permissions/application/administration.py:69
 permissions-role-not-yours = Role is not yours to manage
 
-# squid/permissions/domain/catalogue.py:355
+# squid/core/permissions/domain/catalogue.py:355
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
-# squid/permissions/domain/catalogue.py:162
+# squid/core/permissions/domain/catalogue.py:162
 permissions-submit-build-review = Submit a build for review.
 
-# squid/permissions/domain/catalogue.py:350
+# squid/core/permissions/domain/catalogue.py:350
 permissions-synchronise-command-tree = Synchronise the application command tree with Discord.
 
-# squid/permissions/domain/catalogue.py:155
+# squid/core/permissions/domain/catalogue.py:155
 permissions-view-published-builds = View published builds.
 
-# squid/permissions/domain/catalogue.py:381
+# squid/core/permissions/domain/catalogue.py:381
 permissions-view-server-bot = View this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:398
+# squid/core/permissions/domain/catalogue.py:398
 permissions-view-server-starboards = View this server's starboards.
 
-# squid/permissions/domain/catalogue.py:185
+# squid/core/permissions/domain/catalogue.py:185
 permissions-view-unreviewed-builds = View builds that have not been reviewed yet.
 
-# squid/permissions/domain/catalogue.py:362
+# squid/core/permissions/domain/catalogue.py:362
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:477
+# squid/core/permissions/domain/catalogue.py:477
 permissions-vote-build-log = Vote in build log deletion votes.
 
-# squid/permissions/domain/catalogue.py:456
+# squid/core/permissions/domain/catalogue.py:456
 permissions-vote-polls = Vote in polls.
 
-# squid/permissions/domain/catalogue.py:482
+# squid/core/permissions/domain/catalogue.py:482
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/poll_wizard.py:406
@@ -4661,13 +4661,13 @@ poll-setup-results-hidden-until-close = No totals at all until the poll closes.
 # squid/bot/voting/poll_wizard.py:45
 poll-setup-vote-privacy-notice = Running totals are public; who voted for what is not.
 
-# squid/posts/errors.py:10
+# squid/core/posts/errors.py:10
 posts-tracked-message-not-found = Tracked message not found.
 
-# squid/reactions/domain/models.py:36
+# squid/core/reactions/domain/models.py:36
 reactions-role-multiplier-finite = Role multiplier must be finite and greater than zero.
 
-# squid/reactions/application/policies.py:33
+# squid/core/reactions/application/policies.py:33
 reactions-staff-multiplier-finite = Staff multiplier must be finite and greater than zero.
 
 # squid/bot/submission/ui/recalculation.py:49
@@ -4757,13 +4757,13 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title
 # squid/bot/catalogue/records.py:247
 records-active-version = the active version
 
-# squid/records/application/services.py:750, squid/records/application/services.py:781
+# squid/core/records/application/services.py:750, squid/core/records/application/services.py:781
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:488
 records-category-id = Category definition #{ $definition_id }
 
-# squid/records/errors.py:29, squid/records/errors.py:45
+# squid/core/records/errors.py:29, squid/core/records/errors.py:45
 records-category-not-found-title = Record category not found
 
 # squid/bot/catalogue/records.py:258, squid/bot/catalogue/records.py:399
@@ -4778,7 +4778,7 @@ records-choose-version = Use another version
 # squid/bot/catalogue/records.py:241
 records-diagnostics-loading = Loading record diagnostics.
 
-# squid/records/errors.py:15
+# squid/core/records/errors.py:15
 records-errors-record-not-found = Record not found.
 
 # squid/bot/catalogue/records.py:297
@@ -4793,10 +4793,10 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:285
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/records/application/services.py:794
+# squid/core/records/application/services.py:794
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
-# squid/records/domain/models.py:115
+# squid/core/records/domain/models.py:115
 records-fixed-volume-positive = Fixed volume must be positive.
 
 # squid/bot/catalogue/records.py:154
@@ -4817,10 +4817,10 @@ records-maintenance-purpose = Recalculate standings after fixing builds or title
 # squid/bot/catalogue/records.py:227
 records-maintenance-tools = Recompute
 
-# squid/records/domain/categories.py:50
+# squid/core/records/domain/categories.py:50
 records-maximum-category-size = Maximum category size cannot be negative.
 
-# squid/records/errors.py:44
+# squid/core/records/errors.py:44
 records-no-confirmed-build = No confirmed build satisfies the requested record category.
 
 # squid/bot/catalogue/records.py:246
@@ -4832,10 +4832,10 @@ records-no-titles-need-review = Every active record title uses known terms.
 # squid/bot/catalogue/records.py:124
 records-no-unresolved-categories = Every active record category has the evidence it needs.
 
-# squid/records/application/published_points.py:75
+# squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/records/application/services.py:711
+# squid/core/records/application/services.py:711
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:464
@@ -4847,19 +4847,19 @@ records-recompute-definition = Recompute definition
 # squid/bot/catalogue/records.py:188, squid/bot/catalogue/records.py:393, squid/bot/catalogue/records.py:441
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/records/application/services.py:535
+# squid/core/records/application/services.py:535
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
-# squid/records/errors.py:28
+# squid/core/records/errors.py:28
 records-record-category-not-found = Record category not found.
 
-# squid/records/infrastructure/repository.py:681
+# squid/core/records/infrastructure/repository.py:681
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
-# squid/records/errors.py:16
+# squid/core/records/errors.py:16
 records-record-not-found-title = Record not found
 
-# squid/records/application/services.py:812
+# squid/core/records/application/services.py:812
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:492
@@ -4877,13 +4877,13 @@ records-restriction-ids-help = Restriction IDs, comma separated
 # squid/bot/catalogue/records.py:419
 records-restriction-ids-invalid = Restriction IDs must be whole numbers separated by commas.
 
-# squid/records/domain/models.py:89
+# squid/core/records/domain/models.py:89
 records-timing-variant-minimum-items = A timing variant must contain at least its primary timing method.
 
-# squid/records/domain/models.py:142
+# squid/core/records/domain/models.py:142
 records-title-holder-required = A resolved record title must have at least one holder.
 
-# squid/records/domain/models.py:145
+# squid/core/records/domain/models.py:145
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
 # squid/bot/catalogue/records.py:214
@@ -5019,136 +5019,136 @@ schematic-world-format-help = Minecraft world-format number, such as 3953; this 
 # squid/bot/catalogue/schematics/tools.py:378
 schematic-world-format-version = World-format data version
 
-# squid/schematics/application/previews.py:52
+# squid/core/schematics/application/previews.py:52
 schematics-build-no-primary = This build has no primary schematic to preview.
 
-# squid/schematics/errors.py:133
+# squid/core/schematics/errors.py:133
 schematics-build-schematic-previewed = This build's schematic cannot be previewed.
 
-# squid/schematics/application/render_jobs.py:55
+# squid/core/schematics/application/render_jobs.py:55
 schematics-claim-limit = Render claim limit must be between 1 and 32.
 
-# squid/schematics/errors.py:81
+# squid/core/schematics/errors.py:81
 schematics-crop-schematic-build = Crop the schematic to the build itself and try again.
 
-# squid/schematics/errors.py:60
+# squid/core/schematics/errors.py:60
 schematics-errors-add-an-io-input-sign-or-use = Add an @io.* input sign, or use a schematic with an interactable input.
 
-# squid/schematics/errors.py:112
+# squid/core/schematics/errors.py:112
 schematics-errors-schematic-not-found = Schematic not found.
 
-# squid/schematics/errors.py:21
+# squid/core/schematics/errors.py:21
 schematics-file-not-readable = The file is not a readable Minecraft schematic.
 
-# squid/schematics/errors.py:44
+# squid/core/schematics/errors.py:44
 schematics-input-coordinate-gave = The input coordinate you gave is not a lever or button in this schematic.
 
-# squid/schematics/application/render_jobs.py:46
+# squid/core/schematics/application/render_jobs.py:46
 schematics-max-attempts-positive = Render max_attempts must be positive.
 
-# squid/schematics/errors.py:48
+# squid/core/schematics/errors.py:48
 schematics-pick-coordinates-listed = Pick one of the coordinates listed below.
 
-# squid/schematics/application/commands.py:59
+# squid/core/schematics/application/commands.py:59
 schematics-pixels = Render { $axis } must be between { $minimum } and { $maximum } pixels.
 
-# squid/schematics/application/attachments.py:36
+# squid/core/schematics/application/attachments.py:36
 schematics-public-schematic-downloads = public schematic downloads require a license and rights attestation
 
-# squid/schematics/domain/values.py:72
+# squid/core/schematics/domain/values.py:72
 schematics-resource-pack-bytes = Resource-pack bytes do not match their SHA-256 digest.
 
-# squid/schematics/domain/values.py:64
+# squid/core/schematics/domain/values.py:64
 schematics-resource-pack-data = Resource-pack data must be immutable bytes.
 
-# squid/schematics/domain/values.py:68
+# squid/core/schematics/domain/values.py:68
 schematics-resource-packs-use = Resource packs must use { $media_type }.
 
-# squid/schematics/domain/values.py:27
+# squid/core/schematics/domain/values.py:27
 schematics-rgba-channels-finite = RGBA channels must be finite numbers between 0 and 1.
 
-# squid/schematics/domain/values.py:39
+# squid/core/schematics/domain/values.py:39
 schematics-rgba-channels-numbers = RGBA channels must be numbers.
 
-# squid/schematics/domain/values.py:34
+# squid/core/schematics/domain/values.py:34
 schematics-rgba-four-channels-required = RGBA colours require exactly four channels.
 
-# squid/schematics/errors.py:54
+# squid/core/schematics/errors.py:54
 schematics-run-command = Run the command again with one of the coordinates listed below.
 
-# squid/schematics/errors.py:180
+# squid/core/schematics/errors.py:180
 schematics-schematic-engine-failed = The schematic engine failed while reading this file.
 
-# squid/schematics/application/previews.py:55
+# squid/core/schematics/application/previews.py:55
 schematics-schematic-file-crashed = This schematic file already crashed the engine on this instance.
 
-# squid/schematics/application/jobs.py:150
+# squid/core/schematics/application/jobs.py:150
 schematics-schematic-job-claim = Schematic job claim limit must be between 1 and 32.
 
-# squid/schematics/application/jobs.py:221
+# squid/core/schematics/application/jobs.py:221
 schematics-schematic-job-cleanup = Schematic job cleanup limit must be between 1 and 500.
 
-# squid/schematics/application/jobs.py:125
+# squid/core/schematics/application/jobs.py:125
 schematics-schematic-job-retry = Schematic job retry and retention settings must be positive.
 
-# squid/schematics/errors.py:56
+# squid/core/schematics/errors.py:56
 schematics-schematic-no-input = This schematic has no input annotation and no lever or button to actuate.
 
-# squid/schematics/application/previews.py:49
+# squid/core/schematics/application/previews.py:49
 schematics-schematic-not-enabled = Schematic previews are not enabled on this instance.
 
-# squid/schematics/errors.py:158
+# squid/core/schematics/errors.py:158
 schematics-schematic-operation-took = The schematic operation took too long and was cancelled.
 
-# squid/schematics/errors.py:50
+# squid/core/schematics/errors.py:50
 schematics-schematic-several-possible = This schematic has several possible inputs, so choosing one for you would be unsafe.
 
-# squid/schematics/application/previews.py:61
+# squid/core/schematics/application/previews.py:61
 schematics-schematic-too-large = This schematic is too large to preview.
 
-# squid/schematics/application/previews.py:58
+# squid/core/schematics/application/previews.py:58
 schematics-schematic-too-many = This schematic has too many blocks to preview.
 
-# squid/schematics/errors.py:145
+# squid/core/schematics/errors.py:145
 schematics-schematic-unavailable = Schematic rendering is unavailable.
 
-# squid/schematics/application/previews.py:64
+# squid/core/schematics/application/previews.py:64
 schematics-stored-schematic-file = The stored schematic file is missing, so it cannot be previewed.
 
-# squid/schematics/errors.py:120
+# squid/core/schematics/errors.py:120
 schematics-support-unavailable = Schematic support is not available on this instance.
 
-# squid/schematics/errors.py:87
+# squid/core/schematics/errors.py:87
 schematics-too-large-limit = The schematic is too large: { $measure } is { $actual }, limit is { $limit }.
 
-# squid/schematics/errors.py:78
+# squid/core/schematics/errors.py:78
 schematics-too-large-process = The schematic is too large to process.
 
-# squid/schematics/errors.py:24
+# squid/core/schematics/errors.py:24
 schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nbt, or .mcstructure file.
 
-# squid/schematics/application/commands.py:64
+# squid/core/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/search/application/fields.py:225
+# squid/core/search/application/fields.py:225
 search-align-increments = { $field_name } must align to increments of { $step }
 
-# squid/search/domain/query.py:95
+# squid/core/search/domain/query.py:95
 search-boolean-minimum-operands = Boolean expressions require at least two operands
 
-# squid/search/application/ranking.py:69
+# squid/core/search/application/ranking.py:69
 search-branch-limit-positive = branch_limit must be positive
 
-# squid/search/application/fields.py:49
+# squid/core/search/application/fields.py:49
 search-duplicate-search-field = duplicate search field or alias: { $name }
 
-# squid/search/application/embeddings.py:114
+# squid/core/search/application/embeddings.py:114
 search-embeddings-configured-embedding = The configured embedding provider did not return a vector.
 
-# squid/search/application/embeddings.py:83
+# squid/core/search/application/embeddings.py:83
 search-embeddings-embedding-claim = Embedding claim limit must be between 1 and 32.
 
-# squid/search/application/embeddings.py:65
+# squid/core/search/application/embeddings.py:65
 search-embeddings-embedding-max = Embedding max_attempts must be positive.
 
 # squid/bot/catalogue/search/help.py:30
@@ -5169,13 +5169,13 @@ search-example-extenders = Current smallest extenders
 # squid/bot/catalogue/search/help.py:24
 search-example-fastest = All-time fastest doors
 
-# squid/search/application/fields.py:129
+# squid/core/search/application/fields.py:129
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/search/application/fields.py:119
+# squid/core/search/application/fields.py:119
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/search/application/fields.py:111
+# squid/core/search/application/fields.py:111
 search-expects-number = { $field_name } expects a number
 
 # squid/bot/catalogue/search/labels.py:61
@@ -5196,7 +5196,7 @@ search-field-depth = Depth
 # squid/bot/catalogue/search/labels.py:43
 search-field-description = Description
 
-# squid/search/application/fields.py:102
+# squid/core/search/application/fields.py:102
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
 # squid/bot/catalogue/search/labels.py:67
@@ -5277,10 +5277,10 @@ search-grouped-result-count = { $total } results
 # squid/bot/catalogue/record_display.py:40
 search-grouped-tied-holders = Tied holders
 
-# squid/search/application/ranking.py:67
+# squid/core/search/application/ranking.py:67
 search-k-positive = k must be positive
 
-# squid/search/domain/query.py:120
+# squid/core/search/domain/query.py:120
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
 # squid/bot/catalogue/search/help.py:160
@@ -5376,10 +5376,10 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:63
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/search/application/fields.py:220
+# squid/core/search/application/fields.py:220
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/search/application/services.py:71
+# squid/core/search/application/services.py:71
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
 # squid/bot/catalogue/search/labels.py:145
@@ -5397,7 +5397,7 @@ search-sort-newest = { $field }, newest first
 # squid/bot/catalogue/search/labels.py:142
 search-sort-oldest = { $field }, oldest first
 
-# squid/search/application/ranking.py:76
+# squid/core/search/application/ranking.py:76
 search-weight-negative = weight for { $branch_name } cannot be negative
 
 # squid/bot/settings/screen.py:310
@@ -5418,7 +5418,7 @@ settings-review-weighting-explained = Build reviews are weighted by the network'
 # squid/bot/settings/screen.py:652
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
-# squid/settings/domain/runtime.py:41
+# squid/core/settings/domain/runtime.py:41
 settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
 # squid/bot/settings/screen.py:162
@@ -5478,13 +5478,13 @@ starboard-history-create = Create starboard
 # squid/bot/starboard/screen.py:309
 starboard-history-edit = Edit starboard
 
-# squid/starboard/models.py:130
+# squid/core/starboard/models.py:130
 starboard-minimum-message-age = The minimum message age cannot exceed the maximum.
 
 # squid/bot/starboard/screen.py:110
 starboard-none-configured = No starboards are configured.
 
-# squid/starboard/models.py:124
+# squid/core/starboard/models.py:124
 starboard-post-threshold-exceed = The post threshold must exceed the removal threshold.
 
 # squid/bot/starboard/screen.py:249
@@ -5502,526 +5502,526 @@ starboard-role = Role
 # squid/bot/starboard/screen.py:439
 starboard-role-multiplier-action = Set or remove role multiplier
 
-# squid/starboard/models.py:133
+# squid/core/starboard/models.py:133
 starboard-starboard-colour-valid = Starboard colour must be a valid RGB value.
 
-# squid/starboard/models.py:136
+# squid/core/starboard/models.py:136
 starboard-starboard-display-emoji = Starboard display emoji cannot be empty.
 
-# squid/starboard/models.py:173
+# squid/core/starboard/models.py:173
 starboard-starboard-emoji-empty = Starboard emoji cannot be empty.
 
-# squid/starboard/models.py:176
+# squid/core/starboard/models.py:176
 starboard-starboard-emoji-multiplier = Starboard emoji multiplier must be finite and greater than zero.
 
-# squid/starboard/models.py:182
+# squid/core/starboard/models.py:182
 starboard-starboard-emoji-position = Starboard emoji position cannot be negative.
 
-# squid/starboard/models.py:140
+# squid/core/starboard/models.py:140
 starboard-starboard-emojis-unique = Starboard emojis must be unique.
 
-# squid/starboard/models.py:127
+# squid/core/starboard/models.py:127
 starboard-starboard-message-ages = Starboard message ages cannot be negative.
 
-# squid/starboard/models.py:118
+# squid/core/starboard/models.py:118
 starboard-starboard-name-empty = Starboard name cannot be empty.
 
-# squid/starboard/models.py:121
+# squid/core/starboard/models.py:121
 starboard-starboard-thresholds-finite = Starboard thresholds must be finite.
 
 # squid/bot/starboard/cog.py:247, squid/bot/starboard/screen.py:84
 starboard-unknown-role = Deleted role
 
-# squid/submissions/application/forms.py:177
+# squid/core/submissions/application/forms.py:177
 submissions-about-submission = About this submission
 
-# squid/submissions/application/forms.py:448
+# squid/core/submissions/application/forms.py:448
 submissions-ai-generated-ai = AI-generated or AI-assisted
 
-# squid/submissions/application/forms.py:252
+# squid/core/submissions/application/forms.py:252
 submissions-application-forms-build-depth = Build depth
 
-# squid/submissions/application/forms.py:245
+# squid/core/submissions/application/forms.py:245
 submissions-application-forms-build-height = Build height
 
-# squid/submissions/application/forms.py:190
+# squid/core/submissions/application/forms.py:190
 submissions-application-forms-build-identity = Name and creators
 
-# squid/submissions/application/forms.py:238
+# squid/core/submissions/application/forms.py:238
 submissions-application-forms-build-width = Build width
 
-# squid/submissions/application/forms.py:755
+# squid/core/submissions/application/forms.py:755
 submissions-application-forms-cc = CC0 1.0
 
-# squid/submissions/application/forms.py:756
+# squid/core/submissions/application/forms.py:756
 submissions-application-forms-cc-by = CC BY 4.0
 
-# squid/submissions/application/forms.py:572
+# squid/core/submissions/application/forms.py:572
 submissions-application-forms-closing-time = Closing time
 
-# squid/submissions/application/forms.py:218
+# squid/core/submissions/application/forms.py:218
 submissions-application-forms-creators = Creators
 
-# squid/submissions/application/forms.py:208
+# squid/core/submissions/application/forms.py:208
 submissions-application-forms-description = Description
 
-# squid/submissions/application/forms.py:195
+# squid/core/submissions/application/forms.py:195
 submissions-application-forms-display-name = Build name
 
-# squid/submissions/application/forms.py:515, squid/submissions/application/forms.py:549
+# squid/core/submissions/application/forms.py:515, squid/core/submissions/application/forms.py:549
 submissions-application-forms-door = Door
 
-# squid/submissions/application/forms.py:519
+# squid/core/submissions/application/forms.py:519
 submissions-application-forms-door-geometry = Door size and type
 
-# squid/submissions/application/forms.py:544
+# squid/core/submissions/application/forms.py:544
 submissions-application-forms-door-orientation = Door type
 
-# squid/submissions/application/forms.py:485
+# squid/core/submissions/application/forms.py:485
 submissions-application-forms-entrance = Entrance
 
-# squid/submissions/application/forms.py:588
+# squid/core/submissions/application/forms.py:588
 submissions-application-forms-extender = Extender
 
-# squid/submissions/application/forms.py:592
+# squid/core/submissions/application/forms.py:592
 submissions-application-forms-extender-movement = Extender size and direction
 
-# squid/submissions/application/forms.py:616
+# squid/core/submissions/application/forms.py:616
 submissions-application-forms-extension-length = Extension length
 
-# squid/submissions/application/forms.py:629
+# squid/core/submissions/application/forms.py:629
 submissions-application-forms-extension-time = Extension time
 
-# squid/submissions/application/forms.py:602
+# squid/core/submissions/application/forms.py:602
 submissions-application-forms-horizontal = Horizontal
 
-# squid/submissions/application/forms.py:696
+# squid/core/submissions/application/forms.py:696
 submissions-application-forms-known-patterns = Patterns
 
-# squid/submissions/application/forms.py:308
+# squid/core/submissions/application/forms.py:308
 submissions-application-forms-known-restrictions = Restrictions
 
-# squid/submissions/application/forms.py:692
+# squid/core/submissions/application/forms.py:692
 submissions-application-forms-mechanism-patterns = Patterns
 
-# squid/submissions/application/forms.py:596
+# squid/core/submissions/application/forms.py:596
 submissions-application-forms-movement-orientation = Direction
 
-# squid/submissions/application/forms.py:509
+# squid/core/submissions/application/forms.py:509
 submissions-application-forms-opening-depth = Opening depth
 
-# squid/submissions/application/forms.py:504
+# squid/core/submissions/application/forms.py:504
 submissions-application-forms-opening-height = Opening height
 
-# squid/submissions/application/forms.py:564
+# squid/core/submissions/application/forms.py:564
 submissions-application-forms-opening-time = Opening time
 
-# squid/submissions/application/forms.py:499
+# squid/core/submissions/application/forms.py:499
 submissions-application-forms-opening-width = Opening width
 
-# squid/submissions/application/forms.py:175
+# squid/core/submissions/application/forms.py:175
 submissions-application-forms-origin = About this submission
 
-# squid/submissions/application/forms.py:490
+# squid/core/submissions/application/forms.py:490
 submissions-application-forms-other = Other
 
-# squid/submissions/application/forms.py:401
+# squid/core/submissions/application/forms.py:401
 submissions-application-forms-public-download = Anyone
 
-# squid/submissions/application/forms.py:633
+# squid/core/submissions/application/forms.py:633
 submissions-application-forms-retraction-time = Retraction time
 
-# squid/submissions/application/forms.py:397
+# squid/core/submissions/application/forms.py:397
 submissions-application-forms-reviewer-only = Staff reviewers only
 
-# squid/submissions/application/forms.py:382
+# squid/core/submissions/application/forms.py:382
 submissions-application-forms-schematic-visibility = Who can download the schematic
 
-# squid/submissions/application/forms.py:364
+# squid/core/submissions/application/forms.py:364
 submissions-application-forms-showcase-tags = Tags
 
-# squid/submissions/application/forms.py:550
+# squid/core/submissions/application/forms.py:550
 submissions-application-forms-skydoor = Skydoor
 
-# squid/submissions/application/forms.py:552
+# squid/core/submissions/application/forms.py:552
 submissions-application-forms-trapdoor = Trapdoor
 
-# squid/submissions/application/forms.py:480
+# squid/core/submissions/application/forms.py:480
 submissions-application-forms-utility = Utility
 
-# squid/submissions/application/forms.py:610
+# squid/core/submissions/application/forms.py:610
 submissions-application-forms-vertical-downward = Vertical downward
 
-# squid/submissions/application/forms.py:606
+# squid/core/submissions/application/forms.py:606
 submissions-application-forms-vertical-upward = Vertical upward
 
-# squid/submissions/application/attachments.py:79
+# squid/core/submissions/application/attachments.py:79
 submissions-attachment-upload-authority = The draft attachment upload authority is no longer available.
 
-# squid/submissions/application/finalization.py:224
+# squid/core/submissions/application/finalization.py:224
 submissions-attention-retention-positive = finalization attention retention must be positive
 
-# squid/submissions/domain/drafts.py:121
+# squid/core/submissions/domain/drafts.py:121
 submissions-base-revision-negative = base_revision cannot be negative
 
-# squid/submissions/domain/forms.py:359
+# squid/core/submissions/domain/forms.py:359
 submissions-category-blank-label = category { $category } has a blank label
 
-# squid/submissions/domain/forms.py:407
+# squid/core/submissions/domain/forms.py:407
 submissions-category-duplicates-common = category { $category_code } duplicates common fields: { $fields }
 
-# squid/submissions/application/forms.py:759
+# squid/core/submissions/application/forms.py:759
 submissions-cc-by-nc = CC BY-NC 4.0
 
-# squid/submissions/application/forms.py:761
+# squid/core/submissions/application/forms.py:761
 submissions-cc-by-nc-nd = CC BY-NC-ND 4.0
 
-# squid/submissions/application/forms.py:760
+# squid/core/submissions/application/forms.py:760
 submissions-cc-by-nc-sa = CC BY-NC-SA 4.0
 
-# squid/submissions/application/forms.py:758
+# squid/core/submissions/application/forms.py:758
 submissions-cc-by-nd = CC BY-ND 4.0
 
-# squid/submissions/application/forms.py:757
+# squid/core/submissions/application/forms.py:757
 submissions-cc-by-sa = CC BY-SA 4.0
 
-# squid/submissions/domain/forms.py:95
+# squid/core/submissions/domain/forms.py:95
 submissions-choice-characters-without = choice values must be 1-120 characters without surrounding whitespace
 
-# squid/submissions/domain/forms.py:101
+# squid/core/submissions/domain/forms.py:101
 submissions-choice-labels-blank = choice labels cannot be blank
 
-# squid/submissions/domain/forms.py:234
+# squid/core/submissions/domain/forms.py:234
 submissions-choice-options-required = choice field { $field_id } requires options
 
-# squid/submissions/domain/forms.py:104
+# squid/core/submissions/domain/forms.py:104
 submissions-choice-value-type = choice value types must be text, numeric, boolean, or absent
 
-# squid/submissions/application/forms.py:385
+# squid/core/submissions/application/forms.py:385
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
 
-# squid/submissions/application/finalization.py:423
+# squid/core/submissions/application/finalization.py:423
 submissions-claim-limit = finalization claim limit must be between 1 and { $maximum }
 
-# squid/submissions/application/finalization.py:69
+# squid/core/submissions/application/finalization.py:69
 submissions-claimed-finalization-metadata-invalid = claimed submission finalization metadata is invalid
 
-# squid/submissions/application/forms.py:511
+# squid/core/submissions/application/forms.py:511
 submissions-clear-opening-depth = Clear opening depth
 
-# squid/submissions/application/forms.py:506
+# squid/core/submissions/application/forms.py:506
 submissions-clear-opening-height = Clear opening height
 
-# squid/submissions/application/forms.py:501
+# squid/core/submissions/application/forms.py:501
 submissions-clear-opening-width = Clear opening width
 
-# squid/submissions/domain/drafts.py:124
+# squid/core/submissions/domain/drafts.py:124
 submissions-client-instance-id = client_instance_id has an invalid format
 
-# squid/submissions/application/forms.py:440
+# squid/core/submissions/application/forms.py:440
 submissions-completion-date-context = When it was finished
 
-# squid/submissions/application/forms.py:182
+# squid/core/submissions/application/forms.py:182
 submissions-credit-minecraft-server = Credit the Minecraft server this submission came from
 
-# squid/submissions/application/forms.py:216
+# squid/core/submissions/application/forms.py:216
 submissions-credits = Credits
 
-# squid/submissions/application/forms.py:295
+# squid/core/submissions/application/forms.py:295
 submissions-declared-version-compatibility = Works in versions
 
-# squid/submissions/application/forms.py:234
+# squid/core/submissions/application/forms.py:234
 submissions-dimensions-versions = Size and version
 
-# squid/submissions/errors.py:33
+# squid/core/submissions/errors.py:33
 submissions-draft-account-required = No linked account was found for this request.
 
-# squid/submissions/domain/drafts.py:214
+# squid/core/submissions/domain/drafts.py:214
 submissions-draft-answers-exceed = The draft answers exceed the retained data limit.
 
-# squid/submissions/application/attachments.py:73
+# squid/core/submissions/application/attachments.py:73
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/submissions/application/drafts.py:253
+# squid/core/submissions/application/drafts.py:253
 submissions-draft-capacity-positive = draft capacity must be positive
 
-# squid/submissions/domain/drafts.py:142
+# squid/core/submissions/domain/drafts.py:142
 submissions-draft-change-duplicate-field = a draft change may mutate each field at most once
 
-# squid/submissions/domain/drafts.py:58
+# squid/core/submissions/domain/drafts.py:58
 submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII characters
 
-# squid/submissions/domain/drafts.py:132
+# squid/core/submissions/domain/drafts.py:132
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/submissions/application/drafts.py:373
+# squid/core/submissions/application/drafts.py:373
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/submissions/application/drafts.py:441
+# squid/core/submissions/application/drafts.py:441
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
-# squid/submissions/domain/drafts.py:292, squid/submissions/domain/drafts.py:300
+# squid/core/submissions/domain/drafts.py:292, squid/core/submissions/domain/drafts.py:300
 submissions-draft-json-compatible = draft values must be JSON-compatible
 
-# squid/submissions/domain/drafts.py:310
+# squid/core/submissions/domain/drafts.py:310
 submissions-draft-json-cycle-invalid = draft JSON values cannot contain cycles or shared containers
 
-# squid/submissions/domain/drafts.py:295, squid/submissions/domain/drafts.py:303
+# squid/core/submissions/domain/drafts.py:295, squid/core/submissions/domain/drafts.py:303
 submissions-draft-json-exceed = draft JSON values exceed the retained byte limit
 
-# squid/submissions/domain/drafts.py:270
+# squid/core/submissions/domain/drafts.py:270
 submissions-draft-json-integers = draft JSON integers are too large
 
-# squid/submissions/domain/drafts.py:262
+# squid/core/submissions/domain/drafts.py:262
 submissions-draft-json-nested = draft JSON values are nested too deeply
 
-# squid/submissions/domain/drafts.py:275
+# squid/core/submissions/domain/drafts.py:275
 submissions-draft-json-numbers = draft JSON numbers must be finite
 
-# squid/submissions/domain/drafts.py:283
+# squid/core/submissions/domain/drafts.py:283
 submissions-draft-json-object = draft JSON object keys must be strings
 
-# squid/submissions/domain/drafts.py:127
+# squid/core/submissions/domain/drafts.py:127
 submissions-draft-operation-required = draft changes require at least one operation
 
-# squid/submissions/errors.py:39
+# squid/core/submissions/errors.py:39
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/submissions/application/drafts.py:293
+# squid/core/submissions/application/drafts.py:293
 submissions-draft-retention-positive = draft retention must be positive
 
-# squid/submissions/errors.py:35
+# squid/core/submissions/errors.py:35
 submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator.
 
-# squid/submissions/domain/drafts.py:237
+# squid/core/submissions/domain/drafts.py:237
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
 
-# squid/submissions/application/forms.py:744
+# squid/core/submissions/application/forms.py:744
 submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.
 
-# squid/submissions/application/forms.py:259
+# squid/core/submissions/application/forms.py:259
 submissions-exact-source-minecraft = Minecraft version
 
-# squid/submissions/domain/finalization.py:289
+# squid/core/submissions/domain/finalization.py:289
 submissions-extender-length-positive = extender length must be positive
 
-# squid/submissions/application/forms.py:673
+# squid/core/submissions/application/forms.py:673
 submissions-external-links = External links
 
-# squid/submissions/domain/forms.py:252
+# squid/core/submissions/domain/forms.py:252
 submissions-field-apply = field { $field_id } must apply to at least one origin
 
-# squid/submissions/domain/forms.py:218
+# squid/core/submissions/domain/forms.py:218
 submissions-field-blank-label = field { $field_id } has a blank label
 
-# squid/submissions/domain/forms.py:226
+# squid/core/submissions/domain/forms.py:226
 submissions-field-inline-dynamic = field { $field_id } cannot have inline and dynamic options
 
-# squid/submissions/domain/forms.py:572
+# squid/core/submissions/domain/forms.py:572
 submissions-field-name-format = { $label } must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/submissions/domain/normalization.py:193
+# squid/core/submissions/domain/normalization.py:193
 submissions-field-not-integer = validated field { $field_id } is not an integer
 
-# squid/submissions/domain/normalization.py:159, squid/submissions/domain/normalization.py:172
+# squid/core/submissions/domain/normalization.py:159, squid/core/submissions/domain/normalization.py:172
 submissions-field-not-string = validated field { $field_id } is not a string
 
-# squid/submissions/domain/forms.py:246
+# squid/core/submissions/domain/forms.py:246
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
-# squid/submissions/application/finalization.py:260
+# squid/core/submissions/application/finalization.py:260
 submissions-finalization-job-missing = processing draft has no active finalization job
 
-# squid/submissions/application/finalization.py:266
+# squid/core/submissions/application/finalization.py:266
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
-# squid/submissions/domain/finalization.py:404
+# squid/core/submissions/domain/finalization.py:404
 submissions-finalized-build-identity = finalized build identity is invalid
 
-# squid/submissions/domain/forms.py:393
+# squid/core/submissions/domain/forms.py:393
 submissions-form-revision-protocol = form revision and protocol bounds must be positive and ordered
 
-# squid/submissions/application/forms.py:418
+# squid/core/submissions/application/forms.py:418
 submissions-i-permission-distribute = I have permission to distribute this schematic under the selected license.
 
-# squid/submissions/domain/drafts.py:90
+# squid/core/submissions/domain/drafts.py:90
 submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
-# squid/submissions/domain/finalization.py:128
+# squid/core/submissions/domain/finalization.py:128
 submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
-# squid/submissions/domain/drafts.py:259
+# squid/core/submissions/domain/drafts.py:259
 submissions-json-contain-too = draft JSON values contain too many nodes
 
-# squid/submissions/domain/finalization.py:428
+# squid/core/submissions/domain/finalization.py:428
 submissions-keys-stable-lowercase = { $label } keys must be stable lowercase identifiers
 
-# squid/submissions/domain/finalization.py:425
+# squid/core/submissions/domain/finalization.py:425
 submissions-keys-unique = { $label } keys must be unique
 
-# squid/submissions/domain/forms.py:172
+# squid/core/submissions/domain/forms.py:172
 submissions-min-items-exceed = min_items cannot exceed max_items
 
-# squid/submissions/domain/forms.py:169
+# squid/core/submissions/domain/forms.py:169
 submissions-min-length-exceed = min_length cannot exceed max_length
 
-# squid/submissions/domain/forms.py:162
+# squid/core/submissions/domain/forms.py:162
 submissions-minimum-exceed-maximum = minimum cannot exceed maximum
 
-# squid/submissions/application/forms.py:188
+# squid/core/submissions/application/forms.py:188
 submissions-name-and-credits = Name and credits
 
-# squid/submissions/domain/forms.py:167
+# squid/core/submissions/domain/forms.py:167
 submissions-negative = { $name } cannot be negative
 
-# squid/submissions/domain/finalization.py:211
+# squid/core/submissions/domain/finalization.py:211
 submissions-normalized-media-upload = normalized media upload identifiers must be unique
 
-# squid/submissions/domain/finalization.py:355
+# squid/core/submissions/domain/finalization.py:355
 submissions-normalized-source-version-blank = normalized source versions cannot be blank
 
-# squid/submissions/domain/finalization.py:349
+# squid/core/submissions/domain/finalization.py:349
 submissions-normalized-submission-origin = normalized submission origin is invalid
 
-# squid/submissions/domain/finalization.py:352
+# squid/core/submissions/domain/finalization.py:352
 submissions-normalized-submission-schema = normalized submission schema origin is invalid
 
-# squid/submissions/domain/normalization.py:219
+# squid/core/submissions/domain/normalization.py:219
 submissions-not-string-list = validated field { $field_id } is not a string list
 
-# squid/submissions/domain/drafts.py:138
+# squid/core/submissions/domain/drafts.py:138
 submissions-operation-ids-unique = operation IDs must be unique within a draft change
 
-# squid/submissions/application/forms.py:77
+# squid/core/submissions/application/forms.py:77
 submissions-option-revisions-positive = option revisions must be positive
 
-# squid/submissions/application/forms.py:561, squid/submissions/application/forms.py:626
+# squid/core/submissions/application/forms.py:561, squid/core/submissions/application/forms.py:626
 submissions-optional-default-timing = Timings
 
-# squid/submissions/application/forms.py:197
+# squid/core/submissions/application/forms.py:197
 submissions-optional-name-shown = Optional. Shown next to the title generated from the build's details.
 
-# squid/submissions/domain/drafts.py:170
+# squid/core/submissions/domain/drafts.py:170
 submissions-owner-account-id = owner_account_id must be positive
 
-# squid/submissions/domain/finalization.py:374
+# squid/core/submissions/domain/finalization.py:374
 submissions-paper-installation-only = Only Paper submissions may retain an installation ID.
 
-# squid/submissions/application/drafts.py:324
+# squid/core/submissions/application/drafts.py:324
 submissions-paper-installation-origin-required = Paper drafts require server-derived installation identity.
 
-# squid/submissions/application/drafts.py:101
+# squid/core/submissions/application/drafts.py:101
 submissions-paper-may-retain = Only Paper drafts may retain an installation ID.
 
-# squid/submissions/application/forms.py:351
+# squid/core/submissions/application/forms.py:351
 submissions-propose-animation-restrictions = Other animation restrictions
 
-# squid/submissions/application/forms.py:355
+# squid/core/submissions/application/forms.py:355
 submissions-propose-component-restrictions = Other component restrictions
 
-# squid/submissions/application/forms.py:705
+# squid/core/submissions/application/forms.py:705
 submissions-propose-missing-patterns = Other patterns
 
-# squid/submissions/application/forms.py:317
+# squid/core/submissions/application/forms.py:317
 submissions-propose-missing-restrictions = Other restrictions
 
-# squid/submissions/application/forms.py:347
+# squid/core/submissions/application/forms.py:347
 submissions-propose-wiring-restrictions = Other wiring restrictions
 
-# squid/submissions/application/forms.py:407
+# squid/core/submissions/application/forms.py:407
 submissions-public-schematic-license = Schematic license
 
-# squid/submissions/domain/finalization.py:180
+# squid/core/submissions/domain/finalization.py:180
 submissions-public-schematic-rights-required = public schematics require a license and rights attestation
 
-# squid/submissions/domain/finalization.py:226
+# squid/core/submissions/domain/finalization.py:226
 submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID
 
-# squid/submissions/domain/finalization.py:416
+# squid/core/submissions/domain/finalization.py:416
 submissions-rejected-build-submission = rejected build submission requires at least one issue
 
-# squid/submissions/application/preparation.py:45
+# squid/core/submissions/application/preparation.py:45
 submissions-rejected-preparation-requirement = rejected submission preparation requires at least one issue
 
-# squid/submissions/domain/forms.py:240
+# squid/core/submissions/domain/forms.py:240
 submissions-repeatable-field-use = repeatable field { $field_id } must use string_list values
 
-# squid/submissions/application/forms.py:304
+# squid/core/submissions/application/forms.py:304
 submissions-restrictions-tags = Restrictions and tags
 
-# squid/submissions/application/finalization.py:405
+# squid/core/submissions/application/finalization.py:405
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
-# squid/submissions/domain/finalization.py:186
+# squid/core/submissions/domain/finalization.py:186
 submissions-reviewer-schematics-carry = reviewer-only schematics cannot carry a public distribution grant
 
-# squid/submissions/domain/forms.py:390
+# squid/core/submissions/domain/forms.py:390
 submissions-schema-id-stable = schema_id must be a stable lowercase identifier
 
-# squid/submissions/domain/drafts.py:173
+# squid/core/submissions/domain/drafts.py:173
 submissions-schema-revision-positive = schema_revision must be positive and revision cannot be negative
 
-# squid/submissions/application/forms.py:377
+# squid/core/submissions/application/forms.py:377
 submissions-schematic-rights-privacy = Schematic sharing
 
-# squid/submissions/domain/forms.py:340
+# squid/core/submissions/domain/forms.py:340
 submissions-section-blank-title = section { $section_id } has a blank title
 
-# squid/submissions/application/forms.py:180
+# squid/core/submissions/application/forms.py:180
 submissions-show-sponsoring-server = Show the sponsoring server on this build
 
-# squid/submissions/application/forms.py:262
+# squid/core/submissions/application/forms.py:262
 submissions-source-version-help = The version the schematic or world capture was exported from.
 
-# squid/submissions/domain/finalization.py:383
+# squid/core/submissions/domain/finalization.py:383
 submissions-sponsor-installation-match-required = Sponsor attribution requires a matching Paper installation projection.
 
-# squid/submissions/application/attachments.py:102
+# squid/core/submissions/application/attachments.py:102
 submissions-staged-attachment-unavailable = The staged attachment is no longer available.
 
-# squid/submissions/domain/drafts.py:195
+# squid/core/submissions/domain/drafts.py:195
 submissions-state-edited = drafts in { $current_status } state cannot be edited
 
-# squid/submissions/domain/finalization.py:148
+# squid/core/submissions/domain/finalization.py:148
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/submissions/application/drafts.py:216
+# squid/core/submissions/application/drafts.py:216
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
-# squid/submissions/domain/finalization.py:368
+# squid/core/submissions/domain/finalization.py:368
 submissions-submission-incompatible-category = { $category } submission has incompatible category details
 
-# squid/submissions/domain/finalization.py:389
+# squid/core/submissions/domain/finalization.py:389
 submissions-submission-retain-sponsor = A submission cannot retain a sponsor projection when attribution was not requested.
 
-# squid/submissions/domain/finalization.py:436
+# squid/core/submissions/domain/finalization.py:436
 submissions-submission-timings-negative = submission timings cannot be negative
 
-# squid/submissions/application/forms.py:319, squid/submissions/application/forms.py:707
+# squid/core/submissions/application/forms.py:319, squid/core/submissions/application/forms.py:707
 submissions-suggestions-unofficial = Not in the list? Add them here, one per line. Staff review new ones.
 
-# squid/submissions/domain/forms.py:582
+# squid/core/submissions/domain/forms.py:582
 submissions-unique = { $label } must be unique
 
-# squid/submissions/domain/forms.py:434
+# squid/core/submissions/domain/forms.py:434
 submissions-unknown-submission-category = unknown submission category: { $category }
 
-# squid/submissions/domain/drafts.py:95
+# squid/core/submissions/domain/drafts.py:95
 submissions-unset-operations-carry = unset operations cannot carry a value
 
-# squid/submissions/application/forms.py:154
+# squid/core/submissions/application/forms.py:154
 submissions-unsupported-checked-submission = unsupported checked-in submission form revision
 
-# squid/submissions/domain/normalization.py:204
+# squid/core/submissions/domain/normalization.py:204
 submissions-validated-field-not = validated field { $field_id } is not a boolean
 
-# squid/submissions/domain/finalization.py:208
+# squid/core/submissions/domain/finalization.py:208
 submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs
 
-# squid/submissions/application/forms.py:576
+# squid/core/submissions/application/forms.py:576
 submissions-visible-closing-time = Visible closing time
 
-# squid/submissions/application/forms.py:568
+# squid/core/submissions/application/forms.py:568
 submissions-visible-opening-time = Visible opening time
 
 # squid/bot/submission/cog.py:274, squid/bot/submission/cog.py:278, squid/bot/submission/cog.py:282
@@ -6075,28 +6075,28 @@ submit-staff-notes-prompt = A short description of the build.
 # squid/bot/submission/cog.py:245
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
-# squid/suggestions/application/registry.py:82
+# squid/core/suggestions/application/registry.py:82
 suggestions-duplicate-suggestion-source = duplicate suggestion source: { $source_id }
 
-# squid/suggestions/application/services.py:126
+# squid/core/suggestions/application/services.py:126
 suggestions-enumerated = { $source_id } cannot be enumerated
 
-# squid/suggestions/application/registry.py:55
+# squid/core/suggestions/application/registry.py:55
 suggestions-invalid-suggestion-source = invalid suggestion source id: { $source_id }
 
-# squid/suggestions/application/registry.py:24
+# squid/core/suggestions/application/registry.py:24
 suggestions-no-such-suggestion = No such suggestion source.
 
-# squid/suggestions/application/registry.py:61
+# squid/core/suggestions/application/registry.py:61
 suggestions-required-node-set = { $source_id }: required_node must be set exactly when visibility is requires_node
 
-# squid/suggestions/application/registry.py:25
+# squid/core/suggestions/application/registry.py:25
 suggestions-unknown-suggestion-source = Unknown suggestion source
 
-# squid/sync/application.py:104
+# squid/core/sync/application.py:104
 sync-claim-limit-between = claim limit must be between 1 and 100
 
-# squid/sync/application.py:95
+# squid/core/sync/application.py:95
 sync-max-attempts-positive = max_attempts must be positive
 
 # squid/bot/tags_view.py:312
@@ -6108,19 +6108,19 @@ tags-alias-already-exists = That alias is already on this restriction.
 # squid/bot/tags_view.py:258, squid/bot/tags_view.py:289
 tags-choose-restriction = Choose restriction
 
-# squid/tags/domain/values.py:34
+# squid/core/tags/domain/values.py:34
 tags-does-not-accept-value = { $display_name } does not accept a value.
 
-# squid/tags/errors.py:10
+# squid/core/tags/errors.py:10
 tags-errors-tag-not-found = Tag not found.
 
-# squid/tags/domain/values.py:58
+# squid/core/tags/domain/values.py:58
 tags-expects-finite-number = { $display_name } expects a finite number.
 
-# squid/tags/domain/values.py:53
+# squid/core/tags/domain/values.py:53
 tags-expects-number-canonical = { $display_name } expects a number in its canonical unit.
 
-# squid/tags/domain/values.py:48
+# squid/core/tags/domain/values.py:48
 tags-expects-true-false = { $display_name } expects true or false.
 
 # squid/bot/tags_view.py:302
@@ -6132,7 +6132,7 @@ tags-history-proposal = Propose showcase tag
 # squid/bot/tags_view.py:227
 tags-link-account-instructions = Link and consent an account in `/account` before proposing tags.
 
-# squid/tags/application/services.py:87
+# squid/core/tags/application/services.py:87
 tags-names-start-letter = query names must start with a letter and contain only lowercase letters, digits, or underscores
 
 # squid/bot/tags_view.py:174
@@ -6141,13 +6141,13 @@ tags-no-proposals-awaiting-review = No tag proposals are awaiting review.
 # squid/bot/tags_view.py:341
 tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here.
 
-# squid/tags/domain/values.py:38
+# squid/core/tags/domain/values.py:38
 tags-requires-value = { $display_name } requires a { $value_type } value.
 
-# squid/tags/application/services.py:83
+# squid/core/tags/application/services.py:83
 tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 
-# squid/tags/errors.py:11
+# squid/core/tags/errors.py:11
 tags-tag-not-found-title = Tag not found
 
 # squid/bot/tags_view.py:211
@@ -6330,10 +6330,10 @@ verify-creator-page-target-prompt = Whose creator page to show. Defaults to your
 # squid/bot/version_tracking_cog.py:103
 versions-add-permission-denied = You are no longer allowed to add versions.
 
-# squid/versions/errors.py:21
+# squid/core/versions/errors.py:21
 versions-minecraft-version-catalog = The Minecraft version catalog is empty.
 
-# squid/versions/errors.py:10
+# squid/core/versions/errors.py:10
 versions-minecraft-version-invalid = The Minecraft version is invalid.
 
 # squid/bot/version_tracking_cog.py:81
@@ -6342,7 +6342,7 @@ versions-none-recognized = No Minecraft versions are recognized yet.
 # squid/bot/version_tracking_cog.py:80
 versions-recognized-list-title = Recognized Minecraft versions
 
-# squid/versions/errors.py:13
+# squid/core/versions/errors.py:13
 versions-use-supported-minecraft = Use a supported Minecraft version format and try again.
 
 # squid/bot/catalogue/schematics/video.py:197
@@ -6462,16 +6462,16 @@ vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 # squid/bot/voting/controls.py:80
 vote-unresolved-voter-cache-retained = { $count } voter(s) could not be resolved, so their cached weight was kept.
 
-# squid/voting/errors.py:34
+# squid/core/voting/errors.py:34
 voting-discord-membership-information = Discord membership information is temporarily unavailable.
 
-# squid/voting/errors.py:11
+# squid/core/voting/errors.py:11
 voting-session-not-found-title = Vote session not found
 
-# squid/voting/errors.py:26
+# squid/core/voting/errors.py:26
 voting-vote-configuration-invalid = Vote configuration is invalid.
 
-# squid/voting/errors.py:10
+# squid/core/voting/errors.py:10
 voting-vote-session-not-found = Vote session not found.
 
 # squid/bot/chrome.py:120

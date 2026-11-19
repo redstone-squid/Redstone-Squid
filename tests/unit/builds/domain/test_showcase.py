@@ -1,6 +1,6 @@
 import pytest
 
-from squid.builds.domain import ShowcaseTag, read_showcase_tags
+from squid.core.builds.domain import ShowcaseTag, read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
 
 

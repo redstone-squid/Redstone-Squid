@@ -10,10 +10,10 @@ import pytest
 from pytest_mock import MockerFixture
 
 from squid.bot import welcome_relay_cog as welcome_relay
-from squid.community.application import WelcomeRelayService
-from squid.community.domain import WelcomeRelayPolicy
+from squid.core.community.application import WelcomeRelayService
+from squid.core.community.domain import WelcomeRelayPolicy
+from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.runtime import BotServices
-from squid.settings.domain.runtime import RuntimeSettings
 from squid_i18n.text import NEUTRAL, discord_text, resolve_text
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.services import bot_services

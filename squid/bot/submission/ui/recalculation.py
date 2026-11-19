@@ -7,8 +7,8 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
 from squid.core.errors import SquidError
+from squid.core.submissions.application.recalculation_values import RecalculationProposal
 from squid.runtime import BotServices
-from squid.submissions.application.recalculation_values import RecalculationProposal
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

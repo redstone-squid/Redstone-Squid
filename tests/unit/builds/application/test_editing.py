@@ -5,15 +5,15 @@ from decimal import Decimal
 
 import pytest
 
-from squid.builds.application import BuildEditPatch
-from squid.builds.application.edits import build_values, patch_values
-from squid.builds.domain import ShowcaseTag
-from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
-from squid.builds.errors import InvalidBuildError
-from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
+from squid.core.builds.application import BuildEditPatch
+from squid.core.builds.application.edits import build_values, patch_values
+from squid.core.builds.domain import ShowcaseTag
+from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
+from squid.core.builds.errors import InvalidBuildError
+from squid.core.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagAssignment, TagDefinition
 
 
 def test_combine_preserves_every_typed_patch_field() -> None:

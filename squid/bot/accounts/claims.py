@@ -5,14 +5,14 @@ from typing import Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.accounts.application import AccountService
-from squid.accounts.errors import AliasAlreadyClaimedError
-from squid.accounts.models import AliasClaim
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.accounts.profile_render import present_claimant
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants
-from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.errors import AliasAlreadyClaimedError
+from squid.core.accounts.models import AliasClaim
+from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target

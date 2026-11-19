@@ -12,13 +12,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.persistence.base import Base
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.models import SearchDocument, SearchDocumentFacet
-from squid.suggestions.application.queries import SuggestionQueryService
-from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+from squid.core.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.suggestions.application.queries import SuggestionQueryService
+from squid.core.suggestions.domain import SuggestionRequest
+from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 pytestmark = pytest.mark.asyncio
 

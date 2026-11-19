@@ -6,9 +6,9 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
-from squid.notifications.domain import NotificationKind, NotificationSource
-from squid.notifications.infrastructure.account_merge import _coalesce_notification_deliveries
-from squid.notifications.models import NotificationDeliveryRecord
+from squid.core.notifications.domain import NotificationKind, NotificationSource
+from squid.core.notifications.infrastructure.account_merge import _coalesce_notification_deliveries
+from squid.core.notifications.models import NotificationDeliveryRecord
 
 
 @pytest.mark.parametrize(

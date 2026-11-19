@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from squid.records.application.history import reconstruct_history
-from squid.records.domain.models import DOOR_TIMING_METHODS, BaseTitle, Candidate, TimingVariant
+from squid.core.records.application.history import reconstruct_history
+from squid.core.records.domain.models import DOOR_TIMING_METHODS, BaseTitle, Candidate, TimingVariant
 
 
 def test_unresolved_comparison_closes_previous_holder_period() -> None:

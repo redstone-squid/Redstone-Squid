@@ -7,12 +7,12 @@ import discord
 
 from squid.bot.ui import tr
 from squid.core.actors import Actor
-from squid.permissions.domain.catalogue import (
+from squid.core.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CLOSE_ANY,
     VOTE_WEIGHT_STAFF,
 )
-from squid.voting.domain import VoteRejection
+from squid.core.voting.domain import VoteRejection
 from squid_ui.content.text import Text
 
 if TYPE_CHECKING:

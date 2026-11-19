@@ -8,10 +8,8 @@ from dataclasses import dataclass
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.core.actors import Actor
-from squid.core.errors import DomainError
-from squid.core.i18n import tr
-from squid.edits.application import EditRunner
-from squid.edits.domain import (
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import (
     EditCommand,
     EditCommitUncertainError,
     EditReceipt,
@@ -20,6 +18,8 @@ from squid.edits.domain import (
     EditValues,
     Revision,
 )
+from squid.core.errors import DomainError
+from squid.core.i18n import tr
 from squid_reactivity import Signal, current_transaction
 from squid_ui.content.text import TextLike
 from squid_ui.ext.discord.target_types import ComponentsV2Target

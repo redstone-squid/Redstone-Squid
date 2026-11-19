@@ -1,7 +1,7 @@
 """Fixed permission grants for screen tests."""
 
 from squid.bot.utils.permissions import Grants
-from squid.permissions.domain import PermissionNode
+from squid.core.permissions.domain import PermissionNode
 
 
 def grants(*nodes: PermissionNode, current: bool = True) -> Grants:

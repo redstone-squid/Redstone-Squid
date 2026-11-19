@@ -2,7 +2,7 @@
 
 It edits a build through the same form, sections, and pickers as a submission draft (see
 `squid.bot.submission.ui.sections`), using the edit view of the build form
-(`squid.submissions.application.forms.build_edit_manifest`). Unlike a draft, nothing is saved
+(`squid.core.submissions.application.forms.build_edit_manifest`). Unlike a draft, nothing is saved
 until the user asks:
 
 1. Opening the editor turns the build into form answers (`answers_from_build`).
@@ -28,17 +28,17 @@ from squid.bot.edit_history import history_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.sections import form_sections, problem_text, section_text
 from squid.bot.ui import tr
-from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.builds.domain import UnresolvedTaxonomy
-from squid.builds.models import Build
 from squid.core.actors import Actor
+from squid.core.builds.application import BuildEditPatch, BuildService
+from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
+from squid.core.builds.domain import UnresolvedTaxonomy
+from squid.core.builds.models import Build
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import RevisionConflictError
 from squid.core.errors import JSONValue
-from squid.edits.application import EditRunner
-from squid.edits.domain import RevisionConflictError
-from squid.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
-from squid.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
-from squid.suggestions.domain import Suggestion
+from squid.core.submissions.application.build_answers import BuildAnswers, answers_from_build, patch_from_answers
+from squid.core.submissions.domain import ChoiceOption, FormField, FormManifest, FormSection, SubmissionOrigin
+from squid.core.suggestions.domain import Suggestion
 from squid_i18n import Text, md_tr
 from squid_reactivity import Topic
 from squid_ui.content.text import TextLike, md

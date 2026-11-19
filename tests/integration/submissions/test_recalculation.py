@@ -10,25 +10,25 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.models import Account
-from squid.builds.application import BuildService
-from squid.builds.application.ports import BuildUnitOfWork
-from squid.builds.domain import BuildCategory
-from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.models import Build
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
+from squid.core.builds.application import BuildService
+from squid.core.builds.application.ports import BuildUnitOfWork
+from squid.core.builds.domain import BuildCategory
+from squid.core.builds.errors import BuildRevisionMismatchError
+from squid.core.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError
-from squid.permissions.application import PermissionService
-from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.models import PermissionGrant
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application.recalculation import RecalculationProposalService
-from squid.submissions.application.recalculation_values import (
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.models import PermissionGrant
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.submissions.application.recalculation import RecalculationProposalService
+from squid.core.submissions.application.recalculation_values import (
     RecalculationFacts,
     RecalculationProposal,
     recalculation_values,
 )
-from squid.submissions.infrastructure.recalculation import PostgresRecalculationProposals
+from squid.core.submissions.infrastructure.recalculation import PostgresRecalculationProposals
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact

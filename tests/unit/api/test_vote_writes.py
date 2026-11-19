@@ -10,8 +10,8 @@ from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote, clear_vote
 from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
-from squid.voting.application import VoteService
-from squid.voting.domain import (
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import (
     CastVoteResult,
     VoteChoice,
     VoteKind,
@@ -20,7 +20,7 @@ from squid.voting.domain import (
     VoteRejection,
     VoteSessionSnapshot,
 )
-from squid.voting.errors import VoteSessionNotFoundError
+from squid.core.voting.errors import VoteSessionNotFoundError
 from tests.support.voting import build_snapshot
 from tests.unit.api.fakes import credential_nodes
 

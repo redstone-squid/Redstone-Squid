@@ -14,15 +14,15 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid.schematics.domain.formats import (
+from squid.core.schematics.domain.formats import (
     Container,
     format_from_filename,
     inflated_size_at_most,
     sniff_container,
     sniff_schematic_format,
 )
-from squid.schematics.domain.models import SchematicFormat
-from squid.schematics.errors import DecompressionBudgetExceededError, InvalidSchematicError
+from squid.core.schematics.domain.models import SchematicFormat
+from squid.core.schematics.errors import DecompressionBudgetExceededError, InvalidSchematicError
 
 ZIP_HEADER = b"PK\x03\x04" + bytes(64)
 

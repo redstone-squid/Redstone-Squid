@@ -10,7 +10,7 @@ checks basic whitespace and ASCII casing.
 
 import pytest
 
-from squid.accounts.domain import fold_creator_name
+from squid.core.accounts.domain import fold_creator_name
 
 
 @pytest.mark.parametrize(

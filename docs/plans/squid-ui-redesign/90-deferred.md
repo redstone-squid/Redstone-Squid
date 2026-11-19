@@ -231,7 +231,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   `**params: Unpack[TD]` in a `Protocol.__call__`. **Pyrefly 1.2 rejects `Unpack` on a
   TypeVar** — "`Unpack` in \*\*kwargs annotation must be used only with a `TypedDict`" —
   including when the TypeVar is bound to a TypedDict base, so the protocol cannot even be
-  spelled. The concrete-TypedDict form (`squid/settings/application/ports.py`) is the
+  spelled. The concrete-TypedDict form (`squid/core/settings/application/ports.py`) is the
   supported case and is not what this needs. It would also reintroduce the drift `Route`
   exists to eliminate, with parameter names and types living in two places, and three of
   five routes carry no parameters at all. Registration-time `inspect.signature` checking

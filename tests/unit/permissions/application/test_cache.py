@@ -3,10 +3,10 @@
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache, cache_key
-from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Pattern, Rule
-from squid.permissions.models import PermissionRole, PermissionRoleAssignment
+from squid.core.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache, cache_key
+from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Pattern, Rule
+from squid.core.permissions.models import PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
 GUILD = 555

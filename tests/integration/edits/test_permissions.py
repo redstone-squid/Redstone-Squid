@@ -6,13 +6,13 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
+from squid.core.accounts.models import Account
 from squid.core.actors import Actor
+from squid.core.edits.application import EditExecutor
+from squid.core.edits.domain import EditCommand, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, ConflictError, InvalidStateError
-from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, Revision, RevisionConflictError
-from squid.permissions.application.administration import PermissionAdministrationService
-from squid.permissions.application.edits import (
+from squid.core.permissions.application.administration import PermissionAdministrationService
+from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
@@ -37,12 +37,12 @@ from squid.permissions.application.edits import (
     RoleDeletionValues,
     RolePresenceValues,
 )
-from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Effect
-from squid.permissions.domain.catalogue import PERM_NODE_VIEW, ROLE_DEFINITION_MANAGE
-from squid.permissions.domain.models import AccountGrantSubject
-from squid.permissions.models import PermissionAuditEntry
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain import Effect
+from squid.core.permissions.domain.catalogue import PERM_NODE_VIEW, ROLE_DEFINITION_MANAGE
+from squid.core.permissions.domain.models import AccountGrantSubject
+from squid.core.permissions.models import PermissionAuditEntry
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 
 

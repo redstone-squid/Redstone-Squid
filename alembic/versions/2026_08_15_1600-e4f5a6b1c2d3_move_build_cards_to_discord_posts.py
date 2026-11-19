@@ -23,7 +23,7 @@ from alembic_utils.pg_function import PGFunction
 from alembic_utils.replaceable_entity import ReplaceableEntity
 
 from alembic import op
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.core.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "e4f5a6b1c2d3"
 down_revision: str | Sequence[str] | None = "d3e4f5a6b1c2"

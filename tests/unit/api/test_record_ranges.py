@@ -5,13 +5,13 @@ from unittest.mock import create_autospec
 import pytest
 from litestar.testing import TestClient
 
-from squid.idempotency import IdempotencyService
-from squid.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
-from squid.records.application.published_points import (
+from squid.core.idempotency import IdempotencyService
+from squid.core.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.published_points import (
     PublishedDoorPoint,
 )
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.application.range_snapshots import RangePublication
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.range_snapshots import RangePublication
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 from tests.unit.api.test_idempotency import MemoryIdempotencyRepository, MemoryIdempotencyUnitOfWork
 from tests.unit.records.application.test_expansion_regions import family

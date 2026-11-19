@@ -4,10 +4,10 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import replace
 from typing import override
 
-from squid.settings.application import SettingsService
-from squid.settings.domain.runtime import RuntimeSettings
-from squid.settings.models import RuntimeSetting, ServerSetting
-from squid.voting.application.ports import VoteRepository
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.models import RuntimeSetting, ServerSetting
+from squid.core.voting.application.ports import VoteRepository
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 

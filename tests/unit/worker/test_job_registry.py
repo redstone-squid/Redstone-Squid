@@ -6,7 +6,7 @@ from typing import override
 import pytest
 
 from squid.config import WorkerConfig
-from squid.media.application.jobs import MediaProcessingJobRunner
+from squid.core.media.application.jobs import MediaProcessingJobRunner
 from squid.worker.app import WorkerJobSpec
 from squid.worker.rendering import SchematicPreviewWorker
 from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services

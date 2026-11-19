@@ -11,21 +11,21 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.models import Account
-from squid.builds.domain import Status
-from squid.builds.models import DoorBuild
+from squid.core.accounts.models import Account
+from squid.core.builds.domain import Status
+from squid.core.builds.models import DoorBuild
 from squid.core.errors import InvalidStateError
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
-from squid.records.application.models import CandidateBuild
-from squid.records.application.ports import DoorRangeAnalyzer
-from squid.records.application.range_publication import RangePublicationService
-from squid.records.application.range_snapshots import RangeSnapshotDocument, RangeSource
-from squid.records.application.services import RecordComputationService
-from squid.records.domain.regions import RegionAnalysisStatus
-from squid.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
-from squid.records.infrastructure.range_wire import failed_analysis
-from squid.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnapshot, RulesRevision
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.models import CandidateBuild
+from squid.core.records.application.ports import DoorRangeAnalyzer
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.range_snapshots import RangeSnapshotDocument, RangeSource
+from squid.core.records.application.services import RecordComputationService
+from squid.core.records.domain.regions import RegionAnalysisStatus
+from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
+from squid.core.records.infrastructure.range_wire import failed_analysis
+from squid.core.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnapshot, RulesRevision
 from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
 

@@ -8,20 +8,20 @@ from unittest.mock import Mock
 import discord
 import pytest
 
-from squid.accounts.application import AccountService
-from squid.accounts.models import Account
 from squid.bot.posts import vote_renderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
-from squid.messages.application import MessageService
-from squid.messages.models import Message
-from squid.posts.application import PostService
-from squid.posts.domain import ResourceKind
-from squid.posts.models import DiscordPost
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.models import Account
+from squid.core.messages.application import MessageService
+from squid.core.messages.models import Message
+from squid.core.posts.application import PostService
+from squid.core.posts.domain import ResourceKind
+from squid.core.posts.models import DiscordPost
+from squid.core.settings.application import SettingsService
+from squid.core.settings.domain import Setting
+from squid.core.voting.application import VoteService
+from squid.core.voting.domain import PollScope, VoteKind, VoteMessage, VoteSessionSnapshot, VoteStatus
 from squid.runtime import BotServices
-from squid.settings.application import SettingsService
-from squid.settings.domain import Setting
-from squid.voting.application import VoteService
-from squid.voting.domain import PollScope, VoteKind, VoteMessage, VoteSessionSnapshot, VoteStatus
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import DEFAULT_DELETE_LOG_TARGET, build_snapshot, poll_snapshot

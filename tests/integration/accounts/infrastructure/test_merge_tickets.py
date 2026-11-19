@@ -8,18 +8,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import (
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     MERGE_TICKET_TTL_SECONDS,
     AccountConsent,
     AccountMerge,
 )
-from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.infrastructure.repository import AccountRepository
-from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.accounts.models import MergeTicket as AccountMergeTicketModel
-from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.accounts.errors import AccountNotFoundError
+from squid.core.accounts.infrastructure.repository import AccountRepository
+from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.accounts.models import MergeTicket as AccountMergeTicketModel
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact

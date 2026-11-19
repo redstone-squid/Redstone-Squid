@@ -18,9 +18,9 @@ from litestar.types import ReceiveMessage
 
 from squid.api.v1 import submission_media
 from squid.api.v1.submission_media import upload_draft_media
-from squid.media.domain import MediaKind
-from squid.media.errors import DraftMediaRequestError
-from squid.submissions.application import DraftAttachmentService
+from squid.core.media.domain import MediaKind
+from squid.core.media.errors import DraftMediaRequestError
+from squid.core.submissions.application import DraftAttachmentService
 from tests.support.litestar import asgi_transport, make_request
 from tests.unit.submissions.media_api_fakes import (
     ACCOUNT_ID,

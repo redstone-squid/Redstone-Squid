@@ -4,20 +4,20 @@ from typing import Protocol
 from uuid import UUID
 
 from squid.core.actors import Actor
-from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
-from squid.notifications.domain import (
+from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.core.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
     NotificationPreferences,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.edits import (
+from squid.core.notifications.edits import (
     StatesValues,
     SubscriptionsValues,
     SubscriptionValues,
 )
-from squid.notifications.models import NotificationSubscription
+from squid.core.notifications.models import NotificationSubscription
 
 
 class NotificationRecorder(Protocol):

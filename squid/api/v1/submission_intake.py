@@ -24,8 +24,8 @@ from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
-from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.core.submissions.application.attachment_edits import AttachmentValues, FileMembership
+from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 
 
 class SuppliedFileDTO(DataclassDTO[SuppliedAttachment]):

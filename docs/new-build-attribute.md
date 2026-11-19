@@ -1,6 +1,6 @@
 # Adding a build attribute
 
-1. Add the field once to `Build` or its category subclass in `squid/builds/models.py`. Define its type, default,
+1. Add the field once to `Build` or its category subclass in `squid/core/builds/models.py`. Define its type, default,
    units, and the meaning of `None`; add a short attribute docstring when useful. Create a
    [migration](new-migration.md) for the column and any backfill. Inserts and updates use the same entity;
    there is no domain-to-ORM field map to extend.

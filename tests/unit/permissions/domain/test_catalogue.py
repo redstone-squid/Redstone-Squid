@@ -3,7 +3,7 @@
 import pytest
 
 from squid.core.i18n import tr
-from squid.permissions.domain import (
+from squid.core.permissions.domain import (
     BUILTIN_ROLES,
     BUILTIN_ROLES_BY_KEY,
     CATALOGUE,
@@ -15,7 +15,7 @@ from squid.permissions.domain import (
     UnknownPermissionNodeError,
     expand_role,
 )
-from squid.permissions.domain.catalogue import MAX_SEGMENTS, MIN_SEGMENTS
+from squid.core.permissions.domain.catalogue import MAX_SEGMENTS, MIN_SEGMENTS
 
 
 def builtin_leaves(key: str) -> frozenset[str]:

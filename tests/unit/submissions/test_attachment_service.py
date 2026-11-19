@@ -8,17 +8,17 @@ import pytest
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.media.application.jobs import (
+from squid.core.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
     MediaUploadMetadata,
     StagedMediaUploadSubmission,
 )
-from squid.media.domain import MediaKind, MediaLimits
-from squid.media.domain.jobs import MediaJobStatus
-from squid.media.errors import DraftMediaConflictError, DraftMediaNotFoundError, MediaUploadConflictError
-from squid.submissions.application import DraftAttachmentService, DraftUploadAuthority, StagedUpload, StoredDraft
-from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaJobStatus
+from squid.core.media.errors import DraftMediaConflictError, DraftMediaNotFoundError, MediaUploadConflictError
+from squid.core.submissions.application import DraftAttachmentService, DraftUploadAuthority, StagedUpload, StoredDraft
+from squid.core.submissions.domain import DraftSnapshot, SubmissionOrigin
 
 NOW = Instant.parse_iso("2026-08-31T12:00:00Z")
 DRAFT_ID = UUID("11111111-1111-4111-8111-111111111111")
