@@ -10,7 +10,8 @@ from typing import Any
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).parents[2]
+from squid import PROJECT_ROOT
+
 COMPOSE_FILES = ("compose.yml", "compose.override.yml", "deploy/compose.edge.yml", "deploy/compose.production.yml")
 
 

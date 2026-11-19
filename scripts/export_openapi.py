@@ -1,12 +1,11 @@
 """Export the API's deterministic OpenAPI document for generated clients."""
 
 import json
-from pathlib import Path
 
+from squid import PROJECT_ROOT
 from squid.api.app import create_api_app
 from squid.api.openapi import openapi_document
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = PROJECT_ROOT / "contracts" / "openapi.json"
 
 

@@ -2,11 +2,11 @@
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
+from squid import PROJECT_ROOT
 from tests.fuzz.api.schemathesis import CHECKS
 
-_OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
+_OPENAPI_DOCUMENT = PROJECT_ROOT / "contracts" / "openapi.json"
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 

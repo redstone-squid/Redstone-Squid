@@ -9,6 +9,7 @@ from sqlalchemy import Engine, create_engine, make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from squid import PROJECT_ROOT
 from squid.config import DatabaseConfig
 from squid.core.errors import DataIntegrityError
 
@@ -66,7 +67,6 @@ class DatabaseEngine:
             )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
 """Source tree root, where `alembic.ini` and the `alembic/` script directory live."""
 
 

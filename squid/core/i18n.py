@@ -6,6 +6,7 @@ from pathlib import Path
 
 from babel import Locale, UnknownLocaleError
 
+from squid import PACKAGE_ROOT
 from squid_i18n import Localization
 from squid_i18n import tr as tr
 
@@ -15,7 +16,7 @@ SUPPORTED_LOCALES = frozenset({"en", "zh-CN"})
 
 def locales_dir() -> Path:
     """Return the application's shipped Fluent catalogs."""
-    return Path(__file__).resolve().parent.parent / "locales"
+    return PACKAGE_ROOT / "locales"
 
 
 @cache

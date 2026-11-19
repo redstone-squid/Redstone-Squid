@@ -15,13 +15,13 @@ import sys
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import psycopg2
 from psycopg2 import sql
 from psycopg2.extensions import connection as PsycopgConnection
 from sqlalchemy import URL
 
+from squid import PROJECT_ROOT
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.core.auth.application.services import hash_api_key_secret
 from squid.core.auth.application.web import hash_web_session_token
@@ -34,7 +34,6 @@ SEED_BUILDER_HASH = hashlib.sha256(SEED_BUILDER_VERSION.encode()).hexdigest()
 DATABASE_STARTUP_SECONDS = 30
 MIGRATION_SECONDS = 180
 _SAFE_IDENTITY = re.compile(r"[0-9a-f]{32}")
-_ROOT = Path(__file__).resolve().parents[3]
 
 ALICE_ACCOUNT_ID = 1_001
 BOB_ACCOUNT_ID = 1_002
@@ -550,7 +549,7 @@ class DatabaseController:
         )
         environment = {
             "PYTHONDONTWRITEBYTECODE": "1",
-            "PYTHONPATH": str(_ROOT),
+            "PYTHONPATH": str(PROJECT_ROOT),
             "PYTHONUTF8": "1",
             "SQUID_DATABASE_URL": migration_url,
         }
@@ -558,8 +557,8 @@ class DatabaseController:
         # pyproject.toml, which Alembic resolves relative to the working directory, so a
         # scratch cwd makes it fail with "No 'script_location' key found".
         result = subprocess.run(
-            [sys.executable, "-m", "alembic", "-c", str(_ROOT / "alembic.ini"), "upgrade", "head"],
-            cwd=_ROOT,
+            [sys.executable, "-m", "alembic", "-c", str(PROJECT_ROOT / "alembic.ini"), "upgrade", "head"],
+            cwd=PROJECT_ROOT,
             env=environment,
             stdin=subprocess.DEVNULL,
             capture_output=True,

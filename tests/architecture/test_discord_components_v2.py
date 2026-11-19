@@ -9,10 +9,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import override
 
+from squid import PACKAGE_ROOT, PROJECT_ROOT
 from tests.support.source_tree import source_tree
 
-BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
-LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-ui" / "src"
+BOT_ROOT = PACKAGE_ROOT / "bot"
+LAYOUTS_ROOT = PROJECT_ROOT / "packages" / "squid-ui" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
 # Allow type references in modules at the former squid_ui/discord path.

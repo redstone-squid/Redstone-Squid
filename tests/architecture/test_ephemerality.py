@@ -8,9 +8,10 @@ This AST check covers the literal call pattern, not aliases or dynamically suppl
 import ast
 from pathlib import Path
 
+from squid import PACKAGE_ROOT
 from tests.support.source_tree import source_tree
 
-BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
+BOT_ROOT = PACKAGE_ROOT / "bot"
 
 CONTEXT_REPLY_METHODS = {"send", "reply", "defer"}
 

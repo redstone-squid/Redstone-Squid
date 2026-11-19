@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+from squid import PROJECT_ROOT
+
+SCRIPTS = PROJECT_ROOT / "scripts"
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="requires a POSIX shell")
 
 

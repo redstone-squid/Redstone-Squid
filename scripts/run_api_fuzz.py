@@ -4,14 +4,13 @@ import argparse
 import asyncio
 import json
 from collections.abc import Sequence
-from pathlib import Path
 
+from squid import PROJECT_ROOT
 from tests.fuzz.api.docker_stack import docker_api_environment
 from tests.fuzz.api.schemathesis import LOCAL_SMOKE, CampaignOutcome, CampaignState, run_campaign
 
-_ROOT = Path(__file__).resolve().parents[1]
-_COMMITTED_CONTRACT = _ROOT / "contracts" / "openapi.json"
-_ARTIFACT_ROOT = _ROOT / ".fuzz" / "api"
+_COMMITTED_CONTRACT = PROJECT_ROOT / "contracts" / "openapi.json"
+_ARTIFACT_ROOT = PROJECT_ROOT / ".fuzz" / "api"
 
 
 def exit_code_for(state: CampaignState) -> int:
@@ -46,7 +45,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     print(
         json.dumps(
             {
-                "artifact_directory": str(outcome.paths.root.relative_to(_ROOT)),
+                "artifact_directory": str(outcome.paths.root.relative_to(PROJECT_ROOT)),
                 "forced_kill": outcome.forced_kill,
                 "returncode": outcome.returncode,
                 "state": outcome.state,

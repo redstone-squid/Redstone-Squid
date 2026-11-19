@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from squid import PROJECT_ROOT
 from tests.fuzz.artifacts import (
     FindingCandidateV1,
     QualifiedFindingV1,
@@ -187,7 +188,7 @@ def test_artifact_scan_refuses_symlinks(tmp_path: Path) -> None:
 def test_committed_finding_schemas_match_models(
     filename: str, model: type[FindingCandidateV1 | QualifiedFindingV1]
 ) -> None:
-    root = Path(__file__).resolve().parents[3]
+    root = PROJECT_ROOT
     committed = json.loads((root / "contracts" / "fuzz" / filename).read_bytes())
 
     assert committed == model.model_json_schema(mode="validation")

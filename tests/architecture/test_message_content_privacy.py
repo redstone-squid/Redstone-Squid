@@ -5,11 +5,11 @@ response tests; it cannot prove that content never arrives through another servi
 """
 
 import ast
-from pathlib import Path
 
+from squid import PACKAGE_ROOT
 from tests.support.source_tree import source_tree
 
-API_ROOT = Path(__file__).resolve().parents[2] / "squid" / "api"
+API_ROOT = PACKAGE_ROOT / "api"
 MESSAGE_MODULES = {"squid.core.messages", "squid.core.messages.application", "squid.core.messages.domain"}
 
 

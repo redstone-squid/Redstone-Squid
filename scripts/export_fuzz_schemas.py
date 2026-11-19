@@ -1,11 +1,11 @@
 """Export versioned finding-envelope schemas for untrusted workflow artifacts."""
 
 import json
-from pathlib import Path
 
+from squid import PROJECT_ROOT
 from tests.fuzz.artifacts import FindingCandidateV1, QualifiedFindingV1
 
-OUTPUT_DIRECTORY = Path(__file__).resolve().parents[1] / "contracts" / "fuzz"
+OUTPUT_DIRECTORY = PROJECT_ROOT / "contracts" / "fuzz"
 MODELS = {
     "finding-candidate-v1.schema.json": FindingCandidateV1,
     "qualified-finding-v1.schema.json": QualifiedFindingV1,

@@ -14,7 +14,6 @@ import urllib.request
 from collections.abc import Mapping
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import docker
@@ -24,6 +23,7 @@ from docker.models.images import Image
 from docker.models.networks import Network
 from docker.types import LogConfig
 
+from squid import PROJECT_ROOT
 from tests.fuzz.api.database import (
     DATABASE_STARTUP_SECONDS,
     POSTGRES_DATABASE,
@@ -71,7 +71,6 @@ REDIS_CONTAINER_PORT = 6379
 API_READY_SECONDS = 30
 CONTAINER_STOP_SECONDS = 10
 MAX_CONTROL_BYTES = 128 * 1024
-_ROOT = Path(__file__).resolve().parents[3]
 _FAKE_HEALTHCHECK = (
     "CMD-SHELL",
     'python -c "import urllib.request; '
@@ -620,9 +619,9 @@ def _build_production_image(client: docker.DockerClient, identity: RunIdentity) 
             "GIT_COMMIT_MESSAGE=disposable api fuzz environment",
             "--build-arg",
             "WITH_OBSERVABILITY=0",
-            str(_ROOT),
+            str(PROJECT_ROOT),
         ],
-        cwd=_ROOT,
+        cwd=PROJECT_ROOT,
         check=True,
     )
     return client.images.get(tag)
@@ -642,9 +641,9 @@ def _build_fuzz_image(client: docker.DockerClient, identity: RunIdentity, produc
             "tests/fuzz/api/Dockerfile",
             "--build-arg",
             f"BASE_IMAGE={production_image.tags[0]}",
-            str(_ROOT),
+            str(PROJECT_ROOT),
         ],
-        cwd=_ROOT,
+        cwd=PROJECT_ROOT,
         check=True,
     )
     return client.images.get(tag)

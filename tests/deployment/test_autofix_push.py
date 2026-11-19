@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-PUSH_SCRIPT = Path(__file__).parents[2] / ".github" / "scripts" / "push-autofix.sh"
+from squid import PROJECT_ROOT
+
+PUSH_SCRIPT = PROJECT_ROOT / ".github" / "scripts" / "push-autofix.sh"
 
 
 def git(repository: Path, *args: str) -> str:

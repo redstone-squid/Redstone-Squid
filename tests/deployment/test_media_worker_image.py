@@ -5,11 +5,11 @@ import subprocess
 import tomllib
 import uuid
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).parents[2]
+from squid import PROJECT_ROOT
+
 RUNTIME_TARGETS = {
     "runtime-base": (False, False),
     "runtime-media": (True, False),

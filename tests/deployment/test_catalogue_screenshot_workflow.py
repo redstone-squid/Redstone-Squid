@@ -1,9 +1,9 @@
 """Security policy for privileged catalogue screenshot delivery."""
 
 import subprocess
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parents[2]
+from squid import PROJECT_ROOT
+
 WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "catalogue-screenshots-commit.yml"
 PLANNER_TEST_PATH = PROJECT_ROOT / ".github" / "scripts" / "catalogue-screenshot-plan.test.cjs"
 

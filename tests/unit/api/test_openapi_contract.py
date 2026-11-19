@@ -10,6 +10,7 @@ from litestar import Litestar, Router, get, post
 from litestar.testing import TestClient
 
 from scripts import export_openapi
+from squid import PROJECT_ROOT
 from squid.api.app import create_api_app
 from squid.api.capabilities import API_FEATURES
 from squid.api.contract import ANONYMOUS, WEB, contract, transport_only, validate_contract
@@ -19,7 +20,7 @@ from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app = create_api_app()
-OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
+OPENAPI_DOCUMENT = PROJECT_ROOT / "contracts" / "openapi.json"
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 
@@ -121,7 +122,6 @@ def test_openapi_export_is_cwd_independent_and_byte_deterministic(
     expected_bytes = (json.dumps(expected, ensure_ascii=False, indent=2) + "\n").encode()
     assert destination.read_bytes() == expected_bytes
     assert json.loads(destination.read_text(encoding="utf-8")) == expected
-    assert Path(__file__).resolve().parents[3] == export_openapi.PROJECT_ROOT
 
 
 _CLASSIFICATIONS = frozenset({"command", "browser-only", "transport-only", "internal", "compatibility-alias"})

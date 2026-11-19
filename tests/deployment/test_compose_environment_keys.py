@@ -6,11 +6,9 @@ With `SQUID_STRICT_UNKNOWN_KEYS` enabled, an unrecognized variable prevents star
 """
 
 import re
-from pathlib import Path
 
+from squid import PROJECT_ROOT
 from squid.config import _INFRASTRUCTURE_ENVIRONMENT_KEYS, _known_environment_keys
-
-PROJECT_ROOT = Path(__file__).parents[2]
 
 COMPOSE_FILES = ("compose.yml", "compose.override.yml", "deploy/compose.production.yml", "deploy/compose.edge.yml")
 

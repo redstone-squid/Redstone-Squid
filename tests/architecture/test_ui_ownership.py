@@ -1,11 +1,11 @@
 """Pin application UI ownership to Squid screens, widgets, and portable events."""
 
 import ast
-from pathlib import Path
 
+from squid import PACKAGE_ROOT
 from tests.support.source_tree import source_tree
 
-BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
+BOT_ROOT = PACKAGE_ROOT / "bot"
 
 
 def _classes(tree: ast.AST) -> list[ast.ClassDef]:

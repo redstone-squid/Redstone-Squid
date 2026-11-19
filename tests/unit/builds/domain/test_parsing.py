@@ -1,10 +1,10 @@
 """Build value parsing tests."""
 
 import json
-from pathlib import Path
 
 import pytest
 
+from squid import PROJECT_ROOT
 from squid.core.builds.domain import parse_time_string
 
 
@@ -41,7 +41,7 @@ def test_parse_time_string(time_string: str | None, expected: int | None) -> Non
     assert parse_time_string(time_string) == expected
 
 
-_DURATION_FIXTURE = Path(__file__).resolve().parents[4] / "contracts" / "fixtures" / "duration-cases.json"
+_DURATION_FIXTURE = PROJECT_ROOT / "contracts" / "fixtures" / "duration-cases.json"
 _DURATION_CASES = json.loads(_DURATION_FIXTURE.read_text(encoding="utf-8"))
 
 
