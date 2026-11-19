@@ -8,6 +8,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import squid_ui as sl
 from squid_ui import Renderable, paragraph
 from squid_ui.authoring.presentations import Replacement, corresponds, losses, ref
 from squid_ui.ext.discord import DISCORD_V2_DPY27, render_message
@@ -32,8 +33,9 @@ from squid_ui.ext.discord.primitives import (
 )
 from squid_ui.ext.discord.primitives.nodes import Node
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.planning import plan
+from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.allocation import AllocationSnapshot
+from squid_ui.planning.composition import LocalCapacityExceeded
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError
 from squid_ui.planning.result import PlanResult
 from squid_ui.selectors import query, select
@@ -68,6 +70,58 @@ def _components(result: PlanResult[discord_scene.ComponentsV2]) -> int:
         return total
 
     return count(result.scene.expect_body(discord_scene.ComponentsV2).children)
+
+
+@pytest.mark.parametrize(
+    ("label", "key", "description", "limit"),
+    [
+        ("x" * 104, "bad", None, "select.option.label"),
+        ("Bad", "x" * 104, None, "select.option.value"),
+        ("Bad", "bad", "x" * 104, "select.option.description"),
+    ],
+)
+@pytest.mark.parametrize("fixed", [False, True])
+def test_invalid_option_rules_out_every_page_split(label, key, description, limit, fixed) -> None:
+    picker = sl.choices(
+        *(sl.choice(str(i), key=str(i)) for i in range(24)),
+        sl.choice(label, key=key, description=description),
+        key="picker",
+    )
+    identity = OccurrenceId(("root", "picker"))
+    options = CompositionOptions(automatic=True, partitions={identity: (24, 25)} if fixed else {})
+    with pytest.raises(JointInfeasibleError) as caught:
+        _planned([picker], composition=options)
+
+    diagnostics = caught.value.diagnostics
+    assert diagnostics.target_evaluations == 0
+    (violation,) = diagnostics.violations
+    assert isinstance(violation, LocalCapacityExceeded)
+    assert violation.occurrence.path[-2:] == ("@option", "24")
+    assert (violation.limit, violation.used, violation.capacity) == (limit, 104, 100)
+
+
+def test_select_option_count_guides_page_splits() -> None:
+    picker = sl.choices(*(sl.choice(str(i), key=str(i)) for i in range(26)), key="picker")
+    result = _planned([picker])
+    allocation = result.allocation
+    assert isinstance(allocation, AllocationSnapshot)
+    (region,) = allocation.regions.values()
+    assert len(region.cuts) == 2
+    assert region.cuts[0] <= 25
+    assert region.cuts[1] - region.cuts[0] <= 25
+    assert result.metrics.target_evaluations == result.metrics.certified_combinations
+
+
+def test_button_limit_leaves_a_valid_select_representation() -> None:
+    navigation = sl.navigation(
+        sl.nav_option("x" * 81, key="long"),
+        sl.nav_option("Short", key="short"),
+        key="navigation",
+        display=sl.semantic.NavigationDisplay.INDIVIDUAL,
+    )
+    result = _planned([navigation])
+    (menu,) = query(result.scene, select(discord_scene.Select)).all()
+    assert [option.value for option in menu.node.options] == ["long", "short"]
 
 
 def _selected_rungs(result: PlanResult[discord_scene.ComponentsV2]) -> list[int]:

@@ -12,7 +12,13 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import ClassicLimits, DiscordAxis
-from squid_ui.ext.discord.planning.composition_discord import discord_text, resolve_select, select_violations
+from squid_ui.ext.discord.planning.composition_discord import (
+    button_violations,
+    constrain_offers,
+    discord_text,
+    resolve_select,
+    select_violations,
+)
 from squid_ui.ext.discord.planning.policy import DiscordOfferPolicy
 from squid_ui.ext.discord.planning.realizations import CardRealization, ClassicContentRealization, PremiumRealization
 from squid_ui.planning.composition import (
@@ -77,7 +83,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
         tuple[RealizationOffer[RenderTargetT, ContextT, Realization], ...]
         | OfferDiscovery[RenderTargetT, ContextT, Realization]
     ):
-        return semantic_offers(
+        offers = semantic_offers(
             occurrence,
             context,
             DiscordOfferPolicy(
@@ -88,9 +94,12 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                 native_controls=True,
                 panel_text_limit=self.limits.embeds.description,
                 grid_columns=self.limits.components.row_buttons,
+                select_options_per_page=self.limits.components.select_options or None,
                 embed_limits=asdict(self.limits.embeds),
             ),
         )
+
+        return constrain_offers(offers, context, self.limits.components)
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
@@ -352,12 +361,7 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                     else:
                         row.append(premium)
                 case ControlRealization() as control:
-                    limit("row.buttons", 1, self.limits.components.row_buttons)
-                    limit("button.label", len(control.label), self.limits.components.button_label)
-                    limit("button.url", len(control.url or ""), self.limits.components.link_url)
-                    limit("button.id", len(control.action or control.route or ""), self.limits.components.custom_id)
-                    if not control.label and control.emoji is None:
-                        violations.append(ConstraintViolation(identity, "button needs a label"))
+                    violations.extend(button_violations(control, self.limits.components, identity))
                     button = (
                         scene.Button(
                             control.label,
@@ -387,18 +391,14 @@ class ClassicCompositionRules[RenderTargetT, ContextT]:
                             UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
                         )
                     violations.extend(
-                        ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(resolved, self.limits.components)
+                        select_violations(resolved, self.limits.components, part.offer.occurrence.identity)
                     )
                     rows.append(scene.ClassicRow((resolved,)))
                 case SelectRealization(node=node, summaries=summaries):
                     resolved = resolve_select(node)
                     if summaries is not None:
                         text("\n".join(markdown(item.nodes) for item in summaries))
-                    violations.extend(
-                        ConstraintViolation(identity, detail)
-                        for detail in select_violations(resolved, self.limits.components)
-                    )
+                    violations.extend(select_violations(resolved, self.limits.components, identity))
                     rows.append(scene.ClassicRow((resolved,)))
                     for child in part.children:
                         visit(child, output, embedded=embedded)

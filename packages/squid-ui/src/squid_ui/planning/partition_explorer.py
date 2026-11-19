@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from itertools import count
 from math import ceil
 
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import AllocationQuality, RegionPolicy, compare_quality
 from squid_ui.planning.allocation_scoring import preference_tree
 from squid_ui.planning.composition import (
@@ -107,6 +108,7 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
     ) -> tuple[int, int, int, int] | None:
         """Find the first page whose next refinement must insert a cut."""
+        # A local certificate can skip offscreen pages, including nested regions.
         if self.context.local_view:
             return None
         for index, (node, ends) in enumerate(zip(task.regions, task.cuts, strict=True)):
@@ -191,7 +193,19 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
                 tuple(range(contract.per, len(node.units), contract.per)) if contract.per else ()
             )
             required = tuple(end for end in required if end < len(node.units))
-            initial.append(self.fixed_cuts.get(node.candidate.offer.occurrence.identity, (*required, len(node.units))))
+            fixed = self.fixed_cuts.get(node.candidate.offer.occurrence.identity)
+            ends = (*required, len(node.units)) if fixed is None else fixed
+            if contract.max_units is not None and (fixed is not None or required):
+                self.context.work.consume(len(ends) + len(node.legal_ends))
+                if (
+                    not ends
+                    or ends[-1] != len(node.units)
+                    or ends != tuple(sorted(set(ends)))
+                    or not set(ends) <= (set(node.legal_ends) or {0})
+                ):
+                    message = "region cuts must cover every unit at legal boundaries"
+                    raise LayoutInvariantError(message)
+            initial.append(ends)
         cuts = tuple(initial)
         assignment = next(self.assignment_ids)
         if self.partition_hint:

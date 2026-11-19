@@ -193,6 +193,7 @@ def _items_offers[RenderTargetT, ContextT](
                 cursor_key,
                 pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                 cursor_key=cursor_key,
+                max_units=scope.policy.select_options_per_page,
             ),
         ),
     )
@@ -335,7 +336,7 @@ def _navigation_offers[RenderTargetT, ContextT](
         fragments=FragmentContract(
             tuple(frozenset({ref}) for ref, _ in available), tuple(range(1, len(available) + 1)), payload.fragment
         ),
-        region=contract,
+        region=replace(contract, max_units=scope.policy.select_options_per_page),
     )
     prefer_grouped = value.display == sem.NavigationDisplay.GROUPED or (
         value.display == sem.NavigationDisplay.AUTO and len(available) > 5
@@ -431,7 +432,7 @@ def _grid_offers[RenderTargetT, ContextT](
             tuple(range(1, len(available) + 1)),
             grid_fragment,
         ),
-        region=contract,
+        region=replace(contract, max_units=scope.policy.select_options_per_page),
         preference_priority=int(value.flexibility),
         interaction=True,
         binding=ActionBinding(action, value.on_pick),
@@ -578,6 +579,7 @@ def _choices_offers[RenderTargetT, ContextT](
                 cursor_key,
                 pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, default_controls=True),
                 cursor_key=cursor_key,
+                max_units=scope.policy.select_options_per_page,
             ),
         )
     return (offer,)

@@ -52,6 +52,7 @@ class OfferPolicy:
         panel_text_limit: Replaces `text_limit` for text inside a panel.
         heading_limit: Further caps the text of a shortened heading.
         grid_columns: Controls one row may hold.
+        select_options_per_page: Options one fragment of a paged select can contain.
     """
 
     table_forms: tuple[TableForm, ...]
@@ -64,6 +65,7 @@ class OfferPolicy:
     panel_text_limit: int | None = None
     heading_limit: int | None = None
     grid_columns: int | None = None
+    select_options_per_page: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

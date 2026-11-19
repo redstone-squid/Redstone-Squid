@@ -26,6 +26,7 @@ from squid_ui.planning.certification import FamilyCertifier, FamilyRejection
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
+    LocalCapacityExceeded,
     OccurrenceId,
     PlanningContext,
     SemanticOccurrence,
@@ -39,7 +40,23 @@ from squid_ui.planning.partition_explorer import PartitionExplorer, PartitionTas
 class JointInfeasibleError(UnsolvableLayoutError):
     def __init__(self, diagnostics: SearchDiagnostics) -> None:
         self.diagnostics = diagnostics
-        super().__init__("no declared joint allocation is feasible")
+        limits = tuple(
+            dict.fromkeys(
+                (violation.limit, violation.used, violation.capacity)
+                for violation in diagnostics.violations
+                if isinstance(violation, LocalCapacityExceeded)
+            )
+        )[:8]
+        super().__init__(
+            "no declared joint allocation is feasible",
+            context={
+                "local_limits": [
+                    {"limit": limit, "used": used, "capacity": capacity} for limit, used, capacity in limits
+                ]
+            }
+            if limits
+            else None,
+        )
 
 
 class JointUnsupportedError(LayoutError):
@@ -218,9 +235,15 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         """Return the best retained allocation, or raise why the search found none."""
 
         exhausted = self.exhausted or self.offers.exhausted
-        if not exhausted and (
-            self.selected.keys() - self.offers.seen_occurrences
-            or (self.policy.keys() | self.partitions.fixed_cuts.keys()) - self.partitions.seen_regions
+        # An intrinsically rejected offer can prevent discovery of later
+        # occurrences. The infeasibility is known even if option validation is incomplete.
+        if (
+            not exhausted
+            and (self.frontier.has_result or not self.offers.pruned)
+            and (
+                self.selected.keys() - self.offers.seen_occurrences
+                or (self.policy.keys() | self.partitions.fixed_cuts.keys()) - self.partitions.seen_regions
+            )
         ):
             message = "joint search options contain unknown occurrences"
             raise LayoutInvariantError(message)

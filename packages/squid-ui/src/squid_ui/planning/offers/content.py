@@ -734,7 +734,8 @@ def container_offers[RenderTargetT, ContextT](
                 preference=0 if value.display == sem.ControlDisplay.GROUPED else 1,
                 preference_priority=int(value.flexibility),
             )
-            if len(value.items) > 25:
+            select_limit = scope.policy.select_options_per_page or 25
+            if len(value.items) > select_limit:
                 cursor_key = f"{value.key}.actions"
                 contract = RegionContract(
                     cursor_key,
@@ -742,7 +743,7 @@ def container_offers[RenderTargetT, ContextT](
                     cursor_key=cursor_key,
                 )
                 container = replace(container, region=contract)
-                if len(eligible) > 25 and len(eligible) != len(value.items):
+                if len(eligible) > select_limit and len(eligible) != len(value.items):
                     return (container,)
                 if len(eligible) == len(value.items):
                     payload = SelectRealization(controls.Select(options, key))
@@ -753,7 +754,7 @@ def container_offers[RenderTargetT, ContextT](
                             tuple(range(1, len(eligible) + 1)),
                             payload.fragment,
                         ),
-                        region=contract,
+                        region=replace(contract, max_units=scope.policy.select_options_per_page),
                     )
             return (
                 (replace(container, preference=1), grouped)

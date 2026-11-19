@@ -54,6 +54,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.degradation_probed = False
         self.repair_started = False
         self.exhausted = False
+        self.pruned = False
         self.choice_counts: dict[OccurrenceId, int] = {}
         # Keep each occurrence alive while its identity keys a cached discovery.
         self.discoveries: dict[
@@ -108,13 +109,14 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
             if self.context.strict and offer.effects:
                 continue
             if offer.rejections:
+                self.pruned = True
                 if fresh:
                     self.violations.extend(offer.rejections)
                 continue
             eligible.append((offer, rank))
         self.choice_counts[occurrence.identity] = len(eligible)
         ordered = sorted(eligible, key=lambda entry: (entry[1], entry[0].key))
-        if task.probe:
+        if task.probe and ordered:
             if task.repair is not None:
                 preferred = task.repair.get(occurrence.identity)
                 ordered = next(([entry] for entry in ordered if entry[0].key == preferred), ordered[:1])

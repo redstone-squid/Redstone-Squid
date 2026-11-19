@@ -14,6 +14,8 @@ from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.capabilities import DiscordCapability
 from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.planning.composition_discord import (
+    button_violations,
+    constrain_offers,
     discord_text,
     discord_time_prefix,
     resolve_select,
@@ -88,7 +90,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
         if isinstance(value, primitive.Section) and not 1 <= len(value.texts) <= self.limits.section_texts:
             context.work.consume()
             return OfferDiscovery(())
-        return semantic_offers(
+        offers = semantic_offers(
             occurrence,
             context,
             DiscordOfferPolicy(
@@ -99,8 +101,11 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                 native_controls=True,
                 native_v2=True,
                 grid_columns=self.limits.components.row_buttons,
+                select_options_per_page=self.limits.components.select_options or None,
             ),
         )
+
+        return constrain_offers(offers, context, self.limits.components, v2=self.limits)
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext
@@ -218,16 +223,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     return (premium,) if in_row else (scene.Row((premium,)),)
                 case ControlRealization() as control:
                     identity = part.offer.occurrence.identity
-                    for name, used, capacity in (
-                        ("button.label", len(control.label), self.limits.components.button_label),
-                        ("button.url", len(control.url or ""), self.limits.components.link_url),
-                        ("button.id", len(control.action or control.route or ""), self.limits.components.custom_id),
-                        ("row.buttons", 1, self.limits.components.row_buttons),
-                    ):
-                        if used > capacity:
-                            violations.append(LocalCapacityExceeded(identity, name, used, capacity))
-                    if not control.label and control.emoji is None:
-                        violations.append(ConstraintViolation(identity, "button needs a label"))
+                    violations.extend(button_violations(control, self.limits.components, identity))
                     components += 1 if in_row else 2
                     if control.action is not None:
                         button = scene.Button(
@@ -319,8 +315,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                             UnsupportedCapability(part.offer.occurrence.identity, "native entity discovery")
                         )
                     violations.extend(
-                        ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(resolved, self.limits.components)
+                        select_violations(resolved, self.limits.components, part.offer.occurrence.identity)
                     )
                     components += 2
                     return (resolved,)
@@ -338,8 +333,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     )
                     components += 2
                     violations.extend(
-                        ConstraintViolation(part.offer.occurrence.identity, detail)
-                        for detail in select_violations(resolved, self.limits.components)
+                        select_violations(resolved, self.limits.components, part.offer.occurrence.identity)
                     )
                     return (
                         *overview,
@@ -644,7 +638,7 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                         raise DrawInvariantError(msg)
                 case scene.Select() | scene.RoutedSelect() | scene.EntitySelect():
                     components += 1  # Selects occupy an implicit action row.
-                    if select_violations(node, self.limits.components):
+                    if select_violations(node, self.limits.components, OccurrenceId(("root",))):
                         msg_0 = "built V2 select violates its limits"
                         raise DrawInvariantError(msg_0)
                 case scene.Text(content=content):
