@@ -1,6 +1,7 @@
 """Offer realizations for explicitly authored primitive nodes."""
 
 from dataclasses import replace
+from itertools import accumulate
 from typing import cast
 
 from squid_i18n import tree
@@ -44,6 +45,7 @@ from squid_ui.planning.composition import (
     FragmentContract,
     OccurrenceId,
     OfferDiscovery,
+    PageWeights,
     RealizationOffer,
     RegionContract,
     ResourceIdentity,
@@ -355,6 +357,25 @@ def _primitive_text_offers[RenderTargetT, ContextT](
             "\n```" if isinstance(value, primitive.Code) else "",
             literal=isinstance(value, primitive.Code),
         )
+        weights = None
+        # Markdown continuations can merge adjacent styling tokens. Literal
+        # code preserves length when joined, and independent items serialize separately.
+        if scope.policy.native_v2 and (sequence.literal or not any(part.continuation for part in parts)):
+            context.work.consume(len(parts))
+            lengths = (
+                len(part.prefix)
+                + (
+                    sum(len(tree.plain(node)) for node in part.nodes)
+                    if sequence.literal
+                    else len(tree.markdown(part.nodes, discord=True, escape=context.escape_text))
+                )
+                for part in parts
+            )
+            weights = PageWeights(
+                Axis.DISPLAY_TEXT,
+                tuple(accumulate(lengths, initial=0)),
+                len(sequence.prefix) + len(sequence.suffix),
+            )
         return (
             RealizationOffer[RenderTargetT, ContextT, Realization](
                 occurrence,
@@ -374,6 +395,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
                     owner=overflow.page,
                     cursor_key=cursor_key,
                     required_ends=tuple(ends),
+                    weights=weights,
                 ),
             ),
         )

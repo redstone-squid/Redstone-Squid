@@ -5,6 +5,7 @@ tracks the regions reached by assignments, and yields initial and refined
 partition tasks. The coordinator decides when to certify or enqueue them.
 """
 
+from bisect import bisect_right
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from itertools import count
@@ -23,6 +24,18 @@ from squid_ui.planning.composition import (
     SemanticOccurrence,
 )
 from squid_ui.planning.fragments import FragmentTree, fragment_tree
+from squid_ui.planning.resources import Axis
+
+
+@dataclass(frozen=True, slots=True)
+class OversizedPage:
+    region: int
+    start: int
+    end: int
+    last_cut: int
+    limit: str
+    used: int
+    capacity: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,9 +117,7 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
                     changed = (*task.cuts[:index], tuple(sorted((*task.cuts[index], end))), *task.cuts[index + 1 :])
                     yield replace(task, cuts=changed, probe=False, expand_only=False)
 
-    def oversized_page(
-        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
-    ) -> tuple[int, int, int, int] | None:
+    def oversized_page(self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]) -> OversizedPage | None:
         """Find the first page whose next refinement must insert a cut."""
         # A local certificate can skip offscreen pages, including nested regions.
         if self.context.local_view:
@@ -114,30 +125,46 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         for index, (node, ends) in enumerate(zip(task.regions, task.cuts, strict=True)):
             contract = node.candidate.offer.region
             assert contract is not None
-            if (limit := contract.max_units) is None:
+            units = contract.max_units
+            weights = contract.weights
+            capacity = self.context.capacities.get(weights.axis) if weights is not None else None
+            if weights is not None and weights.axis == Axis.DISPLAY_TEXT and contract.chars is not None:
+                capacity = min(capacity, contract.chars) if capacity is not None else contract.chars
+            if units is None and capacity is None:
                 continue
             self.context.work.consume(len(ends))
             for start, end in zip((0, *ends[:-1]), ends, strict=True):
-                if end - start > limit:
-                    return index, start, end, limit
+                if units is not None and end - start > units:
+                    return OversizedPage(index, start, end, start + units, "page.units", end - start, units)
+                if weights is not None and capacity is not None:
+                    used = weights.prefix[end] - weights.prefix[start] + weights.overhead
+                    if used > capacity:
+                        ceiling = weights.prefix[start] + capacity - weights.overhead
+                        last_cut = bisect_right(weights.prefix, ceiling, lo=start + 1, hi=end) - 1
+                        return OversizedPage(index, start, end, last_cut, f"page.{weights.axis}", used, capacity)
         return None
 
     def refine_oversized(
-        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT], oversized: tuple[int, int, int, int]
+        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT], oversized: OversizedPage
     ) -> Iterator[PartitionTask[RenderTargetT, ContextT, PayloadT]]:
         """Branch only on cuts that can help resolve the first hard page bound."""
-        index, start, end, limit = oversized
+        index, start, end = oversized.region, oversized.start, oversized.end
         node = task.regions[index]
         identity = node.candidate.offer.occurrence.identity
         self.context.work.consume(len(node.legal_ends))
-        available = [cut for cut in node.legal_ends if start < cut < end] if identity not in self.fixed_cuts else []
+        # Every feasible refinement has a first cut whose prefix fits.
+        available = (
+            [cut for cut in node.legal_ends if start < cut <= oversized.last_cut]
+            if identity not in self.fixed_cuts
+            else []
+        )
         if not available:
-            self.violations.append(LocalCapacityExceeded(identity, "page.units", end - start, limit))
+            self.violations.append(LocalCapacityExceeded(identity, oversized.limit, oversized.used, oversized.capacity))
             return
         if task.probe and not task.expand_only:
             # Probe an even split over the minimum number of pages, then
             # explore other cuts if needed. No legal refinement is lost.
-            goal = start + (end - start) / ceil((end - start) / limit)
+            goal = start + (end - start) / ceil(oversized.used / max(1, oversized.capacity))
             available = [min(available, key=lambda cut: (abs(cut - goal), cut))]
             yield replace(task, probe=False, expand_only=True)
         for cut in available:
@@ -195,7 +222,10 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
             required = tuple(end for end in required if end < len(node.units))
             fixed = self.fixed_cuts.get(node.candidate.offer.occurrence.identity)
             ends = (*required, len(node.units)) if fixed is None else fixed
-            if contract.max_units is not None and (fixed is not None or required):
+            if contract.weights is not None and len(contract.weights.prefix) != len(node.units) + 1:
+                message = "page weights must cover every unit"
+                raise LayoutInvariantError(message)
+            if (contract.max_units is not None or contract.weights is not None) and (fixed is not None or required):
                 self.context.work.consume(len(ends) + len(node.legal_ends))
                 if (
                     not ends

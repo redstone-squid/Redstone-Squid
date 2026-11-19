@@ -1,5 +1,6 @@
 """Engine pagination and ModalSpec tests."""
 
+from dataclasses import replace
 from typing import override
 
 import discord
@@ -369,6 +370,21 @@ class TestBuildModal:
         await modal.on_submit(interaction_harness())
 
         assert received == {"name": "steve"}
+
+
+def test_paginated_code_skips_cuts_that_cannot_fit() -> None:
+    target = components_v2_target(
+        AdapterProfile(DiscordAdapter, "pagination-tests", "1"), limits=replace(LIMITS, total_text=160)
+    )
+    body = "\n".join(("a" * 30, "b" * 65, "c" * 30, "d" * 65))
+    result = plan(Code(body, overflow=Paginate(boundary="\n")), target=target)
+
+    assert result.allocation is not None
+    ((identity, region),) = result.allocation.regions.items()
+    assert len(region.cuts) == 2
+    assert result.metrics.target_evaluations == result.metrics.certified_combinations
+    for index in range(len(region.cuts)):
+        assert result.for_page({identity: index}).cost.get(Axis.DISPLAY_TEXT) <= 160
 
 
 # Public planning certifies every page; this property has no timing contract.

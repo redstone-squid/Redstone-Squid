@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import field, replace
 from enum import StrEnum
+from itertools import pairwise
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -100,6 +101,25 @@ class ContextualChrome[RenderTargetT, ContextT, PayloadT]:
 
 
 @immutable
+class PageWeights:
+    """A lower bound per source unit, stored as cumulative costs for contiguous cuts."""
+
+    axis: Axis
+    prefix: tuple[int, ...]
+    overhead: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            not self.prefix
+            or self.prefix[0] != 0
+            or self.overhead < 0
+            or any(left > right for left, right in pairwise(self.prefix))
+        ):
+            message = "page weights require nonnegative costs and a prefix starting at zero"
+            raise LayoutInvariantError(message)
+
+
+@immutable
 class RegionContract[RenderTargetT, ContextT, PayloadT]:
     """Target-declared pagination chrome, composed and charged on every visible page."""
 
@@ -114,6 +134,7 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
     required_ends: tuple[int, ...] = ()
     max_units: int | None = None
     """Hard maximum source units per page, independent of page contents and chrome."""
+    weights: PageWeights | None = None
 
     def __post_init__(self) -> None:
         if self.max_units is not None and self.max_units < 1:
