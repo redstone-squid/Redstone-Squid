@@ -7,7 +7,6 @@ from typing import Protocol
 from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.tags.application.snapshots import AssignmentSnapshot
 from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.models import TagDefinition
 from squid.unit_of_work import UnitOfWorkFactory
@@ -38,20 +37,6 @@ class TagDefinitionRepository(Protocol):
     async def approved(self) -> Sequence[TagDefinition]: ...
 
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
-
-    async def build_revision(self, build_id: int) -> int: ...
-
-    async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None: ...
-
-    async def replace_assignment(
-        self,
-        build_id: int,
-        tag_id: int,
-        expected: AssignmentSnapshot | None,
-        replacement: AssignmentSnapshot | None,
-        *,
-        actor_account_id: int,
-    ) -> bool: ...
 
     async def assign_showcase(
         self,
@@ -88,10 +73,6 @@ class TagService:
         async with self._uow_factory() as uow:
             return await uow.tags.approved()
 
-    async def build_revision(self, build_id: int) -> int:
-        async with self._uow_factory() as uow:
-            return await uow.tags.build_revision(build_id)
-
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
         """Return an approved tag, or None if it is missing or has another status."""
         async with self._uow_factory() as uow:
@@ -103,19 +84,6 @@ class TagService:
             ):
                 return None
             return definition
-
-
-def require_showcase(definition: TagDefinition | None) -> TagDefinition:
-    if (
-        definition is None
-        or definition.withdrawn
-        or definition.authority.value != "user"
-        or definition.semantic_kind.value != "showcase"
-        or definition.moderation_status is not TagModerationStatus.APPROVED
-    ):
-        msg = tr(t"tags-approved-user-showcase = An approved user showcase tag is required.")
-        raise ValidationError(msg)
-    return definition
 
 
 def normalize_proposal(display_name: str, query_name: str | None) -> tuple[str, str | None]:

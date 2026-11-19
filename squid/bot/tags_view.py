@@ -1,7 +1,10 @@
-"""The shared tag catalogue workspace."""
+"""The tag library workspace: browse tags, propose new ones, moderate proposals, and add restriction aliases.
+
+Tags are put on a build from the build's own editor, not here.
+"""
 
 import re
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from functools import partial
 from typing import Any, Protocol, override
 
@@ -13,7 +16,6 @@ from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
-from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
@@ -30,14 +32,12 @@ from squid.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
-    SHOWCASE_EDIT,
     AliasValues,
     ModerationValues,
     ProposalValues,
-    ShowcaseValues,
     tag_target,
 )
-from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.domain import TagModerationStatus, TagValueType
 from squid.tags.models import TagDefinition
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -51,8 +51,6 @@ class TagOperations(Protocol):
     async def pending(self) -> Sequence[TagDefinition]: ...
 
     async def reserve_identity(self) -> int: ...
-
-    async def build_revision(self, build_id: int) -> int: ...
 
 
 class RestrictionOperations(Protocol):
@@ -99,11 +97,7 @@ class _ModerationActions(sl.Component[ComponentsV2Target, sd.Request[Any, Redsto
 class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     """A tag workspace that ends when replaced or timed out."""
 
-    _build_id: int | None = sl.state(None)
-    _build_label: str = sl.state("")
     _restriction: tuple[Suggestion, Revision] | None = sl.state(None)
-    _build_revision: int | None = sl.state(default=None)
-    _tag_names: Mapping[int, str] = sl.state(factory=dict)
     _catalogue: sp.Browser[TagDefinition, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         default=None
     )
@@ -127,14 +121,12 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         *,
-        build_id: int | None,
         actor_account_id: int | None,
         grants: Grants,
     ) -> None:
         self.edits = EditController(edits, actor, self._refresh)
         self._tags = tags
         self._restrictions = restrictions
-        self._build_id = build_id
         self._actor_account_id = actor_account_id
         self.grants = grants
 
@@ -146,10 +138,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._restriction is not None:
             item, _ = self._restriction
             self._restriction = (item, await self._restrictions.alias_revision(item.value))
-        if self._build_id is not None:
-            self._build_revision = await self._tags.build_revision(self._build_id)
         definitions = tuple(await self._tags.public_definitions())
-        self._tag_names = {tag.id: tag.display_name for tag in definitions}
         self._catalogue = sp.Browser(
             sl.sources.list_source(definitions),
             key="tag-catalogue",
@@ -189,9 +178,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _build_tabs(self) -> None:
         assert self._catalogue is not None
         tabs = [sp.Tab("catalogue", tr(t"bot-tags-view-catalogue = Catalogue"), self._catalogue)]
-        tabs.append(
-            sp.Tab("contribute", tr(t"bot-tags-view-propose-and-apply = Propose and apply"), self._contribution_nodes())
-        )
+        tabs.append(sp.Tab("contribute", tr(t"bot-tags-view-propose = Propose"), self._contribution_nodes()))
         if self._pending is not None:
             tabs.append(sp.Tab("moderation", tr(t"bot-tags-view-moderation = Moderation"), self._pending))
         if RESTRICTION_ALIAS_CREATE in self.grants:
@@ -223,14 +210,11 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.section(
                 sl.heading(tr(t"tags-workspace-heading = Tags")),
                 sl.paragraph(
-                    self._build_label or f"Build #{self._build_id}"
-                    if self._build_id is not None
-                    else tr(t"tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.")
+                    md_tr(
+                        t"tags-workspace-help = Browse the tag library and propose new tags. "
+                        t"To tag one of your builds, open the build and choose **Edit**."
+                    )
                 ),
-            ),
-            sl.action_controls(
-                sl.action_control(tr(t"tags-choose-build = Choose build"), self._choose_build, key="choose-build"),
-                key="build-actions",
             ),
             self._tabs,
             *self.edits.refresh_controls(),
@@ -242,7 +226,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.note(
                     md_tr(
                         t"tags-link-account-instructions = Link and consent an account in "
-                        t"`/account` before proposing or applying tags.",
+                        t"`/account` before proposing tags.",
                     )
                 ),
             )
@@ -258,54 +242,10 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
-    async def _choose_build(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        await pick(event, "builds", tr(t"tags-choose-build = Choose build"), self._build_picked)
-
-    async def _build_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
-        self._build_id = int(item.value)
-        self._build_label = item.label
-        await self._refresh()
-
-    def _tag_detail(
-        self, tag: TagDefinition
-    ) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
-            _ModerationActions(tag, ("archive",), self._request_moderation)
-            if TAG_PROPOSAL_ARCHIVE in self.grants
-            else _tag_fields(tag)
-        ]
-        if tag.semantic_kind is TagSemanticKind.SHOWCASE and self._actor_account_id is not None:
-            if self._build_id is None:
-                nodes.append(sl.note(tr(t"tags-select-build-first = Choose a build above to apply this tag.")))
-            else:
-                handler = partial(self._apply_selected, tag, self._build_id, self._build_revision)
-                if tag.value_type is TagValueType.NONE:
-                    nodes.append(
-                        sl.action_controls(
-                            sl.action_control(tr(t"tags-apply-selected = Apply this tag"), handler, key="apply-tag"),
-                            key="tag-actions",
-                        )
-                    )
-                else:
-                    nodes.append(
-                        sl.form(
-                            tr(t"tags-apply-selected = Apply this tag"),
-                            _showcase_value_form(tag),
-                            key="apply-tag",
-                            on_submit=handler,
-                        )
-                    )
-        return tuple(nodes)
-
-    async def _apply_selected(
-        self, tag: TagDefinition, build_id: int, revision: int | None, event: sd.ActionEvent
-    ) -> None:
-        assert revision is not None
-        await self.edits.bind(SHOWCASE_EDIT, build_target(build_id), revision).save(
-            ShowcaseValues(tag_id=tag.id, value=_showcase_submission_value(event)).edit_values(),
-            tr(t"tags-history-assignment = Edit showcase tag"),
-        )
-        await event.notice(tr(t"tags-applied = Tag applied."))
+    def _tag_detail(self, tag: TagDefinition) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        if TAG_PROPOSAL_ARCHIVE in self.grants:
+            return _ModerationActions(tag, ("archive",), self._request_moderation)
+        return _tag_fields(tag)
 
     @staticmethod
     def _proposal_form() -> sl.forms.FormSpec[sd.Request[Any, Any]]:
@@ -386,31 +326,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             )
         )
 
-    async def _apply(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
-        account_id = self._actor_account_id
-        if account_id is None:
-            await event.notice(tr(t"tags-account-consent-required = A linked, consented account is required."))
-            return
-        form = _ApplyForm.from_submission(event)
-        build_id = self._build_id or form.build_id
-        tag_id = form.tag_id
-        assert build_id is not None and tag_id is not None
-        value = form.value
-        revision = base_revision if base_revision is not None else self._build_revision
-        if self._build_id is None:
-            revision = await self._tags.build_revision(build_id)
-        assert revision is not None
-        await self.edits.bind(SHOWCASE_EDIT, build_target(build_id), revision).save(
-            ShowcaseValues(tag_id=tag_id, value=value).edit_values(),
-            tr(t"tags-history-assignment = Edit showcase tag"),
-        )
-        tag_name = self._tag_names.get(tag_id, str(tag_id))
-        await event.notice(
-            md_tr(
-                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{build_id!s}.",
-            )
-        )
-
     @requires_grant(RESTRICTION_ALIAS_CREATE)
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
         form = _AliasForm.from_submission(event)
@@ -475,25 +390,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         await event.source.notice(md_tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
 
 
-def _showcase_value_form(tag: TagDefinition) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
-    field: sl.forms.FormField
-    label = tr(t"bot-tags-view-value = Value")
-    if tag.value_type is TagValueType.BOOLEAN:
-        field = sl.forms.BoolField(key="value", label=label)
-    elif tag.value_type is TagValueType.NUMERIC:
-        field = sl.forms.FloatField(key="value", label=label)
-    else:
-        field = sl.forms.TextField(key="value", label=label, maximum=300)
-    return sl.forms.FormSpec(tag.display_name, (field,))
-
-
-def _showcase_submission_value(event: sl.ActionEvent) -> str | None:
-    value = event.values.get("value") if isinstance(event, sl.SubmitEvent) else None
-    if isinstance(value, bool):
-        return str(value).lower()
-    return None if value is None else str(value)
-
-
 def _tag_summary(tag: TagDefinition) -> str:
     return f"{tag.display_name} · {tag.semantic_kind.value} · {tag.value_type.value}"
 
@@ -541,11 +437,3 @@ class _AliasForm(sl.forms.Form[sd.Request[Any, Any]]):
         label=tr(t"bot-tags-view-canonical-restriction = Canonical restriction"), maximum=100
     )
     alias = sl.forms.TextField(label=tr(t"bot-tags-view-new-alias = New alias"), maximum=100)
-
-
-class _ApplyForm(sl.forms.Form[sd.Request[Any, Any]]):
-    title = tr(t"bot-tags-view-apply-showcase-tag = Apply showcase tag")
-
-    build_id = sl.forms.IntField(label=tr(t"bot-tags-view-build-id = Build ID"), minimum=1)
-    tag_id = sl.forms.IntField(label=tr(t"bot-tags-view-tag-id = Tag ID"), minimum=1)
-    value = sl.forms.TextField(label=tr(t"bot-tags-view-value = Value"), required=False, maximum=300)

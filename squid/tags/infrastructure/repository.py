@@ -4,17 +4,15 @@ from collections.abc import Callable, Sequence
 from decimal import Decimal
 from typing import override
 
-from sqlalchemy import exists, func, or_, select, text, update
+from sqlalchemy import exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
-from squid.edits.domain import Revision, RevisionConflictError
+from squid.edits.domain import Revision
 from squid.persistence.revisions import flush_revision
 from squid.tags.application import TagDefinitionRepository
-from squid.tags.application.snapshots import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
@@ -123,24 +121,6 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         return await flush_revision(self._session(), definition, expected)
 
     @override
-    async def build_revision(self, build_id: int) -> int:
-        revision = await self._session().scalar(select(Build.revision).where(Build.id == build_id))
-        if revision is None:
-            raise BuildNotFoundError(build_id)
-        return revision
-
-    async def advance_build_revision(self, build_id: int, expected: Revision) -> Revision:
-        revision = await self._session().scalar(
-            update(Build)
-            .where(Build.id == build_id, Build.revision == expected.value)
-            .values(revision=Build.revision + 1)
-            .returning(Build.revision)
-        )
-        if revision is None:
-            raise RevisionConflictError(expected, await self.build_revision(build_id))
-        return Revision(expected.target, revision)
-
-    @override
     async def approved(self) -> Sequence[TagDefinition]:
         session = self._session()
         rows = (
@@ -173,62 +153,6 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             },
         )
         return row
-
-    @override
-    async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None:
-        session = self._session()
-        # Serialize with all build edits, including assignments absent at the time of the read.
-        await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
-        row = await session.scalar(
-            select(TagAssignment)
-            .where(TagAssignment.build_id == build_id, TagAssignment.tag_id == tag_id)
-            .with_for_update()
-        )
-        return None if row is None else AssignmentSnapshot.capture(row)
-
-    @override
-    async def replace_assignment(
-        self,
-        build_id: int,
-        tag_id: int,
-        expected: AssignmentSnapshot | None,
-        replacement: AssignmentSnapshot | None,
-        *,
-        actor_account_id: int,
-    ) -> bool:
-        session = self._session()
-        owned = await session.scalar(
-            select(Build.id)
-            .where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
-            .with_for_update()
-        )
-        if owned is None or await self.assignment(build_id, tag_id) != expected:
-            return False
-        row = await session.scalar(
-            select(TagAssignment).where(TagAssignment.build_id == build_id, TagAssignment.tag_id == tag_id)
-        )
-        if replacement is None:
-            if row is not None:
-                await session.delete(row)
-        else:
-            if row is None:
-                definition = await session.get(TagDefinition, tag_id)
-                if definition is None:
-                    return False
-                row = TagAssignment(definition, replacement.value)
-                row.build_id = build_id
-                session.add(row)
-            row.value_type = replacement.value_type
-            row.value = replacement.value
-            row.display_unit = replacement.display_unit
-            row.display_order = replacement.display_order
-            row.evidence = replacement.evidence
-            row.origin = replacement.origin
-            row.created_by_account_id = replacement.created_by_account_id
-            row.created_at = replacement.created_at
-            row.updated_at = Instant.now()
-        await session.flush()
-        return True
 
     @override
     async def assign_showcase(

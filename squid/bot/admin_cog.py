@@ -52,17 +52,10 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.command(
         name=tr(t"command-tags-name = tags"),
-        description=tr(t"command-tags-help = Browse, apply, propose, and moderate build tags"),
-        options={
-            "build_id": sd.Option(
-                name=tr(t"command-tags-build-id-name = build"),
-                description=tr(t"command-tags-build-id-help = Choose a build by name to apply tags to it"),
-                autocomplete=suggests("builds"),
-            )
-        },
+        description=tr(t"command-tags-help = Browse, propose, and moderate build tags"),
     )
-    async def tags_workspace(self, request: sd.Request[Self, BotT], build_id: int | None = None) -> TagsScreen:
-        """Open the capability-aware build tag workspace."""
+    async def tags_workspace(self, request: sd.Request[Self, BotT]) -> TagsScreen:
+        """Open the tag library, with the moderation and alias tabs the user's grants allow."""
         nodes = (
             TAG_PROPOSAL_LIST,
             TAG_PROPOSAL_APPROVE,
@@ -91,7 +84,6 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             self.restrictions,
             self.bot.services.edits,
             partial(request.client.actors.resolve, request, refresh=True),
-            build_id=build_id,
             actor_account_id=account_id,
             grants=grants,
         )

@@ -4,9 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.core.errors import ValidationError
 from squid.tags.application.edits import ProposalValues
-from squid.tags.application.services import require_showcase
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType, coerce_assignment_value
 from squid.tags.models import TagDefinition
 
@@ -36,7 +34,7 @@ def test_invalid_public_query_name_is_rejected(query: str) -> None:
         (TagValueType.BOOLEAN, "YES", True),
     ],
 )
-def test_approved_showcase_values_are_coerced_to_the_declared_type(
+def test_showcase_values_are_coerced_to_the_declared_type(
     kind: TagValueType, raw: str | None, expected: object
 ) -> None:
     definition = TagDefinition(
@@ -47,7 +45,4 @@ def test_approved_showcase_values_are_coerced_to_the_declared_type(
         value_type=kind,
         moderation_status=TagModerationStatus.APPROVED,
     )
-    assert coerce_assignment_value(require_showcase(definition), raw) == expected
-    definition.withdrawn = True
-    with pytest.raises(ValidationError):
-        require_showcase(definition)
+    assert coerce_assignment_value(definition, raw) == expected

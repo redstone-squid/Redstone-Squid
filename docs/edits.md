@@ -153,6 +153,5 @@ edit adds a new history entry rather than removing one.
   review (`squid/submissions/application/recalculation.py`). Their HTTP routes and
   table still use the older name "revision proposal".
 - **Minecraft versions.** `squid/versions` handles the game versions a build works in.
-- **Snapshots.** `squid/tags/application/snapshots.py` and
-  `squid/starboard/application/snapshots.py` hold detached copies of records that
-  handlers compare before replacing.
+- **Snapshots.** `squid/starboard/application/snapshots.py` holds detached copies of
+  records that handlers compare before replacing.

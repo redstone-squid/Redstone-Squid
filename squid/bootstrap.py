@@ -168,8 +168,6 @@ from squid.tags.application.edits import (
     ALIAS_EDIT,
     MODERATION_EDIT,
     PROPOSAL_EDIT,
-    SHOWCASE_EDIT,
-    ShowcaseAssignmentEdit,
     TagAliasEdit,
     TagModerationEdit,
     TagProposalEdit,
@@ -381,7 +379,6 @@ class _ServiceGraph:
             {
                 DRAFT_ATTACHMENTS: DraftAttachmentsEdit(self.submission_drafts, self.media_job_service.limits),
                 DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
-                SHOWCASE_EDIT: ShowcaseAssignmentEdit(),
                 ALIAS_EDIT: TagAliasEdit(self.permissions),
                 PROPOSAL_EDIT: TagProposalEdit(),
                 MODERATION_EDIT: TagModerationEdit(self.permissions),

@@ -1,10 +1,8 @@
-"""Build showcase tags and the shared tag catalogue workspace."""
+"""The tag library workspace: browsing, proposals, moderation, and restriction aliases."""
 
 from collections.abc import Sequence
 from typing import Any, cast, override
 from unittest.mock import AsyncMock
-
-import pytest
 
 import squid_ui as sl
 from squid.bot.admin_cog import Admin
@@ -18,7 +16,6 @@ from squid.edits.domain import (
     EditReceipt,
     EditResult,
     Revision,
-    RevisionConflictError,
 )
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -34,7 +31,6 @@ from squid.tags.application.edits import (
     AliasValues,
     ModerationValues,
     ProposalValues,
-    ShowcaseValues,
     tag_target,
 )
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -63,13 +59,7 @@ class FakeTagService(TagService):
         self.proposal = tag(2, "Reliable", pending=True)
         self.public_reads = 0
         self.proposals: list[tuple[str, TagValueType, str | None, int]] = []
-        self.assignments: list[tuple[int, int, str | None, int]] = []
         self.approvals: list[int] = []
-        self.revision = 1
-
-    @override
-    async def build_revision(self, build_id: int) -> int:
-        return self.revision
 
     @override
     async def public_definitions(self) -> Sequence[TagDefinition]:
@@ -111,24 +101,14 @@ class TagEditRecorder(EditRunner):
             self.tags.proposal.withdrawn = not proposal.present
             revision = bound_revisions(command)[0].value + 1
             self.tags.proposal.revision = revision
-        elif command.kind == MODERATION_EDIT:
+        else:
+            assert command.kind == MODERATION_EDIT
             moderation = ModerationValues.model_validate_json(command.values.encoded)
             before = ModerationValues(status=self.tags.proposal.moderation_status).edit_values()
             self.tags.proposal.moderation_status = moderation.status
             self.tags.approvals.append(self.tags.proposal.id)
             revision = bound_revisions(command)[0].value + 1
             self.tags.proposal.revision = revision
-        else:
-            expected = bound_revisions(command)[0]
-            if expected.value != self.tags.revision:
-                raise RevisionConflictError(expected, self.tags.revision)
-            values = ShowcaseValues.model_validate_json(command.values.encoded)
-            self.tags.assignments.append(
-                (int(bound_revisions(command)[0].target.key), values.tag_id, values.value, actor.require_account_id())
-            )
-            self.tags.revision += 1
-            revision = self.tags.revision
-            before = ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values()
         revisions = (Revision(bound_revisions(command)[0].target, revision),)
         receipt = EditReceipt(command, before, command.values, revisions, final=command.kind == MODERATION_EDIT)
         return EditResult(
@@ -169,7 +149,6 @@ class TransitionEvent:
 
 def make_screen(
     *,
-    build_id: int | None = 42,
     account_id: int | None = 7,
     capabilities: frozenset[PermissionNode] = frozenset(),
     allowed: bool = True,
@@ -182,7 +161,6 @@ def make_screen(
             restrictions,
             TagEditRecorder(tags, restrictions),
             AsyncMock(return_value=Actor(account_id=account_id)),
-            build_id=build_id,
             actor_account_id=account_id,
             grants=grants(*capabilities, current=allowed),
         ),
@@ -201,30 +179,7 @@ async def test_tags_use_browsers_and_capability_aware_tabs() -> None:
     assert screen._catalogue is not None
     assert screen._pending is not None
     assert screen._tabs is not None
-    assert {"Catalogue", "Propose and apply", "Moderation", "Restriction aliases"} <= set(labels(screen._tabs.render()))
-
-
-async def test_seeded_build_application_uses_the_opening_build() -> None:
-    screen, tags, _ = make_screen(build_id=42)
-    await screen.on_load()
-    event = form_event(tag_id=1, value=None)
-
-    with transaction():
-        await screen._apply(event)
-
-    assert tags.assignments == [(42, 1, None, 7)]
-    assert len(notices(event)) == 1
-
-
-async def test_open_assignment_form_keeps_its_displayed_build_revision() -> None:
-    screen, tags, _ = make_screen()
-    await screen.on_load()
-    opening_revision = tags.revision
-    with transaction():
-        await screen._apply(form_event(tag_id=1, value=None))
-    with transaction(), pytest.raises(RevisionConflictError):
-        await screen._apply(form_event(tag_id=1, value=None), base_revision=opening_revision)
-    assert len(tags.assignments) == 1
+    assert {"Catalogue", "Propose", "Moderation", "Restriction aliases"} <= set(labels(screen._tabs.render()))
 
 
 async def test_proposal_refreshes_the_service_backed_browsers() -> None:
@@ -305,18 +260,3 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
         await screen._decide(cast(Any, TransitionEvent(form_event())), "confirm")
     assert len(screen.edits.undoable) == 1
     assert screen.edits.undoable[0].receipt.targets == frozenset({tag_target(1).identity})
-
-
-@pytest.mark.parametrize(("value", "expected"), [(True, "true"), (2.5, "2.5"), ("compact", "compact")])
-async def test_selected_tag_value_uses_the_captured_build_and_revision(value: object, expected: str) -> None:
-    screen, tags, _ = make_screen()
-    await screen.on_load()
-    event = sl.SubmitEvent(
-        context=None, actor=sl.interactions.Actor("42"), responder=RecordingResponder(), values={"value": value}
-    )
-    with transaction():
-        await screen._apply_selected(tags.published, 42, 1, cast(Any, event))
-    assert tags.assignments == [(42, 1, expected, 7)]
-    with transaction(), pytest.raises(RevisionConflictError):
-        await screen._apply_selected(tags.published, 42, 1, cast(Any, event))
-    assert len(tags.assignments) == 1
