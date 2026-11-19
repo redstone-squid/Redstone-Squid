@@ -296,10 +296,14 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     @requires_grant(RESTRICTION_ALIAS_CREATE)
     async def _add_selected_alias(self, revision: Revision, event: sd.SubmitEvent) -> None:
-        await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
-            AliasValues(alias=str(event.values["alias"])).edit_values(),
-            tr(t"tags-history-alias = Add restriction alias"),
-        )
+        try:
+            await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
+                AliasValues(alias=str(event.values["alias"])).edit_values(),
+                tr(t"tags-history-alias = Add restriction alias"),
+            )
+        except AliasAlreadyAddedError:
+            await event.notice(tr(t"tags-alias-already-exists = That alias is already on this restriction."))
+            return
         await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
     async def _propose(self, event: sl.SubmitEvent) -> None:
@@ -325,22 +329,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{tag_id!s} is awaiting staff approval.",
             )
         )
-
-    @requires_grant(RESTRICTION_ALIAS_CREATE)
-    async def _add_alias(self, event: sl.SubmitEvent) -> None:
-        form = _AliasForm.from_submission(event)
-        restriction = form.restriction
-        alias = form.alias
-        try:
-            revision = await self._restrictions.alias_revision(restriction)
-            await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
-                AliasValues(alias=alias).edit_values(), tr(t"tags-history-alias = Add restriction alias")
-            )
-        except AliasAlreadyAddedError:
-            await event.notice(tr(t"tags-alias-already-exists = That alias is already on this restriction."))
-            return
-
-        await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
     async def _request_moderation(
         self,
@@ -428,12 +416,3 @@ class _ProposalForm(sl.forms.Form[sd.Request[Any, Any]]):
         required=False,
         maximum=64,
     )
-
-
-class _AliasForm(sl.forms.Form[sd.Request[Any, Any]]):
-    title = tr(t"bot-tags-view-add-restriction-alias = Add restriction alias")
-
-    restriction = sl.forms.TextField(
-        label=tr(t"bot-tags-view-canonical-restriction = Canonical restriction"), maximum=100
-    )
-    alias = sl.forms.TextField(label=tr(t"bot-tags-view-new-alias = New alias"), maximum=100)
