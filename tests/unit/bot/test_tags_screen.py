@@ -42,6 +42,7 @@ from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
 from squid_ui.testing import RecordingResponder, labels
 from tests.support.edits import bound_revisions
+from tests.support.grants import grants
 
 
 def tag(tag_id: int, name: str, *, pending: bool = False) -> TagDefinition:
@@ -177,10 +178,6 @@ def make_screen(
 ) -> tuple[TagsScreen, FakeTagService, FakeRestrictionService]:
     tags = FakeTagService()
     restrictions = FakeRestrictionService()
-
-    async def authorize(_node: PermissionNode) -> bool:
-        return allowed
-
     return (
         TagsScreen(
             tags,
@@ -189,8 +186,7 @@ def make_screen(
             AsyncMock(return_value=Actor(account_id=account_id)),
             build_id=build_id,
             actor_account_id=account_id,
-            capabilities=capabilities,
-            authorize=authorize,
+            grants=grants(*capabilities, current=allowed),
         ),
         tags,
         restrictions,

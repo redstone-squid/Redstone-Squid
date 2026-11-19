@@ -18,10 +18,9 @@ from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import suggests
-from squid.bot.utils.permissions import allows, enforce, requires
+from squid.bot.utils.permissions import Grants, enforce, requires
 from squid.core.i18n import tr
 from squid.edits.domain import EditCommand, EditValues, LatestRevision, Revision
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
     RESTRICTION_ALIAS_CREATE,
@@ -72,14 +71,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             RESTRICTION_ALIAS_CREATE,
         )
 
-        async def authorize(node: PermissionNode) -> bool:
-            return await allows(request, node)
-
-        granted: set[PermissionNode] = set()
-        for node in nodes:
-            if await authorize(node):
-                granted.add(node)
-        capabilities = frozenset(granted)
+        grants = await Grants.load(request, *nodes)
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD,
             str(request.user.id),
@@ -101,8 +93,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             partial(request.client.actors.resolve, request, refresh=True),
             build_id=build_id,
             actor_account_id=account_id,
-            capabilities=capabilities,
-            authorize=authorize,
+            grants=grants,
         )
 
     @sd.context_menu(

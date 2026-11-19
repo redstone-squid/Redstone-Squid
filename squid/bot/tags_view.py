@@ -12,12 +12,12 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
+from squid.bot.utils.permissions import Grants
 from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import Revision
-from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
     TAG_PROPOSAL_APPROVE,
@@ -61,7 +61,6 @@ class RestrictionOperations(Protocol):
     async def alias_revision(self, restriction: str) -> Revision: ...
 
 
-type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable[None]]
 
 
@@ -130,16 +129,14 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         *,
         build_id: int | None,
         actor_account_id: int | None,
-        capabilities: frozenset[PermissionNode],
-        authorize: TagAuthorizer,
+        grants: Grants,
     ) -> None:
         self.edits = EditController(edits, actor, self._refresh)
         self._tags = tags
         self._restrictions = restrictions
         self._build_id = build_id
         self._actor_account_id = actor_account_id
-        self._capabilities = capabilities
-        self._authorize = authorize
+        self._grants = grants
 
     @override
     async def on_load(self) -> None:
@@ -164,7 +161,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             title=tr(t"bot-tags-view-published-build-tags = Published build tags"),
             empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
-        if TAG_PROPOSAL_LIST in self._capabilities:
+        if TAG_PROPOSAL_LIST in self._grants:
             pending = tuple(await self._tags.pending())
             actions = tuple(
                 action
@@ -172,7 +169,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                     ("approve", TAG_PROPOSAL_APPROVE),
                     ("reject", TAG_PROPOSAL_REJECT),
                 )
-                if node in self._capabilities
+                if node in self._grants
             )
             self._pending = sp.Browser(
                 sl.sources.list_source(pending),
@@ -197,7 +194,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         if self._pending is not None:
             tabs.append(sp.Tab("moderation", tr(t"bot-tags-view-moderation = Moderation"), self._pending))
-        if RESTRICTION_ALIAS_CREATE in self._capabilities:
+        if RESTRICTION_ALIAS_CREATE in self._grants:
             tabs.append(
                 sp.Tab("aliases", tr(t"bot-tags-view-restriction-aliases = Restriction aliases"), self._alias_nodes())
             )
@@ -274,7 +271,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     ) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             _ModerationActions(tag, ("archive",), self._request_moderation)
-            if TAG_PROPOSAL_ARCHIVE in self._capabilities
+            if TAG_PROPOSAL_ARCHIVE in self._grants
             else _tag_fields(tag)
         ]
         if tag.semantic_kind is TagSemanticKind.SHOWCASE and self._actor_account_id is not None:
@@ -358,7 +355,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._build_tabs()
 
     async def _add_selected_alias(self, revision: Revision, event: sd.SubmitEvent) -> None:
-        if not await self._may(event, RESTRICTION_ALIAS_CREATE):
+        if not await self._grants.confirm(event, RESTRICTION_ALIAS_CREATE):
             return
         await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
             AliasValues(alias=str(event.values["alias"])).edit_values(),
@@ -416,7 +413,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, RESTRICTION_ALIAS_CREATE):
+        if not await self._grants.confirm(event, RESTRICTION_ALIAS_CREATE):
             return
         form = _AliasForm.from_submission(event)
         restriction = form.restriction
@@ -460,7 +457,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             "reject": TAG_PROPOSAL_REJECT,
             "archive": TAG_PROPOSAL_ARCHIVE,
         }[action]
-        if not await self._may(event.source, node):
+        if not await self._grants.confirm(event.source, node):
             self._pending_action = None
             self._decision = None
             return
@@ -478,14 +475,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._pending_action = None
         self._decision = None
         await event.source.notice(md_tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
-
-    async def _may(self, event: sl.ActionEvent[Any], node: PermissionNode) -> bool:
-        if await self._authorize(node):
-            return True
-        await event.notice(
-            tr(t"tags-operation-permission-denied = You are no longer allowed to perform this tag operation.")
-        )
-        return False
 
 
 def _showcase_value_form(tag: TagDefinition) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:

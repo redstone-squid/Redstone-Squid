@@ -1,18 +1,22 @@
 """Translate Discord callers into permission subjects and enforce declared nodes.
 
 requires supplies checks for discord.py commands; enforce performs the same
-check from a command body, component callback, or context-menu handler. The
-home-server check separately limits where community features are available.
+check from a command body, component callback, or context-menu handler. Grants carries
+a viewer's permissions into a screen. The home-server check separately limits where
+community features are available.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from functools import cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from discord import app_commands
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 
+import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.core.i18n import tr
 from squid.permissions.domain import CATALOGUE, CheckMode, PermissionNode
 from squid.permissions.errors import PermissionDeniedError, require_check
 
@@ -30,6 +34,45 @@ async def allows(caller: sd.Request[Any, squid.bot.app.RedstoneSquid], node: Per
     """Whether the user behind `caller` holds `node`."""
     subject = await caller.client.actors.resolve(caller)
     return (await caller.client.services.permissions.check(subject, node)).allowed
+
+
+@dataclass(frozen=True, slots=True)
+class Grants:
+    """The permission nodes a viewer held when a screen opened, and a way to recheck them.
+
+    Screens test membership (`node in grants`) to choose which controls to show, and call
+    `confirm` before acting, because permissions can change while a screen stays open.
+    Services still enforce their own checks; `confirm` only turns a refusal into a short notice.
+    """
+
+    held: frozenset[PermissionNode]
+    check: Callable[[PermissionNode], Awaitable[bool]]
+
+    @classmethod
+    async def load(cls, caller: sd.Request[Any, squid.bot.app.RedstoneSquid], *nodes: PermissionNode) -> Self:
+        """Check `nodes` for the user behind `caller`, and recheck through the same request later."""
+
+        async def check(node: PermissionNode) -> bool:
+            return await allows(caller, node)
+
+        return cls(frozenset([node for node in nodes if await check(node)]), check)
+
+    def __contains__(self, node: PermissionNode) -> bool:
+        return node in self.held
+
+    async def allows(self, *nodes: PermissionNode) -> bool:
+        """Whether the viewer currently holds any of `nodes`."""
+        for node in nodes:
+            if await self.check(node):
+                return True
+        return False
+
+    async def confirm(self, event: sl.ActionEvent[Any], *nodes: PermissionNode) -> bool:
+        """Like `allows`, but tell the viewer when they no longer hold any of `nodes`."""
+        if await self.allows(*nodes):
+            return True
+        await event.notice(tr(t"permission-revoked = You are no longer allowed to do this."))
+        return False
 
 
 async def enforce(
