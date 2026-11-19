@@ -144,7 +144,8 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         if claim is None:
             return
         node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
-        if not await self.grants.confirm(event, node):
+        denied = tr(t"claims-resolve-forbidden = You are no longer allowed to resolve creator claims.")
+        if not await self.grants.confirm(event, node, denied=denied):
             return
 
         async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:

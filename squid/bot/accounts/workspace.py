@@ -456,14 +456,22 @@ class AccountWorkspace(sd.Screen):
         if not opened:
             await release()
 
-    @requires_grant(ACCOUNT_IDENTITY_REFRESH)
+    @requires_grant(
+        ACCOUNT_IDENTITY_REFRESH,
+        denied=tr(t"account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity."),
+    )
     async def _refresh_identity(self, event: sd.PressEvent) -> None:
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
         await self._rebuild(changed_account_id=account_id)
         await event.notice(refresh_message(refresh))
 
-    @requires_grant(ACCOUNT_IDENTITY_REFRESH_ANY)
+    @requires_grant(
+        ACCOUNT_IDENTITY_REFRESH_ANY,
+        denied=tr(
+            t"account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity."
+        ),
+    )
     async def _refresh_member_identity(self, event: sd.SubmitEvent) -> None:
         form = _RefreshMemberForm.from_submission(event)
         member = form.user

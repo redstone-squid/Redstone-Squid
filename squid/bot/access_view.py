@@ -53,6 +53,8 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
 
+_DENIED = tr(t"access-change-forbidden = You are no longer allowed to change access controls.")
+
 
 class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Browse and administer one subject's access in a guild.
@@ -342,7 +344,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
-    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
     async def _custom_role_pattern(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
         form = _RolePatternForm.from_submission(event)
         await self._save(
@@ -356,7 +358,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             tr(t"access-view-internal-role-updated = Internal role updated."),
         )
 
-    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
     async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
         await self._save(
             RANK_EDIT,
@@ -371,7 +373,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         composing = operation in {"compose", "decompose"}
 
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:
-            if not await self.grants.confirm(source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+            if not await self.grants.confirm(
+                source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED
+            ):
                 return
             label = tr(t"access-view-internal-role-updated = Internal role updated.")
             if composing:
@@ -466,7 +470,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             values.edit_values(), label
         )
 
-    @requires_grant(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL)
+    @requires_grant(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, denied=_DENIED)
     async def _change_rule(
         self, event: sl.SubmitEvent, *, base_revision: int | None = None, pattern: str | None = None
     ) -> None:
@@ -490,7 +494,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         await event.notice(label)
 
-    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
     async def _change_assignment(
         self, event: sl.SubmitEvent, *, base_revision: int | None = None, role: PermissionRole | None = None
     ) -> None:
@@ -513,7 +517,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
         await event.notice(label)
 
-    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE)
+    @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
     async def _create_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         form = _CreateRoleForm.from_submission(event)
         slug = form.slug
@@ -551,7 +555,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._decision = None
         if pending is None or choice == "cancel":
             return
-        if not await self.grants.confirm(event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
+        if not await self.grants.confirm(
+            event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED
+        ):
             return
         slug, identity, revision = pending
         label = md_tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
