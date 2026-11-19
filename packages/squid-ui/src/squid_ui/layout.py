@@ -60,6 +60,7 @@ class ElementRef[T]:
 
 
 def region_ref(*keys: str) -> RegionRef:
+    """Refer to a region by its path of authored keys."""
     if not keys or any(not key for key in keys):
         message = "a region reference needs nonempty keys"
         raise ValueError(message)
@@ -67,6 +68,7 @@ def region_ref(*keys: str) -> RegionRef:
 
 
 def element_ref[T](kind: type[T], *keys: str) -> ElementRef[T]:
+    """Refer to an authored element by its type and key path."""
     if not keys or any(not key for key in keys):
         message = "an element reference needs nonempty keys"
         raise ValueError(message)

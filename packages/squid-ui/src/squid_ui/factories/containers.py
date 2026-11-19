@@ -136,6 +136,7 @@ def context[R, C](
     initial: DocumentLike[R, C] = (),
     components: tuple[Boundary[R, C], ...] = (),
 ) -> Contextual[R, C]:
+    """Build content from layout facts using a callback that runs without side effects."""
     if not key:
         message = "a contextual occurrence requires a nonempty key"
         raise ValueError(message)

@@ -1133,6 +1133,8 @@ class History:
 
 
 class HistoryField:
+    """Give each component instance its own lazily initialized action history."""
+
     def __init__(self, limit: int, compensation_outbox: CompensationOutbox | None) -> None:
         self._limit = limit
         self._compensation_outbox = compensation_outbox
