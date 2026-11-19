@@ -193,10 +193,7 @@ BUILD_SUBMISSION_RECALC = _b.node(
 BUILD_SCHEMATIC_DOWNLOAD_PRIVATE = _b.node(
     "build.schematic.download_private",
     NodeScope.GLOBAL,
-    tr(
-        t"permissions-download-convert-schematics = Download or convert "
-        t"schematics that are not publicly downloadable, on builds you did not upload them to."
-    ),
+    tr(t"permissions-download-convert-schematics = Download or convert non-public schematics you did not upload."),
 )
 BUILD_SCHEMATIC_VIEW_PRIVATE = _b.node(
     "build.schematic.view_private",

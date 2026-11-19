@@ -4407,7 +4407,7 @@ permissions-delete-starboard-recorded = Delete a starboard and its recorded star
 permissions-deny-reason = an explicit deny rule blocks that permission
 
 # squid/permissions/domain/catalogue.py:196
-permissions-download-convert-schematics = Download or convert schematics that are not publicly downloadable, on builds you did not upload them to.
+permissions-download-convert-schematics = Download or convert non-public schematics you did not upload.
 
 # squid/permissions/domain/catalogue.py:313
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
