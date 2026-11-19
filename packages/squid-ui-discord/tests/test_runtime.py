@@ -113,6 +113,30 @@ async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> Non
         tasks.cancel_scope.cancel()
 
 
+async def test_running_finishes_live_panels_when_the_caller_is_cancelled() -> None:
+    client = fake_client()
+    runtime = install(cast(discord.Client, client))
+    root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
+    finished = anyio.Event()
+
+    async def on_finish(_: sd.MessageRoot) -> None:
+        await anyio.sleep(0)
+        finished.set()
+
+    with anyio.CancelScope() as caller:
+        async with runtime.running():
+            assert runtime.execution_host is not None
+            runtime.execution_host._require_running()
+            await runtime.sessions.open(root, delivered_to(message_harness()))
+            root.on_finish(on_finish)
+            caller.cancel()
+            await anyio.sleep_forever()
+
+    assert finished.is_set()
+    assert client not in Lifetime.installations
+    assert not runtime.challenges._running
+
+
 async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     """The scheduler `install` built is the one `run` drains, not a spare."""
     bus = LocalTopicBus()

@@ -5,8 +5,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Unpack, cast, overload
 
-import anyio
-
 import discord
 from discord.ext import commands
 from squid_ui.content.text import NEUTRAL, Localization
@@ -343,27 +341,21 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request[Any, A
     scope = runtime.scope(owner)
     interaction = InteractionHarness(client=client, user_id=user_id)
     try:
-        async with anyio.create_task_group() as tasks:
-            await tasks.start(runtime.run)
-            try:
-                result = await (await scope.request(interaction.source)).respond(content, **overrides)
-                if layout_errors:
-                    raise layout_errors.pop(0)
-                if not isinstance(result, Presented):
-                    message = f"staging live content produced {type(result).__name__}"
-                    raise TypeError(message)
-                staged = StagedUI(
-                    cast(Presented[ComponentT], result),
-                    client=client,
-                    user_id=user_id,
-                    interaction=interaction,
-                    layout_errors=layout_errors,
-                )
-                staged.assert_within_limits()
-                yield staged
-            finally:
-                with anyio.CancelScope(shield=True):
-                    await runtime.close()
-                tasks.cancel_scope.cancel()
+        async with runtime.running():
+            result = await (await scope.request(interaction.source)).respond(content, **overrides)
+            if layout_errors:
+                raise layout_errors.pop(0)
+            if not isinstance(result, Presented):
+                message = f"staging live content produced {type(result).__name__}"
+                raise TypeError(message)
+            staged = StagedUI(
+                cast(Presented[ComponentT], result),
+                client=client,
+                user_id=user_id,
+                interaction=interaction,
+                layout_errors=layout_errors,
+            )
+            staged.assert_within_limits()
+            yield staged
     finally:
         await client.close()

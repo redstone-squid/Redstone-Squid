@@ -1,8 +1,8 @@
 """Install and locate the Discord UI services owned by one client.
 
 Installation assembles sessions, challenge handling, an execution host, and optional
-scheduling without starting tasks. The application starts run in its task group and
-closes the runtime before cancelling that group.
+scheduling without starting tasks. Enter runtime.running() to start those services and
+close them before the client disconnects.
 
 Commands and component callbacks recover those same services through DiscordUIRuntime.of,
 using their interaction or other client-bearing source. A Scope groups the message roots
@@ -10,6 +10,8 @@ opened by one application owner, so unloading a cog can finish its live panels t
 """
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, Never, Unpack, cast, overload
 
 import anyio
@@ -43,8 +45,8 @@ type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | dis
 class DiscordUIRuntime[ClientT: discord.Client]:
     """The Discord runtime installed on one client; `close()` ends it.
 
-    Use install to assemble shared services and defaults, then run to supervise their
-    tasks in the application's task group. Requests use of to find this same runtime
+    Use install to assemble shared services and defaults, then enter running() to supervise their
+    tasks. Requests use of to find this same runtime
     from their source, and scope to associate live panels with an application owner.
     Closing the runtime finishes its scopes and sessions before unregistering it.
 
@@ -101,6 +103,18 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         hook and the challenge presenter all arrive with it.
         """
         return self.defaults.mount(component, access=access, **overrides)
+
+    @asynccontextmanager
+    async def running(self) -> AsyncIterator[None]:
+        """Start the runtime and close it on exit. Enter inside the client context."""
+        async with anyio.create_task_group() as tasks:
+            try:
+                await tasks.start(self.run)
+                yield
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await self.close()
+                tasks.cancel_scope.cancel()
 
     async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
         """Run the scheduler, challenges, and execution host until the caller cancels.
