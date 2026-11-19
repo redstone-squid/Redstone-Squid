@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from scripts import run_api_fuzz
+from squid import PROJECT_ROOT
 from tests.fuzz.api.schemathesis import CampaignOutcome, CampaignPaths, CampaignState
 
 
@@ -28,7 +29,7 @@ def test_main_runs_fixed_smoke_and_prints_bounded_report(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     paths = CampaignPaths(
-        root=run_api_fuzz._ROOT / ".fuzz" / "api" / "run",
+        root=PROJECT_ROOT / ".fuzz" / "api" / "run",
         config=Path("config"),
         cache=Path("cache"),
         events=Path("events"),
