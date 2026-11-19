@@ -4331,76 +4331,76 @@ permission-view-channel = View Channel
 # squid/permissions/errors.py:35
 permissions-action-requirement = This action requires { $node }, but { $detail }.
 
-# squid/permissions/domain/catalogue.py:258
+# squid/permissions/domain/catalogue.py:255
 permissions-add-alias-restriction = Add an alias for a restriction.
 
-# squid/permissions/domain/catalogue.py:277
+# squid/permissions/domain/catalogue.py:274
 permissions-approve-creator-alias = Approve a creator alias claim.
 
 # squid/permissions/domain/catalogue.py:173
 permissions-approve-pending-build = Approve pending build submissions.
 
-# squid/permissions/domain/catalogue.py:239
+# squid/permissions/domain/catalogue.py:236
 permissions-approve-tag-proposal = Approve a tag proposal.
 
-# squid/permissions/domain/catalogue.py:442
+# squid/permissions/domain/catalogue.py:439
 permissions-archive-channel-messages = Archive a channel's messages.
 
-# squid/permissions/domain/catalogue.py:251
+# squid/permissions/domain/catalogue.py:248
 permissions-archive-tag = Archive a tag.
 
-# squid/permissions/domain/catalogue.py:491
+# squid/permissions/domain/catalogue.py:488
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
 # squid/permissions/application/administration.py:75
 permissions-built-role = Built-in role
 
-# squid/permissions/domain/catalogue.py:390
+# squid/permissions/domain/catalogue.py:387
 permissions-change-server-bot = Change this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:395
+# squid/permissions/domain/catalogue.py:392
 permissions-change-server-voting = Change this server's voting emojis and role weights.
 
-# squid/permissions/domain/catalogue.py:412
+# squid/permissions/domain/catalogue.py:409
 permissions-change-starboard-configuration = Change a starboard's configuration.
 
-# squid/permissions/domain/catalogue.py:436
+# squid/permissions/domain/catalogue.py:433
 permissions-change-starboard-per = Change a starboard's per-role vote weights.
 
-# squid/permissions/domain/catalogue.py:431
+# squid/permissions/domain/catalogue.py:428
 permissions-change-which-emojis = Change which emojis count towards a starboard.
 
-# squid/permissions/domain/catalogue.py:371
+# squid/permissions/domain/catalogue.py:368
 permissions-change-wide-settings = Change application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:319
+# squid/permissions/domain/catalogue.py:316
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/permissions/domain/catalogue.py:475
+# squid/permissions/domain/catalogue.py:472
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
-# squid/permissions/domain/catalogue.py:331
+# squid/permissions/domain/catalogue.py:328
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/permissions/domain/catalogue.py:515
+# squid/permissions/domain/catalogue.py:512
 permissions-create-edit-server = Create and edit this server's permission roles.
 
-# squid/permissions/domain/catalogue.py:465
+# squid/permissions/domain/catalogue.py:462
 permissions-create-poll = Create a poll.
 
-# squid/permissions/domain/catalogue.py:470
+# squid/permissions/domain/catalogue.py:467
 permissions-create-poll-carded = Create a poll carded in every server's vote channel.
 
-# squid/permissions/domain/catalogue.py:407
+# squid/permissions/domain/catalogue.py:404
 permissions-create-starboard = Create a starboard.
 
 # squid/permissions/errors.py:79
 permissions-credential-scope = This action requires { $node }, but your credential does not include that permission.
 
-# squid/permissions/domain/catalogue.py:343
+# squid/permissions/domain/catalogue.py:340
 permissions-delete-every-stored = Delete every stored error report.
 
-# squid/permissions/domain/catalogue.py:417
+# squid/permissions/domain/catalogue.py:414
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
 
 # squid/permissions/errors.py:13
@@ -4409,7 +4409,7 @@ permissions-deny-reason = an explicit deny rule blocks that permission
 # squid/permissions/domain/catalogue.py:196
 permissions-download-convert-schematics = Download or convert non-public schematics you did not upload.
 
-# squid/permissions/domain/catalogue.py:313
+# squid/permissions/domain/catalogue.py:310
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
 
 # squid/permissions/domain/catalogue.py:168
@@ -4424,31 +4424,31 @@ permissions-forbid-reason = an explicit forbid rule blocks that permission
 # squid/permissions/errors.py:14
 permissions-grant-reason = your current permissions do not grant it
 
-# squid/permissions/domain/catalogue.py:326
+# squid/permissions/domain/catalogue.py:323
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/permissions/domain/catalogue.py:510
+# squid/permissions/domain/catalogue.py:507
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
-# squid/permissions/domain/catalogue.py:498
+# squid/permissions/domain/catalogue.py:495
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
-# squid/permissions/domain/catalogue.py:204
+# squid/permissions/domain/catalogue.py:201
 permissions-inspect-nonpublic-schematics = Inspect and render schematics that are not publicly downloadable, without receiving the file.
 
-# squid/permissions/domain/catalogue.py:220
+# squid/permissions/domain/catalogue.py:217
 permissions-inspect-record-gaps = Inspect record gaps, lookups and title issues.
 
 # squid/permissions/domain/models.py:84
 permissions-invalid-permission-pattern = Invalid permission pattern
 
-# squid/permissions/domain/catalogue.py:271
+# squid/permissions/domain/catalogue.py:268
 permissions-list-pending-creator = List pending creator alias claims.
 
-# squid/permissions/domain/catalogue.py:233
+# squid/permissions/domain/catalogue.py:230
 permissions-list-pending-tag = List pending tag proposals.
 
-# squid/permissions/domain/catalogue.py:213
+# squid/permissions/domain/catalogue.py:210
 permissions-measure-schematic-timing = Measure a schematic's timing.
 
 # squid/permissions/domain/models.py:83
@@ -4457,46 +4457,46 @@ permissions-not-valid-permission = That is not a valid permission pattern.
 # squid/permissions/application/administration.py:63
 permissions-outside-authority = Outside your authority
 
-# squid/permissions/domain/catalogue.py:448
+# squid/permissions/domain/catalogue.py:445
 permissions-post-manage-redstoner = Post and manage the Redstoner self-assign panel.
 
-# squid/permissions/domain/catalogue.py:301
+# squid/permissions/domain/catalogue.py:298
 permissions-re-read-linked = Re-read your linked Minecraft name after a rename.
 
-# squid/permissions/domain/catalogue.py:307
+# squid/permissions/domain/catalogue.py:304
 permissions-re-read-user = Re-read another user's linked Minecraft name.
 
-# squid/permissions/domain/catalogue.py:294
+# squid/permissions/domain/catalogue.py:291
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/permissions/domain/catalogue.py:504
+# squid/permissions/domain/catalogue.py:501
 permissions-read-permission-audit = Read the permission audit log.
 
-# squid/permissions/domain/catalogue.py:337
+# squid/permissions/domain/catalogue.py:334
 permissions-read-stored-error = Read a stored error report by the reference its user was shown.
 
-# squid/permissions/domain/catalogue.py:226
+# squid/permissions/domain/catalogue.py:223
 permissions-rebuild-record-table = Rebuild the record table from scratch.
 
 # squid/permissions/domain/catalogue.py:191
 permissions-recompute-build-derived = Recompute a build's derived attributes.
 
-# squid/permissions/domain/catalogue.py:426
+# squid/permissions/domain/catalogue.py:423
 permissions-recount-starboard-reactions = Recount a starboard's reactions.
 
-# squid/permissions/domain/catalogue.py:265
+# squid/permissions/domain/catalogue.py:262
 permissions-register-minecraft-version = Register a new Minecraft version.
 
-# squid/permissions/domain/catalogue.py:283
+# squid/permissions/domain/catalogue.py:280
 permissions-reject-creator-alias = Reject a creator alias claim.
 
 # squid/permissions/domain/catalogue.py:179
 permissions-reject-pending-build = Reject pending build submissions.
 
-# squid/permissions/domain/catalogue.py:245
+# squid/permissions/domain/catalogue.py:242
 permissions-reject-tag-proposal = Reject a tag proposal.
 
-# squid/permissions/domain/catalogue.py:289
+# squid/permissions/domain/catalogue.py:286
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
 # squid/permissions/errors.py:41
@@ -4505,43 +4505,43 @@ permissions-require-all = This action requires all of these permissions:
 # squid/permissions/errors.py:39
 permissions-require-any = This action requires at least one of these permissions:
 
-# squid/permissions/domain/catalogue.py:453
+# squid/permissions/domain/catalogue.py:450
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
 # squid/permissions/application/administration.py:69
 permissions-role-not-yours = Role is not yours to manage
 
-# squid/permissions/domain/catalogue.py:358
+# squid/permissions/domain/catalogue.py:355
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
 # squid/permissions/domain/catalogue.py:162
 permissions-submit-build-review = Submit a build for review.
 
-# squid/permissions/domain/catalogue.py:353
+# squid/permissions/domain/catalogue.py:350
 permissions-synchronise-command-tree = Synchronise the application command tree with Discord.
 
 # squid/permissions/domain/catalogue.py:155
 permissions-view-published-builds = View published builds.
 
-# squid/permissions/domain/catalogue.py:384
+# squid/permissions/domain/catalogue.py:381
 permissions-view-server-bot = View this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:401
+# squid/permissions/domain/catalogue.py:398
 permissions-view-server-starboards = View this server's starboards.
 
 # squid/permissions/domain/catalogue.py:185
 permissions-view-unreviewed-builds = View builds that have not been reviewed yet.
 
-# squid/permissions/domain/catalogue.py:365
+# squid/permissions/domain/catalogue.py:362
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:480
+# squid/permissions/domain/catalogue.py:477
 permissions-vote-build-log = Vote in build log deletion votes.
 
-# squid/permissions/domain/catalogue.py:459
+# squid/permissions/domain/catalogue.py:456
 permissions-vote-polls = Vote in polls.
 
-# squid/permissions/domain/catalogue.py:485
+# squid/permissions/domain/catalogue.py:482
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/poll_wizard.py:406

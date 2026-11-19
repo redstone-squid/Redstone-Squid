@@ -14179,7 +14179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:258"
+      "squid/permissions/domain/catalogue.py:255"
     ]
   },
   "permissions-approve-creator-alias": {
@@ -14188,7 +14188,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:277"
+      "squid/permissions/domain/catalogue.py:274"
     ]
   },
   "permissions-approve-pending-build": {
@@ -14206,7 +14206,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:239"
+      "squid/permissions/domain/catalogue.py:236"
     ]
   },
   "permissions-archive-channel-messages": {
@@ -14215,7 +14215,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:442"
+      "squid/permissions/domain/catalogue.py:439"
     ]
   },
   "permissions-archive-tag": {
@@ -14224,7 +14224,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:251"
+      "squid/permissions/domain/catalogue.py:248"
     ]
   },
   "permissions-browse-permission": {
@@ -14233,7 +14233,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:491"
+      "squid/permissions/domain/catalogue.py:488"
     ]
   },
   "permissions-built-role": {
@@ -14251,7 +14251,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:390"
+      "squid/permissions/domain/catalogue.py:387"
     ]
   },
   "permissions-change-server-voting": {
@@ -14260,7 +14260,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:395"
+      "squid/permissions/domain/catalogue.py:392"
     ]
   },
   "permissions-change-starboard-configuration": {
@@ -14269,7 +14269,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:412"
+      "squid/permissions/domain/catalogue.py:409"
     ]
   },
   "permissions-change-starboard-per": {
@@ -14278,7 +14278,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:436"
+      "squid/permissions/domain/catalogue.py:433"
     ]
   },
   "permissions-change-which-emojis": {
@@ -14287,7 +14287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:431"
+      "squid/permissions/domain/catalogue.py:428"
     ]
   },
   "permissions-change-wide-settings": {
@@ -14296,7 +14296,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:371"
+      "squid/permissions/domain/catalogue.py:368"
     ]
   },
   "permissions-clear-user-public": {
@@ -14305,7 +14305,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:319"
+      "squid/permissions/domain/catalogue.py:316"
     ]
   },
   "permissions-close-refresh-poll": {
@@ -14314,7 +14314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:475"
+      "squid/permissions/domain/catalogue.py:472"
     ]
   },
   "permissions-create-edit-global": {
@@ -14323,7 +14323,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:331"
+      "squid/permissions/domain/catalogue.py:328"
     ]
   },
   "permissions-create-edit-server": {
@@ -14332,7 +14332,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:515"
+      "squid/permissions/domain/catalogue.py:512"
     ]
   },
   "permissions-create-poll": {
@@ -14341,7 +14341,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:465"
+      "squid/permissions/domain/catalogue.py:462"
     ]
   },
   "permissions-create-poll-carded": {
@@ -14350,7 +14350,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:470"
+      "squid/permissions/domain/catalogue.py:467"
     ]
   },
   "permissions-create-starboard": {
@@ -14359,7 +14359,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:407"
+      "squid/permissions/domain/catalogue.py:404"
     ]
   },
   "permissions-credential-scope": {
@@ -14383,7 +14383,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:343"
+      "squid/permissions/domain/catalogue.py:340"
     ]
   },
   "permissions-delete-starboard-recorded": {
@@ -14392,7 +14392,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:417"
+      "squid/permissions/domain/catalogue.py:414"
     ]
   },
   "permissions-deny-reason": {
@@ -14419,7 +14419,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:313"
+      "squid/permissions/domain/catalogue.py:310"
     ]
   },
   "permissions-edit-unsubmitted-builds": {
@@ -14464,7 +14464,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:326"
+      "squid/permissions/domain/catalogue.py:323"
     ]
   },
   "permissions-grant-revoke-server": {
@@ -14473,7 +14473,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:510"
+      "squid/permissions/domain/catalogue.py:507"
     ]
   },
   "permissions-inspect-explain-user": {
@@ -14482,7 +14482,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:498"
+      "squid/permissions/domain/catalogue.py:495"
     ]
   },
   "permissions-inspect-nonpublic-schematics": {
@@ -14491,7 +14491,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:204"
+      "squid/permissions/domain/catalogue.py:201"
     ]
   },
   "permissions-inspect-record-gaps": {
@@ -14500,7 +14500,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:220"
+      "squid/permissions/domain/catalogue.py:217"
     ]
   },
   "permissions-invalid-permission-pattern": {
@@ -14518,7 +14518,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:271"
+      "squid/permissions/domain/catalogue.py:268"
     ]
   },
   "permissions-list-pending-tag": {
@@ -14527,7 +14527,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:233"
+      "squid/permissions/domain/catalogue.py:230"
     ]
   },
   "permissions-measure-schematic-timing": {
@@ -14536,7 +14536,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:213"
+      "squid/permissions/domain/catalogue.py:210"
     ]
   },
   "permissions-not-valid-permission": {
@@ -14563,7 +14563,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:448"
+      "squid/permissions/domain/catalogue.py:445"
     ]
   },
   "permissions-re-read-linked": {
@@ -14572,7 +14572,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:301"
+      "squid/permissions/domain/catalogue.py:298"
     ]
   },
   "permissions-re-read-user": {
@@ -14581,7 +14581,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:307"
+      "squid/permissions/domain/catalogue.py:304"
     ]
   },
   "permissions-read-account-notifications": {
@@ -14590,7 +14590,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:294"
+      "squid/permissions/domain/catalogue.py:291"
     ]
   },
   "permissions-read-permission-audit": {
@@ -14599,7 +14599,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:504"
+      "squid/permissions/domain/catalogue.py:501"
     ]
   },
   "permissions-read-stored-error": {
@@ -14608,7 +14608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:337"
+      "squid/permissions/domain/catalogue.py:334"
     ]
   },
   "permissions-rebuild-record-table": {
@@ -14617,7 +14617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:226"
+      "squid/permissions/domain/catalogue.py:223"
     ]
   },
   "permissions-recompute-build-derived": {
@@ -14635,7 +14635,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:426"
+      "squid/permissions/domain/catalogue.py:423"
     ]
   },
   "permissions-register-minecraft-version": {
@@ -14644,7 +14644,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:265"
+      "squid/permissions/domain/catalogue.py:262"
     ]
   },
   "permissions-reject-creator-alias": {
@@ -14653,7 +14653,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:283"
+      "squid/permissions/domain/catalogue.py:280"
     ]
   },
   "permissions-reject-pending-build": {
@@ -14671,7 +14671,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:245"
+      "squid/permissions/domain/catalogue.py:242"
     ]
   },
   "permissions-relay-account-verification": {
@@ -14680,7 +14680,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:289"
+      "squid/permissions/domain/catalogue.py:286"
     ]
   },
   "permissions-require-all": {
@@ -14707,7 +14707,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:453"
+      "squid/permissions/domain/catalogue.py:450"
     ]
   },
   "permissions-role-not-yours": {
@@ -14725,7 +14725,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:358"
+      "squid/permissions/domain/catalogue.py:355"
     ]
   },
   "permissions-submit-build-review": {
@@ -14743,7 +14743,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:353"
+      "squid/permissions/domain/catalogue.py:350"
     ]
   },
   "permissions-view-published-builds": {
@@ -14761,7 +14761,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:384"
+      "squid/permissions/domain/catalogue.py:381"
     ]
   },
   "permissions-view-server-starboards": {
@@ -14770,7 +14770,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:401"
+      "squid/permissions/domain/catalogue.py:398"
     ]
   },
   "permissions-view-unreviewed-builds": {
@@ -14788,7 +14788,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:365"
+      "squid/permissions/domain/catalogue.py:362"
     ]
   },
   "permissions-vote-build-log": {
@@ -14797,7 +14797,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:480"
+      "squid/permissions/domain/catalogue.py:477"
     ]
   },
   "permissions-vote-polls": {
@@ -14806,7 +14806,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:459"
+      "squid/permissions/domain/catalogue.py:456"
     ]
   },
   "permissions-votes-counted-staff": {
@@ -14815,7 +14815,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/permissions/domain/catalogue.py:485"
+      "squid/permissions/domain/catalogue.py:482"
     ]
   },
   "poll-choice-row-emoji": {
