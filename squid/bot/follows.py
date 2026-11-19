@@ -43,7 +43,7 @@ def follow_control(kind: SubscriptionKind, subject_id: UUID) -> sl.semantic.Acti
 
 
 async def _follow(kind: SubscriptionKind, subject_id: UUID, event: sd.PressEvent) -> None:
-    bot = cast(RedstoneSquid, event.context.client)
+    bot = cast("RedstoneSquid", event.context.client)
 
     async def save(source: sd.ActionEvent, account_id: int) -> None:
         _existing, revision = await bot.services.notifications.subscription_snapshot(

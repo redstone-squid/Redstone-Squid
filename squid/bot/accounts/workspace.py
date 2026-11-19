@@ -492,7 +492,7 @@ class AccountWorkspace(sd.Screen):
 
     async def _choose_claim(self, event: sd.PressEvent) -> None:
         await pick(
-            cast(sd.PressEvent[RedstoneSquid], event),
+            cast("sd.PressEvent[RedstoneSquid]", event),
             "creators",
             tr(t"account-search-credit-names = Search credited names"),
             self._claim_picked,

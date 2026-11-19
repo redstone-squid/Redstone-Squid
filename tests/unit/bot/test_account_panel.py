@@ -343,6 +343,17 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
     assert "Someone" in str(card.render())
 
 
+async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> None:
+    workspace = AccountWorkspace.__new__(AccountWorkspace)
+    pick = mocker.patch("squid.bot.accounts.workspace.pick", new_callable=mocker.AsyncMock)
+    event = notice_press()
+
+    await workspace._choose_claim(event)
+
+    assert pick.await_count == 1
+    assert pick.await_args_list[0].args[:2] == (event, "creators")
+
+
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
