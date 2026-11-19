@@ -1,10 +1,12 @@
 """Offer permission nodes, wildcard prefixes, and tag selectors from the code catalogue."""
 
+from squid.core.i18n import localization_for
 from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import Candidate
 from squid.suggestions.application.registry import SuggestionSource
 from squid.suggestions.domain import SourceKind
 from squid.suggestions.infrastructure.providers.static import StaticProvider
+from squid_i18n import resolve_text
 
 WILDCARD = "**"
 
@@ -12,7 +14,13 @@ WILDCARD = "**"
 def permission_node_candidates() -> tuple[Candidate, ...]:
     """Suggest concrete permission nodes."""
     return tuple(
-        Candidate.create(node.name, description=node.scope.value, kind="permission_node") for node in CATALOGUE.values()
+        Candidate.create(
+            node.name,
+            label=resolve_text(node.description, localization_for("en")).plain(),
+            description=node.name,
+            kind="permission_node",
+        )
+        for node in CATALOGUE.values()
     )
 
 

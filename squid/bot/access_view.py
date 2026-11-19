@@ -6,6 +6,8 @@ from dataclasses import replace
 from functools import partial
 from typing import Any, override
 
+import discord
+
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
@@ -36,7 +38,7 @@ from squid.permissions.application.edits import (
     RoleDeletionValues,
     RolePresenceValues,
 )
-from squid.permissions.domain import CATALOGUE, Effect
+from squid.permissions.domain import CATALOGUE, Decision, Effect, Reason
 from squid.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
@@ -60,7 +62,7 @@ _DENIED = tr(t"access-change-forbidden = You are no longer allowed to change acc
 class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     """Browse and administer one subject's access in a guild.
 
-    Grants held at open determine which tabs are displayed. Mutation handlers
+    Grants held at open determine which tasks are available. Mutation handlers
     recheck authorization and obtain a fresh administrative actor; the application
     service then enforces role rank, scope, and delegation limits.
     """
@@ -73,9 +75,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
     _selected_pattern: tuple[str, int] | None = sl.state(None)
     _selected_role: tuple[PermissionRole, int] | None = sl.state(None)
     _revision: int = sl.state(default=0)
-    _tabs: sp.ComponentDriver[sp.TabsState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
-        default=None
-    )
+    _page: str = sl.state("home")
+    _content: tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...] = sl.state(())
+    _member_id: int | None = sl.state(None)
+    _action: str | None = sl.state(None)
     _pending_delete: tuple[str, int, int] | None = sl.state(default=None)
     _decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
         sl.state(default=None)
@@ -90,9 +93,15 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         account_id: int | None,
         discord_role_id: int | None,
         subject_label: str,
+        member_id: int | None = None,
+        guild_name: str = "this server",
+        bot: RedstoneSquid | None = None,
         grants: Grants,
         actor: ActorProvider,
     ) -> None:
+        self._bot = bot
+        self._member_id = member_id
+        self._guild_name = guild_name
         self._admin = admin
         self._guild_id = guild_id
         self._account_id = account_id
@@ -107,56 +116,144 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _refresh(self) -> None:
         self._revision = await self._admin.revision()
-        tabs: list[sp.Tab[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        if PERM_SUBJECT_INSPECT in self.grants:
-            rules = await self._admin.rules_for(
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
-                guild_id=self._guild_id,
-            )
-            assignments = await self._admin.assignments_for(
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
-                guild_id=self._guild_id,
-            )
-            tabs.append(
-                sp.Tab(
-                    "subject",
-                    tr(t"access-current = Current access"),
-                    (
-                        *self._target_controls(),
-                        self._subject_browser(
-                            tuple(row for row in rules if row.scope_guild_id == self._scope_id),
-                            tuple(row for row in assignments if row.scope_guild_id == self._scope_id),
+        page = self._page
+        nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
+        tasks = (
+            ("check", tr(t"access-check = Check access"), PERM_SUBJECT_INSPECT in self.grants),
+            ("edit", tr(t"access-edit = Give or remove access"), self._may_grant or self._may_manage_roles),
+            ("roles", tr(t"access-view-internal-roles = Manage bot roles"), self._may_manage_roles),
+            ("audit", tr(t"access-history = Recent changes"), PERM_AUDIT_VIEW in self.grants),
+            (
+                "reference",
+                tr(t"access-permission-list = Find a bot action"),
+                PERM_NODE_VIEW in self.grants and PERM_SUBJECT_INSPECT not in self.grants,
+            ),
+        )
+        if page == "home":
+            nodes.extend(
+                (
+                    sl.heading(tr(t"access-home = What do you want to do?")),
+                    sl.action_controls(
+                        *(
+                            sl.action_control(label, partial(self._open, key), key=key)
+                            for key, label, allowed in tasks
+                            if allowed
                         ),
+                        key="access-tasks",
                     ),
                 )
             )
-        subject_forms = self._subject_forms()
-        if subject_forms:
-            tabs.append(
-                sp.Tab(
-                    "assignments",
-                    tr(t"access-edit = Change access"),
-                    (*self._target_controls(), *subject_forms),
+        elif page in {"check", "edit"}:
+            nodes.extend(self._target_controls())
+            if page == "check":
+                nodes.append(
+                    sl.action_controls(
+                        sl.action_control(
+                            tr(t"access-find = Find a bot action"), self._choose_permission, key="action"
+                        ),
+                        key="action-controls",
+                    )
+                )
+                if self._action:
+                    nodes.extend(await self._result())
+                    if self._may_grant:
+                        nodes.append(
+                            sl.action_controls(
+                                sl.action_control(
+                                    tr(t"access-edit-result = Change this access"),
+                                    partial(self._open, "edit"),
+                                    key="edit-result",
+                                ),
+                                key="edit-result-controls",
+                            )
+                        )
+            else:
+                nodes.extend(self._subject_forms())
+                if PERM_SUBJECT_INSPECT in self.grants and (self._selected_pattern or self._selected_role):
+                    target = dict(
+                        account_id=self._account_id, discord_role_id=self._discord_role_id, guild_id=self._guild_id
+                    )
+                    rules = await self._admin.rules_for(**target)
+                    assignments = await self._admin.assignments_for(**target)
+                    nodes.append(
+                        self._subject_browser(
+                            tuple(
+                                r
+                                for r in rules
+                                if r.scope_guild_id == self._scope_id
+                                and self._selected_pattern
+                                and r.pattern == self._selected_pattern[0]
+                            ),
+                            tuple(
+                                a
+                                for a in assignments
+                                if a.scope_guild_id == self._scope_id
+                                and self._selected_role
+                                and a.role_id == self._selected_role[0].id
+                            ),
+                        )
+                    )
+        elif page == "roles":
+            nodes.append(
+                sl.note(
+                    tr(
+                        t"access-role-guide = A bot role bundles actions. Assign it to a member or a Discord role to give them those permissions."
+                    )
                 )
             )
-        if self._may_manage_roles:
-            roles = await self._admin.roles(guild_id=self._guild_id)
-            tabs.append(
-                sp.Tab("roles", tr(t"access-view-internal-roles = Manage bot roles"), self._role_browser(roles))
+            nodes.extend(self._role_forms())
+            nodes.append(self._role_browser(await self._admin.roles(guild_id=self._guild_id)))
+        elif page == "reference":
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(tr(t"access-find = Find a bot action"), self._choose_permission, key="find"),
+                    key="find-controls",
+                )
             )
-            tabs.append(sp.Tab("role-editor", tr(t"access-create-role-tab = Create a bot role"), self._role_forms()))
-        if PERM_NODE_VIEW in self.grants:
-            tabs.append(sp.Tab("catalogue", tr(t"access-permission-list = Permission reference"), self._catalogue()))
-        if PERM_AUDIT_VIEW in self.grants:
-            audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
-            tabs.append(sp.Tab("audit", tr(t"access-history = Change history"), self._audit(audit)))
-        self._tabs = sp.Tabs(
-            tabs,
-            key="access-tabs",
-            title=tr(t"access-workspace = Manage bot access"),
-            initial_state=None if self._tabs is None else self._tabs.machine_state,
+            if self._action:
+                nodes.append(sl.note(CATALOGUE[self._action].description))
+        elif page == "audit":
+            nodes.append(self._audit(await self._admin.audit(guild_id=self._guild_id, limit=50)))
+        if page != "home":
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(tr(t"access-home-button = Home"), partial(self._open, "home"), key="home"),
+                    key="home-controls",
+                )
+            )
+        self._content = tuple(nodes)
+
+    async def _open(self, page: str, event: sd.PressEvent) -> None:
+        self._page = page
+        self._selected_role = None
+        self._selected_pattern = (self._action, self._revision) if page == "edit" and self._action else None
+        if page == "home":
+            self._action = None
+            self._scope_key = "guild"
+        await self._refresh()
+
+    async def _result(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
+        assert self._action and self._bot
+        if not await self.grants.allows(PERM_SUBJECT_INSPECT):
+            return (sl.note(_DENIED),)
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            return (sl.note("This server is unavailable."),)
+        if self._discord_role_id is not None:
+            if guild.get_role(self._discord_role_id) is None:
+                return (sl.note("That Discord role has been deleted."),)
+            actor = Actor(guild_id=guild.id, discord_role_ids=frozenset({self._discord_role_id}))
+        else:
+            assert self._member_id is not None
+            try:
+                member = await guild.fetch_member(self._member_id)
+            except discord.NotFound:
+                return (sl.note("This member has left the server."),)
+            actor = await self._bot.actors.resolve(member, account_id=self._account_id)
+        decision = (await self._bot.services.permissions.check(actor, self._action)).decisions[0]
+        return (
+            sl.heading(CATALOGUE[self._action].description),
+            sl.paragraph(_explanation(decision, self._discord_role_id is not None)),
         )
 
     @property
@@ -165,19 +262,26 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _target_controls(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         subject = self._subject_label
+        server = self._guild_name
         return (
-            sl.heading(md_tr(t"access-target = Access for {subject}")),
+            sl.heading(md_tr(t"access-target = {subject} in {server}")),
             sl.entities(
                 key="access-target",
                 entity_type=sl.entity.EntityType.MENTIONABLE,
                 selection=sl.controlled((), self._change_subject),
                 placeholder=tr(t"access-target-picker = Choose a member or Discord role"),
             ),
-            sl.choices(
-                sl.choice(tr(t"access-view-this-server = This server"), key="guild"),
-                sl.choice(tr(t"access-all-servers = All servers"), key="global"),
-                key="access-scope",
-                selection=sl.controlled((self._scope_key,), self._change_scope),
+            *(
+                (
+                    sl.choices(
+                        sl.choice(tr(t"access-view-this-server = This server"), key="guild"),
+                        sl.choice(tr(t"access-all-servers = All servers"), key="global"),
+                        key="access-scope",
+                        selection=sl.controlled((self._scope_key,), self._change_scope),
+                    ),
+                )
+                if self._page == "edit" and PERM_GRANT_GLOBAL in self.grants
+                else ()
             ),
         )
 
@@ -192,10 +296,12 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 await event.notice(tr(t"access-role-unavailable = That role is no longer available."))
                 return
             self._account_id, self._discord_role_id = None, role.id
+            self._member_id = None
             self._subject_label = role.name
         else:
             account = await get_or_create_discord_account_id(event.context.client.services.accounts, target.id)
             self._account_id, self._discord_role_id = account, None
+            self._member_id = target.id
             member = guild.get_member(target.id)
             self._subject_label = member.display_name if member else f"<@{target.id}>"
         await self._reset_selection()
@@ -205,6 +311,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._reset_selection()
 
     async def _reset_selection(self) -> None:
+        self._action = None
         self._selected_role = None
         self._selected_pattern = None
         self.edits.forget((PERMISSION_GRAPH.identity,))
@@ -233,9 +340,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 ),
                 self._decision,
             )
-        if self._tabs is None:
-            return (sl.status(tr(t"access-view-loading-access-controls = Loading access controls.")),)
-        return (self._tabs, *self.edits.refresh_controls())
+        return (*self._content, *self.edits.controls())
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
@@ -267,7 +372,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.action_controls(
                 self._may_grant
                 and sl.action_control(
-                    tr(t"access-choose-permission = Choose permission"),
+                    tr(t"access-choose-permission = Change one action"),
                     self._choose_permission,
                     key="choose-permission",
                 ),
@@ -317,10 +422,12 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         revision = self._revision
 
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
+            self._action = item.value
+            self._selected_role = None
             self._selected_pattern = (item.value, revision)
             await self._refresh()
 
-        await pick(event, "permission_patterns", tr(t"access-choose-permission = Choose permission"), selected)
+        await pick(event, "permission_nodes", tr(t"access-choose-permission = Change one action"), selected)
 
     async def _choose_role(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         revision = self._revision
@@ -332,6 +439,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             if role is None:
                 await _event.notice(tr(t"access-role-unavailable = That role is no longer available."))
                 return
+            self._selected_pattern = None
+            self._action = None
             self._selected_role = (role, revision)
             await self._refresh()
 
@@ -650,6 +759,31 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         label = md_tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
         await self._save(ROLE_DELETE, RoleDeletionValues(role_id=identity), revision, label)
         await event.source.notice(label)
+
+
+def _explanation(decision: Decision, role_only: bool) -> str:
+    rule = decision.decisive_rule
+    if role_only and rule is None:
+        return "This Discord role contributes no rule for this action. Choose a member above to check their access."
+    verdict = (
+        {"allow": "Allows", "deny": "Denies", "forbid": "Always denies"}.get(rule.effect.name.lower(), "Denies")
+        if role_only and rule
+        else ("Yes" if decision.allowed else "No")
+    )
+    if rule is None:
+        why = "Bot owners have access." if decision.reason is Reason.OWNER else "The default for this action applies."
+    else:
+        origin, _, identity = rule.source.partition(":")
+        source = {
+            "role": f"bot role {identity}",
+            "account": "a direct member rule",
+            "discord-role": f"Discord role <@&{identity}>",
+            "discord": "Discord Manage Server",
+        }.get(origin, rule.source)
+        via = f" through Discord role <@&{rule.via.split(':')[-1]}>" if rule.via else ""
+        where = "this server" if rule.scope_guild_id else "all servers"
+        why = f"The deciding rule is {rule.pattern.raw} from {source}{via} ({where})."
+    return f"{verdict}. {why}"
 
 
 def _without(form: sl.forms.FormSpec[sd.Request[Any, Any]], *keys: str) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
