@@ -19,11 +19,12 @@ from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 TAGS = (
-    ("seamless", "Seamless", TagSemanticKind.PATTERN),
-    ("full_lamp", "Full Lamp", TagSemanticKind.PATTERN),
-    ("locational", "Locational", TagSemanticKind.RESTRICTION),
-    ("directional", "Directional", TagSemanticKind.RESTRICTION),
-    ("showcase_fast", "Fast", TagSemanticKind.SHOWCASE),
+    ("seamless", "Seamless", TagSemanticKind.PATTERN, TagValueType.NONE),
+    ("full_lamp", "Full Lamp", TagSemanticKind.PATTERN, TagValueType.NONE),
+    ("locational", "Locational", TagSemanticKind.RESTRICTION, TagValueType.NONE),
+    ("directional", "Directional", TagSemanticKind.RESTRICTION, TagValueType.NONE),
+    ("showcase_fast", "Fast", TagSemanticKind.SHOWCASE, TagValueType.NONE),
+    ("showcase_speed", "Speed", TagSemanticKind.SHOWCASE, TagValueType.NUMERIC),
 )
 
 VERSIONS = (
@@ -33,14 +34,14 @@ VERSIONS = (
 )
 
 
-def _definition(index: int, key: str, name: str, kind: TagSemanticKind) -> TagDefinition:
+def _definition(index: int, key: str, name: str, kind: TagSemanticKind, value_type: TagValueType) -> TagDefinition:
     return TagDefinition(
         id=index,
         stable_key=key,
         display_name=name,
         authority=TagAuthority.OFFICIAL if kind is not TagSemanticKind.SHOWCASE else TagAuthority.USER,
         semantic_kind=kind,
-        value_type=TagValueType.NONE,
+        value_type=value_type,
         moderation_status=TagModerationStatus.APPROVED,
     )
 
@@ -74,8 +75,14 @@ class FakeSuggestionRepository:
     ) -> Sequence[TaxonomyEntry]:
         del build_kind, authority
         return [
-            TaxonomyEntry(id=index, stable_key=key, display_name=name, semantic_kind=semantic_kind)
-            for index, (key, name, kind) in enumerate(reversed(TAGS), start=1)
+            TaxonomyEntry(
+                id=index,
+                stable_key=key,
+                display_name=name,
+                semantic_kind=semantic_kind,
+                value_type=None if value_type is TagValueType.NONE else value_type.value,
+            )
+            for index, (key, name, kind, value_type) in enumerate(reversed(TAGS), start=1)
             if kind.value == semantic_kind
         ]
 
@@ -103,6 +110,15 @@ async def test_taxonomy_options_match_the_catalogue_they_replace(source: str) ->
     after = await replacement.options(source, "door", locale="en")
     assert after.options == before.options
     assert after.revision == before.revision
+
+
+async def test_showcase_options_carry_the_value_each_tag_takes() -> None:
+    _, catalogue = catalogues()
+    options = await catalogue.options("approved_showcase_tags", "door", locale="en")
+    assert [(option.value, option.value_type) for option in options.options] == [
+        ("showcase_fast", None),
+        ("showcase_speed", "numeric"),
+    ]
 
 
 async def test_version_options_match_the_catalogue_they_replace() -> None:

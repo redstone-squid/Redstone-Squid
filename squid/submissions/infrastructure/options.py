@@ -7,7 +7,7 @@ from typing import Protocol, override
 
 from squid.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.submissions.domain import ChoiceOption
-from squid.tags.domain import TagSemanticKind
+from squid.tags.domain import TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
@@ -72,14 +72,27 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
             if definition.semantic_kind is semantic_kind
         )
         choices = tuple(
-            ChoiceOption(definition.stable_key, definition.display_name)
+            ChoiceOption(
+                definition.stable_key,
+                definition.display_name,
+                None if definition.value_type is TagValueType.NONE else definition.value_type.value,
+            )
             for definition in sorted(definitions, key=lambda item: (item.display_name.casefold(), item.stable_key))
         )
         return FormOptionSet(source, category, _content_revision(choices), choices)
 
 
 def _content_revision(options: tuple[ChoiceOption, ...]) -> int:
-    payload = json.dumps([(option.value, option.label) for option in options], separators=(",", ":")).encode()
+    # Matches `content_revision` for suggestions, so both catalogues publish the same revision.
+    payload = json.dumps(
+        [
+            (option.value, option.label)
+            if option.value_type is None
+            else (option.value, option.label, option.value_type)
+            for option in options
+        ],
+        separators=(",", ":"),
+    ).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
 
 

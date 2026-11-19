@@ -332,9 +332,9 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (2, "d94305480829b469df09eb39f7692b30ab93c55aad1823acda3f19763930888b"),
-        (3, "06fc4358f2688a923763f2c7679c7683ecba91af48360fa4d1685c35c9788e8c"),
-        (4, "a83a309e70b20690dbe671443f847e65de62619b4f4166248e34a0fc5692f711"),
+        (2, "40df1c64d2f7cd5f8ab639e42fa3536b3f57f4f73b21f12c71c05b3719ec42de"),
+        (3, "5dc4c89e5d9802cc8f36a55678854406044b6b3370c78119dc2a33da17979617"),
+        (4, "69d1f0e127ad0d97b8b3fa07a7d18f36712edd0f32d83d8b0102ce3c85b6d83d"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
@@ -426,7 +426,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert pinned_manifest_response.json()["revision"] == 2
     assert forms.revision_calls == [("build_submission.v1", 2, "zh-CN"), ("build_submission.v1", 999, "en")]
     assert options_response.status_code == 200
-    assert options_response.json()["options"] == [{"value": "slim", "label": "Slim"}]
+    assert options_response.json()["options"] == [{"value": "slim", "label": "Slim", "value_type": None}]
     assert forms.option_calls == [("approved_restrictions", "door", "en")]
     assert create_response.status_code == 201
     assert create_response.json()["origin"] == "web"

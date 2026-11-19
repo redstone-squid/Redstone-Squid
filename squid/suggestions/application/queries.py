@@ -16,6 +16,8 @@ class TaxonomyEntry:
     display_name: str
     semantic_kind: str
     aliases: tuple[str, ...] = ()
+    value_type: str | None = None
+    """The value a showcase tag takes, such as "numeric"; None when it takes none."""
 
 
 @dataclass(frozen=True, slots=True)

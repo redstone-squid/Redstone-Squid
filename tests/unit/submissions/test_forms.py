@@ -6,7 +6,7 @@ import anyio
 import pytest
 from anyio.lowlevel import checkpoint
 
-from squid.core.errors import JSONValue
+from squid.core.errors import JSONValue, ValidationError
 from squid.submissions.application import (
     CURRENT_SUBMISSION_PROTOCOL,
     CheckedInFormManifestRegistry,
@@ -285,3 +285,9 @@ def test_revision_six_adds_optional_media_links_without_changing_pinned_forms() 
     assert current.validate_answers(
         "other", {"image_urls": ["javascript:alert(1)"]}, origin=SubmissionOrigin.DISCORD, require_complete=False
     ) == {"image_urls": "wrong_type"}
+
+
+def test_choice_options_name_a_known_value_type() -> None:
+    assert ChoiceOption("speed", "Speed", "numeric").value_type == "numeric"
+    with pytest.raises(ValidationError):
+        ChoiceOption("speed", "Speed", "decimal")

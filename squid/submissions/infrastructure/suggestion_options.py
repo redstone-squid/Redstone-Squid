@@ -42,6 +42,6 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
             raise ValueError(msg)
 
         result = await self._suggestions.enumerate(source, context={"category": category}, locale=locale)
-        choices = tuple(ChoiceOption(item.value, item.label) for item in result.items)
+        choices = tuple(ChoiceOption(item.value, item.label, item.value_type) for item in result.items)
         # Reuse the suggestion source's revision so both clients can cache the same choices.
         return FormOptionSet(source, category, result.revision or 1, choices)

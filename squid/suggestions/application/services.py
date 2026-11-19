@@ -177,13 +177,20 @@ class SuggestionService:
 
 
 def content_revision(items: Sequence[Suggestion]) -> int:
-    """Hash the ordered values and labels into a nonzero 64-bit revision.
+    """Hash the ordered values, labels, and value types into a nonzero 64-bit revision.
 
     The same sequence produces the same revision across processes, allowing API
     replicas to issue the same ETag for unchanged options. Descriptions and kinds
     are excluded, so changes to those fields do not invalidate it.
     """
-    payload = json.dumps([(item.value, item.label) for item in items], separators=(",", ":")).encode()
+    payload = json.dumps(
+        # Leave out absent value types so sources without them keep their revisions.
+        [
+            (item.value, item.label) if item.value_type is None else (item.value, item.label, item.value_type)
+            for item in items
+        ],
+        separators=(",", ":"),
+    ).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
 
 
@@ -208,8 +215,5 @@ def _labelled(result: SuggestionResult, source: SuggestionSource) -> SuggestionR
     """Fill missing candidate kinds from the source definition."""
     if not source.kind_label or all(item.kind for item in result.items):
         return result
-    items = tuple(
-        item if item.kind else Suggestion(item.value, item.label, item.description, source.kind_label)
-        for item in result.items
-    )
+    items = tuple(item if item.kind else replace(item, kind=source.kind_label) for item in result.items)
     return SuggestionResult(items=items, revision=result.revision, replacement=result.replacement)

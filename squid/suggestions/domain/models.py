@@ -75,6 +75,9 @@ class Suggestion:
     kind: str = ""
     """The entity type behind the candidate, so mixed result lists stay readable."""
 
+    value_type: str | None = None
+    """What the candidate takes with it when chosen, such as a valued showcase tag's "numeric"."""
+
 
 @dataclass(frozen=True, slots=True)
 class SuggestionRequest:

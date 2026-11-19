@@ -17,6 +17,7 @@ from squid.records.domain import VersionScope
 from squid.records.models import RecordTitle, TitleDefinition
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.suggestions.application.queries import DocumentEntry, TaxonomyEntry
+from squid.tags.domain import TagValueType
 from squid.tags.models import TagApplicability, TagDefinition
 from squid.versions.models import Version
 
@@ -66,6 +67,7 @@ class PostgresSuggestionRepository:
                 display_name=row.display_name,
                 semantic_kind=semantic_kind,
                 aliases=tuple(alias.alias for alias in row.aliases),
+                value_type=None if row.value_type is TagValueType.NONE else row.value_type.value,
             )
             for row in definitions
         ]

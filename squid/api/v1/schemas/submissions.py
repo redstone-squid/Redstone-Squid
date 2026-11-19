@@ -5,7 +5,7 @@ decision.
 """
 
 from datetime import datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Self, cast
 from uuid import UUID
 
 from pydantic import (
@@ -81,6 +81,9 @@ DraftChangeKeyInput = Annotated[
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
+type OptionValueType = Literal["text", "numeric", "boolean"]
+
+
 class StrictSchema(BaseModel):
     """Base model which rejects contract fields unknown to this server."""
 
@@ -92,10 +95,17 @@ class ChoiceOptionResponse(StrictSchema):
 
     value: StableIdentifier
     label: str
+    value_type: OptionValueType | None
+    """The value a showcase tag option takes with it; null when it takes none."""
 
     @classmethod
     def from_domain(cls, option: ChoiceOption) -> ChoiceOptionResponse:
-        return cls(value=option.value, label=option.label)
+        return cls(
+            value=option.value,
+            label=option.label,
+            # ChoiceOption validates its value type against the same three names.
+            value_type=cast(OptionValueType | None, option.value_type),
+        )
 
 
 class VisibilityRuleResponse(StrictSchema):

@@ -70,6 +70,7 @@ class TaxonomyProvider:
                 kind=entry.semantic_kind,
                 terms=(entry.display_name, entry.stable_key, *entry.aliases)
                 + ((str(entry.id),) if self._by_id else ()),
+                value_type=entry.value_type,
             )
             for entry in entries
         )

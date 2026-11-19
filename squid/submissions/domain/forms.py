@@ -19,6 +19,7 @@ from squid.submissions.domain.links import LINK_FIELDS, valid_link_url
 from squid_i18n import md_tr
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_OPTION_VALUE_TYPES = frozenset({None, "text", "numeric", "boolean"})
 
 
 class SubmissionOrigin(StrEnum):
@@ -82,6 +83,8 @@ class ChoiceOption:
 
     value: str
     label: str
+    value_type: str | None = None
+    """What a showcase tag option takes with it: "text", "numeric", "boolean", or None for nothing."""
 
     def __post_init__(self) -> None:
         if not self.value.strip() or self.value != self.value.strip() or len(self.value) > 120:
@@ -92,6 +95,9 @@ class ChoiceOption:
             raise ValidationError(msg)
         if not self.label.strip():
             msg = tr(t"submissions-choice-labels-blank = choice labels cannot be blank")
+            raise ValidationError(msg)
+        if self.value_type not in _OPTION_VALUE_TYPES:
+            msg = tr(t"submissions-choice-value-type = choice value types must be text, numeric, boolean, or absent")
             raise ValidationError(msg)
 
 

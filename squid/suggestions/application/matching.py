@@ -46,9 +46,12 @@ class Candidate:
         description: str | None = None,
         kind: str = "",
         terms: tuple[str, ...] = (),
+        value_type: str | None = None,
     ) -> Candidate:
         """Build a candidate, matched on `terms` when given and on its label and value otherwise."""
-        suggestion = Suggestion(value=value, label=label or value, description=description, kind=kind)
+        suggestion = Suggestion(
+            value=value, label=label or value, description=description, kind=kind, value_type=value_type
+        )
         return cls(suggestion, terms)
 
     def match_terms(self) -> tuple[str, ...]:
