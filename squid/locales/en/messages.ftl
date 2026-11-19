@@ -1096,16 +1096,16 @@ bot-starboard-screen-starboards = Starboards
 # squid/bot/starboard/screen.py:453
 bot-starboard-screen-up = Up
 
-# squid/bot/catalogue/browse.py:285, squid/bot/catalogue/browse.py:336
+# squid/bot/catalogue/browse.py:278, squid/bot/catalogue/browse.py:321
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/catalogue/browse.py:488
+# squid/bot/catalogue/browse.py:474
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1139
+# squid/bot/catalogue/browse.py:1140
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/catalogue/browse.py:344
+# squid/bot/catalogue/browse.py:329
 bot-submission-build-browse-cancel = Cancel
 
 # squid/bot/catalogue/schematics/tools.py:350
@@ -1120,22 +1120,22 @@ bot-submission-build-browse-download-result = Download result
 # squid/bot/catalogue/schematics/tools.py:94
 bot-submission-build-browse-download-schematic = Download
 
-# squid/bot/catalogue/browse.py:277
+# squid/bot/catalogue/browse.py:824
 bot-submission-build-browse-edit = Edit
 
 # squid/bot/catalogue/browse.py:242
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1137
+# squid/bot/catalogue/browse.py:1138
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/catalogue/browse.py:663
+# squid/bot/catalogue/browse.py:649
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/catalogue/schematics/tools.py:362
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/catalogue/browse.py:294, squid/bot/catalogue/browse.py:338
+# squid/bot/catalogue/browse.py:287, squid/bot/catalogue/browse.py:323
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/catalogue/schematics/tools.py:122
@@ -1322,109 +1322,109 @@ bot-submission-ui-views-reload-latest = Reload latest
 # squid/bot/submission/ui/build_edit.py:447
 bot-submission-ui-views-review-changes = Review changes
 
-# squid/bot/tags_view.py:458, squid/bot/tags_view.py:676
+# squid/bot/tags_view.py:333, squid/bot/tags_view.py:551
 bot-tags-view-add-restriction-alias = Add restriction alias
 
-# squid/bot/tags_view.py:685
+# squid/bot/tags_view.py:560
 bot-tags-view-apply-showcase-tag = Apply showcase tag
 
-# squid/bot/tags_view.py:650
+# squid/bot/tags_view.py:525
 bot-tags-view-approve = Approve
 
-# squid/bot/tags_view.py:652
+# squid/bot/tags_view.py:527
 bot-tags-view-archive = Archive
 
-# squid/bot/tags_view.py:538
+# squid/bot/tags_view.py:413
 bot-tags-view-attached-to-build = Attached **{ $tag_name }** to build #{ $build_id }.
 
-# squid/bot/tags_view.py:687
+# squid/bot/tags_view.py:562
 bot-tags-view-build-id = Build ID
 
-# squid/bot/tags_view.py:148, squid/bot/tags_view.py:571
+# squid/bot/tags_view.py:446
 bot-tags-view-cancel = Cancel
 
-# squid/bot/tags_view.py:679
+# squid/bot/tags_view.py:554
 bot-tags-view-canonical-restriction = Canonical restriction
 
-# squid/bot/tags_view.py:319
+# squid/bot/tags_view.py:194
 bot-tags-view-catalogue = Catalogue
 
-# squid/bot/tags_view.py:570
+# squid/bot/tags_view.py:445
 bot-tags-view-confirm = Confirm
 
-# squid/bot/tags_view.py:343
+# squid/bot/tags_view.py:218
 bot-tags-view-confirm-tag-moderation = Confirm tag moderation
 
-# squid/bot/tags_view.py:659
+# squid/bot/tags_view.py:534
 bot-tags-view-display-name = Display name
 
-# squid/bot/tags_view.py:641
+# squid/bot/tags_view.py:516
 bot-tags-view-id = ID
 
-# squid/bot/tags_view.py:642
+# squid/bot/tags_view.py:517
 bot-tags-view-kind = Kind
 
-# squid/bot/tags_view.py:349
+# squid/bot/tags_view.py:224
 bot-tags-view-loading-build-tags = Loading build tags.
 
-# squid/bot/tags_view.py:324
+# squid/bot/tags_view.py:199
 bot-tags-view-moderation = Moderation
 
-# squid/bot/tags_view.py:463, squid/bot/tags_view.py:681
+# squid/bot/tags_view.py:338, squid/bot/tags_view.py:556
 bot-tags-view-new-alias = New alias
 
-# squid/bot/tags_view.py:290
+# squid/bot/tags_view.py:165
 bot-tags-view-no-public-build-tags-are-available = No public build tags are available.
 
-# squid/bot/tags_view.py:321
+# squid/bot/tags_view.py:196
 bot-tags-view-propose-and-apply = Propose and apply
 
-# squid/bot/tags_view.py:657
+# squid/bot/tags_view.py:532
 bot-tags-view-propose-showcase-tag = Propose showcase tag
 
-# squid/bot/tags_view.py:380
+# squid/bot/tags_view.py:255
 bot-tags-view-propose-tag = Propose tag
 
-# squid/bot/tags_view.py:289
+# squid/bot/tags_view.py:164
 bot-tags-view-published-build-tags = Published build tags
 
-# squid/bot/tags_view.py:644
+# squid/bot/tags_view.py:519
 bot-tags-view-query-field = Query field
 
-# squid/bot/tags_view.py:667
+# squid/bot/tags_view.py:542
 bot-tags-view-query-field-help = Used in search expressions. Leave empty to derive it from the name.
 
-# squid/bot/tags_view.py:666
+# squid/bot/tags_view.py:541
 bot-tags-view-query-field-override = Advanced: query field
 
-# squid/bot/tags_view.py:651
+# squid/bot/tags_view.py:526
 bot-tags-view-reject = Reject
 
-# squid/bot/tags_view.py:492, squid/bot/tags_view.py:558
+# squid/bot/tags_view.py:367, squid/bot/tags_view.py:433
 bot-tags-view-restriction-alias-added = Restriction alias added.
 
-# squid/bot/tags_view.py:327
+# squid/bot/tags_view.py:202
 bot-tags-view-restriction-aliases = Restriction aliases
 
-# squid/bot/tags_view.py:688
+# squid/bot/tags_view.py:563
 bot-tags-view-tag-id = Tag ID
 
-# squid/bot/tags_view.py:513
+# squid/bot/tags_view.py:388
 bot-tags-view-tag-is-awaiting-staff-approval = Tag #{ $tag_id } is awaiting staff approval.
 
-# squid/bot/tags_view.py:312
+# squid/bot/tags_view.py:187
 bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review
 
-# squid/bot/tags_view.py:618, squid/bot/tags_view.py:643, squid/bot/tags_view.py:689
+# squid/bot/tags_view.py:493, squid/bot/tags_view.py:518, squid/bot/tags_view.py:564
 bot-tags-view-value = Value
 
-# squid/bot/tags_view.py:605
+# squid/bot/tags_view.py:480
 bot-tags-view-value-2 = { $action_label } **{ $tag_name }**.
 
-# squid/bot/tags_view.py:344
+# squid/bot/tags_view.py:219
 bot-tags-view-value-3 = { $action_label } **{ $tag_name }**?
 
-# squid/bot/tags_view.py:661
+# squid/bot/tags_view.py:536
 bot-tags-view-value-type = Value type
 
 # squid/bot/chrome.py:269
@@ -1706,13 +1706,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:140
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:1106
+# squid/bot/catalogue/browse.py:1107
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:1104
+# squid/bot/catalogue/browse.py:1105
 browse-query-all-standings = All standings
 
-# squid/bot/catalogue/browse.py:717
+# squid/bot/catalogue/browse.py:703
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1721,22 +1721,19 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/catalogue/browse.py:640
+# squid/bot/catalogue/browse.py:626
 build-browse-all-builds = Builds
 
-# squid/bot/catalogue/browse.py:656
+# squid/bot/catalogue/browse.py:642
 build-browse-record-tools = Record tools
 
-# squid/bot/catalogue/browse.py:648
+# squid/bot/catalogue/browse.py:634
 build-browse-records = Records
 
-# squid/bot/catalogue/browse.py:265
-build-browse-tags = Build tags
-
-# squid/bot/catalogue/browse.py:719
+# squid/bot/catalogue/browse.py:705
 build-browser-close-search = Done
 
-# squid/bot/catalogue/browse.py:721
+# squid/bot/catalogue/browse.py:707
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/ui/saved_drafts.py:55
@@ -1817,7 +1814,7 @@ build-edit-search-patterns = Search patterns
 # squid/bot/submission/ui/build_edit.py:499
 build-edit-search-unavailable = Return to the editor before adding a pattern.
 
-# squid/bot/submission/ui/controls.py:57
+# squid/bot/submission/ui/controls.py:27
 build-editor-build-deleted = That build no longer exists.
 
 # squid/bot/submission/ui/build_edit.py:323
@@ -1859,7 +1856,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:403
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/catalogue/browse.py:709, squid/bot/catalogue/browse.py:864
+# squid/bot/catalogue/browse.py:695, squid/bot/catalogue/browse.py:865
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:46
@@ -1874,25 +1871,25 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/catalogue/browse.py:489
+# squid/bot/catalogue/browse.py:475
 build-list-empty = No builds are available.
 
-# squid/bot/catalogue/browse.py:388
+# squid/bot/catalogue/browse.py:373
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/catalogue/browse.py:317
+# squid/bot/catalogue/browse.py:302
 build-review-approve-effect = The build becomes visible in the public catalogue.
 
-# squid/bot/catalogue/browse.py:316
+# squid/bot/catalogue/browse.py:301
 build-review-approve-title = Approve build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:322
+# squid/bot/catalogue/browse.py:307
 build-review-reject-effect = The build is marked as denied and leaves the catalogue.
 
-# squid/bot/catalogue/browse.py:321
+# squid/bot/catalogue/browse.py:306
 build-review-reject-title = Reject build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:368, squid/bot/catalogue/browse.py:370
+# squid/bot/catalogue/browse.py:353, squid/bot/catalogue/browse.py:355
 build-review-state-updated = Build review state updated.
 
 # squid/bot/catalogue/schematics/tools.py:154
@@ -1901,10 +1898,10 @@ build-schematic-missing = This build has no schematic attached.
 # squid/bot/catalogue/schematics/tools.py:158
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/catalogue/browse.py:303
+# squid/bot/catalogue/browse.py:268
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/catalogue/browse.py:305
+# squid/bot/catalogue/browse.py:270
 build-schematic-tools-show = Schematic tools
 
 # squid/bot/catalogue/search/results.py:162, squid/bot/catalogue/search/results.py:166, squid/bot/catalogue/search/results.py:242, squid/bot/catalogue/search/results.py:295
@@ -1930,24 +1927,6 @@ build-search-sort-help = Order results by a field, ascending or descending.
 
 # squid/bot/submission/cog.py:74
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
-
-# squid/bot/tags_view.py:181
-build-tags-add-or-update = Add or update tag
-
-# squid/bot/tags_view.py:184
-build-tags-catalogue = Browse the tag catalogue or propose a tag with `/tags`.
-
-# squid/bot/tags_view.py:193
-build-tags-choose = Choose a showcase tag
-
-# squid/bot/tags_view.py:178
-build-tags-empty = No showcase tags have been applied.
-
-# squid/bot/tags_view.py:129
-build-tags-heading = Showcase tags
-
-# squid/bot/tags_view.py:201
-build-tags-tag-unavailable = That showcase tag is no longer available.
 
 # squid/builds/errors.py:109
 builds-alias-restriction = That alias is already on this restriction.
@@ -2015,10 +1994,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:792, squid/bot/catalogue/search/help.py:185
+# squid/bot/catalogue/browse.py:778, squid/bot/catalogue/search/help.py:185
 catalogue-search-help = Search help
 
-# squid/bot/catalogue/browse.py:612
+# squid/bot/catalogue/browse.py:598
 catalogue-search-help-close = Close help
 
 # squid/catalogue/domain/titles.py:67
@@ -3395,7 +3374,7 @@ guided-search-query-title = Search query
 # squid/bot/catalogue/search/filters.py:230
 guided-search-remove-clause = Remove
 
-# squid/bot/catalogue/browse.py:798
+# squid/bot/catalogue/browse.py:784
 guided-search-reset = Reset
 
 # squid/bot/catalogue/search/filters.py:432
@@ -4006,7 +3985,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/catalogue/browse.py:593, squid/bot/submission/ui/controls.py:27
+# squid/bot/catalogue/browse.py:579
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:537
@@ -4649,22 +4628,22 @@ record-browse-pending = Newer inputs are waiting to be checked.
 # squid/bot/catalogue/record_browser.py:101
 record-browse-title = Records
 
-# squid/bot/catalogue/browse.py:755
+# squid/bot/catalogue/browse.py:741
 record-browser-all = All types
 
-# squid/bot/catalogue/browse.py:779
+# squid/bot/catalogue/browse.py:765
 record-browser-all-time = All time
 
-# squid/bot/catalogue/browse.py:780
+# squid/bot/catalogue/browse.py:766
 record-browser-current-version = Current version
 
-# squid/bot/catalogue/browse.py:750
+# squid/bot/catalogue/browse.py:736
 record-browser-fastest = Fastest
 
-# squid/bot/catalogue/browse.py:751
+# squid/bot/catalogue/browse.py:737
 record-browser-first = First
 
-# squid/bot/catalogue/browse.py:749
+# squid/bot/catalogue/browse.py:735
 record-browser-smallest = Smallest
 
 # squid/bot/catalogue/record_display.py:65
@@ -6021,25 +6000,25 @@ sync-claim-limit-between = claim limit must be between 1 and 100
 # squid/sync/application.py:95
 sync-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/tags_view.py:497, squid/bot/tags_view.py:521
+# squid/bot/tags_view.py:372, squid/bot/tags_view.py:396
 tags-account-consent-required = A linked, consented account is required.
 
-# squid/bot/tags_view.py:555
+# squid/bot/tags_view.py:430
 tags-alias-already-exists = That alias is already on this restriction.
 
-# squid/bot/tags_view.py:217, squid/bot/tags_view.py:436
+# squid/bot/tags_view.py:311
 tags-applied = Tag applied.
 
-# squid/bot/tags_view.py:140, squid/bot/tags_view.py:143, squid/bot/tags_view.py:413, squid/bot/tags_view.py:420
+# squid/bot/tags_view.py:288, squid/bot/tags_view.py:295
 tags-apply-selected = Apply this tag
 
 # squid/tags/application/services.py:155
 tags-approved-user-showcase = An approved user showcase tag is required.
 
-# squid/bot/tags_view.py:360, squid/bot/tags_view.py:390
+# squid/bot/tags_view.py:235, squid/bot/tags_view.py:265
 tags-choose-build = Choose build
 
-# squid/bot/tags_view.py:446, squid/bot/tags_view.py:477
+# squid/bot/tags_view.py:321, squid/bot/tags_view.py:352
 tags-choose-restriction = Choose restriction
 
 # squid/tags/application/services.py:119
@@ -6057,34 +6036,34 @@ tags-expects-number-canonical = { $display_name } expects a number in its canoni
 # squid/tags/application/services.py:133
 tags-expects-true-false = { $display_name } expects true or false.
 
-# squid/bot/tags_view.py:490, squid/bot/tags_view.py:552
+# squid/bot/tags_view.py:365, squid/bot/tags_view.py:427
 tags-history-alias = Add restriction alias
 
-# squid/bot/tags_view.py:214, squid/bot/tags_view.py:434, squid/bot/tags_view.py:534
+# squid/bot/tags_view.py:309, squid/bot/tags_view.py:409
 tags-history-assignment = Edit showcase tag
 
-# squid/bot/tags_view.py:510
+# squid/bot/tags_view.py:385
 tags-history-proposal = Propose showcase tag
 
-# squid/bot/tags_view.py:371
+# squid/bot/tags_view.py:246
 tags-link-account-instructions = Link and consent an account in `/account` before proposing or applying tags.
 
 # squid/tags/application/services.py:167
 tags-names-start-letter = query names must start with a letter and contain only lowercase letters, digits, or underscores
 
-# squid/bot/tags_view.py:313
+# squid/bot/tags_view.py:188
 tags-no-proposals-awaiting-review = No tag proposals are awaiting review.
 
-# squid/bot/tags_view.py:611
+# squid/bot/tags_view.py:486
 tags-operation-permission-denied = You are no longer allowed to perform this tag operation.
 
-# squid/bot/tags_view.py:568
+# squid/bot/tags_view.py:443
 tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here.
 
 # squid/tags/application/services.py:123
 tags-requires-value = { $display_name } requires a { $value_type } value.
 
-# squid/bot/tags_view.py:407
+# squid/bot/tags_view.py:282
 tags-select-build-first = Choose a build above to apply this tag.
 
 # squid/tags/application/services.py:163
@@ -6093,10 +6072,10 @@ tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 # squid/tags/errors.py:11
 tags-tag-not-found-title = Tag not found
 
-# squid/bot/tags_view.py:352
+# squid/bot/tags_view.py:227
 tags-workspace-heading = Build tags
 
-# squid/bot/tags_view.py:356
+# squid/bot/tags_view.py:231
 tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.
 
 # squid/bot/chrome.py:293
@@ -6111,7 +6090,7 @@ ui-chrome-approximate-total-footer = { $first }–{ $last } of ~{ $total }
 # squid/bot/chrome.py:278
 ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again.
 
-# squid/bot/chrome.py:283, squid/bot/tags_view.py:195
+# squid/bot/chrome.py:283
 ui-chrome-continue = Continue
 
 # squid/bot/chrome.py:291

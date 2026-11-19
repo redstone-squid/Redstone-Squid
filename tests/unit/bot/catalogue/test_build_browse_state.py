@@ -63,8 +63,9 @@ def _screen(
     records: RecordService | None = None,
     initial_records: bool = False,
     record_tools: RecordsScreen | None = None,
+    submitter_account_id: int | None = None,
 ) -> BuildBrowseScreen:
-    build = DoorBuild(id=7, submission_status=status)
+    build = DoorBuild(id=7, submission_status=status, submitter_account_id=submitter_account_id)
     queries = AsyncMock(spec=BuildQueryService)
     queries.get.return_value = build
     queries.semantic.return_value = build
@@ -295,6 +296,15 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
         await ui.press(ui.key_for("search-back-records"))
         assert f"## {record.title}" in ui.texts()
         ui.assert_within_limits()
+
+
+@pytest.mark.parametrize(("submitter_account_id", "editable"), [(1, True), (2, False)])
+def test_only_the_submitter_or_an_editor_gets_edit(submitter_account_id: int, editable: bool) -> None:
+    screen = _screen(submitter_account_id=submitter_account_id)
+
+    actions = screen._build_actions(DoorBuild(id=7, submitter_account_id=submitter_account_id))
+
+    assert [action.key for action in actions] == (["edit"] if editable else [])
 
 
 @pytest.mark.parametrize("action", ["approve", "reject"])

@@ -165,8 +165,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     Given only an ID, the build loads on first render; a `Build` is shown immediately.
 
-    Capabilities control which actions appear. Review actions recheck permission
-    through authorize; the routed editor checks its own access.
+    Capabilities control which review actions appear, and those actions recheck permission
+    through authorize. Edit belongs to the catalogue's navigation row instead.
     """
 
     _decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = (
@@ -248,7 +248,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         if self._decision is not None:
             return (node, self._decision)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
-        nodes.append(self._detail_actions(build, has_schematic=has_schematic))
+        if actions := self._detail_actions(build, has_schematic=has_schematic):
+            nodes.append(actions)
         nodes.extend(self.controller.controls())
         if has_schematic:
             nodes.append(self.schematics)
@@ -259,24 +260,16 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     def _detail_actions(
         self, build: Build, *, has_schematic: bool
-    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = [
-            sl.routed_action_control(
-                tr(t"build-browse-tags = Build tags"),
-                build_controls.build_tags.custom_id(build_id=self._build_id),
-                key="tags",
-            )
-        ]
-        if self._capabilities.edit or (
-            build.submission_status is Status.PENDING
-            and self._actor_account_id is not None
-            and build.submitter_account_id == self._actor_account_id
-        ):
+    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None:
+        actions: list[sl.semantic.ActionControl] = []
+        if has_schematic:
             actions.append(
-                sl.routed_action_control(
-                    tr(t"bot-submission-build-browse-edit = Edit"),
-                    build_controls.edit_build.custom_id(build_id=self._build_id),
-                    key="edit",
+                sl.action_control(
+                    tr(t"build-schematic-tools-hide = Hide schematic tools")
+                    if self._show_schematics
+                    else tr(t"build-schematic-tools-show = Schematic tools"),
+                    self._toggle_schematics,
+                    key="schematic-tools",
                 )
             )
         if build.submission_status is Status.PENDING and self._capabilities.approve:
@@ -297,16 +290,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     tone=sl.Tone.DANGER,
                 )
             )
-        if has_schematic:
-            actions.append(
-                sl.action_control(
-                    tr(t"build-schematic-tools-hide = Hide schematic tools")
-                    if self._show_schematics
-                    else tr(t"build-schematic-tools-show = Schematic tools"),
-                    self._toggle_schematics,
-                    key="schematic-tools",
-                )
-            )
+        if not actions:
+            return None
         return sl.action_controls(*actions, key="build-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
 
     def _review_prompt(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
@@ -483,6 +468,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             # domain type stays optional only for a build that has not been submitted yet.
             summary=_build_summary,
             detail=self._detail,
+            entry_actions=self._build_actions,
             page_size=CATALOGUE_PAGE_SIZE,
             show_page_size=True,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
@@ -827,6 +813,20 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             refresh_posts=self._refresh_posts,
         )
 
+    def _build_actions(self, build: Build) -> tuple[sl.semantic.RoutedActionControl, ...]:
+        """Edit, for staff and for the build's submitter; the editor decides how much they may change."""
+        assert build.id is not None
+        submitter = self._actor_account_id is not None and build.submitter_account_id == self._actor_account_id
+        if not (self._capabilities.edit or submitter):
+            return ()
+        return (
+            sl.routed_action_control(
+                tr(t"bot-submission-build-browse-edit = Edit"),
+                build_controls.edit_build.custom_id(build_id=build.id),
+                key="edit",
+            ),
+        )
+
     async def _select(self, build_id: int) -> bool:
         build = await self._queries.get(build_id)
         if build is None or (build.submission_status is not Status.CONFIRMED and not self._capabilities.view_pending):
@@ -845,6 +845,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             key="linked-build",
             label=_build_label,
             detail=self._detail,
+            entry_actions=self._build_actions,
             chronology=sl.sources.Chronology.NEWEST_FIRST,
             # The browser's own list would hold only the opened build; Back returns to the
             # catalogue, search results, or record that the build was opened from.
