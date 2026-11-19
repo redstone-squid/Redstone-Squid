@@ -1,26 +1,16 @@
-"""Showcase ownership follows account IDs, including accounts with no Discord identity."""
-
-from collections.abc import AsyncIterator
+"""Tag moderation and its search projection request commit or roll back together."""
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.builds.domain import Status
-from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.tags.models import TagDefinition
 from tests.support.build_edits import build_edit_session
-
-
-@pytest.fixture
-async def uow(migrated_session_factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[SqlAlchemyUnitOfWork]:
-    async with SqlAlchemyUnitOfWork(migrated_session_factory) as work:
-        yield work
 
 
 async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock_xuid: int) -> int:
@@ -32,21 +22,6 @@ async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock
         await session.flush()
         session.add(AccountIdentityModel(account_id=account.id, provider=identity.provider, subject=identity.subject))
         return account.id
-
-
-async def _build(session_factory: async_sessionmaker[AsyncSession], *, submitter_account_id: int) -> int:
-    async with build_edit_session(session_factory) as session:
-        build = OtherBuild(
-            submitter_account_id=submitter_account_id,
-            submission_status=Status.PENDING,
-            width=1,
-            height=2,
-            depth=3,
-            completion_time=None,
-        )
-        session.add(build)
-        await session.flush()
-        return build.id
 
 
 async def _approved_tag(session_factory: async_sessionmaker[AsyncSession], *, created_by_account_id: int) -> int:
@@ -73,46 +48,6 @@ async def _approved_tag(session_factory: async_sessionmaker[AsyncSession], *, cr
         session.add(definition)
         await session.flush()
         return definition.id
-
-
-async def test_an_account_without_discord_can_tag_its_own_build(
-    uow: SqlAlchemyUnitOfWork,
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    account_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322445)
-    build_id = await _build(migrated_session_factory, submitter_account_id=account_id)
-    tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=account_id)
-
-    async with uow.builds.editing(actor=account_id, source="test"):
-        assigned = await uow.tags.assign_showcase(
-            build_id=build_id, tag_id=tag_id, value=None, actor_account_id=account_id
-        )
-
-    await uow.commit()
-    assert assigned is True
-    async with migrated_session_factory() as session:
-        stored = await session.scalar(select(TagAssignment).where(TagAssignment.build_id == build_id))
-        assert stored is not None
-        assert stored.created_by_account_id == account_id
-
-
-async def test_an_account_cannot_tag_someone_elses_build(
-    uow: SqlAlchemyUnitOfWork,
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    owner_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322445)
-    stranger_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322446)
-    build_id = await _build(migrated_session_factory, submitter_account_id=owner_id)
-    tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=owner_id)
-
-    assigned = await uow.tags.assign_showcase(
-        build_id=build_id, tag_id=tag_id, value=None, actor_account_id=stranger_id
-    )
-
-    await uow.commit()
-    assert assigned is False
-    async with migrated_session_factory() as session:
-        assert await session.scalar(select(TagAssignment)) is None
 
 
 @pytest.mark.parametrize("commit", [False, True])

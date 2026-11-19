@@ -1433,37 +1433,34 @@ bot-submission-ui-views-reload-latest = Reload latest
 # squid/bot/submission/ui/build_edit.py:447
 bot-submission-ui-views-review-changes = Review changes
 
-# squid/bot/tags_view.py:270, squid/bot/tags_view.py:434
+# squid/bot/tags_view.py:270
 bot-tags-view-add-restriction-alias = Add restriction alias
 
-# squid/bot/tags_view.py:408
+# squid/bot/tags_view.py:396
 bot-tags-view-approve = Approve
 
-# squid/bot/tags_view.py:410
+# squid/bot/tags_view.py:398
 bot-tags-view-archive = Archive
 
-# squid/bot/tags_view.py:356
+# squid/bot/tags_view.py:344
 bot-tags-view-cancel = Cancel
-
-# squid/bot/tags_view.py:437
-bot-tags-view-canonical-restriction = Canonical restriction
 
 # squid/bot/tags_view.py:180
 bot-tags-view-catalogue = Catalogue
 
-# squid/bot/tags_view.py:355
+# squid/bot/tags_view.py:343
 bot-tags-view-confirm = Confirm
 
 # squid/bot/tags_view.py:202
 bot-tags-view-confirm-tag-moderation = Confirm tag moderation
 
-# squid/bot/tags_view.py:417
+# squid/bot/tags_view.py:405
 bot-tags-view-display-name = Display name
 
-# squid/bot/tags_view.py:399
+# squid/bot/tags_view.py:387
 bot-tags-view-id = ID
 
-# squid/bot/tags_view.py:400
+# squid/bot/tags_view.py:388
 bot-tags-view-kind = Kind
 
 # squid/bot/tags_view.py:208
@@ -1472,7 +1469,7 @@ bot-tags-view-loading-tags = Loading tags.
 # squid/bot/tags_view.py:183
 bot-tags-view-moderation = Moderation
 
-# squid/bot/tags_view.py:275, squid/bot/tags_view.py:439
+# squid/bot/tags_view.py:275
 bot-tags-view-new-alias = New alias
 
 # squid/bot/tags_view.py:151
@@ -1481,7 +1478,7 @@ bot-tags-view-no-public-build-tags-are-available = No public build tags are avai
 # squid/bot/tags_view.py:181
 bot-tags-view-propose = Propose
 
-# squid/bot/tags_view.py:415
+# squid/bot/tags_view.py:403
 bot-tags-view-propose-showcase-tag = Propose showcase tag
 
 # squid/bot/tags_view.py:236
@@ -1490,40 +1487,40 @@ bot-tags-view-propose-tag = Propose tag
 # squid/bot/tags_view.py:150
 bot-tags-view-published-build-tags = Published build tags
 
-# squid/bot/tags_view.py:402
+# squid/bot/tags_view.py:390
 bot-tags-view-query-field = Query field
 
-# squid/bot/tags_view.py:425
+# squid/bot/tags_view.py:413
 bot-tags-view-query-field-help = Used in search expressions. Leave empty to derive it from the name.
 
-# squid/bot/tags_view.py:424
+# squid/bot/tags_view.py:412
 bot-tags-view-query-field-override = Advanced: query field
 
-# squid/bot/tags_view.py:409
+# squid/bot/tags_view.py:397
 bot-tags-view-reject = Reject
 
-# squid/bot/tags_view.py:303, squid/bot/tags_view.py:343
+# squid/bot/tags_view.py:307
 bot-tags-view-restriction-alias-added = Restriction alias added.
 
 # squid/bot/tags_view.py:186
 bot-tags-view-restriction-aliases = Restriction aliases
 
-# squid/bot/tags_view.py:324
+# squid/bot/tags_view.py:328
 bot-tags-view-tag-is-awaiting-staff-approval = Tag #{ $tag_id } is awaiting staff approval.
 
 # squid/bot/tags_view.py:173
 bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review
 
-# squid/bot/tags_view.py:401
+# squid/bot/tags_view.py:389
 bot-tags-view-value = Value
 
-# squid/bot/tags_view.py:390
+# squid/bot/tags_view.py:378
 bot-tags-view-value-2 = { $action_label } **{ $tag_name }**.
 
 # squid/bot/tags_view.py:203
 bot-tags-view-value-3 = { $action_label } **{ $tag_name }**?
 
-# squid/bot/tags_view.py:419
+# squid/bot/tags_view.py:407
 bot-tags-view-value-type = Value type
 
 # squid/bot/chrome.py:269
@@ -6102,10 +6099,10 @@ sync-claim-limit-between = claim limit must be between 1 and 100
 # squid/sync/application.py:95
 sync-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/tags_view.py:308
+# squid/bot/tags_view.py:312
 tags-account-consent-required = A linked, consented account is required.
 
-# squid/bot/tags_view.py:340
+# squid/bot/tags_view.py:305
 tags-alias-already-exists = That alias is already on this restriction.
 
 # squid/bot/tags_view.py:258, squid/bot/tags_view.py:289
@@ -6126,28 +6123,28 @@ tags-expects-number-canonical = { $display_name } expects a number in its canoni
 # squid/tags/domain/values.py:48
 tags-expects-true-false = { $display_name } expects true or false.
 
-# squid/bot/tags_view.py:301, squid/bot/tags_view.py:337
+# squid/bot/tags_view.py:302
 tags-history-alias = Add restriction alias
 
-# squid/bot/tags_view.py:321
+# squid/bot/tags_view.py:325
 tags-history-proposal = Propose showcase tag
 
 # squid/bot/tags_view.py:227
 tags-link-account-instructions = Link and consent an account in `/account` before proposing tags.
 
-# squid/tags/application/services.py:96
+# squid/tags/application/services.py:87
 tags-names-start-letter = query names must start with a letter and contain only lowercase letters, digits, or underscores
 
 # squid/bot/tags_view.py:174
 tags-no-proposals-awaiting-review = No tag proposals are awaiting review.
 
-# squid/bot/tags_view.py:353
+# squid/bot/tags_view.py:341
 tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here.
 
 # squid/tags/domain/values.py:38
 tags-requires-value = { $display_name } requires a { $value_type } value.
 
-# squid/tags/application/services.py:92
+# squid/tags/application/services.py:83
 tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 
 # squid/tags/errors.py:11

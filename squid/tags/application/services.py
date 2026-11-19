@@ -7,7 +7,7 @@ from typing import Protocol
 from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
+from squid.tags.domain import TagModerationStatus, TagValueType
 from squid.tags.models import TagDefinition
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -37,15 +37,6 @@ class TagDefinitionRepository(Protocol):
     async def approved(self) -> Sequence[TagDefinition]: ...
 
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
-
-    async def assign_showcase(
-        self,
-        *,
-        build_id: int,
-        tag_id: int,
-        value: TagValue,
-        actor_account_id: int,
-    ) -> bool: ...
 
 
 class TagUnitOfWork(BuildEditingUnitOfWork, Protocol):

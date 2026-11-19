@@ -1,19 +1,16 @@
 """PostgreSQL tag-definition repository."""
 
 from collections.abc import Callable, Sequence
-from decimal import Decimal
 from typing import override
 
 from sqlalchemy import exists, func, or_, select, text
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.builds.models import Build
 from squid.edits.domain import Revision
 from squid.persistence.revisions import flush_revision
 from squid.tags.application import TagDefinitionRepository
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
 
@@ -153,70 +150,3 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             },
         )
         return row
-
-    @override
-    async def assign_showcase(
-        self,
-        *,
-        build_id: int,
-        tag_id: int,
-        value: TagValue,
-        actor_account_id: int,
-    ) -> bool:
-        """Insert or replace a value on a build owned by the actor.
-
-        Return False if the build is missing, belongs to someone else, or the tag
-        is missing. The application service checks tag approval and showcase kind.
-        """
-        session = self._session()
-        owned_build_id = await session.scalar(
-            select(Build.id)
-            .where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
-            .with_for_update()
-        )
-        if owned_build_id is None:
-            return False
-        definition = await session.get(TagDefinition, tag_id)
-        if definition is None:
-            return False
-        value_type = definition.value_type
-        numeric_value, text_value, boolean_value = _split_value(value_type, value)
-        statement = insert(TagAssignment).values(
-            build_id=build_id,
-            tag_id=tag_id,
-            value_type=definition.value_type,
-            numeric_value=numeric_value,
-            text_value=text_value,
-            boolean_value=boolean_value,
-            origin="submitted",
-            created_by_account_id=actor_account_id,
-        )
-        await session.execute(
-            statement.on_conflict_do_update(
-                index_elements=[TagAssignment.build_id, TagAssignment.tag_id],
-                set_={
-                    "numeric_value": statement.excluded.numeric_value,
-                    "text_value": statement.excluded.text_value,
-                    "boolean_value": statement.excluded.boolean_value,
-                    # InstantUTC converts the Instant when binding this value to SQL.
-                    "updated_at": Instant.now(),
-                },
-            )
-        )
-        return True
-
-
-def _split_value(
-    value_type: TagValueType,
-    value: TagValue,
-) -> tuple[Decimal | None, str | None, bool | None]:
-    if value_type is TagValueType.NONE and value is None:
-        return None, None, None
-    if value_type is TagValueType.NUMERIC and isinstance(value, Decimal):
-        return value, None, None
-    if value_type is TagValueType.TEXT and isinstance(value, str):
-        return None, value, None
-    if value_type is TagValueType.BOOLEAN and isinstance(value, bool):
-        return None, None, value
-    msg = f"invalid {value_type.value} tag value"
-    raise ValueError(msg)
