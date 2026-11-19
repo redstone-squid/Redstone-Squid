@@ -7,7 +7,7 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr
 from squid.builds.application import BuildService
-from squid.builds.domain import Status
+from squid.builds.domain import EditAccess
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
@@ -26,9 +26,8 @@ async def prepare_build_editor(
 ) -> BuildEditScreen:
     """Construct an editor and its callbacks without presenting or authorizing it yet.
 
-    show_build_editor checks access before presentation. A pending build's submitter or an
-    account with build-edit permission gets the full editor; the submitter of a build that is
-    no longer pending gets one limited to its showcase tags.
+    show_build_editor checks access before presentation. The editor is limited to showcase
+    tags when that is all `Build.edit_access` grants.
     """
     client = request.client
     prepared: BuildEditScreen | None = None
@@ -36,22 +35,18 @@ async def prepare_build_editor(
     async def actor() -> Actor:
         return await request.client.actors.resolve(request, refresh=True)
 
-    async def full_access(current: Build, current_actor: Actor) -> bool:
-        if current.submission_status is Status.PENDING and submits(current, current_actor):
-            return True
-        return (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
+    async def access(current: Build) -> EditAccess:
+        current_actor = await actor()
+        may_edit_any = (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
+        return current.edit_access(current_actor.account_id, may_edit_any=may_edit_any)
 
-    def submits(current: Build, current_actor: Actor) -> bool:
-        return current_actor.account_id is not None and current.submitter_account_id == current_actor.account_id
-
-    showcase_only = not await full_access(build, await actor())
+    # The editor keeps the scope it opened with; losing full access closes it rather than narrowing it.
+    scope = await access(build)
+    showcase_only = scope is EditAccess.SHOWCASE_TAGS
 
     async def authorize() -> bool:
-        current = build if prepared is None else prepared.build
-        current_actor = await actor()
-        if showcase_only:
-            return submits(current, current_actor)
-        return await full_access(current, current_actor)
+        current = await access(build if prepared is None else prepared.build)
+        return scope is not EditAccess.NONE and current in {scope, EditAccess.FULL}
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(

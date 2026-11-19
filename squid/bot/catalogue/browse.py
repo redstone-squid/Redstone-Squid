@@ -28,7 +28,7 @@ from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import allows
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.edits import BUILD_STATUS_EDIT, build_target
-from squid.builds.domain import Status
+from squid.builds.domain import EditAccess, Status
 from squid.builds.models import Build
 from squid.core.actors import Actor
 from squid.core.pagination import PageSelector
@@ -814,10 +814,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     def _build_actions(self, build: Build) -> tuple[sl.semantic.RoutedActionControl, ...]:
-        """Edit, for staff and for the build's submitter; the editor decides how much they may change."""
+        """Edit, for anyone who may edit some of the build; the editor decides how much."""
         assert build.id is not None
-        submitter = self._actor_account_id is not None and build.submitter_account_id == self._actor_account_id
-        if not (self._capabilities.edit or submitter):
+        if build.edit_access(self._actor_account_id, may_edit_any=self._capabilities.edit) is EditAccess.NONE:
             return ()
         return (
             sl.routed_action_control(

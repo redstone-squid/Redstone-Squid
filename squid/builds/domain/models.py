@@ -4,7 +4,7 @@ import re
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum, auto
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -113,6 +113,14 @@ class Status(IntEnum):
     PENDING = 0
     CONFIRMED = 1
     DENIED = 2
+
+
+class EditAccess(Enum):
+    """How much of a build someone may edit."""
+
+    NONE = auto()
+    SHOWCASE_TAGS = auto()
+    FULL = auto()
 
 
 class BuildCategory(StrEnum):

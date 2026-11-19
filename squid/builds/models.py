@@ -36,6 +36,7 @@ from whenever import Instant
 from squid.builds.domain import (
     BuildCategory,
     DoorOrientationLiteral,
+    EditAccess,
     Info,
     MediaTypeLiteral,
     Status,
@@ -294,6 +295,18 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
         values["source_messages"] = [asdict(message) for message in self.source_messages]
         values["sponsor"] = None if self.sponsor is None else asdict(self.sponsor)
         return values
+
+    def edit_access(self, account_id: int | None, *, may_edit_any: bool) -> EditAccess:
+        """How much of this build `account_id` may edit.
+
+        `may_edit_any` is whether they hold build-edit permission. Without it, the submitter may
+        edit their build fully while it is pending, and its showcase tags at any time.
+        """
+        if may_edit_any:
+            return EditAccess.FULL
+        if account_id is None or account_id != self.submitter_account_id:
+            return EditAccess.NONE
+        return EditAccess.FULL if self.submission_status is Status.PENDING else EditAccess.SHOWCASE_TAGS
 
     def copy_for_edit(self, *, source_messages: tuple[MessageRef, ...] | None = None) -> Build:
         """Create an unsaved copy for previewing edits, without ORM history.

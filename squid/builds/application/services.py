@@ -14,7 +14,7 @@ from squid.builds.application.ports import (
 )
 from squid.builds.application.restrictions import RestrictionReader
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy, replace_showcase_tags
-from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
+from squid.builds.domain import BuildDraft, EditAccess, RestrictionTypeLiteral, Status, sort_restrictions
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.builds.models import Build
@@ -192,22 +192,20 @@ class BuildService:
     async def authorize_edit(
         self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None, showcase_only: bool = False
     ) -> None:
-        """Require build-edit permission unless the actor submitted the build.
+        """Require the access `Build.edit_access` grants for this edit.
 
-        A submitter may edit their pending build freely, and may change the showcase tags of
-        their build in any status; pass `showcase_only` when the edit changes nothing else.
-        Pass `uow` to check within the caller's transaction.
+        Pass `showcase_only` when the edit changes nothing but showcase tags, and `uow` to check
+        within the caller's transaction.
         """
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
-        owns = (
-            actor.account_id is not None
-            and build.submitter_account_id == actor.account_id
-            and (showcase_only or build.submission_status is Status.PENDING)
-        )
-        if not owns:
-            await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
+        may_edit_any = (await self._permissions.check(actor, BUILD_SUBMISSION_EDIT, uow=uow)).allowed
+        access = build.edit_access(actor.account_id, may_edit_any=may_edit_any)
+        if access is EditAccess.FULL or (showcase_only and access is EditAccess.SHOWCASE_TAGS):
+            return
+        # Raise the shared permission denial, which explains which rule refused the node.
+        await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def prepare_edit(
         self, actor: Actor, build: Build, patch: BuildEditPatch, *, showcase_only: bool = False
