@@ -142,6 +142,22 @@ def test_construction_mismatch_propagates_even_with_a_valid_incumbent() -> None:
         )
 
 
+def test_exclusion_prunes_before_discovering_descendants() -> None:
+    rules = FaultRules(stage="offers", fail_at=2)
+    root = occurrence(alternatives())
+    result = search_composition(
+        root,
+        rules,
+        PlanningContext(WorkBudget(10000)),
+        finalize=rules.finalize,
+        excluded=(((root.identity, "a"),), ((root.identity, "b"), (OccurrenceId(("absent",)), "other"))),
+    )
+
+    assert rules.calls["offers"] == 1
+    assert result.diagnostics.optimal
+    assert result.allocation.select().evaluation.text == ("another",)
+
+
 @dataclass(frozen=True, slots=True)
 class DiscoveryRules:
     discover: Callable[

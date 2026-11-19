@@ -5,8 +5,10 @@ queued assignments refer to their occurrences, including partial discoveries
 that mark the search exhausted without preventing a feasible certificate.
 """
 
+from collections import defaultdict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
+from functools import cached_property
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import dense_ranks
@@ -21,6 +23,8 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
+
+type OfferChoice = tuple[OccurrenceId, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +47,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         selections: Mapping[OccurrenceId, str],
         violations: list[CandidateViolation],
         unsupported: set[OccurrenceId],
+        excluded: tuple[tuple[OfferChoice, ...], ...],
     ) -> None:
         self.root = root
         self.rules = rules
@@ -50,6 +55,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.selected = selections
         self.violations = violations
         self.unsupported = unsupported
+        self.excluded = excluded
         self.seen_occurrences: set[OccurrenceId] = set()
         self.degradation_probed = False
         self.repair_started = False
@@ -63,6 +69,17 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
             | OfferDiscovery[RenderTargetT, ContextT, PayloadT],
         ] = {}
         self.discovery_owners: dict[int, SemanticOccurrence[RenderTargetT, ContextT]] = {}
+
+    @cached_property
+    def exclusions_by_choice(self) -> Mapping[OfferChoice, list[frozenset[OfferChoice]]]:
+        """Index each forbidden combination by any choice that could complete it."""
+        indexed: dict[OfferChoice, list[frozenset[OfferChoice]]] = defaultdict(list)
+        for pattern in self.excluded:
+            self.context.work.consume(1 + len(pattern))
+            choices = frozenset(pattern)
+            for choice in choices:
+                indexed[choice].append(choices)
+        return indexed
 
     def branch(
         self, task: AssignmentTask[RenderTargetT, ContextT, PayloadT]
@@ -97,6 +114,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.context.work.consume(len(offers))
         ranks = dense_ranks(tuple(offer.preference for offer in offers))
         keys: set[str] = set()
+        assigned: set[OfferChoice] | None = None
         eligible: list[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int]] = []
         for offer, rank in zip(offers, ranks, strict=True):
             self.context.work.consume()
@@ -112,6 +130,19 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 self.pruned = True
                 if fresh:
                     self.violations.extend(offer.rejections)
+                continue
+            choice = (occurrence.identity, offer.key)
+            if self.excluded and (patterns := self.exclusions_by_choice.get(choice)):
+                if assigned is None:
+                    self.context.work.consume(len(task.choices))
+                    assigned = {(previous.occurrence.identity, previous.key) for previous, _ in task.choices}
+                for pattern in patterns:
+                    self.context.work.consume(1 + len(pattern))
+                    if all(item == choice or item in assigned for item in pattern):
+                        self.pruned = True
+                        break
+                else:
+                    eligible.append((offer, rank))
                 continue
             eligible.append((offer, rank))
         self.choice_counts[occurrence.identity] = len(eligible)
