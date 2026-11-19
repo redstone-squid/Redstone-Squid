@@ -1,7 +1,7 @@
 """Bounded joint search over representations and stable legal page partitions.
 
-The queue retains partial assignments and exact partition states. Fit estimates
-only order probes; rejection uses complete, contextual evaluations. An assignment
+The queue retains partial assignments and exact partition states. Intrinsic offer
+failures and hard page bounds guide the search before contextual evaluation. An assignment
 can be skipped when a certified family beats even its best possible quality:
 zero shortfalls and no page turns. Feasible families with satisfied soft goals
 also need no partition refinements, which necessarily add page turns.
@@ -112,7 +112,9 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         self.unsupported: set[OccurrenceId] = set()
         self.violations: list[CandidateViolation] = []
         self.offers = OfferExplorer(root, rules, context, self.selected, self.violations, self.unsupported)
-        self.partitions = PartitionExplorer(root, context, self.selected, self.policy, partitions or {}, partition_hint)
+        self.partitions = PartitionExplorer(
+            root, context, self.selected, self.policy, partitions or {}, partition_hint, self.violations
+        )
         self.generated = 0
         self.initial_evaluations = self.context.work.target_evaluations
         self.exhausted = False
@@ -134,6 +136,9 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                                 repair=task.repair is not None,
                             )
                         )
+                    continue
+                if (oversized := self.partitions.oversized_page(task)) is not None:
+                    self._enqueue(self.partitions.refine_oversized(task, oversized))
                     continue
                 if task.expand_only:
                     self._enqueue(self.partitions.expand(task))

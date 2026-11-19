@@ -112,6 +112,13 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
     cursor_key: str | None = None
     per: int | None = None
     required_ends: tuple[int, ...] = ()
+    max_units: int | None = None
+    """Hard maximum source units per page, independent of page contents and chrome."""
+
+    def __post_init__(self) -> None:
+        if self.max_units is not None and self.max_units < 1:
+            message = "region page unit limit must be positive"
+            raise LayoutInvariantError(message)
 
 
 @immutable
@@ -214,6 +221,8 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     region: RegionContract[RenderTargetT, ContextT, PayloadT] | None = None
     preference_priority: int | None = None
     """Compare this subtree as a sibling preference scope, even without a pager."""
+    rejections: tuple[CandidateViolation, ...] = ()
+    """Intrinsic failures that rule out this offer for every partition."""
 
 
 class DiscoveryCompletion(StrEnum):

@@ -8,11 +8,14 @@ partition tasks. The coordinator decides when to certify or enqueue them.
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from itertools import count
+from math import ceil
 
 from squid_ui.planning.allocation_policy import AllocationQuality, RegionPolicy, compare_quality
 from squid_ui.planning.allocation_scoring import preference_tree
 from squid_ui.planning.composition import (
     CandidateComposition,
+    CandidateViolation,
+    LocalCapacityExceeded,
     OccurrenceId,
     PlanningContext,
     RealizationOffer,
@@ -44,6 +47,7 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         policies: Mapping[OccurrenceId, RegionPolicy],
         fixed_cuts: Mapping[OccurrenceId, tuple[int, ...]],
         partition_hint: Mapping[OccurrenceId, tuple[int, ...]] | None,
+        violations: list[CandidateViolation],
     ) -> None:
         self.root = root
         self.context = context
@@ -51,6 +55,7 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
         self.policy = policies
         self.fixed_cuts = fixed_cuts
         self.partition_hint = partition_hint
+        self.violations = violations
         self.seen_regions: set[OccurrenceId] = set()
         self.seen_partitions: set[tuple[int, tuple[tuple[int, ...], ...], bool]] = set()
         self.assignment_ids = count()
@@ -97,6 +102,49 @@ class PartitionExplorer[RenderTargetT, ContextT, PayloadT]:
                 if end not in task.cuts[index]:
                     changed = (*task.cuts[:index], tuple(sorted((*task.cuts[index], end))), *task.cuts[index + 1 :])
                     yield replace(task, cuts=changed, probe=False, expand_only=False)
+
+    def oversized_page(
+        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT]
+    ) -> tuple[int, int, int, int] | None:
+        """Find the first page whose next refinement must insert a cut."""
+        if self.context.local_view:
+            return None
+        for index, (node, ends) in enumerate(zip(task.regions, task.cuts, strict=True)):
+            contract = node.candidate.offer.region
+            assert contract is not None
+            if (limit := contract.max_units) is None:
+                continue
+            self.context.work.consume(len(ends))
+            for start, end in zip((0, *ends[:-1]), ends, strict=True):
+                if end - start > limit:
+                    return index, start, end, limit
+        return None
+
+    def refine_oversized(
+        self, task: PartitionTask[RenderTargetT, ContextT, PayloadT], oversized: tuple[int, int, int, int]
+    ) -> Iterator[PartitionTask[RenderTargetT, ContextT, PayloadT]]:
+        """Branch only on cuts that can help resolve the first hard page bound."""
+        index, start, end, limit = oversized
+        node = task.regions[index]
+        identity = node.candidate.offer.occurrence.identity
+        self.context.work.consume(len(node.legal_ends))
+        available = [cut for cut in node.legal_ends if start < cut < end] if identity not in self.fixed_cuts else []
+        if not available:
+            self.violations.append(LocalCapacityExceeded(identity, "page.units", end - start, limit))
+            return
+        if task.probe and not task.expand_only:
+            # Probe an even split over the minimum number of pages, then
+            # explore other cuts if needed. No legal refinement is lost.
+            goal = start + (end - start) / ceil((end - start) / limit)
+            available = [min(available, key=lambda cut: (abs(cut - goal), cut))]
+            yield replace(task, probe=False, expand_only=True)
+        for cut in available:
+            ends = tuple(sorted((*task.cuts[index], cut)))
+            yield replace(
+                task,
+                cuts=(*task.cuts[:index], ends, *task.cuts[index + 1 :]),
+                expand_only=False,
+            )
 
     def seed(
         self,

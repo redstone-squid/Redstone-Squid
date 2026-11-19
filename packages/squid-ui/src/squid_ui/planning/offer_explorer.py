@@ -73,6 +73,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         # An occurrence's immutable context is shared by queued assignments.
         # Keep its owner alive so object identities cannot be recycled.
         discovery = self.discoveries.get(id(occurrence))
+        fresh = discovery is None
         if discovery is None:
             discovery = self.rules.offers(
                 occurrence,
@@ -95,37 +96,32 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.context.work.consume(len(offers))
         ranks = dense_ranks(tuple(offer.preference for offer in offers))
         keys: set[str] = set()
-        eligible_count = 0
-        for offer in offers:
+        eligible: list[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int]] = []
+        for offer, rank in zip(offers, ranks, strict=True):
             self.context.work.consume()
             if offer.key in keys or offer.occurrence != occurrence:
                 message = "offers must have unique keys and retain their requested occurrence"
                 raise LayoutInvariantError(message)
             keys.add(offer.key)
-            if (occurrence.identity not in self.selected or offer.key == self.selected[occurrence.identity]) and not (
-                self.context.strict and offer.effects
-            ):
-                eligible_count += 1
-        self.choice_counts[occurrence.identity] = eligible_count
-        ordered = sorted(zip(offers, ranks, strict=True), key=lambda entry: (entry[1], entry[0].key))
-        if task.probe:
-            eligible = [
-                entry
-                for entry in ordered
-                if (occurrence.identity not in self.selected or entry[0].key == self.selected[occurrence.identity])
-                and not (self.context.strict and entry[0].effects)
-            ]
-            if task.repair is not None:
-                preferred = task.repair.get(occurrence.identity)
-                ordered = next(([entry] for entry in eligible if entry[0].key == preferred), eligible[:1])
-            else:
-                position = min(len(eligible) - 1, int((len(eligible) - 1) * task.fraction + 0.5))
-                ordered = eligible[position : position + 1] if eligible else []
-        for offer, rank in ordered:
             if occurrence.identity in self.selected and self.selected[occurrence.identity] != offer.key:
                 continue
             if self.context.strict and offer.effects:
                 continue
+            if offer.rejections:
+                if fresh:
+                    self.violations.extend(offer.rejections)
+                continue
+            eligible.append((offer, rank))
+        self.choice_counts[occurrence.identity] = len(eligible)
+        ordered = sorted(eligible, key=lambda entry: (entry[1], entry[0].key))
+        if task.probe:
+            if task.repair is not None:
+                preferred = task.repair.get(occurrence.identity)
+                ordered = next(([entry] for entry in ordered if entry[0].key == preferred), ordered[:1])
+            else:
+                position = min(len(ordered) - 1, int((len(ordered) - 1) * task.fraction + 0.5))
+                ordered = ordered[position : position + 1]
+        for offer, rank in ordered:
             self.context.work.consume(len(task.choices))
             if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
                 message = "cyclic or duplicate occurrence in offer structure"
@@ -160,6 +156,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 (offer_rank, offer)
                 for offer, offer_rank in zip(domain, domain_ranks, strict=True)
                 if offer_rank > rank
+                and not offer.rejections
                 and (not self.context.strict or not offer.effects)
                 and (not offer.effects or current.children or offer.children)
             ]
