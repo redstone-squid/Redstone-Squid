@@ -5,18 +5,18 @@ from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import Candidate
 from squid.suggestions.application.registry import SuggestionSource
 from squid.suggestions.domain import SourceKind
-from squid.suggestions.infrastructure.providers.static import StaticProvider
+from squid.suggestions.infrastructure.providers.static import CallableProvider, StaticProvider
 from squid_i18n import resolve_text
 
 WILDCARD = "**"
 
 
-def permission_node_candidates() -> tuple[Candidate, ...]:
+def permission_node_candidates(locale: str | None = None) -> tuple[Candidate, ...]:
     """Suggest concrete permission nodes."""
     return tuple(
         Candidate.create(
             node.name,
-            label=resolve_text(node.description, localization_for("en")).plain(),
+            label=resolve_text(node.description, localization_for(locale)).plain(),
             description=node.name,
             kind="permission_node",
         )
@@ -45,7 +45,7 @@ def permission_sources() -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
             id="permission_nodes",
-            provider=StaticProvider(permission_node_candidates()),
+            provider=CallableProvider(lambda request: permission_node_candidates(request.locale)),
             kind=SourceKind.ENUMERABLE,
             kind_label="permission_node",
         ),

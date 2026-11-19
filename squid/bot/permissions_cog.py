@@ -1,6 +1,6 @@
 """Discord entry point for the canonical access-control workspace."""
 
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Self
 
 import discord
 from discord import app_commands
@@ -11,8 +11,7 @@ from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, enforce, hide_unless
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
-from squid.permissions.domain import Effect, Reason, TraceStep
+from squid.permissions.application.administration import PermissionAdministrationService
 from squid.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
     PERM_GRANT_GLOBAL,
@@ -52,7 +51,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         options={
             "user": sd.Option(
                 name=tr(t"command-access-user-name = user"),
-                description=tr(t"command-access-user-help = Member whose access to inspect. Defaults to you."),
+                description=tr(t"command-access-user-help = Start with this member selected."),
             ),
             "role": sd.Option(
                 name=tr(t"command-access-role-name = role"),
@@ -92,6 +91,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
             self.bot.services.edits,
             guild_id=guild.id,
             guild_name=guild.name,
+            target_chosen=user is not None or role is not None,
             bot=self.bot,
             member_id=target.id if target else None,
             account_id=account_id,
@@ -100,33 +100,6 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
             grants=await Grants.load(request, *ACCESS_NODES),
             actor=actor,
         )
-
-
-def render_decision(decision: Any, subject_label: str) -> str:
-    """Render a permission decision with its winning rule first."""
-    verdict = "ALLOWED" if decision.allowed else "DENIED"
-    lines = [f"`{decision.node}` for {subject_label} → **{verdict}**", ""]
-    for step in decision.trace:
-        lines.append(_render_step(step))
-        if step.rule.via is not None:
-            lines.append(f"    via: {step.rule.via}")
-    if decision.reason is Reason.DEFAULT:
-        lines.append(f"no rule matched; catalogue default: {'allow' if decision.allowed else 'deny'}")
-    elif decision.reason is Reason.OWNER:
-        lines.append("bot owner: allowed before any rule is read")
-    elif decision.reason is Reason.FORBIDDEN:
-        lines.append("forbidden: absolute, and no allow can outrank it")
-    return "\n".join(lines)
-
-
-def _render_step(step: TraceStep) -> str:
-    marker = "✗" if step.decisive and step.rule.effect is not Effect.ALLOW else ("✓" if step.decisive else "·")
-    tail = "← decisive" if step.decisive else f"lost: {step.lost_on}"
-    source = step.rule.source or "?"
-    return (
-        f"{marker} {effect_label(int(step.rule.effect))} `{step.rule.pattern.raw}` "
-        f"{source} {scope_label(step.rule.scope_guild_id)} {tail}"
-    )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
