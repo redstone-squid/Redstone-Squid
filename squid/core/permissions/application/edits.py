@@ -25,6 +25,7 @@ from squid.core.permissions.models import PermissionRole
 
 PERMISSION_GRAPH = EditTarget("permission-graph", "1")
 GRANT_EDIT = "permissions.grant"
+BULK_ASSIGNMENT_EDIT = "permissions.assignments"
 ASSIGNMENT_EDIT = "permissions.assignment"
 RANK_EDIT = "permissions.rank"
 PATTERN_EDIT = "permissions.pattern"
@@ -281,6 +282,65 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
             await root.admin.unassign(
                 root.current_actor, role, scope_guild_id=after.scope_guild_id, subject=after.subject
             )
+
+
+class AssignmentBatch(PermissionValues):
+    assignments: tuple[AssignmentValues, ...] = Field(min_length=1, max_length=25)
+
+    @model_validator(mode="after")
+    def distinct_targets(self) -> Self:
+        if len({(a.account_id, a.discord_role_id) for a in self.assignments}) != len(self.assignments):
+            raise ValidationError
+        return self
+
+
+class PermissionAssignmentBatchEdit(PermissionFieldCommand[AssignmentBatch]):
+    """Capture each recipient's previous assignment under one graph lock for undo."""
+
+    def __init__(self, admin: PermissionAdministrationService) -> None:
+        super().__init__(admin, AssignmentBatch)
+        self.single = PermissionAssignmentEdit(admin)
+
+    @override
+    async def capture(
+        self, uow: PermissionEditUnitOfWork, root: PermissionGraph, command: EditCommand
+    ) -> AssignmentBatch:
+        batch = AssignmentBatch.model_validate_json(command.values.encoded)
+        return AssignmentBatch(
+            assignments=tuple(
+                [
+                    await self.single.capture(uow, root, replace(command, values=item.edit_values()))
+                    for item in batch.assignments
+                ]
+            )
+        )
+
+    @override
+    async def validate(
+        self,
+        uow: PermissionEditUnitOfWork,
+        actor: Actor,
+        root: PermissionGraph,
+        command: EditCommand,
+        before: AssignmentBatch,
+        after: AssignmentBatch,
+    ) -> AssignmentBatch:
+        return AssignmentBatch(
+            assignments=tuple(
+                [
+                    await self.single.validate(uow, actor, root, command, old, new)
+                    for old, new in zip(before.assignments, after.assignments, strict=True)
+                ]
+            )
+        )
+
+    @override
+    async def write(
+        self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: AssignmentBatch, after: AssignmentBatch
+    ) -> None:
+        for old, new in zip(before.assignments, after.assignments, strict=True):
+            if old != new:
+                await self.single.write(uow, root, old, new)
 
 
 class PermissionRankEdit(PermissionFieldCommand[RankValues]):

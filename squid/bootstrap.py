@@ -83,12 +83,14 @@ from squid.core.permissions.application import (
 )
 from squid.core.permissions.application.edits import (
     ASSIGNMENT_EDIT,
+    BULK_ASSIGNMENT_EDIT,
     GRANT_EDIT,
     INCLUDE_EDIT,
     PATTERN_EDIT,
     RANK_EDIT,
     ROLE_CREATE,
     ROLE_DELETE,
+    PermissionAssignmentBatchEdit,
     PermissionAssignmentEdit,
     PermissionGrantEdit,
     PermissionIncludeEdit,
@@ -383,6 +385,7 @@ class _ServiceGraph:
                 PROPOSAL_EDIT: TagProposalEdit(),
                 MODERATION_EDIT: TagModerationEdit(self.permissions),
                 GRANT_EDIT: PermissionGrantEdit(self.permission_admin),
+                BULK_ASSIGNMENT_EDIT: PermissionAssignmentBatchEdit(self.permission_admin),
                 ASSIGNMENT_EDIT: PermissionAssignmentEdit(self.permission_admin),
                 RANK_EDIT: PermissionRankEdit(self.permission_admin),
                 PATTERN_EDIT: PermissionPatternEdit(self.permission_admin),
