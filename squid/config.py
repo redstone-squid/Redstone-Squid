@@ -649,6 +649,10 @@ class GoogleConfig(_FrozenModel):
         return self._credentials_info
 
 
+def attachment_review_archive_root() -> Path:
+    return Path(os.environ.get("ATTACHMENT_REVIEW_ARCHIVE", "/var/lib/app/attachment-review"))
+
+
 def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
     """Return the schematic cache directory, using XDG_CACHE_HOME when set.
 

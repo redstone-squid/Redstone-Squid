@@ -8,7 +8,6 @@ import logging
 import mimetypes
 import os
 from functools import partial
-from pathlib import Path
 from typing import Self, override
 from uuid import UUID
 
@@ -19,6 +18,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.routes import AppRequest, ScreenUnavailable, router
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
+from squid.config import attachment_review_archive_root
 from squid.core.builds.application import BuildEditPatch
 from squid.core.builds.domain import Status
 from squid.core.builds.models import Build
@@ -28,13 +28,9 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 logger = logging.getLogger(__name__)
 
 
-def archive_root() -> Path:
-    return Path(os.environ.get("ATTACHMENT_REVIEW_ARCHIVE", "/var/lib/app/attachment-review"))
-
-
 def warn_if_attachment_archive_unavailable() -> None:
     """Check archive access at startup without scanning the retained files."""
-    root = archive_root()
+    root = attachment_review_archive_root()
     try:
         with (root / "retained-files.jsonl").open("rb") as manifest:
             manifest.read(1)
@@ -52,7 +48,7 @@ def warn_if_attachment_archive_unavailable() -> None:
 
 def retained_bytes(identity: str, filename: str) -> bytes:
     """Read the verified archived original, addressed only by source UUID."""
-    root = archive_root()
+    root = attachment_review_archive_root()
     key = str(UUID(identity))
     with (root / "retained-files.jsonl").open() as manifest:
         for line in manifest:
