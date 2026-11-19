@@ -27,6 +27,8 @@ from squid.messages.domain import MessageRef
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 from squid_i18n import source_text
 from squid_ui.ext.discord import SessionSpec
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -397,6 +399,29 @@ def test_build_card_credits_the_sponsoring_server_and_website(display_build: Bui
 
     assert metadata["Sponsoring Server"] == "Sponsor Network"
     assert metadata["Sponsor Website"] == "https://example.test/"
+
+
+def test_build_card_lists_approved_showcase_tags(display_build: Build) -> None:
+    def tag(key: str, kind: TagSemanticKind, *, withdrawn: bool = False) -> TagAssignment:
+        definition = TagDefinition(
+            stable_key=key,
+            display_name=key.title(),
+            authority=TagAuthority.USER if kind is TagSemanticKind.SHOWCASE else TagAuthority.OFFICIAL,
+            semantic_kind=kind,
+            value_type=TagValueType.NONE,
+            moderation_status=TagModerationStatus.APPROVED,
+            withdrawn=withdrawn,
+        )
+        return TagAssignment(definition)
+
+    display_build.tags = [
+        tag("compact", TagSemanticKind.SHOWCASE),
+        tag("retired", TagSemanticKind.SHOWCASE, withdrawn=True),
+        tag("seamless", TagSemanticKind.PATTERN),
+        tag("silent", TagSemanticKind.SHOWCASE),
+    ]
+
+    assert build_metadata_fields(display_build)["Tags"] == "Compact, Silent"
 
 
 async def test_build_card_renders_bounded_human_attachment_evidence(display_build: Build) -> None:

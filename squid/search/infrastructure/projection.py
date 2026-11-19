@@ -389,7 +389,7 @@ class SearchProjectionLoader:
         approved_assignments = tuple(
             assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
         )
-        assigned_tag_names = tuple(_render_tag_assignment(assignment) for assignment in approved_assignments)
+        assigned_tag_names = tuple(assignment.rendered for assignment in approved_assignments)
         search_aliases = tuple(
             sorted({alias.alias for assignment in approved_assignments for alias in assignment.definition.aliases})
         )
@@ -781,7 +781,7 @@ def build_tag_name_facets(assignments: Sequence[TagAssignment]) -> tuple[Project
     for assignment in assignments:
         definition = assignment.definition
         names = tuple(dict.fromkeys((definition.display_name, *(alias.alias for alias in definition.aliases))))
-        tag_names = tuple(dict.fromkeys((_render_tag_assignment(assignment), *names)))
+        tag_names = tuple(dict.fromkeys((assignment.rendered, *names)))
         facets.extend(ProjectionFacet("tag", name) for name in tag_names)
         if definition.authority == "official":
             fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
@@ -830,17 +830,3 @@ def _assignment_value(assignment: TagAssignment) -> str | Decimal | bool | None:
         "boolean": "boolean_value",
     }.get(value_type)
     return None if attribute is None else getattr(assignment, attribute)
-
-
-def _render_tag_assignment(assignment: TagAssignment) -> str:
-    definition = assignment.definition
-    name = definition.display_name
-    value = assignment.presentation_value
-    if value is None:
-        return name
-    unit = assignment.presentation_unit.key if assignment.presentation_unit else ""
-    template = definition.render_template
-    try:
-        return template.format(name=name, value=value, unit=unit)
-    except IndexError, KeyError, ValueError:
-        return f"{name}: {value}{unit}"

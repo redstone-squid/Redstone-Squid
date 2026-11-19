@@ -24,6 +24,7 @@ from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicate
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.observability import add_counter
+from squid.tags.domain import TagModerationStatus, TagSemanticKind
 from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -157,6 +158,7 @@ def build_card(
             },
         ),
         _field_section("Compatibility", fields, fallbacks, {"Versions"}),
+        _field_section("Tags", fields, fallbacks, {"Tags"}),
         _field_section("Credits", fields, fallbacks, {"Creators", "Date Of Completion", "Sponsoring Server"}),
         _build_resources(build, fields, fallbacks, schematic),
         bool(media) and sl.media(*media, key="media"),
@@ -361,6 +363,16 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
             )
 
     fields["Versions"] = build.version_spec or "Unknown"
+
+    showcase = [
+        assignment.rendered
+        for assignment in build.tags
+        if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
+        and assignment.definition.moderation_status is TagModerationStatus.APPROVED
+        and not assignment.definition.withdrawn
+    ]
+    if showcase:
+        fields["Tags"] = ", ".join(showcase)
 
     server_info = build.extra_info.get("server_info", {})
     if ip := server_info.get("server_ip"):

@@ -6,7 +6,6 @@ from decimal import Decimal
 import pytest
 
 from squid.records.infrastructure.repository import _restriction_facets
-from squid.search.infrastructure.projection import _render_tag_assignment
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition, UnitDefinition, convert_display_value
 
@@ -31,7 +30,7 @@ def test_display_conversion_and_category_thresholds() -> None:
     assignment = TagAssignment(definition, Decimal(20))
     assignment.tag_id = 1
     assert assignment.presentation_value == Decimal(1)
-    assert _render_tag_assignment(assignment) == "Delay: 1.00 second"
+    assert assignment.rendered == "Delay: 1.00 second"
     facet = _restriction_facets([assignment])[0]
     assert facet.assigned_value == Decimal(20)
     assert replace(facet, category_value=Decimal(40)).category_name == "Delay: 2 second"

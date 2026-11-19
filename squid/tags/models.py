@@ -331,6 +331,19 @@ class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
         return convert_display_value(self.value, self.definition.canonical_unit_definition, self.presentation_unit)
 
     @property
+    def rendered(self) -> str:
+        """The tag as readers see it, such as "Delay: 1.00 second", using the definition's template."""
+        name = self.definition.display_name
+        value = self.presentation_value
+        if value is None:
+            return name
+        unit = self.presentation_unit.key if self.presentation_unit else ""
+        try:
+            return self.definition.render_template.format(name=name, value=value, unit=unit)
+        except IndexError, KeyError, ValueError:
+            return f"{name}: {value}{unit}"
+
+    @property
     def value(self) -> TagValue:
         """The scalar stored in the column selected by the definition's value type."""
         match self.value_type:
