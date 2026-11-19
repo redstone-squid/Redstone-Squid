@@ -22,7 +22,7 @@ from squid.bot._types import MessageableChannel
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.catalogue.search.contextual import ContextualSearches
 from squid.bot.diagnostics.gateway import GatewayHistory
-from squid.bot.errors import UI_ERRORS, SquidCommandTree, handle_interaction_error
+from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.interaction_metrics import InteractionMetrics
@@ -64,7 +64,6 @@ from squid_reactivity import EventLedger, LocalTopicBus, observe_events
 from squid_storage import PostgresTopicBridge
 from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import Config, DiscordUIRuntime, SessionManager, install
-from squid_ui.ext.discord.routing.adapter import install as install_ui_router
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.routing import MountedRouter
 
@@ -202,7 +201,7 @@ class RedstoneSquid(Bot):
         # One assembly for the whole process, reachable from any interaction as
         # `DiscordUIRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.ui: DiscordUIRuntime[Self] = install(
+        self.ui: DiscordUIRuntime[RedstoneSquid] = install(
             self,
             Config(
                 defaults=HOST_DEFAULTS,
@@ -211,6 +210,7 @@ class RedstoneSquid(Bot):
                 localization=localization_resolver,
                 errors=UI_ERRORS,
             ),
+            routes=self.ui_router,
         )
 
     @property
@@ -393,11 +393,7 @@ class RedstoneSquid(Bot):
             self.topic_publisher = self.topic_bridge
             self.background_tasks.start(self.topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
 
-        install_ui_router(self.ui_router, self, on_error=self._ui_route_error, profiler=self.layout_profiler)
         await self.extension_manager.start(super().load_extension, super().unload_extension)
-
-    async def _ui_route_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
-        await handle_interaction_error(interaction, error, surface=source)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""

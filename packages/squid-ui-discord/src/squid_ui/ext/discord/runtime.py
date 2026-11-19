@@ -20,6 +20,7 @@ from anyio.abc import TaskStatus
 import discord
 from discord.ext import commands
 from squid_ui.ext.discord.access import AccessPolicy
+from squid_ui.ext.discord.address_control import AddressControl
 from squid_ui.ext.discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui.ext.discord.config import Config
 from squid_ui.ext.discord.contracts import LocalizationResolver
@@ -35,6 +36,7 @@ from squid_ui.ext.discord.response import Presented, ResponseSpec, Sent
 from squid_ui.ext.discord.sessions import SessionManager
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionEvent
+from squid_ui.routing import MountedRouter
 from squid_ui.runtime.definition import Component
 from squid_ui.runtime.services import UIExecutionHost
 
@@ -64,6 +66,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         localization: LocalizationResolver | None,
         response_defaults: ResponseSpec,
         config: Config,
+        routes: MountedRouter[Request[Any, ClientT]] | None = None,
     ) -> None:
         self._client = client
         self.sessions = sessions
@@ -72,6 +75,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
+        self.routes = routes
         self.execution_host = sessions.defaults.execution_host
         self._lifetime = Lifetime()
         self._lifetime.adopt(sessions._lifetime)
@@ -150,6 +154,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                     await self.execution_host.close()
             finally:
                 if Lifetime.installations.get(self.client) is self:
+                    if self.routes is not None:
+                        self.client.remove_dynamic_items(AddressControl)
                     del Lifetime.installations[self.client]
         if errors:
             message = "Discord runtime shutdown failed"
@@ -240,11 +246,14 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     async def _handle_component_error(self, event: ActionEvent, error: Exception, source: str) -> None:
         """Present and observe a rolled-back component failure through the installed policy."""
+        await self.handle_request_error(await request(event), error, source)
+
+    async def handle_request_error(self, req: Request[Any, Any], error: Exception, source: str) -> None:
+        """Present and observe a callback failure through the installed error policy."""
         policy = self.config.errors
         if policy.render is None and policy.observe is None:
             logging.getLogger(__name__).error("unhandled component error in %s", source, exc_info=error)
             return
-        req = await request(event)
         delivery: DeliveryResult | None = None
         try:
             if policy.render is not None:
@@ -267,6 +276,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 def install[ClientT: discord.Client](
     client: ClientT,
     config: Config | None = None,
+    *,
+    routes: MountedRouter[Request[Any, ClientT]] | None = None,
 ) -> DiscordUIRuntime[ClientT]:
     """Assemble and register the UI runtime for a client without starting its tasks.
 
@@ -302,7 +313,10 @@ def install[ClientT: discord.Client](
         localization=localization,
         response_defaults=selected.responses,
         config=selected,
+        routes=routes,
     )
+    if routes is not None:
+        client.add_dynamic_items(AddressControl)
     Lifetime.installations[client] = runtime
     return runtime
 

@@ -611,11 +611,12 @@ class OperationalInspector(sl.Component):
         if self._client is None:
             body = "Route inspection is unavailable because no Discord client was supplied."
         else:
+            from squid_ui.ext.discord.lifetime import Lifetime
             from squid_ui.ext.discord.routing import routers
-            from squid_ui.ext.discord.routing.adapter import installed_router
 
             lines: list[str] = []
-            if ui_router := installed_router(self._client):
+            runtime = Lifetime.installations.get(self._client)
+            if runtime is not None and (ui_router := runtime.routes) is not None:
                 lines.append("UI endpoints:")
                 for endpoint in ui_router.endpoints():
                     handler = endpoint.function

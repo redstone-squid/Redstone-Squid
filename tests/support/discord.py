@@ -27,6 +27,7 @@ from squid_reactivity import LocalTopicBus
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from squid_ui.ext.discord.testing import InteractionHarness as UIInteractionHarness
+from squid_ui.routing import MountedRouter
 from tests.support.services import bot_services, is_configured
 
 if TYPE_CHECKING:
@@ -346,7 +347,7 @@ class FakeClient:
         return f"FakeClient({', '.join(sorted(self.__dict__))})"
 
 
-def make_layout_bot(**attributes: Any) -> Any:
+def make_layout_bot(*, routes: MountedRouter[sd.Request[Any, Any]] | None = None, **attributes: Any) -> Any:
     """Install the application UI defaults and error handling on a bot double.
 
     Panels find their configuration through DiscordUIRuntime.of(source), so tests need a
@@ -371,7 +372,9 @@ def make_layout_bot(**attributes: Any) -> Any:
         return await localization_resolver(source)
 
     runtime = sd.install(
-        cast(discord.Client, client), sd.Config(defaults=HOST_DEFAULTS, bus=bus, localization=resolve, errors=UI_ERRORS)
+        cast(discord.Client, client),
+        sd.Config(defaults=HOST_DEFAULTS, bus=bus, localization=resolve, errors=UI_ERRORS),
+        routes=routes,
     )
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
