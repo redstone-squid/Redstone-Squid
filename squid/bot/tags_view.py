@@ -221,10 +221,10 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 self._decision,
             )
         if self._tabs is None:
-            return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
+            return (sl.status(tr(t"bot-tags-view-loading-tags = Loading tags.")),)
         return (
             sl.section(
-                sl.heading(tr(t"tags-workspace-heading = Build tags")),
+                sl.heading(tr(t"tags-workspace-heading = Tags")),
                 sl.paragraph(
                     self._build_label or f"Build #{self._build_id}"
                     if self._build_id is not None

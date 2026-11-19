@@ -4579,8 +4579,8 @@
       "squid/bot/tags_view.py:517"
     ]
   },
-  "bot-tags-view-loading-build-tags": {
-    "fingerprint": "c9839b5c44c11f68c7f9f3ba11aaaca98d18c55138a9e53ffa5536fefb60bdfe",
+  "bot-tags-view-loading-tags": {
+    "fingerprint": "ad85555d59476c15c320cf24d0148a243170d9e2cc8594658eae8094065f3edb",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -20210,7 +20210,7 @@
     ]
   },
   "tags-workspace-heading": {
-    "fingerprint": "2e667b7542cc4756957e910134cb352c632f288c8c9e75fc13d02efece3e6238",
+    "fingerprint": "624bfc9801f5906e3abf07294370b8cecdc7af454e4fb08c2936916f5218d4dd",
     "attributes": [],
     "has_value": true,
     "arguments": [],

@@ -1365,7 +1365,7 @@ bot-tags-view-id = ID
 bot-tags-view-kind = Kind
 
 # squid/bot/tags_view.py:224
-bot-tags-view-loading-build-tags = Loading build tags.
+bot-tags-view-loading-tags = Loading tags.
 
 # squid/bot/tags_view.py:199
 bot-tags-view-moderation = Moderation
@@ -6073,7 +6073,7 @@ tags-tag-name-length = Tag names must contain between 1 and 80 characters.
 tags-tag-not-found-title = Tag not found
 
 # squid/bot/tags_view.py:227
-tags-workspace-heading = Build tags
+tags-workspace-heading = Tags
 
 # squid/bot/tags_view.py:231
 tags-workspace-help = Browse the tag library, or choose a build to apply tags to it.
