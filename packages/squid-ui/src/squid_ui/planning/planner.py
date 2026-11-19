@@ -9,14 +9,12 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition_planner import plan_composition
-from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
 from squid_ui.planning.pagination.navigation import PlannedNav
-from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, CompositionOptions, CompositionPlanner, PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.result import PlanResult
+from squid_ui.planning.result import PlanResult, prepare_bindings
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.target import Target
 from squid_ui.presentation_state import PresentationState

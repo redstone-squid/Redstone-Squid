@@ -20,13 +20,12 @@ from squid_ui.overflow import FIRST_PAGE, RoutedPage
 from squid_ui.pages import InitialPage, PagePosition
 from squid_ui.planning.action_projection import prepare_action_allocation
 from squid_ui.planning.composition import OccurrenceId, SemanticOccurrence
-from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.identity import requires_live_preparation, stable_fingerprint
 from squid_ui.planning.interaction_semantics import ItemSummary
 from squid_ui.planning.offers import region_cursor_key
 from squid_ui.planning.pagination.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.pagination.reuse import same_allocation_document
-from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.request import CompositionOptions, PlanRequest
 from squid_ui.planning.result import PlanMetrics, PlanResult, PlanReuse, RegionReport
 from squid_ui.planning.reveals import RevealResolver
 from squid_ui.planning.semantic_index import ItemBranch, SemanticGraph, semantic_graph

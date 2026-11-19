@@ -14,6 +14,7 @@ from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import FidelityEffect
 from squid_ui.interactions import ActionBinding
 from squid_ui.interactions.forms import FormBinding
+from squid_ui.interactions.handlers import bind_handlers
 from squid_ui.planning.allocation import AllocationSelection
 from squid_ui.planning.allocation_policy import SearchDiagnostics
 from squid_ui.planning.composition import OccurrenceId
@@ -23,6 +24,7 @@ from squid_ui.scene.model import Body, Scene
 
 if TYPE_CHECKING:
     from squid_ui.layout import LayoutContext
+    from squid_ui.planning.request import PlanRequest
 
 
 class CertificateScope(StrEnum):
@@ -152,3 +154,35 @@ class PlanResult[BodyT = Body]:
             metrics=self.metrics,
             allocation=self.allocation,
         )
+
+
+def prepare_bindings[BodyT: Body, RenderTargetT, AdapterT](
+    result: PlanResult[BodyT],
+    request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+    *,
+    consume: Callable[[int], None] | None = None,
+) -> PlanResult[BodyT]:
+    """Prepare frontend handlers and forms without publishing them."""
+    if consume is not None:
+        consume(1 + len(result.bindings) + len(result.form_bindings))
+    frontend = request.target.adapter.frontend or request.target.adapter.name
+    bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend, request.presentation.declared)
+    result = (
+        replace(result, bindings=bindings, form_bindings=forms)
+        if bindings is not result.bindings or forms is not result.form_bindings
+        else result
+    )
+    if (prepare_form := request.target.adapter.form_planner) is not None and forms:
+        result = replace(
+            result,
+            form_plans={
+                key: prepare_form(
+                    binding.spec,
+                    target=request.target,
+                    localization=request.localization,
+                    strict=request.strict or request.composition is not None,
+                )
+                for key, binding in forms.items()
+            },
+        )
+    return result

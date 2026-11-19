@@ -21,11 +21,10 @@ from squid_ui.planning.allocation_policy import AllocationGoal, RegionPolicy, Se
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import AtomicContract, OccurrenceId
 from squid_ui.planning.composition_planner import AutomaticComposition, CompositionRejectedError, FixedComposition
-from squid_ui.planning.composition_request import CompositionOptions
 from squid_ui.planning.dialect import TargetDialect
 from squid_ui.planning.joint_search import JointExhaustedError, JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.planner import plan
-from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, CompositionOptions
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import (
     CertificateScope,

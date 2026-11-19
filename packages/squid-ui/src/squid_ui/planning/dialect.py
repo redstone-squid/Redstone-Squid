@@ -9,9 +9,11 @@ from squid_ui.planning.resources import TargetLimits
 
 if TYPE_CHECKING:
     from squid_ui.authoring.document import DocumentLike
+    from squid_ui.planning.cache import PlanCache
     from squid_ui.planning.composition_input import InputPreparation
-    from squid_ui.planning.composition_request import TargetComposition
     from squid_ui.planning.pagination.navigation import PlannedNav
+    from squid_ui.planning.request import CompositionOptions, PlanRequest
+    from squid_ui.planning.result import PlanResult
     from squid_ui.target_types import Renderable
 
 
@@ -30,6 +32,18 @@ class InputPolicy:
     native: Callable[[InputPreparation], NativeInput] | None = None
     budget_ladder: bool = False
     inspect: bool = True
+
+
+class TargetComposition[RenderTargetT, BodyT: scene.Body](Protocol):
+    """Bound target rules whose internal payload types stay within their implementation."""
+
+    def plan[AdapterT](
+        self,
+        rendered: DocumentLike[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+        options: CompositionOptions,
+        cache: PlanCache | None = None,
+    ) -> PlanResult[BodyT]: ...
 
 
 class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT](Protocol):

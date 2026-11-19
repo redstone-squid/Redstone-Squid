@@ -32,10 +32,9 @@ from squid_ui.planning.composition import (
     RealizationOffer,
     SemanticOccurrence,
 )
-from squid_ui.planning.control_style import button_style
+from squid_ui.planning.composition_input import RootRegion
 from squid_ui.planning.interaction_handlers import ChoiceCommit, SelectChoices
 from squid_ui.planning.interaction_semantics import DisclosureToggle, ItemBack, NavigationChoice
-from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.pagination.navigation import PlannedNav, default_nav
 from squid_ui.planning.realizations import (
     ActionsRealization,
@@ -143,7 +142,7 @@ def navigation_candidate[R, C](
             label,
             action=node.key if isinstance(node, sem.ActionControl) else None,
             route=node.route_id if isinstance(node, sem.RoutedActionControl) else None,
-            style=button_style(node.tone, node.emphasis),
+            style=controls.button_style(node.tone, node.emphasis),
             disabled=not node.available,
             mode=node.mode if isinstance(node, sem.ActionControl) else ActionMode.EXCLUSIVE,
         )

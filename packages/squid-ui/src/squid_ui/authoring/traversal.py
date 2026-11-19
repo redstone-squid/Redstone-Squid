@@ -2,8 +2,9 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import cast
+from typing import Any, cast
 
+from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import Alternatives, Budget
 from squid_ui.authoring.semantic import (
     ActionControl as SemanticActionControl,
@@ -73,6 +74,7 @@ from squid_ui.authoring.semantic import (
 from squid_ui.authoring.semantic import Toggle as SemanticToggle
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.native import NativeTraits, NativeValue
+from squid_ui.target_types import Renderable
 
 type LayoutTransform[RenderTargetT, ContextT = object] = Callable[
     [LayoutNode[RenderTargetT, ContextT], str], Sequence[LayoutNode[RenderTargetT, ContextT]]
@@ -365,3 +367,37 @@ def _namespace[RenderTargetT, ContextT = object](
     # carry a target, and returns the same nodes rekeyed. That costs the local walker's
     # precision, not the caller's, so the target the caller passed in is what comes back.
     return cast(list[LayoutNode[RenderTargetT, ContextT]], [rewrite(node) for node in nodes])
+
+
+LAYOUT_CONTAINERS = (
+    sem.Group,
+    sem.Stack,
+    sem.Cluster,
+    sem.Themed,
+    sem.Block,
+    sem.Section,
+    sem.Article,
+    sem.Aside,
+    sem.Region,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LayoutParts:
+    children: tuple[Renderable[Any, Any], ...]
+    heading: Renderable[Any, Any] | None = None
+    header: tuple[Renderable[Any, Any], ...] = ()
+    footer: tuple[Renderable[Any, Any], ...] = ()
+
+
+def layout_parts(value: Renderable[Any, Any]) -> LayoutParts:
+    """Return the named slots and ordinary children of a layout container."""
+    if not isinstance(value, LAYOUT_CONTAINERS):
+        message = f"{type(value).__name__} is not a layout container"
+        raise TypeError(message)
+    return LayoutParts(
+        value.children,
+        value.heading if isinstance(value, sem.Section | sem.Article) else None,
+        value.header if isinstance(value, sem.Region) else (),
+        value.footer if isinstance(value, sem.Region) else (),
+    )

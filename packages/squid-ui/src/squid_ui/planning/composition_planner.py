@@ -13,7 +13,6 @@ from squid_ui.authoring.semantic import Group
 from squid_ui.content.assets import Asset
 from squid_ui.errors import LayoutError, LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.allocation_policy import SearchCompletion, SearchDiagnostics
-from squid_ui.planning.binding_preparation import prepare_bindings
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.composition import (
     BuiltComposition,
@@ -25,11 +24,12 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
     WorkBudget,
     build_composition,
+    select_composition,
 )
 from squid_ui.planning.composition_input import prepare_composition
-from squid_ui.planning.composition_request import CompositionOptions, TargetComposition
 from squid_ui.planning.composition_state import RetainedComposition
 from squid_ui.planning.contextual import ContextualResolution
+from squid_ui.planning.dialect import TargetComposition
 from squid_ui.planning.identity import has_contextual, requires_live_preparation, stable_fingerprint
 from squid_ui.planning.joint_search import (
     JointExhaustedError,
@@ -37,10 +37,17 @@ from squid_ui.planning.joint_search import (
     JointUnsupportedError,
     search_composition,
 )
-from squid_ui.planning.offers import select_composition
 from squid_ui.planning.pagination.navigation import PlannedNav
-from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, PlanRequest
-from squid_ui.planning.result import CertificateScope, PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
+from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, CompositionOptions, PlanRequest
+from squid_ui.planning.result import (
+    CertificateScope,
+    PlanEvent,
+    PlanMetrics,
+    PlanReport,
+    PlanResult,
+    PlanSeverity,
+    prepare_bindings,
+)
 from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
 from squid_ui.planning.snapshot import PlanningSnapshot
 

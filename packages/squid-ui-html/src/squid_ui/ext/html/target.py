@@ -12,8 +12,7 @@ from squid_ui.ext.html.composition import HtmlCompositionRules
 from squid_ui.ext.html.target_types import HtmlAdapter, HtmlTarget
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.composition_planner import RuleComposition
-from squid_ui.planning.composition_request import TargetComposition
-from squid_ui.planning.dialect import InputPolicy
+from squid_ui.planning.dialect import InputPolicy, TargetComposition
 from squid_ui.planning.pagination.navigation import PlannedNav, page_select_nav
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target

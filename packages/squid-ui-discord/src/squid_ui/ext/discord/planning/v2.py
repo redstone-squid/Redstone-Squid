@@ -9,8 +9,7 @@ from squid_ui.ext.discord.planning.composition_v2 import V2CompositionRules
 from squid_ui.ext.discord.planning.input import V2Input
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.planning.composition_planner import RuleComposition
-from squid_ui.planning.composition_request import TargetComposition
-from squid_ui.planning.dialect import InputPolicy
+from squid_ui.planning.dialect import InputPolicy, TargetComposition
 from squid_ui.planning.pagination.navigation import PlannedNav
 
 

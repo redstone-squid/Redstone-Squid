@@ -14,6 +14,7 @@ from squid_ui.authoring.presentations import (
     TextPresentation,
 )
 from squid_ui.authoring.rosters import RosterEntry, RosterSlot
+from squid_ui.authoring.traversal import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.content.text import TextLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.native import NativeValue
@@ -25,7 +26,6 @@ from squid_ui.planning.interaction_semantics import (
     ItemSummary,
     NavigationChoice,
 )
-from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.target_types import Renderable
 
 

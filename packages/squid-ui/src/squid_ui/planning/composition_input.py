@@ -8,16 +8,20 @@ from squid_ui import scene
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import Alternatives, Budget, TextPresentation
+from squid_ui.authoring.traversal import LAYOUT_CONTAINERS, layout_parts
 from squid_ui.content.text import Localization, resolve_text
 from squid_ui.native import NativeNode, NativeTraits
 from squid_ui.planning.adapter import ExtensionAdapter
 from squid_ui.planning.dialect import InputPolicy, NativeInput
-from squid_ui.planning.layout_structure import LAYOUT_CONTAINERS, layout_parts
-from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_index import UnsupportedSemanticError, semantic_graph
-from squid_ui.target_types import Renderable
+from squid_ui.target_types import Renderable, RenderTarget
+
+
+@dataclass(frozen=True, slots=True)
+class RootRegion[RenderTargetT = RenderTarget](sem.Region[RenderTargetT]):
+    """A keyed document's layout pages, using its existing public pager key."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
 from uuid import uuid4
 
+from squid_ui._contextual import evaluate_contextual
 from squid_ui.authoring.presentations import SemanticRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
@@ -22,7 +23,6 @@ from squid_ui.planning.composition import (
     PlanningContext,
     RegionContract,
 )
-from squid_ui.planning.context_evaluation import evaluate_contextual
 from squid_ui.planning.fragments import FragmentTree, slice_fragment
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 

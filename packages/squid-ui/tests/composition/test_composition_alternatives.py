@@ -33,8 +33,8 @@ from squid_ui.planning.composition import (
     UnsupportedCapability,
     WorkBudget,
     build_composition,
+    select_composition,
 )
-from squid_ui.planning.offers import select_composition
 from squid_ui.planning.realizations import Realization, TextRealization
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.semantic_index import semantic_graph

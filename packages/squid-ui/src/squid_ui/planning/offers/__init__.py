@@ -1,4 +1,4 @@
-"""Propose target realizations and assemble explicit composition choices.
+"""Propose target realizations.
 
 Policies and inherited constraints are shared by the primitive, content, and
 interaction handlers. Navigation constructs region controls before certification;
@@ -11,4 +11,3 @@ from squid_ui.planning.offers.navigation import pagination_chrome as pagination_
 from squid_ui.planning.offers.navigation import region_cursor_key as region_cursor_key
 from squid_ui.planning.offers.policy import OfferPolicy as OfferPolicy
 from squid_ui.planning.offers.policy import Offers as Offers
-from squid_ui.planning.offers.selection import select_composition as select_composition

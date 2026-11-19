@@ -16,10 +16,10 @@ from squid_ui.planning.composition import (
     TargetRules,
     WorkBudget,
     build_composition,
+    select_composition,
 )
 from squid_ui.planning.fragments import fragment_tree, slice_fragment
 from squid_ui.planning.layout_snapshot import FamilyLayout
-from squid_ui.planning.offers import select_composition
 from squid_ui.planning.realizations import Realization, TableRealization
 from squid_ui.planning.semantic_index import semantic_graph
 from squid_ui.target_types import RenderTarget

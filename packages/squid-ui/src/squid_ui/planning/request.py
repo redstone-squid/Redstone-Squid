@@ -2,13 +2,16 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypedDict, override
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, override
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.allocation_policy import RegionPolicy
+from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.identity import FingerprintCache
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
@@ -16,10 +19,48 @@ from squid_ui.planning.target import Target
 from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
-    from squid_ui.planning.composition_request import CompositionOptions, CompositionPlanner
+    from squid_ui.authoring.document import DocumentLike
+    from squid_ui.planning.result import PlanResult
 
 
 DEFAULT_SEARCH_BUDGET = 512
+
+
+@dataclass(frozen=True, slots=True)
+class CompositionOptions:
+    """Explicit choices keyed by occurrence path; a sole offer is selected automatically.
+
+    Set automatic=True for joint search. Fixed selections and partitions then
+    constrain its domain. Page coordinates only select certified output.
+    Work_limit bounds both fixed evaluation and automatic search through scene assembly.
+    """
+
+    selections: Mapping[OccurrenceId, str] = field(default_factory=dict)
+    automatic: bool = False
+    policies: Mapping[OccurrenceId, RegionPolicy] = field(default_factory=dict)
+    partitions: Mapping[OccurrenceId, tuple[int, ...]] = field(default_factory=dict)
+    pages: Mapping[OccurrenceId, int] = field(default_factory=dict)
+    work_limit: int = 50_000
+    excluded: tuple[tuple[tuple[OccurrenceId, str], ...], ...] = field(default=(), repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "selections", MappingProxyType(dict(self.selections)))
+        for name in ("policies", "partitions", "pages"):
+            object.__setattr__(self, name, MappingProxyType(dict(getattr(self, name))))
+        if self.work_limit < 1:
+            message = "composition work limit must be positive"
+            raise ValueError(message)
+        if not self.automatic and (self.policies or self.partitions or self.pages):
+            message = "page and allocation options require automatic composition"
+            raise ValueError(message)
+
+
+class CompositionPlanner[RenderTargetT, BodyT: scene.Body](Protocol):
+    """Custom target rules exposed through the public planning dispatcher."""
+
+    def plan[AdapterT](
+        self, rendered: DocumentLike[RenderTargetT], request: PlanRequest[BodyT, RenderTargetT, AdapterT]
+    ) -> PlanResult[BodyT]: ...
 
 
 class Identity:

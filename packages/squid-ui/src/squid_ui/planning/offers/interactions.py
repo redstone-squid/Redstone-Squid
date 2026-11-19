@@ -25,7 +25,6 @@ from squid_ui.planning.composition import (
     RegionContract,
     SemanticOccurrence,
 )
-from squid_ui.planning.control_style import button_style as _button_style
 from squid_ui.planning.interaction_handlers import (
     ChoiceCommit,
     CloseItem,
@@ -609,7 +608,7 @@ def _action_control_offers[RenderTargetT, ContextT](
             payload = ControlRealization(
                 label,
                 action=key,
-                style=_button_style(value.tone, sem.Emphasis.NORMAL),
+                style=controls.button_style(value.tone, sem.Emphasis.NORMAL),
                 disabled=not value.available,
             )
             binding = ActionBinding(key, FlipToggle(value, on, context.presentation), ActionMode.EXCLUSIVE, label=label)
@@ -617,7 +616,7 @@ def _action_control_offers[RenderTargetT, ContextT](
             payload = ControlRealization(
                 label,
                 action=key,
-                style=_button_style(value.tone, value.emphasis),
+                style=controls.button_style(value.tone, value.emphasis),
                 disabled=not value.available,
                 mode=value.mode,
             )
@@ -643,13 +642,13 @@ def _action_control_offers[RenderTargetT, ContextT](
                 label=value.label,
             )
             payload = ControlRealization(
-                label, action=key, style=_button_style(value.tone, value.emphasis), mode=value.mode
+                label, action=key, style=controls.button_style(value.tone, value.emphasis), mode=value.mode
             )
         case sem.RoutedActionControl():
             payload = ControlRealization(
                 label,
                 route=value.route_id,
-                style=_button_style(value.tone, value.emphasis),
+                style=controls.button_style(value.tone, value.emphasis),
                 disabled=not value.available,
             )
         case sem.Link():

@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from squid_ui import scene
+from squid_ui._contextual import evaluate_contextual
 from squid_ui.authoring.document import Document, DocumentLike, as_document
 from squid_ui.authoring.semantic import Contextual, Group, LayoutNode, PreparedSlot
 from squid_ui.authoring.traversal import _namespace, map_layout_children
@@ -20,7 +21,6 @@ from squid_ui.layout import (
     RegionRef,
 )
 from squid_ui.planning.composition import OccurrenceId, WorkBudget
-from squid_ui.planning.context_evaluation import evaluate_contextual
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.planning.layout_snapshot import SemanticCapture, _ScopeReader

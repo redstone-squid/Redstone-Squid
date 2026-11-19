@@ -26,12 +26,12 @@ from squid_ui.planning.composition import (
     RegionContract,
     SemanticOccurrence,
 )
+from squid_ui.planning.composition_input import RootRegion
 from squid_ui.planning.interaction_handlers import (
     RouteSelection,
 )
 from squid_ui.planning.offers.navigation import grouped_control_key, pagination_chrome, region_cursor_key
 from squid_ui.planning.offers.policy import Offers, OfferScope
-from squid_ui.planning.pagination.content import RootRegion
 from squid_ui.planning.realizations import (
     ActionsRealization,
     DownloadRealization,

@@ -6,8 +6,11 @@ from typing import Annotated
 from pydantic import Field
 
 from squid_ui.action_mode import ActionMode
+from squid_ui.authoring.semantic import Emphasis
 from squid_ui.content.emoji import Emoji
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
+from squid_ui.palette import Role, Tone
+from squid_ui.styles import ActionStyle
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,3 +54,11 @@ class EntitySelect:
     max_values: Annotated[int, Field(ge=0, strict=True)] = 1
     disabled: Annotated[bool, Field(strict=True)] = False
     mode: ActionMode = ActionMode.EXCLUSIVE
+
+
+def button_style(tone: Tone | Role, emphasis: Emphasis) -> ActionStyle:
+    return {
+        Tone.SUCCESS: ActionStyle.SUCCESS,
+        Tone.DANGER: ActionStyle.DANGER,
+        Tone.INFO: ActionStyle.PRIMARY,
+    }.get(tone.base, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
