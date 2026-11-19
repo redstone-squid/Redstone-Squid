@@ -8,7 +8,15 @@ from squid_reactivity import untracked
 from squid_reactivity.operations import Failed, Pending
 from squid_reactivity.resources import PendingMode, resource
 from squid_ui.authoring.document import DocumentLike
-from squid_ui.authoring.semantic import ActionControl, ActionControls, ChoiceEvent, ControlDisplay, Link, ListItem
+from squid_ui.authoring.semantic import (
+    ActionControl,
+    ActionControls,
+    ChoiceEvent,
+    ControlDisplay,
+    Link,
+    ListItem,
+    RoutedActionControl,
+)
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.content.text import Text, TextLike
 from squid_ui.factories import (
@@ -71,7 +79,8 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
 
     Back in an opened item returns to the list. Pass `on_back` when the list is not a
     useful destination, such as a browser opened directly on one item; the handler then
-    decides where Back goes and the session keeps its focus.
+    decides where Back goes and the session keeps its focus. `entry_actions` adds an opened
+    item's own actions after Back, in the same row, so keep them to two.
     """
 
     def __init__(
@@ -83,7 +92,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         label: Callable[[ItemT], TextLike],
         detail: BrowserDetail[ItemT, RenderTargetT, ContextT],
         summary: Callable[[ItemT], TextLike] | None = None,
-        entry_actions: Callable[[ItemT], Sequence[ActionControl | Link]] | None = None,
+        entry_actions: Callable[[ItemT], Sequence[ActionControl | RoutedActionControl | Link]] | None = None,
         overview: BrowserOverview[ItemT, RenderTargetT, ContextT] | None = None,
         page_size: int = 10,
         title: TextLike | None = None,
@@ -310,7 +319,6 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         return stack(
             heading(self.title) if self.title is not None else None,
             *detail,
-            action_controls(*entry_actions, key=f"{self.key}.entry-actions") if entry_actions else None,
             action_controls(
                 (len(items) > 1 or loaded.window.has_previous or loaded.window.has_next)
                 and action_control(
@@ -331,6 +339,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
                     self.on_back or partial(self._back_at, self.session.revision),
                     key=f"{self.key}.back",
                 ),
+                *entry_actions,
                 key=f"{self.key}.detail-navigation",
                 display=ControlDisplay.INDIVIDUAL,
             ),
