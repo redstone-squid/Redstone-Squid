@@ -27,12 +27,18 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.tags.application.services import (
     TagDefinitionRepository,
-    coerce_assignment_value,
     normalize_proposal,
     require_showcase,
 )
 from squid.tags.application.snapshots import AssignmentSnapshot
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
+from squid.tags.domain import (
+    TagAuthority,
+    TagModerationStatus,
+    TagSemanticKind,
+    TagValueType,
+    assignment_value,
+    coerce_assignment_value,
+)
 from squid.tags.models import TagDefinition
 
 SHOWCASE_EDIT = "tags.assignment"
@@ -76,12 +82,6 @@ class AssignmentRoot:
     definition: TagDefinition
     assignment: AssignmentSnapshot | None
     actor_id: int | None = None
-
-
-def assignment_value(value: TagValue) -> str | None:
-    if value is None:
-        return None
-    return str(value).lower() if isinstance(value, bool) else str(value)
 
 
 class ShowcaseAssignmentEdit(FieldCommand[TagEditUnitOfWork, AssignmentRoot, ShowcaseValues]):

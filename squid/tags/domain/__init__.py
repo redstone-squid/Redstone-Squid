@@ -8,6 +8,7 @@ from squid.tags.domain.models import (
     TagValue,
     TagValueType,
 )
+from squid.tags.domain.values import ValuedTag, assignment_value, coerce_assignment_value
 
 __all__ = [
     "RecordOperator",
@@ -16,4 +17,7 @@ __all__ = [
     "TagSemanticKind",
     "TagValue",
     "TagValueType",
+    "ValuedTag",
+    "assignment_value",
+    "coerce_assignment_value",
 ]

@@ -6,8 +6,8 @@ import pytest
 
 from squid.core.errors import ValidationError
 from squid.tags.application.edits import ProposalValues
-from squid.tags.application.services import coerce_assignment_value, require_showcase
-from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.application.services import require_showcase
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType, coerce_assignment_value
 from squid.tags.models import TagDefinition
 
 
