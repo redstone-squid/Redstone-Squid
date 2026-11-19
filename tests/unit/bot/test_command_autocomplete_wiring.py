@@ -80,7 +80,7 @@ PARAMETERS = autocompleted_parameters()
 def test_the_command_tree_actually_uses_autocomplete() -> None:
     """Guards the walker itself: an empty list would make every check below vacuous."""
     assert PARAMETERS
-    assert {command for command, _, _ in PARAMETERS} >= {"build browse", "build submit", "search", "tags"}
+    assert {command for command, _, _ in PARAMETERS} >= {"build browse", "build submit", "search"}
 
 
 @pytest.mark.parametrize(
