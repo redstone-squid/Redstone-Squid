@@ -729,6 +729,12 @@ textarea:disabled {
   text-transform: none;
 }
 
+.submission-tag-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem 1rem;
+}
+
 .field-error,
 .submission-inline-error {
   color: var(--danger) !important;
@@ -1163,7 +1169,8 @@ textarea:disabled {
     grid-column: auto;
   }
 
-  .submission-check-grid {
+  .submission-check-grid,
+  .submission-tag-values {
     grid-template-columns: 1fr;
   }
 

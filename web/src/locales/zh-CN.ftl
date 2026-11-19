@@ -236,6 +236,7 @@ submitFlow-deleteDraft = 删除草稿
 submitFlow-deleteConfirm = 删除此草稿并丢弃其上传媒体？此操作无法撤销。
 submitFlow-schematicNote = 提交前请检查原理图建议并补充缺失信息。
 submitFlow-saveBeforeSubmit = 提交前请修复或重试未保存的字段。
+submitFlow-tagValue = { $tag }的值
 taxonomy-confirmed = 已确认
 taxonomy-pending = 待审核
 taxonomy-denied = 未通过

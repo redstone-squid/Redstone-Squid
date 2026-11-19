@@ -99,6 +99,20 @@ describe("submission form compatibility", () => {
     expect(validateSubmissionManifest(manifest()).schema_id).toBe("build_submission.v1");
   });
 
+  it("accepts the showcase tag field with its required capability", () => {
+    const showcase = field({
+      id: "showcase_tags",
+      control: "showcase_tags",
+      value_kind: "showcase_tag_list",
+      required: true,
+      required_capability: "showcase_tag_values",
+      option_source: "approved_showcase_tags",
+      constraints: { ...constraints, max_items: 40 },
+    });
+    const form = manifest({ common_sections: [{ id: "tags", title: "Tags", fields: [showcase] }] });
+    expect(validateSubmissionManifest(form)).toBe(form);
+  });
+
   it("rejects both newer and retired protocol ranges", () => {
     expect(() =>
       validateSubmissionManifest(manifest({ minimum_protocol: 2, maximum_protocol: 3 })),
@@ -209,6 +223,9 @@ describe("renderer values", () => {
     expect(draftValue(Number.NaN)).toBeUndefined();
     expect(draftValue(["one", 2])).toBeUndefined();
     expect(draftValue({})).toBeUndefined();
+    const tags = [{ key: "compact" }, { key: "speed", value: "1.5" }];
+    expect(draftValue(tags)).toEqual(tags);
+    expect(draftValue([{ key: "speed", value: 1.5 }])).toBeUndefined();
   });
 
   it("parses every core case of the shared duration fixture", () => {

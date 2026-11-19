@@ -578,3 +578,118 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
     editable.unmount();
   });
 });
+
+describe("SubmissionFlow showcase tags", { timeout: 15_000 }, () => {
+  const showcaseManifest: FormManifestResponse = {
+    ...manifest,
+    common_sections: [
+      ...manifest.common_sections,
+      {
+        id: "showcase",
+        title: "Showcase",
+        fields: [
+          field({
+            id: "showcase_tags",
+            label: "Showcase tags",
+            control: "showcase_tags",
+            value_kind: "showcase_tag_list",
+            option_source: "approved_showcase_tags",
+            required_capability: "showcase_tag_values",
+            constraints: { ...constraints, max_items: 40 },
+          }),
+        ],
+      },
+    ],
+  };
+  const showcaseOptions = [
+    { value: "compact", label: "Compact", value_type: null },
+    { value: "speed", label: "Speed", value_type: "numeric" as const },
+    { value: "lit", label: "Lit", value_type: "boolean" as const },
+  ];
+
+  function showcaseApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
+    const base = fakeApi(overrides);
+    return {
+      ...base,
+      currentForm: vi.fn(() => Promise.resolve(showcaseManifest)),
+      formOptions: vi.fn((source, category) =>
+        source === "approved_showcase_tags"
+          ? Promise.resolve({ source, category, revision: 1, options: showcaseOptions })
+          : base.formOptions(source, category),
+      ),
+    };
+  }
+
+  function savedTags(api: SubmissionApi): unknown {
+    return vi
+      .mocked(api.changeDraft)
+      .mock.calls.flatMap(([, change]) => change.operations)
+      .filter((operation) => operation.field_id === "showcase_tags")
+      .at(-1)?.value;
+  }
+
+  it("saves chosen tags with typed values and never sends a value for a no-value tag", async () => {
+    const api = showcaseApi();
+    render(<SubmissionFlow locale="en" config={config} api={api} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start draft" }));
+
+    fireEvent.click(await screen.findByLabelText("Compact"));
+    await waitFor(() => expect(savedTags(api)).toEqual([{ key: "compact" }]));
+    expect(screen.queryByLabelText("Compact value")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Speed"));
+    const speed = await screen.findByLabelText("Speed value");
+    expect(speed).toHaveAttribute("inputmode", "decimal");
+    fireEvent.change(speed, { target: { value: "1.50" } });
+    fireEvent.blur(speed);
+    fireEvent.click(screen.getByLabelText("Lit"));
+    fireEvent.change(await screen.findByLabelText("Lit value"), { target: { value: "true" } });
+    await waitFor(() =>
+      expect(savedTags(api)).toEqual([
+        { key: "compact" },
+        { key: "speed", value: "1.50" },
+        { key: "lit", value: "true" },
+      ]),
+    );
+  });
+
+  it("drops a removed tag's value and shows the server's wrong_type issue", async () => {
+    const api = showcaseApi({
+      submitDraft: vi.fn<SubmissionApi["submitDraft"]>(() =>
+        Promise.resolve({
+          draft_id: storedDraft().id,
+          draft_revision: 3,
+          attempt_id: "00000000-0000-4000-8000-000000000001",
+          attempt_number: 1,
+          input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+          status: "needs_attention",
+          issues: [{ field_id: "showcase_tags", reason: "wrong_type" }],
+          build_id: null,
+        }),
+      ),
+    });
+    render(<SubmissionFlow locale="en" config={config} api={api} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start draft" }));
+
+    fireEvent.click(await screen.findByLabelText("Speed"));
+    const speed = await screen.findByLabelText("Speed value");
+    fireEvent.change(speed, { target: { value: "2" } });
+    fireEvent.blur(speed);
+    await waitFor(() => expect(savedTags(api)).toEqual([{ key: "speed", value: "2" }]));
+
+    fireEvent.click(screen.getByLabelText("Speed"));
+    expect(screen.queryByLabelText("Speed value")).not.toBeInTheDocument();
+    await waitFor(() => expect(savedTags(api)).toBeUndefined());
+    fireEvent.click(screen.getByLabelText("Speed"));
+    expect(await screen.findByLabelText("Speed value")).toHaveValue("");
+    await waitFor(() => expect(savedTags(api)).toEqual([{ key: "speed" }]));
+
+    await waitFor(() => expect(screen.getByText("All changes saved")).toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "Submit draft" }));
+    expect(await screen.findAllByText("Showcase tags has the wrong value format.")).toHaveLength(2);
+    expect(screen.getByRole("group", { name: /Showcase tags/ })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
+});

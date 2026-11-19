@@ -319,6 +319,7 @@ export const messageKeys = [
   "submitFlow.submissionTitle",
   "submitFlow.submit",
   "submitFlow.submitting",
+  "submitFlow.tagValue",
   "submitFlow.unavailable",
   "submitFlow.unavailableTitle",
   "submitFlow.upload",
@@ -479,6 +480,7 @@ export type MessageVariables = {
     size: string | number;
     videos: string | number;
   };
+  "submitFlow.tagValue": { tag: string | number };
   "trial.attachment": { filename: string | number };
   "workbench.build-count": { count: string | number };
   "workbench.fixture-alt": { title: string | number };

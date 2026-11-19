@@ -236,6 +236,7 @@ submitFlow-deleteDraft = Delete draft
 submitFlow-deleteConfirm = Delete this draft and discard its uploaded media? This cannot be undone.
 submitFlow-schematicNote = Review the schematic suggestions and fill in any missing details before submitting.
 submitFlow-saveBeforeSubmit = Fix or retry the unsaved fields before submitting.
+submitFlow-tagValue = { $tag } value
 taxonomy-confirmed = Confirmed
 taxonomy-pending = Pending
 taxonomy-denied = Denied

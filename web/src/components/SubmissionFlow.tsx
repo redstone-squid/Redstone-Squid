@@ -1,6 +1,6 @@
 import SchematicSubmissionSection from "./SchematicSubmissionSection";
 import { CreditEditor } from "./CreditEditor";
-import type { CreditAnswer } from "../lib/submission-form";
+import { ShowcaseTagEditor } from "./ShowcaseTagEditor";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type {
@@ -26,9 +26,11 @@ import type { RuntimeConfig } from "../lib/config";
 import ConsentGate from "./ConsentGate";
 import { type Locale, translate } from "../lib/i18n";
 import {
+  type CreditAnswer,
   draftValue,
   fieldInputValue,
   isFieldVisible,
+  isShowcaseTagAnswer,
   issueMessage,
   materializedAnswers,
   parseFieldInput,
@@ -898,6 +900,36 @@ function FieldEditor({
           </small>
         )}
       </div>
+    );
+  }
+
+  if (field.control === "showcase_tags") {
+    return (
+      <fieldset
+        className="field submission-field submission-field--wide"
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+        disabled={disabled || optionsLoading}
+      >
+        <legend>
+          {field.label} <small>({state})</small>
+        </legend>
+        <ShowcaseTagEditor
+          value={Array.isArray(value) ? value.filter(isShowcaseTagAnswer) : []}
+          options={options ?? []}
+          maxItems={field.constraints.max_items}
+          disabled={disabled || optionsLoading}
+          locale={locale}
+          onCommit={onCommit}
+        />
+        {optionsLoading && <small>{copy.loading}</small>}
+        {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
+        {message && (
+          <small className="field-error" id={`${id}-error`} role="alert">
+            {message}
+          </small>
+        )}
+      </fieldset>
     );
   }
 

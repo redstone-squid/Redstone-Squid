@@ -8,7 +8,11 @@ import type {
 import { translate, type Locale } from "./i18n";
 
 export const SUBMISSION_PROTOCOL = 1;
-export const WEB_SUBMISSION_CAPABILITIES = ["repeatable_text", "typed_credits"] as const;
+export const WEB_SUBMISSION_CAPABILITIES = [
+  "repeatable_text",
+  "typed_credits",
+  "showcase_tag_values",
+] as const;
 
 const REQUIRED_CATEGORIES = new Set(["door", "extender", "utility", "entrance", "other"]);
 const SUPPORTED_CONTROLS = new Set([
@@ -19,6 +23,7 @@ const SUPPORTED_CONTROLS = new Set([
   "duration",
   "boolean",
   "credits",
+  "showcase_tags",
 ]);
 const SUPPORTED_VALUE_KINDS = new Set([
   "string",
@@ -28,6 +33,7 @@ const SUPPORTED_VALUE_KINDS = new Set([
   "string_list",
   "game_ticks",
   "credit_list",
+  "showcase_tag_list",
 ]);
 
 export type CreditAnswer = {
@@ -39,7 +45,10 @@ export type CreditAnswer = {
   attribution?: string;
   source_message_id?: number | null;
 };
-export type DraftValue = string | number | boolean | string[] | CreditAnswer[];
+/** A chosen showcase tag. `value` is the raw text as entered, omitted for tags that take no value. */
+export type ShowcaseTagAnswer = { key: string; value?: string };
+export type DraftValue =
+  string | number | boolean | string[] | CreditAnswer[] | ShowcaseTagAnswer[];
 
 export class SubmissionSchemaError extends Error {
   constructor(message: string) {
@@ -163,6 +172,16 @@ export function isCreditAnswer(value: unknown): value is CreditAnswer {
   );
 }
 
+export function isShowcaseTagAnswer(value: unknown): value is ShowcaseTagAnswer {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "key" in value &&
+    typeof value.key === "string" &&
+    (!("value" in value) || typeof value.value === "string")
+  );
+}
+
 export function draftValue(value: unknown): DraftValue | undefined {
   if (typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -170,6 +189,7 @@ export function draftValue(value: unknown): DraftValue | undefined {
   if (Array.isArray(value)) {
     const entries: unknown[] = value;
     if (entries.every(isCreditAnswer)) return entries;
+    if (entries.every(isShowcaseTagAnswer)) return entries;
   }
   return undefined;
 }
@@ -190,7 +210,9 @@ export function parseDuration(value: string): number | undefined {
 export function fieldInputValue(field: FormFieldResponse, value: unknown): string {
   const parsed = draftValue(value);
   if (Array.isArray(parsed))
-    return parsed.map((item) => (typeof item === "string" ? item : item.name)).join("\n");
+    return parsed
+      .map((item) => (typeof item === "string" ? item : "name" in item ? item.name : item.key))
+      .join("\n");
   if (typeof parsed === "number" && field.control === "duration") return `${parsed}gt`;
   if (typeof parsed === "string" || typeof parsed === "number") return String(parsed);
   return "";
