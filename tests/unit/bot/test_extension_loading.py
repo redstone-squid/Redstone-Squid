@@ -139,7 +139,7 @@ async def test_submission_extension_reloads_with_its_own_command_group() -> None
         for _ in range(2):
             group = bot.tree.get_command("build")
             assert isinstance(group, discord.app_commands.Group)
-            assert {command.name for command in group.commands} == {"browse", "submit", "drafts"}
+            assert {command.name for command in group.commands} == {"browse", "submit", "drafts", "issues"}
             assert all(
                 isinstance(command, discord.app_commands.Command) and command.binding is bot.get_cog("BuildCommands")
                 for command in group.commands

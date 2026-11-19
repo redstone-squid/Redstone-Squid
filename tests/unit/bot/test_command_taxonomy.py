@@ -26,6 +26,7 @@ UNGATED_COMMANDS = frozenset(
     {
         # Public: anyone may run these.
         "layout",
+        "layout catalogue",
         "layout workbench",
         "layout review",
     }
@@ -95,6 +96,7 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
         "build browse",
         "build submit",
         "build drafts",
+        "build issues",
     }
 
 

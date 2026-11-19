@@ -2252,6 +2252,12 @@ command-build-drafts-name = drafts
 # squid/bot/submission/cog.py:48
 command-build-help = Browse and submit redstone builds
 
+# squid/bot/submission/cog.py:133
+command-build-issues-help = Review unresolved build attachments
+
+# squid/bot/submission/cog.py:132
+command-build-issues-name = issues
+
 # squid/bot/submission/cog.py:47
 command-build-name = build
 

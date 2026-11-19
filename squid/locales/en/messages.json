@@ -7449,6 +7449,24 @@
       "squid/bot/submission/cog.py:48"
     ]
   },
+  "command-build-issues-help": {
+    "fingerprint": "760d30a42b66cddd2ead35beb0291abdec622774363cc8db5321962f8ed8daad",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/cog.py:133"
+    ]
+  },
+  "command-build-issues-name": {
+    "fingerprint": "57593d5b70e927da7b9a63f8132bfae74632162e24a7676cf818a3e6e3d35e4d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/cog.py:132"
+    ]
+  },
   "command-build-name": {
     "fingerprint": "69d56be6a1aece08758bc9e5d62bb9327598ae0de3b7455e0bbfc55281d6050a",
     "attributes": [],

@@ -128,7 +128,11 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             query=query,
         )
 
-    @build_group.command(name="issues", description="Review unresolved build attachments", defer="private")
+    @build_group.command(
+        name=tr(t"command-build-issues-name = issues"),
+        description=tr(t"command-build-issues-help = Review unresolved build attachments"),
+        defer="private",
+    )
     async def attachment_issues(self, request: sd.Request[Self, BotT]) -> AttachmentReview:
         return await AttachmentReview.open(request)
 
