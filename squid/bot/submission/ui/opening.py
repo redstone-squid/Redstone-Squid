@@ -26,9 +26,9 @@ async def prepare_build_editor(
 ) -> BuildEditScreen:
     """Construct an editor and its callbacks without presenting or authorizing it yet.
 
-    show_build_editor checks access before presentation. The callback also lets the
-    screen recheck permission, allowing a pending build's submitter or an account
-    with build-edit permission to proceed.
+    show_build_editor checks access before presentation. A pending build's submitter or an
+    account with build-edit permission gets the full editor; the submitter of a build that is
+    no longer pending gets one limited to its showcase tags.
     """
     client = request.client
     prepared: BuildEditScreen | None = None
@@ -36,17 +36,22 @@ async def prepare_build_editor(
     async def actor() -> Actor:
         return await request.client.actors.resolve(request, refresh=True)
 
+    async def full_access(current: Build, current_actor: Actor) -> bool:
+        if current.submission_status is Status.PENDING and submits(current, current_actor):
+            return True
+        return (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
+
+    def submits(current: Build, current_actor: Actor) -> bool:
+        return current_actor.account_id is not None and current.submitter_account_id == current_actor.account_id
+
+    showcase_only = not await full_access(build, await actor())
+
     async def authorize() -> bool:
         current = build if prepared is None else prepared.build
         current_actor = await actor()
-        actor_account_id = current_actor.account_id
-        if (
-            current.submission_status is Status.PENDING
-            and actor_account_id is not None
-            and current.submitter_account_id == actor_account_id
-        ):
-            return True
-        return (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
+        if showcase_only:
+            return submits(current, current_actor)
+        return await full_access(current, current_actor)
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(
@@ -67,7 +72,11 @@ async def prepare_build_editor(
     # names are resolved, and the others label its saved answers in the overview.
     sources = sorted({field.option_source for field in manifest.fields_for(category) if field.option_source})
     workspace = BuildEditWorkspace(
-        build, manifest, {source: await load_options(source) for source in sources}, load_options=load_options
+        build,
+        manifest,
+        {source: await load_options(source) for source in sources},
+        load_options=load_options,
+        showcase_only=showcase_only,
     )
     prepared = BuildEditScreen(
         build,
@@ -92,7 +101,7 @@ async def show_build_editor(request: sd.Request[Any, RedstoneSquid], screen: Bui
             error_node(
                 tr(t"bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build"),
                 tr(
-                    t"build-editor-edit-access-required = Only the pending "
+                    t"build-editor-edit-access-required = Only the "
                     t"build's submitter or a trusted staff member can edit it."
                 ),
             ),

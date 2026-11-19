@@ -1295,31 +1295,31 @@ bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 # squid/bot/submission/cog.py:231
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
-# squid/bot/submission/ui/opening.py:93
+# squid/bot/submission/ui/opening.py:102
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/build_edit.py:421
+# squid/bot/submission/ui/build_edit.py:436
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/build_edit.py:426
+# squid/bot/submission/ui/build_edit.py:441
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/build_edit.py:454
+# squid/bot/submission/ui/build_edit.py:469
 bot-submission-ui-views-cancel = Cancel
 
-# squid/bot/submission/ui/build_edit.py:330
+# squid/bot/submission/ui/build_edit.py:340
 bot-submission-ui-views-edit-build = Edit build
 
-# squid/bot/submission/ui/build_edit.py:302
+# squid/bot/submission/ui/build_edit.py:309
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/build_edit.py:505
+# squid/bot/submission/ui/build_edit.py:520
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/build_edit.py:451
+# squid/bot/submission/ui/build_edit.py:466
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/build_edit.py:432
+# squid/bot/submission/ui/build_edit.py:447
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:458, squid/bot/tags_view.py:676
@@ -1799,61 +1799,64 @@ build-edit-form-videos = Video links
 # squid/submissions/application/forms.py:678
 build-edit-form-world-downloads = World download links
 
-# squid/bot/submission/ui/build_edit.py:164
+# squid/bot/submission/ui/build_edit.py:171
 build-edit-history-fields = Edit build fields
 
-# squid/bot/submission/ui/build_edit.py:521
+# squid/bot/submission/ui/build_edit.py:536
 build-edit-history-save = Save build changes
 
-# squid/bot/submission/ui/build_edit.py:194
+# squid/bot/submission/ui/build_edit.py:201
 build-edit-history-unlisted = Remove names not in the catalogue
 
-# squid/bot/submission/ui/build_edit.py:475
+# squid/bot/submission/ui/build_edit.py:490
 build-edit-search-destination = Add a pattern to build #{ $build_id }
 
-# squid/bot/submission/ui/build_edit.py:442
+# squid/bot/submission/ui/build_edit.py:457
 build-edit-search-patterns = Search patterns
 
-# squid/bot/submission/ui/build_edit.py:484
+# squid/bot/submission/ui/build_edit.py:499
 build-edit-search-unavailable = Return to the editor before adding a pattern.
 
 # squid/bot/submission/ui/controls.py:57
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/build_edit.py:316
+# squid/bot/submission/ui/build_edit.py:323
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
-# squid/bot/submission/ui/opening.py:94
-build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
+# squid/bot/submission/ui/opening.py:103
+build-editor-edit-access-required = Only the build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:562
-build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
+# squid/bot/submission/ui/build_edit.py:577
+build-editor-edit-access-required-views = Only the build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:363
+# squid/bot/submission/ui/build_edit.py:338
+build-editor-edit-tags = Edit tags
+
+# squid/bot/submission/ui/build_edit.py:378
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
-# squid/bot/submission/ui/build_edit.py:368
+# squid/bot/submission/ui/build_edit.py:383
 build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/build_edit.py:308
+# squid/bot/submission/ui/build_edit.py:315
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/build_edit.py:341
+# squid/bot/submission/ui/build_edit.py:356
 build-editor-remove-unlisted = Remove names not in the catalogue…
 
-# squid/bot/submission/ui/build_edit.py:408
+# squid/bot/submission/ui/build_edit.py:423
 build-editor-removed-unlisted = Removed: { $names }
 
-# squid/bot/submission/ui/build_edit.py:324
+# squid/bot/submission/ui/build_edit.py:331
 build-editor-review-hint = Review the changed values below, then apply them.
 
-# squid/bot/submission/ui/build_edit.py:326
+# squid/bot/submission/ui/build_edit.py:333
 build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.
 
-# squid/bot/submission/ui/build_edit.py:156
+# squid/bot/submission/ui/build_edit.py:163
 build-editor-stale-form = These answers changed while the form was open. Open it again.
 
-# squid/bot/submission/ui/build_edit.py:388
+# squid/bot/submission/ui/build_edit.py:403
 build-editor-unlisted = Not in the catalogue: { $names }
 
 # squid/bot/catalogue/browse.py:709, squid/bot/catalogue/browse.py:864
@@ -2876,7 +2879,7 @@ draft-editor-choose = Choose…
 # squid/bot/submission/ui/drafts.py:733
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:584, squid/bot/submission/ui/sections.py:347
+# squid/bot/submission/ui/build_edit.py:599, squid/bot/submission/ui/sections.py:347
 draft-editor-done = Done
 
 # squid/bot/submission/ui/sections.py:86
@@ -2999,7 +3002,7 @@ draft-editor-picker-other-pages = Choices on other pages are kept.
 # squid/bot/submission/ui/sections.py:223
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/build_edit.py:447, squid/bot/submission/ui/drafts.py:601
+# squid/bot/submission/ui/build_edit.py:462, squid/bot/submission/ui/drafts.py:601
 draft-editor-preview = Preview
 
 # squid/bot/submission/ui/drafts.py:864, squid/bot/submission/ui/drafts.py:866

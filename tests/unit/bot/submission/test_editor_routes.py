@@ -187,7 +187,9 @@ async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
 async def test_a_pending_builds_submitter_may_edit_it_without_the_node() -> None:
     bot = _bot(_door(), allowed=False, account_id=1)
 
-    assert _component(_sent_view(await _run(bot))) is not None
+    component = _component(_sent_view(await _run(bot)))
+    assert component is not None
+    assert not component.workspace.showcase_only
 
 
 async def test_someone_else_without_the_node_is_denied() -> None:
@@ -222,14 +224,16 @@ async def test_recovery_route_reloads_current_state_before_authorizing() -> None
     assert "Unsaved changes from the previous editor were discarded" in str(component.render())
 
 
-async def test_recovery_route_denies_an_actor_after_reloading_current_state() -> None:
+async def test_recovery_route_limits_a_confirmed_builds_submitter_to_its_tags() -> None:
     latest = DoorBuild(id=1, revision=4, submission_status=Status.CONFIRMED, submitter_account_id=1)
     bot = _bot(latest, allowed=False, account_id=1)
     interaction = _interaction(bot)
 
     await recover_build_editor(await sd.request(interaction), 1)
 
-    assert _component(_sent_view(interaction)) is None
+    component = _component(_sent_view(interaction))
+    assert component is not None
+    assert component.workspace.showcase_only
     assert cast(StubBuilds, bot.services.builds).gets == 1
 
 
@@ -247,7 +251,7 @@ async def test_in_session_reload_reauthorizes_the_reloaded_non_pending_build() -
 
     assert screen.build is latest
     assert responder.acknowledged == 0
-    assert responder.notices[0][0] == "Only the pending build's submitter or a trusted staff member can edit it."
+    assert responder.notices[0][0] == "Only the build's submitter or a trusted staff member can edit it."
 
 
 @pytest.mark.parametrize("endpoint", [edit_build, recover_build_editor])

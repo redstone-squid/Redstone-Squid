@@ -65,6 +65,8 @@ async def _no_more_options(source: str) -> tuple[ChoiceOption, ...]:
     raise AssertionError(f"the test did not expect {source} to be loaded")
 
 
-def edit_workspace(build: Build) -> BuildEditWorkspace:
+def edit_workspace(build: Build, *, showcase_only: bool = False) -> BuildEditWorkspace:
     """A saved-build workspace over the checked-in edit form and `EDIT_OPTIONS`."""
-    return BuildEditWorkspace(build, build_edit_manifest(), EDIT_OPTIONS, load_options=_no_more_options)
+    return BuildEditWorkspace(
+        build, build_edit_manifest(), EDIT_OPTIONS, load_options=_no_more_options, showcase_only=showcase_only
+    )

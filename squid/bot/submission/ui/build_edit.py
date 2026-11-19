@@ -61,6 +61,9 @@ class BuildEditWorkspace(sl.Reactive):
     The workspace keeps the answers the build had when it was loaded (`saved`) and the edited
     answers (`staged`). Each change is a step in `history`. Nothing reaches the build until the
     screen saves `patch()`; after a save, `reset` starts again from the saved build.
+
+    With `showcase_only`, the workspace offers only the showcase tags field, which is all a
+    submitter may change once their build is no longer pending.
     """
 
     staged: Mapping[str, JSONValue] = sl.state({})
@@ -80,6 +83,7 @@ class BuildEditWorkspace(sl.Reactive):
         option_sets: Mapping[str, tuple[ChoiceOption, ...]],
         *,
         load_options: OptionLoader,
+        showcase_only: bool = False,
     ) -> None:
         """Start from `build`.
 
@@ -87,6 +91,7 @@ class BuildEditWorkspace(sl.Reactive):
         build's names are resolved; other catalogues are fetched by `load_options` when needed.
         """
         self.manifest = manifest
+        self.showcase_only = showcase_only
         self.category = build.category.value.lower()
         self._load_options = load_options
         self.option_sets = dict(option_sets)
@@ -122,7 +127,9 @@ class BuildEditWorkspace(sl.Reactive):
     def fields(self) -> tuple[FormField, ...]:
         answers = self._normalized_answers
         return tuple(
-            field for field in self.manifest.fields_for(self.category) if field.is_visible(answers, self.origin)
+            field
+            for field in self.manifest.fields_for(self.category)
+            if field.is_visible(answers, self.origin) and (not self.showcase_only or field.id == "showcase_tags")
         )
 
     @sl.computed
@@ -327,12 +334,20 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 t"build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet."
             )
         children: list[Any] = [
-            sl.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
+            sl.heading(
+                tr(t"build-editor-edit-tags = Edit tags")
+                if ws.showcase_only
+                else tr(t"bot-submission-ui-views-edit-build = Edit build")
+            ),
             sl.paragraph(description),
             sd.v2.separator(),
             *self.section_overview(self._review_sections() if self.confirming else self._sections()),
         ]
-        if not self.confirming and (names := (*ws.unresolved.restriction_names(), *ws.unresolved.patterns)):
+        if (
+            not self.confirming
+            and not ws.showcase_only
+            and (names := (*ws.unresolved.restriction_names(), *ws.unresolved.patterns))
+        ):
             children.append(
                 sd.v2.select(
                     *(sd.v2.option(name[:100], name) for name in dict.fromkeys(names[:_MAX_SELECT_OPTIONS])),
@@ -560,7 +575,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         if not await self.may_edit():
             await event.notice(
                 tr(
-                    t"build-editor-edit-access-required-views = Only the pending build's "
+                    t"build-editor-edit-access-required-views = Only the build's "
                     t"submitter or a trusted staff member can edit it."
                 )
             )

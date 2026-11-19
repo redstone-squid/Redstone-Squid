@@ -30,11 +30,11 @@ from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor,
 from tests.support.discord import make_command_interaction
 
 
-def editor(build: Build) -> BuildEditScreen:
+def editor(build: Build, *, showcase_only: bool = False) -> BuildEditScreen:
     return BuildEditScreen(
         build,
         cast(BuildService, AsyncMock()),
-        edit_workspace(build),
+        edit_workspace(build, showcase_only=showcase_only),
         edits=BuildEditRecorder(),
         actor=build_edit_actor,
         authorize=AsyncMock(return_value=True),
@@ -273,3 +273,18 @@ async def test_names_outside_the_catalogue_are_listed_and_can_only_be_removed() 
     assert workspace.patch().miscellaneous_restrictions == ["Observerless"]
     screen.confirming = True
     assert "Removed: Hand-wired" in rendered(screen)
+
+
+async def test_a_showcase_only_editor_offers_just_the_tags() -> None:
+    build = _door(version_spec="1.20", miscellaneous_restrictions=["Hand-wired"])
+    screen = editor(build, showcase_only=True)
+    await screen.projection.reload()
+    workspace = screen.workspace
+
+    assert [field.id for section in workspace.sections for field in section.fields] == ["showcase_tags"]
+    text = rendered(screen)
+    assert "Edit tags" in text
+    assert "Hand-wired" not in text
+    with sl.runtime.transaction() as tx:
+        await workspace.save_values(tx, {"showcase_tags": ["compact"]})
+    assert workspace.patch().attributes() == {"showcase_tags": ["compact"]}
