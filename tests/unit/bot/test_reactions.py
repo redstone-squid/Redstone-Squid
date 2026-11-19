@@ -658,6 +658,7 @@ async def test_handlers_for_one_kind_run_concurrently_and_fail_independently() -
 
 async def test_subscribe_rejects_a_subscriber_without_handlers() -> None:
     async with running_router() as router:
+        assert router.subscribe_if_present(object()) is None
         with pytest.raises(ValueError, match="no @reaction_handler"):
             router.subscribe(object())
 

@@ -302,11 +302,6 @@ def _handler_specs(subscriber: object) -> list[tuple[str, _HandlerSpec]]:
     return specs
 
 
-def has_reaction_handlers(subscriber: object) -> bool:
-    """Return whether the subscriber's class has any @reaction_handler method."""
-    return bool(_handler_specs(subscriber))
-
-
 @dataclass(frozen=True, slots=True)
 class _BoundHandler:
     """One @reaction_handler method bound to its subscriber."""
@@ -399,7 +394,6 @@ class ReactionRouter:
     def subscribe(self, subscriber: object) -> ReactionSubscription:
         """Route events to the subscriber's @reaction_handler methods until detached.
 
-        The bot calls this for cogs; other subscribers call it when they start.
         The subscriber's `reaction_filter` class attribute, if any, selects which
         add and remove events reach its handlers; a handler's own `filter`
         restricts them further.
@@ -412,6 +406,17 @@ class ReactionRouter:
             ValueError: The subscriber has no @reaction_handler methods.
             TypeError: The subscriber's `reaction_filter` is not a ReactionFilter.
         """
+        subscription = self.subscribe_if_present(subscriber)
+        if subscription is None:
+            msg = f"{type(subscriber).__qualname__} has no @reaction_handler methods."
+            raise ValueError(msg)
+        return subscription
+
+    def subscribe_if_present(self, subscriber: object) -> ReactionSubscription | None:
+        """Subscribe decorated handlers, returning None when the subscriber has none."""
+        specs = _handler_specs(subscriber)
+        if not specs:
+            return None
         cls_name = type(subscriber).__qualname__
         reaction_filter = getattr(subscriber, "reaction_filter", _DEFAULT_FILTER)
         if not isinstance(reaction_filter, ReactionFilter):
@@ -425,11 +430,8 @@ class ReactionRouter:
                 (reaction_filter,) if spec.reaction_filter is None else (reaction_filter, spec.reaction_filter),
                 getattr(subscriber, name),
             )
-            for name, spec in _handler_specs(subscriber)
+            for name, spec in specs
         )
-        if not handlers:
-            msg = f"{cls_name} has no @reaction_handler methods."
-            raise ValueError(msg)
         registration_id = self._next_registration_id
         self._next_registration_id += 1
         self._registrations[registration_id] = handlers

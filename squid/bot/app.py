@@ -29,7 +29,7 @@ from squid.bot.interaction_metrics import InteractionMetrics
 from squid.bot.members import DiscordMembers
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
-from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
+from squid.bot.reactions import ReactionRouter, ReactionSubscription
 from squid.bot.recount.spec import extension as recount_extension
 from squid.bot.routes import AppRequest
 from squid.bot.starboard.spec import extension as starboard_extension
@@ -233,8 +233,9 @@ class RedstoneSquid(Bot):
         The subscription starts after the cog has loaded, so handlers never run before cog_load.
         """
         await super().add_cog(cog, override=override, guild=guild, guilds=guilds)
-        if has_reaction_handlers(cog):
-            self._reaction_subscriptions[cog.qualified_name] = self.reactions.subscribe(cog)
+        subscription = self.reactions.subscribe_if_present(cog)
+        if subscription is not None:
+            self._reaction_subscriptions[cog.qualified_name] = subscription
 
     @override
     async def remove_cog(

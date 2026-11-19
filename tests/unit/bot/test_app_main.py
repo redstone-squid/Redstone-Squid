@@ -15,6 +15,7 @@ from pytest_mock import MockerFixture
 import squid_ui.ext.discord as sd
 from squid.bot import app as bot_app
 from squid.bot.extensions import ExtensionDependencyError, ExtensionManager
+from squid.bot.reactions import ReactionRouter
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_reactivity import EventLedger, transaction
@@ -153,6 +154,7 @@ async def test_devtools_dispatch_and_dashboard_lifetime(replace: bool) -> None:
     Bot.__init__(bot, command_prefix="!", intents=discord.Intents.none())
     await bot._async_setup_hook()
     bot._reaction_subscriptions = {}
+    bot.reactions = ReactionRouter(bot, BackgroundTaskSupervisor())
     bot.ui = sd.install(bot)
     check = AsyncCallRecorder(result=True)
     cog = DevTools(bot, check=check)
