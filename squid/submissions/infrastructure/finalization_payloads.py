@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
-from squid.builds.domain import RestrictionField
+from squid.builds.domain import RestrictionField, ShowcaseTag
 from squid.builds.domain.credits import Credit
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import DataIntegrityError, JSONValue
@@ -52,17 +52,27 @@ class _RestrictionProposalPayload(_StrictPayloadModel):
     name: str
 
 
+class _ShowcaseTagPayload(_StrictPayloadModel):
+    key: str
+    value: str | None = None
+
+
 class _TaxonomyPayload(_StrictPayloadModel):
     restriction_keys: list[str]
     restriction_proposals: list[str]
-    showcase_tag_keys: list[str]
+    showcase_tags: list[_ShowcaseTagPayload] = []
+    # Bare keys, as payloads queued before showcase tags took values carry them. Read, never written.
+    showcase_tag_keys: list[str] = Field(default=[], exclude=True)
     restriction_proposal_fields: list[_RestrictionProposalPayload]
 
     def to_domain(self) -> SubmissionTaxonomy:
         return SubmissionTaxonomy(
             restriction_keys=tuple(self.restriction_keys),
             restriction_proposals=tuple(self.restriction_proposals),
-            showcase_tag_keys=tuple(self.showcase_tag_keys),
+            showcase_tags=(
+                *(ShowcaseTag(key) for key in self.showcase_tag_keys),
+                *(ShowcaseTag(tag.key, tag.value) for tag in self.showcase_tags),
+            ),
             restriction_proposal_fields=tuple((value.field, value.name) for value in self.restriction_proposal_fields),
         )
 
@@ -340,7 +350,7 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
         "taxonomy": {
             "restriction_keys": list(submission.taxonomy.restriction_keys),
             "restriction_proposals": list(submission.taxonomy.restriction_proposals),
-            "showcase_tag_keys": list(submission.taxonomy.showcase_tag_keys),
+            "showcase_tags": [tag.to_json() for tag in submission.taxonomy.showcase_tags],
             "restriction_proposal_fields": [
                 {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
             ],

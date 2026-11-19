@@ -37,8 +37,8 @@ from squid_i18n import Text, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 # Older revisions remain immutable for pinned drafts and queued submissions.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 8
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7, 8})
+CURRENT_SUBMISSION_SCHEMA_REVISION = 9
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9})
 
 
 class FormManifestRegistry(Protocol):
@@ -362,10 +362,13 @@ def _build_form_manifest(revision: int) -> FormManifest:
                 FormField(
                     id="showcase_tags",
                     label=localize(tr(t"submissions-application-forms-showcase-tags = Tags")),
-                    control=ControlKind.MULTI_CHOICE,
-                    value_kind=ValueKind.STRING_LIST,
+                    control=ControlKind.SHOWCASE_TAGS if revision >= 9 else ControlKind.MULTI_CHOICE,
+                    value_kind=ValueKind.SHOWCASE_TAG_LIST if revision >= 9 else ValueKind.STRING_LIST,
                     option_source="approved_showcase_tags",
-                    constraints=FieldConstraints(max_length=64, max_items=40),
+                    constraints=FieldConstraints(max_items=40)
+                    if revision >= 9
+                    else FieldConstraints(max_length=64, max_items=40),
+                    required_capability="showcase_tag_values" if revision >= 9 else None,
                 ),
             ),
         ),

@@ -123,7 +123,7 @@ export type BuildPatch = {
     display_name?: string | null;
     version_spec?: string | null;
     versions?: Array<string> | null;
-    showcase_tags?: Array<string> | null;
+    showcase_tags?: Array<ShowcaseTag> | null;
     dimensions?: [
         number | null,
         number | null,
@@ -235,6 +235,7 @@ export type ChallengeCreateResponse = {
 export type ChoiceOptionResponse = {
     value: string;
     label: string;
+    value_type: 'text' | 'numeric' | 'boolean' | null;
 };
 
 /**
@@ -346,7 +347,7 @@ export type ConsentGrantRequest = {
  *
  * Control types a submission client may render.
  */
-export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits';
+export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits' | 'showcase_tags';
 
 /**
  * CreatorAliasDetail
@@ -1766,7 +1767,7 @@ export type RegionAnalysisStatus = 'exact' | 'unsupported' | 'limit_exceeded' | 
  * RendererCapabilities
  */
 export type RendererCapabilities = {
-    controls: Array<'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits'>;
+    controls: Array<'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean' | 'credits' | 'showcase_tags'>;
     capability_identifiers: Array<string>;
 };
 
@@ -1998,6 +1999,14 @@ export type ServerProfileSchema = {
     description?: string | null;
     website_url?: string | null;
     sponsor_opt_in?: boolean;
+};
+
+/**
+ * ShowcaseTag
+ */
+export type ShowcaseTag = {
+    key: string;
+    value?: string | null;
 };
 
 /**
@@ -2237,7 +2246,7 @@ export type UserMe = {
  *
  * Canonical JSON value expected from a field.
  */
-export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks' | 'credit_list';
+export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks' | 'credit_list' | 'showcase_tag_list';
 
 /**
  * ValueType

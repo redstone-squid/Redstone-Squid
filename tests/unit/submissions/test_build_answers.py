@@ -1,8 +1,10 @@
 """Saved builds round-trip through edit-form answers without changing what the user did not touch."""
 
+from decimal import Decimal
+
 import pytest
 
-from squid.builds.domain import Status, UnresolvedTaxonomy
+from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
 from squid.submissions.application.build_answers import answers_from_build, patch_from_answers
@@ -43,7 +45,16 @@ def _utility() -> UtilityBuild:
         value_type=TagValueType.NONE,
         moderation_status=TagModerationStatus.APPROVED,
     )
-    utility.tags = [TagAssignment(compact)]
+    speed = TagDefinition(
+        id=2,
+        stable_key="speed",
+        display_name="Speed",
+        authority=TagAuthority.USER,
+        semantic_kind=TagSemanticKind.SHOWCASE,
+        value_type=TagValueType.NUMERIC,
+        moderation_status=TagModerationStatus.APPROVED,
+    )
+    utility.tags = [TagAssignment(compact), TagAssignment(speed, Decimal("1.5"))]
     utility.extra_info = {"server_info": {"server_ip": "play.example.com"}}
     return utility
 
@@ -67,11 +78,20 @@ def test_every_answer_is_a_field_of_the_edit_form(build: Build) -> None:
 def test_versions_and_showcase_tags_are_replaced_as_lists() -> None:
     before = answers_from_build(_utility(), OPTIONS)
 
-    assert (before.answers["versions"], before.answers["showcase_tags"]) == (["Java 1.21"], ["compact"])
-    patch = patch_from_answers(
-        before, {**before.answers, "versions": [], "showcase_tags": ["compact", "tileable"]}, before.unresolved, OPTIONS
-    )
-    assert patch.attributes() == {"versions": [], "showcase_tags": ["compact", "tileable"]}
+    assert before.answers["versions"] == ["Java 1.21"]
+    assert before.answers["showcase_tags"] == [{"key": "compact"}, {"key": "speed", "value": "1.5"}]
+    after = {**before.answers, "versions": [], "showcase_tags": [{"key": "compact"}, {"key": "tileable"}]}
+    patch = patch_from_answers(before, after, before.unresolved, OPTIONS)
+    assert patch.attributes() == {"versions": [], "showcase_tags": [ShowcaseTag("compact"), ShowcaseTag("tileable")]}
+
+
+def test_changing_only_a_showcase_tag_value_patches_the_tags() -> None:
+    before = answers_from_build(_utility(), OPTIONS)
+
+    after = {**before.answers, "showcase_tags": [{"key": "compact"}, {"key": "speed", "value": "2"}]}
+    patch = patch_from_answers(before, after, before.unresolved, OPTIONS)
+
+    assert patch.attributes() == {"showcase_tags": [ShowcaseTag("compact"), ShowcaseTag("speed", "2")]}
 
 
 def test_general_pattern_answers_survive_an_unrelated_edit() -> None:

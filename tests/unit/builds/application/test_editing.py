@@ -1,15 +1,19 @@
 """Typed build-edit patch composition."""
 
 from copy import deepcopy
+from decimal import Decimal
 
 import pytest
 
 from squid.builds.application import BuildEditPatch
 from squid.builds.application.edits import build_values, patch_values
+from squid.builds.domain import ShowcaseTag
 from squid.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 
 
 def test_combine_preserves_every_typed_patch_field() -> None:
@@ -23,7 +27,7 @@ def test_combine_preserves_every_typed_patch_field() -> None:
         visible_closing_time=4,
         version_spec="1.21",
         versions=["Java 1.21"],
-        showcase_tags=["compact"],
+        showcase_tags=[ShowcaseTag("compact")],
         dimensions=(1, 2, 3),
         door_dimensions=(4, 5, 6),
         door_type=["Full lamp"],
@@ -114,7 +118,7 @@ def test_extender_edits_normalize_preserve_and_clear_geometry() -> None:
 
 def test_versions_are_replaced_and_showcase_tags_are_left_to_the_service() -> None:
     build = DoorBuild(versions=["Java 1.20.4"])
-    BuildEditPatch(versions=["Java 1.21", "Java 1.21.1"], showcase_tags=["compact"]).apply(build)
+    BuildEditPatch(versions=["Java 1.21", "Java 1.21.1"], showcase_tags=[ShowcaseTag("compact")]).apply(build)
     assert build.versions == ["Java 1.21", "Java 1.21.1"]
     assert build.tags == []
 
@@ -151,3 +155,21 @@ def test_expansion_survives_edit_values_and_is_captured_from_the_build() -> None
     assert captured["door_expansion"] == expansion.model_dump(mode="json")
     build.expansion = None
     assert build_values(build).unpack()["door_expansion"] is None
+
+
+def test_showcase_tag_values_survive_edit_values_and_are_captured_from_the_build() -> None:
+    tags = [ShowcaseTag("compact"), ShowcaseTag("speed", "1.5")]
+    stored = patch_values(BuildEditPatch(showcase_tags=tags)).unpack()
+    assert stored == {"showcase_tags": [{"key": "compact"}, {"key": "speed", "value": "1.5"}]}
+    assert BuildEditPatch.from_attributes(stored) == BuildEditPatch(showcase_tags=tags)
+
+    speed = TagDefinition(
+        stable_key="speed",
+        display_name="Speed",
+        authority=TagAuthority.USER,
+        semantic_kind=TagSemanticKind.SHOWCASE,
+        value_type=TagValueType.NUMERIC,
+        moderation_status=TagModerationStatus.APPROVED,
+    )
+    build = UtilityBuild(tags=[TagAssignment(speed, Decimal("1.5"))])
+    assert build_values(build).unpack()["showcase_tags"] == [{"key": "speed", "value": "1.5"}]

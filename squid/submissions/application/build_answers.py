@@ -4,7 +4,8 @@ The Discord editor edits saved builds with the same sections and pickers as subm
 (see `squid.submissions.application.edit_form`). This module is the bridge in both directions:
 
 1. `answers_from_build` turns a loaded build into answers keyed by edit-form field IDs. Catalogue
-   fields (restrictions, patterns, showcase tags, versions) hold catalogue keys, as a draft's do.
+   fields (restrictions, patterns, versions) hold catalogue keys, as a draft's do, and showcase
+   tags hold `{"key": ..., "value": ...}` objects.
 2. The editor changes some answers.
 3. `patch_from_answers` compares the answers before and after and returns a `BuildEditPatch`
    carrying only what changed, in the patch's own vocabulary.
@@ -24,13 +25,13 @@ from dataclasses import dataclass
 from typing import cast
 
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import UnresolvedTaxonomy
+from squid.builds.domain import ShowcaseTag, UnresolvedTaxonomy, read_showcase_tags
 from squid.builds.domain.credits import read_credits
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS, RestrictionField
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import JSONValue
 from squid.submissions.domain import ChoiceOption, match_choice
-from squid.tags.domain import TagSemanticKind
+from squid.tags.domain import TagSemanticKind, assignment_value
 
 type CatalogueOptions = Mapping[str, Sequence[ChoiceOption]]
 """Choices by option source, such as `approved_restrictions`, as the form option service returns them."""
@@ -67,7 +68,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         "version_compatibility": build.version_spec,
         "completion": build.completion_time,
         "showcase_tags": [
-            assignment.definition.stable_key
+            ShowcaseTag(assignment.definition.stable_key, assignment_value(assignment.value)).to_json()
             for assignment in build.tags
             if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
         ],
@@ -148,10 +149,11 @@ def patch_from_answers(
             changes[attribute] = _blank_as_none(after.get(field_id))
     if changed("credits"):
         changes["credits"] = read_credits(after.get("credits", []))
+    if changed("showcase_tags"):
+        changes["showcase_tags"] = list(read_showcase_tags(after.get("showcase_tags", [])))
     lists = {
         "creators": "creators_ign",
         "versions": "versions",
-        "showcase_tags": "showcase_tags",
         "image_urls": "image_urls",
         "video_urls": "video_urls",
         "world_download_urls": "world_download_urls",

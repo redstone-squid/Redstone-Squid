@@ -170,7 +170,9 @@ def _taxonomy_issues(
     for field_id in fields:
         value = answers.get(field_id, ())
         if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-            values = [item for item in value if isinstance(item, str)]
+            # Showcase tags are `{"key": ..., "value": ...}` objects from form revision 9.
+            keys = (item.get("key") if isinstance(item, dict) else item for item in value)
+            values = [key for key in keys if isinstance(key, str)]
             if len(values) != len(set(values)) or any(_STABLE_KEY.fullmatch(item) is None for item in values):
                 issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
     return tuple(issues)

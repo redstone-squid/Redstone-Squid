@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import Self
 
 from squid.builds.domain.credits import read_credits
+from squid.builds.domain.showcase import read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.submissions.domain.links import LINK_FIELDS, valid_link_url
@@ -55,6 +56,7 @@ class ControlKind(StrEnum):
     DURATION = "duration"
     BOOLEAN = "boolean"
     CREDITS = "credits"
+    SHOWCASE_TAGS = "showcase_tags"
 
 
 class ValueKind(StrEnum):
@@ -67,6 +69,8 @@ class ValueKind(StrEnum):
     STRING_LIST = "string_list"
     GAME_TICKS = "game_ticks"
     CREDIT_LIST = "credit_list"
+    SHOWCASE_TAG_LIST = "showcase_tag_list"
+    """Showcase tags as `{"key": ..., "value": ...}` objects; see `read_showcase_tags`."""
 
 
 class VisibilityOperator(StrEnum):
@@ -223,7 +227,9 @@ class FormField:
                     t"submissions-field-inline-dynamic = field {field_id!s} cannot have inline and dynamic options",
                 )
             )
-        if self.control in {ControlKind.CHOICE, ControlKind.MULTI_CHOICE} and not (self.options or self.option_source):
+        if self.control in {ControlKind.CHOICE, ControlKind.MULTI_CHOICE, ControlKind.SHOWCASE_TAGS} and not (
+            self.options or self.option_source
+        ):
             raise ValidationError(
                 md_tr(
                     t"submissions-choice-options-required = choice field {field_id!s} requires options",
@@ -288,7 +294,7 @@ class FormField:
                 return "too_short"
             if constraints.max_length is not None and len(value) > constraints.max_length:
                 return "too_long"
-        if self.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST}:
+        if self.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST, ValueKind.SHOWCASE_TAG_LIST}:
             assert isinstance(value, Sequence) and not isinstance(value, str | bytes)
             if constraints.min_items is not None and len(value) < constraints.min_items:
                 return "too_few_items"
@@ -304,7 +310,13 @@ class FormField:
                 return "too_long"
         if self.options:
             allowed = {option.value for option in self.options}
-            supplied = value if isinstance(value, Sequence) and not isinstance(value, str | bytes) else (value,)
+            supplied: Sequence[JSONValue]
+            if self.value_kind is ValueKind.SHOWCASE_TAG_LIST:
+                supplied = tuple(tag.key for tag in read_showcase_tags(value))
+            elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
+                supplied = value
+            else:
+                supplied = (value,)
             if any(item not in allowed for item in supplied):
                 return "unknown_option"
         return None
@@ -535,6 +547,12 @@ def _matches_kind(value: JSONValue, kind: ValueKind) -> bool:
         case ValueKind.CREDIT_LIST:
             try:
                 read_credits(value)
+            except ValidationError:
+                return False
+            return True
+        case ValueKind.SHOWCASE_TAG_LIST:
+            try:
+                read_showcase_tags(value)
             except ValidationError:
                 return False
             return True

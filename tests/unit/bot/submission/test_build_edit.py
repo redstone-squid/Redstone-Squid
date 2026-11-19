@@ -1,10 +1,11 @@
 """Editing a saved build through the build form's sections, staged until the user applies them."""
 
 from dataclasses import replace
+from decimal import Decimal
 from inspect import unwrap
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import discord
 import pytest
@@ -14,9 +15,10 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.contextual import ContextualSearches, search_autocomplete
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
+from squid.bot.submission.ui.sections import SectionEditorScreen
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.builds.application import BuildService
-from squid.builds.domain import Status, UnresolvedTaxonomy
+from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import name_credits
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
@@ -24,6 +26,8 @@ from squid.submissions.domain import FormManifest
 from squid.submissions.domain.forms import VisibilityOperator, VisibilityRule
 from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource
 from squid.suggestions.infrastructure.providers import StaticProvider
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 from squid_ui.ext.discord.testing import InteractionHarness, assert_within_limits, commit_render, payload_texts, stage
 from squid_ui.testing import press_event, texts
 from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor, edit_workspace
@@ -301,5 +305,32 @@ async def test_a_showcase_only_editor_offers_just_the_tags() -> None:
     assert "Edit tags" in text
     assert "Hand-wired" not in text
     with sl.runtime.transaction() as tx:
-        await workspace.save_values(tx, {"showcase_tags": ["compact"]})
-    assert workspace.patch().attributes() == {"showcase_tags": ["compact"]}
+        await workspace.save_values(tx, {"showcase_tags": [{"key": "compact"}]})
+    assert workspace.patch().attributes() == {"showcase_tags": [ShowcaseTag("compact")]}
+
+
+async def test_picking_showcase_tags_keeps_the_values_of_tags_that_stay() -> None:
+    speed = TagDefinition(
+        stable_key="speed",
+        display_name="Speed",
+        authority=TagAuthority.USER,
+        semantic_kind=TagSemanticKind.SHOWCASE,
+        value_type=TagValueType.NUMERIC,
+        moderation_status=TagModerationStatus.APPROVED,
+    )
+    screen = editor(_door(tags=[TagAssignment(speed, Decimal("1.5"))]))
+    await screen.projection.reload()
+    section = next(
+        section for section in screen.workspace.sections if "showcase_tags" in {f.id for f in section.fields}
+    )
+    child = SectionEditorScreen(screen.workspace, section.id)
+    assert "speed: 1.5" in "\n".join(texts(child.render()))
+
+    with sl.runtime.transaction() as tx:
+        event = Mock(spec=sd.SelectionEvent, transaction=tx, values=("compact",))
+        await child._select_value("showcase_tags", event, visible=("compact",))
+
+    assert screen.workspace.answers["showcase_tags"] == [{"key": "speed", "value": "1.5"}, {"key": "compact"}]
+    assert screen.workspace.patch().attributes() == {
+        "showcase_tags": [ShowcaseTag("speed", "1.5"), ShowcaseTag("compact")]
+    }

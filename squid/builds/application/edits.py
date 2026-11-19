@@ -15,7 +15,7 @@ from squid.builds.application.edit_schema import BuildPatch
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.application.services import BuildService
-from squid.builds.domain import Info, Status, UnresolvedTaxonomy
+from squid.builds.domain import Info, ShowcaseTag, Status, UnresolvedTaxonomy
 from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import BuildNotFoundError
@@ -42,7 +42,7 @@ from squid.edits.domain import (
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
-from squid.tags.domain import TagSemanticKind
+from squid.tags.domain import TagSemanticKind, assignment_value
 
 BUILD_STATUS_EDIT = "build.status"
 
@@ -57,6 +57,8 @@ def _patch_document(patch: BuildEditPatch) -> dict[str, object]:
     values = patch.attributes()
     if patch.credits is not UNSET:
         values["credits"] = [credit.to_json() for credit in patch.credits]
+    if patch.showcase_tags is not UNSET:
+        values["showcase_tags"] = [tag.to_json() for tag in patch.showcase_tags]
     if isinstance(patch.door_expansion, DoorExpansion):
         values["door_expansion"] = patch.door_expansion.model_dump(mode="json")
     return values
@@ -74,7 +76,7 @@ def build_values(build: Build) -> EditValues:
         version_spec=build.version_spec,
         versions=list(build.versions),
         showcase_tags=[
-            assignment.definition.stable_key
+            ShowcaseTag(assignment.definition.stable_key, assignment_value(assignment.value))
             for assignment in build.tags
             if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
         ],

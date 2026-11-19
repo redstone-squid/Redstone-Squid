@@ -228,6 +228,8 @@ class CheckedInFormRevisionMigration:
                     credit.to_json()
                     for credit in name_credits((item for item in names if isinstance(item, str)), legacy=True)
                 ]
+        if source.revision == 8 and target.revision == 9 and isinstance(keys := answers.get("showcase_tags"), list):
+            answers["showcase_tags"] = [{"key": key} if isinstance(key, str) else key for key in keys]
         removed_answers = answers.keys() & (source_fields - target_fields)
         if removed_answers:
             errors = {field_id: "removed_field" for field_id in sorted(removed_answers)}

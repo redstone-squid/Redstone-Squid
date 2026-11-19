@@ -17,7 +17,7 @@ from squid.builds.application.services import (
     BuildService,
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
-from squid.builds.domain import BuildCategory, Status, normalize_tag_name
+from squid.builds.domain import BuildCategory, ShowcaseTag, Status, normalize_tag_name
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.actors import Actor
@@ -273,6 +273,7 @@ SHOWCASE_TAGS = {
     "compact": _showcase(2001, "compact"),
     "tileable": _showcase(2002, "tileable"),
     "speed": _showcase(2003, "speed", TagValueType.NUMERIC),
+    "label": _showcase(2004, "label", TagValueType.TEXT),
 }
 
 
@@ -642,31 +643,66 @@ async def test_vote_outcome_leaves_an_existing_decision_unchanged(existing_build
     assert existing_build.submission_status is status
 
 
-async def test_showcase_tags_are_replaced_by_key_keeping_existing_assignments(existing_build: DoorBuild) -> None:
+async def test_showcase_tags_are_replaced_keeping_existing_assignments(existing_build: DoorBuild) -> None:
     existing_build.tags = [
-        TagAssignment(SHOWCASE_TAGS["speed"], Decimal(3)),
+        TagAssignment(SHOWCASE_TAGS["speed"], Decimal(3), display_unit="ticks"),
         TagAssignment(definition=SHOWCASE_TAGS["compact"], origin="submitted"),
     ]
     repository = FakeBuildRepository(existing_build)
 
     result = await build_service(repository).edit(
-        42, BuildEditPatch(showcase_tags=["tileable", "speed"]), actor="test", operation="edit", source="test"
+        42,
+        BuildEditPatch(showcase_tags=[ShowcaseTag("tileable"), ShowcaseTag("speed", "3.0")]),
+        actor="test",
+        operation="edit",
+        source="test",
     )
 
     showcase = [tag for tag in result.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE]
-    assert [tag.definition.stable_key for tag in showcase] == ["tileable", "speed"]
-    # A new assignment could not carry a value, so the kept value shows the old one survived.
-    assert showcase[1].value == Decimal(3)
+    assert [(tag.definition.stable_key, tag.value) for tag in showcase] == [("tileable", None), ("speed", Decimal(3))]
+    # "3.0" is the stored value, so the assignment is kept as it was.
+    assert showcase[1].display_unit == "ticks"
     # Restriction tags come from the build's names, which the patch did not touch.
     assert {tag.definition.display_name for tag in result.tags} >= {"Locational", "Directional with fixes"}
 
 
-@pytest.mark.parametrize("key", ["unknown", "speed"])
-async def test_a_showcase_tag_can_only_be_added_if_approved_and_valueless(existing_build: DoorBuild, key: str) -> None:
+async def test_showcase_tags_can_be_added_with_values_and_have_values_changed(existing_build: DoorBuild) -> None:
+    existing_build.tags = [TagAssignment(SHOWCASE_TAGS["speed"], Decimal(3), origin="moderated")]
+    repository = FakeBuildRepository(existing_build)
+    service = build_service(repository)
+
+    added = await service.edit(
+        42,
+        BuildEditPatch(showcase_tags=[ShowcaseTag("speed", "4.5"), ShowcaseTag("label", "Fast")]),
+        actor="test",
+        operation="edit",
+        source="test",
+    )
+
+    showcase = [tag for tag in added.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE]
+    assert [(tag.definition.stable_key, tag.value, tag.origin) for tag in showcase] == [
+        ("speed", Decimal("4.5"), "moderated"),
+        ("label", "Fast", "submitted"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("tag", "rejected"),
+    [
+        (ShowcaseTag("unknown"), "unknown"),
+        (ShowcaseTag("speed"), "speed"),
+        (ShowcaseTag("speed", "fast"), "speed"),
+        (ShowcaseTag("compact", "1"), "compact"),
+    ],
+)
+async def test_showcase_tags_need_an_approved_key_and_a_value_that_suits_it(
+    existing_build: DoorBuild, tag: ShowcaseTag, rejected: str
+) -> None:
     repository = FakeBuildRepository(existing_build)
 
-    with pytest.raises(InvalidBuildError, match=key):
+    with pytest.raises(InvalidBuildError) as error:
         await build_service(repository).edit(
-            42, BuildEditPatch(showcase_tags=[key]), actor="test", operation="edit", source="test"
+            42, BuildEditPatch(showcase_tags=[tag]), actor="test", operation="edit", source="test"
         )
+    assert error.value.public_context == {"showcase_tags": [rejected]}
     assert repository.saved == []

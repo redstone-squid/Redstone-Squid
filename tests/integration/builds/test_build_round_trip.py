@@ -22,7 +22,7 @@ from whenever import Instant
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import BuildCategory, Status
+from squid.builds.domain import BuildCategory, ShowcaseTag, Status
 from squid.builds.domain.credits import name_credits
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
@@ -909,7 +909,7 @@ async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(
     restrictions = loaded.restrictions
 
     taxonomy = BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    await replace_showcase_tags(loaded, ["compact"], taxonomy)
+    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], taxonomy)
     await _resolve_and_save(migrated_session_factory, repository, loaded)
 
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))

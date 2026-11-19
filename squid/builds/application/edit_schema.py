@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from squid.builds.application.editing import BuildEditPatch
+from squid.builds.domain import ShowcaseTag
 from squid.builds.domain.credits import Credit
 from squid.builds.domain.expansion import DoorExpansion
 
@@ -100,8 +101,10 @@ class BuildPatch(BaseModel):
     version_spec: str | None = Field(default=None, max_length=500)
     versions: list[str] | None = Field(default=None, max_length=500)
     """Canonical version names, such as "Java 1.20.4", replacing the build's versions."""
-    showcase_tags: list[str] | None = Field(default=None, max_length=50)
-    """Stable keys of approved showcase tags, replacing the build's showcase tags."""
+    showcase_tags: list[ShowcaseTag] | None = Field(default=None, max_length=50)
+    """Approved showcase tags with their values, if they take one, replacing the build's showcase tags.
+
+    A value is the raw text, such as "1.5" or "true", in the tag's canonical unit."""
     dimensions: InputDimensions | None = None
     door: DoorPatch | None = None
     extender: ExtenderPatch | None = None
@@ -164,6 +167,8 @@ class BuildPatch(BaseModel):
         attributes: dict[str, object] = self.model_dump(exclude_unset=True)
         if self.credits is not None:
             attributes["credits"] = list(self.credits)
+        if self.showcase_tags is not None:
+            attributes["showcase_tags"] = list(self.showcase_tags)
         attributes.pop("door", None)
         attributes.pop("extender", None)
         if self.door is not None:

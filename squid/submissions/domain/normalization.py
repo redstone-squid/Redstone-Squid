@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 from uuid import UUID
 
+from squid.builds.domain import ShowcaseTag, read_showcase_tags
 from squid.builds.domain.credits import name_credits, read_credits
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue
@@ -116,7 +117,7 @@ def normalize_submission(
         taxonomy=SubmissionTaxonomy(
             restriction_keys=_string_tuple(answers, "restrictions"),
             restriction_proposals=_string_tuple(answers, "restriction_proposals"),
-            showcase_tag_keys=_string_tuple(answers, "showcase_tags"),
+            showcase_tags=_showcase_tags(answers),
             restriction_proposal_fields=tuple(
                 (field, name)
                 for field_id, field in RESTRICTION_PROPOSAL_FIELDS.items()
@@ -141,6 +142,14 @@ def normalize_submission(
         source_installation_id=source_installation_id,
         sponsor=sponsor,
     )
+
+
+def _showcase_tags(answers: Mapping[str, JSONValue]) -> tuple[ShowcaseTag, ...]:
+    # Drafts pinned before form revision 9 answer with bare keys.
+    value = answers.get("showcase_tags", [])
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return tuple(ShowcaseTag(key) for key in _string_tuple(answers, "showcase_tags"))
+    return read_showcase_tags(value)
 
 
 def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:

@@ -1072,7 +1072,7 @@ export const recordsRefreshDoorRanges = <ThrowOnError extends boolean = false>(o
 /**
  * GetDoorRangePoint
  *
- * Read one opening from saved regions, with publication and latest-attempt provenance.
+ * Read one opening from saved regions, with publication and latest-attempt origin.
  */
 export const recordsGetDoorRangePoint = <ThrowOnError extends boolean = false>(options: Options<RecordsGetDoorRangePointData, ThrowOnError>): RequestResult<RecordsGetDoorRangePointResponses, RecordsGetDoorRangePointErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetDoorRangePointResponses, RecordsGetDoorRangePointErrors, ThrowOnError>({ url: '/v1/records/ranges/door/{query_id}/at/{width}', ...options });
 

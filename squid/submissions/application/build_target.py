@@ -5,11 +5,19 @@ from contextlib import suppress
 from typing import Any, Protocol, cast
 from uuid import UUID
 
-from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, Status, UnresolvedTaxonomy
+from squid.builds.domain import (
+    BuildCategory,
+    DoorOrientationLiteral,
+    Info,
+    ShowcaseTag,
+    Status,
+    UnresolvedTaxonomy,
+    read_showcase_tags,
+)
 from squid.builds.domain.credits import name_credits, read_credits
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild
-from squid.core.errors import InvalidStateError, JSONValue
+from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
     DoorSubmissionDetails,
@@ -21,7 +29,7 @@ from squid.submissions.domain.finalization import (
     SubmissionCategory,
 )
 from squid.submissions.domain.links import LINK_FIELDS
-from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.domain import TagModerationStatus, TagSemanticKind, coerce_assignment_value
 from squid.tags.models import TagAssignment, TagDefinition
 from squid.versions.domain import MinecraftVersion
 from squid.versions.errors import InvalidVersionError
@@ -106,10 +114,10 @@ class SubmissionBuildPreparation:
             rejection = await self._validate_source_version(submission.source_version)
             if rejection is not None:
                 return rejection
-        definitions = await self._resolve_tags(submission)
-        if isinstance(definitions, BuildSubmissionRejected):
-            return definitions
-        build = _to_build(submission, definitions)
+        resolved = await self._resolve_tags(submission)
+        if isinstance(resolved, BuildSubmissionRejected):
+            return resolved
+        build = _to_build(submission, *resolved)
         if submission.version_compatibility:
             # Keep an unparseable claim as editable text without guessing
             # compatible releases or refusing an otherwise usable build.
@@ -138,7 +146,13 @@ class SubmissionBuildPreparation:
 
     async def _resolve_tags(
         self, submission: NormalizedSubmission
-    ) -> Mapping[str, TagDefinition] | BuildSubmissionRejected:
+    ) -> tuple[Mapping[str, TagDefinition], list[TagAssignment]] | BuildSubmissionRejected:
+        """Look up the submitted option keys and parse showcase tag values.
+
+        Returns the definitions by key and the showcase tag assignments, or the field issues:
+        `unknown_option` for a key that names no approved tag of the field's kind, and
+        `wrong_type` for a showcase value its tag cannot take, including a missing one.
+        """
         definitions = {
             definition.stable_key: definition
             for definition in await self._tags.public_definitions()
@@ -146,7 +160,7 @@ class SubmissionBuildPreparation:
         }
         requested: dict[str, tuple[tuple[str, ...], TagSemanticKind]] = {
             "restrictions": (submission.taxonomy.restriction_keys, TagSemanticKind.RESTRICTION),
-            "showcase_tags": (submission.taxonomy.showcase_tag_keys, TagSemanticKind.SHOWCASE),
+            "showcase_tags": (tuple(tag.key for tag in submission.taxonomy.showcase_tags), TagSemanticKind.SHOWCASE),
         }
         requested["patterns"] = (submission.details.pattern_keys, TagSemanticKind.PATTERN)
 
@@ -164,17 +178,24 @@ class SubmissionBuildPreparation:
                 ):
                     invalid = True
                     continue
-                if expected_kind is TagSemanticKind.SHOWCASE and definition.value_type is not TagValueType.NONE:
-                    invalid = True
-                    continue
                 selected[key] = definition
             if invalid:
                 issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
+        showcase: list[TagAssignment] = []
+        for tag in submission.taxonomy.showcase_tags:
+            if (definition := selected.get(tag.key)) is None:
+                continue
+            try:
+                showcase.append(
+                    TagAssignment(definition, coerce_assignment_value(definition, tag.value), origin="submitted")
+                )
+            except ValidationError:
+                issues.append(SubmissionAttentionIssue("showcase_tags", SubmissionAttentionReason.WRONG_TYPE))
         if submission.display_name is not None and len(submission.display_name.strip()) > 120:
             issues.append(SubmissionAttentionIssue("display_name", SubmissionAttentionReason.TOO_LONG))
         if issues:
-            return BuildSubmissionRejected(tuple(issues))
-        return selected
+            return BuildSubmissionRejected(tuple(dict.fromkeys(issues)))
+        return selected, showcase
 
 
 def _restriction_values(keys: Sequence[str], definitions: Mapping[str, TagDefinition]) -> dict[str, list[str]]:
@@ -190,14 +211,13 @@ def _restriction_values(keys: Sequence[str], definitions: Mapping[str, TagDefini
     return values
 
 
-def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDefinition]) -> Build:
+def _to_build(
+    submission: NormalizedSubmission, definitions: Mapping[str, TagDefinition], showcase: list[TagAssignment]
+) -> Build:
     restriction_values = _restriction_values(submission.taxonomy.restriction_keys, definitions)
 
     pattern_names = [definitions[key].display_name for key in submission.details.pattern_keys]
     pattern_proposals = submission.details.pattern_proposals
-    showcase_assignments = [
-        TagAssignment(definitions[key], origin="submitted") for key in submission.taxonomy.showcase_tag_keys
-    ]
 
     extra_info: dict[str, JSONValue] = {
         "source_submission": _source_submission(submission),
@@ -220,7 +240,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         "animated_restrictions": restriction_values["animated_restrictions"],
         "component_restrictions": restriction_values["component_restrictions"],
         "miscellaneous_restrictions": restriction_values["miscellaneous_restrictions"],
-        "tags": showcase_assignments,
+        "tags": showcase,
         "extra_info": cast(Info, extra_info),
         "credits": list(submission.credits),
         "links": [BuildLink(url=link.url, media_type=link.media_type) for link in submission.links],
@@ -322,6 +342,26 @@ def _sponsor_attribution(submission: NormalizedSubmission) -> dict[str, JSONValu
     }
 
 
+def _preview_showcase(answer: JSONValue, definitions: Mapping[str, TagDefinition]) -> list[TagAssignment]:
+    """Showcase tag assignments for a draft's answer, leaving out unknown keys and unusable values."""
+    try:
+        tags = read_showcase_tags(answer if answer is not None else [])
+    except ValidationError:
+        # Drafts pinned before form revision 9 answer with bare keys.
+        keys = answer if isinstance(answer, list) else []
+        tags = tuple(ShowcaseTag(key) for key in keys if isinstance(key, str) and key in definitions)
+    assignments: list[TagAssignment] = []
+    for tag in tags:
+        definition = definitions.get(tag.key)
+        if definition is None or definition.semantic_kind is not TagSemanticKind.SHOWCASE:
+            continue
+        with suppress(ValidationError):
+            assignments.append(
+                TagAssignment(definition, coerce_assignment_value(definition, tag.value), origin="submitted")
+            )
+    return assignments
+
+
 def preview_build(
     category: str,
     answers: Mapping[str, JSONValue],
@@ -367,9 +407,7 @@ def preview_build(
         "height": integer("capture_height"),
         "depth": integer("capture_depth"),
         **_restriction_values(keys("restrictions"), definitions),
-        "tags": [
-            TagAssignment(definitions[key], origin="submitted") for key in keys("showcase_tags") if key in definitions
-        ],
+        "tags": _preview_showcase(answers.get("showcase_tags"), definitions),
         "extra_info": cast(Info, extra_info),
         "credits": read_credits(answers.get("credits", [])) or name_credits(keys("creators"), legacy=True),
         "links": list(

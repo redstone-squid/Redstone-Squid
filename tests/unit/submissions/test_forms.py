@@ -25,6 +25,7 @@ from squid.submissions.domain import (
     FieldOperation,
     FieldOperationKind,
     SubmissionOrigin,
+    ValueKind,
 )
 from squid_ui.content.text import Localization
 
@@ -116,7 +117,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 
     assert revision_two is not None
     assert revision_three is not None
-    assert current.revision == 8
+    assert current.revision == 9
     old_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
     new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
@@ -285,6 +286,31 @@ def test_revision_six_adds_optional_media_links_without_changing_pinned_forms() 
     assert current.validate_answers(
         "other", {"image_urls": ["javascript:alert(1)"]}, origin=SubmissionOrigin.DISCORD, require_complete=False
     ) == {"image_urls": "wrong_type"}
+
+
+def test_revision_nine_takes_showcase_tags_with_values() -> None:
+    previous = next(
+        field for field in build_submission_manifest(revision=8).fields_for("other") if field.id == "showcase_tags"
+    )
+    current = build_submission_manifest(revision=9)
+    field = next(field for field in current.fields_for("other") if field.id == "showcase_tags")
+
+    assert (previous.control, previous.value_kind) == (ControlKind.MULTI_CHOICE, ValueKind.STRING_LIST)
+    assert (field.control, field.value_kind) == (ControlKind.SHOWCASE_TAGS, ValueKind.SHOWCASE_TAG_LIST)
+    assert (field.option_source, field.required_capability, field.constraints.max_items) == (
+        "approved_showcase_tags",
+        "showcase_tag_values",
+        40,
+    )
+
+    def check(value: JSONValue) -> dict[str, str]:
+        answers = {"showcase_tags": value}
+        return current.validate_answers("other", answers, origin=SubmissionOrigin.WEB, require_complete=False)
+
+    assert check([{"key": "compact"}, {"key": "speed", "value": "1.5"}]) == {}
+    assert check(["compact"]) == {"showcase_tags": "wrong_type"}
+    assert check([{"key": "compact"}, {"key": "compact"}]) == {"showcase_tags": "wrong_type"}
+    assert check([{"key": f"tag_{index}"} for index in range(41)]) == {"showcase_tags": "too_many_items"}
 
 
 def test_choice_options_name_a_known_value_type() -> None:

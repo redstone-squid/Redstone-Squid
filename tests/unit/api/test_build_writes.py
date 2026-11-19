@@ -11,7 +11,7 @@ from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import Status
+from squid.builds.domain import ShowcaseTag, Status
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
@@ -158,6 +158,15 @@ def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
 def test_versions_and_showcase_tags_replace_but_cannot_be_null() -> None:
     patch = BuildPatch.model_validate({"versions": ["Java 1.21"], "showcase_tags": []})
     assert patch.edit_attributes() == {"versions": ["Java 1.21"], "showcase_tags": []}
+    valued = BuildPatch.model_validate({"showcase_tags": [{"key": "compact"}, {"key": "speed", "value": "1.5"}]})
+    assert valued.edit_attributes() == {"showcase_tags": [ShowcaseTag("compact"), ShowcaseTag("speed", "1.5")]}
+    assert BuildPatch.from_patch(BuildEditPatch(showcase_tags=[ShowcaseTag("compact")])) == BuildPatch(
+        showcase_tags=[ShowcaseTag("compact")]
+    )
+    with pytest.raises(ValidationError):
+        BuildPatch.model_validate({"showcase_tags": ["compact"]})
+    with pytest.raises(ValidationError):
+        BuildPatch.model_validate({"showcase_tags": [{"key": "Not a key"}]})
     with pytest.raises(ValidationError):
         BuildPatch.model_validate({"versions": None})
     with pytest.raises(ValidationError):

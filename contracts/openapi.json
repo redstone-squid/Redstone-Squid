@@ -18510,7 +18510,7 @@
             "oneOf": [
               {
                 "items": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ShowcaseTag"
                 },
                 "type": "array"
               },
@@ -19067,12 +19067,28 @@
           },
           "label": {
             "type": "string"
+          },
+          "value_type": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "numeric",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
           "label",
-          "value"
+          "value",
+          "value_type"
         ],
         "title": "ChoiceOptionResponse"
       },
@@ -19376,7 +19392,8 @@
           "multi_choice",
           "duration",
           "boolean",
-          "credits"
+          "credits",
+          "showcase_tags"
         ],
         "title": "ControlKind",
         "description": "Control types a submission client may render."
@@ -24694,7 +24711,8 @@
                 "multi_choice",
                 "duration",
                 "boolean",
-                "credits"
+                "credits",
+                "showcase_tags"
               ]
             },
             "type": "array"
@@ -25532,6 +25550,28 @@
         "required": [],
         "title": "ServerProfileSchema"
       },
+      "ShowcaseTag": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ShowcaseTag"
+      },
       "SmallestRecordRegion": {
         "properties": {
           "domain": {
@@ -26289,7 +26329,8 @@
           "boolean",
           "string_list",
           "game_ticks",
-          "credit_list"
+          "credit_list",
+          "showcase_tag_list"
         ],
         "title": "ValueKind",
         "description": "Canonical JSON value expected from a field."

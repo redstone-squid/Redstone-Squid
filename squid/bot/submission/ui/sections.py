@@ -25,6 +25,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui.credits import CreditEditor
 from squid.builds.application.input import parse_build_ticks
+from squid.builds.domain import ShowcaseTag, read_showcase_tags
 from squid.builds.domain.credits import read_credits
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
@@ -215,10 +216,11 @@ class SectionEditorScreen(sd.Screen[None]):
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""
-        options = self.workspace.option_sets.get(field.option_source or "", ())
-        selected = _as_list(value)
-        labels = {option.value: option.label for option in options}
-        chosen = ", ".join(labels.get(item, item) for item in selected)
+        selected = (
+            [tag.key for tag in _showcase_tags(value)]
+            if field.value_kind is ValueKind.SHOWCASE_TAG_LIST
+            else _as_list(value)
+        )
         name = (
             md_tr(t"draft-editor-picker-required = **{(label := field.label)}** · Required")  # noqa: F841 - captured Fluent binding
             if field.required
@@ -226,7 +228,9 @@ class SectionEditorScreen(sd.Screen[None]):
         )
         lines: list[TextLike] = [
             name,
-            md(t"{chosen}") if chosen else md_tr(t"draft-editor-nothing-chosen = *Nothing chosen yet.*"),
+            _value_text(self.workspace, field, value)
+            if selected
+            else md_tr(t"draft-editor-nothing-chosen = *Nothing chosen yet.*"),
         ]
         search = sl.form(
             tr(t"draft-options-search = Search choices"),
@@ -249,7 +253,7 @@ class SectionEditorScreen(sd.Screen[None]):
         if not options:
             lines.append(tr(t"draft-options-empty = No matching choices. Clear the search to see all choices."))
             return [sd.v2.text(Text.join("\n", lines)), search]
-        multiple = field.value_kind is ValueKind.STRING_LIST
+        multiple = field.value_kind in {ValueKind.STRING_LIST, ValueKind.SHOWCASE_TAG_LIST}
         windows: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         for start in range(0, len(options), PICKER_PAGE_SIZE):
             shown = options[start : start + PICKER_PAGE_SIZE]
@@ -315,7 +319,13 @@ class SectionEditorScreen(sd.Screen[None]):
         ws = self.workspace
         field = next(field for field in ws.fields if field.id == field_id)
         value: JSONValue
-        if field.value_kind is ValueKind.STRING_LIST:
+        if field.value_kind is ValueKind.SHOWCASE_TAG_LIST:
+            # Picking only chooses keys; keep the values of tags that stay chosen.
+            stored = {tag.key: tag for tag in _showcase_tags(ws.stored_answers.get(field.id))}
+            retained = [tag for key, tag in stored.items() if key not in visible]
+            picked = [stored.get(key, ShowcaseTag(key)) for key in event.values]
+            value = [tag.to_json() for tag in (*retained, *picked)]
+        elif field.value_kind is ValueKind.STRING_LIST:
             # A select menu reports only its own page; keep the choices made on other pages.
             retained = [item for item in _as_list(ws.stored_answers.get(field.id)) if item not in visible]
             value = [*retained, *event.values]
@@ -434,6 +444,12 @@ def _value_text(ws: AnswerWorkspace, field: FormField, value: JSONValue) -> Text
         labels = {option.value: option.label for option in ws.option_sets.get(field.option_source, ())}
     if field.value_kind is ValueKind.CREDIT_LIST:
         return md(t"{', '.join(format_credit(credit) for credit in read_credits(value))}")
+    if field.value_kind is ValueKind.SHOWCASE_TAG_LIST:
+        joined = ", ".join(
+            labels.get(tag.key, tag.key) if tag.value is None else f"{labels.get(tag.key, tag.key)}: {tag.value}"
+            for tag in _showcase_tags(value)
+        )
+        return md(t"{joined}")
     if isinstance(value, list):
         joined = ", ".join(labels.get(str(item), str(item)) for item in value)
         return md(t"{joined}")
@@ -681,6 +697,14 @@ def problem_text(reason: str) -> Text:
 def _seconds(ticks: int) -> str:
     """Format game ticks as exact seconds, such as 30 as "1.5s", matching build cards."""
     return f"{(Decimal(ticks) / 20).normalize():f}s"
+
+
+def _showcase_tags(value: JSONValue) -> tuple[ShowcaseTag, ...]:
+    """Read a showcase tag answer, treating a malformed one as empty so the picker can replace it."""
+    try:
+        return read_showcase_tags(value or [])
+    except ValidationError:
+        return ()
 
 
 def _as_list(value: JSONValue) -> list[str]:

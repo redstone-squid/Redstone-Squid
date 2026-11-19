@@ -1,13 +1,14 @@
-"""Edit-time resolution of build taxonomy names and showcase keys into tag assignments."""
+"""Edit-time resolution of build taxonomy names and showcase tags into tag assignments."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
+from squid.builds.domain import BuildCategory, ShowcaseTag, UnresolvedTaxonomy
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build
-from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.core.errors import ValidationError
+from squid.tags.domain import TagAuthority, TagSemanticKind, TagValue, coerce_assignment_value
 from squid.tags.models import TagAssignment, TagDefinition
 
 
@@ -108,38 +109,53 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     ]
 
 
-async def replace_showcase_tags(build: Build, keys: Sequence[str], resolver: BuildTaxonomyResolver) -> None:
-    """Make `keys` the build's showcase tags, in that order.
+async def replace_showcase_tags(build: Build, tags: Sequence[ShowcaseTag], resolver: BuildTaxonomyResolver) -> None:
+    """Make `tags` the build's showcase tags, in that order.
 
-    A showcase tag the build already has keeps its assignment, including its value and origin.
-    A newly added key must name an approved showcase tag that takes no value, as for submissions,
-    because a key alone cannot supply one. Restriction and pattern tags are left alone.
+    A key the build does not have yet must name an approved showcase tag. Each value must suit its
+    tag: none for a tag that takes none, and a value of its type otherwise. A tag the build already
+    has keeps its assignment, including its origin and display unit, with the new value if it
+    changed. Restriction and pattern tags are left alone.
 
     Raises:
-        InvalidBuildError: If an added key names no such tag.
+        InvalidBuildError: If a key names no such tag or a value does not suit its tag. The
+            public context lists the offending keys under `showcase_tags`.
     """
-    requested = list(dict.fromkeys(keys))
+    requested = list({tag.key: tag for tag in tags}.values())
     current = {
         assignment.definition.stable_key: assignment
         for assignment in build.tags
         if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
     }
-    added = [key for key in requested if key not in current]
-    definitions = {definition.stable_key: definition for definition in await resolver.showcase_definitions(added)}
-    invalid = sorted(
-        key for key in added if key not in definitions or definitions[key].value_type is not TagValueType.NONE
-    )
+    added = [tag.key for tag in requested if tag.key not in current]
+    definitions = {
+        **{key: assignment.definition for key, assignment in current.items()},
+        **{definition.stable_key: definition for definition in await resolver.showcase_definitions(added)},
+    }
+    values: dict[str, TagValue] = {}
+    invalid: list[str] = []
+    for tag in requested:
+        try:
+            values[tag.key] = coerce_assignment_value(definitions[tag.key], tag.value)
+        except KeyError, ValidationError:
+            invalid.append(tag.key)
     if invalid:
-        msg = f"Unknown showcase tags: {', '.join(invalid)}"
+        invalid.sort()
+        msg = f"Invalid showcase tags: {', '.join(invalid)}"
         raise InvalidBuildError(msg, context={"showcase_tags": invalid}, public_context={"showcase_tags": invalid})
+    assignments: list[TagAssignment] = []
+    for tag in requested:
+        assignment = current.get(tag.key)
+        if assignment is None:
+            assignment = TagAssignment(definition=definitions[tag.key], value=values[tag.key], origin="submitted")
+        elif assignment.value != values[tag.key]:
+            assignment.value = values[tag.key]
+        assignments.append(assignment)
     build.tags = [
         *(
             assignment
             for assignment in build.tags
             if assignment.definition.semantic_kind is not TagSemanticKind.SHOWCASE
         ),
-        *(
-            current[key] if key in current else TagAssignment(definition=definitions[key], origin="submitted")
-            for key in requested
-        ),
+        *assignments,
     ]

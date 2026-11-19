@@ -2,19 +2,20 @@
 
 from collections.abc import Mapping
 from dataclasses import replace
+from decimal import Decimal
 from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import BuildCategory, BuildDraft, Status
+from squid.builds.domain import BuildCategory, BuildDraft, ShowcaseTag, Status
 from squid.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
 from squid.builds.domain.taxonomy import RestrictionField
 from squid.builds.domain.titles import format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
-from squid.core.errors import DataIntegrityError, ValidationError
+from squid.core.errors import DataIntegrityError, JSONValue, ValidationError
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.build_target import SubmissionBuildPreparation, preview_build
 from squid.submissions.application.forms import build_submission_manifest
@@ -276,7 +277,7 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_ori
         taxonomy=SubmissionTaxonomy(
             restriction_keys=(restriction.stable_key,),
             restriction_proposals=("Novel restriction",),
-            showcase_tag_keys=(showcase.stable_key,),
+            showcase_tags=(ShowcaseTag(showcase.stable_key),),
         ),
         artifacts=VerifiedSubmissionArtifacts((MEDIA_ID,), SCHEMATIC_ID),
         details=DoorSubmissionDetails(
@@ -317,6 +318,77 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_ori
         "license": None,
         "rights_attested": False,
     }
+
+
+async def test_showcase_tags_become_assignments_with_their_parsed_values() -> None:
+    speed = _definition("speed", TagSemanticKind.SHOWCASE, value_type=TagValueType.NUMERIC)
+    compact = _definition("compact", TagSemanticKind.SHOWCASE)
+    submission = replace(
+        _submission(SubmissionCategory.OTHER),
+        taxonomy=SubmissionTaxonomy(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "1.5"))),
+    )
+    builds = FakeBuilds()
+
+    await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(submission)
+
+    build = builds.calls[0][0]
+    assert [(tag.definition.stable_key, tag.value) for tag in build.tags] == [
+        ("compact", None),
+        ("speed", Decimal("1.5")),
+    ]
+
+
+@pytest.mark.parametrize(
+    "tag", [ShowcaseTag("speed"), ShowcaseTag("speed", " "), ShowcaseTag("speed", "fast"), ShowcaseTag("compact", "1")]
+)
+async def test_a_showcase_value_its_tag_cannot_take_is_a_field_issue(tag: ShowcaseTag) -> None:
+    speed = _definition("speed", TagSemanticKind.SHOWCASE, value_type=TagValueType.NUMERIC)
+    compact = _definition("compact", TagSemanticKind.SHOWCASE)
+    submission = replace(_submission(SubmissionCategory.OTHER), taxonomy=SubmissionTaxonomy(showcase_tags=(tag,)))
+    builds = FakeBuilds()
+
+    result = await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(submission)
+
+    assert result == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("showcase_tags", SubmissionAttentionReason.WRONG_TYPE),)
+    )
+    assert builds.calls == []
+
+
+@pytest.mark.parametrize(
+    ("revision", "answer"),
+    [(9, [{"key": "compact"}, {"key": "speed", "value": "2"}]), (8, ["compact", "speed"])],
+)
+def test_normalization_reads_showcase_tags_of_either_form_revision(revision: int, answer: JSONValue) -> None:
+    answers: dict[str, JSONValue] = {
+        "schematic_visibility": "reviewer_only",
+        "ai_generated": False,
+        "showcase_tags": answer,
+    }
+    snapshot = DraftSnapshot(DRAFT_ID, 1, "build_submission.v1", revision, "other", answers=answers)
+
+    normalized = normalize_submission(
+        snapshot, answers, SubmissionArtifactReadiness(), None, origin=SubmissionOrigin.WEB
+    )
+
+    expected = ShowcaseTag("speed", "2") if revision == 9 else ShowcaseTag("speed")
+    assert normalized.taxonomy.showcase_tags == (ShowcaseTag("compact"), expected)
+
+
+def test_a_payload_queued_with_bare_showcase_keys_still_loads() -> None:
+    submission = replace(
+        _submission(SubmissionCategory.OTHER),
+        taxonomy=SubmissionTaxonomy(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "2"))),
+    )
+    payload = encode_submission(submission)
+    taxonomy = cast(dict[str, object], payload["taxonomy"])
+    assert taxonomy["showcase_tags"] == [{"key": "compact", "value": None}, {"key": "speed", "value": "2"}]
+    assert "showcase_tag_keys" not in taxonomy
+
+    del taxonomy["showcase_tags"]
+    taxonomy["showcase_tag_keys"] = ["compact"]
+
+    assert decode_submission(payload).taxonomy.showcase_tags == (ShowcaseTag("compact"),)
 
 
 async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
@@ -526,6 +598,8 @@ def test_submission_dimensions_reject_parts_below_one() -> None:
 def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None:
     restriction = _definition("seamless", TagSemanticKind.RESTRICTION, restriction_type="wiring-placement")
     pattern = _definition("regular", TagSemanticKind.PATTERN)
+    speed = _definition("speed", TagSemanticKind.SHOWCASE, value_type=TagValueType.NUMERIC)
+    compact = _definition("compact", TagSemanticKind.SHOWCASE)
     build = preview_build(
         "door",
         {
@@ -536,9 +610,10 @@ def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None
             "restrictions": ["seamless", "retired"],
             "patterns": ["regular"],
             "pattern_proposals": ["Spiral"],
+            "showcase_tags": [{"key": "speed", "value": "3"}, {"key": "compact", "value": "1"}],
             "ai_generated": True,
         },
-        {definition.stable_key: definition for definition in (restriction, pattern)},
+        {definition.stable_key: definition for definition in (restriction, pattern, speed, compact)},
     )
     assert isinstance(build, DoorBuild)
     assert build.id is None
@@ -547,6 +622,8 @@ def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None
     assert build.orientation == "Trapdoor"
     assert build.wiring_placement_restrictions == [restriction.display_name]
     assert build.patterns == [pattern.display_name]
+    # A value the tag cannot take leaves the tag off the preview instead of failing it.
+    assert [(tag.definition.stable_key, tag.value) for tag in build.tags] == [("speed", Decimal(3))]
     assert build.ai_generated
     assert build.versions == []
 

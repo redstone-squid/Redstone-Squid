@@ -1,5 +1,6 @@
 """Build receipts preserve audit history and fence every aggregate change."""
 
+from decimal import Decimal
 from functools import partial
 from typing import override
 from unittest.mock import AsyncMock
@@ -23,7 +24,7 @@ from squid.builds.application.edits import (
 from squid.builds.application.locks import BuildLockService
 from squid.builds.application.restrictions import RestrictionService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import Status, UnresolvedTaxonomy
+from squid.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
 from squid.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.builds.history_models import BuildHistoryEntry
 from squid.builds.models import Build, OtherBuild
@@ -302,6 +303,15 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
             created_by_account_id=actor.account_id,
         )
         await uow.tags.set_status(tag.id, TagModerationStatus.APPROVED)
+        speed = await uow.tags.create_showcase(
+            stable_key="speed",
+            display_name="Speed",
+            normalized_name="speed",
+            value_type=TagValueType.NUMERIC,
+            query_name=None,
+            created_by_account_id=actor.account_id,
+        )
+        await uow.tags.set_status(speed.id, TagModerationStatus.APPROVED)
         await uow.commit()
     build = await service.confirm(build.id, actor=actor.account_id, source="test")
 
@@ -309,13 +319,31 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
         EditCommand(
             BUILD_EDIT,
             (Revision(build_target(build.id), build.revision),),
-            patch_values(BuildEditPatch(showcase_tags=["compact"])),
+            patch_values(BuildEditPatch(showcase_tags=[ShowcaseTag("compact"), ShowcaseTag("speed", "1.5")])),
         ),
         actor,
     )
     assert tagged.receipt is not None
+    # Changing only a value is still a showcase-only edit.
+    revalued = await executor.execute(
+        EditCommand(
+            BUILD_EDIT,
+            tagged.outcome.revisions,
+            patch_values(BuildEditPatch(showcase_tags=[ShowcaseTag("compact"), ShowcaseTag("speed", "2")])),
+        ),
+        actor,
+    )
+    assert revalued.receipt is not None
+    current = await service.get(build.id)
+    assert current is not None
+    assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal(2)}
+    reverted = await executor.execute(revalued.receipt.undo(revalued.outcome.revisions), actor)
+    current = await service.get(build.id)
+    assert current is not None
+    assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal("1.5")}
+    assert reverted.receipt is not None
     # Undo replays every field, which still changes only the tags.
-    undone = await executor.execute(tagged.receipt.undo(tagged.outcome.revisions), actor)
+    undone = await executor.execute(tagged.receipt.undo(reverted.outcome.revisions), actor)
     current = await service.get(build.id)
     assert current is not None
     assert current.tags == []
@@ -325,7 +353,7 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
             EditCommand(
                 BUILD_EDIT,
                 (Revision(build_target(build.id), undone.outcome.revisions[0].value),),
-                patch_values(BuildEditPatch(showcase_tags=["compact"], extra_user_info="edited")),
+                patch_values(BuildEditPatch(showcase_tags=[ShowcaseTag("compact")], extra_user_info="edited")),
             ),
             actor,
         )

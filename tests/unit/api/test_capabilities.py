@@ -35,5 +35,5 @@ async def test_capabilities_keep_namespaces_independent() -> None:
     assert response.protocols.submission.maximum == CURRENT_SUBMISSION_PROTOCOL
     assert response.uploads.max_source_bytes > 0
     assert set(response.renderer.controls) == {control.value for control in ControlKind}
-    assert response.renderer.capability_identifiers == ("repeatable_text", "typed_credits")
+    assert response.renderer.capability_identifiers == ("repeatable_text", "typed_credits", "showcase_tag_values")
     assert response.sanitization.schematics == "unavailable"

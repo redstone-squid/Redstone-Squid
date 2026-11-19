@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
-from squid.builds.domain import RESTRICTION_FIELDS, RestrictionField
+from squid.builds.domain import RESTRICTION_FIELDS, RestrictionField, ShowcaseTag
 from squid.builds.domain.credits import Credit, creator_names
 from squid.builds.domain.expansion import DoorExpansion
 from squid.core.errors import ValidationError
@@ -151,16 +151,16 @@ class SubmissionDimensions:
 
 @dataclass(frozen=True, slots=True)
 class SubmissionTaxonomy:
-    """Approved stable keys and unapproved free-text proposals."""
+    """Approved stable keys, showcase tags with their raw values, and unapproved free-text proposals."""
 
     restriction_keys: tuple[str, ...] = ()
     restriction_proposals: tuple[str, ...] = ()
-    showcase_tag_keys: tuple[str, ...] = ()
+    showcase_tags: tuple[ShowcaseTag, ...] = ()
     restriction_proposal_fields: tuple[tuple[RestrictionField, str], ...] = ()
 
     def __post_init__(self) -> None:
         _require_stable_keys(self.restriction_keys, "restriction")
-        _require_stable_keys(self.showcase_tag_keys, "showcase tag")
+        _require_stable_keys(tuple(tag.key for tag in self.showcase_tags), "showcase tag")
         if any(field not in RESTRICTION_FIELDS or not name.strip() for field, name in self.restriction_proposal_fields):
             msg = "Restriction proposals need a known field and a nonblank name."
             raise ValidationError(msg)

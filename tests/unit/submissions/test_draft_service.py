@@ -245,7 +245,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 8
+    assert draft.snapshot.schema_revision == 9
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 
@@ -595,6 +595,30 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
     assert not upgraded.replayed
     assert replayed.replayed
     assert replayed.draft == upgraded.draft
+
+
+async def test_manifest_upgrade_to_revision_nine_turns_showcase_keys_into_tags() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(
+        CheckedInFormManifestRegistry(), now=lambda: NOW, uow_factory=partial(DraftScope, repository)
+    )
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text", "typed_credits"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    repository.drafts[DRAFT_ID] = replace(
+        created,
+        snapshot=replace(created.snapshot, schema_revision=8, answers={"showcase_tags": ["compact", "tileable"]}),
+    )
+
+    upgraded = await service.upgrade_manifest(DRAFT_ID, 7, expected_revision=0, target_revision=9, locale="en")
+
+    assert upgraded.draft.snapshot.answers == {"showcase_tags": [{"key": "compact"}, {"key": "tileable"}]}
 
 
 @pytest.mark.asyncio

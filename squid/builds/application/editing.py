@@ -6,12 +6,21 @@ from typing import Literal, Self, cast
 
 from squid.builds.application.commands import Dimensions
 from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
-from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo, UnresolvedTaxonomy
+from squid.builds.domain import (
+    DoorOrientationLiteral,
+    Info,
+    MediaTypeLiteral,
+    ServerInfo,
+    ShowcaseTag,
+    UnresolvedTaxonomy,
+    read_showcase_tags,
+)
 from squid.builds.domain.credits import Credit
 from squid.builds.domain.expansion import DoorExpansion
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.errors import JSONValue
 from squid.core.sentinel import UNSET
 
 type PatchValue[T] = T | UNSET
@@ -30,9 +39,9 @@ class BuildEditPatch:
     empty lists remove all entries of that kind.
 
     Versions are canonical names such as "Java 1.20.4"; saving rejects unknown ones.
-    Showcase tags are stable keys. `apply` cannot look them up, so it leaves tags
-    alone; BuildService resolves them with `replace_showcase_tags` when it applies
-    a patch.
+    Showcase tags carry raw values. `apply` cannot look up their definitions, so it
+    leaves tags alone; BuildService resolves them with `replace_showcase_tags` when
+    it applies a patch.
     """
 
     extender_orientation: PatchValue[str | None] = UNSET
@@ -44,7 +53,7 @@ class BuildEditPatch:
     visible_closing_time: PatchValue[int | None] = UNSET
     version_spec: PatchValue[str | None] = UNSET
     versions: PatchValue[list[str]] = UNSET
-    showcase_tags: PatchValue[list[str]] = UNSET
+    showcase_tags: PatchValue[list[ShowcaseTag]] = UNSET
     dimensions: PatchValue[Dimensions] = UNSET
     door_expansion: PatchValue[DoorExpansion | None] = UNSET
     door_dimensions: PatchValue[Dimensions] = UNSET
@@ -145,6 +154,8 @@ class BuildEditPatch:
         for name, value in changes.items():
             if name == "credits" and isinstance(value, list):
                 value = [Credit.from_json(item) if isinstance(item, dict) else item for item in value]
+            if name == "showcase_tags" and isinstance(value, list) and all(isinstance(item, dict) for item in value):
+                value = list(read_showcase_tags(cast(JSONValue, value)))
             if name == "door_expansion" and value is not None:
                 value = DoorExpansion.model_validate(value)
             object.__setattr__(patch, name, value)
