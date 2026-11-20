@@ -10,7 +10,7 @@ from squid_ui.target_types import RenderTarget
 
 
 def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
-    count = ctx.region(sl.region_ref("results")).count
+    count = ctx.region(sl.region_ref("results")).page_count
     match count:
         case sl.Known(value=n):
             assert_type(n, int)
@@ -44,8 +44,8 @@ def pagination_footer(ctx: sl.LayoutContext) -> sl.TextLike:
     if navigation is None:
         return "No results"
     assert_type(navigation.extent, int | None)
-    assert_type(navigation.page, int | None)
-    match region.count:
+    assert_type(navigation.index, int | None)
+    match region.page_count:
         case sl.Known(value=n):
             assert_type(n, int)
             return f"{n} pages"

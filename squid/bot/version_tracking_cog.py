@@ -76,7 +76,7 @@ class VersionScreen(sd.Screen):
                 sl.field(tr(t"bot-version-tracking-version = Version"), item.value),
                 sl.field(tr(t"bot-version-tracking-edition = Edition"), item.edition),
             ),
-            page_size=15,
+            fetch_size=15,
             title=tr(t"versions-recognized-list-title = Recognized Minecraft versions"),
             empty=tr(t"versions-none-recognized = No Minecraft versions are recognized yet."),
         )

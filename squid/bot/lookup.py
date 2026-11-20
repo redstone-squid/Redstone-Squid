@@ -46,7 +46,7 @@ class SuggestionSource:
         self.enumerable = service.registry.resolve(request.source).kind is SourceKind.ENUMERABLE
         self._items: tuple[Suggestion, ...] | None = None
 
-    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Suggestion]:
+    async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[Suggestion]:
         if self._items is None:
             request = replace(self.request, limit=0, query="") if self.enumerable else self.request
             result = await self.service.suggest(request, authorizer=self.authorizer, raise_on_failure=True)
@@ -55,7 +55,7 @@ class SuggestionSource:
                 if self.enumerable
                 else result.items
             )
-        return await sl.sources.list_source(self._items).fetch(position, extent)
+        return await sl.sources.list_source(self._items).fetch(position, fetch_size)
 
 
 class LookupScreen(sd.Screen[Suggestion]):
@@ -84,13 +84,13 @@ class LookupScreen(sd.Screen[Suggestion]):
             label=lambda item: item.label,
             description=lambda item: item.description or f"{item.kind} · {item.value[:8]}",
             on_pick=self._picked,
-            page_size=25,
+            fetch_size=25,
             hide_search_when_complete=not self.bounded,
         )
 
     @override
     async def on_load(self) -> None:
-        self.picker.session = sp.BrowseSession(self.picker.search(""), identity=lambda item: item.value, page_size=25)
+        self.picker.session = sp.BrowseSession(self.picker.search(""), identity=lambda item: item.value, fetch_size=25)
 
     async def _picked(self, _event: sl.ActionEvent[Any], _items: tuple[Suggestion, ...]) -> None:
         pass

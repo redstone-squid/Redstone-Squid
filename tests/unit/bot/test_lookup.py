@@ -36,9 +36,9 @@ async def test_queried_picker_preserves_matches_found_through_secondary_terms() 
     provider = RecordingProvider((Candidate.create("stable-uuid", "Record", terms=("subtitle",)),))
     service = SuggestionService(SuggestionRegistry.of((RegisteredSource("records", provider),)))
     source = SuggestionSource(service, SuggestionRequest("records", query="subtitle"), AllowingAuthorizer(allowed=True))
-    window = await source.fetch(sl.sources.ORIGIN, 25)
-    assert [item.value for item in window.items] == ["stable-uuid"]
-    assert window.next is None
+    batch = await source.fetch(sl.sources.ORIGIN, 25)
+    assert [item.value for item in batch.items] == ["stable-uuid"]
+    assert batch.next is None
 
 
 async def test_failed_fetch_is_retried_instead_of_cached_as_empty() -> None:

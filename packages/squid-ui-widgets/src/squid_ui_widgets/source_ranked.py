@@ -1,4 +1,4 @@
-"""An explicitly asynchronous ranking component backed by a window source."""
+"""An explicitly asynchronous ranking component backed by a batch source."""
 
 from collections.abc import Callable
 from functools import partial
@@ -15,16 +15,16 @@ from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
     default_nav,
-    page_size_button,
+    fetch_size_button,
 )
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
     ORIGIN,
+    BatchSource,
     CountPrecision,
-    LoadedWindow,
+    LoadedBatch,
     Position,
-    WindowSource,
-    window_footer,
+    batch_footer,
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
@@ -44,19 +44,19 @@ type SourceContentHook[RenderTargetT: RenderTarget = RenderTarget, ContextT = ob
 class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
-    """Render source-ordered ranking windows, retaining the last page during reloads.
+    """Render source-ordered ranking batches, retaining the last page during reloads.
 
     The source's absolute offset determines row numbers. Header and footer callbacks
-    receive None when the source does not supply a total count. `show_page_size` adds
-    an items-per-page form; changing it returns to the beginning.
+    receive None when the source does not supply a total count. `show_fetch_size` adds
+    an items-per-batch form; changing it returns to the beginning.
     """
 
     def __init__(
         self,
-        source: WindowSource[RankedEntry | EntryT],
+        source: BatchSource[RankedEntry | EntryT],
         *,
         key: str,
-        page_size: int,
+        fetch_size: int,
         identity: Projector[EntryT],
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
@@ -65,13 +65,13 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         footer: SourceContentHook[RenderTargetT, ContextT] | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_position: Position = ORIGIN,
-        show_page_size: bool = False,
+        show_fetch_size: bool = False,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         title = None if title is None else Text(title)
         self.key = require_key(key, name="SourceRankedList.key")
-        if page_size < 1:
-            message = "SourceRankedList.page_size must be at least 1"
+        if fetch_size < 1:
+            message = "SourceRankedList.fetch_size must be at least 1"
             raise ValueError(message)
         self.source = source
         self.rows = RankedRows(label, value, identity)
@@ -80,18 +80,18 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         self.footer = footer
         self.empty = normalize_content(empty, name="SourceRankedList.empty")
         self.session = BrowseSession(
-            source, page_size=page_size, identity=self.rows.identity_of, initial_position=initial_position
+            source, fetch_size=fetch_size, identity=self.rows.identity_of, initial_position=initial_position
         )
 
-        self.show_page_size = show_page_size
+        self.show_fetch_size = show_fetch_size
         self.copy = copy
 
     @property
-    def page_size(self) -> int:
-        return self.session.page_size
+    def fetch_size(self) -> int:
+        return self.session.fetch_size
 
-    async def _resize(self, revision: int, _event: ActionEvent, page_size: int) -> None:
-        self.session.resize(page_size, revision=revision)
+    async def _resize(self, revision: int, _event: ActionEvent, fetch_size: int) -> None:
+        self.session.resize(fetch_size, revision=revision)
 
     async def refresh(self) -> None:
         self.session.move("refresh", revision=self.session.revision)
@@ -102,7 +102,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         self.session.move(movement, revision=revision)
 
     async def _seek(self, revision: int, _event: ActionEvent, page: int) -> None:
-        self.session.move("seek", revision=revision, position=Position(offset=page * self.page_size))
+        self.session.move("seek", revision=revision, position=Position(offset=page * self.fetch_size))
 
     async def _retry(self, revision: int, _event: ActionEvent) -> None:
         self.session.retry(revision=revision)
@@ -127,7 +127,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         return self._render_loaded(current.loaded, status=message, retry=failed)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render a source status without a stale ranking window."""
+        """Render a source status without a stale ranking batch."""
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -141,41 +141,41 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
 
     def _render_loaded(
         self,
-        loaded: LoadedWindow[RankedEntry | EntryT],
+        loaded: LoadedBatch[RankedEntry | EntryT],
         *,
         status: TextLike | None = None,
         retry: bool = False,
     ) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render one ranked source window with navigation facts."""
+        """Render one ranked source batch with navigation facts."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
-        window = loaded.window
+        batch = loaded.batch
         capabilities = self.source.capabilities
         navigation_state = source_navigation_state(
             loaded,
             capabilities,
             key=self.key,
-            page_size=self.page_size,
+            fetch_size=self.fetch_size,
             chrome=chrome,
         )
-        total = window.total if capabilities.count is not CountPrecision.NONE else None
+        total = batch.item_count if capabilities.count is not CountPrecision.NONE else None
         body = (
             (
                 List(
                     tuple(
                         ListItem(str(index), line)
-                        for index, line in enumerate(self.rows.lines(window.items, window.position.offset))
+                        for index, line in enumerate(self.rows.lines(batch.items, batch.position.offset))
                     ),
                     key=f"{self.key}.rows",
                     markers=False,
                 ),
             )
-            if window.items
+            if batch.items
             else self._hook(self.empty, total, name="empty")
         )
         size = (
-            page_size_button(self.key, self.page_size, partial(self._resize, self.session.revision), chrome=chrome)
-            if self.show_page_size
+            fetch_size_button(self.key, self.fetch_size, partial(self._resize, self.session.revision), chrome=chrome)
+            if self.show_fetch_size
             else None
         )
         navigation = (
@@ -186,13 +186,13 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
                     partial(self._move, "next", self.session.revision),
                     partial(self._seek, self.session.revision) if navigation_state.extent is not None else None,
                     chrome=chrome,
-                    page_size=size,
+                    fetch_size=size,
                 )
             )
             if navigation_state is not None
             else ()
         )
-        numeric_footer = window_footer(chrome, self.source, loaded, self.page_size)
+        numeric_footer = batch_footer(chrome, self.source, loaded, self.fetch_size)
         return stack(
             heading(self.title) if self.title is not None else None,
             *(self._hook(self.header, total, name="header") if self.header is not None else ()),

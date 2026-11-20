@@ -5,12 +5,12 @@ import pytest
 
 import squid_ui_widgets as sp
 from squid_ui.ext.discord.testing import stage
-from squid_ui.sources import Position, SourceCapabilities, Window, list_source
+from squid_ui.sources import Batch, Position, SourceCapabilities, list_source
 
 
 async def test_detail_steps_cross_windows_and_return_to_the_containing_overview() -> None:
     browser = sp.Browser(
-        list_source(("a", "b", "c")), identity=str, label=str, detail=lambda item: f"Detail {item}", page_size=2
+        list_source(("a", "b", "c")), identity=str, label=str, detail=lambda item: f"Detail {item}", fetch_size=2
     )
     async with stage(browser, owner=object()) as ui:
         await ui.select(ui.key_for("browser.open"), ["b"])
@@ -30,7 +30,7 @@ async def test_back_reveals_the_focused_item_without_overriding_later_layout_pag
         label=str,
         summary=lambda item: f"Entry {item}: " + "content " * 150,
         detail=lambda item: f"Detail {item}",
-        page_size=8,
+        fetch_size=8,
     )
     async with stage(browser, owner=object()) as ui:
         await ui.select(ui.key_for("browser.open"), ["7"])
@@ -51,15 +51,15 @@ async def test_back_during_a_boundary_fetch_does_not_reopen_the_fetched_detail()
             self.started = anyio.Event()
             self.release = anyio.Event()
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
             if position.anchor is None:
-                return Window(Position(), ("a",), next=Position("b"))
+                return Batch(Position(), ("a",), next=Position("b"))
             self.started.set()
             await self.release.wait()
-            return Window(Position("b"), ("b",), previous=Position())
+            return Batch(Position("b"), ("b",), previous=Position())
 
     source = Source()
-    browser = sp.Browser(source, identity=str, label=str, detail=lambda item: f"Detail {item}", page_size=1)
+    browser = sp.Browser(source, identity=str, label=str, detail=lambda item: f"Detail {item}", fetch_size=1)
     async with stage(browser, owner=object()) as ui:
         await ui.select(ui.key_for("browser.open"), ["a"])
         with anyio.fail_after(3):
@@ -71,7 +71,7 @@ async def test_back_during_a_boundary_fetch_does_not_reopen_the_fetched_detail()
                 assert browser.session.focus is None
                 source.release.set()
         assert browser.session.snapshot is not None
-        assert browser.session.snapshot.loaded.window.items == ("a",)
+        assert browser.session.snapshot.loaded.batch.items == ("a",)
         assert not any("Detail" in text for text in ui.texts())
 
 
@@ -82,7 +82,7 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
         label=str,
         summary=lambda item: f"Entry {item}: " + "content " * 150,
         detail=lambda item: f"Detail {item}",
-        page_size=8,
+        fetch_size=8,
     )
     async with stage(browser, owner=object()) as ui:
         await ui.select(ui.key_for("browser.open"), ["7"])
@@ -109,19 +109,19 @@ async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeyp
     class Source:
         capabilities = SourceCapabilities()
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
             requests.append(position)
-            assert extent == 2
+            assert fetch_size == 2
             if position == Position():
-                return Window(position, ("A", "B"), next=Position("C"))
+                return Batch(position, ("A", "B"), next=Position("C"))
             assert position == Position("C")
-            return Window(position, ("C", "D"))
+            return Batch(position, ("C", "D"))
 
     flow = sp.SourceFlow(
         Source(),
         identity=str,
         paragraphs=lambda item: ("C1", "C2") if item == "C" else (item,),
-        page_size=3,
+        max_paragraphs_per_page=3,
         fetch_size=2,
     )
     async with stage(flow, owner=object()) as ui:

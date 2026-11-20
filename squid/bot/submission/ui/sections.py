@@ -285,7 +285,7 @@ class SectionEditorScreen(sd.Screen[None]):
         first_window = first // PICKER_PAGE_SIZE * PICKER_PAGE_SIZE
 
         def selection_hint(ctx: sl.LayoutContext) -> sl.LayoutNode:
-            count = ctx.region().count
+            count = ctx.region().page_count
             return (
                 sl.note(tr(t"draft-editor-picker-other-pages = Choices on other pages are kept."))
                 if multiple and (isinstance(count, sl.Unknown) or count.value > 1)

@@ -26,7 +26,7 @@ from squid.core.search.domain import (
 from squid_i18n import Text, md_tr, strong
 from squid_reactivity import untracked
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.sources import Position, WindowLoader, window_fingerprint
+from squid_ui.sources import BatchLoader, Position, batch_fingerprint
 
 if TYPE_CHECKING:
     from squid.core.search.application import SearchService
@@ -53,7 +53,7 @@ def _hit_identity(hit: SearchHit) -> str:
 
 
 class _SearchSource:
-    """Adapt search pages to browser windows while retaining their warning metadata."""
+    """Adapt search pages to browser batches while retaining their warning metadata."""
 
     capabilities = sl.sources.SourceCapabilities(
         backward=True,
@@ -72,8 +72,8 @@ class _SearchSource:
     def request_at(self, offset: int) -> SearchRequest:
         return replace(self.base_request, offset=offset)
 
-    def _loaded(self, page: SearchPage, offset: int) -> sl.sources.LoadedWindow[SearchHit]:
-        window = sl.sources.Window(
+    def _loaded(self, page: SearchPage, offset: int) -> sl.sources.LoadedBatch[SearchHit]:
+        batch = sl.sources.Batch(
             sl.sources.Position(_hit_identity(page.hits[0]) if page.hits else None, offset),
             page.hits,
             previous=sl.sources.Position(offset=page.prev.offset)
@@ -82,28 +82,28 @@ class _SearchSource:
             next=sl.sources.Position(offset=page.next.offset)
             if page.next is not None and page.next.offset is not None
             else None,
-            total=page.total,
+            item_count=page.total,
         )
-        fingerprint = window_fingerprint(page.hits, _hit_identity)
+        fingerprint = batch_fingerprint(page.hits, _hit_identity)
         # Offset alone cannot distinguish an older visible page from a refreshed result set.
         self._metadata[(offset, fingerprint)] = page
-        return sl.sources.LoadedWindow(window, fingerprint)
+        return sl.sources.LoadedBatch(batch, fingerprint)
 
-    def initial_loaded(self) -> sl.sources.LoadedWindow[SearchHit]:
+    def initial_loaded(self) -> sl.sources.LoadedBatch[SearchHit]:
         assert self._initial is not None
         page = self._initial
         self._initial = None
         return self._loaded(page, self.base_request.offset)
 
-    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[SearchHit]:
-        request = replace(self.base_request, offset=position.offset, page_size=extent)
+    async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[SearchHit]:
+        request = replace(self.base_request, offset=position.offset, page_size=fetch_size)
         page = await self._service.search(request)
-        return self._loaded(page, position.offset).window
+        return self._loaded(page, position.offset).batch
 
-    def page_for(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> SearchPage:
+    def page_for(self, loaded: sl.sources.LoadedBatch[SearchHit]) -> SearchPage:
         page = self._metadata.get((loaded.position.offset, loaded.fingerprint))
         if page is None:
-            message = "search source has no metadata for the loaded window"
+            message = "search source has no metadata for the loaded batch"
             raise sl.errors.LayoutInvariantError(message)
         return page
 
@@ -201,7 +201,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
             label=lambda record: truncate_display_text(record.one_line_title, 80),
             summary=_record_line,
             detail=self._record_detail,
-            page_size=5,
+            fetch_size=5,
             title=self._records_label,
         )
 
@@ -220,8 +220,8 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
             for index, record in enumerate(self.hit.records):
                 if record.source_id == record_id:
                     session = self._records.session
-                    offset = index // session.page_size * session.page_size
-                    loaded = await WindowLoader(session.source, session.page_size, session.identity).load(
+                    offset = index // session.fetch_size * session.fetch_size
+                    loaded = await BatchLoader(session.source, session.fetch_size, session.identity).load(
                         Position(offset=offset)
                     )
                     assert loaded is not None
@@ -367,7 +367,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             summary=lambda hit: _result_description(hit, request),
             detail=self._detail,
             overview=self._overview,
-            page_size=request.page_size,
+            fetch_size=request.page_size,
             title=tr(t"bot-submission-search-view-search-results = Search results"),
             empty=tr(t"build-search-no-results = No results match this query."),
             copy=sp.LoadingCopy(
@@ -426,23 +426,23 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
     @property
     def hits(self) -> tuple[SearchHit, ...]:
         """Return the results currently displayed."""
-        return self._visible_window().window.items
+        return self._visible_window().batch.items
 
     @property
     def can_go_back(self) -> bool:
         """Return whether an earlier page exists."""
-        return self._visible_window().window.has_previous
+        return self._visible_window().batch.has_previous
 
     @property
     def can_go_forward(self) -> bool:
         """Return whether a later page exists."""
-        return self._visible_window().window.has_next
+        return self._visible_window().batch.has_next
 
-    def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
+    def _visible_window(self) -> sl.sources.LoadedBatch[SearchHit]:
         """Keep the last loaded page visible while a fetch is pending or has failed."""
         current = self._browser.session.snapshot
         if current is None:
-            message = "search browser has no visible window"
+            message = "search browser has no visible batch"
             raise sl.errors.LayoutInvariantError(message)
         return current.loaded
 
@@ -469,7 +469,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     def _overview(
-        self, loaded: sl.sources.LoadedWindow[SearchHit]
+        self, loaded: sl.sources.LoadedBatch[SearchHit]
     ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | tuple[()]:
         page = self._source.page_for(loaded)
         notes: list[sl.TextLike] = []

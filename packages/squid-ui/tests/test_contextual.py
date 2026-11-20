@@ -20,7 +20,7 @@ def test_footer_resolves_materialized_count_and_generated_queries() -> None:
     calls: list[int] = []
 
     def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
-        total = ctx.region(results).count.require()
+        total = ctx.region(results).page_count.require()
         calls.append(total)
         assert ctx.authored.query(select(Heading)).count() == 0
         return sl.heading(f"{total} pages")
@@ -57,8 +57,8 @@ def test_selection_dependent_footer_replans_with_snapshot_scoped_totals() -> Non
     assert "Page 1" in sl.scene.Codec.dumps(result.scene)
     assert result.layout is not None
     region = result.layout.region(results)
-    assert region.count == sl.Known(3)
-    assert region.groups == sl.Known(3)
+    assert region.page_count == sl.Known(3)
+    assert region.group_count == sl.Known(3)
     assert result.certificate is sl.planning.CertificateScope.VIEW
     assert result.scene.pagers and all(pager.pages == 3 for pager in result.scene.pagers)
     assert sl.scene.Codec.loads(sl.scene.Codec.dumps(result.scene)) == result.scene
@@ -70,7 +70,7 @@ def test_selection_dependent_footer_replans_with_snapshot_scoped_totals() -> Non
 
 def test_missing_required_region_and_feedback_cycles_have_distinct_failures() -> None:
     missing = sl.context(
-        lambda ctx: sl.paragraph(str(ctx.region(sl.region_ref("missing")).count.require())), key="missing"
+        lambda ctx: sl.paragraph(str(ctx.region(sl.region_ref("missing")).page_count.require())), key="missing"
     )
     with pytest.raises(ContextResolutionError, match="unresolved required facts"):
         plan(missing, target=html.target())
@@ -184,7 +184,7 @@ def test_context_references_are_scoped_to_the_producing_component_placement() ->
         @override
         def render(self) -> sl.LayoutNode:
             def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
-                groups = ctx.region(sl.region_ref("results")).groups.require()
+                groups = ctx.region(sl.region_ref("results")).group_count.require()
                 located = ctx.locate(sl.element_ref(ListItem, "item-0"))
                 assert len(located.fragments) == 1
                 return sl.paragraph(f"{groups} groups")
@@ -231,7 +231,7 @@ def test_an_unfittable_unselected_fragment_does_not_block_the_current_view() -> 
     assert result.certificate is sl.planning.CertificateScope.VIEW
     assert result.layout is not None
     region = result.layout.region(sl.region_ref("body"))
-    assert isinstance(region.count, sl.Unknown)
+    assert isinstance(region.page_count, sl.Unknown)
     assert result.report.search is not None and not result.report.search.optimal
     with pytest.raises(sl.planning.JointInfeasibleError):
         result.for_page({region.identity: 1})
@@ -281,7 +281,7 @@ def test_generated_footer_changes_real_page_allocation_before_certification() ->
     observed: list[int] = []
 
     def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
-        count = ctx.region(sl.region_ref("items")).count.require()
+        count = ctx.region(sl.region_ref("items")).page_count.require()
         observed.append(count)
         return sl.paragraph("f" * (10 * count))
 
@@ -297,7 +297,7 @@ def test_generated_footer_changes_real_page_allocation_before_certification() ->
     )
     result = plan(document, target=html.target())
     assert result.layout is not None
-    count = result.layout.region(sl.region_ref("items")).count.require()
+    count = result.layout.region(sl.region_ref("items")).page_count.require()
     assert len(set(observed)) > 1
     assert observed[-1] == count
     assert "f" * (10 * count) in sl.scene.Codec.dumps(result.scene)

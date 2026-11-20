@@ -21,7 +21,7 @@ def test_region_can_page_atomic_control_windows() -> None:
     result = plan(document, target=html.target(), inspect_layout=True)
     assert result.layout is not None
     region = result.layout.region(sl.region_ref("windows"))
-    assert region.count == sl.Known(3)
+    assert region.page_count == sl.Known(3)
     assert "Choice 0" in html.Renderer().draw(result.scene)
     assert "Choice 2" not in html.Renderer().draw(result.scene)
     later = result.for_page({region.identity: 2})

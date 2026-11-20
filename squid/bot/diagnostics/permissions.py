@@ -58,7 +58,7 @@ class GuildPermissionDiagnostics(sl.Component[ComponentsV2Target, sd.Request]):
             label=lambda finding: finding.title,
             summary=lambda finding: Text.join(" — ", (finding.title, finding.detail)),
             detail=lambda finding: (sl.heading(finding.title), sl.paragraph(finding.detail)),
-            page_size=5,
+            fetch_size=5,
             title=tr(t"permission-diagnostics-heading = Discord permissions"),
         )
 

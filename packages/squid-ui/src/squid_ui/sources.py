@@ -1,8 +1,8 @@
-"""Fetch ordered content a window at a time for paginated interfaces.
+"""Fetch ordered content a batch at a time for paginated interfaces.
 
-A WindowSource fetches items at a Position and returns a Window with the position it
+A BatchSource fetches items at a Position and returns a Batch with the position it
 actually resolved. Positions can carry a stable item key, a numeric offset, or both;
-the source decides which it can use. WindowLoader turns next, previous, and refresh
+the source decides which it can use. BatchLoader turns next, previous, and refresh
 requests into fetches and discards results overtaken by a newer request.
 """
 
@@ -28,7 +28,7 @@ class Direction(StrEnum):
 class Position:
     """An optional stable item anchor plus a zero-based offset and navigation direction.
 
-    The source defines how anchor and offset interact. Resolved windows use AROUND;
+    The source defines how anchor and offset interact. Resolved batches use AROUND;
     FORWARD and BACKWARD describe requests beyond an anchor.
     """
 
@@ -59,14 +59,14 @@ class Chronology(StrEnum):
 
 
 class SourceStability(StrEnum):
-    """How a flow can combine windows from successive fetches."""
+    """How a flow can combine batches from successive fetches."""
 
     ASSUMED = "assumed"
     VERIFIED = "verified"
 
 
 class CountPrecision(StrEnum):
-    """Accuracy of the total a source returns with each window."""
+    """Accuracy of the total a source returns with each batch."""
 
     NONE = "none"
     APPROXIMATE = "approximate"
@@ -77,7 +77,7 @@ class CountPrecision(StrEnum):
 class SourceCapabilities:
     """Navigation, count precision, and optional fixed grouping promises.
 
-    fixed_groups promises complete, extent-aligned groups and consecutive neighbour
+    fixed_groups promises complete, fetch_size-aligned groups and consecutive neighbour
     addresses. It says nothing about the target space their contents require.
     """
 
@@ -88,10 +88,10 @@ class SourceCapabilities:
     fixed_groups: bool = False
     stability: SourceStability = SourceStability.ASSUMED
 
-    def group_count[T](self, window: Window[T], extent: int) -> int | None:
+    def group_count[T](self, batch: Batch[T], fetch_size: int) -> int | None:
         """Count declared groups, independently of target fit certification."""
-        if self.fixed_groups and self.count is CountPrecision.EXACT and window.total is not None:
-            return (window.total + extent - 1) // extent
+        if self.fixed_groups and self.count is CountPrecision.EXACT and batch.item_count is not None:
+            return (batch.item_count + fetch_size - 1) // fetch_size
         return None
 
     def __post_init__(self) -> None:
@@ -107,7 +107,7 @@ class SourceCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
-class Window[ItemT]:
+class Batch[ItemT]:
     """One fetched slice and the source's addresses for its neighbours.
 
     The loader follows `previous` and `next` verbatim. An address may use an
@@ -119,7 +119,7 @@ class Window[ItemT]:
     items: tuple[ItemT, ...]
     previous: Position | None = None
     next: Position | None = None
-    total: int | None = None
+    item_count: int | None = None
     revision: str | None = None
 
     @property
@@ -132,23 +132,23 @@ class Window[ItemT]:
 
     def __post_init__(self) -> None:
         if self.position.direction is not Direction.AROUND:
-            message = "a resolved Window.position must use Direction.AROUND"
+            message = "a resolved Batch.position must use Direction.AROUND"
             raise ValueError(message)
         if self.position.offset < 0:
-            message = "a resolved Window.position cannot have a negative offset"
+            message = "a resolved Batch.position cannot have a negative offset"
             raise ValueError(message)
-        if self.total is not None and self.total < 0:
-            message = "Window.total cannot be negative"
+        if self.item_count is not None and self.item_count < 0:
+            message = "Batch.item_count cannot be negative"
             raise ValueError(message)
 
 
-class WindowSource[ItemT](Protocol):
+class BatchSource[ItemT](Protocol):
     """An async ordered source with one validated capability declaration."""
 
     capabilities: SourceCapabilities
 
-    async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
-        """Fetch at most ``extent`` items around or beyond ``position``."""
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[ItemT]:
+        """Fetch at most ``fetch_size`` items around or beyond ``position``."""
         ...
 
 
@@ -161,24 +161,24 @@ class _ListSource[ItemT]:
             backward=True, offsets=True, jumpable=True, count=CountPrecision.EXACT, fixed_groups=fixed_groups
         )
 
-    async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[ItemT]:
         offset = min(max(0, position.offset), max(0, len(self.items) - 1))
         if self.capabilities.fixed_groups:
-            offset = offset // extent * extent
-        visible = self.items[offset : offset + extent]
-        return Window(
+            offset = offset // fetch_size * fetch_size
+        visible = self.items[offset : offset + fetch_size]
+        return Batch(
             Position(offset=offset),
             visible,
-            previous=Position(offset=max(0, offset - extent)) if offset > 0 else None,
+            previous=Position(offset=max(0, offset - fetch_size)) if offset > 0 else None,
             next=Position(offset=offset + len(visible)) if offset + len(visible) < len(self.items) else None,
-            total=len(self.items),
+            item_count=len(self.items),
         )
 
 
-def list_source[ItemT](items: Iterable[ItemT], *, fixed_groups: bool = False) -> WindowSource[ItemT]:
+def list_source[ItemT](items: Iterable[ItemT], *, fixed_groups: bool = False) -> BatchSource[ItemT]:
     """Snapshot the iterable into an exact offset-addressed source.
 
-    fixed_groups aligns fetches to complete groups of the requested extent.
+    fixed_groups aligns fetches to complete groups of the requested fetch_size.
     Items themselves are not copied. Fetches ignore anchors and direction and clamp
     an out-of-range offset to the last item, or zero for an empty source.
     """
@@ -186,19 +186,19 @@ def list_source[ItemT](items: Iterable[ItemT], *, fixed_groups: bool = False) ->
 
 
 @dataclass(frozen=True, slots=True)
-class LoadedWindow[ItemT]:
-    """A fetched window and the fingerprint of only its visible identities."""
+class LoadedBatch[ItemT]:
+    """A fetched batch and the fingerprint of only its visible identities."""
 
-    window: Window[ItemT]
+    batch: Batch[ItemT]
     fingerprint: str
 
     @property
     def position(self) -> Position:
-        return self.window.position
+        return self.batch.position
 
 
-def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[ItemT], str]) -> str:
-    """Fingerprint only the identities in one visible window."""
+def batch_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[ItemT], str]) -> str:
+    """Fingerprint only the identities in one visible batch."""
     digest = blake2s(digest_size=16)
     for item in items:
         encoded = identity(item).encode()
@@ -207,8 +207,8 @@ def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[Item
     return digest.hexdigest()
 
 
-class WindowLoader[ItemT]:
-    """Load windows and ignore results superseded by a newer request on this loader.
+class BatchLoader[ItemT]:
+    """Load batches and ignore results superseded by a newer request on this loader.
 
     Starting another request does not cancel an earlier fetch. A stale successful result
     returns None before validation; fetch exceptions still propagate. Item identities
@@ -217,17 +217,17 @@ class WindowLoader[ItemT]:
 
     def __init__(
         self,
-        source: WindowSource[ItemT],
-        extent: int,
+        source: BatchSource[ItemT],
+        fetch_size: int,
         identity: Callable[[ItemT], str],
         *,
         initial: Position = ORIGIN,
     ) -> None:
-        if extent < 1:
-            message = "WindowLoader.extent must be at least 1"
+        if fetch_size < 1:
+            message = "BatchLoader.fetch_size must be at least 1"
             raise ValueError(message)
         self.source = source
-        self.extent = extent
+        self.fetch_size = fetch_size
         self.identity = identity
         self.initial = initial
         self._request_token = 0
@@ -236,118 +236,118 @@ class WindowLoader[ItemT]:
         self,
         position: Position | None = None,
         *,
-        previous: LoadedWindow[ItemT] | None = None,
-    ) -> LoadedWindow[ItemT] | None:
-        """Load an explicit position or refresh the previous window, returning None if superseded.
+        previous: LoadedBatch[ItemT] | None = None,
+    ) -> LoadedBatch[ItemT] | None:
+        """Load an explicit position or refresh the previous batch, returning None if superseded.
 
-        Validate the latest result against the requested extent and source capabilities.
+        Validate the latest result against the requested fetch_size and source capabilities.
         The source's resolved position is authoritative, including when its anchor moved.
         """
         requested = position if position is not None else previous.position if previous is not None else self.initial
         self._request_token += 1
         token = self._request_token
-        fetched = await self.source.fetch(requested, self.extent)
+        fetched = await self.source.fetch(requested, self.fetch_size)
         if token != self._request_token:
             return None
         self._validate(fetched)
 
-        fingerprint = window_fingerprint(fetched.items, self.identity)
-        return LoadedWindow(fetched, fingerprint)
+        fingerprint = batch_fingerprint(fetched.items, self.identity)
+        return LoadedBatch(fetched, fingerprint)
 
-    async def next(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
-        """Load the window after the visible trailing identity."""
-        window = current.window
-        if not window.has_next:
+    async def next(self, current: LoadedBatch[ItemT]) -> LoadedBatch[ItemT] | None:
+        """Load the batch after the visible trailing identity."""
+        batch = current.batch
+        if not batch.has_next:
             return None
-        return await self.load(window.next, previous=current)
+        return await self.load(batch.next, previous=current)
 
-    async def previous(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
-        """Load the window before the visible leading identity."""
-        window = current.window
-        if not self.source.capabilities.backward or not window.has_previous:
+    async def previous(self, current: LoadedBatch[ItemT]) -> LoadedBatch[ItemT] | None:
+        """Load the batch before the visible leading identity."""
+        batch = current.batch
+        if not self.source.capabilities.backward or not batch.has_previous:
             return None
-        return await self.load(window.previous, previous=current)
+        return await self.load(batch.previous, previous=current)
 
-    def _validate(self, window: Window[ItemT]) -> None:
-        if len(window.items) > self.extent:
-            message = f"WindowSource returned {len(window.items)} items for extent {self.extent}"
+    def _validate(self, batch: Batch[ItemT]) -> None:
+        if len(batch.items) > self.fetch_size:
+            message = f"BatchSource returned {len(batch.items)} items for fetch_size {self.fetch_size}"
             raise ValueError(message)
         capabilities = self.source.capabilities
-        if capabilities.stability is SourceStability.VERIFIED and window.revision is None:
-            msg = "a verified source must supply a window revision"
+        if capabilities.stability is SourceStability.VERIFIED and batch.revision is None:
+            msg = "a verified source must supply a batch revision"
             raise ValueError(msg)
         if capabilities.fixed_groups:
-            if window.position.offset % self.extent:
+            if batch.position.offset % self.fetch_size:
                 message = "a fixed-group source returned an unaligned position"
                 raise ValueError(message)
-            if window.has_next and len(window.items) != self.extent:
+            if batch.has_next and len(batch.items) != self.fetch_size:
                 message = "a fixed-group source returned an incomplete nonfinal group"
                 raise ValueError(message)
-            if window.next is not None and window.next.offset != window.position.offset + self.extent:
+            if batch.next is not None and batch.next.offset != batch.position.offset + self.fetch_size:
                 message = "a fixed-group source returned a nonconsecutive next group"
                 raise ValueError(message)
-            if window.previous is not None and window.previous.offset != max(0, window.position.offset - self.extent):
+            if batch.previous is not None and batch.previous.offset != max(0, batch.position.offset - self.fetch_size):
                 message = "a fixed-group source returned a nonconsecutive previous group"
                 raise ValueError(message)
-            if capabilities.count is CountPrecision.EXACT and window.total is not None:
-                if window.position.offset > max(0, (window.total - 1) // self.extent * self.extent):
+            if capabilities.count is CountPrecision.EXACT and batch.item_count is not None:
+                if batch.position.offset > max(0, (batch.item_count - 1) // self.fetch_size * self.fetch_size):
                     message = "an exact source returned a position beyond its final fixed-group"
                     raise ValueError(message)
-                expected = min(self.extent, max(0, window.total - window.position.offset))
-                if len(window.items) != expected or window.has_next != (
-                    window.position.offset + expected < window.total
+                expected = min(self.fetch_size, max(0, batch.item_count - batch.position.offset))
+                if len(batch.items) != expected or batch.has_next != (
+                    batch.position.offset + expected < batch.item_count
                 ):
                     message = "a fixed-group source returned content inconsistent with its exact count"
                     raise ValueError(message)
-        if not capabilities.backward and window.has_previous:
+        if not capabilities.backward and batch.has_previous:
             message = "a forward-only source returned has_previous=True"
             raise ValueError(message)
-        if capabilities.count is CountPrecision.NONE and window.total is not None:
+        if capabilities.count is CountPrecision.NONE and batch.item_count is not None:
             message = "an uncountable source returned a total"
             raise ValueError(message)
-        if capabilities.count is not CountPrecision.NONE and window.total is None:
+        if capabilities.count is not CountPrecision.NONE and batch.item_count is None:
             message = "a countable source omitted its total"
             raise ValueError(message)
         if (
             capabilities.count is CountPrecision.EXACT
-            and window.total is not None
-            and window.position.offset + len(window.items) > window.total
+            and batch.item_count is not None
+            and batch.position.offset + len(batch.items) > batch.item_count
         ):
-            message = "an exact source returned a window beyond its total"
+            message = "an exact source returned a batch beyond its total"
             raise ValueError(message)
 
 
-def window_footer[ItemT](
-    chrome: Chrome, source: WindowSource[ItemT], loaded: LoadedWindow[ItemT], extent: int
+def batch_footer[ItemT](
+    chrome: Chrome, source: BatchSource[ItemT], loaded: LoadedBatch[ItemT], fetch_size: int
 ) -> TextLike | None:
     """Describe only the numeric position the source's capabilities support."""
-    window = loaded.window
+    batch = loaded.batch
     capabilities = source.capabilities
-    if not window.items or not capabilities.offsets:
+    if not batch.items or not capabilities.offsets:
         return None
-    first = window.position.offset + 1
-    last = window.position.offset + len(window.items)
-    if (pages := capabilities.group_count(window, extent)) is not None and capabilities.jumpable:
+    first = batch.position.offset + 1
+    last = batch.position.offset + len(batch.items)
+    if (pages := capabilities.group_count(batch, fetch_size)) is not None and capabilities.jumpable:
         # One authored group needs no group-number footer; target fit is separate.
-        return chrome.page_footer(window.position.offset // extent + 1, pages) if pages > 1 else None
-    if capabilities.count is CountPrecision.EXACT and window.total is not None:
-        return chrome.total_range_footer(first, last, window.total)
-    if capabilities.count is CountPrecision.APPROXIMATE and window.total is not None:
-        return chrome.approximate_total_footer(first, last, window.total)
+        return chrome.page_footer(batch.position.offset // fetch_size + 1, pages) if pages > 1 else None
+    if capabilities.count is CountPrecision.EXACT and batch.item_count is not None:
+        return chrome.total_range_footer(first, last, batch.item_count)
+    if capabilities.count is CountPrecision.APPROXIMATE and batch.item_count is not None:
+        return chrome.approximate_total_footer(first, last, batch.item_count)
     return chrome.range_footer(first, last)
 
 
 __all__ = [
     "ORIGIN",
+    "Batch",
+    "BatchLoader",
+    "BatchSource",
     "Chronology",
     "CountPrecision",
     "Direction",
-    "LoadedWindow",
+    "LoadedBatch",
     "Position",
     "SourceCapabilities",
     "SourceStability",
-    "Window",
-    "WindowLoader",
-    "WindowSource",
     "list_source",
 ]

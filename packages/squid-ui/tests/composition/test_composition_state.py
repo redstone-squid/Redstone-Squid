@@ -112,7 +112,7 @@ def test_custom_navigation_cost_can_require_view_scoped_fallback() -> None:
     assert partial.certificate is sl.planning.CertificateScope.VIEW
     assert partial.cost.within(target.limits.capacities)
     assert partial.layout is not None
-    assert isinstance(partial.layout.region(sl.region_ref("r")).count, sl.Unknown)
+    assert isinstance(partial.layout.region(sl.region_ref("r")).page_count, sl.Unknown)
     assert not any(
         isinstance(node, discord_scene.Select)
         for node in partial.scene.expect_body(discord_scene.ComponentsV2).children

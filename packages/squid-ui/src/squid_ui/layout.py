@@ -140,7 +140,7 @@ class RegionFacts:
         return value
 
     @property
-    def count(self) -> Fact[int]:
+    def page_count(self) -> Fact[int]:
         """Rendered page total, when established for this capture."""
         return self._read("count", self._count)
 
@@ -154,7 +154,7 @@ class RegionFacts:
         return self._read("navigation", self._navigation)
 
     @property
-    def groups(self) -> Fact[int]:
+    def group_count(self) -> Fact[int]:
         """Authored group count, independent of the evidence that those groups fit."""
         return self._read("groups", self._groups)
 

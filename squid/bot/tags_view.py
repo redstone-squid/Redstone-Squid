@@ -146,7 +146,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda tag: tag.display_name,
             summary=_tag_summary,
             detail=self._tag_detail,
-            page_size=15,
+            fetch_size=15,
             title=tr(t"bot-tags-view-published-build-tags = Published build tags"),
             empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
@@ -169,7 +169,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 detail=lambda tag: (
                     _ModerationActions(tag, actions, self._request_moderation) if actions else _tag_fields(tag)
                 ),
-                page_size=15,
+                fetch_size=15,
                 title=tr(t"bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review"),
                 empty=tr(t"tags-no-proposals-awaiting-review = No tag proposals are awaiting review."),
             )

@@ -43,7 +43,7 @@ class VideoEditor(sd.Screen[VideoRenderRequest]):
                 identity=lambda item: str(item),
                 label=lambda item: " ".join(map(str, item)),
                 detail=self._input_detail,
-                page_size=10,
+                fetch_size=10,
                 title=tr(t"video-detected-inputs = Detected input positions"),
                 empty=tr(t"video-no-candidates = No detected input positions are available."),
             )

@@ -119,7 +119,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda gap: truncate_display_text(_gap_title(gap), 80),
             summary=_gap_summary,
             detail=self._gap_detail,
-            page_size=15,
+            fetch_size=15,
             title=tr(t"bot-submission-records-record-evidence-gaps = Records missing evidence"),
             empty=tr(t"records-no-unresolved-categories = Every active record category has the evidence it needs."),
         )
@@ -142,7 +142,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                     key="diagnostic-actions",
                 ),
             ),
-            page_size=15,
+            fetch_size=15,
             title=tr(t"bot-submission-records-record-title-diagnostics = Unrecognised record titles"),
             empty=tr(t"records-no-titles-need-review = Every active record title uses known terms."),
         )

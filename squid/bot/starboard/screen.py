@@ -105,7 +105,7 @@ class StarboardScreen(sd.Screen):
             label=lambda board: board.name,
             summary=lambda board: f"{board.name} · #{board.channel_id} · {board.required:g} votes",
             detail=self._board_editor,
-            page_size=10,
+            fetch_size=10,
             title=tr(t"bot-starboard-screen-starboards = Starboards"),
             empty=tr(t"starboard-none-configured = No starboards are configured."),
         )
@@ -114,9 +114,9 @@ class StarboardScreen(sd.Screen):
             tabs.append(sp.Tab("create", tr(t"bot-starboard-screen-create = Create"), self._create_nodes()))
         if focus is not None:
             offset = next((index // 10 * 10 for index, board in enumerate(boards) if str(board.id) == focus), 0)
-            window = await source.fetch(sl.sources.Position(offset=offset), 10)
+            batch = await source.fetch(sl.sources.Position(offset=offset), 10)
             self._browser.session.replace(
-                sl.sources.LoadedWindow(window, sl.sources.window_fingerprint(window.items, lambda item: str(item.id)))
+                sl.sources.LoadedBatch(batch, sl.sources.batch_fingerprint(batch.items, lambda item: str(item.id)))
             )
             self._browser.session.open(focus, revision=self._browser.session.revision)
         self._tabs = sp.Tabs(

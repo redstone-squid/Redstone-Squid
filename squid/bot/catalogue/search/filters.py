@@ -406,13 +406,13 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             description=lambda item: item.description or "",
             on_pick=on_pick,
             maximum=maximum,
-            page_size=_PICKER_PAGE_SIZE,
+            fetch_size=_PICKER_PAGE_SIZE,
             show_heading=False,
             show_query=True,
             search_label=search_label,
             hide_search_when_complete=initial_source.enumerable,
         )
-        picker.session = sp.BrowseSession(initial_source, identity=picker.identity, page_size=picker.page_size)
+        picker.session = sp.BrowseSession(initial_source, identity=picker.identity, fetch_size=picker.fetch_size)
         return picker
 
     async def _toggle_filter(self, event: sd.PressEvent[RedstoneSquid]) -> None:

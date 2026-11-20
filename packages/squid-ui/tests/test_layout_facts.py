@@ -16,8 +16,8 @@ def test_complete_snapshot_reports_pages_queries_and_all_locations() -> None:
     ctx = result.layout
     assert ctx is not None
     region = ctx.region(sl.region_ref("results"))
-    assert region.count == sl.Known(3)
-    assert region.groups == sl.Known(3)
+    assert region.page_count == sl.Known(3)
+    assert region.group_count == sl.Known(3)
     assert ctx.authored.query(select(ListItem)).count() == 23
     assert ctx.visible.query(select(ListItem)).count() == 10
     positions = ctx.locate(sl.element_ref(ListItem, "item-21"))
@@ -54,7 +54,7 @@ def test_fragmented_source_is_one_query_match_with_several_locations() -> None:
     assert locations.complete and len(locations.fragments) > 1
     indices = {loc.page.coordinates[-1].index.require() for loc in locations.fragments}
     assert len(indices) > 1
-    assert isinstance(ctx.region(sl.region_ref("results")).groups, sl.Unknown)
+    assert isinstance(ctx.region(sl.region_ref("results")).group_count, sl.Unknown)
 
 
 def test_unsupported_exact_facts_fail_explicitly() -> None:
@@ -69,6 +69,6 @@ def test_empty_grouped_flow_has_no_selected_content_page() -> None:
     result = plan(sl.bullets(key="empty", group_size=10), target=html.target(), inspect_layout=True)
     assert result.layout is not None
     facts = result.layout.region(sl.region_ref("empty"))
-    assert facts.groups == sl.Known(0)
-    assert facts.count == sl.Known(0)
+    assert facts.group_count == sl.Known(0)
+    assert facts.page_count == sl.Known(0)
     assert facts.selection == sl.Known(None)

@@ -268,7 +268,7 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
             )
             if identity in visible:
                 count = (
-                    selected.layout.region(RegionRef(region.source_prefix)).count
+                    selected.layout.region(RegionRef(region.source_prefix)).page_count
                     if selected.layout is not None
                     else Known(len(region.cuts))
                 )

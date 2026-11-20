@@ -1,4 +1,4 @@
-"""Browse a forward-only flow of paragraphs across source windows."""
+"""Browse a forward-only flow of paragraphs across source batches."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -11,7 +11,7 @@ from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.factories import action_control, action_controls, note, paragraph, stack
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.definition import Component
-from squid_ui.sources import ORIGIN, Position, SourceStability, WindowLoader, WindowSource
+from squid_ui.sources import ORIGIN, BatchLoader, BatchSource, Position, SourceStability
 from squid_ui_widgets._content import require_key
 
 
@@ -20,14 +20,14 @@ class _Page:
     number: int
     paragraphs: tuple[str, ...]
     remaining: tuple[str, ...]
-    next_window: Position | None
+    next_batch: Position | None
     revision: str | None
 
 
 class SourceFlow[ItemT](Component):
-    """Read a window source using authored paragraph boundaries.
+    """Read a batch source using authored paragraph boundaries.
 
-    page_size caps paragraphs per page. fits can impose a tighter budget on the
+    max_paragraphs_per_page caps paragraphs per page. fits can impose a tighter budget on the
     paragraph sequence. Each item must contribute at least one paragraph.
     Mount a separate flow instance for each independent reading session.
     """
@@ -36,49 +36,49 @@ class SourceFlow[ItemT](Component):
 
     def __init__(
         self,
-        source: WindowSource[ItemT],
+        source: BatchSource[ItemT],
         *,
         identity: Callable[[ItemT], str],
         paragraphs: Callable[[ItemT], Sequence[str]],
-        page_size: int,
+        max_paragraphs_per_page: int,
         fetch_size: int,
         fits: Callable[[Sequence[str]], bool] | None = None,
         key: str = "flow",
     ) -> None:
-        if page_size < 1 or source.capabilities.fixed_groups:
+        if max_paragraphs_per_page < 1 or source.capabilities.fixed_groups:
             msg = "SourceFlow requires a positive page size and an ungrouped source"
             raise ValueError(msg)
         self.key = require_key(key, name="SourceFlow.key")
-        self.loader = WindowLoader(source, fetch_size, identity)
+        self.loader = BatchLoader(source, fetch_size, identity)
         self.paragraphs = paragraphs
-        self.page_size = page_size
+        self.max_paragraphs_per_page = max_paragraphs_per_page
         self.fits = fits
 
     async def _read(self, previous: _Page | None) -> _Page:
-        next_window = ORIGIN if previous is None else previous.next_window
+        next_batch = ORIGIN if previous is None else previous.next_batch
         remaining = () if previous is None else previous.remaining
         revision = None if previous is None else previous.revision
         content: list[str] = []
         index = 0
-        while len(content) < self.page_size:
+        while len(content) < self.max_paragraphs_per_page:
             if index == len(remaining):
-                if next_window is None:
+                if next_batch is None:
                     break
-                loaded = await self.loader.load(next_window)
+                loaded = await self.loader.load(next_batch)
                 if loaded is None:
                     msg = "source flow read was superseded"
                     raise RuntimeError(msg)
-                window = loaded.window
+                batch = loaded.batch
                 if self.loader.source.capabilities.stability is SourceStability.VERIFIED:
-                    if revision is not None and window.revision != revision:
+                    if revision is not None and batch.revision != revision:
                         msg = "source revision changed while reading the flow"
                         raise ValueError(msg)
-                    revision = window.revision
-                if window.next == next_window or (not window.items and window.has_next):
-                    msg = "source window made no forward progress"
+                    revision = batch.revision
+                if batch.next == next_batch or (not batch.items and batch.has_next):
+                    msg = "source batch made no forward progress"
                     raise ValueError(msg)
                 fragments: list[str] = []
-                for item in window.items:
+                for item in batch.items:
                     parts = self.paragraphs(item)
                     if not parts or isinstance(parts, str):
                         msg = "each flow item must supply a sequence of paragraphs"
@@ -86,7 +86,7 @@ class SourceFlow[ItemT](Component):
                     fragments.extend(parts)
                 remaining = tuple(fragments)
                 index = 0
-                next_window = window.next
+                next_batch = batch.next
                 if not remaining:
                     break
             if self.fits is not None and not self.fits([*content, remaining[index]]):
@@ -97,7 +97,7 @@ class SourceFlow[ItemT](Component):
             content.append(remaining[index])
             index += 1
         return _Page(
-            1 if previous is None else previous.number + 1, tuple(content), remaining[index:], next_window, revision
+            1 if previous is None else previous.number + 1, tuple(content), remaining[index:], next_batch, revision
         )
 
     @override
@@ -108,7 +108,7 @@ class SourceFlow[ItemT](Component):
         # A failed delivery leaves the old binding live. Reuse its prepared successor.
         if self._page is delivered:
             candidate = await self._read(delivered)
-            self._page = candidate if candidate.paragraphs else replace(delivered, next_window=None)
+            self._page = candidate if candidate.paragraphs else replace(delivered, next_batch=None)
 
     @override
     def render(self) -> DocumentLike:
@@ -122,7 +122,7 @@ class SourceFlow[ItemT](Component):
                 action_control(chrome.next, partial(self._advance, page), key=f"{self.key}.next"),
                 key=f"{self.key}.navigation",
             )
-            if page.remaining or page.next_window is not None
+            if page.remaining or page.next_batch is not None
             else None,
             note(f"Page {page.number}"),
         )

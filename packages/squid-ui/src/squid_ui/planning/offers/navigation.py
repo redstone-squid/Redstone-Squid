@@ -57,7 +57,7 @@ class _PaginationContent:
         if navigation is None or not (navigation.has_previous or navigation.has_next):
             return ()
         selection = region.selection.require()
-        total = region.count
+        total = region.page_count
         label = None
         if self.footer is not None:
             label = self.footer(ctx)

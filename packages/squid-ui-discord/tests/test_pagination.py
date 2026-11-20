@@ -258,7 +258,7 @@ class TestMountPagination:
 
     async def test_a_custom_nav_factory_replaces_the_stock_controls(self):
         def nav(context):
-            label = f"{context.page + 1}/{context.state.extent}"
+            label = f"{context.index + 1}/{context.state.extent}"
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=nav)

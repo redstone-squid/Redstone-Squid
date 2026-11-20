@@ -65,7 +65,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
             region = ctx.region()
             selection = region.selection.require()
             assert selection is not None
-            page, pages = selection.number.require(), region.count.require()
+            page, pages = selection.number.require(), region.page_count.require()
             return md_tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
 
         entries = tuple(_claim_entry(claim) for claim in self._claims)

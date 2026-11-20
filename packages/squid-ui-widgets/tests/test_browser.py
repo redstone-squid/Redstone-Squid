@@ -20,9 +20,9 @@ class Entry:
 
 async def _loaded(
     items: tuple[Entry, ...], *, extent: int = 2, fixed_groups: bool = False
-) -> tuple[sl.sources.WindowSource[Entry], sl.sources.LoadedWindow[Entry]]:
+) -> tuple[sl.sources.BatchSource[Entry], sl.sources.LoadedBatch[Entry]]:
     source = sl.sources.list_source(items, fixed_groups=fixed_groups)
-    loaded = await sl.sources.WindowLoader(source, extent, lambda item: item.key).load()
+    loaded = await sl.sources.BatchLoader(source, extent, lambda item: item.key).load()
     assert loaded is not None
     return source, loaded
 
@@ -48,7 +48,7 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
         identity=lambda item: item.key,
         label=lambda item: item.label,
         detail=detail,
-        page_size=2,
+        fetch_size=2,
     )
     browser.session.replace(loaded)
 
@@ -77,7 +77,7 @@ async def test_on_back_replaces_returning_to_the_list() -> None:
         identity=lambda item: item.key,
         label=lambda item: item.label,
         detail=lambda item: item.label,
-        page_size=2,
+        fetch_size=2,
         on_back=leave,
     )
     browser.session.replace(loaded)
@@ -98,7 +98,7 @@ async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pe
         identity=lambda item: item.key,
         label=lambda item: item.label,
         detail=lambda item: item.label,
-        page_size=2,
+        fetch_size=2,
     )
     browser.session.replace(loaded)
 
@@ -113,7 +113,7 @@ async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pe
 
 async def test_the_overview_hook_receives_the_loaded_window() -> None:
     source, loaded = await _loaded((Entry("a", "A"),))
-    seen: list[sl.sources.LoadedWindow[Entry]] = []
+    seen: list[sl.sources.LoadedBatch[Entry]] = []
     browser = sp.Browser(
         source,
         identity=lambda item: item.key,
@@ -131,14 +131,14 @@ async def test_the_overview_hook_receives_the_loaded_window() -> None:
 
 
 def _paged_browser(
-    source: sl.sources.WindowSource[Entry], chronology: sl.sources.Chronology | None = None
+    source: sl.sources.BatchSource[Entry], chronology: sl.sources.Chronology | None = None
 ) -> sp.Browser[Entry]:
     return sp.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,
         detail=lambda item: item.label,
-        page_size=2,
+        fetch_size=2,
         chronology=chronology,
     )
 
@@ -196,17 +196,17 @@ async def test_page_numbers_appear_only_when_there_is_more_than_one_page() -> No
 
 async def test_source_count_is_not_a_layout_page_count() -> None:
     source = sl.sources.list_source(tuple(str(i) for i in range(23)))
-    loaded = await sl.sources.WindowLoader(source, 10, str).load()
+    loaded = await sl.sources.BatchLoader(source, 10, str).load()
     assert loaded is not None
-    facts = source_navigation_state(loaded, source.capabilities, key="results", page_size=10, chrome=DEFAULT_CHROME)
+    facts = source_navigation_state(loaded, source.capabilities, key="results", fetch_size=10, chrome=DEFAULT_CHROME)
     assert facts is not None
-    assert facts.extent is None and facts.page is None
+    assert facts.extent is None and facts.index is None
     assert facts.total == 23 and facts.visible_range == (1, 10)
 
     fixed = sl.sources.list_source(tuple(str(i) for i in range(23)), fixed_groups=True)
-    loaded = await sl.sources.WindowLoader(fixed, 10, str).load()
+    loaded = await sl.sources.BatchLoader(fixed, 10, str).load()
     assert loaded is not None
-    facts = source_navigation_state(loaded, fixed.capabilities, key="results", page_size=10, chrome=DEFAULT_CHROME)
+    facts = source_navigation_state(loaded, fixed.capabilities, key="results", fetch_size=10, chrome=DEFAULT_CHROME)
     assert facts is not None
-    assert facts.extent == 3 and facts.page == 0
+    assert facts.extent == 3 and facts.index == 0
     assert facts.unit.value == "groups"

@@ -53,7 +53,7 @@ def navigation_controls(context: NavigationContext, *extra: Button | RoutedButto
         else ()
     )
     items = (*previous, button(state.next_label, context.on_next, state.next_key, state.has_next), *extra)
-    if (size := context.page_size) is not None:
+    if (size := context.fetch_size) is not None:
         form = FormBinding(size.key, size.spec, size.on_submit, size.mode, size.label)
         items = (*items, FormButton(size.label, PresentPageForm(form), form.key, mode=form.mode, form=form))
     return Row(items)
@@ -83,7 +83,7 @@ def seek_control(context: NavigationContext) -> SelectMenu | RoutedSelect | None
     """A jump select for a cursor that can address a page, or `None` when it cannot."""
     state = context.state
     seek = context.on_seek
-    extent, page = state.extent, state.page
+    extent, page = state.extent, state.index
     if seek is None or extent is None or page is None or extent < 2 or state.page_option is None:
         return None
     label = state.page_option
@@ -117,7 +117,7 @@ def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """
     state = context.state
     seek = context.on_seek
-    if state.page is None or state.extent is None or state.extent < 2:
+    if state.index is None or state.extent is None or state.extent < 2:
         return (navigation_controls(context),)
     label = state.seek_label or context.chrome.jump_to_page
     if context.jump_route is not None:
@@ -126,7 +126,7 @@ def page_jump_nav(context: NavigationContext) -> Sequence[MountNavNode]:
         return (navigation_controls(context),)
     form = FormBinding(
         f"{state.seek_key}.jump",
-        page_jump_form(state.page, state.extent, title=label, chrome=context.chrome),
+        page_jump_form(state.index, state.extent, title=label, chrome=context.chrome),
         SubmitPageJump(seek),
         ActionMode.REBASE,
         label,

@@ -111,8 +111,8 @@ async def test_help_entrypoints_share_the_screen(entrypoint: str, query: str | N
         assert isinstance(screen, HelpScreen)
         assert screen.owner is (builds if entrypoint == "internal" else cog)
         if query is None:
-            window = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
-            assert {item.qualified_name for item in window.items} == {"build", "help"}
+            batch = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
+            assert {item.qualified_name for item in batch.items} == {"build", "help"}
         else:
             assert f"/{query}" in texts(screen.render())
     finally:
@@ -194,8 +194,8 @@ async def test_prefix_help_hides_internal_commands_even_for_the_owner(
         (root,) = session.message_roots
         screen = cast(HelpScreen, root.component)
         if query in {None, "DiscoveryCommands"}:
-            window = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
-            names = {item.qualified_name for item in window.items}
+            batch = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
+            names = {item.qualified_name for item in batch.items}
             assert names == ({"build", "settings", "help"} if query is None else {"build", "settings"})
         elif query == "build":
             rendered = texts(screen.render())
@@ -220,8 +220,8 @@ async def test_slash_help_uses_discoverability_instead_of_execution_permissions(
         (root,) = session.message_roots
         screen = cast(HelpScreen, root.component)
         if query is None:
-            window = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
-            assert {item.qualified_name for item in window.items} == {"build", "settings", "help"}
+            batch = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
+            assert {item.qualified_name for item in batch.items} == {"build", "settings", "help"}
         elif query == "settings":
             assert "/settings" in texts(screen.render())
         else:

@@ -62,7 +62,7 @@ from squid_i18n import Text, inline_code
 from squid_reactivity import Topic, TopicBus
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.sources import window_fingerprint
+from squid_ui.sources import batch_fingerprint
 
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
@@ -87,23 +87,25 @@ class _BuildSource:
         self._queries = queries
         self._statuses = statuses
 
-    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
+    async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[Build]:
         page = await self._queries.list_page(
             statuses=self._statuses,
             selector=PageSelector(offset=position.offset),
-            page_size=extent,
+            page_size=fetch_size,
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
-        return sl.sources.Window(
+        return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
-            previous=sl.sources.Position(offset=max(0, position.offset - extent)) if page.prev is not None else None,
+            previous=sl.sources.Position(offset=max(0, position.offset - fetch_size))
+            if page.prev is not None
+            else None,
             next=sl.sources.Position(offset=position.offset + len(page.items)) if page.next is not None else None,
-            total=page.total,
+            item_count=page.total,
         )
 
-    def fingerprint(self, window: sl.sources.Window[Build]) -> str:
-        return window_fingerprint(window.items, lambda build: str(build.id))
+    def fingerprint(self, batch: sl.sources.Batch[Build]) -> str:
+        return batch_fingerprint(batch.items, lambda build: str(build.id))
 
 
 class _NeighbourBuildSource:
@@ -115,31 +117,31 @@ class _NeighbourBuildSource:
         self.queries = queries
         self.statuses = statuses
 
-    def initial(self, build: Build) -> sl.sources.LoadedWindow[Build]:
+    def initial(self, build: Build) -> sl.sources.LoadedBatch[Build]:
         key = str(build.id)
-        window = sl.sources.Window(
+        batch = sl.sources.Batch(
             sl.sources.Position(key),
             (build,),
             previous=sl.sources.Position(key, direction=sl.sources.Direction.BACKWARD),
             next=sl.sources.Position(key, direction=sl.sources.Direction.FORWARD),
         )
-        return sl.sources.LoadedWindow(window, window_fingerprint(window.items, lambda item: str(item.id)))
+        return sl.sources.LoadedBatch(batch, batch_fingerprint(batch.items, lambda item: str(item.id)))
 
-    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
+    async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[Build]:
         assert position.anchor is not None
         build_id = int(position.anchor)
         if position.direction is sl.sources.Direction.AROUND:
             build = await self.queries.get(build_id)
             if build is None or build.submission_status not in self.statuses:
-                return sl.sources.Window(sl.sources.Position(), ())
-            return self.initial(build).window
+                return sl.sources.Batch(sl.sources.Position(), ())
+            return self.initial(build).batch
         selector = (
             PageSelector(before_id=build_id)
             if position.direction is sl.sources.Direction.BACKWARD
             else PageSelector(after_id=build_id)
         )
-        page = await self.queries.list_page(statuses=self.statuses, selector=selector, page_size=extent)
-        return sl.sources.Window(
+        page = await self.queries.list_page(statuses=self.statuses, selector=selector, page_size=fetch_size)
+        return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None),
             page.items,
             previous=sl.sources.Position(str(page.prev.before_id), direction=sl.sources.Direction.BACKWARD)
@@ -448,8 +450,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             summary=_build_summary,
             detail=self._detail,
             entry_actions=self._build_actions,
-            page_size=CATALOGUE_PAGE_SIZE,
-            show_page_size=True,
+            fetch_size=CATALOGUE_PAGE_SIZE,
+            show_fetch_size=True,
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
             # `_BuildSource` uses the default listing order: highest, so newest, build ID first.
@@ -807,7 +809,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _show_build(self, build: Build) -> None:
         source = _NeighbourBuildSource(self._queries, self._statuses)
         session = sp.BrowseSession(
-            source, identity=lambda item: str(item.id), page_size=1, initial=source.initial(build)
+            source, identity=lambda item: str(item.id), fetch_size=1, initial=source.initial(build)
         )
         session.open(str(build.id), revision=session.revision)
         browser = sp.Browser(

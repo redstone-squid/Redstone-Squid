@@ -17,7 +17,7 @@ from squid.core.records.application.models import PublishedTitle
 from squid.core.records.domain.models import VersionScope
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
-from squid_ui.sources import window_fingerprint
+from squid_ui.sources import batch_fingerprint
 
 CATALOGUE_PAGE_SIZE = 15
 """Rows per page in the catalogue's build, record, and search lists; viewers can change it."""
@@ -35,24 +35,26 @@ class RecordSource:
         self._records = records
         self._version_scope = version_scope
 
-    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[PublishedTitle]:
+    async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[PublishedTitle]:
         page = await self._records.list_page(
             selector=PageSelector(offset=position.offset),
-            page_size=extent,
+            page_size=fetch_size,
             resolved_only=True,
             version_scope=self._version_scope,
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
-        return sl.sources.Window(
+        return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
-            previous=sl.sources.Position(offset=max(0, position.offset - extent)) if page.prev is not None else None,
+            previous=sl.sources.Position(offset=max(0, position.offset - fetch_size))
+            if page.prev is not None
+            else None,
             next=sl.sources.Position(offset=position.offset + len(page.items)) if page.next is not None else None,
-            total=page.total,
+            item_count=page.total,
         )
 
-    def fingerprint(self, window: sl.sources.Window[PublishedTitle]) -> str:
-        return window_fingerprint(window.items, lambda record: str(record.id))
+    def fingerprint(self, batch: sl.sources.Batch[PublishedTitle]) -> str:
+        return batch_fingerprint(batch.items, lambda record: str(record.id))
 
 
 def _record_label(record: PublishedTitle) -> str:
@@ -96,8 +98,8 @@ def record_browser(
         label=_record_label,
         summary=lambda record: record_row(record.title, record.subtitle),
         detail=detail,
-        page_size=CATALOGUE_PAGE_SIZE,
-        show_page_size=True,
+        fetch_size=CATALOGUE_PAGE_SIZE,
+        show_fetch_size=True,
         title=tr(t"record-browse-title = Records"),
         empty=tr(t"record-browse-empty = No published records are available."),
     )

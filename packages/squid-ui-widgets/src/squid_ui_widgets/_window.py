@@ -1,11 +1,11 @@
-"""Shared paging state for widgets whose visible page comes from a window source."""
+"""Shared paging state for widgets whose visible page comes from a batch source."""
 
 from dataclasses import dataclass
 
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.planning.pagination.navigation import NavigationState, NavigationUnit
-from squid_ui.sources import Chronology, CountPrecision, LoadedWindow, SourceCapabilities
+from squid_ui.sources import Chronology, CountPrecision, LoadedBatch, SourceCapabilities
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,42 +23,42 @@ DEFAULT_LOADING_COPY = LoadingCopy()
 
 
 def source_navigation_state[ItemT](
-    loaded: LoadedWindow[ItemT],
+    loaded: LoadedBatch[ItemT],
     capabilities: SourceCapabilities,
     *,
     key: str,
-    page_size: int,
+    fetch_size: int,
     chrome: Chrome,
     chronology: Chronology | None = None,
 ) -> NavigationState | None:
-    """Build navigation facts for an addressable source window, if it can move.
+    """Build navigation facts for an addressable source batch, if it can move.
 
     An exact jumpable source stays navigable on its last page so the jump control can
     still take the reader elsewhere. The buttons say Previous and Next unless `chronology`
     says how the items are sorted in time.
     """
-    window = loaded.window
-    extent = capabilities.group_count(window, page_size) if capabilities.jumpable else None
-    if not (window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1):
+    batch = loaded.batch
+    extent = capabilities.group_count(batch, fetch_size) if capabilities.jumpable else None
+    if not (batch.has_next or (capabilities.backward and batch.has_previous) or (extent or 0) > 1):
         return None
-    total = window.total if capabilities.count is not CountPrecision.NONE else None
+    total = batch.item_count if capabilities.count is not CountPrecision.NONE else None
     previous_label, next_label = step_labels(chrome, chronology)
     visible_range = (
-        (window.position.offset + 1, window.position.offset + len(window.items))
-        if capabilities.offsets and window.items
+        (batch.position.offset + 1, batch.position.offset + len(batch.items))
+        if capabilities.offsets and batch.items
         else None
     )
     return NavigationState(
         key=key,
-        has_previous=window.has_previous,
-        has_next=window.has_next,
+        has_previous=batch.has_previous,
+        has_next=batch.has_next,
         backward=capabilities.backward,
         previous_label=previous_label,
         next_label=next_label,
         previous_key=f"{key}.previous",
         next_key=f"{key}.next",
         extent=extent,
-        page=window.position.offset // page_size if capabilities.fixed_groups else None,
+        index=batch.position.offset // fetch_size if capabilities.fixed_groups else None,
         unit=NavigationUnit.GROUPS if capabilities.fixed_groups else NavigationUnit.ITEMS,
         visible_range=visible_range,
         total=total,

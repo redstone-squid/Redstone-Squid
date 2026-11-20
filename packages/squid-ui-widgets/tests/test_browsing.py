@@ -7,7 +7,7 @@ import pytest
 
 from squid_reactivity import transaction
 from squid_reactivity.operations import Failed
-from squid_ui.sources import LoadedWindow, Position, SourceCapabilities, Window, list_source
+from squid_ui.sources import Batch, LoadedBatch, Position, SourceCapabilities, list_source
 from squid_ui_widgets.browsing import BrowseSession
 
 
@@ -18,7 +18,7 @@ async def settle[ItemT](session: BrowseSession[ItemT]) -> None:
 
 
 async def test_item_steps_cross_windows_and_back_returns_to_the_containing_window() -> None:
-    session = BrowseSession(list_source(("a", "b", "c")), identity=str, page_size=2)
+    session = BrowseSession(list_source(("a", "b", "c")), identity=str, fetch_size=2)
     await settle(session)
     session.open("a", revision=session.revision)
     session.move("next-item", revision=session.revision)
@@ -35,7 +35,7 @@ async def test_item_steps_cross_windows_and_back_returns_to_the_containing_windo
     session.back(revision=session.revision)
     assert session.snapshot is not None
     assert session.snapshot.focus is None
-    assert session.snapshot.loaded.window.items == ("a", "b")
+    assert session.snapshot.loaded.batch.items == ("a", "b")
 
 
 class HeldSource:
@@ -47,21 +47,21 @@ class HeldSource:
         self.fail = False
         self.requests: list[Position] = []
 
-    async def fetch(self, position: Position, extent: int) -> Window[str]:
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
         self.requests.append(position)
         if position.anchor is None:
-            return Window(Position(), ("a",), next=Position("second"))
+            return Batch(Position(), ("a",), next=Position("second"))
         self.started.set()
         await self.release.wait()
         if self.fail:
             raise RuntimeError("offline")
-        return Window(Position("second"), ("b",), previous=Position())
+        return Batch(Position("second"), ("b",), previous=Position())
 
 
 @pytest.mark.parametrize("replacement", ["back", "reset"])
 async def test_a_late_result_cannot_reopen_detail_or_replace_a_new_collection(replacement: str) -> None:
     source = HeldSource()
-    session = BrowseSession(source, identity=str, page_size=1)
+    session = BrowseSession(source, identity=str, fetch_size=1)
     await settle(session)
     session.open("a", revision=session.revision)
     session.move("next-item", revision=session.revision)
@@ -76,7 +76,7 @@ async def test_a_late_result_cannot_reopen_detail_or_replace_a_new_collection(re
         source.release.set()
     assert session.snapshot is not None
     assert session.snapshot.focus is None
-    assert session.snapshot.loaded.window.items == (("a",) if replacement == "back" else ("x",))
+    assert session.snapshot.loaded.batch.items == (("a",) if replacement == "back" else ("x",))
 
 
 async def test_retry_preserves_the_original_destination_and_focus() -> None:
@@ -99,7 +99,7 @@ async def test_retry_preserves_the_original_destination_and_focus() -> None:
 
 
 async def test_stale_and_duplicate_clicks_cannot_skip_items() -> None:
-    session = BrowseSession(list_source(("a", "b", "c")), identity=str, page_size=1)
+    session = BrowseSession(list_source(("a", "b", "c")), identity=str, fetch_size=1)
     await settle(session)
     session.open("a", revision=session.revision)
     revision = session.revision
@@ -113,7 +113,7 @@ async def test_stale_and_duplicate_clicks_cannot_skip_items() -> None:
 
 
 async def test_a_rolled_back_navigation_action_does_not_start_work() -> None:
-    session = BrowseSession(list_source(("a", "b")), identity=str, page_size=1)
+    session = BrowseSession(list_source(("a", "b")), identity=str, fetch_size=1)
     await settle(session)
     before = session.snapshot
     with pytest.raises(RuntimeError, match="rollback"), transaction():
@@ -127,7 +127,7 @@ async def test_forward_only_sources_still_allow_local_previous_item() -> None:
     source = HeldSource()
     source.capabilities = SourceCapabilities()
     session = BrowseSession(source, identity=str)
-    session.replace(LoadedWindow(Window(Position(), ("a", "b")), "ab"))
+    session.replace(LoadedBatch(Batch(Position(), ("a", "b")), "ab"))
     session.open("b", revision=session.revision)
     assert session.can_step(-1)
     session.move("previous-item", revision=session.revision)
@@ -139,7 +139,7 @@ async def test_forward_only_sources_still_allow_local_previous_item() -> None:
 @pytest.mark.parametrize("size", [0, 1, 7])
 async def test_traversal_visits_each_item_once_in_both_directions(size: int, page_size: int) -> None:
     items = tuple(str(index) for index in range(size))
-    session = BrowseSession(list_source(items), identity=str, page_size=page_size)
+    session = BrowseSession(list_source(items), identity=str, fetch_size=page_size)
     await settle(session)
     if not items:
         assert session.focus is None
@@ -165,8 +165,8 @@ async def test_refresh_retains_the_detail_visit_until_the_focused_item_is_remove
         capabilities = SourceCapabilities(backward=True, offsets=True)
         items: tuple[str, ...] = ("a", "b")
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
-            return Window(Position(), self.items)
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+            return Batch(Position(), self.items)
 
     source = MutableSource()
     session = BrowseSession(source, identity=str)
@@ -188,13 +188,13 @@ async def test_boundary_fetches_handle_empty_and_overlapping_windows(result: str
     class SparseSource:
         capabilities = SourceCapabilities()
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
             if position.anchor is None:
-                return Window(Position(), ("a",), next=Position("gap"))
+                return Batch(Position(), ("a",), next=Position("gap"))
             if position.anchor == "gap":
                 continuation = None if result == "end" else Position("gap" if result == "cycle" else "b")
-                return Window(Position("gap"), ("a",) if result == "overlap" else (), next=continuation)
-            return Window(Position("b"), ("b",))
+                return Batch(Position("gap"), ("a",) if result == "overlap" else (), next=continuation)
+            return Batch(Position("b"), ("b",))
 
     session = BrowseSession(SparseSource(), identity=str)
     await settle(session)
@@ -211,7 +211,7 @@ async def test_boundary_fetches_handle_empty_and_overlapping_windows(result: str
 
 
 async def test_resize_restarts_and_rejects_stale_controls() -> None:
-    session = BrowseSession(list_source(("a", "b", "c", "d")), identity=str, page_size=2)
+    session = BrowseSession(list_source(("a", "b", "c", "d")), identity=str, fetch_size=2)
     await settle(session)
     session.move("next", revision=session.revision)
     await settle(session)
@@ -220,12 +220,12 @@ async def test_resize_restarts_and_rejects_stale_controls() -> None:
     assert session.snapshot is None
     await settle(session)
     assert session.snapshot is not None
-    assert session.snapshot.loaded.window.items == ("a", "b", "c")
+    assert session.snapshot.loaded.batch.items == ("a", "b", "c")
     session.resize(1, revision=revision)
-    assert session.page_size == 3
+    assert session.fetch_size == 3
     session.move("next", revision=session.revision)
     await settle(session)
-    assert session.snapshot.loaded.window.items == ("d",)
+    assert session.snapshot.loaded.batch.items == ("d",)
 
 
 @pytest.mark.parametrize("size", [0, -1])

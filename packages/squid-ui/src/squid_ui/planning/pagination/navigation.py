@@ -1,4 +1,4 @@
-"""Build navigation controls for complete content and asynchronously loaded windows.
+"""Build navigation controls for complete content and asynchronously loaded batches.
 
 Both kinds of pager expose `NavigationState`, which describes the visible position
 and available movements. `NavigationContext` adds handlers so a factory can build
@@ -170,7 +170,7 @@ class NavigationState:
     next_key: str
     extent: int | None = None
     """Exact extent in `unit`, when known."""
-    page: int | None = None
+    index: int | None = None
     """Zero-based position in `unit`, when known."""
     visible_range: tuple[int, int] | None = None
     total: int | None = None
@@ -200,8 +200,8 @@ class NavigationContext:
     chrome: Chrome = dataclass_field(default=DEFAULT_CHROME, kw_only=True)
     jump_route: str | None = None
     """Persistent button route that opens a page-number form, when provided by the host."""
-    page_size: sem.FormTrigger | None = dataclass_field(default=None, kw_only=True)
-    """Optional page-size form to include alongside the navigation buttons."""
+    fetch_size: sem.FormTrigger | None = dataclass_field(default=None, kw_only=True)
+    """Optional batch-size form to include alongside the navigation buttons."""
 
     @property
     def key(self) -> str:
@@ -216,8 +216,8 @@ class NavigationContext:
         return self.state.has_next
 
     @property
-    def page(self) -> int | None:
-        return self.state.page
+    def index(self) -> int | None:
+        return self.state.index
 
     @property
     def extent(self) -> int | None:
@@ -261,7 +261,7 @@ def page_jump_form(
 
 
 @dataclass(frozen=True, slots=True)
-class SubmitPageSize(_HandlerComposition):
+class SubmitFetchSize(_HandlerComposition):
     change: Callable[[ActionEvent, int], Awaitable[None]]
 
     @override
@@ -272,23 +272,23 @@ class SubmitPageSize(_HandlerComposition):
         return self
 
     async def __call__(self, event: SubmitEvent) -> None:
-        await self.change(event, cast(int, event.values["page_size"]))
+        await self.change(event, cast(int, event.values["fetch_size"]))
 
 
-def page_size_form(page_size: int, *, maximum: int | None = None, chrome: Chrome = DEFAULT_CHROME) -> FormSpec:
+def fetch_size_form(fetch_size: int, *, maximum: int | None = None, chrome: Chrome = DEFAULT_CHROME) -> FormSpec:
     """Ask for a positive item count, optionally bounded by the widget's capacity."""
-    if page_size < 1 or (maximum is not None and page_size > maximum):
-        message = "page_size must be positive and no greater than maximum"
+    if fetch_size < 1 or (maximum is not None and fetch_size > maximum):
+        message = "fetch_size must be positive and no greater than maximum"
         raise ValueError(message)
     return FormSpec(
-        chrome.items_per_page,
+        chrome.items_per_batch,
         (
             IntField(
-                key="page_size",
-                label=chrome.items_per_page,
+                key="fetch_size",
+                label=chrome.items_per_batch,
                 minimum=1,
                 maximum=maximum,
-                default=page_size,
+                default=fetch_size,
                 chrome=chrome,
             ),
         ),
@@ -318,13 +318,13 @@ def materialized_navigation(
         next_label=chrome.next,
         previous_key=f"{MATERIALIZED_PREVIOUS_KEY}.{key}",
         next_key=f"{MATERIALIZED_NEXT_KEY}.{key}",
-        page=selection.index.value if selection is not None and isinstance(selection.index, Known) else None,
+        index=selection.index.value if selection is not None and isinstance(selection.index, Known) else None,
         extent=count.value if isinstance(count, Known) else None,
         seek_key=f"{MATERIALIZED_SEEK_KEY}.{key}",
         seek_label=chrome.jump_to_page,
         page_option=chrome.page_option,
     )
-    seekable = state.page is not None and state.extent is not None
+    seekable = state.index is not None and state.extent is not None
     if route_prefix is not None:
         return NavigationContext(
             state,
@@ -365,11 +365,11 @@ __all__ = [
     "PlannedNav",
     "TurnPage",
     "default_nav",
+    "fetch_size_button",
+    "fetch_size_form",
     "materialized_navigation",
     "page_jump_form",
     "page_select_nav",
-    "page_size_button",
-    "page_size_form",
 ]
 
 
@@ -391,7 +391,7 @@ def default_nav(context: NavigationContext) -> Sequence[NavNode]:
         if state.backward
         else ()
     )
-    size = (context.page_size,) if context.page_size is not None else ()
+    size = (context.fetch_size,) if context.fetch_size is not None else ()
     return (
         sem.ActionControls(
             (*previous, control(state.next_label, context.on_next, state.next_key, state.has_next), *size),
@@ -400,9 +400,9 @@ def default_nav(context: NavigationContext) -> Sequence[NavNode]:
     )
 
 
-def page_size_button(
+def fetch_size_button(
     key: str,
-    page_size: int,
+    fetch_size: int,
     on_change: Callable[[ActionEvent, int], Awaitable[None]],
     *,
     maximum: int | None = None,
@@ -410,10 +410,10 @@ def page_size_button(
 ) -> sem.FormTrigger:
     """Offer a portable form that changes an application's items-per-page value."""
     return sem.FormTrigger(
-        f"{key}.page-size",
-        chrome.items_per_page,
-        page_size_form(page_size, maximum=maximum, chrome=chrome),
-        SubmitPageSize(on_change),
+        f"{key}.fetch-size",
+        chrome.items_per_batch,
+        fetch_size_form(fetch_size, maximum=maximum, chrome=chrome),
+        SubmitFetchSize(on_change),
         mode=ActionMode.REBASE,
     )
 
@@ -437,14 +437,14 @@ class _SeekChoice(_HandlerComposition):
 def page_select_nav(context: NavigationContext) -> Sequence[NavNode]:
     """Previous/Next plus portable page choices when random access is available."""
     state, seek = context.state, context.on_seek
-    if seek is None or state.page is None or state.extent is None or state.extent < 2 or state.page_option is None:
+    if seek is None or state.index is None or state.extent is None or state.extent < 2 or state.page_option is None:
         return default_nav(context)
     choices = tuple(sem.Choice(str(page), state.page_option(page + 1)) for page in range(state.extent))
     picker = (
         sem.RoutedChoices(
-            state.seek_key, choices, seek, placeholder=state.seek_label or None, selected=(str(state.page),)
+            state.seek_key, choices, seek, placeholder=state.seek_label or None, selected=(str(state.index),)
         )
         if isinstance(seek, str)
-        else sem.Choices(state.seek_key, choices, selection=Controlled((str(state.page),), _SeekChoice(seek)))
+        else sem.Choices(state.seek_key, choices, selection=Controlled((str(state.index),), _SeekChoice(seek)))
     )
     return (*default_nav(context), picker)

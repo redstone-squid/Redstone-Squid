@@ -341,7 +341,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 label=lambda d: CATALOGUE[d.node].description,
                 summary=lambda d: self._privilege_summary(d, guild),
                 detail=lambda d: sl.paragraph(_explanation(d, role_only)),
-                page_size=5,
+                fetch_size=5,
                 title=f"Effective privileges in {self._guild_name} ({len(allowed)})",
                 empty="No allowed actions in your inspection scope.",
             ),
@@ -586,7 +586,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 f"{_subject_item_summary(row, scope(row))} · by {authors.get(row.granted_by_account_id or 0, 'System' if row.granted_by_account_id is None else 'Unknown account')}"
             ),
             detail=lambda row: _subject_item_detail(row, scope(row)),
-            page_size=4,
+            fetch_size=4,
             title=tr(t"access-view-rules-and-assignments = Direct rules and assigned bot roles"),
         )
 
@@ -715,7 +715,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label=lambda role: role.name,
             summary=_role_summary,
             detail=lambda role: self._role_editor(role, roles),
-            page_size=8,
+            fetch_size=8,
             title=tr(t"access-view-internal-roles = Manage bot roles"),
             empty=tr(t"access-role-list-empty = No internal roles are visible in this server."),
         )
@@ -1004,7 +1004,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.field(tr(t"access-view-default = Default"), node.default.value),
                 sl.field(tr(t"access-view-description = Description"), node.description),
             ),
-            page_size=8,
+            fetch_size=8,
             title=title,
             empty=tr(t"access-permission-catalogue-empty = This role grants no actions."),
         )
@@ -1100,7 +1100,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                     else "All servers",
                 ),
             ),
-            page_size=8,
+            fetch_size=8,
             title=tr(t"access-view-permission-audit = Audit log"),
             empty=tr(t"access-audit-empty = No permission changes are recorded for this server."),
         )

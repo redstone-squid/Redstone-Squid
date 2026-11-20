@@ -1,4 +1,4 @@
-"""Position policy and asynchronous window loading contracts."""
+"""Position policy and asynchronous batch loading contracts."""
 
 import asyncio
 from dataclasses import dataclass
@@ -7,12 +7,12 @@ import anyio
 import pytest
 
 from squid_ui.sources import (
+    Batch,
+    BatchLoader,
     CountPrecision,
     Direction,
     Position,
     SourceCapabilities,
-    Window,
-    WindowLoader,
     list_source,
 )
 
@@ -31,55 +31,55 @@ class ListSource:
         self.keys = keys
         self.requests: list[Position] = []
 
-    async def fetch(self, position: Position, extent: int) -> Window[Entry]:
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[Entry]:
         self.requests.append(position)
         if position.anchor in self.keys:
             anchor = self.keys.index(position.anchor)
             if position.direction is Direction.FORWARD:
                 offset = anchor + 1
             elif position.direction is Direction.BACKWARD:
-                offset = max(0, anchor - extent)
+                offset = max(0, anchor - fetch_size)
             else:
                 offset = anchor
         else:
             offset = min(position.offset, max(0, len(self.keys) - 1))
-        items = tuple(Entry(key) for key in self.keys[offset : offset + extent])
+        items = tuple(Entry(key) for key in self.keys[offset : offset + fetch_size])
         anchor = items[0].key if items else None
-        return Window(
+        return Batch(
             Position(anchor, offset),
             items,
-            previous=Position(anchor, max(0, offset - extent), Direction.BACKWARD) if offset > 0 else None,
+            previous=Position(anchor, max(0, offset - fetch_size), Direction.BACKWARD) if offset > 0 else None,
             next=Position(items[-1].key, offset + len(items), Direction.FORWARD)
-            if offset + extent < len(self.keys)
+            if offset + fetch_size < len(self.keys)
             else None,
-            total=len(self.keys),
+            item_count=len(self.keys),
         )
 
 
 async def test_loader_navigates_by_boundaries_and_accepts_resolved_positions() -> None:
     source = ListSource(("a", "b", "c", "d", "e"))
-    loader = WindowLoader(source, 2, lambda entry: entry.key)
+    loader = BatchLoader(source, 2, lambda entry: entry.key)
 
     first = await loader.load()
     assert first is not None
-    assert first.window.items == (Entry("a"), Entry("b"))
+    assert first.batch.items == (Entry("a"), Entry("b"))
     assert first.position == Position("a", 0)
 
     second = await loader.next(first)
     assert second is not None
     assert source.requests[-1] == Position("b", 2, Direction.FORWARD)
-    assert second.window.items == (Entry("c"), Entry("d"))
+    assert second.batch.items == (Entry("c"), Entry("d"))
     assert second.position == Position("c", 2)
 
     returned = await loader.previous(second)
     assert returned is not None
     assert source.requests[-1] == Position("c", 0, Direction.BACKWARD)
-    assert returned.window.items == (Entry("a"), Entry("b"))
+    assert returned.batch.items == (Entry("a"), Entry("b"))
 
 
 async def test_refresh_delegates_anchor_gone_fallback_to_the_source() -> None:
     source = ListSource(("a", "b", "c"))
-    loader = WindowLoader(source, 2, lambda entry: entry.key)
+    loader = BatchLoader(source, 2, lambda entry: entry.key)
     first = await loader.load()
     assert first is not None
 
@@ -88,7 +88,7 @@ async def test_refresh_delegates_anchor_gone_fallback_to_the_source() -> None:
 
     assert refreshed is not None
     assert source.requests[-1] == Position("a", 0)
-    assert refreshed.window.items == (Entry("b"), Entry("c"))
+    assert refreshed.batch.items == (Entry("b"), Entry("c"))
     assert refreshed.position == Position("b", 0)
     assert refreshed.fingerprint != first.fingerprint
 
@@ -102,19 +102,19 @@ class RacingSource:
         self.started = {"old": asyncio.Event(), "new": asyncio.Event()}
         self.release = {"old": asyncio.Event(), "new": asyncio.Event()}
 
-    async def fetch(self, position: Position, extent: int) -> Window[str]:
-        del extent
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+        del fetch_size
         assert position.anchor is not None
         self.started[position.anchor].set()
         await self.release[position.anchor].wait()
-        return Window(
+        return Batch(
             Position(position.anchor), (position.anchor,), previous=Position("previous"), next=Position("next")
         )
 
 
 async def test_out_of_order_result_cannot_publish_state() -> None:
     source = RacingSource()
-    loader = WindowLoader(source, 1, lambda item: item)
+    loader = BatchLoader(source, 1, lambda item: item)
     results = {}
     finished = {"old": asyncio.Event(), "new": asyncio.Event()}
 
@@ -132,7 +132,7 @@ async def test_out_of_order_result_cannot_publish_state() -> None:
         source.release["old"].set()
 
     assert results["old"] is None
-    assert results["new"] is not None and results["new"].window.items == ("new",)
+    assert results["new"] is not None and results["new"].batch.items == ("new",)
 
 
 @pytest.mark.parametrize(
@@ -156,38 +156,38 @@ def test_capabilities_reject_claims_that_require_unknown_offsets() -> None:
 
 def test_window_requires_a_resolved_position() -> None:
     with pytest.raises(ValueError, match="AROUND"):
-        Window(Position("a", direction=Direction.FORWARD), ("a",))
+        Batch(Position("a", direction=Direction.FORWARD), ("a",))
     with pytest.raises(ValueError, match="negative offset"):
-        Window(Position("a", offset=-1), ("a",))
+        Batch(Position("a", offset=-1), ("a",))
 
 
 async def test_loader_rejects_results_that_contradict_capabilities() -> None:
     source = ListSource(("a", "b"))
     source.capabilities = SourceCapabilities()
     with pytest.raises(ValueError, match="uncountable source returned a total"):
-        await WindowLoader(source, 2, lambda entry: entry.key).load()
+        await BatchLoader(source, 2, lambda entry: entry.key).load()
 
     class InvalidExactSource:
         capabilities = SourceCapabilities(offsets=True, count=CountPrecision.EXACT)
 
-        async def fetch(self, position: Position, extent: int) -> Window[Entry]:
-            del position, extent
-            return Window(Position(offset=1), (Entry("a"),), total=1)
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[Entry]:
+            del position, fetch_size
+            return Batch(Position(offset=1), (Entry("a"),), item_count=1)
 
     with pytest.raises(ValueError, match="beyond its total"):
-        await WindowLoader(InvalidExactSource(), 2, lambda entry: entry.key).load(Position(offset=1))
+        await BatchLoader(InvalidExactSource(), 2, lambda entry: entry.key).load(Position(offset=1))
 
 
 async def test_a_list_source_returns_exact_offset_windows_and_advertises_every_capability() -> None:
     source = list_source(("a", "b", "c"))
 
-    window = await source.fetch(Position(offset=1), 2)
+    batch = await source.fetch(Position(offset=1), 2)
 
-    assert window.items == ("b", "c")
-    assert window.position == Position(offset=1)
-    assert window.has_previous
-    assert not window.has_next
-    assert window.total == 3
+    assert batch.items == ("b", "c")
+    assert batch.position == Position(offset=1)
+    assert batch.has_previous
+    assert not batch.has_next
+    assert batch.item_count == 3
     assert source.capabilities == SourceCapabilities(
         backward=True,
         offsets=True,
@@ -200,56 +200,56 @@ async def test_loader_follows_source_addresses_without_reconstructing_them() -> 
     class TokenSource:
         capabilities = SourceCapabilities(backward=True)
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
-            assert extent == 2
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+            assert fetch_size == 2
             match position.anchor:
                 case None | "return-to-first":
-                    return Window(Position("first"), ("a", "b"), next=Position("continue-at-c"))
+                    return Batch(Position("first"), ("a", "b"), next=Position("continue-at-c"))
                 case "continue-at-c":
-                    return Window(Position("second"), ("c",), previous=Position("return-to-first"))
+                    return Batch(Position("second"), ("c",), previous=Position("return-to-first"))
                 case _:
                     raise AssertionError(f"unexpected address {position}")
 
-    loader = WindowLoader(TokenSource(), 2, str)
+    loader = BatchLoader(TokenSource(), 2, str)
     first = await loader.load()
     assert first is not None
     second = await loader.next(first)
-    assert second is not None and second.window.items == ("c",)
+    assert second is not None and second.batch.items == ("c",)
     returned = await loader.previous(second)
-    assert returned is not None and returned.window.items == ("a", "b")
+    assert returned is not None and returned.batch.items == ("a", "b")
 
 
 async def test_fixed_source_groups_are_aligned_and_counted_without_claiming_fit() -> None:
     source = list_source(tuple(str(i) for i in range(23)), fixed_groups=True)
-    loader = WindowLoader(source, 10, str)
+    loader = BatchLoader(source, 10, str)
     loaded = await loader.load(Position(offset=21))
     assert loaded is not None
     assert loaded.position.offset == 20
-    assert loaded.window.items == ("20", "21", "22")
-    assert source.capabilities.group_count(loaded.window, 10) == 3
+    assert loaded.batch.items == ("20", "21", "22")
+    assert source.capabilities.group_count(loaded.batch, 10) == 3
     previous = await loader.previous(loaded)
     assert previous is not None and previous.position.offset == 10
-    assert source.capabilities.group_count(previous.window, 10) == 3
+    assert source.capabilities.group_count(previous.batch, 10) == 3
     ordinary = list_source(tuple(str(i) for i in range(23)))
-    assert ordinary.capabilities.group_count(loaded.window, 10) is None
+    assert ordinary.capabilities.group_count(loaded.batch, 10) is None
 
 
 @pytest.mark.parametrize(
-    "window",
+    "batch",
     [
-        Window(Position(offset=1), ("a", "b"), total=3),
-        Window(Position(), ("a",), next=Position(offset=2), total=3),
-        Window(Position(), ("a", "b"), next=Position(offset=4), total=3),
-        Window(Position(), ("a",), total=3),
-        Window(Position(offset=4), (), total=3),
+        Batch(Position(offset=1), ("a", "b"), item_count=3),
+        Batch(Position(), ("a",), next=Position(offset=2), item_count=3),
+        Batch(Position(), ("a", "b"), next=Position(offset=4), item_count=3),
+        Batch(Position(), ("a",), item_count=3),
+        Batch(Position(offset=4), (), item_count=3),
     ],
 )
-async def test_loader_rejects_broken_fixed_group_promises(window: Window[str]) -> None:
+async def test_loader_rejects_broken_fixed_group_promises(batch: Batch[str]) -> None:
     class Broken:
         capabilities = SourceCapabilities(offsets=True, count=CountPrecision.EXACT, fixed_groups=True)
 
-        async def fetch(self, position: Position, extent: int) -> Window[str]:
-            return window
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+            return batch
 
     with pytest.raises(ValueError, match="fixed-group"):
-        await WindowLoader(Broken(), 2, str).load()
+        await BatchLoader(Broken(), 2, str).load()

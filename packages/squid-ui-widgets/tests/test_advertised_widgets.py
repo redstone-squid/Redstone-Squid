@@ -22,12 +22,12 @@ async def test_resource_backed_and_actor_keyed_widgets_render_without_a_frontend
 
     # `SourceRankedList` takes rows already ranked or the raw entries behind them, so its source
     # declares that union rather than the bare item type the other three widgets take.
-    ranked_source: sl.sources.WindowSource[sp.RankedEntry | str] = sl.sources.list_source(("one", "two"))
+    ranked_source: sl.sources.BatchSource[sp.RankedEntry | str] = sl.sources.list_source(("one", "two"))
 
     agreement = sp.Agreement("Approve?", (sp.AgreementParticipant("one", "One"),))
     browser = sp.Browser(source, identity=str, label=str, detail=lambda item: item)
     search = sp.SearchPicker(lambda _query: source, identity=str, label=str, on_pick=picked)
-    ranking = sp.SourceRankedList(ranked_source, key="ranking", page_size=10, identity=str, label=str)
+    ranking = sp.SourceRankedList(ranked_source, key="ranking", fetch_size=10, identity=str, label=str)
 
     for component in (agreement, browser, search, ranking):
         assert engine.render_tree(component), f"{type(component).__name__} rendered nothing"

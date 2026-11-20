@@ -26,12 +26,12 @@ from squid_ui.factories import (
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.runtime.definition import Component
-from squid_ui.sources import WindowSource, window_footer
+from squid_ui.sources import BatchSource, batch_footer
 from squid_ui_widgets._content import require_key
 from squid_ui_widgets._window import LoadingCopy
 from squid_ui_widgets.browsing import BrowseSession, BrowseSnapshot, Movement
 
-type SearchProvider[ItemT] = Callable[[str], WindowSource[ItemT]]
+type SearchProvider[ItemT] = Callable[[str], BatchSource[ItemT]]
 type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
 
 
@@ -40,7 +40,7 @@ SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
 
 
 class SearchPicker[ItemT](Component):
-    """Search a window source and retain picked items across query changes.
+    """Search a batch source and retain picked items across query changes.
 
     With maximum=1 a new pick replaces the previous one. Higher limits allow
     selecting several visible results at once and accumulating picks across pages.
@@ -64,7 +64,7 @@ class SearchPicker[ItemT](Component):
         maximum: int = 1,
         picked: Sequence[ItemT] = (),
         on_pick: SearchPickHandler[ItemT],
-        page_size: int = 10,
+        fetch_size: int = 10,
         copy: LoadingCopy = SEARCH_LOADING_COPY,
         show_heading: bool = True,
         search_label: TextLike | None = None,
@@ -75,8 +75,8 @@ class SearchPicker[ItemT](Component):
         if minimum < 0 or maximum < 1 or minimum > maximum:
             message = "SearchPicker bounds must satisfy 0 <= minimum <= maximum and maximum >= 1"
             raise ValueError(message)
-        if not 1 <= page_size <= 25:
-            message = "SearchPicker.page_size must be between 1 and 25"
+        if not 1 <= fetch_size <= 25:
+            message = "SearchPicker.fetch_size must be between 1 and 25"
             raise ValueError(message)
         initial = tuple(picked)
         identities = tuple(identity(item) for item in initial)
@@ -94,7 +94,7 @@ class SearchPicker[ItemT](Component):
         self.maximum = maximum
         self.picked = initial
         self.on_pick = on_pick
-        self.page_size = page_size
+        self.fetch_size = fetch_size
         self.copy = copy
         self.show_heading = show_heading
         self.search_label = search_label
@@ -106,7 +106,7 @@ class SearchPicker[ItemT](Component):
         source = self.search(query)
         self.query = query
         if self.session is None:
-            self.session = BrowseSession(source, identity=self.identity, page_size=self.page_size)
+            self.session = BrowseSession(source, identity=self.identity, fetch_size=self.fetch_size)
         else:
             self.session.reset(source)
 
@@ -127,7 +127,7 @@ class SearchPicker[ItemT](Component):
         current = self.session.snapshot
         if current is None:
             return
-        visible = {self.identity(item): item for item in current.loaded.window.items}
+        visible = {self.identity(item): item for item in current.loaded.batch.items}
         if any(key not in visible for key in event.selected):
             return
         identities = {self.identity(item) for item in self.picked}
@@ -192,8 +192,8 @@ class SearchPicker[ItemT](Component):
         session = self.session
         current = session.snapshot if session is not None else None
         if self.hide_search_when_complete and not self.query and current is not None:
-            window = current.loaded.window
-            if not window.has_previous and not window.has_next:
+            batch = current.loaded.batch
+            if not batch.has_previous and not batch.has_next:
                 search_control = None
         header = heading(chrome.search) if self.show_heading and search_control is not None else None
         query = paragraph(self.query) if self.show_query and self.query else None
@@ -228,17 +228,17 @@ class SearchPicker[ItemT](Component):
         status_text: TextLike | None = None,
         retry: bool = False,
     ) -> tuple[ChildLike, ...]:
-        """Render one result window with navigation and status."""
+        """Render one result batch with navigation and status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         assert self.session is not None
-        window = current.loaded.window
+        batch = current.loaded.batch
         entries = tuple(
             choice(
                 self.label(item),
                 key=self.identity(item),
                 description=self.description(item) if self.description is not None else None,
             )
-            for item in window.items
+            for item in batch.items
         )
         picker = (
             choices(
@@ -257,20 +257,20 @@ class SearchPicker[ItemT](Component):
                     chrome.previous,
                     partial(self._move, "previous", self.session.revision),
                     key=f"{self.key}.previous",
-                    available=self.session.source.capabilities.backward and window.has_previous,
+                    available=self.session.source.capabilities.backward and batch.has_previous,
                 ),
                 action_control(
                     chrome.next,
                     partial(self._move, "next", self.session.revision),
                     key=f"{self.key}.next",
-                    available=window.has_next,
+                    available=batch.has_next,
                 ),
                 key=f"{self.key}.navigation",
             )
-            if window.has_previous or window.has_next
+            if batch.has_previous or batch.has_next
             else None
         )
-        footer = window_footer(chrome, self.session.source, current.loaded, self.page_size)
+        footer = batch_footer(chrome, self.session.source, current.loaded, self.fetch_size)
         return (
             picker,
             navigation,

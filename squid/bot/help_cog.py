@@ -106,7 +106,7 @@ class HelpScreen(sd.Screen):
             label=lambda item: f"/{item.qualified_name}",
             summary=lambda item: md(t"`/{item.qualified_name}` — {_summary(item)}"),
             detail=self._detail,
-            page_size=10,
+            fetch_size=10,
             title=tr(t"help-redstone-squid-help = Redstone Squid help"),
             empty=tr(t"help-no-commands-are-available = No commands are available."),
         )

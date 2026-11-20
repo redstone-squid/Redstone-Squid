@@ -38,15 +38,15 @@ from squid_ui.planning.pagination.navigation import (
     NavigationContext,
     NavNode,
     default_nav,
-    page_size_button,
+    fetch_size_button,
 )
 from squid_ui.runtime.definition import Component
 from squid_ui.sources import (
+    BatchSource,
     Chronology,
-    LoadedWindow,
+    LoadedBatch,
     Position,
-    WindowSource,
-    window_footer,
+    batch_footer,
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
@@ -62,20 +62,20 @@ type BrowserDetail[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT =
     [ItemT], ContentLike[RenderTargetT, ContextT]
 ]
 type BrowserOverview[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = Callable[
-    [LoadedWindow[ItemT]], ContentLike[RenderTargetT, ContextT]
+    [LoadedBatch[ItemT]], ContentLike[RenderTargetT, ContextT]
 ]
 
 
 class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
-    """Browse a window source and open one item's detail content.
+    """Browse a batch source and open one item's detail content.
 
     The session owns source navigation and focus. Detail content is prepared through
     an atomic resource when focus changes; the factory must be safe to retry. Refreshing
     the same item retains its detail, whose component owns refresh of its domain data.
 
     Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
-    list sorted by time to label them Newer and Older instead. `show_page_size` adds
-    an items-per-page form (1 to 25); changing it returns to the beginning.
+    list sorted by time to label them Newer and Older instead. `show_fetch_size` adds
+    an items-per-batch form (1 to 25); changing it returns to the beginning.
 
     Back in an opened item returns to the list. Pass `on_back` when the list is not a
     useful destination, such as a browser opened directly on one item; the handler then
@@ -85,7 +85,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
 
     def __init__(
         self,
-        source: WindowSource[ItemT] | BrowseSession[ItemT],
+        source: BatchSource[ItemT] | BrowseSession[ItemT],
         *,
         key: str = "browser",
         identity: Callable[[ItemT], str] | None = None,
@@ -94,10 +94,10 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         summary: Callable[[ItemT], TextLike] | None = None,
         entry_actions: Callable[[ItemT], Sequence[ActionControl | RoutedActionControl | Link]] | None = None,
         overview: BrowserOverview[ItemT, RenderTargetT, ContextT] | None = None,
-        page_size: int = 10,
+        fetch_size: int = 10,
         title: TextLike | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
-        show_page_size: bool = False,
+        show_fetch_size: bool = False,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
         chronology: Chronology | None = None,
         on_back: Callable[[ActionEvent], Awaitable[None]] | None = None,
@@ -110,9 +110,9 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             if identity is None:
                 message = "Browser requires identity when given a source"
                 raise ValueError(message)
-            self.session = BrowseSession(source, identity=identity, page_size=page_size)
-        if not 1 <= self.session.page_size <= 25:
-            message = "Browser.page_size must be between 1 and 25"
+            self.session = BrowseSession(source, identity=identity, fetch_size=fetch_size)
+        if not 1 <= self.session.fetch_size <= 25:
+            message = "Browser.fetch_size must be between 1 and 25"
             raise ValueError(message)
         self.identity = self.session.identity
         self.label = label
@@ -122,13 +122,13 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         self.overview = overview
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
-        self.show_page_size = show_page_size
+        self.show_fetch_size = show_fetch_size
         self.copy = copy
         self.chronology = chronology
         self.on_back = on_back
 
     @property
-    def source(self) -> WindowSource[ItemT]:
+    def source(self) -> BatchSource[ItemT]:
         return self.session.source
 
     @property
@@ -146,14 +146,14 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         return self.detail(item) if key is not None and item is not None else None
 
     @property
-    def page_size(self) -> int:
-        return self.session.page_size
+    def fetch_size(self) -> int:
+        return self.session.fetch_size
 
-    async def _resize(self, revision: int, _event: ActionEvent, page_size: int) -> None:
-        if not 1 <= page_size <= 25:
-            message = "Browser.page_size must be between 1 and 25"
+    async def _resize(self, revision: int, _event: ActionEvent, fetch_size: int) -> None:
+        if not 1 <= fetch_size <= 25:
+            message = "Browser.fetch_size must be between 1 and 25"
             raise ValueError(message)
-        self.session.resize(page_size, revision=revision)
+        self.session.resize(fetch_size, revision=revision)
 
     async def refresh(self) -> None:
         self.session.move("refresh", revision=self.session.revision)
@@ -164,7 +164,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         self.session.move(movement, revision=revision)
 
     async def _seek(self, revision: int, _event: ActionEvent, page: int) -> None:
-        self.session.move("seek", revision=revision, position=Position(offset=page * self.page_size))
+        self.session.move("seek", revision=revision, position=Position(offset=page * self.fetch_size))
 
     async def _retry(self, revision: int, _event: ActionEvent) -> None:
         self.session.retry(revision=revision)
@@ -204,7 +204,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         return self._render_overview(current.loaded, status_text=status_text, retry=failed)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render a source status without a stale window."""
+        """Render a source status without a stale batch."""
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -218,14 +218,14 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
 
     def _render_overview(
         self,
-        loaded: LoadedWindow[ItemT],
+        loaded: LoadedBatch[ItemT],
         *,
         status_text: TextLike | None,
         retry: bool,
     ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render overview content, item selection, and navigation."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        items = loaded.window.items
+        items = loaded.batch.items
         extra = normalize_content(self.overview(loaded), name="Browser.overview") if self.overview is not None else ()
         if items:
             listing = (
@@ -263,10 +263,10 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             )
             if retry
             else None,
-            note(footer) if (footer := window_footer(chrome, self.source, loaded, self.page_size)) else None,
+            note(footer) if (footer := batch_footer(chrome, self.source, loaded, self.fetch_size)) else None,
         )
 
-    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[NavNode, ...]:
+    def _navigation(self, loaded: LoadedBatch[ItemT]) -> tuple[NavNode, ...]:
         """Bind shared source navigation facts to mounted handlers."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
@@ -274,15 +274,15 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             loaded,
             self.source.capabilities,
             key=self.key,
-            page_size=self.page_size,
+            fetch_size=self.fetch_size,
             chrome=chrome,
             chronology=self.chronology,
         )
         size = (
-            page_size_button(
-                self.key, self.page_size, partial(self._resize, self.session.revision), maximum=25, chrome=chrome
+            fetch_size_button(
+                self.key, self.fetch_size, partial(self._resize, self.session.revision), maximum=25, chrome=chrome
             )
-            if self.show_page_size
+            if self.show_fetch_size
             else None
         )
         if state is None:
@@ -295,14 +295,14 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
                     partial(self._move, "next", self.session.revision),
                     partial(self._seek, self.session.revision) if state.extent is not None else None,
                     chrome=chrome,
-                    page_size=size,
+                    fetch_size=size,
                 )
             )
         )
 
     def _render_detail(
         self,
-        loaded: LoadedWindow[ItemT],
+        loaded: LoadedBatch[ItemT],
         item: ItemT,
         *,
         status_text: TextLike | None,
@@ -310,7 +310,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
     ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render one opened item and its local actions."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        items = loaded.window.items
+        items = loaded.batch.items
         detail_value = self._detail.value
         assert detail_value is not None
         detail = normalize_content(detail_value, name="Browser.detail")
@@ -320,14 +320,14 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             heading(self.title) if self.title is not None else None,
             *detail,
             action_controls(
-                (len(items) > 1 or loaded.window.has_previous or loaded.window.has_next)
+                (len(items) > 1 or loaded.batch.has_previous or loaded.batch.has_next)
                 and action_control(
                     previous_label,
                     partial(self._move, "previous-item", self.session.revision),
                     key=f"{self.key}.item-previous",
                     available=self.session.can_step(-1) and not self.session.busy,
                 ),
-                (len(items) > 1 or loaded.window.has_previous or loaded.window.has_next)
+                (len(items) > 1 or loaded.batch.has_previous or loaded.batch.has_next)
                 and action_control(
                     next_label,
                     partial(self._move, "next-item", self.session.revision),

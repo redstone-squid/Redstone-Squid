@@ -18,7 +18,7 @@ from squid_ui.ext.discord.navigation_controls import page_jump_nav, page_select_
 from squid_ui.ext.discord.primitives import Button, Row
 from squid_ui.ext.discord.testing import delivered_to, interaction_harness, message_harness
 from squid_ui.planning.pagination.navigation import NavigationContext
-from squid_ui.sources import Position, Window
+from squid_ui.sources import Batch, Position
 
 
 def _texts(view: discord.ui.View | discord.ui.LayoutView) -> list[str]:
@@ -46,7 +46,7 @@ class ScoreSource:
         self.capabilities = capabilities
         self.requests: list[Position] = []
 
-    async def fetch(self, position: Position, extent: int) -> Window[sp.RankedEntry | tuple[str, int]]:
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[sp.RankedEntry | tuple[str, int]]:
         self.requests.append(position)
         keys = tuple(label for label, _score in self.entries)
         if position.anchor in keys:
@@ -54,24 +54,24 @@ class ScoreSource:
             if position.direction is sl.sources.Direction.FORWARD:
                 offset = anchor + 1
             elif position.direction is sl.sources.Direction.BACKWARD:
-                offset = max(0, anchor - extent)
+                offset = max(0, anchor - fetch_size)
             else:
                 offset = anchor
         else:
             offset = position.offset
-        visible = self.entries[offset : offset + extent]
+        visible = self.entries[offset : offset + fetch_size]
         total = len(self.entries) if self.capabilities.count is not sl.sources.CountPrecision.NONE else None
         resolved_anchor = visible[0][0] if visible else None
-        return Window(
+        return Batch(
             Position(resolved_anchor, offset),
             visible,
-            previous=Position(resolved_anchor, max(0, offset - extent), sl.sources.Direction.BACKWARD)
+            previous=Position(resolved_anchor, max(0, offset - fetch_size), sl.sources.Direction.BACKWARD)
             if offset > 0 and self.capabilities.backward
             else None,
             next=Position(visible[-1][0], offset + len(visible), sl.sources.Direction.FORWARD)
-            if offset + extent < len(self.entries)
+            if offset + fetch_size < len(self.entries)
             else None,
-            total=total,
+            item_count=total,
         )
 
 
@@ -81,11 +81,11 @@ class FlakyScoreSource(ScoreSource):
         self.fail_next = False
 
     @override
-    async def fetch(self, position: Position, extent: int) -> Window[sp.RankedEntry | tuple[str, int]]:
+    async def fetch(self, position: Position, fetch_size: int) -> Batch[sp.RankedEntry | tuple[str, int]]:
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("source unavailable")
-        return await super().fetch(position, extent)
+        return await super().fetch(position, fetch_size)
 
 
 @pytest.mark.parametrize(
@@ -117,7 +117,7 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
         capabilities=capabilities,
     )
-    ranked = sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
+    ranked = sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], fetch_size=2)
     message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
 
     await message_root.send(delivered_to(message_harness()))
@@ -138,7 +138,7 @@ async def test_source_ranked_list_shows_progress_and_follows_source_navigation()
             fixed_groups=True,
         ),
     )
-    ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
+    ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], fetch_size=2)
     message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
     await message_root.send(delivered_to(message_harness()))
 
@@ -168,7 +168,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
         ),
     )
     message_root = MessageRoot(
-        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], fetch_size=2),
         access=Everyone(),
         timeout=None,
     )
@@ -201,7 +201,7 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
         ),
     )
     message_root = MessageRoot(
-        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], fetch_size=2),
         access=Everyone(),
         timeout=None,
         nav=page_select_nav,
@@ -232,7 +232,7 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
         return page_select_nav(context)
 
     message_root = MessageRoot(
-        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], fetch_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
@@ -256,7 +256,7 @@ async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> 
         return (Row((Button("More", context.on_next, "more"),)),)
 
     message_root = MessageRoot(
-        sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], fetch_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
@@ -276,7 +276,7 @@ async def test_page_form_jumps_to_a_source_offset_beyond_25_pages() -> None:
             offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT, fixed_groups=True
         ),
     )
-    ranked = sp.SourceRankedList(source, key="ranked", identity=lambda entry: entry[0], page_size=2)
+    ranked = sp.SourceRankedList(source, key="ranked", identity=lambda entry: entry[0], fetch_size=2)
     root = MessageRoot(ranked, access=Everyone(), timeout=None, nav=page_jump_nav)
     await root.send(delivered_to(message_harness()))
     for number in (73, 100, 1):
@@ -287,34 +287,34 @@ async def test_page_form_jumps_to_a_source_offset_beyond_25_pages() -> None:
         await modal.on_submit(interaction_harness())
         assert source.requests[-1].offset == (number - 1) * 2
         assert ranked.session.snapshot is not None
-        assert ranked.session.snapshot.loaded.window.position.offset == (number - 1) * 2
+        assert ranked.session.snapshot.loaded.batch.position.offset == (number - 1) * 2
 
 
-@pytest.mark.parametrize("show_page_size", [False, True])
-async def test_optional_page_size_form_can_shrink_a_single_page(show_page_size: bool) -> None:
+@pytest.mark.parametrize("show_fetch_size", [False, True])
+async def test_optional_fetch_size_form_can_shrink_a_single_page(show_fetch_size: bool) -> None:
     ranked = sp.SourceRankedList(
         sl.sources.list_source(("a", "b", "c")),
         key="ranked",
         identity=str,
-        page_size=3,
+        fetch_size=3,
         label=str,
         value=str,
-        show_page_size=show_page_size,
+        show_fetch_size=show_fetch_size,
     )
     root = MessageRoot(ranked, access=Everyone(), timeout=None)
     await root.send(delivered_to(message_harness()))
     assert root._candidates.view is not None
-    assert ("Items per page" in _labels(root._candidates.view)) is show_page_size
-    if not show_page_size:
+    assert ("Items per batch" in _labels(root._candidates.view)) is show_fetch_size
+    if not show_fetch_size:
         return
     interaction = interaction_harness()
-    await root.dispatch("ranked.page-size", interaction)
+    await root.dispatch("ranked.fetch-size", interaction)
     modal = interaction.response.send_modal.await_args.args[0]
     assert modal.children[0].component.default == "3"
     modal.children[0].component._value = "1"
     await modal.on_submit(interaction_harness())
-    assert ranked.page_size == 1
+    assert ranked.fetch_size == 1
     assert ranked.session.snapshot is not None
-    assert ranked.session.snapshot.loaded.window.items == ("a",)
+    assert ranked.session.snapshot.loaded.batch.items == ("a",)
     await root.dispatch("ranked.next", interaction_harness())
-    assert ranked.session.snapshot.loaded.window.items == ("b",)
+    assert ranked.session.snapshot.loaded.batch.items == ("b",)

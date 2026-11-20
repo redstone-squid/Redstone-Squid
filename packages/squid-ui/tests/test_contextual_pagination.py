@@ -24,7 +24,7 @@ def test_builtin_footer_uses_each_candidate_view_without_outer_feedback() -> Non
     assert result.layout is not None
     region = result.layout.region(sl.region_ref("results"))
     assert region.navigation is not None
-    assert region.navigation.page == 0 and region.navigation.extent == 3
+    assert region.navigation.index == 0 and region.navigation.extent == 3
     assert "Page 1 of 3" in html.Renderer().draw(result.scene)
     later = result.for_page({region.identity: 2})
     assert "Page 3 of 3" in html.Renderer().draw(later.scene)
@@ -41,7 +41,7 @@ def test_custom_footer_can_query_and_locate_the_current_candidate() -> None:
         page = selection.number.require()
         observed.add(page)
         assert region.navigation is not None
-        assert region.navigation.page == page - 1
+        assert region.navigation.index == page - 1
         assert ctx.authored.query(select(Paragraph)).count() == 3
         visible = ctx.visible.query(select(Paragraph))
         assert visible.count() > 0
@@ -58,7 +58,7 @@ def test_custom_footer_can_query_and_locate_the_current_candidate() -> None:
     )
     assert result.layout is not None
     region = result.layout.region(sl.region_ref("body"))
-    assert region.count == sl.Known(3)
+    assert region.page_count == sl.Known(3)
     assert observed == {1, 2, 3}
     assert "Position 1 (1)" in sl.scene.Codec.dumps(result.scene)
     assert "Position 3 (1)" in sl.scene.Codec.dumps(result.for_page({region.identity: 2}).scene)
@@ -114,8 +114,8 @@ def test_builtin_pagination_certifies_a_view_without_an_authored_context() -> No
     assert result.allocation is None
     assert result.layout is not None
     region = result.layout.region(sl.region_ref("results"))
-    assert region.groups == sl.Known(3)
-    assert isinstance(region.count, sl.Unknown)
+    assert region.group_count == sl.Known(3)
+    assert isinstance(region.page_count, sl.Unknown)
     assert region.navigation is not None and region.navigation.extent is None
     assert region.navigation.on_seek is None
     assert all(pager.pages is None for pager in result.scene.pagers)
@@ -132,7 +132,7 @@ def test_builtin_pagination_certifies_a_view_without_an_authored_context() -> No
 
 def test_custom_footer_handles_unknown_facts_in_the_same_context() -> None:
     def footer(ctx: sl.LayoutContext) -> str:
-        return "More" if isinstance(ctx.region().count, sl.Unknown) else "Known"
+        return "More" if isinstance(ctx.region().page_count, sl.Unknown) else "Known"
 
     result = plan(
         sl.paged(

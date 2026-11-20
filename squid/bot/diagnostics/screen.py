@@ -39,7 +39,7 @@ def _traceback_footer(ctx: sl.LayoutContext) -> sl.TextLike:
     region = ctx.region()
     selection = region.selection.require()
     assert selection is not None
-    page, pages = selection.number.require(), region.count.require()
+    page, pages = selection.number.require(), region.page_count.require()
     section = tr(t"diagnostics-view-traceback = Traceback")
     return md_tr(t"diagnostics-attachment-page-hint = {section} — page {page} of {pages}")
 
@@ -225,7 +225,7 @@ class ErrorReportScreen(sd.Screen[int]):
             label=lambda report: report.reference,
             summary=_list_line,
             detail=lambda report: self._render_report(report, 1),
-            page_size=10,
+            fetch_size=10,
             title=tr(t"diagnostics-view-recent-errors = Recent errors"),
             empty=tr(t"diagnostics-no-recent-errors = Nothing has failed within the retention window."),
             chronology=sl.sources.Chronology.NEWEST_FIRST,

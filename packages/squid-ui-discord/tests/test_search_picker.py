@@ -43,7 +43,7 @@ def _lookup(
         minimum=minimum,
         maximum=maximum,
         on_pick=committed,
-        page_size=2,
+        fetch_size=2,
     )
 
 
@@ -125,7 +125,7 @@ async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> No
     commit_render(message_root)
     await message_root.dispatch("lookup.next", interaction_harness())
     assert lookup.session is not None and lookup.session.snapshot is not None
-    assert lookup.session.snapshot.loaded.window.items == (Entry("c", "Gamma"),)
+    assert lookup.session.snapshot.loaded.batch.items == (Entry("c", "Gamma"),)
 
     await _search(message_root, lookup, "missing")
     assert "No results" in str(lookup.render())
@@ -147,13 +147,13 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
         def __init__(self, query: str) -> None:
             self.query = query
 
-        async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Entry]:
+        async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[Entry]:
             entered[self.query].set()
             await release[self.query].wait()
-            return sl.sources.Window(
+            return sl.sources.Batch(
                 position,
                 (Entry(self.query, self.query),),
-                total=1,
+                item_count=1,
             )
 
     async def committed(_event: sl.ActionEvent, _picked: tuple[Entry, ...]) -> None:
@@ -185,4 +185,4 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
 
     assert lookup.session is not None and lookup.session.snapshot is not None
     assert lookup.query == "new"
-    assert lookup.session.snapshot.loaded.window.items == (Entry("new", "new"),)
+    assert lookup.session.snapshot.loaded.batch.items == (Entry("new", "new"),)

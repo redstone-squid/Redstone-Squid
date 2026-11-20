@@ -202,7 +202,7 @@ def test_jump_is_omitted_without_an_addressable_range(page, pages, seekable: boo
         next_label="Next",
         previous_key="previous",
         next_key="next",
-        page=page,
+        index=page,
         extent=pages,
     )
 
