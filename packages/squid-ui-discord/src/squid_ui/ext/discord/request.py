@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 type Deferral = Literal["private", "public"]
 type SourceKind = Literal["interaction", "context", "message"]
-type RequestOrigin = RequestSource | ActionEvent
+type RequestOrigin[ContextT = object] = RequestSource | ActionEvent[ContextT]
 """Anything a request can be resolved from: a native source, or a component event."""
 
 _MEMO_KEY = "squid_ui.ext.discord.request"
@@ -558,10 +558,10 @@ async def request[BotT: commands.Bot](source: commands.Context[BotT]) -> Request
 
 
 @overload
-async def request(source: RequestOrigin) -> Request[Any]: ...
+async def request[ContextT](source: RequestOrigin[ContextT]) -> Request[Any]: ...
 
 
-async def request(source: RequestOrigin) -> Request[Any, Any]:
+async def request[ContextT](source: RequestOrigin[ContextT]) -> Request[Any, Any]:
     """Resolve the one request for a source, inferring its owner from Discord dispatch.
 
     Commands inherit their binding's registered scope; component events inherit their root's
@@ -586,7 +586,7 @@ def _binding_scope(runtime: DiscordUIRuntime[Any], binding: object) -> Scope[Any
     return runtime.app if isinstance(binding, app_commands.Group) else runtime.scope_for(binding)
 
 
-async def _request_for_binding(source: RequestOrigin, binding: object | None) -> Request[Any, Any]:
+async def _request_for_binding[ContextT](source: RequestOrigin[ContextT], binding: object | None) -> Request[Any, Any]:
     """Apply the wrapper's actual binding, including context-menu and autocomplete callbacks."""
     runtime = Lifetime.runtime_for(source)
     scope = runtime.app if binding is None else _binding_scope(runtime, binding)
@@ -594,19 +594,19 @@ async def _request_for_binding(source: RequestOrigin, binding: object | None) ->
 
 
 @overload
-async def _resolve_request[OwnerT, ClientT: discord.Client](
-    source: RequestOrigin, *, scope: Scope[OwnerT, ClientT], root: MessageRoot | None = None
+async def _resolve_request[OwnerT, ClientT: discord.Client, ContextT](
+    source: RequestOrigin[ContextT], *, scope: Scope[OwnerT, ClientT], root: MessageRoot | None = None
 ) -> Request[OwnerT, ClientT]: ...
 
 
 @overload
-async def _resolve_request(
-    source: RequestOrigin, *, scope: None = None, root: MessageRoot | None = None
+async def _resolve_request[ContextT](
+    source: RequestOrigin[ContextT], *, scope: None = None, root: MessageRoot | None = None
 ) -> Request[Any, Any]: ...
 
 
-async def _resolve_request(
-    source: RequestOrigin, *, scope: Scope[Any, Any] | None = None, root: MessageRoot | None = None
+async def _resolve_request[ContextT](
+    source: RequestOrigin[ContextT], *, scope: Scope[Any, Any] | None = None, root: MessageRoot | None = None
 ) -> Request[Any, Any]:
     """Share source normalization and memoization between inferred and bound resolution."""
     localization: Localization | None = None if root is None else root.localization

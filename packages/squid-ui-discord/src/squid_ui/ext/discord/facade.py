@@ -90,7 +90,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
             policy = policy.overlay(content.__response_spec__)
         return policy.overlay(None, **overrides).resolve(actor_id)
 
-    async def request(self, source: RequestOrigin) -> Request[OwnerT, ClientT]:
+    async def request[ContextT](self, source: RequestOrigin[ContextT]) -> Request[OwnerT, ClientT]:
         """Resolve this owner's request, sharing the source's existing acknowledgement ledger.
 
         Use this in listeners and native callbacks whose source carries no command binding.
