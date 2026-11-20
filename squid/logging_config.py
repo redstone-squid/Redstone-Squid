@@ -17,12 +17,6 @@ DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
 """Default root log level when SQUID_LOG_ROOT_LEVEL is not set."""
 
-DEFAULT_LOG_DIR_NAME = "logs"
-"""Default directory used when SQUID_LOG_DIRECTORY is not set."""
-
-DEFAULT_DISCORD_LOG_FILE = "discord.log"
-"""Default log file for the Discord bot process."""
-
 DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 """Maximum log file size in bytes before rotation."""
 

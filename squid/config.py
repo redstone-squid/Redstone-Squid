@@ -576,7 +576,7 @@ class UpstreamHttpConfig(_FrozenModel):
 class BotConfig(_FrozenModel):
     """Discord-process-specific settings."""
 
-    log_file: str | None = "discord.log"
+    log_file: str | None = None
     health_port: int = Field(default=8001, ge=1, le=65535)
 
     _empty_log_file = field_validator("log_file", mode="before")(_empty_to_none)
@@ -586,7 +586,7 @@ class BotConfig(_FrozenModel):
 class WorkerConfig(_FrozenModel):
     """Database-worker process settings."""
 
-    log_file: str | None = "worker.log"
+    log_file: str | None = None
     health_port: int = Field(default=8002, ge=1, le=65535)
     event_interval_seconds: float = Field(default=15, gt=0)
     maintenance_interval_seconds: float = Field(default=30, gt=0)
