@@ -25,12 +25,6 @@ from squid_ui.ext.slack.target_types import (
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 
-# The verified default, widened to the family every implementation below accepts. `AdapterProfile`
-# is frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright
-# infers a dataclass type parameter as invariant even when the dataclass is frozen, while Pyrefly
-# reads the same declaration as covariant. Naming the default once keeps that to one crossing.
-_DEFAULT_ADAPTER: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER  # pyright: ignore[reportAssignmentType]
-
 
 @overload
 def message(
@@ -44,12 +38,17 @@ def message[ProfileT: SlackSdkAdapter](
 ) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, ProfileT]: ...
 
 
-def message(
+def message[ProfileT: SlackSdkAdapter](
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
+    adapter: AdapterProfile[ProfileT] | None = None,
     limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS,
-) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdkAdapter]:
+) -> (
+    Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, ProfileT]
+    | Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdk343Adapter]
+):
     """A Slack Block Kit message target realized by the Slack SDK."""
+    if adapter is None:
+        return message_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return message_target(adapter=adapter, limits=limits)
 
 
@@ -65,12 +64,17 @@ def modal[ProfileT: SlackSdkAdapter](
 ) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, ProfileT]: ...
 
 
-def modal(
+def modal[ProfileT: SlackSdkAdapter](
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
+    adapter: AdapterProfile[ProfileT] | None = None,
     limits: SlackModalLimits = SLACK_MODAL_LIMITS,
-) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdkAdapter]:
+) -> (
+    Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, ProfileT]
+    | Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdk343Adapter]
+):
     """A Slack Block Kit modal target realized by the Slack SDK."""
+    if adapter is None:
+        return modal_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return modal_target(adapter=adapter, limits=limits)
 
 
@@ -86,12 +90,17 @@ def home[ProfileT: SlackSdkAdapter](
 ) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, ProfileT]: ...
 
 
-def home(
+def home[ProfileT: SlackSdkAdapter](
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
+    adapter: AdapterProfile[ProfileT] | None = None,
     limits: SlackHomeLimits = SLACK_HOME_LIMITS,
-) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdkAdapter]:
+) -> (
+    Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, ProfileT]
+    | Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdk343Adapter]
+):
     """A Slack App Home target realized by the Slack SDK."""
+    if adapter is None:
+        return home_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return home_target(adapter=adapter, limits=limits)
 
 

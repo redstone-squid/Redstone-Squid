@@ -3,6 +3,7 @@
 from enum import StrEnum
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
+from typing import Protocol
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -60,9 +61,23 @@ def slack_sdk_adapter_profile(
     return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities, frontend="slack")
 
 
-def require_slack_sdk_capability(
-    profile: AdapterProfile[SlackSdkAdapter], capability: SlackAdapterCapability, operation: str
-) -> None:
+class SlackSdkProfile(Protocol):
+    """Adapter information the Slack renderer reads when checking SDK support."""
+
+    @property
+    def family(self) -> type[SlackSdkAdapter]: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def version_expression(self) -> str: ...
+
+    @property
+    def capabilities(self) -> frozenset[str]: ...
+
+
+def require_slack_sdk_capability(profile: SlackSdkProfile, capability: SlackAdapterCapability, operation: str) -> None:
     """Verify the selected profile and installed Slack SDK at a drawing boundary."""
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
@@ -84,6 +99,7 @@ def require_slack_sdk_capability(
 __all__ = [
     "SLACK_SDK_343_ADAPTER",
     "SLACK_SDK_BEHAVIOR_CAPABILITIES",
+    "SlackSdkProfile",
     "require_slack_sdk_capability",
     "slack_sdk_adapter_profile",
 ]

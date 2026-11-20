@@ -56,10 +56,13 @@ from squid_ui.content.assets import Asset, StoredAsset
 from squid_ui.content.entity import ConversationType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack import scene
-from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER, SlackAdapterCapability, require_slack_sdk_capability
+from squid_ui.ext.slack.adapter import (
+    SLACK_SDK_343_ADAPTER,
+    SlackAdapterCapability,
+    SlackSdkProfile,
+    require_slack_sdk_capability,
+)
 from squid_ui.ext.slack.protocol import SLACK_HOME_LIMITS, SLACK_MESSAGE_LIMITS, SLACK_MODAL_LIMITS, SlackLimits
-from squid_ui.ext.slack.target_types import SlackSdkAdapter
-from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver, Renderer
 
@@ -84,12 +87,6 @@ class MessagePayload:
 
 
 type SdkText = PlainTextObject | MarkdownTextObject
-
-# The verified default, widened to the family every renderer below accepts. `AdapterProfile` is
-# frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright
-# infers a dataclass type parameter as invariant even when the dataclass is frozen, while Pyrefly
-# reads the same declaration as covariant. Naming the default once keeps that to one crossing.
-_DEFAULT_ADAPTER: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER  # pyright: ignore[reportAssignmentType]
 
 _CONVERSATION_TYPES = {
     ConversationType.WORKSPACE_PUBLIC: "public",
@@ -456,7 +453,7 @@ def _validate_scene[BodyT: scene.SlackBody](
     target: str,
     body_type: type[BodyT],
     capability: SlackAdapterCapability,
-    profile: AdapterProfile[SlackSdkAdapter],
+    profile: SlackSdkProfile,
 ) -> BodyT:
     """Validate scene/profile identity and return the narrowed body."""
     require_slack_sdk_capability(profile, capability, f"draw {target}")
@@ -641,7 +638,7 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
     def __init__(
         self,
         *,
-        adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
+        adapter: SlackSdkProfile = SLACK_SDK_343_ADAPTER,
         asset_resolver: AssetResolver | None = None,
     ) -> None:
         self.adapter = adapter
@@ -679,7 +676,7 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
 class ModalRenderer(Renderer[scene.SlackModalView, View]):
     """Draw planned Slack modal scenes into SDK views."""
 
-    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER) -> None:
+    def __init__(self, *, adapter: SlackSdkProfile = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
 
     @override
@@ -715,7 +712,7 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
 class HomeRenderer(Renderer[scene.SlackHomeView, View]):
     """Draw planned Slack App Home scenes into SDK views."""
 
-    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER) -> None:
+    def __init__(self, *, adapter: SlackSdkProfile = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
 
     @override
