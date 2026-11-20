@@ -7,8 +7,10 @@ that mark the search exhausted without preventing a feasible certificate.
 
 from collections import defaultdict
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import cached_property
+
+from rpds import HashTrieMap, List
 
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.allocation_policy import dense_ranks
@@ -28,9 +30,23 @@ type OfferChoice = tuple[OccurrenceId, str]
 
 
 @dataclass(frozen=True, slots=True)
+class Pending[T]:
+    siblings: tuple[T, ...]
+    index: int = 0
+    tail: Pending[T] | None = None
+
+    def advance(self) -> Pending[T] | None:
+        if self.index + 1 == len(self.siblings):
+            return self.tail
+        return Pending(self.siblings, self.index + 1, self.tail)
+
+
+@dataclass(frozen=True, slots=True)
 class AssignmentTask[RenderTargetT, ContextT, PayloadT]:
-    pending: tuple[SemanticOccurrence[RenderTargetT, ContextT], ...]
-    choices: tuple[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int], ...] = ()
+    pending: Pending[SemanticOccurrence[RenderTargetT, ContextT]] | None
+    history: List[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int]] = field(default_factory=List)
+    selected: HashTrieMap[OccurrenceId, str] = field(default_factory=HashTrieMap)
+    ranks: tuple[tuple[int, int], ...] = ()
     probe: bool = False
     fraction: float = 1.0
     repair: Mapping[OccurrenceId, str] | None = None
@@ -85,7 +101,9 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self, task: AssignmentTask[RenderTargetT, ContextT, PayloadT]
     ) -> Iterator[AssignmentTask[RenderTargetT, ContextT, PayloadT]]:
         """Yield eligible assignments in queue order for the next occurrence."""
-        occurrence, *rest = task.pending
+        assert task.pending is not None
+        occurrence = task.pending.siblings[task.pending.index]
+        rest = task.pending.advance()
         self.seen_occurrences.add(occurrence.identity)
         self.context.work.consume()
         # An occurrence's immutable context is shared by queued assignments.
@@ -114,7 +132,6 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.context.work.consume(len(offers))
         ranks = dense_ranks(tuple(offer.preference for offer in offers))
         keys: set[str] = set()
-        assigned: set[OfferChoice] | None = None
         eligible: list[tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], int]] = []
         for offer, rank in zip(offers, ranks, strict=True):
             self.context.work.consume()
@@ -136,12 +153,9 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 continue
             choice = (occurrence.identity, offer.key)
             if self.excluded and (patterns := self.exclusions_by_choice.get(choice)):
-                if assigned is None:
-                    self.context.work.consume(len(task.choices))
-                    assigned = {(previous.occurrence.identity, previous.key) for previous, _ in task.choices}
                 for pattern in patterns:
                     self.context.work.consume(1 + len(pattern))
-                    if all(item == choice or item in assigned for item in pattern):
+                    if all(item == choice or task.selected.get(item[0]) == item[1] for item in pattern):
                         self.pruned = True
                         break
                 else:
@@ -158,13 +172,21 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 position = min(len(ordered) - 1, int((len(ordered) - 1) * task.fraction + 0.5))
                 ordered = ordered[position : position + 1]
         for offer, rank in ordered:
-            self.context.work.consume(len(task.choices))
-            if any(previous.occurrence.identity == occurrence.identity for previous, _ in task.choices):
+            if occurrence.identity in task.selected:
                 message = "cyclic or duplicate occurrence in offer structure"
                 raise LayoutInvariantError(message)
+            ranks_key = task.ranks
+            if rank and not task.probe:
+                # Descending (rank, count) pairs compare like the expanded rank sequence.
+                self.context.work.consume(len(ranks_key) + 1)
+                counts = dict(ranks_key)
+                counts[rank] = counts.get(rank, 0) + 1
+                ranks_key = tuple(sorted(counts.items(), reverse=True))
             yield AssignmentTask(
-                (*offer.children, *rest),
-                (*task.choices, (offer, rank)),
+                Pending(offer.children, tail=rest) if offer.children else rest,
+                task.history.push_front((offer, rank)),
+                task.selected.insert(occurrence.identity, offer.key),
+                ranks_key,
                 probe=task.probe,
                 fraction=task.fraction,
                 repair=task.repair,
@@ -206,7 +228,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
             self.context.work.consume(len(choices))
             hints = {offer.occurrence.identity: offer.key for offer, _ in choices}
             hints[changed.occurrence.identity] = changed.key
-            yield AssignmentTask((self.root,), probe=True, repair=hints)
+            yield AssignmentTask(Pending((self.root,)), probe=True, repair=hints)
 
     def degradation_probes(
         self,
@@ -232,4 +254,4 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 adjustable += 1
         if adjustable:
             for fraction in dict.fromkeys((1.0, 1 - 1 / max(2, adjustable), 0.5, 0.75, 0.875, 0.9375)):
-                yield AssignmentTask((self.root,), probe=True, fraction=fraction)
+                yield AssignmentTask(Pending((self.root,)), probe=True, fraction=fraction)

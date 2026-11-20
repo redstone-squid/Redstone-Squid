@@ -8,6 +8,7 @@ also need no partition refinements, which necessarily add page turns.
 Opaque payloads and scalar resource envelopes never establish dominance.
 """
 
+from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from heapq import heappop, heappush
@@ -33,7 +34,7 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
-from squid_ui.planning.offer_explorer import AssignmentTask, OfferExplorer
+from squid_ui.planning.offer_explorer import AssignmentTask, OfferExplorer, Pending
 from squid_ui.planning.partition_explorer import PartitionExplorer, PartitionTask
 
 
@@ -116,7 +117,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         self.queue: list[
             tuple[
                 int,
-                tuple[int, ...],
+                tuple[tuple[int, int], ...],
                 int,
                 int,
                 int,
@@ -137,7 +138,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
 
     def run(self) -> JointResult[OutputT]:
         try:
-            self._push(AssignmentTask((self.root,)))
+            self._push(AssignmentTask(Pending((self.root,))))
             while self.queue:
                 self.context.work.consume()
                 _, _, _, _, _, task = heappop(self.queue)
@@ -145,9 +146,10 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                     if task.pending:
                         self._enqueue(self.offers.branch(task))
                     else:
+                        self.context.work.consume(len(task.history))
                         self._enqueue(
                             self.partitions.seed(
-                                task.choices,
+                                tuple(reversed(tuple(task.history))),
                                 self.frontier.qualities(),
                                 repair=task.repair is not None,
                             )
@@ -187,11 +189,18 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         self,
         task: AssignmentTask[RenderTargetT, ContextT, PayloadT] | PartitionTask[RenderTargetT, ContextT, PayloadT],
     ) -> None:
-        self.context.work.consume(1 + len(task.choices))
-        if isinstance(task, PartitionTask) and not self.partitions.mark_seen(task):
-            return
+        if isinstance(task, AssignmentTask):
+            self.context.work.consume()
+            depth = len(task.history)
+            ranks = task.ranks
+        else:
+            depth = len(task.choices)
+            self.context.work.consume(1 + depth)
+            if not self.partitions.mark_seen(task):
+                return
+            counts = Counter(rank for _, rank in task.choices if rank)
+            ranks = tuple(sorted(counts.items(), reverse=True))
         self.generated += 1
-        ranks = tuple(sorted((rank for _, rank in task.choices if rank), reverse=True))
         turns = sum(len(cuts) - 1 for cuts in task.cuts) if isinstance(task, PartitionTask) else 0
         probe = task.probe
         # Finish a probe before discovering every other probe's large offer ladder.
@@ -202,7 +211,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 -1 if probe and task.repair else 0 if probe else 1,
                 () if probe else ranks,
                 turns,
-                -len(task.choices),
+                -depth,
                 next(self.serials),
                 task,
             ),

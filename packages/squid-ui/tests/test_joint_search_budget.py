@@ -108,6 +108,14 @@ def alternatives() -> sl.Renderable[RenderTarget, object]:
     )
 
 
+def test_tight_budget_certifies_the_preferred_alternative_first() -> None:
+    result = search_composition(
+        occurrence(alternatives()), FaultRules(), PlanningContext(WorkBudget(100)), finalize=finish
+    )
+    assert result.diagnostics.completion == SearchCompletion.EXHAUSTED
+    assert result.allocation.select().evaluation.text == ("original",)
+
+
 @pytest.mark.parametrize("stage", ["offers", "evaluate", "build", "validate", "finalize"])
 @pytest.mark.parametrize("fail_at", [1, 2])
 def test_exhaustion_at_each_stage_never_returns_an_uncertified_output(stage: str, fail_at: int) -> None:

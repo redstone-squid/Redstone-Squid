@@ -2852,6 +2852,7 @@ source = { editable = "packages/squid-ui" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pydantic" },
+    { name = "rpds-py" },
     { name = "squid-i18n" },
     { name = "squid-reactivity" },
 ]
@@ -2866,6 +2867,7 @@ requires-dist = [
     { name = "anyio", marker = "extra == 'services'", specifier = ">=4.14,<5" },
     { name = "markdown-it-py", specifier = ">=4.0,<5" },
     { name = "pydantic", specifier = ">=2.14,<3" },
+    { name = "rpds-py", specifier = ">=0.30" },
     { name = "squid-i18n", editable = "packages/squid-i18n" },
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
