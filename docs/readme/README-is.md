@@ -117,11 +117,6 @@ Ef þú vilt spyrjast fyrir um allar stillingar í einu geturðu keyrt:
 
 Vinsamlega lestu [CODE_OF_CONDUC.md](https://github.com/Kappeh/Redstone-Squid/blob/master/CODE_OF_CONDUCT.md) til að fá upplýsingar um siðareglur okkar og ferlið við að senda okkur draga beiðnir.
 
-## Höfundar
-
-* **Kieran Powell** - *Upphafsverk* - [Kappeh](https://github.com/Kappeh)
-* **Savio Mak** - *Hjálparaðili* - [Glinte](https://github.com/Glinte)
-
 ## Leyfi
 
 Þetta verkefni er með leyfi samkvæmt MIT leyfinu - sjá [LICENSE](../../LICENSE) skrána fyrir frekari upplýsingar
