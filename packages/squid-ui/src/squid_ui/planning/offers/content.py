@@ -667,6 +667,24 @@ def container_offers[RenderTargetT, ContextT](
         region=region,
         preference_priority=int(value.flexibility) if isinstance(value, sem.ActionControls) else None,
     )
+    if isinstance(value, sem.SourcePage):
+        size = len(value.children)
+        if not size or size != len(value.endings):
+            msg = "a source page requires one ending for each nonempty prefix"
+            raise ValueError(msg)
+        offers = []
+        for count in range(size, 0, -1):
+            context.work.consume(count + 1)
+            offers.append(
+                replace(
+                    container,
+                    key=f"prefix-{count}",
+                    children=(*children[:count], children[size + count - 1]),
+                    preference=size - count,
+                    flow=False,
+                )
+            )
+        return tuple(offers)
     if isinstance(value, sem.Fields) and scope.spill and value.fields:
         order = sorted(range(len(children)), key=lambda index: (value.fields[index].importance, -index))
         spilled_fields = [container]

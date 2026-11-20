@@ -236,6 +236,18 @@ class Group[RenderTargetT = RenderTarget, ContextT = object](Container[RenderTar
 
 
 @dataclass(frozen=True, slots=True)
+class SourcePage[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
+    """A loaded prefix with one navigation slot for each legal paragraph cut.
+
+    Each ending resumes after its corresponding child. The planner selects a
+    nonempty prefix and measures its ending in the enclosing view.
+    """
+
+    STRUCTURE: ClassVar[Structure] = Structure(layout=("children", "endings"))
+    endings: tuple[LayoutNode[RenderTargetT, ContextT], ...] = field(kw_only=True)
+
+
+@dataclass(frozen=True, slots=True)
 class Contextual[RenderTargetT = RenderTarget, ContextT = object](Group[RenderTargetT, ContextT]):
     """Pure contextual content with component placements declared before planning."""
 
