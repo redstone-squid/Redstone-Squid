@@ -177,12 +177,22 @@ runtime's navigation/persistence protocol.
 
 The next source-flow implementation needs:
 
-- Revision-validated source and intra-item continuation addresses, separate from ordinals.
+- Source and intra-item continuation addresses, separate from ordinals. Each source
+  declares verified or assumed stability. Verified sources validate the revision
+  before combining windows. Assumed-stable sources may continue across fetches.
 - Bounded asynchronous demand outside the solver, retaining unconsumed loaded content.
 - Next that consumes content or reaches a declared end; no zero-progress content pages.
 - Previous through valid visited checkpoints or an explicit predecessor capability.
-- Prefix evidence for page ordinals, and a closed enumeration or stronger proof for totals.
-- Source revision contracts before combining facts from separate fetches.
+- On an assumed-stable source, show the browsing session's ordinal. Starting at the
+  beginning and delivering three Next actions displays “Page 4”. Failed deliveries
+  leave that number unchanged. An exact total still requires a closed enumeration
+  or equivalent proof.
+
+If a saved item disappears, resume at the closest position the source can resolve.
+If it cannot resolve one, retain the delivered view and offer Refresh. When a
+[presentation control](../presentation-state/README.md) causes reflow, keep the
+current fragment visible if possible. If the fragment becomes hidden, keep its
+containing item in view when visible. Resolve this per placement.
 
 Acceptance must cover variable-size lazy items, pages crossing fetch windows, one item
 spanning pages, oversized indivisible content, forward-only sources, direct seeks with
