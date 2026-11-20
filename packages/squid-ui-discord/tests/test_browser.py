@@ -101,3 +101,45 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
         await ui.root.refresh()
         assert any("Entry 7:" in text for text in ui.texts())
         assert not ui.root.presentation.pending_reveals
+
+
+async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[Position] = []
+
+    class Source:
+        capabilities = SourceCapabilities()
+
+        async def fetch(self, position: Position, extent: int) -> Window[str]:
+            requests.append(position)
+            assert extent == 2
+            if position == Position():
+                return Window(position, ("A", "B"), next=Position("C"))
+            assert position == Position("C")
+            return Window(position, ("C", "D"))
+
+    flow = sp.SourceFlow(
+        Source(),
+        identity=str,
+        paragraphs=lambda item: ("C1", "C2") if item == "C" else (item,),
+        page_size=3,
+        fetch_size=2,
+    )
+    async with stage(flow, owner=object()) as ui:
+        first = " ".join(ui.texts())
+        assert all(text in first for text in ("A", "B", "C1", "Page 1"))
+        assert "C2" not in first
+        key = ui.key_for("flow.next")
+        with monkeypatch.context() as patch:
+
+            async def fail(*args: object, **kwargs: object) -> None:
+                raise RuntimeError("delivery failed")
+
+            patch.setattr(ui.root, "_deliver", fail)
+            with pytest.raises(RuntimeError, match="delivery failed"):
+                await ui.press(key)
+        assert " ".join(ui.texts()) == first
+        await ui.press(key)
+        second = " ".join(ui.texts())
+        assert all(text in second for text in ("C2", "D", "Page 2"))
+        assert "C1" not in second
+        assert requests == [Position(), Position("C")]
