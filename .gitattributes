@@ -125,7 +125,6 @@ Dockerfile.*   text
 LICENSE        text
 babel.cfg      text
 justfile       text
-scripts/pre-push text
 gradlew        text eol=lf
 web/.prettierignore text
 tests/fuzz/corpus/** text
