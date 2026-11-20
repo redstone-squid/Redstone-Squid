@@ -38,10 +38,7 @@ uv run prek install       # installs the pre-commit and pre-push hooks
 The workspace packages still support Python 3.14+. The root development environment
 runs on Python 3.15; use `uv sync --locked --all-packages` before checking the whole workspace.
 
-Native Atheris fuzzing is temporarily unavailable because [upstream supports Python
-3.11–3.14](https://github.com/google/atheris#installation-instructions). Its scheduled job
-is disabled until a compatible release is available. API fuzzing and property tests
-remain available.
+Run `just fuzz-parsers` for the parser properties and `just fuzz-api` for draft edits against PostgreSQL.
 
 ## Framework ground rules
 

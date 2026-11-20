@@ -16,7 +16,6 @@ from squid.api.capabilities import API_FEATURES
 from squid.api.contract import ANONYMOUS, WEB, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
 from squid.api.openapi import openapi_document
-from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app = create_api_app()
@@ -174,12 +173,45 @@ def test_openapi_declares_submission_draft_producer_links() -> None:
         operation["operationId"]: (path, method) for path, method, operation in _document_operations(document)
     }
 
-    for expected in DRAFT_PRODUCER_LINKS:
-        path, method = operation_locations[expected.producer_operation_id]
-        link = document["paths"][path][method]["responses"][expected.status_code]["links"][expected.name]
-
-        assert link["operationId"] == expected.target_operation_id
-        assert link["parameters"] == {"draft_id": expected.draft_id_expression}
+    for producer, status, name, target, parameter in [
+        ("submission_draft_create", "201", "GetCreatedDraft", "submission_draft_get", "$response.body#/id"),
+        ("submission_draft_create", "201", "ChangeCreatedDraft", "submission_draft_change", "$response.body#/id"),
+        (
+            "submission_draft_create",
+            "201",
+            "FinalizeCreatedDraft",
+            "submission_finalization_start",
+            "$response.body#/id",
+        ),
+        ("submission_draft_create", "201", "DeleteCreatedDraft", "submission_draft_delete", "$response.body#/id"),
+        ("submission_draft_change", "200", "ChangeDraftAgain", "submission_draft_change", "$response.body#/draft/id"),
+        (
+            "submission_draft_change",
+            "200",
+            "FinalizeChangedDraft",
+            "submission_finalization_start",
+            "$response.body#/draft/id",
+        ),
+        (
+            "submission_finalization_start",
+            "202",
+            "GetFinalization",
+            "submission_finalization_get",
+            "$response.body#/draft_id",
+        ),
+        (
+            "submission_finalization_start",
+            "202",
+            "DeleteFinalizedDraft",
+            "submission_draft_delete",
+            "$response.body#/draft_id",
+        ),
+        ("submission_draft_delete", "204", "UseAfterDeletedDraft", "submission_draft_get", "$request.path.draft_id"),
+    ]:
+        path, method = operation_locations[producer]
+        link = document["paths"][path][method]["responses"][status]["links"][name]
+        assert link["operationId"] == target
+        assert link["parameters"] == {"draft_id": parameter}
 
 
 def test_validate_contract_rejects_a_route_without_an_operation_id() -> None:

@@ -11,7 +11,7 @@ tests/
 ├── e2e/<context>/                # adapters composed with in-process dependencies
 ├── external/                     # opt-in live services
 ├── support/                      # only genuinely shared builders and fakes
-└── fuzz/                         # standalone harnesses and seed corpora
+└── fuzz/                         # generated parser properties
 ```
 
 Not every target directory exists yet. Add one when it receives its first real test; do not add placeholder tests.
@@ -30,12 +30,7 @@ third-party tests belong under `external` and must require an explicit opt-in; t
 
 Run `just fuzz-parsers` to generate search queries and Minecraft versions. Hypothesis reports the smallest failing example it finds.
 
-API exploration is a maintained standalone campaign, not part of `just test`. `just fuzz-api-smoke`
-starts the disposable API stack and runs the pinned Schemathesis CLI with a bounded generated-example
-and wall-clock budget. `tests/unit/fuzz/` tests the launcher, safety policy, event classification, and
-applicability manifest deterministically; `tests/integration/fuzz/` tests the disposable stack lifecycle.
-The old in-process Schemathesis experiment was removed: it hung during collection and duplicated a
-less faithful transport topology without exercising the maintained campaign lifecycle.
+Run `just fuzz-api` with Docker available to generate sequences of draft edits. Each example creates its own account and draft, writes through the submission routes, and checks the saved answers and revision after each edit.
 
 ## What to test
 

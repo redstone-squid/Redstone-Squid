@@ -72,10 +72,6 @@ dependency-report output="dependency-report.json":
 export-openapi:
     uv run --locked python -m scripts.export_openapi
 
-# Refresh the versioned finding schemas consumed across fuzz workflow trust boundaries.
-export-fuzz-schemas:
-    uv run --locked python -m scripts.export_fuzz_schemas
-
 gha-analysis:
     uvx zizmor --gh-token $(gh auth token) --persona=pedantic .
 
@@ -100,15 +96,8 @@ test:
 test-integration:
     uv run --locked pytest tests/integration
 
-# Prove the disposable API stack lifecycle without running an API fuzzer.
-[unix]
-test-api-fuzz-lifecycle:
-    uv run --locked pytest tests/integration/fuzz/test_api_environment_lifecycle.py --no-cov
-
-# One worker, one generated example, and a hard 20-second exploration ceiling.
-[unix]
-fuzz-api-smoke seed="0":
-    uv run --locked python -m scripts.run_api_fuzz --seed {{seed}}
+fuzz-api:
+    uv run --locked pytest tests/integration/api/test_draft_properties.py --no-cov
 
 test-all:
     uv run --locked pytest tests packages

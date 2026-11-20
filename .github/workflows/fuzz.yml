@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  parsers:
-    name: Search and version parsers
+  properties:
+    name: Parser and draft properties
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -40,3 +40,6 @@ jobs:
         env:
           HYPOTHESIS_PROFILE: ci
         run: uv run --locked pytest tests/fuzz/test_parsers.py --no-cov
+
+      - name: Check draft edits against PostgreSQL
+        run: uv run --locked pytest tests/integration/api/test_draft_properties.py --no-cov

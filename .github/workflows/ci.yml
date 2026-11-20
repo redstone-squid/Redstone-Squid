@@ -142,8 +142,7 @@ jobs:
       - name: Check committed API contracts
         run: |
           uv run --locked python -m scripts.export_openapi
-          uv run --locked python -m scripts.export_fuzz_schemas
-          git diff --exit-code -- contracts/openapi.json contracts/fuzz
+          git diff --exit-code -- contracts/openapi.json
 
       - name: Check all files have corresponding gitattributes
         shell: bash

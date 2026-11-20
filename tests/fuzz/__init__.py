@@ -1,1 +1,1 @@
-"""Standalone coverage-guided fuzz harnesses."""
+"""Generated parser properties."""
