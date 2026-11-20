@@ -43,7 +43,7 @@ def warn_if_attachment_archive_unavailable() -> None:
         logger.warning(
             "Attachment review archive unavailable at %s: %s. "
             "Preview and publish require the archive. Set ATTACHMENT_REVIEW_ARCHIVE "
-            "and include compose.attachment-review.yml when deploying with Compose.",
+            "and include deploy/compose.attachment-review.yml when deploying with Compose.",
             root,
             error,
         )

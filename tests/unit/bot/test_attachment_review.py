@@ -18,7 +18,7 @@ def test_startup_warns_when_archive_mount_is_missing(
 
     assert "Attachment review archive unavailable" in caplog.text
     assert str(tmp_path / "retained-files") in caplog.text
-    assert "compose.attachment-review.yml" in caplog.text
+    assert "deploy/compose.attachment-review.yml" in caplog.text
 
     caplog.clear()
     (tmp_path / "retained-files").mkdir()

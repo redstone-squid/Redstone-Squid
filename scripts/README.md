@@ -119,6 +119,6 @@ removes the link added by that decision.
 
 For historical files, set `ATTACHMENT_REVIEW_ARCHIVE` to the directory containing
 `retained-files.jsonl` and `retained-files/`. With Docker Compose, include
-`-f compose.attachment-review.yml` alongside the deployment's usual Compose files.
+`-f deploy/compose.attachment-review.yml` alongside the deployment's usual Compose files.
 The bot user needs read access to the manifest and files and traversal access to
 their directories. Only those two archive entries are mounted, both read-only.
