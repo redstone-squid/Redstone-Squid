@@ -6,20 +6,37 @@ across the services.
 
 ## Release deployments
 
-The production workflow publishes two immutable images. The API and bot use
-one image, and the worker uses a separate image with the optional schematic
-engine. The host needs Docker Compose, `.env`, and the deployment files that
-CI copies to it.
+CI publishes amd64 app and worker images to GHCR. After smoke tests pass on
+master, CI publishes their digests together in a small `release:production`
+image. The VPS polls that image and runs migrations before replacing services.
+A failed readiness check restores the last successful image pair. Migrations
+must remain compatible with the previous release.
 
-CI authenticates to the host using the repository secrets `SSH_HOST`,
-`SSH_USER`, and `SSH_KEY`. Put the pinned OpenSSH host entry in
-`SSH_KNOWN_HOSTS`.
+On the VPS, update the checkout and remove `compose.override.yml` from the
+`COMPOSE_FILE` list in your host .env. Migrations now live in the base file.
+Keep the project name, edge configuration and resource-pack override paths.
+Keep this checkout current when deployment scripts or Compose files change.
 
-The deploy script runs Alembic using the new image before replacing the
-running services. It saves the previous image digests in
-`.deploy/previous-release` and restores them if the new services fail readiness.
-Plan schema changes so the previous application can still run against the
-upgraded database.
+As the deployment user, log in with `docker login ghcr.io` if the packages
+are private (use a token with read:packages). From the project directory,
+run the first deployment and inspect the result:
+
+```sh
+bash scripts/pull-release.sh ghcr.io/redstone-squid/redstone-squid/release:production
+docker compose ps
+```
+
+Add the following line to that user's crontab, substituting the absolute
+checkout path. The host needs Bash, Docker Compose and flock. Overlapping
+polls exit and an already deployed image pair is skipped.
+
+```cron
+*/5 * * * * cd /path/to/Redstone-Squid && bash scripts/pull-release.sh ghcr.io/redstone-squid/redstone-squid/release:production
+```
+
+Use `docker compose restart bot` to restart the existing bot. To reapply
+host mount or environment changes using the deployed images, run
+`bash scripts/deploy.sh $(cat .deploy/current-release)` from the checkout.
 
 ## Shared gateway
 
@@ -29,7 +46,7 @@ Caddy sends API requests to `redstone-api:8000` and website requests to
 
 ```dotenv
 COMPOSE_PROJECT_NAME=redstone-squid
-COMPOSE_FILE=compose.yml:compose.override.yml:deploy/compose.edge.yml
+COMPOSE_FILE=compose.yml:deploy/compose.edge.yml
 SITE_URL=https://squid.your-domain.com
 ```
 

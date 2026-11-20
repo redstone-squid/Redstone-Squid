@@ -4,15 +4,6 @@ permissions: {}
 
 on:
   workflow_call:
-    secrets:
-      SSH_HOST:
-        required: true
-      SSH_KEY:
-        required: true
-      SSH_KNOWN_HOSTS:
-        required: true
-      SSH_USER:
-        required: true
   workflow_dispatch:
 
 concurrency:
@@ -30,9 +21,6 @@ jobs:
     permissions:
       contents: read
       packages: write # Publish release images and their BuildKit attestations.
-    outputs:
-      app-image: ${{ steps.references.outputs.app_image }}
-      worker-image: ${{ steps.references.outputs.worker_image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,52 +90,15 @@ jobs:
           WORKER_IMAGE: ${{ steps.references.outputs.worker_image }}
         run: bash scripts/release-smoke.sh "$APP_IMAGE" "$WORKER_IMAGE"
 
-  deploy:
-    name: Production cutover
-    needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-    permissions:
-      contents: read
-      packages: read # Authorize the production host to pull this workflow's private images.
-    env:
-      APP_IMAGE: ${{ needs.release.outputs.app-image }}
-      WORKER_IMAGE: ${{ needs.release.outputs.worker-image }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Configure pinned production SSH host
+      - name: Promote the tested image pair
+        if: github.ref == 'refs/heads/master'
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          APP_IMAGE: ${{ steps.references.outputs.app_image }}
+          WORKER_IMAGE: ${{ steps.references.outputs.worker_image }}
+          IMAGE_REPOSITORY: ${{ github.repository }}
         run: |
-          install -d -m 0700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 0600 ~/.ssh/id_ed25519
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 0600 ~/.ssh/known_hosts
-
-      - name: Install deployment control files
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          tar -czf - compose.yml deploy/compose.production.yml deploy/compose.edge.yml \
-            deploy/otel-collector.yaml scripts/deploy.sh \
-            | ssh "$SSH_USER@$SSH_HOST" 'mkdir -p Redstone-Squid && tar -xzf - -C Redstone-Squid'
-
-      - name: Deploy immutable release
-        env:
-          GHCR_TOKEN: ${{ github.token }}
-          GHCR_USER: ${{ github.actor }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          printf '%s' "$GHCR_TOKEN" \
-            | ssh "$SSH_USER@$SSH_HOST" \
-                "docker login '$REGISTRY' --username '$GHCR_USER' --password-stdin >/dev/null && \
-                 cd Redstone-Squid && bash scripts/deploy.sh '$APP_IMAGE' '$WORKER_IMAGE'; \
-                 status=\$?; docker logout '$REGISTRY' >/dev/null; exit \$status"
+          mkdir "$RUNNER_TEMP/release"
+          cd "$RUNNER_TEMP/release"
+          printf '%s\n%s\n' "$APP_IMAGE" "$WORKER_IMAGE" > release
+          printf 'FROM scratch\nCOPY release /release\nCMD ["/release"]\n' > Dockerfile
+          docker buildx build --push --tag "$REGISTRY/${IMAGE_REPOSITORY,,}/release:production" .

@@ -468,11 +468,6 @@ jobs:
       contents: read
       packages: write # The reusable release workflow publishes images to GHCR.
     uses: ./.github/workflows/cd.yml
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-      SSH_USER: ${{ secrets.SSH_USER }}
 
   unit:
     name: Unit and architecture (Python ${{ matrix.python-version }})

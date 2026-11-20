@@ -12,7 +12,7 @@ import pytest
 
 from squid import PROJECT_ROOT
 
-COMPOSE_FILES = ("compose.yml", "compose.override.yml", "deploy/compose.edge.yml", "deploy/compose.production.yml")
+COMPOSE_FILES = ("compose.yml", "deploy/compose.edge.yml", "deploy/compose.production.yml")
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def test_default_development_stays_independent_of_the_gateway(compose_project: P
 
 @pytest.mark.parametrize("with_renderer", [False, True])
 def test_plain_compose_preserves_host_routing_and_local_mounts(compose_project: Path, with_renderer: bool) -> None:
-    files = ["compose.yml", "compose.override.yml"]
+    files = ["compose.yml"]
     if with_renderer:
         files.append("compose.render.yml")
         (compose_project / "compose.render.yml").write_text(
@@ -95,8 +95,7 @@ def test_release_and_rollback_preserve_host_selection(
     assert real_docker is not None
     if gateway:
         (compose_project / ".env").write_text(
-            "COMPOSE_FILE=compose.yml:compose.override.yml:compose.render.yml:deploy/compose.edge.yml\n"
-            "SITE_URL=https://squid.test\n"
+            "COMPOSE_FILE=compose.yml:compose.render.yml:deploy/compose.edge.yml\nSITE_URL=https://squid.test\n"
         )
         (compose_project / "compose.render.yml").write_text(
             "services:\n  api:\n    volumes:\n      - ./pack.zip:/run/resources/pack.zip:ro\n"
