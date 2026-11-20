@@ -162,27 +162,41 @@ class PageFamily[RenderTargetT, ContextT, PayloadT]:
                         yield ((identity, index), *coordinates), visible
                 return
 
-            def children(
-                index: int,
-                coordinates: tuple[tuple[OccurrenceId, int], ...],
-                selected: tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...],
-            ) -> Iterator[
+            if not part.children:
+                yield (), part
+                return
+
+            # Enumerate the sibling product lazily. Only nesting consumes Python stack.
+            cursors = [visit(part.children[0])]
+            path: list[
                 tuple[tuple[tuple[OccurrenceId, int], ...], CandidateComposition[RenderTargetT, ContextT, PayloadT]]
-            ]:
+            ] = []
+            while cursors:
                 context.work.consume()
-                if index == len(part.children):
-                    yield (
-                        coordinates,
-                        CandidateComposition(
-                            replace(part.offer, children=tuple(child.offer.occurrence for child in selected)), selected
-                        ),
-                    )
-                else:
-                    for positions, child in visit(part.children[index]):
-                        yield from children(index + 1, (*coordinates, *positions), (*selected, child))
+                choice = next(cursors[-1], None)
+                if choice is None:
+                    cursors.pop()
+                    if path:
+                        path.pop()
+                    continue
+                path.append(choice)
+                if len(path) < len(part.children):
+                    cursors.append(visit(part.children[len(path)]))
+                    continue
+                context.work.consume(len(path))
+                children = tuple(child for _, child in path)
+                yield (
+                    tuple(position for positions, _ in path for position in positions),
+                    CandidateComposition(
+                        replace(part.offer, children=tuple(child.offer.occurrence for child in children)), children
+                    ),
+                )
+                path.pop()
 
-            yield from children(0, (), ())
-
+        if not self.regions:
+            context.work.consume()
+            yield (), self.root
+            return
         yield from visit(self.root)
 
 

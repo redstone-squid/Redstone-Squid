@@ -245,6 +245,12 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
     assert len(cache) == 1
 
 
+def test_wide_render_fits_default_planner_budget() -> None:
+    from scripts.benchmarks.plan72_render_caching import measure_case
+
+    measure_case(1_000, cold_samples=1, unchanged_samples=1)
+
+
 def test_100_component_unchanged_hot_path_meets_latency_budget() -> None:
     from scripts.benchmarks.plan72_render_caching import measure_case
 
