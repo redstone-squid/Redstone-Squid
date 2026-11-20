@@ -185,10 +185,12 @@ The general source-flow implementation needs:
 - Source and intra-item continuation addresses, separate from ordinals. Each source
   declares verified or assumed stability. Verified sources validate the revision
   before combining batches. Assumed-stable sources may continue across fetches.
-- Bounded asynchronous demand outside the solver, retaining unconsumed loaded content.
+- Fetch outside the solver. Once a nonempty page fits, allow a bounded wait for
+  more content. When the budget expires, deliver what fits and resume at the
+  first undelivered fragment on Next. Retain unconsumed loaded content.
 - Next that consumes content or reaches a declared end; no zero-progress content pages.
 - Previous through valid visited checkpoints or an explicit predecessor capability.
-- On an assumed-stable source, show the browsing session's ordinal. Starting at the
+- On an assumed-stable source, track the session ordinal for the current layout. Starting at the
   beginning and delivering three Next actions displays “Page 4”. Failed deliveries
   leave that number unchanged. An exact total still requires a closed enumeration
   or equivalent proof.
@@ -197,7 +199,9 @@ If a saved item disappears, resume at the closest position the source can resolv
 If it cannot resolve one, retain the delivered view and offer Refresh. When a
 [presentation control](../presentation-state/README.md) causes reflow, keep the
 current fragment visible if possible. If the fragment becomes hidden, keep its
-containing item in view when visible. Resolve this per placement.
+containing item in view when visible. Resolve this per placement. If the build
+moves from Page 4 to Page 6, show Page 6. If the new layout cannot establish
+the page number, omit it and keep the available navigation controls.
 
 Acceptance must cover variable-size lazy items, pages crossing fetch batches, one item
 spanning pages, oversized indivisible content, forward-only sources, direct seeks with
