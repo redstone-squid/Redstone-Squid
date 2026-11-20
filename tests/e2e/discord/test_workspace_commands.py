@@ -15,6 +15,7 @@ from tests.e2e.discord.workspace_services import (
     StoredReports,
     WorkspaceAccounts,
     WorkspaceInbox,
+    staff_member,
     staff_permissions,
 )
 from tests.support.services import bot_services
@@ -26,13 +27,6 @@ def assert_private_defer_was_completed(env: simcord.Env) -> None:
     assert callback.json["type"] == discord.InteractionResponseType.deferred_channel_message.value
     assert callback.json["data"]["flags"] & discord.MessageFlags(ephemeral=True).value
     assert any(call.method == "PATCH" and call.path.endswith("/messages/@original") for call in env.http_requests)
-
-
-def staff_member(env: simcord.Env, accounts: WorkspaceAccounts) -> simcord.MemberActor:
-    role = env.guild.create_role("Staff", permissions=discord.Permissions(manage_guild=True))
-    staff = env.guild.add_member(env.create_user("staff"), roles=[role])
-    accounts.discord_accounts[str(staff.id)] = Account(id=27, consent=AccountConsent.grant_current())
-    return staff
 
 
 async def test_account_for_an_unlinked_member_explains_missing_page_privately() -> None:

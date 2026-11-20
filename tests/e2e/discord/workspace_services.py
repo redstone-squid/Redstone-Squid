@@ -3,10 +3,12 @@
 from collections.abc import Sequence
 from typing import override
 
+import discord
+import simcord
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.diagnostics.application import ErrorReportService
@@ -42,6 +44,13 @@ class WorkspaceAccounts(AccountService):
         assert provider is IdentityProvider.DISCORD
         self.lookups.append(subject)
         return self.discord_accounts.get(subject)
+
+
+def staff_member(env: simcord.Env, accounts: WorkspaceAccounts) -> simcord.MemberActor:
+    role = env.guild.create_role("Staff", permissions=discord.Permissions(manage_guild=True))
+    staff = env.guild.add_member(env.create_user("staff"), roles=[role])
+    accounts.discord_accounts[str(staff.id)] = Account(id=27, consent=AccountConsent.grant_current())
+    return staff
 
 
 class WorkspaceRules:
