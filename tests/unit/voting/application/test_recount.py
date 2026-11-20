@@ -117,6 +117,15 @@ async def test_a_reaction_for_the_stored_option_wins_and_the_others_are_removed(
     assert cards.removed == [("1️⃣", 1)]
 
 
+async def test_conflicting_choices_without_a_ballot_remain_for_the_voter_to_resolve() -> None:
+    votes = Votes(_snapshot())
+    cards = Cards({100: CardReactions({"1️⃣": [1], "2️⃣": [1]})})
+
+    assert not await _recounter(votes, cards).recount(1)
+    assert votes.casts == []
+    assert cards.removed == []
+
+
 async def test_anonymous_reactions_are_removed_after_casting_and_unconsented_ones_are_not_cast() -> None:
     votes = Votes(_snapshot(anonymous=True))
     cards = Cards({100: CardReactions({"1️⃣": [1, 99]}, own=frozenset({"1️⃣", "2️⃣"}))})

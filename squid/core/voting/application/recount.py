@@ -116,7 +116,8 @@ class BallotRecounter:
         For each account seen reacting:
 
         - If one of its reactions is for its stored option, the ballot stays.
-        - Otherwise its first reaction, in card and option order, becomes its ballot.
+        - One distinct option becomes its ballot. Conflicting options preserve the stored
+          ballot, or remain unresolved when the voter has no stored ballot.
         - Reactions for any other option are removed from public polls, and every reaction
           is removed from anonymous polls, whose cards must not show who voted.
 
@@ -177,6 +178,8 @@ class BallotRecounter:
         stored = None if selection is None else selection.option_id
         if any(reaction.option_id == stored for reaction in reactions):
             return _Ballot(stored)
+        if len({reaction.option_id for reaction in reactions}) > 1:
+            return _Ballot(stored, unresolved=stored is None)
         desired = reactions[0]
         actor = await self._actors.resolve(account_id, desired.card.guild_id, snapshot.kind)
         if actor is None:
