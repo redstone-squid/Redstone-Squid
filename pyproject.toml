@@ -95,6 +95,7 @@ dev = [
     "redstone-squid[schematics,observability]",
     # The default test and type-check suites include the Slack workspace member.
     "squid-ui-slack",
+    "simcord==4.0.0",
 ]
 # Documentation tooling is installed only when building or publishing the site.
 docs = [
@@ -344,6 +345,7 @@ timezone = "utc"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = [
+    "tests/e2e/discord",
     "tests/unit",
     "tests/architecture",
     "packages/squid-reactivity/tests",

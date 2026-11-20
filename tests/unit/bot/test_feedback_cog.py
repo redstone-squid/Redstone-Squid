@@ -8,48 +8,8 @@ import pytest
 
 from squid.bot import feedback_cog as feedback
 from squid_i18n.text import NEUTRAL, discord_text, resolve_text
-from squid_ui.ext.discord.testing import interaction_harness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
-
-
-@pytest.mark.parametrize(
-    ("command", "description"),
-    [
-        ("bug", "Report a bug with the bot. Your message will be public."),
-        ("suggestion", "Suggest improvements to the bot. Your message will be public."),
-    ],
-)
-async def test_feedback_commands_publish_and_only_ping_owner(
-    monkeypatch: pytest.MonkeyPatch, command: str, description: str
-) -> None:
-    bot = make_layout_bot(services=bot_services())
-    bot.owner_id = 42
-    cog = feedback.FeedbackCog(bot)
-    interaction = interaction_harness(user_id=7)
-    interaction.client = bot
-    channel_send = AsyncMock()
-    monkeypatch.setattr(feedback.sd, "send_to", Mock(return_value=channel_send))
-    monkeypatch.setattr(feedback, "owner_can_view", AsyncMock(return_value=True))
-    entry = cast(Any, getattr(cog, command))
-
-    assert entry.description == description
-    assert not entry.guild_only
-    assert entry.parameters[0].required
-    await entry.callback(cog, interaction, "Please fix @everyone <@99>")
-
-    interaction.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
-    interaction.edit_original_response.assert_not_awaited()
-    interaction.delete_original_response.assert_awaited_once()
-    send_to = cast(Mock, feedback.sd.send_to)
-    assert send_to.call_args.args == (interaction.channel,)
-    assert send_to.call_args.kwargs["allowed_mentions"].to_dict() == {"users": [42], "parse": []}
-    assert channel_send.await_args is not None
-    payload = str(channel_send.await_args.args[0].view.to_components())
-    assert "Please fix" in payload
-    assert ("Bug report: Please fix" if command == "bug" else "Suggestion: Please fix") in payload
-    assert "<@7>" not in payload
-    assert " from " not in payload
 
 
 @pytest.mark.parametrize("in_guild", [True, False])

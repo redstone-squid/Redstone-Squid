@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 import discord
+import pytest
 from discord import app_commands
 from discord.ext.commands import Command
 
@@ -192,3 +193,19 @@ def test_records_is_a_public_entry_to_the_catalogue() -> None:
     records = next(command for command in cast(Any, BuildCommands).__cog_app_commands__ if command.name == "records")
     assert records.default_permissions is None
     assert not records.guild_only
+
+
+@pytest.mark.parametrize(
+    ("name", "description"),
+    [
+        ("bug", "Report a bug with the bot. Your message will be public."),
+        ("suggestion", "Suggest improvements to the bot. Your message will be public."),
+    ],
+)
+def test_feedback_commands_document_the_public_message(name: str, description: str) -> None:
+    command = getattr(FeedbackCog, name)
+    assert command.description == description
+    assert not command.guild_only
+    (parameter,) = command.parameters
+    assert parameter.name == "message"
+    assert parameter.required

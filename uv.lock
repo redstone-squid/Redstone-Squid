@@ -2352,6 +2352,7 @@ dev = [
     { name = "pytest-mock" },
     { name = "redstone-squid", extra = ["observability", "schematics"] },
     { name = "ruff" },
+    { name = "simcord" },
     { name = "squid-ui-slack" },
     { name = "testcontainers" },
     { name = "types-psycopg2" },
@@ -2424,6 +2425,7 @@ dev = [
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "redstone-squid", extras = ["schematics", "observability"] },
     { name = "ruff", specifier = ">=0.5.1" },
+    { name = "simcord", specifier = "==4.0.0" },
     { name = "squid-ui-slack", editable = "packages/squid-ui-slack" },
     { name = "testcontainers", specifier = ">=4.10.0" },
     { name = "types-psycopg2", specifier = ">=2.9" },
@@ -2582,6 +2584,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/70/b3/c19426f783614d625699a4b247faf628ea9ab1db228674491767b417f9e1/setuptools-84.2.1.tar.gz", hash = "sha256:3ff8b3b5492a0aa66960f4419365a86b84e013070d4313e4d4a6894f5d64d6bc", size = 1230289, upload-time = "2026-10-20T19:01:37.742Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/55/6dc6d6bb953bdfc52519a0059592c52b6e3b8ad51cf8256dffceb55b0610/setuptools-84.2.1-py3-none-any.whl", hash = "sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2", size = 876263, upload-time = "2026-10-20T19:01:35.678Z" },
+]
+
+[[package]]
+name = "simcord"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "discord-py" },
+    { name = "sortedcontainers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3c/a2/08a556e1b8b0b2172dba23c5599af949f0e62272341d1ec4467a07dcfd30/simcord-4.0.0.tar.gz", hash = "sha256:225eff9530c430104428f07c3253ef024a3f343c10ed6d4cd93a880d56eb1ade", size = 24624908, upload-time = "2026-11-09T12:30:53.668Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/7f/94896e184ce31b441d03cae9fc49f7d3401035c0708f5cd9ac093cccad36/simcord-4.0.0-py3-none-any.whl", hash = "sha256:26c572fb298d72e74f98c31e99ab551195188e60953d950b729d76b2db7156c1", size = 19184623, upload-time = "2026-11-09T12:30:50.373Z" },
 ]
 
 [[package]]
