@@ -119,7 +119,6 @@ anyio==4.16.0 \
     #   openai
     #   pycrdt
     #   redstone-squid
-    #   schemathesis
     #   squid-storage
     #   squid-ui
     #   squid-ui-discord
@@ -334,7 +333,6 @@ click==8.5.1 \
     #   litestar
     #   pip-tools
     #   rich-click
-    #   schemathesis
     #   uvicorn
 colorama==0.4.6 ; os_name == 'nt' or sys_platform == 'win32' \
     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
@@ -476,10 +474,6 @@ googleapis-common-protos==1.76.0 \
     --hash=sha256:59e13344a9f3651aa201a03e2bee815a3bf43a4baf1f9ff8a9b62a840ce25fac \
     --hash=sha256:71db0e44a1d4c2dd024ebad44ca67129cc1e2892e4861df466764749d5ef8642
     # via opentelemetry-exporter-otlp-proto-http
-graphql-core==3.3.2 \
-    --hash=sha256:15d6eee7d4364fbc202833bc6bd0d504004d8ae7c0aaf620fa884d8e437622f2 \
-    --hash=sha256:d83f49ee18d2db89fb575dab6ffefa8aa1bf5f60dff8a6781db6f63420041348
-    # via hypothesis-graphql
 greenlet==3.5.6 \
     --hash=sha256:2ab5f42ac6c238eb71770715e6e909ad9a1a92b6c681ccb64cd5a0f07edb953f \
     --hash=sha256:311018b46472fb26ee85870847fb89eb64cc8aaddb617400789d87076f7cfeec \
@@ -516,10 +510,6 @@ h11==0.16.0 \
     #   httpcore
     #   httpcore2
     #   uvicorn
-harfile==0.6.0 \
-    --hash=sha256:0f2209d6ec164a2aea7e8fb2b49d9fef5ddeee51b65dbfd28a4167185c34bb30 \
-    --hash=sha256:3e5751d52c59bda35789748256cbac097b664e65315d15ded67b006c173e34b3
-    # via schemathesis
 htpy==26.5.1 \
     --hash=sha256:148566db9d720c897baa5832e2a496954ce317ab06ef49a103b44f8a15322c3b \
     --hash=sha256:43a365c1fc670094da781b923883019339cec031397d61d5fe5f8e2f2278b63e
@@ -586,13 +576,6 @@ hypothesis==6.170.15 \
     --hash=sha256:f29339b5cd4c2a221885e8b7ddbd447b4dc7ee14f763a6f5aaff726d4d3fd5ed \
     --hash=sha256:f545a04342a53008fa696a0592f0a026278ee61fab04f3e9e395d0c7eba42fef \
     --hash=sha256:f6d5d34fa6b56f236ad9659043123efb85391a8a5640f067c9de82b0be0bff73
-    # via
-    #   hypothesis-graphql
-    #   schemathesis
-hypothesis-graphql==0.13.6 \
-    --hash=sha256:64e2425a0ed64fcf0610aeb2a23f61e6fa568249c646313f3926e22ed846c269 \
-    --hash=sha256:8902f9ca57752466bf53d46cb1a9ab7bc45769838dd668c18379b867cc688435
-    # via schemathesis
 idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
@@ -653,27 +636,6 @@ jmespath==1.1.0 \
 jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
-jsonschema-rs==0.60.3 \
-    --hash=sha256:1d831d8eeb775af547aec0e9f75da51122a9c3563486d02e43db88d425b32c86 \
-    --hash=sha256:326ec5b6800552ccd76a1acca131f70511ac013b377230bdd541db3244adc9fa \
-    --hash=sha256:346b7ce0cf6f80e06c82b29ad44240af031e1c8f3714e0c7314ae3e717943af3 \
-    --hash=sha256:4ef102da6744c230bd5464f4d66b57dff6bdce2531210c835605056e06bae999 \
-    --hash=sha256:601481cae7d27aa8d6086b3f44fd1f5799033b6592e870be5a035cb308aee100 \
-    --hash=sha256:963da7e521e51341c8ad1831e5a1252b990631d9a7966bdb9690f02d4869b276 \
-    --hash=sha256:9d6135dbedab4483868d5147f82264a591665d5a72f1ca79816ba2779f7229c9 \
-    --hash=sha256:a18363454179058ae1df926a7722faaf1d4a3c63e00301176f7c91d6a093d3cb \
-    --hash=sha256:ae44f1b248f243d1901214b3ce94519ecc24e1cde3746cb50bd839b18b5adfd4 \
-    --hash=sha256:b330f6f19bb6450f0ce008be24ca48f2cd87deab743cc34886cf6ccadf2ab6e8 \
-    --hash=sha256:b54a43a876fbfb48426f48d763b4ff05033b156077245fda85792950b4e1fa48 \
-    --hash=sha256:b9b00f94f276b497f9b50fd0defb1e43d5457fb93bbcec932991f05773db74dc \
-    --hash=sha256:bb087da5a60d578b9c263d7cf11f247ba48a78d8ad4d79c2083e89b7e80e3370 \
-    --hash=sha256:c0187ceb7192595fe331c4f4c00237699a973a6b2306d604d7e5a545f2d3e2af \
-    --hash=sha256:c295958c93c2407d0993703d9edacd49dd798b89f6a80eb3f186ed12d6ae1ab7 \
-    --hash=sha256:ccbe1314904ba61de0165e3f1e734e6b8a43b65984db4523b7f8cfd1db0a73d2 \
-    --hash=sha256:ce6127ae091b3ae47b27f0098d62367b51a0a618cebd50856b3e3f5b74e8bf16 \
-    --hash=sha256:d5a839dfecf3588ace8e5a316fa8f693802709aecff8bc162587ce4f7618ea28 \
-    --hash=sha256:f54df97923068d976065d3959519922bef83d084d043262e9f56f7a3c6aeb301
-    # via schemathesis
 jsonschema-specifications==2025.9.1 \
     --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe \
     --hash=sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d
@@ -744,7 +706,6 @@ markupsafe==3.0.4 \
     #   htpy
     #   mako
     #   squid-ui-discord
-    #   werkzeug
 mdformat==1.0.0 \
     --hash=sha256:4954045fcae797c29f86d4ad879e43bb151fa55dbaf74ac6eaeacf1d45bb3928 \
     --hash=sha256:bca015d65a1d063a02e885a91daee303057bc7829c2cd37b2075a50dbb65944b
@@ -1180,10 +1141,6 @@ pyproject-hooks==1.3.3 \
     # via
     #   build
     #   pip-tools
-pyrate-limiter==4.5.1 \
-    --hash=sha256:7f03c6a9235b00a4ba3c7b1e8cb6b23fbacc9d40b09f326220917a12ef22cc09 \
-    --hash=sha256:bb8dd2926b0679e4ada6629a865e85daa5599268f930c61a8992dafa8bf3ba0d
-    # via schemathesis
 pyrefly==1.4.1 \
     --hash=sha256:19c35e7e63a02076fc555bdb0800302b89bb419e3de2814ab8274c0c6ac00158 \
     --hash=sha256:1ef91afbaca15336482dd21292974f64a735268ce4990d59e87162d5a097106d \
@@ -1205,7 +1162,6 @@ pytest==9.2.0 \
     #   pytest-asyncio
     #   pytest-cov
     #   pytest-mock
-    #   schemathesis
 pytest-archon==0.0.7 \
     --hash=sha256:5aaad17cff853d058ca686dd1da425ce884daf33ae9668011323173631dc4e94 \
     --hash=sha256:6a1e814c84adbea4afc188369733ec898f2525cc401f3ca965498f8b3ee454d5
@@ -1243,9 +1199,7 @@ pywin32==312 ; sys_platform == 'win32' \
     # via docker
 pyyaml==6.0.3 \
     --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f
-    # via
-    #   litestar
-    #   schemathesis
+    # via litestar
 questionary==2.1.1 \
     --hash=sha256:3d7e980292bb0107abaa79c68dd3eee3c561b83a0f89ae482860b181c8bd412d \
     --hash=sha256:a51af13f345f1cdea62347589fbb6df3b290306ab8930713bfae4d475a7d4a59
@@ -1293,8 +1247,6 @@ requests==2.34.2 \
     #   opentelemetry-exporter-http-transport
     #   opentelemetry-exporter-otlp-proto-http
     #   requests-oauthlib
-    #   schemathesis
-    #   types-docker
 requests-oauthlib==2.0.0 \
     --hash=sha256:7dd8a5c40426b779b0868c404bdef9768deccf22749cde15852df527e6269b36 \
     --hash=sha256:b3dffaebd884d8cd778494369603a9e7b58d29111bf6b41bdc2dcd87203af4e9
@@ -1306,7 +1258,6 @@ rich==15.0.0 \
     #   bump-my-version
     #   litestar
     #   rich-click
-    #   schemathesis
 rich-click==1.9.9 \
     --hash=sha256:324cba7513cd4187ee92b2eef21f071714e45be062458c8b157bd7e0c81103e3 \
     --hash=sha256:365e7a9d0adb42e41ea832a0a12e02c44c079a26536dee688125eb9814f97274
@@ -1347,6 +1298,7 @@ rpds-py==2026.9.1 \
     # via
     #   jsonschema
     #   referencing
+    #   squid-ui
 ruff==0.17.4 \
     --hash=sha256:0d1f4848fd2ec0499be4046db9b7dfcc952666885f00233cc7033515282556a8 \
     --hash=sha256:13e781c3c5f663e7fba737eaaeb70dd943dd55171daf316afb25cd5268cfe0c7 \
@@ -1370,9 +1322,6 @@ s3transfer==0.19.3 \
     --hash=sha256:24eb7535804306355e31c952a90022bf5b2f9d760f9a11062c7493a217c08553 \
     --hash=sha256:8326acc3d056d7f7b8a37110c7d2aea41f67e83f6ae79cd3b5fbcca34c726406
     # via boto3
-schemathesis==4.33.1 \
-    --hash=sha256:409ecaa3ade87e9c7a4f417c9efb88bc60e7535252881f54f27e476c34b5c18c \
-    --hash=sha256:610f2027ef2e60bf287971d5b299e6d25ab9725e2933f4425c41858593b06d79
 setuptools==84.2.1 \
     --hash=sha256:3ff8b3b5492a0aa66960f4419365a86b84e013070d4313e4d4a6894f5d64d6bc \
     --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
@@ -1452,9 +1401,6 @@ typed-ffmpeg-v9==4.6.2 \
     --hash=sha256:167e7aa44daad2eb3ee3ad47ccc04a9933aad59fd0ea3b698bb3b82422924cdd \
     --hash=sha256:d32a1e539b2cd436cde74481f3a57652af54b282714154043169efa5a9353b5e
     # via typed-ffmpeg
-types-docker==7.2.0.20261102 \
-    --hash=sha256:a5fda816dfc909be4a65892c87983ca007e461cb6fb46aba6481547304de0ebe \
-    --hash=sha256:af141295dfc2760f2452fed89988ecfd86e2a66411206eb7c190aadc41d10e12
 types-psycopg2==2.9.21.20261030 \
     --hash=sha256:7850716d731d6bf45c53f2d26179e2bcf7273d1d3acfd56b0201adc1dec4ba20 \
     --hash=sha256:e51ed54722bc7bc3cfb635a8623d9915d1816ed789c926c40b5f61d5f417a4ab
@@ -1478,7 +1424,6 @@ typing-extensions==4.16.0 \
     #   pydantic
     #   pydantic-core
     #   pydantic-settings
-    #   schemathesis
     #   sqlalchemy
     #   squid-ui-discord
     #   testcontainers
@@ -1508,7 +1453,6 @@ urllib3==2.8.0 \
     #   docker
     #   requests
     #   testcontainers
-    #   types-docker
 uvicorn==0.54.0 \
     --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf \
     --hash=sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620
@@ -1557,10 +1501,6 @@ wcwidth==0.9.4 \
     # via
     #   mdformat-gfm
     #   prompt-toolkit
-werkzeug==3.1.9 \
-    --hash=sha256:55ca7c70a75689be937aa27f8ff4b018f06ff4838fc73045560bf0f5a1291060 \
-    --hash=sha256:6392e50c78460ba618e5b21f08a71f59c99ce99cdc6cf6e3dd7e6ccca8754fab
-    # via schemathesis
 wheel==0.48.0 \
     --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab \
     --hash=sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322

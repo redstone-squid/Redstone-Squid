@@ -73,7 +73,6 @@ observability = [
 # Note: GitHub Actions regenerates requirements/dev.txt when this group changes.
 # Local reproduction: uv export --only-dev -o requirements/dev.txt
 dev = [
-    "docker>=7.2,<8",
     "hypothesis>=6.0.0",
     # Scene contract tests validate serialized payloads against the published JSON Schema.
     "jsonschema>=4.23",
@@ -92,18 +91,10 @@ dev = [
     "pytest-asyncio>=1.0.0",
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
-    "schemathesis==4.33.1",
-    # Stub-only packages: docker and psycopg2 ship no type information, so without
-    # these every symbol they export is `Any` and pyrefly reports `untyped-import`.
-    "types-docker>=7.1",
     "types-psycopg2>=2.9",
     "redstone-squid[schematics,observability]",
     # The default test and type-check suites include the Slack workspace member.
     "squid-ui-slack",
-]
-fuzz = [
-    # Atheris bytecode instrumentation does not yet support Python 3.15.
-    "atheris>=3.1.0; sys_platform == 'linux' and python_version < '3.15'",
 ]
 # Documentation tooling is installed only when building or publishing the site.
 docs = [
