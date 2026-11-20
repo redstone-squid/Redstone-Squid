@@ -4,14 +4,18 @@ The first delivery covers help and feedback. The next three migrations, in order
 submission workspace, public vote reactions, and archive/paste. Replace an existing case
 when the simulated user action exercises its assertions. Retain focused policy and failure tests.
 
-Expansion paused on SimCord 4.0.0 (discord.py 2.7.1). For a first-time caller,
-`ensure_consented_account` sends a private screen and awaits `component.wait()`.
-The simulated member can see **Agree**, **Cancel** and **Privacy notice**, but
-`await member.slash(...)` times out with `unknown wait (Future)` before returning
-the interaction. SimCord also rejects a concurrent actor operation. This blocks
-testing the first-time consent round trip for commands including `/build submit`
-and `/poll`. Resume when a member can invoke the command, answer the prompt and
-observe the resumed callback through the public simulation API.
+Expansion paused at first-time consent on SimCord 4.0.0 (discord.py 2.7.1).
+After the private prompt is delivered, Squid's `Screen.wait()` awaits a shielded
+application future. SimCord waits for bot tasks to settle before returning from
+`member.slash()`. It recognizes discord.py view completion futures, and reports
+Squid's future as an unknown wait. Concurrent member operations are rejected.
+
+In a diagnostic run, a test-only wrapper around `ConsentPrompt.wait` awaited
+`env.external_wait(original_wait(prompt), reason="member consent")` inside the
+command task. The slash call returned the prompt, **Agree** resumed the command
+and wrote consent once, and **Cancel** resumed it without an identity write.
+Both clicks were reported as unacknowledged in this harness. Verify component
+acknowledgment separately before treating the interaction as fully covered.
 
 The inventory follows the production and development extension lists in `squid/bot/app.py`.
 The third-party jishaku extension is outside the audit.
