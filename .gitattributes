@@ -123,7 +123,6 @@ minecraft/gradle/verification-metadata.xml linguist-generated=true
 Dockerfile     text
 Dockerfile.*   text
 LICENSE        text
-alembic.ini    text
 babel.cfg      text
 justfile       text
 scripts/pre-push text

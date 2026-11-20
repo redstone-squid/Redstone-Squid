@@ -93,7 +93,7 @@ def test_migrations_create_schema_without_drift(
     Reuse the migrated database to exercise both directions of the chain.
     """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
 
     command.upgrade(config, "head")
     command.check(config)
@@ -278,7 +278,7 @@ def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades
     that checked only whether the notification existed.
     """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -443,7 +443,7 @@ def test_notification_delivery_owner_offline_sql_preserves_safe_ddl_order(
     """Build the supporting index and validate ownership before removing the old foreign key."""
     monkeypatch.setenv("SQUID_DATABASE_URL", "postgresql+asyncpg://squid:squid@localhost/squid")
     output = StringIO()
-    config = Config("alembic.ini", toml_file="pyproject.toml", output_buffer=output)
+    config = Config(toml_file="pyproject.toml", output_buffer=output)
 
     command.upgrade(
         config,
@@ -466,7 +466,7 @@ def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
 ) -> None:
     """The applied historical revision retains its filename and reversible schema contract."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{SCHEMATIC_RENDER_PROJECTION_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -561,7 +561,7 @@ def test_schematic_file_schema_ceiling_agrees_with_its_migration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, SCHEMATIC_PUBLICATION_REVISION)
     engine = create_engine(migration_database_url)
     try:
@@ -598,7 +598,7 @@ def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
 ) -> None:
     """The generic-poll sentinels become NULL and are restored by downgrade."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{NULLABLE_VOTE_THRESHOLDS_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -654,7 +654,7 @@ def test_queue_claim_check_migration_gives_tokenless_claims_a_token(
 ) -> None:
     """A claim made by code from before claim tokens must not block adding the claim check."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{QUEUE_CLAIM_CHECK_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -682,7 +682,7 @@ def test_vote_subtype_invariant_upgrade_rejects_existing_incoherence(
 ) -> None:
     """Reject existing voting sessions without the detail row required by their kind."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{VOTE_SUBTYPE_INVARIANT_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -709,7 +709,7 @@ def test_vote_subtype_invariant_downgrade_removes_triggers_and_function(
 ) -> None:
     """The aggregate invariant is fully reversible when rolling back its revision."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, VOTE_SUBTYPE_INVARIANT_REVISION)
     command.downgrade(config, f"{VOTE_SUBTYPE_INVARIANT_REVISION}-1")
     engine = create_engine(migration_database_url)
@@ -741,7 +741,7 @@ def test_idempotency_caller_migration_dual_writes_and_downgrades(
 ) -> None:
     """Old and new API binaries share one caller namespace during the rollout window."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{IDEMPOTENCY_CALLER_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -819,7 +819,7 @@ def test_idempotency_caller_cleanup_preserves_reservations_and_downgrades(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     revision = "e34951e27320"
     command.upgrade(config, f"{revision}-1")
     engine = create_engine(migration_database_url)
@@ -905,7 +905,7 @@ def test_finalization_result_metadata_migration_expands_and_downgrades(
 ) -> None:
     """The migration makes legacy result metadata nullable; downgrade restores both NOT NULL constraints."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{FINALIZATION_RESULT_METADATA_REVISION}-1")
     engine = create_engine(migration_database_url)
     try:
@@ -960,7 +960,7 @@ def test_finalization_result_metadata_contract_preserves_build_identity(
     legacy_metadata: bool,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     revision = "f45a62f38431"
     command.upgrade(config, f"{revision}-1")
     engine = create_engine(migration_database_url)
@@ -1039,7 +1039,7 @@ def test_finalization_input_migration_backfills_and_rejects_updates(
 ) -> None:
     """Existing job inputs survive the split and the retained copy cannot be edited."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, f"{IMMUTABLE_FINALIZATION_INPUT_REVISION}-1")
     engine = create_engine(migration_database_url)
     draft_id = "44444444-4444-4444-8444-444444444444"
@@ -1119,7 +1119,7 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
 ) -> None:
     """The sponsor downgrade is allowed only after every new provenance field is empty."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     # This historical fixture uses retired schema 3, before the payload reset.
     command.upgrade(config, "a7c1e5b9d304")
     engine = create_engine(migration_database_url)
@@ -1198,7 +1198,7 @@ def test_sponsor_migration_refuses_unresolved_legacy_attribution(
 ) -> None:
     """Schema-two requests cannot cross the migration without a verified sponsor snapshot."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "f4a5b6c7d8e9")
     engine = create_engine(migration_database_url)
     draft_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -1263,7 +1263,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
 ) -> None:
     """Changed functions and missing triggers are surfaced by Alembic autogenerate."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "head")
 
     engine = create_engine(migration_database_url)
@@ -1297,7 +1297,7 @@ def test_idempotency_encryption_migration_purges_plaintext_replay_rows(
 ) -> None:
     """Legacy response bodies cannot survive into the ciphertext-only schema."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "d2f3a4b5c6d7")
 
     engine = create_engine(migration_database_url)
@@ -1340,7 +1340,7 @@ def test_taxonomy_cutover_refuses_unimported_legacy_rows(
 ) -> None:
     """The destructive taxonomy migration fails before dropping unmatched legacy data."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b8c9d0e1f2a3")
 
     engine = create_engine(migration_database_url)
@@ -1369,7 +1369,7 @@ def test_submission_content_policy_migration_preserves_uploads_and_retry_identit
     from uuid import uuid4
 
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "a3c5e7f9b1d2")
     draft_id, job_id, artifact_id = uuid4(), uuid4(), uuid4()
     payload = {
@@ -1442,7 +1442,7 @@ def test_finalization_attempt_migration_preserves_history_and_refuses_lossy_down
 ) -> None:
     """Retained jobs keep their identity and payload when the one-job bound is removed."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b5d9f2a7c0e3")
     engine = create_engine(migration_database_url)
     draft_id = "88888888-8888-4888-8888-888888888888"
@@ -1511,7 +1511,7 @@ def test_inferred_capacity_migration_preserves_provenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "e8a2c5d0f3b6")
     engine = create_engine(migration_database_url)
     try:
@@ -1550,7 +1550,7 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
     # BuildConfig requires the pair, which is what the image supplies.
     monkeypatch.setenv("SQUID_BUILD_COMMIT_HASH", "0123456789abcdef")
     monkeypatch.setenv("SQUID_BUILD_COMMIT_MESSAGE", "record the migration chain")
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     script_directory = ScriptDirectory.from_config(config)
     scripts = {script.revision: script for script in script_directory.walk_revisions()}
     corrupt = text(f"UPDATE {HISTORY_TABLE} SET script_sha256 = repeat('0', 64) WHERE revision = :revision")
@@ -1625,7 +1625,7 @@ def test_schema_audit_constraints(
 ) -> None:
     """Reject invalid categories, aliases, and object keys at the database boundary."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
@@ -1675,7 +1675,7 @@ def test_schema_audit_backfills_legacy_rows(
 ) -> None:
     """Preserve loadable builds and exact aliases while dropping unresolvable legacy votes."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "d5f9a2b7e0c3")
     engine = create_engine(migration_database_url)
     try:
@@ -1750,7 +1750,7 @@ def test_record_terminology_preserves_identities_and_json(
 ) -> None:
     """Rename populated titles and filters in both directions without losing identity or unrelated JSON."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b9d3e6f1c4a7")
     engine = create_engine(migration_database_url)
     original_filter = {
@@ -1881,7 +1881,7 @@ def test_deleting_a_build_removes_only_its_vote_sessions(
 ) -> None:
     """A build delete must not take generic polls or delete-log votes with it."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
@@ -1931,7 +1931,7 @@ def test_role_includes_stay_within_one_guild(
 ) -> None:
     """A role may include global roles and roles of its own guild, but no other guild's roles."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
@@ -1961,7 +1961,7 @@ def test_build_lease_and_embedding_writes_queue_nothing(
 ) -> None:
     """Only a visible change to a build may queue search, recompute, or Discord work."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(migration_database_url)
     queues = ("search_projection_queue", "record_recompute_queue", "discord_sync_queue")
     try:
@@ -1997,7 +1997,7 @@ def test_hardening_constraints(
 ) -> None:
     """Reject builds without their category's subtype row, duplicate versions, and duplicate valid codes."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
@@ -2054,7 +2054,7 @@ def test_build_notes_move_into_description_without_requeueing_unchanged_cards(
 ) -> None:
     """Merge extra_info.user into description, and queue Discord work only where the review card changes."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "f3c6b9e4a1d7")
     engine = create_engine(migration_database_url)
     queues = ("search_projection_queue", "discord_sync_queue")
@@ -2142,7 +2142,7 @@ def test_starboard_message_migration_preserves_deletions_and_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     revision = "c9f4e7a2b5d8"
     command.upgrade(config, f"{revision}-1")
     engine = create_engine(migration_database_url)
@@ -2187,7 +2187,7 @@ def test_draft_schematic_migration_recovers_waiting_uploads(
     migration_database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b2c7d0e5f8a1")
     draft_id, source_id = uuid4(), uuid4()
     engine = create_engine(migration_database_url)
@@ -2248,7 +2248,7 @@ def test_extender_timings_move_out_of_submission_provenance_without_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "a5b8c1d4e7f0")
     engine = create_engine(migration_database_url)
     try:
@@ -2297,7 +2297,7 @@ def test_short_extender_directions_are_spelled_in_full(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "4fd493faba21")
     engine = create_engine(migration_database_url)
     directions = ("Up", "Down", "Upward", "Horizontal", None)
@@ -2330,7 +2330,7 @@ def test_short_extender_directions_are_spelled_in_full(
 
 
 def test_video_thumbnail_role_migration_preserves_objects(migration_database_url: str) -> None:
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     revision = ScriptDirectory.from_config(config).get_revision("a56b73f49542")
     assert revision is not None
     engine = create_engine(migration_database_url)
@@ -2387,7 +2387,7 @@ def test_source_names_rewrite_build_metadata_and_history_without_new_revisions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b8e2c6f0a4d9")
     engine = create_engine(migration_database_url)
     try:
@@ -2457,7 +2457,7 @@ def test_payload_schema_reset_preserves_input_immutability(
 ) -> None:
     """Payload rewrites restore the input guard on upgrade, downgrade, and rollback."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     parent = "a7c1e5b9d304"
     revision = "b8e2c6f0a4d9"
     command.upgrade(config, parent)

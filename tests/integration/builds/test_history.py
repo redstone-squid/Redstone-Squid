@@ -220,7 +220,7 @@ async def test_merge_and_delete_retain_history(sessions: async_sessionmaker[Asyn
 
 async def test_migration_preserves_history(sessions: async_sessionmaker[AsyncSession]) -> None:
     build_id = await seed(sessions)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.downgrade(config, "d0a5f8b3c6e9")
     command.upgrade(config, "head")
     async with SqlAlchemyUnitOfWork(sessions) as uow:

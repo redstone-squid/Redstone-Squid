@@ -67,13 +67,9 @@ class DatabaseEngine:
             )
 
 
-"""Source tree root, where `alembic.ini` and the `alembic/` script directory live."""
-
-
 def migration_heads(root: Path = PROJECT_ROOT) -> frozenset[str]:
     """Return the migration heads in the source tree at `root`."""
-    config = Config(str(root / "alembic.ini"))
-    config.set_main_option("script_location", str(root / "alembic"))
+    config = Config(toml_file=root / "pyproject.toml")
     return frozenset(ScriptDirectory.from_config(config).get_heads())
 
 

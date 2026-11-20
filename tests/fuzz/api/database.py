@@ -557,7 +557,7 @@ class DatabaseController:
         # pyproject.toml, which Alembic resolves relative to the working directory, so a
         # scratch cwd makes it fail with "No 'script_location' key found".
         result = subprocess.run(
-            [sys.executable, "-m", "alembic", "-c", str(PROJECT_ROOT / "alembic.ini"), "upgrade", "head"],
+            [sys.executable, "-m", "alembic", "-c", str(PROJECT_ROOT / "pyproject.toml"), "upgrade", "head"],
             cwd=PROJECT_ROOT,
             env=environment,
             stdin=subprocess.DEVNULL,

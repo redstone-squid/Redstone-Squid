@@ -68,7 +68,7 @@ async def migrated_session_factory(
 
     migration_url = admin_url.rsplit("/", maxsplit=1)[0] + f"/{database_name}"
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_async_engine(migration_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://"))
     try:
         yield async_sessionmaker(engine, expire_on_commit=False)

@@ -48,7 +48,7 @@ def permission_database_url(postgres_container: PostgresContainer) -> Iterator[s
 @pytest.fixture
 def migrated_engine(permission_database_url: str, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SQUID_DATABASE_URL", permission_database_url)
-    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    command.upgrade(Config(toml_file="pyproject.toml"), "head")
     engine = create_engine(permission_database_url)
     try:
         yield engine

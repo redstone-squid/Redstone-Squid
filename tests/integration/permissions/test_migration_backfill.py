@@ -59,7 +59,7 @@ async def backfilled(
 ) -> AsyncGenerator[tuple[async_sessionmaker, dict[str, int]]]:
     """Seed the legacy tiers at the pre-backfill head, then migrate over them."""
     monkeypatch.setenv("SQUID_DATABASE_URL", backfill_database_url)
-    config = Config("alembic.ini", toml_file="pyproject.toml")
+    config = Config(toml_file="pyproject.toml")
     command.upgrade(config, TABLES_REVISION)
 
     engine = create_engine(backfill_database_url)

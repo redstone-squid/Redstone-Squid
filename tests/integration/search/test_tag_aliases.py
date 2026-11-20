@@ -193,9 +193,7 @@ async def test_migration_requeues_existing_builds_and_tag_metadata(
     migrated_session_factory: async_sessionmaker[AsyncSession], catalogue: tuple[int, int, int]
 ) -> None:
     target_id, textual_id, tag_id = catalogue
-    revision = ScriptDirectory.from_config(Config("alembic.ini", toml_file="pyproject.toml")).get_revision(
-        "f9a3b5c1d746"
-    )
+    revision = ScriptDirectory.from_config(Config(toml_file="pyproject.toml")).get_revision("f9a3b5c1d746")
     assert revision is not None
 
     def requeue(connection: Connection) -> None:

@@ -1,11 +1,11 @@
 """Alembic environment for the application-owned PostgreSQL schema."""
 
+import logging
 from collections.abc import MutableMapping
-from logging.config import fileConfig
 from typing import Literal
 
 from alembic_utils.replaceable_entity import register_entities
-from sqlalchemy import Connection, engine_from_config, make_url, pool
+from sqlalchemy import Connection, create_engine, make_url, pool
 from sqlalchemy.engine import URL
 from sqlalchemy.schema import SchemaItem
 
@@ -21,10 +21,8 @@ from squid.core.persistence.migration_history import (
     verify_script_digests,
 )
 
-config = context.config
-if config.config_file_name is not None:
-    # Migration tests also run Alembic in-process; preserve the host's configured loggers.
-    fileConfig(config.config_file_name, disable_existing_loggers=False)
+logging.basicConfig(level=logging.WARNING, format="%(levelname)-5.5s [%(name)s] %(message)s")
+logging.getLogger("alembic").setLevel(logging.INFO)
 
 target_metadata = Base.metadata
 MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in current_entities()}
@@ -106,9 +104,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations through the configured synchronous database driver."""
-    configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = database_url().render_as_string(hide_password=False)
-    connectable = engine_from_config(configuration, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    connectable = create_engine(database_url(), poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         configure_context(connection)
