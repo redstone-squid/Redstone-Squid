@@ -143,3 +143,65 @@ async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeyp
         assert all(text in second for text in ("C2", "D", "Page 2"))
         assert "C1" not in second
         assert requests == [Position(), Position("C")]
+
+
+async def test_flow_numbers_reappear_at_origin_after_opening_mid_collection() -> None:
+    class Source:
+        capabilities = SourceCapabilities()
+
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+            if position.anchor is None:
+                return Batch(Position("a"), ("A",), next=Position("b"))
+            if position.anchor == "b":
+                return Batch(position, ("B",), next=Position("c"))
+            return Batch(position, ("C",))
+
+    flow = sp.SourceFlow(
+        Source(),
+        identity=str,
+        paragraphs=lambda item: (item,),
+        initial_position=Position("b"),
+        fetch_size=1,
+        max_paragraphs_per_page=1,
+    )
+    async with stage(flow, owner=object()) as ui:
+        assert "B" in ui.texts()
+        assert "Page" not in " ".join(ui.texts())
+        await ui.press(ui.key_for("flow.next"))
+        assert "C" in ui.texts()
+        assert "Page" not in " ".join(ui.texts())
+        await ui.press(ui.key_for("flow.first"))
+        assert "Page 1" in " ".join(ui.texts())
+        await ui.press(ui.key_for("flow.next"))
+        assert "Page 2" in " ".join(ui.texts())
+        assert "B" in ui.texts()
+
+
+async def test_flow_resumes_a_timed_out_fill_on_next() -> None:
+    class Source:
+        capabilities = SourceCapabilities()
+        attempts = 0
+
+        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
+            if position == Position():
+                return Batch(position, ("A",), next=Position("b"))
+            self.attempts += 1
+            if self.attempts == 1:
+                await anyio.sleep_forever()
+            return Batch(position, ("B",))
+
+    flow = sp.SourceFlow(
+        Source(),
+        identity=str,
+        paragraphs=lambda item: (item,),
+        fetch_size=1,
+        max_paragraphs_per_page=2,
+        fill_timeout=0.01,
+    )
+    with anyio.fail_after(5):
+        async with stage(flow, owner=object()) as ui:
+            assert "A" in ui.texts()
+            assert "B" not in ui.texts()
+            await ui.press(ui.key_for("flow.next"))
+            assert "B" in ui.texts()
+            assert "Page 2" in " ".join(ui.texts())

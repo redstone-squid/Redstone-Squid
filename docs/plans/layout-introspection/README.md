@@ -178,16 +178,17 @@ runtime's navigation/persistence protocol.
 `SourceFlow` supports forward reading with authored paragraph boundaries. Its
 `fetch_size` limits source items per batch and `max_paragraphs_per_page` caps
 paragraphs on screen. A page can cross batches or end partway through an item.
-The page number starts at 1. A failed delivery can retry the same Next action.
+Opening mid-collection omits the page number until the source establishes the
+beginning. First requests the origin, restoring Page 1 there. Subsequent Next
+actions count from that page. A failed delivery can retry the same action.
+Once content fits, `fill_timeout` bounds the wait for extra batches across the
+page. Next resumes at the first undelivered fragment.
 
 The general source-flow implementation needs:
 
 - Source and intra-item continuation addresses, separate from ordinals. Each source
   declares verified or assumed stability. Verified sources validate the revision
   before combining batches. Assumed-stable sources may continue across fetches.
-- Fetch outside the solver. Once a nonempty page fits, allow a bounded wait for
-  more content. When the budget expires, deliver what fits and resume at the
-  first undelivered fragment on Next. Retain unconsumed loaded content.
 - Next that consumes content or reaches a declared end; no zero-progress content pages.
 - Previous through valid visited checkpoints or an explicit predecessor capability.
 - On an assumed-stable source, track the session ordinal for the current layout. Starting at the
