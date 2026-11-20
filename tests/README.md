@@ -35,11 +35,11 @@ Run `just fuzz-api` with Docker available to generate sequences of draft edits. 
 ## Offline Discord integration tests
 
 Run `uv run --locked pytest tests/e2e/discord` for the offline Discord suite, also included in `just test`.
-Each test loads production cogs and starts the Squid UI runtime on a fresh bot.
+Each test loads the selected extensions on a fresh Redstone Squid bot with in-process application services.
 Drive commands and components as guild members and assert on the resulting messages.
 SimCord records outgoing REST requests for details such as allowed mentions.
 
-See the [cog migration inventory](../docs/plans/simcord-migration.md) for follow-up scenarios.
+See the [command coverage inventory](../docs/plans/simcord-migration.md) for the journeys covered.
 
 ## What to test
 
