@@ -19,7 +19,7 @@ Not every target directory exists yet. Add one when it receives its first real t
 ## Commands
 
 ```bash
-just test                 # unit and architecture; no Docker or credentials
+just test                 # default offline suite, including Discord
 just test-integration     # includes ephemeral PostgreSQL
 just test-all             # unit, architecture, and integration
 pytest                    # same fast paths selected by pyproject.toml
@@ -34,19 +34,12 @@ Run `just fuzz-api` with Docker available to generate sequences of draft edits. 
 
 ## Offline Discord integration tests
 
-[SimCord](https://github.com/SilentHacks/simcord) is a good fit for testing a cog through Discord user actions.
-A trial with SimCord 4.0.0, discord.py 2.7.1, and Python 3.15 loaded the production help and feedback cogs on a
-`commands.Bot` with `source_code_url` set and the Squid UI runtime installed. Enter `ui.running()` and
-`simcord.run(bot)`, create a guild, text channel and member, then `await bot.tree.sync()`.
+Run `uv run --locked pytest tests/e2e/discord` for the offline Discord suite, also included in `just test`.
+Each test loads production cogs and starts the Squid UI runtime on a fresh bot.
+Drive commands and components as guild members and assert on the resulting messages.
+SimCord records outgoing REST requests for details such as allowed mentions.
 
-- Invoking an unsynced command raised `simcord.SetupError`. After sync, help autocomplete returned the matching command.
-- Opening `/help`, selecting `bug`, and clicking **Back** edited the same Components V2 message. Prefix `!help bug`
-  also rendered the command details.
-- With the owner in the channel, `/bug` deferred privately, posted a public report mentioning the owner, and
-  deleted its original acknowledgment.
-
-Use this setup for command registration, dispatch, and interactive message behavior. Full bot startup with
-supervised workers, PostgreSQL persistence, and behavior on Discord's live service require separate coverage.
+See the [cog migration inventory](../docs/plans/simcord-migration.md) for follow-up scenarios.
 
 ## What to test
 

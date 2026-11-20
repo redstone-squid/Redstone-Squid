@@ -69,8 +69,16 @@ def test_help_screen_renders_focused_and_missing_commands() -> None:
     assert any("No command named `missing`" in text for text in texts(missing))
 
 
-@pytest.mark.parametrize("entrypoint", ["prefix", "slash", "internal"])
-@pytest.mark.parametrize("query", [None, "build", "build show"])
+@pytest.mark.parametrize(
+    ("entrypoint", "query"),
+    [
+        ("prefix", "build show"),
+        ("slash", "build show"),
+        ("internal", None),
+        ("internal", "build"),
+        ("internal", "build show"),
+    ],
+)
 async def test_help_entrypoints_share_the_screen(entrypoint: str, query: str | None) -> None:
     bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     cast(Any, bot).source_code_url = None
