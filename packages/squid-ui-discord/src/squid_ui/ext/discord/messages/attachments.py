@@ -14,8 +14,10 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.result import PlanResult
 
 
-def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:
+def attachment_assets[BodyT](plan: PlanResult[BodyT] | None) -> tuple[Asset, ...]:
     """The assets a plan expects to be uploaded, excluding ones already served by URL."""
+    if plan is None:
+        return ()
     assets = tuple(
         asset
         for scene_asset in plan.scene.assets

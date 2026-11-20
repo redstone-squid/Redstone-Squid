@@ -60,10 +60,10 @@ class _RenewalBinding(ActionBinding):
 
 
 @dataclass(frozen=True, slots=True)
-class _MessagePlan:
+class _MessagePlan[BodyT = scene.Body]:
     """One message's scene, visible action bindings, and upload assets."""
 
-    plan: PlanResult
+    plan: PlanResult[BodyT]
     bindings: Mapping[str, ActionBinding]
     assets: tuple[Asset, ...]
 
@@ -71,8 +71,8 @@ class _MessagePlan:
     def keys(self) -> frozenset[str]:
         return frozenset(self.bindings)
 
-    @classmethod
-    def from_plan(cls, plan: PlanResult) -> _MessagePlan:
+    @staticmethod
+    def from_plan[PlanBodyT](plan: PlanResult[PlanBodyT]) -> _MessagePlan[PlanBodyT]:
         """Resolve only visible controls, rejecting scene references without bindings."""
         bindings: dict[str, ActionBinding] = {}
 
@@ -101,7 +101,7 @@ class _MessagePlan:
             case _:
                 message = "a Discord message plan requires a classic or Components V2 scene"
                 raise LayoutInvariantError(message)
-        return cls(plan, bindings, attachment_assets(plan))
+        return _MessagePlan(plan, bindings, attachment_assets(plan))
 
     def shows(self, other: _MessagePlan) -> bool:
         """Whether a message showing `other` already looks and responds like this one."""

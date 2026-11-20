@@ -193,9 +193,7 @@ class ClassicRenderer:
         )
         embeds = tuple(self._embed(embed, index) for index, embed in enumerate(program.embeds))
         view = self._view(program, plan=plan, wire=wire)
-        # `attachment_assets` reads a plan without caring which body it resolved to, but
-        # BasedPyright infers `PlanResult`'s frozen field as writable, hence invariant.
-        assets = () if plan is None else attachment_assets(plan)  # pyright: ignore[reportArgumentType]
+        assets = attachment_assets(plan)
         payload = MessagePayload.classic(
             content=program.content,
             embeds=embeds,
