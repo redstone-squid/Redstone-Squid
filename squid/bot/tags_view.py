@@ -59,7 +59,7 @@ class RestrictionOperations(Protocol):
     async def alias_revision(self, restriction: str) -> Revision: ...
 
 
-type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable[None]]
+type ModerationRequest = Callable[[TagDefinition, str], Awaitable[None]]
 
 
 class _ModerationActions(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
@@ -83,7 +83,7 @@ class _ModerationActions(sl.Component[ComponentsV2Target, sd.Request[Any, Redsto
                 *(
                     sl.action_control(
                         _action_label(action),
-                        lambda event, selected=action: self._request(event, self._tag, selected),
+                        lambda _event, selected=action: self._request(self._tag, selected),
                         key=action,
                         tone=sl.Tone.DANGER if action in {"reject", "archive"} else sl.Tone.SUCCESS,
                     )
@@ -332,7 +332,6 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _request_moderation(
         self,
-        _event: sl.PressEvent,
         tag: TagDefinition,
         action: str,
     ) -> None:

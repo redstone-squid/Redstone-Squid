@@ -219,9 +219,8 @@ async def test_moderation_requires_a_decision_and_rechecks_permission() -> None:
     )
     await screen.on_load()
     proposal = tag(2, "Reliable", pending=True)
-    press = object()
 
-    await screen._request_moderation(cast(sl.PressEvent, press), proposal, "approve")
+    await screen._request_moderation(proposal, "approve")
 
     assert screen._pending_action == (proposal, "approve")
     assert screen._decision is not None
@@ -260,7 +259,7 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
         await screen._add_selected_alias(ALIAS_REVISION, cast(sd.SubmitEvent, form_event(alias="location")))
         await screen._propose(form_event(name="Reliable", value_type=TagValueType.NONE, query_name=None))
     assert len(screen.edits.undoable) == 2
-    await screen._request_moderation(cast(sl.PressEvent, object()), tags.proposal, "approve")
+    await screen._request_moderation(tags.proposal, "approve")
     with transaction():
         await screen._decide(cast(Any, TransitionEvent(form_event())), "confirm")
     assert len(screen.edits.undoable) == 1
