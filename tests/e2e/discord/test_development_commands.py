@@ -1,4 +1,5 @@
 import discord
+import pytest
 
 from tests.e2e.discord.environment import command_environment, displayed_text
 
@@ -103,3 +104,40 @@ async def test_dev_group_preserves_hidden_help_and_owner_can_open_the_private_da
         assert "Operational dashboard" in overview
         assert "scheduler" in overview
         assert "Download snapshot" in overview
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("!layout catalogue", ("## Smallest 2x2 Seamless Door",)),
+        ("!layout workbench", ("## Build workbench", "## Flush piston door")),
+        ("!layout review live", ("Waiting for reviewers.",)),
+    ],
+)
+async def test_layout_prefix_subcommands_deliver_the_selected_preview(command: str, expected: tuple[str, ...]) -> None:
+    async with command_environment("squid.bot.showcase.cog", development_mode=True) as (bot, env):
+        channel = env.guild.create_text_channel("showcase")
+        visitor = env.guild.add_member(env.create_user("reader"))
+
+        await visitor.send(channel, command)
+
+        previews = [message for message in channel.history() if message.author == bot.user]
+        assert len(previews) == len(expected)
+        for preview, text in zip(previews, expected, strict=True):
+            assert text in "\n".join(displayed_text(preview))
+
+
+async def test_dev_ui_prefix_command_opens_the_requested_dashboard_tab() -> None:
+    async with command_environment("squid.bot.devtools_cog", development_mode=True) as (bot, env):
+        channel = env.guild.create_text_channel("dev")
+        owner = env.guild.add_member(env.create_user("owner"))
+        bot.owner_id = owner.id
+
+        await owner.send(channel, "!dev ui queues")
+
+        dashboard = channel.last_message
+        assert dashboard is not None
+        assert dashboard.author == bot.user
+        text = "\n".join(displayed_text(dashboard))
+        assert "Queues and subscribers" in text
+        assert "scheduler" in text
