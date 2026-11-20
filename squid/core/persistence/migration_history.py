@@ -32,7 +32,7 @@ from squid.config import load_build_config
 HISTORY_TABLE = "alembic_migration_history"
 """Migration bookkeeping, maintained here rather than through model metadata.
 
-`alembic/env.py` excludes this table and `alembic_version` from schema comparison.
+`squid/core/persistence/migrations/env.py` excludes this table and `alembic_version` from schema comparison.
 """
 
 UNKNOWN_RELEASE = "unknown"

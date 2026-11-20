@@ -6,7 +6,6 @@ on:
   push:
     branches: [master]
     paths:
-      - "alembic/**"
       - "squid/core/persistence/**"
       - ".github/workflows/schema-artifacts.yml"
       - "scripts/export_schema.sh"
@@ -14,7 +13,6 @@ on:
       - "pyproject.toml"
   pull_request:
     paths:
-      - "alembic/**"
       - "squid/core/persistence/**"
       - ".github/workflows/schema-artifacts.yml"
       - "scripts/export_schema.sh"

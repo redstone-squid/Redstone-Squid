@@ -4,12 +4,12 @@ from functools import partial
 
 import anyio
 import pytest
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from alembic import command
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
 from squid.core.accounts.models import Account
 from squid.core.builds.domain import Status

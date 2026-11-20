@@ -5,12 +5,12 @@ from functools import partial
 
 import psycopg2
 import pytest
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from alembic import command
 from squid.core.actors import Actor
 from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork

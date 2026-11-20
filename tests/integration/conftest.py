@@ -6,13 +6,12 @@ from collections.abc import AsyncGenerator, AsyncIterator, Generator
 
 import psycopg2
 import pytest
+from alembic import command
 from alembic.config import Config
 from psycopg2 import sql
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.core.config import testcontainers_config
 from testcontainers.postgres import PostgresContainer
-
-from alembic import command
 
 
 @pytest.fixture(scope="session")

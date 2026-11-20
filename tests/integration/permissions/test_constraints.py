@@ -4,12 +4,11 @@ from collections.abc import Iterator
 
 import psycopg2
 import pytest
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
-
-from alembic import command
 
 PERMISSION_DATABASE = "redstone_squid_permissions"
 

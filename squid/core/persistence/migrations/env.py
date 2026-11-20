@@ -4,13 +4,13 @@ import logging
 from collections.abc import MutableMapping
 from typing import Literal
 
+from alembic import context
 from alembic_utils.replaceable_entity import register_entities
 from sqlalchemy import Connection, create_engine, make_url, pool
 from sqlalchemy.engine import URL
 from sqlalchemy.schema import SchemaItem
 
 import squid.core.persistence.model_registry  # noqa: F401
-from alembic import context
 from squid.config import load_database_config
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.base import Base

@@ -221,10 +221,10 @@ known-first-party = [
 "__init__.py" = ["E402"]
 "env.py" = ["E402"]
 
-"alembic/**.py" = ["INP"]
-# Migration history stays immutable; several revisions retain their original TypeVar helpers.
-"alembic/versions/**.py" = ["UP047"]
-"alembic/versions/*.py" = ["D"]
+"squid/core/persistence/migrations/**.py" = ["INP"]
+# Preserve recorded revision digests, including historical import order and TypeVar helpers.
+"squid/core/persistence/migrations/versions/**.py" = ["I001", "UP047"]
+"squid/core/persistence/migrations/versions/*.py" = ["D"]
 "scripts/**.py" = ["INP"]
 
 # INP: unlike tests/, these directories must stay namespace-less -- a second top-level
@@ -284,7 +284,7 @@ pythonPlatform = "All"
 typeCheckingMode = "standard"
 # Match what Pyrefly's `project-includes` already treats as this repo's source.
 # `site` is the generated documentation build and holds copies of the Python under docs/.
-# `alembic` is migration history, immutable by policy and already excluded from Pyrefly.
+# The migrations directory is migration history, immutable by policy and already excluded from Pyrefly.
 # `docs` holds spike scripts attached to plan documents: records of past exploration,
 # written against APIs that have since been renamed, and not run by anything.
 exclude = [
@@ -293,7 +293,7 @@ exclude = [
     "**/.*",
     "scripts/migrations",
     "site",
-    "alembic",
+    "squid/core/persistence/migrations",
     "docs",
 ]
 
@@ -324,7 +324,7 @@ enableBasedFeatures = true  # Immutable UI dataclasses omit synthetic replacemen
 
 [tool.pyrefly]
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
-project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
+project-excludes = ["squid/core/persistence/migrations/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.15"
 # List every workspace src directory so Pyrefly checks editable packages as first-party code.
 # project-includes alone does not override their discovery through site-packages .pth files.
@@ -345,7 +345,7 @@ search-path = [
 ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]
 
 [tool.alembic]
-script_location = "%(here)s/alembic"
+script_location = "%(here)s/squid/core/persistence/migrations"
 file_template = "%%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s"
 prepend_sys_path = ["."]
 timezone = "utc"

@@ -6,7 +6,6 @@ import runpy
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from functools import partial
-from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -698,7 +697,7 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
         )
 
     migration = runpy.run_path(
-        str(Path("alembic/versions/2026_11_17_1900-b8e2c6f0a4d9_reset_finalization_payload_schema.py"))
+        "squid/core/persistence/migrations/versions/2026_11_17_1900-b8e2c6f0a4d9_reset_finalization_payload_schema.py"
     )
 
     def apply(session: Session, operation: str) -> None:

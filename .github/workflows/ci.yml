@@ -56,7 +56,6 @@ jobs:
               - 'tests/**'
               - 'scripts/**'
               - 'contracts/**'
-              - 'alembic/**'
               - 'schema/**'
               - 'requirements/**'
               - 'deploy/**'

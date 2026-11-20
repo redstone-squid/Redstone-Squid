@@ -26,7 +26,7 @@
 *.sql      text
 schema/schema_dump.sql linguist-generated=true
 schema/structure/** linguist-generated=true
-alembic/sql/20260728_portable_schema.sql linguist-generated=true
+squid/core/persistence/migrations/sql/20260728_portable_schema.sql linguist-generated=true
 contracts/fuzz/*.json linguist-generated=true
 contracts/openapi.json linguist-generated=true
 web/openapi.json linguist-generated=true
