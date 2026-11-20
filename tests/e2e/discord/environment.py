@@ -1,27 +1,50 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
+from functools import partial
+from typing import override
 
 import discord
 import simcord
 from discord.ext import commands
 
-import squid_ui.ext.discord as sd
-from squid.bot.help_cog import PROJECT_URL
+from squid.bot.app import RedstoneSquid
+from squid.bot.extensions import Extension, ExtensionManager
+from squid.core.settings.application import SettingsService
+from squid.runtime import BotServices
+from tests.support.services import bot_services, is_configured
+from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
 
-class CogTestBot(commands.Bot):
-    source_code_url = PROJECT_URL
+class CommandTestBot(RedstoneSquid):
+    """Load only the extensions under test during the simulated Discord login."""
+
+    @override
+    async def setup_hook(self) -> None:
+        await self.extension_manager.start(
+            partial(commands.Bot.load_extension, self), partial(commands.Bot.unload_extension, self)
+        )
 
 
 @asynccontextmanager
-async def cog_environment() -> AsyncIterator[simcord.Env]:
-    bot = CogTestBot(
-        command_prefix="!", intents=discord.Intents(guilds=True, members=True, messages=True, message_content=True)
-    )
-    ui = sd.install(bot)
-    await bot.load_extension("squid.bot.help_cog")
-    await bot.load_extension("squid.bot.feedback_cog")
-    async with ui.running(), simcord.run(bot) as env:
-        await bot.tree.sync()
-        env.create_guild()
-        yield env
+async def command_environment(
+    *extensions: Extension, services: BotServices | None = None, development_mode: bool = False
+) -> AsyncIterator[tuple[RedstoneSquid, simcord.Env]]:
+    services = services or bot_services()
+    if not is_configured(services.settings):
+        settings = SettingsService(uow_factory=partial(FakeSettingsUnitOfWork, settings_state()))
+        services = replace(services, settings=settings)
+    bot = CommandTestBot(services, development_mode=development_mode)
+    bot.extension_manager = ExtensionManager(extensions)
+    async with bot.background_tasks.running(), bot.ui.running(), simcord.run(bot) as env:
+        try:
+            await bot.tree.sync()
+            env.create_guild()
+            yield bot, env
+        finally:
+            await bot.close()
+
+
+def displayed_text(message: discord.Message) -> list[str]:
+    view = discord.ui.LayoutView.from_message(message)
+    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]

@@ -2425,7 +2425,7 @@ dev = [
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "redstone-squid", extras = ["schematics", "observability"] },
     { name = "ruff", specifier = ">=0.5.1" },
-    { name = "simcord", specifier = "==4.0.0" },
+    { name = "simcord", specifier = "==4.0.1" },
     { name = "squid-ui-slack", editable = "packages/squid-ui-slack" },
     { name = "testcontainers", specifier = ">=4.10.0" },
     { name = "types-psycopg2", specifier = ">=2.9" },
@@ -2588,15 +2588,15 @@ wheels = [
 
 [[package]]
 name = "simcord"
-version = "4.0.0"
+version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "discord-py" },
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3c/a2/08a556e1b8b0b2172dba23c5599af949f0e62272341d1ec4467a07dcfd30/simcord-4.0.0.tar.gz", hash = "sha256:225eff9530c430104428f07c3253ef024a3f343c10ed6d4cd93a880d56eb1ade", size = 24624908, upload-time = "2026-11-09T12:30:53.668Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/ab/d6fe38bff646a2879bc4630db38f17e1eec3c9cd0689f0c2d7df96d49849/simcord-4.0.1.tar.gz", hash = "sha256:75b4b647183f29a1fcc01b5a6ef3913c5725f8038fd6ad30fe84ae28fa0f4a5d", size = 24626696, upload-time = "2026-11-20T19:39:14.089Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/7f/94896e184ce31b441d03cae9fc49f7d3401035c0708f5cd9ac093cccad36/simcord-4.0.0-py3-none-any.whl", hash = "sha256:26c572fb298d72e74f98c31e99ab551195188e60953d950b729d76b2db7156c1", size = 19184623, upload-time = "2026-11-09T12:30:50.373Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/b0/e0d83c80bf07565d1b23377327d6caf8f052585a865040bb883a51a2a5ec/simcord-4.0.1-py3-none-any.whl", hash = "sha256:b74027b65260fd08e33ba1279fba69c1619d4553df8b3976da795c248da6fd2e", size = 19184810, upload-time = "2026-11-20T19:39:11.139Z" },
 ]
 
 [[package]]

@@ -95,7 +95,7 @@ dev = [
     "redstone-squid[schematics,observability]",
     # The default test and type-check suites include the Slack workspace member.
     "squid-ui-slack",
-    "simcord==4.0.0",
+    "simcord==4.0.1",
 ]
 # Documentation tooling is installed only when building or publishing the site.
 docs = [

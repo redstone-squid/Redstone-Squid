@@ -1,15 +1,8 @@
-import discord
-
-from tests.e2e.discord.environment import cog_environment
-
-
-def displayed_text(message: discord.Message) -> list[str]:
-    view = discord.ui.LayoutView.from_message(message)
-    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+from tests.e2e.discord.environment import command_environment, displayed_text
 
 
 async def test_help_browser_opens_command_and_returns_to_directory() -> None:
-    async with cog_environment() as discord_env:
+    async with command_environment("squid.bot.help_cog", "squid.bot.feedback_cog") as (_, discord_env):
         guild = discord_env.guild
         channel = guild.create_text_channel("help")
         member = guild.add_member(discord_env.create_user("reader"))
@@ -35,7 +28,7 @@ async def test_help_browser_opens_command_and_returns_to_directory() -> None:
 
 
 async def test_prefix_help_displays_a_slash_commands_description() -> None:
-    async with cog_environment() as discord_env:
+    async with command_environment("squid.bot.help_cog", "squid.bot.feedback_cog") as (_, discord_env):
         guild = discord_env.guild
         channel = guild.create_text_channel("help")
         member = guild.add_member(discord_env.create_user("reader"))
