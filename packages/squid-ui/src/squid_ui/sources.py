@@ -58,6 +58,13 @@ class Chronology(StrEnum):
         return chrome.older, chrome.newer
 
 
+class SourceStability(StrEnum):
+    """How a flow can combine windows from successive fetches."""
+
+    ASSUMED = "assumed"
+    VERIFIED = "verified"
+
+
 class CountPrecision(StrEnum):
     """Accuracy of the total a source returns with each window."""
 
@@ -79,6 +86,7 @@ class SourceCapabilities:
     jumpable: bool = False
     count: CountPrecision = CountPrecision.NONE
     fixed_groups: bool = False
+    stability: SourceStability = SourceStability.ASSUMED
 
     def group_count[T](self, window: Window[T], extent: int) -> int | None:
         """Count declared groups, independently of target fit certification."""
@@ -112,6 +120,7 @@ class Window[ItemT]:
     previous: Position | None = None
     next: Position | None = None
     total: int | None = None
+    revision: str | None = None
 
     @property
     def has_previous(self) -> bool:
@@ -264,6 +273,9 @@ class WindowLoader[ItemT]:
             message = f"WindowSource returned {len(window.items)} items for extent {self.extent}"
             raise ValueError(message)
         capabilities = self.source.capabilities
+        if capabilities.stability is SourceStability.VERIFIED and window.revision is None:
+            msg = "a verified source must supply a window revision"
+            raise ValueError(msg)
         if capabilities.fixed_groups:
             if window.position.offset % self.extent:
                 message = "a fixed-group source returned an unaligned position"
@@ -333,6 +345,7 @@ __all__ = [
     "LoadedWindow",
     "Position",
     "SourceCapabilities",
+    "SourceStability",
     "Window",
     "WindowLoader",
     "WindowSource",
