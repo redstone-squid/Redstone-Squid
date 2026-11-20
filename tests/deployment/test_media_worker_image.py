@@ -166,14 +166,13 @@ def test_runtime_targets_preserve_unprivileged_directory_contract(runtime_images
             image,
             "/usr/bin/stat",
             "--format=%a:%u",
-            "/var/log/app",
             "/var/lib/app",
             "/var/lib/app/objects",
             "/var/lib/app/.cache",
             "/var/lib/app/media-tmp",
             "/var/lib/app/tmp",
         ).stdout.splitlines()
-        assert modes == ["750:10001"] * 3 + ["700:10001"] * 3
+        assert modes == ["750:10001"] * 2 + ["700:10001"] * 3
 
 
 def test_worker_drops_privileges_and_uses_private_temporary_directories() -> None:

@@ -10,6 +10,8 @@ services:
           - redstone-api
 
   web:
+    logging:
+      driver: local
     build:
       context: ./web
     image: ${WEB_IMAGE:-redstone-squid-web:local}

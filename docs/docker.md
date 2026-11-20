@@ -66,9 +66,9 @@ serve the same endpoints inside their containers on ports 8001 and 8002.
 Readiness checks include the database and schema. The API can fall back to
 local rate limiting while Redis is unavailable.
 
-Use `docker compose logs api bot worker` to inspect standard output. The
-observability collector reads the rotating JSON files from the shared
-`squid-logs` volume. Each service keeps five backups per log file and rotates
-the active file at 32 MiB.
+Use `docker compose logs -f api bot worker migrate` to follow application and migration
+output. Docker's `local` logging driver rotates logs per container. For retention across
+container replacements, configure log forwarding to your backend. The optional
+OpenTelemetry collector handles traces and metrics.
 
 For optional media workers, see [Media processing deployment](media-processing.md).

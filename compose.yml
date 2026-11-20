@@ -1,3 +1,6 @@
+x-logging: &logging
+  driver: local
+
 x-app-environment: &app-environment
   SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
   SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
@@ -6,6 +9,7 @@ x-app-environment: &app-environment
   SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
 
 x-app: &app
+  logging: *logging
   build:
     context: .
     target: runtime-base
@@ -16,7 +20,6 @@ x-app: &app
     - ${SQUID_ENV_FILE:-.env}
   environment: *app-environment
   volumes:
-    - squid-logs:/var/log/app
     - squid-objects:/var/lib/app/objects
   depends_on:
     db:
@@ -27,6 +30,7 @@ x-app: &app
 
 services:
   migrate:
+    logging: *logging
     build:
       context: .
       args:
@@ -40,7 +44,6 @@ services:
       SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
       SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
     volumes:
-      - ./logs:/var/log/app
       - squid-objects:/var/lib/app/objects
     depends_on:
       db:
@@ -120,6 +123,7 @@ services:
       start_period: 60s
 
   db:
+    logging: *logging
     image: pgvector/pgvector:pg18@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782
     restart: unless-stopped
     environment:
@@ -145,6 +149,7 @@ services:
     stop_grace_period: 30s
 
   pgweb:
+    logging: *logging
     image: sosedoff/pgweb:0.17.0@sha256:a5256d416e2e8b92d69a4459058e3eca33a9f075d8325491644411d0bc3bd70b
     restart: unless-stopped
     profiles:
@@ -159,6 +164,7 @@ services:
     stop_grace_period: 10s
 
   redis:
+    logging: *logging
     image: redis:8.8.4-alpine@sha256:1273af45b299d2b8b60d0e400d90aa6c2c5b1794f01d6a7ca60ff3ba6e65efb5
     restart: unless-stopped
     command:
@@ -180,6 +186,7 @@ services:
     stop_grace_period: 10s
 
   otel-collector:
+    logging: *logging
     image: otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
     restart: unless-stopped
     stop_grace_period: 20s
@@ -192,9 +199,7 @@ services:
       - "127.0.0.1:13133:13133"
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-      - squid-logs:/var/log/app:ro
 
 volumes:
   squid-objects:
   squid-pgdata:
-  squid-logs:

@@ -3,22 +3,6 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
-  # Read application JSON logs from files; container stdout carries copies for operators.
-  # The app rotates these files even when this collector is stopped. This receiver starts at
-  # the end of newly discovered files and has no configured persistent read offsets.
-  filelog:
-    include:
-      - /var/log/app/*.log
-      - /var/log/app/**/*.log
-    start_at: end
-    include_file_name: true
-    include_file_path: true
-    operators:
-      - type: json_parser
-      - type: move
-        if: 'body.service_name != nil'
-        from: body.service_name
-        to: resource["service.name"]
 
 extensions:
   health_check:
@@ -28,11 +12,6 @@ processors:
   memory_limiter:
     check_interval: 1s
     limit_mib: 128
-  resource/logs:
-    attributes:
-      - key: service.name
-        value: redstone-squid
-        action: insert
   batch: {}
 
 # The checked-in configuration writes telemetry to collector logs. Configure an exporter
@@ -51,8 +30,4 @@ service:
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
-    logs:
-      receivers: [filelog]
-      processors: [memory_limiter, resource/logs, batch]
       exporters: [debug]

@@ -69,7 +69,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     GIT_PYTHON_REFRESH=quiet \
-    SQUID_LOG_DIRECTORY=/var/log/app \
     TMPDIR=/var/lib/app/tmp \
     XDG_CACHE_HOME=/var/lib/app/.cache \
     WGPU_BACKEND=vulkan
@@ -85,7 +84,7 @@ RUN adduser \
     --no-create-home \
     --uid "${UID}" \
     appuser \
-    && install -d -o appuser -g appuser -m 0750 /var/log/app /var/lib/app /var/lib/app/objects \
+    && install -d -o appuser -g appuser -m 0750 /var/lib/app /var/lib/app/objects \
     && install -d -o appuser -g appuser -m 0700 /var/lib/app/.cache /var/lib/app/media-tmp /var/lib/app/tmp
 
 COPY --from=builder --chown=root:root /app/.venv /app/.venv

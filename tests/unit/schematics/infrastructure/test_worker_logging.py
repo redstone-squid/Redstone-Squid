@@ -242,7 +242,7 @@ async def test_terminate_drains_buffered_stderr_and_logs_the_exit(
 
 
 def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
-    """The collector keys logs off service_name, so the parent must not relabel them."""
+    """Forwarded logs retain the child process service name."""
     line = json.dumps(
         {
             "levelname": "WARNING",
