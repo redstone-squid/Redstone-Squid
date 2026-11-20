@@ -168,11 +168,11 @@ def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
     assert mislabelled == set()
 
 
-def test_polls_are_one_app_only_command() -> None:
-    """Poll creation and its optional editor share one application command."""
+def test_poll_creation_and_review_are_app_only_commands() -> None:
+    """Poll creation and staff review each have a slash command."""
     cog = VoteCog.__new__(VoteCog)
 
-    assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll"]
+    assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll", "poll-review"]
     assert not [command.qualified_name for command in cog.__cog_commands__]
 
 
