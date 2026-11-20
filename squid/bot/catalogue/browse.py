@@ -324,9 +324,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             key="build-review",
         ).build_component(on_decide=self._decide_review)
 
-    async def _decide_review(
-        self, event: sp.TransitionEvent[sp.DecisionState, sd.Request[Any, RedstoneSquid]], choice: str
-    ) -> None:
+    async def _decide_review(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
         action = self._pending_review
         review = self._review
         self._pending_review = None
