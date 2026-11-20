@@ -1,10 +1,14 @@
 """Browsing through mounted Discord actions."""
 
+from typing import override
+
 import anyio
 import pytest
 
+import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.ext.discord.testing import stage
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.sources import Batch, Position, SourceCapabilities, list_source
 
 
@@ -205,3 +209,43 @@ async def test_flow_resumes_a_timed_out_fill_on_next() -> None:
             await ui.press(ui.key_for("flow.next"))
             assert "B" in ui.texts()
             assert "Page 2" in " ".join(ui.texts())
+
+
+async def test_flow_fits_the_delivered_view_and_resumes_at_the_selected_cut() -> None:
+    # The heading plus the first two paragraphs alone would fit the 4000-character target.
+    parts = ("a" * 1499, "b" * 1499, "c" * 300)
+    flow = sp.SourceFlow(
+        list_source(("build",)),
+        identity=str,
+        paragraphs=lambda _: parts,
+        max_paragraphs_per_page=3,
+        fetch_size=1,
+    )
+
+    class Screen(sl.Component):
+        @override
+        def render(self) -> sl.DocumentLike:
+            return sl.stack(sl.paragraph("h" * 1000), flow.keyed("results"))
+
+    async with stage(Screen(), owner=object()) as ui:
+        assert parts[0] in ui.texts()
+        assert parts[1] not in ui.texts()
+        assert "Page 1" in " ".join(ui.texts())
+        await ui.press(ui.key_for("flow.next"))
+        assert parts[0] not in ui.texts()
+        assert all(part in ui.texts() for part in parts[1:])
+        assert "Page 2" in " ".join(ui.texts())
+        assert not any(key.endswith("flow.next") for key in ui.root.snapshot().handler_keys)
+
+
+async def test_flow_rejects_an_indivisible_paragraph_that_cannot_fit() -> None:
+    flow = sp.SourceFlow(
+        list_source(("x" * 4001,)),
+        identity=str,
+        paragraphs=lambda item: (item,),
+        max_paragraphs_per_page=2,
+        fetch_size=1,
+    )
+    with pytest.RaisesGroup(JointInfeasibleError):
+        async with stage(flow, owner=object()):
+            pytest.fail("oversized paragraph was delivered")

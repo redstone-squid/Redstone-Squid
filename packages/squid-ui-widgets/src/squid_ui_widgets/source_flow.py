@@ -9,6 +9,7 @@ import anyio
 
 from squid_reactivity import state
 from squid_ui.authoring.document import DocumentLike
+from squid_ui.authoring.semantic import SourcePage
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.factories import action_control, action_controls, note, paragraph, stack
 from squid_ui.interactions import ActionEvent
@@ -29,8 +30,8 @@ class _Page:
 class SourceFlow[ItemT](Component):
     """Read a batch source using authored paragraph boundaries.
 
-    max_paragraphs_per_page caps paragraphs per page. fits can impose a tighter budget on the
-    paragraph sequence. Each item must contribute at least one paragraph.
+    The planner fits up to max_paragraphs_per_page alongside the surrounding content.
+    fits can impose an additional limit before planning. Each item must contribute at least one paragraph.
     initial_position can open mid-collection with an unknown page number.
     fill_timeout bounds the seconds spent fetching extra batches once content fits.
     Mount a separate flow instance for each independent reading session.
@@ -136,9 +137,15 @@ class SourceFlow[ItemT](Component):
         if self._page is delivered:
             self._page = await self._read(None)
 
-    async def _advance(self, delivered: _Page, _event: ActionEvent) -> None:
+    async def _advance(self, delivered: _Page, count: int, _event: ActionEvent) -> None:
         # A failed delivery leaves the old binding live. Reuse its prepared successor.
         if self._page is delivered:
+            if count < len(delivered.paragraphs):
+                delivered = replace(
+                    delivered,
+                    paragraphs=delivered.paragraphs[:count],
+                    remaining=delivered.paragraphs[count:] + delivered.remaining,
+                )
             candidate = await self._read(delivered)
             self._page = candidate if candidate.paragraphs else replace(delivered, next_batch=None)
 
@@ -148,13 +155,19 @@ class SourceFlow[ItemT](Component):
         if page is None or not page.paragraphs:
             return note("No entries")
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        controls = []
-        if page.number is None:
-            controls.append(action_control("First", partial(self._first, page), key=f"{self.key}.first"))
-        if page.remaining or page.next_batch is not None:
-            controls.append(action_control(chrome.next, partial(self._advance, page), key=f"{self.key}.next"))
-        return stack(
-            *(paragraph(part) for part in page.paragraphs),
-            action_controls(*controls, key=f"{self.key}.navigation") if controls else None,
-            note(f"Page {page.number}") if page.number is not None else None,
-        )
+        endings = []
+        size = len(page.paragraphs)
+        for count in range(1, size + 1):
+            controls = []
+            prefix = self.key if count == size else f"{count}.{self.key}"
+            if page.number is None:
+                controls.append(action_control("First", partial(self._first, page), key=f"{prefix}.first"))
+            if count < size or page.remaining or page.next_batch is not None:
+                controls.append(action_control(chrome.next, partial(self._advance, page, count), key=f"{prefix}.next"))
+            endings.append(
+                stack(
+                    action_controls(*controls, key=f"{prefix}.navigation") if controls else None,
+                    note(f"Page {page.number}") if page.number is not None else None,
+                )
+            )
+        return SourcePage(tuple(paragraph(part) for part in page.paragraphs), endings=tuple(endings))

@@ -177,7 +177,9 @@ runtime's navigation/persistence protocol.
 
 `SourceFlow` supports forward reading with authored paragraph boundaries. Its
 `fetch_size` limits source items per batch and `max_paragraphs_per_page` caps
-paragraphs on screen. A page can cross batches or end partway through an item.
+paragraphs on screen. The target planner measures each legal prefix with its
+controls, footer, and surrounding content. Next resumes after the delivered
+prefix. A page can cross batches or end partway through an item.
 Opening mid-collection omits the page number until the source establishes the
 beginning. First requests the origin, restoring Page 1 there. Subsequent Next
 actions count from that page. A failed delivery can retry the same action.

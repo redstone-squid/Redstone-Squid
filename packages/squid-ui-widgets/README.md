@@ -89,5 +89,6 @@ current collection, keeping the parent's filters and focus intact.
 
 Use `fetch_size` to limit how many items a source returns in one batch.
 `SourceFlow` can read across batches and split an item at its paragraph
-boundaries. Its `max_paragraphs_per_page` controls how much the reader sees
-on one page.
+boundaries. Set `max_paragraphs_per_page` to cap how many paragraphs to prepare.
+The planner fits a prefix alongside the surrounding content, navigation, and footer.
+Next resumes at the first paragraph beyond the delivered cut.
