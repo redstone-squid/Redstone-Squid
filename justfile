@@ -117,21 +117,8 @@ framework-dist output="dist":
     uv run --locked python scripts/build_squid_ui_dist.py "{{output}}"
     uv run --locked python scripts/check_squid_ui_dist.py "{{output}}"
 
-[unix]
-fuzz-target *settings:
-    uv run --locked --group fuzz python -m scripts.run_fuzz_target {{settings}}
-
-[unix]
-fuzz-version seconds="20":
-    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=version_parser seconds={{seconds}}
-
-[unix]
-fuzz-cursor seconds="20":
-    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=cursor_codec seconds={{seconds}}
-
-[unix]
-fuzz-search-parser seconds="20":
-    uv run --locked --group fuzz python -m scripts.run_fuzz_target target=search_parser seconds={{seconds}}
+fuzz-parsers:
+    uv run --locked pytest tests/fuzz/test_parsers.py --no-cov
 
 i18n-extract:
     uv run --locked squid-i18n extract

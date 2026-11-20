@@ -15,11 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version-parser:
-    # Enable the repository variable once Atheris supports Python 3.15:
-    # https://github.com/google/atheris#installation-instructions
-    if: ${{ vars.ENABLE_ATHERIS_PY315 == 'true' }}
-    name: Version parser
+  parsers:
+    name: Search and version parsers
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -39,32 +36,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Install fuzzing dependencies
-        run: uv sync --locked --dev --group fuzz
-
-      - name: Prepare corpus and artifact directories
-        shell: bash
-        run: |
-          mkdir -p .fuzz/corpus/version_parser .fuzz/artifacts/version_parser
-          cp tests/fuzz/corpus/version_parser/* .fuzz/corpus/version_parser/
-
-      - name: Fuzz for ten minutes
-        run: >-
-          uv run --locked --group fuzz python -m tests.fuzz.fuzz_version_parser
-          .fuzz/corpus/version_parser
-          -max_total_time=600
-          -max_len=4096
-          -artifact_prefix=.fuzz/artifacts/version_parser/
-
-      - name: Upload evolved corpus and crash artifacts
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: version-parser-fuzz-${{ github.run_id }}
-          path: .fuzz/
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Minimize uv cache
-        if: always()
-        run: uv cache prune --ci
+      - name: Check parser properties
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: uv run --locked pytest tests/fuzz/test_parsers.py --no-cov

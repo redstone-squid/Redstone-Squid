@@ -127,7 +127,6 @@ babel.cfg      text
 justfile       text
 gradlew        text eol=lf
 web/.prettierignore text
-tests/fuzz/corpus/** text
 *.js           text
 *.lock         text
 *.mako         text

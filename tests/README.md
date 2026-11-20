@@ -28,25 +28,7 @@ pytest                    # same fast paths selected by pyproject.toml
 PostgreSQL integration tests require a working Docker daemon. Live Supabase, Discord, Mojang, OpenAI, and other
 third-party tests belong under `external` and must require an explicit opt-in; they are not part of `test-all`.
 
-On Linux or WSL, run the fuzzers with:
-
-```bash
-just fuzz-version          # Minecraft version string parsing
-just fuzz-cursor           # search cursor codec decoding
-just fuzz-search-parser    # search query language parsing
-just fuzz-target target=cursor_codec seconds=20
-```
-
-Each command copies its committed seeds into the ignored `.fuzz/` workspace so an evolving corpus does not dirty the
-repository. A crash artifact must become a deterministic regression test or a minimized committed corpus seed before
-the bug is considered fixed.
-
-Local recipes default to 20 seconds. The generic recipe accepts only allowlisted targets and bounded integer budgets;
-runs longer than five minutes also require `--allow-long-run`.
-
-Fuzz targets are pure, synchronous, in-process functions that accept untrusted text directly from a Discord command
-or an API request: parsers and codecs, not the handlers around them. Handlers themselves are async and do I/O, which
-breaks the fast, deterministic, coverage-guided loop fuzzing depends on.
+Run `just fuzz-parsers` to generate search queries and Minecraft versions. Hypothesis reports the smallest failing example it finds.
 
 API exploration is a maintained standalone campaign, not part of `just test`. `just fuzz-api-smoke`
 starts the disposable API stack and runs the pinned Schemathesis CLI with a bounded generated-example
