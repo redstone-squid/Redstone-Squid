@@ -3,7 +3,7 @@
 The first production implementation covers bounded, materialized content, scoped
 layout facts, contextual generation, and delivery-driven visibility. It also separates
 source item counts and declared groups from rendered page counts. Continuous flow
-across lazy source windows remains a separate implementation step.
+across lazy source batches remains a separate implementation step.
 
 The rule is to certify the interface being delivered and state what is known for
 that capture. Conditional rendering does not make every total unknowable: a fully
@@ -15,14 +15,14 @@ hydration, or a state change.
 | Object | Meaning |
 | --- | --- |
 | Collection | Ordered application items, possibly changing or incompletely loaded |
-| Window | A fetched slice with source-defined positions and neighbours |
+| Batch | Items returned by one source fetch, with source-defined positions and neighbours |
 | Group | An explicitly declared division of items, independent of target fit |
 | Flow | Authored content and legal continuation boundaries within a named scope |
 | Page | A bounded realization of part of a flow under particular layout inputs |
 | View | Selected region fragments and their surrounding content |
 | Delivery surface | A message, continuation message, or browser surface |
 
-A fetched window does not promise to fit. Ten items can require several rendered
+A fetched batch does not promise to fit. Ten items can require several rendered
 pages. Message continuations are delivery surfaces, not collection positions.
 
 `sl.bullets(..., page_size=10)` limits items per fragment and permits smaller cuts.
@@ -57,7 +57,7 @@ def footer(ctx: sl.LayoutContext) -> sl.LayoutNode:
     if selection is None:
         return sl.paragraph("No results")
     number = selection.number
-    total = region.count
+    total = region.page_count
     if isinstance(number, sl.Known) and isinstance(total, sl.Known):
         return sl.paragraph(f"Page {number.value} of {total.value}")
     return sl.paragraph("More results")
@@ -102,8 +102,8 @@ facts fail without publishing provisional output.
 known value or raises `FactUnavailableError`; an unresolved required read prevents
 certification. `Known(None)` means established absence, rather than unknown.
 
-A region exposes `count`, `selection`, `groups`, and `navigation`. `count` is the rendered total
-for this capture; `groups` is an authored fixed-group count. Neither claims knowledge
+A region exposes `page_count`, `selection`, `group_count`, and `navigation`. `page_count` is the rendered total
+for this capture; `group_count` is an authored fixed-group count. Neither claims knowledge
 of unseen source items. `PageCoordinate.number` is a fact rather than a magic integer.
 `Locations.fragments` carries fragment and repetition provenance, page coordinates,
 and visibility; `complete=False` leaves unexamined content unclaimed.
@@ -170,16 +170,21 @@ Live queries follow committed generated content; `.capture()` retains earlier me
 ## Remaining source-flow work
 
 The materialized allocator is the closed finite case, not a universal lazy-flow engine.
-The current Browser still owns fetched windows. It does not automatically fill one
-rendered page across several windows or preserve an intra-item continuation across
+The current Browser still owns fetched batches. It does not automatically fill one
+rendered page across several batches or preserve an intra-item continuation across
 fetches. `ContentAddress` describes captured fragment anchors; it is not yet the
 runtime's navigation/persistence protocol.
 
-The next source-flow implementation needs:
+`SourceFlow` supports forward reading with authored paragraph boundaries. Its
+`fetch_size` limits source items per batch and `max_paragraphs_per_page` caps
+paragraphs on screen. A page can cross batches or end partway through an item.
+The page number starts at 1. A failed delivery can retry the same Next action.
+
+The general source-flow implementation needs:
 
 - Source and intra-item continuation addresses, separate from ordinals. Each source
   declares verified or assumed stability. Verified sources validate the revision
-  before combining windows. Assumed-stable sources may continue across fetches.
+  before combining batches. Assumed-stable sources may continue across fetches.
 - Bounded asynchronous demand outside the solver, retaining unconsumed loaded content.
 - Next that consumes content or reaches a declared end; no zero-progress content pages.
 - Previous through valid visited checkpoints or an explicit predecessor capability.
@@ -194,7 +199,7 @@ If it cannot resolve one, retain the delivered view and offer Refresh. When a
 current fragment visible if possible. If the fragment becomes hidden, keep its
 containing item in view when visible. Resolve this per placement.
 
-Acceptance must cover variable-size lazy items, pages crossing fetch windows, one item
+Acceptance must cover variable-size lazy items, pages crossing fetch batches, one item
 spanning pages, oversized indivisible content, forward-only sources, direct seeks with
 unknown ordinals, stale checkpoints after reflow, and failed navigation retaining the
 previous delivered state. Estimates, bounds, and demand diagnostics need their own typed

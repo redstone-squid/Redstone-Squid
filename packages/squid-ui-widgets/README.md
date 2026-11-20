@@ -76,13 +76,18 @@ state codec. Other machine-based widgets retain `build_component()` for now.
 
 `Browser`, `SourceRankedList`, and `SearchPicker` expose a `session` that owns source
 paging. A `BrowseSession` accepts commands against its displayed `revision`; its
-`snapshot` holds the accepted window and optional focus. While `operation` loads
-the next window, the accepted snapshot remains usable. A custom presenter should
+`snapshot` holds the accepted batch and optional focus. While `operation` loads
+the next batch, the accepted snapshot remains usable. A custom presenter should
 observe `operation.status` so the host schedules work and redraws its progress.
 
 A Browser can receive a source or an existing session. Its item arrows traverse
-source windows; Back reveals the last focused entry in the overview. The `detail`
+source batches. Back reveals the last focused entry in the overview. The `detail`
 factory prepares content outside rendering and must be safe to retry. It replaces
 the detail on a focus change, while a refresh of the same focus preserves the
 child's local state. Use a separate child screen to open an object outside the
 current collection, keeping the parent's filters and focus intact.
+
+Use `fetch_size` to limit how many items a source returns in one batch.
+`SourceFlow` can read across batches and split an item at its paragraph
+boundaries. Its `max_paragraphs_per_page` controls how much the reader sees
+on one page.
