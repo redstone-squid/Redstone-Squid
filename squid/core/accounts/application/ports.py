@@ -19,7 +19,15 @@ from squid.core.accounts.domain import (
     LinkReservation,
     ProfileUpdate,
 )
-from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
+from squid.core.accounts.models import (
+    Account,
+    AccountIdentity,
+    AccountProfile,
+    AliasClaim,
+    CataloguePreference,
+    CreatorAlias,
+    MergeTicket,
+)
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
 
 
@@ -94,6 +102,10 @@ class AccountRepository(Protocol):
     ) -> AccountIdentity: ...
 
     async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None: ...
+
+    async def catalogue_preferences(self, account_id: int) -> Sequence[CataloguePreference]: ...
+
+    async def save_catalogue_preference(self, preference: CataloguePreference) -> None: ...
 
     async def get_profile(self, account_id: int) -> AccountProfile | None: ...
 

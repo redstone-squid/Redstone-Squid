@@ -38,7 +38,15 @@ from squid.core.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
-from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
+from squid.core.accounts.models import (
+    Account,
+    AccountIdentity,
+    AccountProfile,
+    AliasClaim,
+    CataloguePreference,
+    CreatorAlias,
+    MergeTicket,
+)
 from squid.core.errors import ConflictError, InvalidStateError
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -107,6 +115,15 @@ class AccountService:
         """Return an account by its internal identifier."""
         async with self._uow_factory() as uow:
             return await uow.accounts.get_by_id(account_id)
+
+    async def catalogue_preferences(self, account_id: int) -> Sequence[CataloguePreference]:
+        async with self._uow_factory() as uow:
+            return await uow.accounts.catalogue_preferences(account_id)
+
+    async def save_catalogue_preference(self, preference: CataloguePreference) -> None:
+        async with self._uow_factory() as uow:
+            await uow.accounts.save_catalogue_preference(preference)
+            await uow.commit()
 
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
         """Return accounts with their identities, omitting unknown IDs and batching the reads."""

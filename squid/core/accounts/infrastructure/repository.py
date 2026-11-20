@@ -44,6 +44,7 @@ from squid.core.accounts.models import (
     AccountIdentity,
     AccountProfile,
     AliasClaim,
+    CataloguePreference,
     CreatorAlias,
     MergeTicket,
     ProfileClearAudit,
@@ -314,6 +315,31 @@ class AccountRepository:
 
         if changed is not None:
             account.revision += 1
+
+    async def catalogue_preferences(self, account_id: int) -> Sequence[CataloguePreference]:
+        rows = await self._session().scalars(
+            select(CataloguePreference).where(CataloguePreference.account_id == account_id)
+        )
+        return rows.all()
+
+    async def save_catalogue_preference(self, preference: CataloguePreference) -> None:
+        if not preference.filters and not preference.sort:
+            await self._session().execute(
+                delete(CataloguePreference).where(
+                    CataloguePreference.account_id == preference.account_id,
+                    CataloguePreference.scope == preference.scope,
+                )
+            )
+            return
+        statement = insert(CataloguePreference).values(
+            account_id=preference.account_id, scope=preference.scope, filters=preference.filters, sort=preference.sort
+        )
+        await self._session().execute(
+            statement.on_conflict_do_update(
+                index_elements=[CataloguePreference.account_id, CataloguePreference.scope],
+                set_={"filters": statement.excluded.filters, "sort": statement.excluded.sort},
+            )
+        )
 
     async def get_profile(self, account_id: int) -> AccountProfile | None:
         """Return an account's own profile, visibility flags and all."""

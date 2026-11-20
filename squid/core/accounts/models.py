@@ -81,6 +81,18 @@ class ProfileLinks(TypeDecorator[tuple[ProfileLink, ...]]):
         return None if value is None else tuple(ProfileLink(**link) for link in value)
 
 
+class CataloguePreference(Base, kw_only=True):
+    """Saved catalogue filters and sort order for an account and tab."""
+
+    __tablename__ = "catalogue_preferences"
+    __table_args__ = (CheckConstraint("scope IN ('builds', 'records')", name="catalogue_preferences_scope_check"),)
+
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    scope: Mapped[str] = mapped_column(Text, primary_key=True)
+    filters: Mapped[str] = mapped_column(Text)
+    sort: Mapped[str] = mapped_column(Text)
+
+
 class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
     """An internal caller independent of every external identity provider."""
 

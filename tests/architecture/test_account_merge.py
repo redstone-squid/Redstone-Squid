@@ -33,6 +33,7 @@ def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
     )
     # The survivor keeps its own profile; proof tickets for the absorbed account expire with it.
     deleted = (
+        AccountReference("catalogue_preferences", "account_id"),
         AccountReference("account_profiles", "account_id"),
         AccountReference("account_merge_tickets", "account_id"),
     )
