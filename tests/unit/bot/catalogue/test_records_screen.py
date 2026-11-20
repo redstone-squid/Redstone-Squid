@@ -7,6 +7,7 @@ from typing import override
 import pytest
 
 import squid_ui as sl
+import squid_ui.ext.discord as sd
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.utils.permissions import Grants
 from squid.core.permissions.domain import PermissionNode
@@ -21,7 +22,9 @@ from squid.core.records.application import (
 )
 from squid.core.records.domain import BaseTitle, BuildKind
 from squid.core.suggestions.domain import Suggestion
+from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
+from tests.support.discord import make_layout_bot
 
 
 class RecordRecorder(RecordService):
@@ -208,3 +211,29 @@ async def test_diagnostic_recompute_carries_kind_version_and_rechecks_permission
     screen.grants = Grants(screen.grants.held, Authorizer(inspect=False, rebuild=True))
     await screen._recompute_diagnostic(42, kind, press_event())
     assert harness.records.materialize_calls == [(42, kind, 9)]
+
+
+async def test_large_diagnostics_render_within_discord_limits() -> None:
+    harness = make_screen()
+
+    async def gaps(*, kind: BuildKind | None = None) -> Sequence[RecordGap]:
+        return tuple(
+            RecordGap(
+                i,
+                f"Record category {i} with a descriptive title",
+                None,
+                BaseTitle.SMALLEST,
+                (i,),
+                ("volume",),
+                BuildKind.DOOR,
+            )
+            for i in range(1, 101)
+        )
+
+    harness.records.gaps = gaps
+    await harness.screen.on_load()
+    root = make_layout_bot().ui.mount(harness.screen, access=sd.Owner(7), timeout=300)
+    await root.send(delivered_to(message_harness()))
+    view = commit_render(root)
+    assert_within_limits(view)
+    assert "Record category 1" in str(view.to_components())
