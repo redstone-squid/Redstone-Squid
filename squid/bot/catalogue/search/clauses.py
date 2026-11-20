@@ -35,6 +35,29 @@ class CatalogueQuery:
     def text(self) -> str:
         return self.source if self.source is not None else self.parsed.normalized
 
+    def preference_filters(self, parser: SearchQueryParser) -> str:
+        """Keep field-only conjuncts. A mixed OR group belongs to this search as a whole."""
+        expression = self.parsed.expression
+        if expression is None:
+            return ""
+        terms = (
+            expression.operands
+            if isinstance(expression, BooleanExpression) and expression.operator is BooleanOperator.AND
+            else (expression,)
+        )
+        filters = combine_clauses(
+            BooleanOperator.AND,
+            *(
+                term
+                for term in terms
+                if all(
+                    isinstance(leaf.operand if isinstance(leaf, NotExpression) else leaf, FieldExpression)
+                    for _, leaf in query_leaves(term)
+                )
+            ),
+        )
+        return parser.render(filters) if filters is not None else ""
+
     def with_expression(self, parser: SearchQueryParser, expression: QueryExpression | None) -> CatalogueQuery:
         if expression == self.parsed.expression and self.parsed.scope is parser.scope:
             return self

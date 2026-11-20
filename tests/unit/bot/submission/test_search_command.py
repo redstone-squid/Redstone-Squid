@@ -90,7 +90,10 @@ def _cog(search: RecordingSearch) -> BuildCommands[Any]:
 
 
 async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | SearchScreen:
-    async def create(request: Any, *, initial_records: bool = False) -> BuildBrowseScreen:
+    async def create(
+        request: Any, *, initial_records: bool = False, restore_preferences: bool = True
+    ) -> BuildBrowseScreen:
+        assert not restore_preferences
         screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=initial_records)
         screen._search_service = cog.bot.services.search
         screen._search_fields = await cog.bot.services.search.fields()

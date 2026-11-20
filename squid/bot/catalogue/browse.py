@@ -26,6 +26,8 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.models import CataloguePreference
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
@@ -48,7 +50,7 @@ from squid.core.records.domain import BaseTitle, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.application.parser import QuerySyntaxError, SearchQueryParser
 from squid.core.search.domain import RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope, SearchSort
 from squid.core.search.domain.query import (
     BooleanExpression,
@@ -322,7 +324,9 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             key="build-review",
         ).build_component(on_decide=self._decide_review)
 
-    async def _decide_review(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
+    async def _decide_review(
+        self, event: sp.TransitionEvent[sp.DecisionState, sd.Request[Any, RedstoneSquid]], choice: str
+    ) -> None:
         action = self._pending_review
         review = self._review
         self._pending_review = None
@@ -410,9 +414,11 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         record_tools: RecordsScreen | None = None,
         initial_records: bool = False,
         search: SearchService | None = None,
+        accounts: AccountService | None = None,
     ) -> None:
         self._build_search_help = search_help(records=False, apply_example=self._apply_search_example)
         self._record_search_help = search_help(records=True, apply_example=self._apply_search_example)
+        self._accounts = accounts
         self._search_service = search
         self._search_fields = DEFAULT_FIELD_REGISTRY
         self._mode = "records" if initial_records and records is not None else "builds"
@@ -464,6 +470,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         request: AppRequest,
         *,
         build_id: int | None = None,
+        restore_preferences: bool = True,
         initial_records: bool = False,
     ) -> Self:
         """Build the catalogue with the requesting user's grants.
@@ -508,11 +515,46 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             refresh_posts=refresh_posts,
             records=request.client.services.records,
             search=request.client.services.search,
+            accounts=request.client.services.accounts,
             record_tools=record_tools,
             initial_records=initial_records,
         )
         screen._search_fields = await request.client.services.search.fields()
+        if restore_preferences and build_id is None:
+            await screen._restore_preferences()
         return screen
+
+    async def _restore_preferences(self) -> None:
+        if self._accounts is None or self._actor_account_id is None:
+            return
+        for preference in await self._accounts.catalogue_preferences(self._actor_account_id):
+            scope = SearchScope(preference.scope)
+            parser = SearchQueryParser(self._search_fields, scope=scope)
+            try:
+                query = CatalogueQuery.from_text(parser, preference.filters, typed=False)
+            except QuerySyntaxError:
+                # A field may have been retired since this preference was saved.
+                query = CatalogueQuery.from_text(parser, "", typed=False)
+            field = parser.registry.resolve(preference.sort.removeprefix("-"))
+            tab = _TabSearch(query, preference.sort if field is not None and field.supports_sort else "")
+            if scope is SearchScope.RECORDS:
+                self._record_search = tab
+            else:
+                self._build_search = tab
+        active = self._record_search if self._mode == "records" else self._build_search
+        if active.query.text or active.sort:
+            await self._run_search(active.query, active.sort)
+
+    async def _save_preferences(self) -> None:
+        if self._accounts is not None and self._actor_account_id is not None:
+            await self._accounts.save_catalogue_preference(
+                CataloguePreference(
+                    account_id=self._actor_account_id,
+                    scope=self._search_scope,
+                    filters=self._query.preference_filters(self._search_parser),
+                    sort=self._sort,
+                )
+            )
 
     @classmethod
     async def create_search(
@@ -525,7 +567,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         mode: SearchMode = SearchMode.LEXICAL,
     ) -> Self:
         """Open search results in the catalogue."""
-        screen = await cls.create(request, initial_records=records)
+        screen = await cls.create(request, initial_records=records, restore_preferences=False)
         screen._search_mode = mode
         await screen._run_search(CatalogueQuery.from_text(screen._search_parser, query), sort)
         return screen
@@ -629,7 +671,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             return
         if self._mode != "tools":
             active = _TabSearch(self._query, self._sort, self._search_mode)
-            if self._mode == "builds":
+            if self._mode == "builds" and active != self._build_search:
                 self._build_search = active
                 self._record_search = replace(
                     self._record_search,
@@ -637,7 +679,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                         SearchQueryParser(self._search_fields, scope=SearchScope.RECORDS), active.query
                     ),
                 )
-            else:
+            elif self._mode == "records" and active != self._record_search:
                 self._record_search = active
                 self._build_search = replace(
                     self._build_search,
@@ -762,6 +804,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
         await self._run_search(CatalogueQuery.from_text(self._search_parser, query, typed=False), "")
+        await self._save_preferences()
         if self._guided is not None:
             self._guided.close_panels()
 
@@ -851,6 +894,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
         async def selected(selection: SearchSelection) -> None:
             await self._run_search(selection.query, selection.sort)
+            await self._save_preferences()
 
         self._guided = GuidedSearch(
             self._search_service,
@@ -923,6 +967,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._selected = None
             if self._guided is not None:
                 self._guided.query = query
+        await self._save_preferences()
 
     async def _reset_search(self, _event: sl.PressEvent) -> None:
         self._query = CatalogueQuery.from_text(self._search_parser, "", typed=False)
@@ -933,6 +978,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._guided.close_panels()
             self._guided.query = self._query
             self._guided.sort = self._sort
+        await self._save_preferences()
 
     async def _run_search(self, query: CatalogueQuery, sort: str) -> None:
         if self._search_service is None:

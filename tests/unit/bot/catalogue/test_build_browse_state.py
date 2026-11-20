@@ -19,6 +19,8 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.results import SearchFocus
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
+from squid.core.accounts.application import AccountService
+from squid.core.accounts.models import CataloguePreference
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import Status
 from squid.core.builds.models import Build, DoorBuild
@@ -1452,3 +1454,30 @@ async def test_record_status_is_not_injected_into_an_explicit_expression() -> No
         await submit_search(ui, "status:unresolved OR status:no_candidate")
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
         assert request.query == "status:unresolved OR status:no_candidate"
+
+
+async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
+    accounts = AsyncMock(spec=AccountService)
+    screen = _screen(initial_id=None)
+    screen._accounts = accounts
+    async with stage(screen, owner=object()) as ui:
+        await submit_search(ui, "piston (width<=5 OR width>=10)", "-width")
+    preference = accounts.save_catalogue_preference.await_args.args[0]
+    assert preference.account_id == 1
+    assert preference.scope == "builds"
+    assert "piston" not in preference.filters
+    accounts.catalogue_preferences.return_value = [
+        preference,
+        CataloguePreference(account_id=1, scope="records", filters="base_title:fastest", sort=""),
+    ]
+    reopened = _screen(initial_id=None, records=AsyncMock(spec=RecordService))
+    reopened._accounts = accounts
+    await reopened._restore_preferences()
+    assert reopened._sort == "-width"
+    assert reopened._query.parsed == reopened._search_parser.parse("width<=5 OR width>=10")
+    assert reopened._results is not None
+    await reopened._switch("records", press_event())
+    assert reopened._query.text == "base_title:fastest"
+    await reopened._reset_search(press_event())
+    reset = accounts.save_catalogue_preference.await_args.args[0]
+    assert (reset.scope, reset.filters, reset.sort) == ("records", "", "")

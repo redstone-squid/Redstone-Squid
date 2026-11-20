@@ -44,7 +44,15 @@ from squid.core.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
-from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
+from squid.core.accounts.models import (
+    Account,
+    AccountIdentity,
+    AccountProfile,
+    AliasClaim,
+    CataloguePreference,
+    CreatorAlias,
+    MergeTicket,
+)
 from tests.support.identity_uow import AccountScope
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -76,6 +84,7 @@ class FakeAccountRepository:
         self.consumed_token: str | None = None
         self.failures: dict[tuple[IdentityProvider, str], int] = {}
         self.lockouts: dict[tuple[IdentityProvider, str], Instant] = {}
+        self.preferences: dict[tuple[int, str], CataloguePreference] = {}
         self.profiles: dict[int, AccountProfile] = {}
         self.merge_tickets: dict[str, MergeTicket] = {}
         self.avatar_keys: dict[tuple[int, int], str | None] = {}
@@ -184,6 +193,16 @@ class FakeAccountRepository:
 
     async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
         self.avatar_keys[(account_id, identity_id)] = avatar_key
+
+    async def catalogue_preferences(self, account_id: int) -> list[CataloguePreference]:
+        return [row for (owner, _), row in self.preferences.items() if owner == account_id]
+
+    async def save_catalogue_preference(self, preference: CataloguePreference) -> None:
+        key = preference.account_id, preference.scope
+        if preference.filters or preference.sort:
+            self.preferences[key] = preference
+        else:
+            self.preferences.pop(key, None)
 
     async def get_profile(self, account_id: int) -> AccountProfile | None:
         if account_id not in self.accounts:
