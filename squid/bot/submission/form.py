@@ -29,6 +29,7 @@ from squid.core.submissions.domain import (
     SubmissionOrigin,
 )
 from squid_i18n import md_tr, tr
+from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
 async def open_submission_form(
@@ -48,7 +49,7 @@ async def open_submission_form(
     file_2: discord.Attachment | None = None,
     file_3: discord.Attachment | None = None,
     file_4: discord.Attachment | None = None,
-) -> sd.CommandResult:
+) -> DraftEditorScreen | sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
     """Submit a build. Every option is optional; fill in the rest in the form that opens."""
     # Obtain consent before creating a draft or downloading attachments.
     uploader_account_id = await ensure_consented_account(request, request.client.services.accounts)

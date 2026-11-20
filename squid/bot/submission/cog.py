@@ -313,9 +313,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         file_2: discord.Attachment | None = None,
         file_3: discord.Attachment | None = None,
         file_4: discord.Attachment | None = None,
-    ) -> sd.CommandResult:
+    ) -> None:
         """Open a retained draft with the supplied form values and attachments."""
-        return await open_submission_form(
+        form = await open_submission_form(
             request,
             category=category,
             name=name,
@@ -332,6 +332,8 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             file_3=file_3,
             file_4=file_4,
         )
+        if form is not None:
+            await request.respond(form)
 
     @build_group.command(
         name=tr(t"command-build-drafts-name = drafts"),

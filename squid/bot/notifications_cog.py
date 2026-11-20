@@ -61,11 +61,11 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
         ),
     )
-    async def notifications(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> NotificationScreen | None:
+    async def notifications(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> None:
         """Open the notification preferences and subscription workspace."""
         account_id = await self._account_id(request)
         if account_id is None:
-            return None
+            return
 
         async def actor() -> Actor:
             return await request.client.actors.resolve(request, refresh=True)
@@ -78,7 +78,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
                 ).allowed
             )
 
-        return NotificationScreen(
+        screen = NotificationScreen(
             notifications=self.bot.services.notifications,
             edits=self.bot.services.edits,
             actor=actor,
@@ -87,6 +87,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             visibility=await self._inbox_visibility(request),
             visibility_resolver=visibility,
         )
+        await request.respond(screen)
 
     @staticmethod
     async def _inbox_visibility(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> InboxVisibility:

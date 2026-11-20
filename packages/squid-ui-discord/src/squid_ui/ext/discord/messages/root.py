@@ -2622,6 +2622,8 @@ class MessageRoot[
         try:
             if adapter._finish_accepted or self.finished:
                 await self.wait()
+                # Closing through the original message can leave the button press unanswered.
+                await self._acknowledge(interaction, profile=profile, source="finish")
                 presentation = PresentationStatus.WRITTEN
             else:
                 presentation = await self.refresh(interaction, profile=profile)

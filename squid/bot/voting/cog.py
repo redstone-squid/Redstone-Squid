@@ -114,7 +114,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         ):
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
-            return sd.Response(
+            return await request.respond(
                 text_node(
                     md_tr(
                         t"vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.",
@@ -299,7 +299,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             with contextlib.suppress(discord.HTTPException):
                 await published.delete()
             raise
-        return text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened."))
+        return await request.respond(text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened.")))
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         """Resolve member roles and capabilities for a persisted voter's weight refresh.
