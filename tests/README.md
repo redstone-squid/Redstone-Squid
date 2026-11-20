@@ -32,6 +32,22 @@ Run `just fuzz-parsers` to generate search queries and Minecraft versions. Hypot
 
 Run `just fuzz-api` with Docker available to generate sequences of draft edits. Each example creates its own account and draft, writes through the submission routes, and checks the saved answers and revision after each edit.
 
+## Offline Discord integration tests
+
+[SimCord](https://github.com/SilentHacks/simcord) is a good fit for testing a cog through Discord user actions.
+A trial with SimCord 4.0.0, discord.py 2.7.1, and Python 3.15 loaded the production help and feedback cogs on a
+`commands.Bot` with `source_code_url` set and the Squid UI runtime installed. Enter `ui.running()` and
+`simcord.run(bot)`, create a guild, text channel and member, then `await bot.tree.sync()`.
+
+- Invoking an unsynced command raised `simcord.SetupError`. After sync, help autocomplete returned the matching command.
+- Opening `/help`, selecting `bug`, and clicking **Back** edited the same Components V2 message. Prefix `!help bug`
+  also rendered the command details.
+- With the owner in the channel, `/bug` deferred privately, posted a public report mentioning the owner, and
+  deleted its original acknowledgment.
+
+Use this setup for command registration, dispatch, and interactive message behavior. Full bot startup with
+supervised workers, PostgreSQL persistence, and behavior on Discord's live service require separate coverage.
+
 ## What to test
 
 Domain tests are synchronous and cover invariants, state transitions, value objects, and domain events. They do not
