@@ -221,7 +221,7 @@ class ActionAllocation[BodyT: scene.Body]:
         return self.source.visible(coordinates)
 
     @staticmethod
-    def _projection_weight(result: PlanResult) -> int:
+    def _projection_weight(result: PlanResult[BodyT]) -> int:
         # Borrowed application objects behind handlers/providers belong to the owner.
         def binding_weight(binding: ActionBinding) -> int:
             return (

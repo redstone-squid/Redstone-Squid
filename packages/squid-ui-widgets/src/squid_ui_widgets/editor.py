@@ -552,7 +552,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> ActionControl | RoutedActionControl:
+    ) -> ActionControl[ContextT] | RoutedActionControl:
         """Delegate a child action through namespaced action and control keys."""
         return self.parent.action_control(
             label,

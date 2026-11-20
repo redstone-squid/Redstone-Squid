@@ -25,7 +25,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
 from squid_i18n import source_text
-from squid_ui._dataclass import immutable
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.emoji import EmojiLike, normalize_emoji
 from squid_ui.content.temporal import (
@@ -63,7 +62,7 @@ class FieldError:
         object.__setattr__(self, "message", Text(message))
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormError:
     """A validation error concerning the form as a whole."""
 
@@ -97,7 +96,7 @@ class FormValueError(SquidUiError, ValueError):
         super().__init__(source_text(message, format="plain"))
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormText:
     """Static text placed in a form's declaration order."""
 
@@ -121,7 +120,7 @@ def _prefill(value: object) -> PrefillValue:
     return None
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormField[ValueT, RequiredT: bool = bool](ABC):
     """One typed value in a portable form schema.
 
@@ -200,7 +199,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
         return True
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[str, RequiredT]):
     """A single-line text value."""
 
@@ -227,12 +226,12 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class TextAreaField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](TextField[RequiredT]):
     """A multi-line text value."""
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """An integer constrained by optional inclusive bounds."""
 
@@ -257,7 +256,7 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
         return value
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[float, RequiredT]):
     """A finite floating-point number constrained by optional inclusive bounds."""
 
@@ -288,7 +287,7 @@ _DURATION = re.compile(r"^(\d+(?:\.\d+)?)\s*(s|m|h|d|w)$", re.IGNORECASE)
 _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """Parse compact durations into integer seconds, with optional inclusive bounds.
 
@@ -338,7 +337,7 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         return f"{value}s"
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[date, RequiredT]):
     """An ISO-8601 calendar date."""
 
@@ -367,7 +366,7 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value.isoformat() if isinstance(value, date) else _prefill(value)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[TimeValue, RequiredT]):
     """An ISO-8601 wall-clock time with optional inclusive bounds."""
 
@@ -396,7 +395,7 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[DateTimeValue, RequiredT]):
     """An ISO-8601 instant; naive input is resolved in ``timezone``.
 
@@ -452,7 +451,7 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[ZonedDateTime, RequiredT]
 ):
@@ -520,7 +519,7 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
         return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """One point on an inclusive ordinal scale, such as a 1-5 rating.
 
@@ -570,7 +569,7 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         return None if value is None else str(value)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ChoiceOption[ValueT]:
     """One submitted key, reader-facing label, and typed value."""
 
@@ -584,7 +583,7 @@ class ChoiceOption[ValueT]:
         object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[ValueT, RequiredT]):
     """A single choice mapped from a stable submitted key to a typed value."""
 
@@ -612,7 +611,7 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
         return option.key if option is not None else _prefill(value)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[tuple[ValueT, ...], RequiredT]
 ):
@@ -666,7 +665,7 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
         )
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class UploadedFile:
     """Portable metadata and byte access for a frontend upload."""
 
@@ -677,7 +676,7 @@ class UploadedFile:
     read: Callable[[], Awaitable[bytes]] = dataclass_field(repr=False, compare=False)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[bool, RequiredT]):
     """Parse a checkbox value; missing input means False even when required is True."""
 
@@ -695,15 +694,17 @@ class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         _invalid(self.chrome.form_invalid_boolean)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT]):
     """A frontend-specific field with an optional portable fallback."""
 
-    fallback: FormField[ValueT] | None = None
+    fallback: FormField[ValueT, Literal[True]] | FormField[ValueT, Literal[False]] | FormField[ValueT, bool] | None = (
+        None
+    )
     capability: ClassVar[str] = ""
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormResult:
     """Parsed values, original attempted input, and errors from one submission.
 
@@ -723,7 +724,7 @@ type FormValidator = Callable[
 type SubmitHandler[ContextT = object] = Callable[[SubmitEvent[ContextT]], Awaitable[None]]
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormSpec[ContextT = object]:
     """Fields and validation rules that a frontend uses to present and evaluate a form.
 
@@ -976,7 +977,7 @@ class Form[ContextT = object]:
         """Handle a submission after parsing and cross-field validation succeed."""
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FormBinding[ContextT = object]:
     """One render's answer for a form key: what to present, and what to do with it.
 

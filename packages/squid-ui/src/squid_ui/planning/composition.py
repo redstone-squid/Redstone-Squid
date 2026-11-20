@@ -6,13 +6,12 @@ certifying all reachable page combinations belongs to the joint solver.
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import field, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from itertools import pairwise
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_ui._dataclass import immutable
 from squid_ui.authoring.document import Document
 from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
 from squid_ui.authoring.semantic import Budgeted, ComponentPlacement, Contextual
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
     from squid_ui.planning.adapter import ExtensionAdapter
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class OccurrenceId:
     """One placement, distinct from semantic identity and representation choice."""
 
@@ -52,7 +51,7 @@ class Placement(StrEnum):
     NAVIGATION = "navigation"
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FragmentCoverage:
     logical: OccurrenceId
     start: int
@@ -61,7 +60,7 @@ class FragmentCoverage:
     repeated: frozenset[SemanticRef] = frozenset()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FragmentContract[PayloadT]:
     """Ordered source units and a pure constructor for an exact contiguous fragment.
 
@@ -91,7 +90,7 @@ class FragmentContract[PayloadT]:
             seen.update(unit)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ContextualChrome[RenderTargetT, ContextT, PayloadT]:
     content: Contextual[RenderTargetT, ContextT]
     realize: Callable[
@@ -100,7 +99,7 @@ class ContextualChrome[RenderTargetT, ContextT, PayloadT]:
     ]
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class PageWeights:
     """A lower bound per source unit, stored as cumulative costs for contiguous cuts."""
 
@@ -119,7 +118,7 @@ class PageWeights:
             raise LayoutInvariantError(message)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class RegionContract[RenderTargetT, ContextT, PayloadT]:
     """Target-declared pagination chrome, composed and charged on every visible page."""
 
@@ -142,7 +141,7 @@ class RegionContract[RenderTargetT, ContextT, PayloadT]:
             raise LayoutInvariantError(message)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class SemanticOccurrence[RenderTargetT, ContextT]:
     identity: OccurrenceId
     graph: SemanticGraph[RenderTargetT, ContextT]
@@ -192,7 +191,7 @@ class SemanticOccurrence[RenderTargetT, ContextT]:
         return tuple(scoped)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class AtomicContract:
     """Declared costs and legal placements for one opaque realization.
 
@@ -216,7 +215,7 @@ class AtomicContract:
         return result
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     """A target's declared representation, with its source structure still available.
 
@@ -278,7 +277,7 @@ class DiscoveryCompletion(StrEnum):
     EXHAUSTED = "exhausted"
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
     """Explicit completeness for extensions; a complete empty domain is infeasible.
 
@@ -292,7 +291,7 @@ class OfferDiscovery[RenderTargetT, ContextT, PayloadT]:
     limitation: str | None = None
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class CandidateComposition[RenderTargetT, ContextT, PayloadT]:
     offer: RealizationOffer[RenderTargetT, ContextT, PayloadT]
     children: tuple[CandidateComposition[RenderTargetT, ContextT, PayloadT], ...] = ()
@@ -371,7 +370,7 @@ class WorkBudget:
         self._spent += amount
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class PlanningContext:
     work: WorkBudget
     localization: Localization = NEUTRAL
@@ -393,7 +392,7 @@ class PlanningContext:
     positions: Mapping[str, PagePosition] = field(default_factory=dict)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class SharedUse[ResourceT]:
     identity: ResourceIdentity
     value: ResourceT
@@ -408,7 +407,7 @@ class SharedResourceConflictError(LayoutInvariantError):
         super().__init__(f"conflicting declarations for shared resource {identity}")
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class SharedResources[ResourceT]:
     uses: Mapping[ResourceIdentity, SharedUse[ResourceT]] = field(default_factory=dict)
 
@@ -433,7 +432,7 @@ class SharedResources[ResourceT]:
         return cls(combined)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class CapacityExceeded:
     occurrence: OccurrenceId
     axis: Axis
@@ -441,19 +440,19 @@ class CapacityExceeded:
     capacity: int
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class UnsupportedCapability:
     occurrence: OccurrenceId
     feature: str
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ConstraintViolation:
     occurrence: OccurrenceId
     constraint: str
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class LocalCapacityExceeded:
     occurrence: OccurrenceId
     limit: str
@@ -464,7 +463,7 @@ class LocalCapacityExceeded:
 type CandidateViolation = CapacityExceeded | UnsupportedCapability | ConstraintViolation | LocalCapacityExceeded
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Evaluation[ResourceT, PreparationT = None]:
     """Facts about one composition, never a proof that every layout is infeasible.
 
@@ -530,7 +529,7 @@ class TargetRules[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Preparati
     ) -> None: ...
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class BuiltComposition[ResourceT, BodyT, PreparationT = None, ContextT = object]:
     body: BodyT
     evaluation: Evaluation[ResourceT, PreparationT]
@@ -725,7 +724,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     )
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class AdmittedComposition[ResourceT, PreparationT, ContextT]:
     evaluation: Evaluation[ResourceT, PreparationT]
     bindings: Mapping[str, ActionBinding]

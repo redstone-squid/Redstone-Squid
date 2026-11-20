@@ -177,7 +177,7 @@ class AttachmentReview(sd.Screen[None]):
                         return
         await event.notice("No other confirmed build from these messages has this attachment awaiting review.")
 
-    async def _advance(self, event: sl.PressEvent) -> None:
+    async def _advance(self, event: sl.ActionEventView) -> None:
         assert self.build is not None
         self.index = (self.index + 1) % len(self.build.extra_info["attachment_failures"])
 

@@ -5,7 +5,6 @@ from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import squid_ui as sl
-import squid_ui.ext.discord as sd
 from squid.bot.admin_cog import Admin
 from squid.bot.tags_view import TagsScreen
 from squid.core.actors import Actor
@@ -207,7 +206,7 @@ async def test_revoked_alias_permission_prevents_mutation() -> None:
     )
     event = form_event(alias="location")
 
-    await screen._add_selected_alias(ALIAS_REVISION, cast(sd.SubmitEvent, event))
+    await screen._add_selected_alias(ALIAS_REVISION, event)
 
     assert restrictions.aliases == []
     assert len(notices(event)) == 1
@@ -244,7 +243,7 @@ async def test_alias_history_rechecks_authority_and_reverses_membership() -> Non
     screen, _, restrictions = make_screen(capabilities=frozenset({RESTRICTION_ALIAS_CREATE}))
     await screen.on_load()
     with transaction():
-        await screen._add_selected_alias(ALIAS_REVISION, cast(sd.SubmitEvent, form_event(alias="location")))
+        await screen._add_selected_alias(ALIAS_REVISION, form_event(alias="location"))
     assert restrictions.aliases == [("locational", "location")]
     assert await screen.edits.undo() is not None
     assert restrictions.aliases == []
@@ -256,7 +255,7 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
     screen, tags, _ = make_screen(capabilities=frozenset({TAG_PROPOSAL_APPROVE, RESTRICTION_ALIAS_CREATE}))
     await screen.on_load()
     with transaction():
-        await screen._add_selected_alias(ALIAS_REVISION, cast(sd.SubmitEvent, form_event(alias="location")))
+        await screen._add_selected_alias(ALIAS_REVISION, form_event(alias="location"))
         await screen._propose(form_event(name="Reliable", value_type=TagValueType.NONE, query_name=None))
     assert len(screen.edits.undoable) == 2
     await screen._request_moderation(tags.proposal, "approve")

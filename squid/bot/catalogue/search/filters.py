@@ -250,7 +250,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             ),
         )
 
-    async def _advanced(self, event: sd.SubmitEvent) -> None:
+    async def _advanced(self, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         self.query = CatalogueQuery.from_text(self.parser, str(event.values.get("query") or ""))
         event.reveal(sl.element_ref(sl.semantic.FormTrigger, "edit-0"))
         self._close_filter()
@@ -268,7 +268,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         raw = existing.value if existing is not None else None
         value = raw.lower if isinstance(raw, RangeValue) else raw
         default = str(value).lower() if isinstance(value, bool) else str(value) if value is not None else ""
-        fields: list[sl.forms.FormField] = []
+        fields: list[sl.forms.FormField[Any, Any]] = []
         # A field without ranges has only one comparison, so it gets no comparison menu.
         if field.supports_range:
             operator = "range" if isinstance(raw, RangeValue) else OPERATORS[existing.operator] if existing else ""
@@ -341,7 +341,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             ),
         )
 
-    def _field_expression(self, field: FieldDefinition, event: sd.SubmitEvent) -> FieldExpression:
+    def _field_expression(self, field: FieldDefinition, event: sd.SubmitEvent[RedstoneSquid]) -> FieldExpression:
         value = FieldRegistry.coerce(field, str(event.values["value"]), scope=self.scope)
         operator = str(event.values.get("operator") or "")
         if operator == "range":
@@ -350,7 +350,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         comparison = next(comparison for comparison, symbol in OPERATORS.items() if symbol == operator)
         return FieldExpression(field, comparison, value, phrase=isinstance(value, str))
 
-    async def _edit_clause(self, index: int, event: sd.SubmitEvent) -> None:
+    async def _edit_clause(self, index: int, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         item = self.clauses[index]
         item = item.operand if isinstance(item, NotExpression) else item
         replacement = (
@@ -498,12 +498,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             self.sort = items[0].value
             await self._refresh()
 
-    async def _add(self, field: FieldDefinition, event: sd.SubmitEvent) -> None:
+    async def _add(self, field: FieldDefinition, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         value = self._field_expression(field, event)
         addition = NotExpression(value) if event.values.get("negated") else value
         await self._apply_filter(field, addition, event)
 
-    async def _apply_filter(self, field: FieldDefinition, addition: QueryExpression, event: sl.ActionEvent) -> None:
+    async def _apply_filter(self, field: FieldDefinition, addition: QueryExpression, event: sl.ActionEventView) -> None:
         if self.selected != field:
             return
         request_event = cast(sd.ActionEvent[RedstoneSquid], event)
@@ -522,7 +522,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         event.reveal(sl.element_ref(sl.semantic.FormTrigger, f"edit-{len(self.clauses) - 1}"))
         await self._refresh()
 
-    async def _remove(self, index: int, _event: sd.PressEvent) -> None:
+    async def _remove(self, index: int, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self._replace(index, None)
         await self._refresh()
 

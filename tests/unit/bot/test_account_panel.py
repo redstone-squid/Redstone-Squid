@@ -130,7 +130,7 @@ def notice_press() -> sd.PressEvent:
     return cast(sd.PressEvent, press_event(responder=TextResponder()))
 
 
-def notices(event: sl.ActionEvent) -> list[sl.TextLike]:
+def notices(event: sl.ActionEventView) -> list[sl.TextLike]:
     return cast(TextResponder, event.responder).texts
 
 
@@ -156,7 +156,7 @@ class PressSource:
 
 
 class TransitionSource:
-    def __init__(self, source: sl.ActionEvent) -> None:
+    def __init__(self, source: sl.ActionEventView) -> None:
         self.source = source
 
 

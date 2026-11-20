@@ -664,7 +664,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             display=sl.semantic.ControlDisplay.INDIVIDUAL,
         )
 
-    async def _switch(self, mode: Literal["builds", "records", "tools"], event: sl.ActionEvent) -> None:
+    async def _switch(self, mode: Literal["builds", "records", "tools"], event: sl.ActionEventView) -> None:
         if mode == self._mode:
             return
         if self._mode != "tools":
@@ -797,7 +797,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
-    async def _toggle_search_help(self, _event: sl.PressEvent) -> None:
+    async def _toggle_search_help(self, _event: sl.ActionEventView) -> None:
         self._show_search_help = not self._show_search_help
 
     async def _apply_search_example(self, query: str, _event: sl.PressEvent) -> None:
@@ -871,7 +871,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         await detail.projection.resolve()
         self._selected = browser
 
-    async def _open_id(self, event: sl.SubmitEvent) -> None:
+    async def _open_id[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         form = _OpenBuildForm.from_submission(event)
         build_id = form.id
         if not await self._select(build_id):
@@ -967,7 +967,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 self._guided.query = query
         await self._save_preferences()
 
-    async def _reset_search(self, _event: sl.PressEvent) -> None:
+    async def _reset_search(self, _event: sl.ActionEventView) -> None:
         self._query = CatalogueQuery.from_text(self._search_parser, "", typed=False)
         self._sort = ""
         self._results = None

@@ -284,8 +284,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
 
                     completed_value = outcome.value
 
-                    async def deliver(fresh: PortableActionEvent) -> None:
-                        assert isinstance(fresh.context, Request)
+                    async def deliver(fresh: PortableActionEvent[Request[Any]]) -> None:
                         await callback(
                             ScreenResultEvent(
                                 actor=fresh.actor,

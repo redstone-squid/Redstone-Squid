@@ -186,6 +186,7 @@ from squid_ui.factories.presentation import ChoicesHandle, ToggleHandle, ValueHa
 from squid_ui.focus import Focusable
 from squid_ui.interactions import (
     ActionEvent,
+    ActionEventView,
     EntitySelectionEvent,
     InvalidSubmitEvent,
     PressEvent,
@@ -225,6 +226,7 @@ __all__ = [
     "Accent",
     "AccentRole",
     "ActionEvent",
+    "ActionEventView",
     "Alternative",
     "Alternatives",
     "AtomicNode",

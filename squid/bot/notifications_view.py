@@ -305,7 +305,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
     async def _selection_changed(self, visible: tuple[str, ...], event: sl.ChoiceEvent) -> None:
         self.selected_ids = tuple(key for key in self.selected_ids if key not in visible) + event.selected
 
-    async def _unfollow(self, event: sd.PressEvent) -> None:
+    async def _unfollow(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         await event.acknowledge()
         if self.selected_ids:
             await self._settings.save(
@@ -381,10 +381,10 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
         self.filter_tag = item
         self.filter_tag_type = tag.value_type
 
-    async def _clear_filter_tag(self, _event: sd.PressEvent) -> None:
+    async def _clear_filter_tag(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self.filter_tag = None
 
-    async def _follow_filter(self, event: sd.SubmitEvent, *, tag: Suggestion | None = None) -> None:
+    async def _follow_filter(self, event: sd.SubmitEvent[RedstoneSquid], *, tag: Suggestion | None = None) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
         base_title = self._optional_text(event.values.get("base_title"))
         version_scope = self._optional_text(event.values.get("version_scope"))
@@ -412,7 +412,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
             tr(t"notifications-follow-filter-confirmation = Following records matching that filter."),
         )
 
-    async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:
+    async def _followed(self, event: sd.SubmitEvent[RedstoneSquid], notice: sl.TextLike) -> None:
         await event.notice(notice)
 
     @staticmethod
@@ -421,10 +421,10 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
         return text or None
 
     def _filter_form(self) -> sl.forms.FormSpec[sd.Request[Any, Any]]:
-        value_fields: tuple[sl.forms.FormField, ...] = ()
+        value_fields: tuple[sl.forms.FormField[Any, Any], ...] = ()
         label = tr(t"bot-notifications-view-exact-tag-value = Exact tag value")
         if self.filter_tag is not None and self.filter_tag_type is not TagValueType.NONE:
-            field: sl.forms.FormField
+            field: sl.forms.FormField[Any, Any]
             if self.filter_tag_type is TagValueType.BOOLEAN:
                 field = sl.forms.ChoiceField(
                     key="tag_value",

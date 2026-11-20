@@ -538,7 +538,7 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, A
             description="One per line: Name, discord:@user, java:IGN, bedrock:Name. Optional: | layout or | contributor",
         )
     if field.options or field.value_kind is ValueKind.BOOLEAN:
-        options = (
+        options: tuple[sl.forms.ChoiceOption[JSONValue], ...] = (
             tuple(sl.forms.ChoiceOption(option.value, option.label[:100], option.value) for option in field.options)
             if field.options
             else (

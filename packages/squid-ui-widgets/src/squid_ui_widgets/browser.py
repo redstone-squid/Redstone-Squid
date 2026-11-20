@@ -31,7 +31,7 @@ from squid_ui.factories import (
     note,
     stack,
 )
-from squid_ui.interactions import ActionEvent
+from squid_ui.interactions import ActionEvent, ActionEventView
 from squid_ui.layout import element_ref
 from squid_ui.planning.pagination.navigation import (
     NAV_FACTORY_CONTEXT,
@@ -173,10 +173,10 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         if len(event.selected) == 1:
             self.session.open(event.selected[0], revision=revision)
 
-    async def _back(self, event: ActionEvent) -> None:
+    async def _back(self, event: ActionEventView) -> None:
         await self._back_at(self.session.revision, event)
 
-    async def _back_at(self, revision: int, event: ActionEvent) -> None:
+    async def _back_at(self, revision: int, event: ActionEventView) -> None:
         if revision != self.session.revision:
             return
         focused = self.session.focus

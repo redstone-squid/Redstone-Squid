@@ -38,7 +38,7 @@ from squid_ui.factories import (
     routed_action_control,
     routed_choices,
 )
-from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.interactions import ActionEventView, SubmitEvent
 from squid_ui.interactions.forms import Form, FormLike, FormSpec
 from squid_ui.overflow import PageEvent, RoutedPage
 from squid_ui.palette import Role
@@ -67,7 +67,7 @@ class TransitionRoute[StateT]:
 class TransitionEvent[StateT]:
     """A shell interaction after the machine transition has been applied."""
 
-    source: ActionEvent
+    source: ActionEventView
     action: str
     previous: StateT
     state: StateT
@@ -147,7 +147,7 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> ActionControl | RoutedActionControl: ...
+    ) -> ActionControl[ContextT] | RoutedActionControl: ...
 
     def choices(
         self,
@@ -258,7 +258,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
 
     async def _dispatch(
         self,
-        event: ActionEvent,
+        event: ActionEventView,
         action_name: str,
         *,
         values: tuple[str, ...] = (),
@@ -299,10 +299,10 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         tone: Tone | Role = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> ActionControl:
+    ) -> ActionControl[ContextT]:
         """Bind a mounted action control to machine dispatch."""
 
-        async def trigger(event: ActionEvent) -> None:
+        async def trigger(event: ActionEventView) -> None:
             await self.owner._dispatch(event, action_name)
 
         return action_control(label, trigger, key=key, tone=tone, emphasis=emphasis, available=available)

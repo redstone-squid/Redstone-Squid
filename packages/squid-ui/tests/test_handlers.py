@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from squid_ui.authoring.semantic import Controlled, Details, Summary, Toggle
+from squid_ui.authoring.semantic import ChoiceOwnership, Controlled, Details, Summary, Toggle
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, PressEvent
 from squid_ui.interactions.forms import FormBinding, FormSpec, TextField
 from squid_ui.interactions.handlers import FrontendHandler, HandlerSet, _HandlerComposition, bind_handlers, handlers
@@ -90,7 +90,7 @@ def test_bindings_routes_and_form_callbacks_preserve_shared_identity() -> None:
 
 
 def test_shared_commit_and_ownership_are_selected_once() -> None:
-    ownership = Controlled((), registration())
+    ownership: ChoiceOwnership = Controlled((), registration())
     session = PresentationState()
     first = ChoiceCommit(ownership, "one", (), session)
     second = ChoiceCommit(ownership, "two", (), session)

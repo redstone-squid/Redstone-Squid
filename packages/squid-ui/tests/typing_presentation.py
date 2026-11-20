@@ -44,7 +44,7 @@ class Reports(sd.Screen[None]):
     )
 
     @override
-    def render(self) -> sl.DocumentLike[sd.ComponentsV2Target]:
+    def render(self) -> sl.DocumentLike[sd.ComponentsV2Target, sd.Request]:
         assert_type(self.work_lost.value, bool)
         assert_type(self.selected.value, tuple[str, ...])
         assert_type(self.price.value, PriceRange)

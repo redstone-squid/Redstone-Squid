@@ -18,9 +18,8 @@ class ValueHandle[ValueT](PresentationReference[ValueT]):
         return ValueBinding(self.value, self)
 
 
+@dataclass(frozen=True, slots=True)
 class ToggleBinding(Toggle[object]):
-    __slots__ = ()
-
     def __call__(
         self,
         *,
@@ -68,9 +67,8 @@ class ToggleHandle(PresentationReference[bool]):
         )
 
 
+@dataclass(frozen=True, slots=True)
 class ChoicesBinding(Choices[object]):
-    __slots__ = ()
-
     def __call__(
         self,
         *entries: Choice,

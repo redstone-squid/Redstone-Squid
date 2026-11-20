@@ -356,7 +356,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._version = item
         self._build_tabs()
 
-    async def _reset_version(self, _event: sd.PressEvent) -> None:
+    async def _reset_version(self, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self._version = None
         self._build_tabs()
 
@@ -372,7 +372,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._restrictions = (*(current for current in self._restrictions if current.value != item.value), item)
         self._build_tabs()
 
-    async def _remove_restriction(self, value: str, _event: sd.PressEvent) -> None:
+    async def _remove_restriction(self, value: str, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self._restrictions = tuple(item for item in self._restrictions if item.value != value)
         self._build_tabs()
 
@@ -402,7 +402,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(RECORD_ENTRY_INSPECT)
-    async def _lookup(self, event: sl.SubmitEvent) -> None:
+    async def _lookup[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         form = _LookupForm.from_submission(event)
         kind = form.kind
         selected = form.base_key.strip()
@@ -444,7 +444,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(RECORD_ENTRY_REBUILD)
-    async def _rebuild(self, event: sl.SubmitEvent) -> None:
+    async def _rebuild[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         form = _RebuildForm.from_submission(event)
         kind = form.kind
         version_id = (

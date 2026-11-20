@@ -102,7 +102,7 @@ class VersionScreen(sd.Screen):
     @requires_grant(
         VERSION_ENTRY_CREATE, denied=tr(t"versions-add-permission-denied = You are no longer allowed to add versions.")
     )
-    async def _add(self, event: sl.SubmitEvent) -> None:
+    async def _add[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         form = _AddVersionForm.from_submission(event)
         edition = form.edition
         version_text = form.version

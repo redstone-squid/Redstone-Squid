@@ -75,7 +75,7 @@ class ReviewForm(sl.forms.Form[sd.Request[Any, Any]]):
         return ()
 
     @override
-    async def on_submit(self, event: sl.SubmitEvent) -> None:
+    async def on_submit[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         # The room can close while a modal is open, after the opening guard ran.
         if self.panel.room.closed:
             await event.notice(tr(t"layout-review-this-review-room-has-closed = This review room has closed."))

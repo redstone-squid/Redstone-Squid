@@ -11,7 +11,7 @@ from squid_ui.content.assets import Asset, InlineAsset
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui.ext.discord import ExistingLayoutError, ResourceCost, contribute, primitives
+from squid_ui.ext.discord import ComponentsV2Target, ExistingLayoutError, Request, ResourceCost, contribute, primitives
 from squid_ui.ext.discord import testing as sd
 from squid_ui.ext.discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
 from squid_ui.ext.discord.inspection import audit
@@ -165,7 +165,9 @@ class TestAttachedFragment:
     def test_files_are_repeatable_and_fresh(self):
         host = sd.layout_view()
         asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"report bytes"))
-        document = Document((primitives.File("report", "report.txt", "text/plain"),), assets=(asset,))
+        document = Document[ComponentsV2Target, Request](
+            (primitives.File("report", "report.txt", "text/plain"),), assets=(asset,)
+        )
         attached = contribute(document, to=host)
         first, second = attached.build_files(), attached.attachments()
         assert [file.filename for file in first] == ["report.txt"]

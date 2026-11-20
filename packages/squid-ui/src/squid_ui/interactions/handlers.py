@@ -2,10 +2,9 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Self, cast, override
 
-from squid_ui._dataclass import immutable
 from squid_ui._presentation import PresentationCells, PresentationScope
 from squid_ui.interactions import ActionBinding, ActionEvent
 
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
     from squid_ui.interactions.forms import FormBinding, FormSpec
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class FrontendHandler[EventT: ActionEvent[Any] = ActionEvent]:
     """One explicitly registered frontend implementation."""
 
@@ -27,7 +26,7 @@ class FrontendHandler[EventT: ActionEvent[Any] = ActionEvent]:
         await self.callback(event)
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class HandlerSet[EventT: ActionEvent[Any] = ActionEvent]:
     """Frontend implementations with an optional portable fallback."""
 
@@ -75,7 +74,7 @@ class _HandlerComposition(ABC):
     def _bind_handlers(self, binder: _HandlerBinder) -> Self: ...
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class _ScopedHandler[EventT: ActionEvent[Any]](_HandlerComposition):
     callback: Callable[[EventT], Awaitable[None]]
     scope: PresentationScope

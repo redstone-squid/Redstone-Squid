@@ -165,7 +165,8 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     components += native.contract.cost.get(Axis.COMPONENTS)
                     text_chars += native.contract.cost.get(Axis.DISPLAY_TEXT)
                     texts.extend(native.text)
-                    uses.extend((*native.resources, resource))
+                    uses.extend(SharedUse[object](use.identity, use.value, use.cost) for use in native.resources)
+                    uses.append(resource)
                     native_contracts[resource.identity.key] = native
                     return (node,)
                 case NativeSectionRealization():

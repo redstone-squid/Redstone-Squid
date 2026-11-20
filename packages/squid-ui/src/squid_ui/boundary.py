@@ -1,15 +1,15 @@
 """Placement of a child component in an authored layout."""
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from squid_ui._dataclass import immutable
 from squid_ui.target_types import Renderable, RenderTarget
 
 if TYPE_CHECKING:
     from squid_ui.runtime.definition import Component
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     """Place a child component in the layout under its own control and presentation keys.
 

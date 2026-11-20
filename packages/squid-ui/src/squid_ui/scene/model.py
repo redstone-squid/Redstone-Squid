@@ -1,11 +1,11 @@
 """Portable scene envelopes, assets, and pager coordinates."""
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from pydantic import Field
 
-from squid_ui._dataclass import immutable
 from squid_ui._query_index import QueryIndexOwner
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.scene.base import Body as Body
@@ -37,7 +37,7 @@ class Pager(SceneValue):
         return self.model_dump(mode="json", include={"key", "page", "pages"})
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Scene[BodyT = Body](QueryIndexOwner, SceneNode):
     """One planned display, including its target, content, assets, and selected pages.
 

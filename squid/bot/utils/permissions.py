@@ -69,7 +69,9 @@ class Grants:
                 return True
         return False
 
-    async def confirm(self, event: sl.ActionEvent[Any], *nodes: PermissionNode, denied: TextLike | None = None) -> bool:
+    async def confirm(
+        self, event: sl.interactions.ActionResponder, *nodes: PermissionNode, denied: TextLike | None = None
+    ) -> bool:
         """Like `allows`, but tell the viewer when they no longer hold any of `nodes`.
 
         `denied` replaces the generic refusal, for a screen that can say what was refused.

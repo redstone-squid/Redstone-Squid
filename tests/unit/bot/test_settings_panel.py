@@ -412,7 +412,7 @@ async def test_each_channel_picker_writes_its_own_setting() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
-    selection = sl.EntityEvent(
+    selection: sl.EntityEvent = sl.EntityEvent(
         sl.interactions.Actor("1"),
         RecordingResponder(),
         selected=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),),

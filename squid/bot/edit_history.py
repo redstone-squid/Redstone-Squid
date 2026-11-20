@@ -50,7 +50,9 @@ def _record_local_edit[ValueT](
         stack.record_operation(transaction, label, _LocalEdit(target, after, before, authorize, replace, refresh))
 
 
-async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo: bool = False) -> None:
+async def apply_history(
+    stack: sl.runtime.History, event: sl.interactions.ActionResponder, *, redo: bool = False
+) -> None:
     """Apply a history control and report failures."""
     result = await stack.redo() if redo else await stack.undo()
     if result.status is sl.runtime.HistoryResultStatus.CONFLICT:
@@ -66,10 +68,10 @@ async def apply_history(stack: sl.runtime.History, event: sl.PressEvent, *, redo
 def history_actions(stack: sl.runtime.History) -> tuple[sl.semantic.ActionControl[sd.Request], ...]:
     """Undo and Redo, each only when it can run, with truthful outcomes for external writes."""
 
-    async def undo(event: sl.PressEvent) -> None:
+    async def undo(event: sd.PressEvent) -> None:
         await apply_history(stack, event)
 
-    async def redo(event: sl.PressEvent) -> None:
+    async def redo(event: sd.PressEvent) -> None:
         await apply_history(stack, event, redo=True)
 
     actions: list[sl.semantic.ActionControl[sd.Request]] = []

@@ -8,7 +8,7 @@ import anyio
 import pytest
 
 from squid_reactivity import current_transaction
-from squid_ui import ActionEvent, Component, DocumentLike, state
+from squid_ui import ActionEventView, Component, DocumentLike, state
 from squid_ui.ext.discord import CloseReason, Everyone, MessageRoot, Owner
 from squid_ui.ext.discord.actions import ActionResponder
 from squid_ui.ext.discord.primitives import Button, Row, Text
@@ -21,14 +21,14 @@ from squid_ui.runtime import transaction
 class Panel(Component[ComponentsV2Target]):
     value: int = state(0)
 
-    def __init__(self, handler: Callable[[ActionEvent], Awaitable[None]] | None = None) -> None:
+    def __init__(self, handler: Callable[[ActionEventView], Awaitable[None]] | None = None) -> None:
         self.handler = handler
 
     @override
     def render(self) -> DocumentLike[ComponentsV2Target]:
         return [Text(str(self.value)), Row((Button("Complete", self.complete, "complete"),))]
 
-    async def complete(self, event: ActionEvent) -> None:
+    async def complete(self, event: ActionEventView) -> None:
         if self.handler is not None:
             await self.handler(event)
 
@@ -43,7 +43,7 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
     child: MessageRoot
     observed: list[bool] = []
 
-    async def completed(event: ActionEvent) -> None:
+    async def completed(event: ActionEventView) -> None:
         assert isinstance(event.responder, ActionResponder)
         assert event.responder.message_root is parent
         assert parent._action_lock.locked()
@@ -53,7 +53,7 @@ async def test_result_uses_parent_transaction_after_child_unlock_and_preserves_m
         assert child_panel.value == 1
         parent_panel.value = 2
 
-    async def finish(event: ActionEvent) -> None:
+    async def finish(event: ActionEventView) -> None:
         nonlocal child_transaction
         child_transaction = current_transaction()
         child_panel.value = 1
@@ -83,7 +83,7 @@ async def test_callback_failure_is_reported_and_rolls_back_parent_state() -> Non
     root = MessageRoot(panel, access=Everyone())
     await root.send(delivered_to(message_harness()))
 
-    async def failed(_event: ActionEvent) -> None:
+    async def failed(_event: ActionEventView) -> None:
         panel.value = 10
         raise ValueError("cannot accept result")
 
@@ -99,7 +99,7 @@ async def test_parent_access_and_shutdown_reject_result(finished: bool) -> None:
     if finished:
         await root.finish()
 
-    async def unexpected(_event: ActionEvent) -> None:
+    async def unexpected(_event: ActionEventView) -> None:
         pytest.fail("result must not be accepted")
 
     assert not await root._dispatch_screen_result(interaction_harness(user_id=1), unexpected)
@@ -109,7 +109,7 @@ async def test_parent_access_and_shutdown_reject_result(finished: bool) -> None:
 async def test_result_rejects_nested_child_transaction() -> None:
     root = MessageRoot(Panel(), access=Everyone())
 
-    async def unexpected(_event: ActionEvent) -> None:
+    async def unexpected(_event: ActionEventView) -> None:
         pytest.fail("result must not enter a nested transaction")
 
     with transaction(), pytest.raises(RuntimeError, match="after the child action commits"):
@@ -130,7 +130,7 @@ async def test_middleware_cannot_turn_missing_or_failed_callback_into_success(sw
     root = MessageRoot(panel, access=Everyone(), middleware=(Middleware(),))
     await root.send(delivered_to(message_harness()))
 
-    async def failed(_event: ActionEvent) -> None:
+    async def failed(_event: ActionEventView) -> None:
         panel.value = 10
         raise ValueError("cannot accept result")
 
@@ -146,7 +146,7 @@ async def test_parent_timeout_during_callback_rolls_back_without_deadlock() -> N
     await root.send(delivered_to(message_harness()))
     accepted: list[bool] = []
 
-    async def callback(_event: ActionEvent) -> None:
+    async def callback(_event: ActionEventView) -> None:
         panel.value = 10
         entered.set()
         await release.wait()

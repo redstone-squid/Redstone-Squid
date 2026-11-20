@@ -295,7 +295,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._build_tabs()
 
     @requires_grant(RESTRICTION_ALIAS_CREATE)
-    async def _add_selected_alias(self, revision: Revision, event: sd.SubmitEvent) -> None:
+    async def _add_selected_alias[ContextT](self, revision: Revision, event: sl.SubmitEvent[ContextT]) -> None:
         try:
             await self.edits.bind_many(ALIAS_EDIT, (revision,)).save(
                 AliasValues(alias=str(event.values["alias"])).edit_values(),
@@ -306,7 +306,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             return
         await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
-    async def _propose(self, event: sl.SubmitEvent) -> None:
+    async def _propose[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         account_id = self._actor_account_id
         if account_id is None:
             await event.notice(tr(t"tags-account-consent-required = A linked, consented account is required."))

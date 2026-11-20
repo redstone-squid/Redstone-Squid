@@ -24,7 +24,7 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
         self.options = options
 
     def _form(self, option: VoteOption | None = None) -> sl.forms.FormSpec[sd.Request]:
-        fields: list[sl.forms.FormField] = [
+        fields: list[sl.forms.FormField[Any, Any]] = [
             sl.forms.TextField(
                 key="emoji",
                 label=tr(t"vote-row-emoji = Emoji"),

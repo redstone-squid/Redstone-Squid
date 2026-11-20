@@ -1,8 +1,8 @@
 """Group layout nodes and their assets before planning for a target."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from squid_ui._dataclass import immutable
 from squid_ui.authoring.semantic import LayoutNode
 from squid_ui.content.assets import Asset, AssetSource, InlineAsset, StoredAsset
 from squid_ui.errors import LayoutInvariantError
@@ -11,7 +11,7 @@ from squid_ui.target_types import RenderTarget
 __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "StoredAsset", "as_document"]
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Document[RenderTargetT = RenderTarget, ContextT = object]:
     """The layout to display, together with the files that layout needs.
 

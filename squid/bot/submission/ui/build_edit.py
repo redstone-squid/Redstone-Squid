@@ -426,15 +426,15 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                 sections.append(EditorSection(section.id, Text.join("\n", lines)))
         return sections
 
-    def _actions(self) -> list[sl.semantic.ActionControl[sd.Request]]:
+    def _actions(self) -> list[sl.semantic.ActionControl]:
         """The last row: the main step first, then Preview, then the ways out."""
-        actions: list[sl.semantic.ActionControl[sd.Request]] = []
+        actions: list[sl.semantic.ActionControl] = []
         if self.confirming:
             actions.extend(
                 (
                     sl.action_control(
                         tr(t"bot-submission-ui-views-apply-changes = Apply changes"),
-                        self._apply,
+                        sd.on_press(self._apply),
                         key="apply",
                         tone=sl.Tone.SUCCESS,
                     ),
@@ -459,14 +459,18 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
                         key="search-patterns",
                     )
                 )
-        actions.append(sl.action_control(tr(t"draft-editor-preview = Preview"), self._preview, key="preview"))
+        actions.append(
+            sl.action_control(tr(t"draft-editor-preview = Preview"), sd.on_press(self._preview), key="preview")
+        )
         if self.conflict:
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-ui-views-reload-latest = Reload latest"), self._reload, key="reload"
                 )
             )
-        actions.append(sl.action_control(tr(t"bot-submission-ui-views-cancel = Cancel"), self._close, key="close"))
+        actions.append(
+            sl.action_control(tr(t"bot-submission-ui-views-cancel = Cancel"), sd.on_press(self._close), key="close")
+        )
         return actions
 
     @override
@@ -513,7 +517,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         self.workspace.patch().apply(preview)
         await self.open_child(event, BuildEditPreview(await self._render_build(preview)), on_result=self._child_closed)
 
-    async def _review(self, event: sl.PressEvent) -> None:
+    async def _review(self, event: sl.ActionEventView) -> None:
         if not await self._may_event(event):
             return
         if not self.workspace.patch().attributes():
@@ -521,7 +525,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             return
         self.confirming = True
 
-    async def _unconfirm(self, event: sl.PressEvent) -> None:
+    async def _unconfirm(self, event: sl.ActionEventView) -> None:
         self.confirming = False
 
     async def _apply(self, event: sd.PressEvent) -> None:
@@ -563,7 +567,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         else:
             self.cancel(event)
 
-    async def _reload(self, event: sl.PressEvent) -> None:
+    async def _reload(self, event: sl.ActionEventView) -> None:
         await self.projection.reload()
         if not await self._may_event(event):
             return
@@ -571,7 +575,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         self.controller.forget({build_target(self._build_id).identity})
         await self.controller.refresh()
 
-    async def _may_event(self, event: sl.ActionEvent[Any]) -> bool:
+    async def _may_event(self, event: sl.interactions.ActionResponder) -> bool:
         if not await self.may_edit():
             await event.notice(
                 tr(

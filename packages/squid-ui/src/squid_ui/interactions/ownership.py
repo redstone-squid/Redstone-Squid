@@ -9,14 +9,13 @@ live beside `Paginate` in `squid_ui.overflow`.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
-from squid_ui._dataclass import immutable
 from squid_ui._presentation import ValueBinding
 from squid_ui.interactions.handlers import _HandlerBinder
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Controlled[ValueT, EventT]:
     """Read the value from application state and send requested changes to on_change.
 
@@ -28,7 +27,7 @@ class Controlled[ValueT, EventT]:
     on_change: Callable[[EventT], Awaitable[None]]
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Uncontrolled[ValueT]:
     """Let PresentationState store the value under the node's key.
 

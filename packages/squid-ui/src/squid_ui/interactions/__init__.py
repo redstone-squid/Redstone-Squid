@@ -8,12 +8,11 @@ forms, and other replies through that frontend.
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import field
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.transactions import Transaction, TransactionContext
-from squid_ui._dataclass import immutable, immutable_kw_only
 from squid_ui._presentation import PresentationReference, presentation_scope
 from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.content.entity import EntityRef
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class BusySpec:
     """Ask the framework to show that a slow action is running.
 
@@ -57,7 +56,7 @@ class Visibility(StrEnum):
     PRIVATE = "private"
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class Actor:
     """Portable identity facts supplied by a frontend."""
 
@@ -99,7 +98,33 @@ class ActionResponder(Protocol):
     def invalidate(self) -> None: ...
 
 
-@immutable
+class ActionEventView[ContextT = object](ActionResponder, Protocol):
+    """Read an event and respond to it across frontend context types."""
+
+    @property
+    def context(self) -> ContextT: ...
+
+    @property
+    def actor(self) -> Actor: ...
+
+    @property
+    def responder(self) -> ActionResponder: ...
+
+    @property
+    def locale(self) -> str | None: ...
+
+    @property
+    def metadata(self) -> Mapping[str, Any]: ...
+
+    @property
+    def transaction(self) -> Transaction: ...
+
+    def read[ValueT](self, reference: PresentationReference[ValueT]) -> ValueT: ...
+
+    def reveal(self, reference: ElementRef[object]) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
 class ActionEvent[ContextT = object]:
     """Portable action input whose response authority ends when the handler returns.
 
@@ -210,26 +235,26 @@ class ActionEvent[ContextT = object]:
         self.responder.invalidate()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class PressEvent[ContextT = object](ActionEvent[ContextT]):
     """A button or equivalent action was pressed."""
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class SelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """A selection control submitted one or more values."""
 
     values: tuple[str, ...] = ()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class EntitySelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """An entity selection submitted portable concrete references."""
 
     values: tuple[EntityRef, ...] = ()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
     """A form attempt with parsed values, original attempted input, and validation issues.
 
@@ -242,7 +267,7 @@ class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
     errors: tuple[FormIssue, ...] = ()
 
 
-@immutable_kw_only
+@dataclass(frozen=True, slots=True, kw_only=True)
 class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
     """An invalid attempt with partial values; retry authority ends when the handler returns."""
 
@@ -253,7 +278,7 @@ class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
         await self._retry()
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ActionRequest:
     """One admitted mounted action supplied to application middleware.
 
@@ -298,7 +323,7 @@ type SelectionHandler[ContextT = object] = Callable[[SelectionEvent[ContextT]], 
 type EntitySelectionHandler[ContextT = object] = Callable[[EntitySelectionEvent[ContextT]], Awaitable[None]]
 
 
-@immutable
+@dataclass(frozen=True, slots=True)
 class ActionBinding[EventT: ActionEvent[Any] = Any]:
     """A callback and dispatch policy addressed by a planned control's action key.
 
@@ -332,6 +357,7 @@ class ActionBinding[EventT: ActionEvent[Any] = Any]:
 __all__ = [
     "ActionBinding",
     "ActionEvent",
+    "ActionEventView",
     "ActionHandler",
     "ActionMiddleware",
     "ActionMode",

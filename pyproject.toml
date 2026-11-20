@@ -311,7 +311,7 @@ reportImplicitOverride = "error"
 reportAny = false
 
 enableExperimentalFeatures = true  # For `TypeForm` support
-enableBasedFeatures = true  # Immutable UI dataclasses omit synthetic replacement methods during variance inference.
+enableBasedFeatures = true
 
 [tool.pyrefly]
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]

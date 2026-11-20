@@ -270,7 +270,7 @@ class StarboardScreen(sd.Screen):
         )
 
     @requires_grant(STARBOARD_BOARD_CREATE)
-    async def _create(self, event: sl.SubmitEvent) -> None:
+    async def _create[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
         form = _CreateBoardForm.from_submission(event)
         channel_id = cast(discord.abc.Snowflake, form.channel_id).id
         name = form.name
@@ -296,7 +296,7 @@ class StarboardScreen(sd.Screen):
         await event.notice(md_tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
 
     @requires_grant(STARBOARD_BOARD_EDIT)
-    async def _edit(self, before: StarboardSnapshot, setting: str, event: sl.SubmitEvent) -> None:
+    async def _edit[ContextT](self, before: StarboardSnapshot, setting: str, event: sl.SubmitEvent[ContextT]) -> None:
         value = event.values["value"]
         if setting == "channel_id":
             value = cast(discord.abc.Snowflake, value).id
@@ -310,7 +310,7 @@ class StarboardScreen(sd.Screen):
         )
 
     @requires_grant(STARBOARD_EMOJI_EDIT)
-    async def _edit_emoji(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
+    async def _edit_emoji[ContextT](self, before: StarboardSnapshot, event: sl.SubmitEvent[ContextT]) -> None:
         form = _EditEmojiForm.from_submission(event)
         aliases = tuple(item for item in before.aliases() if item.emoji != form.emoji)
         aliases += (
@@ -330,7 +330,7 @@ class StarboardScreen(sd.Screen):
         await self._save(before, replace(before, emojis=tuple(item for item in before.emojis if item[0] != emoji)))
 
     @requires_grant(STARBOARD_WEIGHT_EDIT)
-    async def _edit_weight(self, before: StarboardSnapshot, event: sl.SubmitEvent) -> None:
+    async def _edit_weight[ContextT](self, before: StarboardSnapshot, event: sl.SubmitEvent[ContextT]) -> None:
         form = _EditWeightForm.from_submission(event)
         role_id = cast(discord.abc.Snowflake, form.role_id).id
         weights = dict(before.weights)

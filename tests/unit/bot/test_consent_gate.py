@@ -336,7 +336,7 @@ class _Gate(sd.Screen):
         if not opened:
             await self._abandoned()
 
-    async def _count(self, event: sl.PressEvent) -> None:
+    async def _count(self, event: sd.PressEvent) -> None:
         del event
         self.presses += 1
 

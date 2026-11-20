@@ -905,7 +905,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
-    async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent) -> None:
+    async def _rank_selected(self, role_id: int, revision: int, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         await self._save(
             RANK_EDIT,
             RankValues(role_id=role_id, rank=int(str(event.values["rank"]))),
@@ -958,7 +958,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             confirm=dict(_ROLE_ACTIONS)[operation],
         )
 
-    async def _delete_selected(self, role: PermissionRole, revision: int, _event: sd.PressEvent) -> None:
+    async def _delete_selected(self, role: PermissionRole, revision: int, _event: sd.PressEvent[RedstoneSquid]) -> None:
         self._request_delete(role, revision)
 
     def _request_delete(self, role: PermissionRole, revision: int) -> None:
@@ -1111,9 +1111,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, denied=_DENIED)
-    async def _change_rule(
+    async def _change_rule[ContextT](
         self,
-        event: sl.SubmitEvent,
+        event: sl.SubmitEvent[ContextT],
         *,
         target: tuple[int | None, int | None, int | None] | None = None,
         subject: str | None = None,
@@ -1144,9 +1144,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
-    async def _change_assignment(
+    async def _change_assignment[ContextT](
         self,
-        event: sl.SubmitEvent,
+        event: sl.SubmitEvent[ContextT],
         *,
         target: tuple[int | None, int | None, int | None] | None = None,
         subject: str | None = None,
@@ -1176,7 +1176,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, denied=_DENIED)
-    async def _create_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
+    async def _create_role[ContextT](
+        self, event: sl.SubmitEvent[ContextT], *, base_revision: int | None = None
+    ) -> None:
         form = _CreateRoleForm.from_submission(event)
         scope = str(event.values.get("scope") or ("global" if ROLE_DEFINITION_MANAGE in self.grants else "guild"))
         slug = form.slug

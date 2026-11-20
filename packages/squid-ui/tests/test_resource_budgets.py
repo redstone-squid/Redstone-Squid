@@ -57,7 +57,11 @@ def evaluate[BodyT, PreparationT, ResourceT](
 
 def on_target(
     node: Renderable[RenderTarget, object], target: Literal["v2", "html", "slack"], *, strict: bool = True
-) -> Evaluation[object, discord_scene.ComponentsV2] | Evaluation[Asset, html_scene.HtmlBody | slack_scene.SlackMessage]:
+) -> (
+    Evaluation[object, discord_scene.ComponentsV2]
+    | Evaluation[Asset, html_scene.HtmlBody]
+    | Evaluation[Asset, slack_scene.SlackMessage]
+):
     match target:
         case "v2":
             return evaluate(node, V2CompositionRules[RenderTarget, object](), strict=strict)
