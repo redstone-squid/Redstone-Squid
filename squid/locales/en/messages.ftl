@@ -1646,19 +1646,19 @@ bot-version-tracking-version = Version
 # squid/bot/version_tracking_cog.py:149
 bot-version-tracking-version-added-successfully = Version added successfully: { $version }
 
-# squid/bot/voting/actors.py:23
+# squid/bot/voting/actors.py:24
 bot-voting-actors-that-vote-is-already-closed = That vote is already closed.
 
-# squid/bot/voting/actors.py:24
+# squid/bot/voting/actors.py:25
 bot-voting-actors-you-do-not-have-a-trusted-role = You do not have a trusted role.
 
 # squid/bot/voting/controls.py:37
 bot-voting-controls-close-poll = Close poll
 
-# squid/bot/voting/controls.py:65
+# squid/bot/voting/controls.py:70
 bot-voting-controls-poll-closed = Poll closed.
 
-# squid/bot/voting/controls.py:79
+# squid/bot/voting/controls.py:84
 bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.
 
 # squid/bot/voting/controls.py:40
@@ -1736,7 +1736,7 @@ bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 # squid/bot/voting/poll_wizard.py:473
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/cog.py:178, squid/bot/voting/poll_wizard.py:468
+# squid/bot/voting/cog.py:180, squid/bot/voting/poll_wizard.py:468
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:328
@@ -1766,19 +1766,19 @@ bot-voting-poll-wizard-visibility = Visibility
 # squid/bot/voting/poll_wizard.py:341
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/cog.py:192
+# squid/bot/voting/cog.py:267
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/cog.py:227
+# squid/bot/voting/cog.py:302
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/cog.py:208
+# squid/bot/voting/cog.py:283
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/cog.py:207
+# squid/bot/voting/cog.py:282
 bot-voting-vote-working = Working
 
-# squid/bot/voting/cog.py:141
+# squid/bot/voting/cog.py:143
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/catalogue/browse.py:1077
@@ -2438,11 +2438,17 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin_cog.py:109
 command-paste-name = paste
 
-# squid/bot/voting/cog.py:60
+# squid/bot/voting/cog.py:62
 command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/cog.py:59
+# squid/bot/voting/cog.py:61
 command-poll-name = poll
+
+# squid/bot/voting/cog.py:189
+command-poll-review-help = Inspect a paused poll or confirm a review decision.
+
+# squid/bot/voting/cog.py:188
+command-poll-review-name = poll-review
 
 # squid/bot/submission/cog.py:72
 command-recalculate-build-name = Scan Build Message
@@ -2576,7 +2582,7 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking_cog.py:122
 command-versions-name = versions
 
-# squid/bot/voting/cog.py:185
+# squid/bot/voting/cog.py:260
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/diagnostics/cog.py:47
@@ -4334,7 +4340,7 @@ permissions-archive-channel-messages = Archive a channel's messages.
 # squid/core/permissions/domain/catalogue.py:248
 permissions-archive-tag = Archive a tag.
 
-# squid/core/permissions/domain/catalogue.py:488
+# squid/core/permissions/domain/catalogue.py:493
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
 # squid/core/permissions/application/administration.py:80
@@ -4361,13 +4367,13 @@ permissions-change-wide-settings = Change application-wide runtime settings.
 # squid/core/permissions/domain/catalogue.py:316
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/core/permissions/domain/catalogue.py:472
+# squid/core/permissions/domain/catalogue.py:477
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
 # squid/core/permissions/domain/catalogue.py:328
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/core/permissions/domain/catalogue.py:512
+# squid/core/permissions/domain/catalogue.py:517
 permissions-create-edit-server = Create and edit this server's permission roles.
 
 # squid/core/permissions/domain/catalogue.py:462
@@ -4412,10 +4418,10 @@ permissions-grant-reason = your current permissions do not grant it
 # squid/core/permissions/domain/catalogue.py:323
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/core/permissions/domain/catalogue.py:507
+# squid/core/permissions/domain/catalogue.py:512
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
-# squid/core/permissions/domain/catalogue.py:495
+# squid/core/permissions/domain/catalogue.py:500
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
 # squid/core/permissions/domain/catalogue.py:201
@@ -4454,7 +4460,7 @@ permissions-re-read-user = Re-read another user's linked Minecraft name.
 # squid/core/permissions/domain/catalogue.py:291
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/core/permissions/domain/catalogue.py:501
+# squid/core/permissions/domain/catalogue.py:506
 permissions-read-permission-audit = Read the permission audit log.
 
 # squid/core/permissions/domain/catalogue.py:334
@@ -4493,6 +4499,9 @@ permissions-require-any = This action requires at least one of these permissions
 # squid/core/permissions/domain/catalogue.py:450
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
+# squid/core/permissions/domain/catalogue.py:472
+permissions-review-poll-recount = Inspect and retry an incomplete final poll count.
+
 # squid/core/permissions/application/administration.py:74
 permissions-role-not-yours = Role is not yours to manage
 
@@ -4520,13 +4529,13 @@ permissions-view-unreviewed-builds = View builds that have not been reviewed yet
 # squid/core/permissions/domain/catalogue.py:362
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/core/permissions/domain/catalogue.py:477
+# squid/core/permissions/domain/catalogue.py:482
 permissions-vote-build-log = Vote in build log deletion votes.
 
 # squid/core/permissions/domain/catalogue.py:456
 permissions-vote-polls = Vote in polls.
 
-# squid/core/permissions/domain/catalogue.py:482
+# squid/core/permissions/domain/catalogue.py:487
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/poll_wizard.py:406
@@ -4559,44 +4568,47 @@ poll-choices-format = Separate choices with commas or line breaks; quote choices
 # squid/bot/voting/poll_wizard.py:231
 poll-choices-length = Keep the choices within 1000 characters.
 
-# squid/bot/voting/cog.py:69
+# squid/bot/voting/cog.py:71
 poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
 
-# squid/bot/voting/cog.py:68
+# squid/bot/voting/cog.py:70
 poll-command-choices-name = choices
 
-# squid/bot/voting/cog.py:73
+# squid/bot/voting/cog.py:75
 poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
 
-# squid/bot/voting/cog.py:72
+# squid/bot/voting/cog.py:74
 poll-command-duration-name = duration
 
-# squid/bot/voting/cog.py:168
+# squid/bot/voting/cog.py:170
 poll-command-network-denied = You do not have permission to publish to every server.
 
-# squid/bot/voting/cog.py:87
+# squid/bot/voting/cog.py:89
 poll-command-preview = Review and edit before publishing. Default: publish immediately.
 
-# squid/bot/voting/cog.py:86
+# squid/bot/voting/cog.py:88
 poll-command-preview-name = preview
 
-# squid/bot/voting/cog.py:65
+# squid/bot/voting/cog.py:67
 poll-command-question = Poll question; omit to open the editor.
 
-# squid/bot/voting/cog.py:64
+# squid/bot/voting/cog.py:66
 poll-command-question-name = question
 
-# squid/bot/voting/cog.py:82
+# squid/bot/voting/cog.py:84
 poll-command-scope = This server, or every server if you have permission.
 
-# squid/bot/voting/cog.py:81
+# squid/bot/voting/cog.py:83
 poll-command-scope-name = scope
 
-# squid/bot/voting/cog.py:77
+# squid/bot/voting/cog.py:79
 poll-command-visibility = Who can see votes and when results are shown.
 
-# squid/bot/voting/cog.py:76
+# squid/bot/voting/cog.py:78
 poll-command-visibility-name = visibility
+
+# squid/bot/voting/controls.py:67
+poll-final-count-pending = The final count is pending.
 
 # squid/bot/voting/poll_wizard.py:456
 poll-history-edit = Edit poll
@@ -6384,19 +6396,19 @@ video-too-many-activations = A video can contain at most 16 activations.
 # squid/bot/catalogue/schematics/video.py:149
 video-use-input = Use this input
 
-# squid/bot/voting/reactions.py:297
+# squid/bot/voting/reactions.py:303
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
-# squid/bot/voting/cog.py:193
+# squid/bot/voting/cog.py:268
 vote-message-guild-mismatch = The message is not from this guild.
 
-# squid/bot/voting/actors.py:22
+# squid/bot/voting/actors.py:23
 vote-message-not-open = That message is not an open vote.
 
-# squid/bot/voting/actors.py:27
+# squid/bot/voting/actors.py:28
 vote-option-unavailable = That option is not available on this vote.
 
-# squid/bot/voting/actors.py:29
+# squid/bot/voting/actors.py:30
 vote-poll-action-permission-denied = Only the poll creator or staff can do that.
 
 # squid/bot/settings/vote_emoji_editor.py:81
@@ -6438,13 +6450,13 @@ vote-rows-save = Save emojis
 # squid/bot/settings/vote_emoji_editor.py:61
 vote-rows-title = Vote emojis
 
-# squid/bot/voting/actors.py:28
+# squid/bot/voting/actors.py:29
 vote-server-mismatch = That vote belongs to a different server.
 
-# squid/bot/voting/cog.py:117
+# squid/bot/voting/cog.py:119
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 
-# squid/bot/voting/controls.py:83
+# squid/bot/voting/controls.py:88
 vote-unresolved-voter-cache-retained = { $count } voter(s) could not be resolved, so their cached weight was kept.
 
 # squid/core/voting/errors.py:34

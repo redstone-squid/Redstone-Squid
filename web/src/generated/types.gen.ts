@@ -2386,6 +2386,7 @@ export type VotePollSummary = {
     visibility: VoteVisibility;
     scope: PollScope;
     deadline: string;
+    voting_ended_at: string | null;
 };
 
 /**
@@ -2417,7 +2418,7 @@ export type VoteSessionResult = 'approved' | 'denied' | 'cancelled' | 'pending';
  *
  * Whether a session still accepts ballots.
  */
-export type VoteStatus = 'open' | 'closed';
+export type VoteStatus = 'open' | 'counting' | 'review' | 'void' | 'closed';
 
 /**
  * VoteTallies

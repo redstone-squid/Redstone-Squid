@@ -4,6 +4,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from math import isfinite
 
+import anyio
 from whenever import Instant
 
 from squid.core.actors import Actor
@@ -27,6 +28,7 @@ from squid.core.voting.domain import (
     VoteRejection,
     VoteSelection,
     VoteSessionSnapshot,
+    VoteStatus,
     VoteVisibility,
     normalize_vote_options,
 )
@@ -35,6 +37,9 @@ from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
+
+
+type FinalRecount = Callable[[int, int], Awaitable[tuple[bool, tuple[int, ...]]]]
 
 
 class VoteService:
@@ -250,6 +255,7 @@ class VoteService:
         *,
         emoji: str | None = None,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> CastVoteResult:
         """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
 
@@ -269,7 +275,12 @@ class VoteService:
         snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
-        if not snapshot.is_open:
+        if not snapshot.is_open and not (
+            count_revision is not None
+            and snapshot.poll
+            and snapshot.poll.count_revision == count_revision
+            and snapshot.status is VoteStatus.COUNTING
+        ):
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
         if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
@@ -315,7 +326,14 @@ class VoteService:
             )
         async with self._uow_factory() as uow:
             mutation = await uow.votes.cast_vote(
-                vote_session_id, account_id, actor.guild_id, option, weight, refreshed, toggle=toggle
+                vote_session_id,
+                account_id,
+                actor.guild_id,
+                option,
+                weight,
+                refreshed,
+                toggle=toggle,
+                count_revision=count_revision,
             )
             await uow.commit()
         if mutation is None:
@@ -379,7 +397,7 @@ class VoteService:
             mutation.just_closed if mutation is not None else False,
         )
 
-    async def close(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
+    async def close(self, vote_session_id: int, actor: Actor, *, recount: FinalRecount | None = None) -> CastVoteResult:
         """Refresh and close a generic poll if its author or an authorized actor requests it."""
         actor.require_account_id()
         snapshot = await self.get_session(vote_session_id)
@@ -388,54 +406,110 @@ class VoteService:
         rejection = snapshot.can_close(actor)
         if rejection is not None:
             return CastVoteResult(snapshot, rejection)
-        return await self._close(snapshot)
-
-    async def _close(self, snapshot: VoteSessionSnapshot) -> CastVoteResult:
-        """Refresh weights so the final tally is current, then close as cancelled."""
-        await self._refresh_snapshot(snapshot)
-        async with self._uow_factory() as uow:
-            mutation = await uow.votes.close(snapshot.id)
-            await uow.commit()
-        if mutation is None:
+        if not snapshot.is_open:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
-        return CastVoteResult(mutation.session, just_closed=mutation.just_closed)
+        return await self._count_and_close(snapshot, recount, actor_id=actor.account_id)
+
+    async def _count_and_close(
+        self, snapshot: VoteSessionSnapshot, recount: FinalRecount | None, *, actor_id: int | None = None
+    ) -> CastVoteResult:
+        # A worker can reclaim an interrupted count after the lease. The revision fences
+        # every ballot write and the final transition against a superseded attempt.
+        async with self._uow_factory() as uow:
+            counting = await uow.votes.transition_poll(
+                snapshot, VoteStatus.COUNTING, claim=True, retry_at=Instant.now().add(minutes=10), actor_id=actor_id
+            )
+            await uow.commit()
+        if counting is None or counting.poll is None:
+            return CastVoteResult(snapshot, VoteRejection.CLOSED)
+        unreadable = tuple(sorted({*(card.id for card in counting.messages), *counting.poll.unreadable_cards}))
+        weights: dict[int, float] = {}
+        failed = False
+        try:
+            with anyio.fail_after(8 * 60):
+                if recount is not None:
+                    _, unreadable = await recount(counting.id, counting.poll.count_revision)
+                    # A card removed from the post registry between attempts is still missing.
+                    detached = set(counting.poll.unreadable_cards).difference(card.id for card in counting.messages)
+                    unreadable = tuple(sorted(detached.union(unreadable)))
+                latest = await self.get_session(counting.id)
+                if latest is None or latest.poll is None or latest.poll.count_revision != counting.poll.count_revision:
+                    return CastVoteResult(latest, VoteRejection.CLOSED)
+                weights, _ = await self._calculate_refresh(latest)
+        except Exception:
+            logger.exception("Final count interrupted for poll %s", counting.id)
+            failed = True
+        status = VoteStatus.CLOSED
+        retry_at = None
+        if failed or unreadable:
+            status = VoteStatus.REVIEW
+            if counting.poll.count_attempts < 3 and snapshot.status is not VoteStatus.REVIEW:
+                status = VoteStatus.COUNTING
+                retry_at = Instant.now().add(minutes=1)
+        async with self._uow_factory() as uow:
+            result = await uow.votes.transition_poll(
+                counting, status, unreadable=unreadable, retry_at=retry_at, weights=weights
+            )
+            await uow.commit()
+        if result is None:
+            return CastVoteResult(snapshot, VoteRejection.CLOSED)
+        return CastVoteResult(result, just_closed=status is VoteStatus.CLOSED)
 
     async def close_due(
-        self,
-        now: Instant | None = None,
-        *,
-        recount: Callable[[int], Awaitable[object]] | None = None,
+        self, now: Instant | None = None, *, recount: FinalRecount | None = None
     ) -> Sequence[VoteSessionSnapshot]:
-        """Close all expired generic polls; safe to call repeatedly after restarts.
-
-        Args:
-            now: The time deadlines are compared with; defaults to the current time.
-            recount: Called with each due session's ID before it closes, to bring its ballots
-                up to date with its cards (see `BallotRecounter`). A failed recount is logged
-                and the poll closes anyway, so a Discord outage cannot keep it open.
-        """
-        closed: list[VoteSessionSnapshot] = []
+        """Count due polls and resume interrupted counts after their retry time."""
         async with self._uow_factory() as uow:
             due = await uow.votes.list_due(now or Instant.now())
+        closed: list[VoteSessionSnapshot] = []
         for snapshot in due:
-            if recount is not None:
-                try:
-                    await recount(snapshot.id)
-                except Exception:
-                    logger.warning(
-                        "Closing vote session %s without a final recount",
-                        snapshot.id,
-                        exc_info=True,
-                        extra={"squid.vote.session_id": snapshot.id},
-                    )
-                latest = await self.get_session(snapshot.id)
-                if latest is None or not latest.is_open:
-                    continue
-                snapshot = latest
-            result = await self._close(snapshot)
+            result = await self._count_and_close(snapshot, recount)
             if result.just_closed and result.session is not None:
                 closed.append(result.session)
         return closed
+
+    async def pending_reviews(self, guild_id: int) -> Sequence[int]:
+        async with self._uow_factory() as uow:
+            return await uow.votes.pending_reviews(guild_id)
+
+    async def review_poll(
+        self,
+        snapshot: VoteSessionSnapshot,
+        actor: Actor,
+        action: str,
+        *,
+        reason: str,
+        deadline: Instant | None = None,
+        recount: FinalRecount | None = None,
+    ) -> CastVoteResult:
+        """Apply a staff decision to the exact review revision the actor inspected."""
+        if snapshot.poll is None or snapshot.status is not VoteStatus.REVIEW:
+            return CastVoteResult(snapshot, VoteRejection.CLOSED)
+        if not snapshot.can_review_poll(actor, recount_only=action == "retry"):
+            return CastVoteResult(snapshot, VoteRejection.NOT_AUTHORIZED)
+        account = actor.require_account_id()
+        if action == "retry":
+            return await self._count_and_close(snapshot, recount, actor_id=account)
+        if not reason.strip():
+            msg = "Give a reason for this review decision."
+            raise InvalidVoteConfigurationError(msg)
+        status = {"finalize": VoteStatus.CLOSED, "reopen": VoteStatus.OPEN, "void": VoteStatus.VOID}[action]
+        if status is VoteStatus.OPEN and (deadline is None or deadline <= Instant.now()):
+            msg = "Choose a future voting deadline."
+            raise InvalidVoteConfigurationError(msg)
+        async with self._uow_factory() as uow:
+            updated = await uow.votes.transition_poll(
+                snapshot,
+                status,
+                actor_id=account,
+                deadline=deadline,
+                reason=reason,
+                unreadable=snapshot.poll.unreadable_cards if status is not VoteStatus.OPEN else (),
+            )
+            await uow.commit()
+        if updated is None:
+            return CastVoteResult(snapshot, VoteRejection.CLOSED)
+        return CastVoteResult(updated, just_closed=status is VoteStatus.CLOSED)
 
     async def configuration(self, guild_id: int, kind: VoteKind) -> VoteConfiguration:
         """Read a consistent snapshot of stored configuration, without applying defaults."""

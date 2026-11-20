@@ -73,6 +73,7 @@ class VoteRecorder(VoteService):
         *,
         emoji: str | None = None,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> CastVoteResult:
         assert emoji is None
         assert not toggle

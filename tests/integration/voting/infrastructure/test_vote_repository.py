@@ -937,3 +937,54 @@ async def test_concurrent_deletion_requests_share_one_session(
     await transact(repository, lambda uow: uow.votes.close(ids[0]), commit=True)
     await create()
     assert ids[2] == ids[0]
+
+
+async def test_review_preserves_collected_ballots_and_rejects_stale_decisions(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    session_id, _ = await seed_generic_poll(
+        async_session_factory,
+        repository,
+        question="Choose one",
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        deadline=Instant.now(),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
+        ),
+    )
+    await cast_ballot(repository, session_id, 7, "one", "1️⃣", 3)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot
+    counting = await transact(
+        repository, lambda uow: uow.votes.transition_poll(snapshot, VoteStatus.COUNTING, claim=True), commit=True
+    )
+    assert counting
+    review = await transact(
+        repository, lambda uow: uow.votes.transition_poll(counting, VoteStatus.REVIEW, unreadable=(100,)), commit=True
+    )
+    assert review
+    assert review.poll
+    assert review.poll.unreadable_cards == (100,)
+    assert await transact(repository, lambda uow: uow.votes.pending_reviews(GUILD_ID)) == [session_id]
+    assert await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True) is None
+    closed = await transact(
+        repository,
+        lambda uow: uow.votes.transition_poll(
+            review, VoteStatus.CLOSED, actor_id=7, reason="Card deleted", unreadable=(100,)
+        ),
+        commit=True,
+    )
+    assert closed
+    assert closed.poll
+    assert closed.poll.voting_ended_at == review.poll.voting_ended_at
+    assert closed.weighted_tallies() == {"one": 3}
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.votes.transition_poll(review, VoteStatus.OPEN, deadline=Instant.now().add(hours=1)),
+            commit=True,
+        )
+        is None
+    )

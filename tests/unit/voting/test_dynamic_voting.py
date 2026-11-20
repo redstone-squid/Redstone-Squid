@@ -152,6 +152,19 @@ def test_closed_poll_presentation_has_readable_outcome() -> None:
     assert "??" not in text
 
 
+@pytest.mark.parametrize(("minutes_late", "show_scheduled"), [(14, False), (15, True)])
+def test_closed_poll_shows_scheduled_time_only_after_significant_drift(minutes_late: int, show_scheduled: bool) -> None:
+    snapshot = poll_snapshot(status=VoteStatus.CLOSED)
+    assert snapshot.poll is not None
+    poll = replace(snapshot.poll, voting_ended_at=snapshot.poll.deadline.add(minutes=minutes_late))
+    payload = render_generic_poll(replace(snapshot, poll=poll))
+    text = "\n".join(
+        child.content for child in payload.layout.walk_children() if isinstance(child, discord.ui.TextDisplay)
+    )
+    assert "Closed <t:" in text
+    assert ("Scheduled for" in text) == show_scheduled
+
+
 def test_hidden_poll_presentation_omits_every_tally_value() -> None:
     snapshot = poll_snapshot(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,

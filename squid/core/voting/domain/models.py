@@ -20,7 +20,7 @@ from math import isfinite
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
+from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
 from squid.core.scores import round_score
 from squid.core.voting.errors import InvalidVoteConfigurationError
 
@@ -44,6 +44,9 @@ class VoteStatus(StrEnum):
     """Whether a session still accepts ballots."""
 
     OPEN = "open"
+    COUNTING = "counting"
+    REVIEW = "review"
+    VOID = "void"
     CLOSED = "closed"
 
 
@@ -194,10 +197,11 @@ class GenericPoll:
     deadline: Instant
     guild_id: int | None = None
     scope: PollScope = PollScope.GUILD
-    """Whether publication is limited to the owning guild or spans configured vote channels.
-
-    The owning guild determines role weights even for ballots cast elsewhere.
-    """
+    voting_ended_at: Instant | None = None
+    count_revision: int = 0
+    count_attempts: int = 0
+    retry_at: Instant | None = None
+    unreadable_cards: tuple[int, ...] = ()
 
 
 def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_threshold: int | None) -> None:
@@ -314,7 +318,7 @@ class VoteSessionSnapshot:
     @property
     def shows_tallies(self) -> bool:
         """Whether current totals may be disclosed to viewers."""
-        return self.visibility is not VoteVisibility.ANONYMOUS_HIDDEN or not self.is_open
+        return self.visibility is not VoteVisibility.ANONYMOUS_HIDDEN or self.status is VoteStatus.CLOSED
 
     def should_remove_reaction_on_cast(self) -> bool:
         """Return whether the transport should remove the reaction to hide the voter's choice."""
@@ -333,6 +337,18 @@ class VoteSessionSnapshot:
         if not author and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
             return VoteRejection.NOT_AUTHORIZED
         return None
+
+    def can_review_poll(self, actor: Actor, *, recount_only: bool) -> bool:
+        if self.poll is None or actor.guild_id is None:
+            return False
+        if self.poll.guild_id is None:
+            if actor.guild_id not in {card.guild_id for card in self.messages}:
+                return False
+        elif actor.guild_id != self.poll.guild_id:
+            return False
+        return VOTE_POLL_CLOSE_ANY.name in actor.capabilities or (
+            recount_only and VOTE_POLL_RECOUNT.name in actor.capabilities
+        )
 
     def options_for_guild(self, guild_id: int) -> tuple[VoteOption, ...]:
         """Return guild-specific options, falling back to global options only when none exist."""

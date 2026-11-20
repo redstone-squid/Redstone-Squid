@@ -333,6 +333,82 @@ class VoteRepository:
         )
         return [await self._to_snapshot(session, row) for row in rows]
 
+    async def transition_poll(
+        self,
+        snapshot: VoteSessionSnapshot,
+        status: VoteStatus,
+        *,
+        retry_at: Instant | None = None,
+        unreadable: Sequence[int] = (),
+        deadline: Instant | None = None,
+        weights: dict[int, float] | None = None,
+        actor_id: int | None = None,
+        reason: str = "",
+        claim: bool = False,
+    ) -> VoteSessionSnapshot | None:
+        session = self._session()
+        row = await self._lock_session_row(session, snapshot.id)
+        poll = await session.get(GenericVoteSession, snapshot.id)
+        if (
+            row is None
+            or poll is None
+            or snapshot.poll is None
+            or row.status != snapshot.status
+            or poll.count_revision != snapshot.poll.count_revision
+        ):
+            return None
+        now = Instant.now().round("microsecond", mode="floor")
+        if weights:
+            await self._apply_refresh(session, row, weights, counting=True)
+        row.status = status
+        poll.count_revision += 1
+        poll.retry_at = retry_at
+        if claim:
+            poll.voting_ended_at = None
+            poll.count_attempts = 1 if snapshot.status is VoteStatus.REVIEW else poll.count_attempts + 1
+        else:
+            poll.unreadable_cards = list(unreadable)
+        if status in (VoteStatus.REVIEW, VoteStatus.CLOSED, VoteStatus.VOID) and poll.voting_ended_at is None:
+            poll.voting_ended_at = now
+        if deadline is not None:
+            poll.deadline = deadline
+            poll.count_attempts = 0
+            poll.voting_ended_at = None
+        if status in (VoteStatus.CLOSED, VoteStatus.VOID):
+            row.result = VoteSessionResult.CANCELLED
+        if actor_id is not None:
+            poll.review_history = [
+                *poll.review_history,
+                dict(
+                    actor=actor_id,
+                    at=str(now),
+                    status=status.value,
+                    reason=reason,
+                    prior_deadline=str(snapshot.poll.deadline),
+                    unreadable=list(snapshot.poll.unreadable_cards),
+                ),
+            ]
+        await session.flush()
+        return await self._to_snapshot(session, row)
+
+    async def pending_reviews(self, guild_id: int) -> Sequence[int]:
+        attached_in_guild = (
+            select(DiscordPost.resource_key)
+            .join(Message, Message.id == DiscordPost.message_id)
+            .where(DiscordPost.resource_kind == "vote_session", Message.guild_id == guild_id)
+        )
+        rows = await self._session().scalars(
+            select(VoteSession.id)
+            .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
+            .where(
+                VoteSession.status == VoteStatus.REVIEW,
+                (GenericVoteSession.guild_id == guild_id)
+                | (GenericVoteSession.guild_id.is_(None) & cast_sql(VoteSession.id, Text).in_(attached_in_guild)),
+            )
+            .order_by(VoteSession.id)
+        )
+        return rows.all()
+
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
         session = self._session()
         rows = (
@@ -340,7 +416,10 @@ class VoteRepository:
                 select(VoteSession)
                 .options(selectinload(VoteSession.options))
                 .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
-                .where(VoteSession.status == VoteStatus.OPEN, GenericVoteSession.deadline <= now)
+                .where(
+                    ((VoteSession.status == VoteStatus.OPEN) & (GenericVoteSession.deadline <= now))
+                    | ((VoteSession.status == VoteStatus.COUNTING) & (GenericVoteSession.retry_at <= now))
+                )
             )
         ).all()
         return [await self._to_snapshot(session, row) for row in rows]
@@ -355,6 +434,7 @@ class VoteRepository:
         refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle or replace a ballot in an open session, returning None if missing or closed.
 
@@ -365,7 +445,13 @@ class VoteRepository:
         """
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)
-        if row is None or row.status is not VoteStatus.OPEN:
+        if row is None:
+            return None
+        if count_revision is not None:
+            poll = await session.get(GenericVoteSession, vote_session_id)
+            if row.status is not VoteStatus.COUNTING or poll is None or poll.count_revision != count_revision:
+                return None
+        elif row.status is not VoteStatus.OPEN:
             return None
         await self._apply_refresh(session, row, refreshed_weights or {})
         await ensure_server_settings(session, (guild_id,))
@@ -453,11 +539,13 @@ class VoteRepository:
         )
 
     @staticmethod
-    async def _apply_refresh(session: AsyncSession, row: VoteSession, weights: dict[int, float]) -> None:
+    async def _apply_refresh(
+        session: AsyncSession, row: VoteSession, weights: dict[int, float], *, counting: bool = False
+    ) -> None:
         """Reweigh ballots only while the locked session still accepts changes."""
         # Actor lookups happen before this lock, so a closing vote may have won
         # while the refresh was in flight. Its final tally must stay frozen.
-        if row.status is not VoteStatus.OPEN:
+        if row.status is not VoteStatus.OPEN and not (counting and row.status is VoteStatus.COUNTING):
             return
         for account_id, weight in weights.items():
             if weight <= 0:
@@ -643,7 +731,8 @@ class VoteRepository:
                 .where(
                     DiscordPost.resource_kind == "vote_session",
                     DiscordPost.resource_key == str(row.id),
-                    DiscordPost.suppressed_at.is_(None),
+                    # A deleted card is evidence of an incomplete final count.
+                    (DiscordPost.suppressed_at.is_(None) | (row.status in (VoteStatus.COUNTING, VoteStatus.REVIEW))),
                 )
                 .order_by(DiscordPost.message_id)
             )
@@ -723,5 +812,14 @@ class VoteRepository:
                 if generic is None:
                     return None, None
                 return None, GenericPoll(
-                    generic.question, generic.visibility, generic.deadline, generic.guild_id, generic.scope
+                    generic.question,
+                    generic.visibility,
+                    generic.deadline,
+                    generic.guild_id,
+                    generic.scope,
+                    generic.voting_ended_at,
+                    generic.count_revision,
+                    generic.count_attempts,
+                    generic.retry_at,
+                    tuple(generic.unreadable_cards),
                 )

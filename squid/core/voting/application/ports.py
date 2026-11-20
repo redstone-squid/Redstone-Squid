@@ -15,6 +15,7 @@ from squid.core.voting.domain import (
     VoteKind,
     VoteOption,
     VoteSessionSnapshot,
+    VoteStatus,
     VoteVisibility,
 )
 from squid.unit_of_work import UnitOfWork
@@ -136,6 +137,7 @@ class VoteRepository(Protocol):
         refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle the same option off or replace the ballot, then check thresholds.
 
@@ -161,6 +163,22 @@ class VoteRepository(Protocol):
         only a missing session returns None.
         """
         ...
+
+    async def transition_poll(
+        self,
+        snapshot: VoteSessionSnapshot,
+        status: VoteStatus,
+        *,
+        retry_at: Instant | None = None,
+        unreadable: Sequence[int] = (),
+        deadline: Instant | None = None,
+        weights: dict[int, float] | None = None,
+        actor_id: int | None = None,
+        reason: str = "",
+        claim: bool = False,
+    ) -> VoteSessionSnapshot | None: ...
+
+    async def pending_reviews(self, guild_id: int) -> Sequence[int]: ...
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]: ...
 

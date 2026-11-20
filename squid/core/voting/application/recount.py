@@ -6,22 +6,22 @@ delivered, so the stored ballots can fall behind the cards. A recount reads the 
 are actually on the cards and casts the ballots they imply.
 
 Reading every reacting user is one Discord request per hundred users per option per card, so
-recounts are not run on a timer. They run when someone asks for one and immediately before a
-session closes, so the final result reflects the cards. See
-`docs/plans/completed/discord-state-reconciliation.md`.
+ordinary recounts run on request. Final counts report unreadable cards so the caller
+can retry or request staff review before publishing a result.
 
 The recount never withdraws a ballot. A missing reaction does not show that the voter changed
 their mind: the card may be unreachable, the reactions may have been cleared, or an anonymous
 poll may have removed the reaction on purpose after storing the ballot.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
 from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.application.services import VoteService
-from squid.core.voting.domain import VoteMessage, VoteSessionSnapshot
+from squid.core.voting.domain import VoteMessage, VoteRejection, VoteSessionSnapshot, VoteStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,9 +128,25 @@ class BallotRecounter:
         Returns:
             Whether any ballot changed. Closed and unknown sessions are left alone.
         """
+        changed, _ = await self.count_cards(vote_session_id)
+        return changed
+
+    async def count_cards(
+        self, vote_session_id: int, count_revision: int | None = None
+    ) -> tuple[bool, tuple[int, ...]]:
+        """Return ballot changes and the IDs of cards whose reactions could not be read."""
         snapshot = await self._votes.get_session(vote_session_id)
-        if snapshot is None or not snapshot.is_open:
-            return False
+        if snapshot is None:
+            return False, ()
+        if count_revision is not None and (
+            snapshot.poll is None
+            or snapshot.poll.count_revision != count_revision
+            or snapshot.status is not VoteStatus.COUNTING
+        ):
+            return False, ()
+        if not snapshot.is_open and count_revision is None:
+            return False, ()
+        unreadable: list[int] = []
 
         # Read every reachable card.
         cards: list[tuple[VoteMessage, tuple[str, ...], CardReactions]] = []
@@ -138,8 +154,15 @@ class BallotRecounter:
         for card in snapshot.messages:
             options = snapshot.options_for_guild(card.guild_id)
             emojis = tuple(option.emoji for option in options)
-            reactions = await self._cards.read(card, emojis)
+            try:
+                reactions = await self._cards.read(card, emojis)
+            except Exception:
+                if count_revision is None:
+                    raise
+                logging.getLogger(__name__).exception("Could not read vote card %s", card.id)
+                reactions = None
             if reactions is None:
+                unreadable.append(card.id)
                 continue
             cards.append((card, emojis, reactions))
             for option in options:
@@ -155,7 +178,7 @@ class BallotRecounter:
         # Cast one ballot per account and tidy its reactions.
         changed = False
         for account_id, reactions_for_account in observed.items():
-            ballot = await self._apply(snapshot, account_id, reactions_for_account)
+            ballot = await self._apply(snapshot, account_id, reactions_for_account, count_revision)
             changed = changed or ballot.changed
             if ballot.unresolved:
                 continue
@@ -168,10 +191,14 @@ class BallotRecounter:
             for emoji in emojis:
                 if emoji not in reactions.own:
                     await self._cards.add_own(card, emoji)
-        return changed
+        return changed, tuple(unreadable)
 
     async def _apply(
-        self, snapshot: VoteSessionSnapshot, account_id: int, reactions: Sequence[_ObservedReaction]
+        self,
+        snapshot: VoteSessionSnapshot,
+        account_id: int,
+        reactions: Sequence[_ObservedReaction],
+        count_revision: int | None,
     ) -> _Ballot:
         """Cast the ballot these reactions imply, unless the stored one already matches."""
         selection = snapshot.selection_for(account_id)
@@ -186,7 +213,11 @@ class BallotRecounter:
             # Discord could not confirm the voter's membership, so eligibility is unknown.
             # Keep the reactions: in an anonymous poll they are the only record of the vote.
             return _Ballot(stored, unresolved=True)
-        result = await self._votes.cast_vote(snapshot.id, actor, desired.option_id, emoji=desired.emoji, toggle=False)
+        result = await self._votes.cast_vote(
+            snapshot.id, actor, desired.option_id, emoji=desired.emoji, toggle=False, count_revision=count_revision
+        )
+        if result.rejection is VoteRejection.CLOSED:
+            return _Ballot(stored, unresolved=True)
         if result.accepted:
             return _Ballot(desired.option_id, changed=True)
         return _Ballot(stored)

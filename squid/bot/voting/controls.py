@@ -54,14 +54,19 @@ async def close_poll(request: AppRequest) -> None:
     # Count reactions added while the bot was offline before the result is fixed. Reading
     # every voter can outlast Discord's three-second reply window, hence the deferral.
     vote_cog = cast("VoteCog | None", bot.get_cog("VoteCog"))
-    if vote_cog is not None:
-        await request.defer()
-        await vote_cog.reactions.recount(snapshot.id)
-    result = await bot.services.votes.close(snapshot.id, actor)
+    await request.defer()
+    result = await bot.services.votes.close(
+        snapshot.id, actor, recount=vote_cog.reactions.count_cards if vote_cog else None
+    )
     if result.rejection is not None or result.session is None:
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
+    if not result.just_closed:
+        await request.respond(
+            text_node(tr(t"poll-final-count-pending = The final count is pending.")), audience="personal"
+        )
+        return
     await request.respond(text_node(tr(t"bot-voting-controls-poll-closed = Poll closed.")), audience="personal")
 
 

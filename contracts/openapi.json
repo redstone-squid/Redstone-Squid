@@ -26728,6 +26728,17 @@
           "deadline": {
             "type": "string",
             "format": "date-time"
+          },
+          "voting_ended_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -26735,7 +26746,8 @@
           "deadline",
           "question",
           "scope",
-          "visibility"
+          "visibility",
+          "voting_ended_at"
         ],
         "title": "VotePollSummary"
       },
@@ -26851,6 +26863,9 @@
         "type": "string",
         "enum": [
           "open",
+          "counting",
+          "review",
+          "void",
           "closed"
         ],
         "title": "VoteStatus",

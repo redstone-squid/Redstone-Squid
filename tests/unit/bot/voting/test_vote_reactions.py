@@ -221,6 +221,7 @@ class Votes(VoteService):
         *,
         emoji: str | None = None,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> CastVoteResult:
         assert vote_session_id == self.snapshot.id
         if self.failure is not None:
@@ -355,6 +356,15 @@ async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: Reacti
     assert reactions.votes.casts == [(Actor(account_id=7, discord_user_id=70, guild_id=10), "one", "1️⃣")] * 2
     assert reactions.refreshes == [("vote_session", "1")] * 2
     assert reactions.permissions.subjects == [Actor(account_id=7, discord_user_id=70, guild_id=10)] * 2
+
+
+async def test_reacting_again_then_removing_withdraws_a_stored_public_ballot(reactions: ReactionHarness) -> None:
+    reactions.selected()
+    async with reactions.running():
+        await reactions.bot.reactions.dispatch_add(reactions.event().payload)
+        await reactions.bot.reactions.dispatch_remove(reactions.event("REACTION_REMOVE").payload)
+        await reactions.bot.reactions.close()
+    assert len(reactions.votes.casts) == 1
 
 
 async def test_anonymous_reaction_is_removed_only_after_commit(reactions: ReactionHarness) -> None:

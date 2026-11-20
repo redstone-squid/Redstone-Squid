@@ -180,6 +180,7 @@ class FakeVoteRepository:
         refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
         self.cast_calls.append(
             CastVoteCall(
@@ -202,6 +203,38 @@ class FakeVoteRepository:
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
         return self.mutation
+
+    async def transition_poll(
+        self,
+        snapshot: VoteSessionSnapshot,
+        status: VoteStatus,
+        *,
+        retry_at: Instant | None = None,
+        unreadable: Sequence[int] = (),
+        deadline: Instant | None = None,
+        weights: dict[int, float] | None = None,
+        actor_id: int | None = None,
+        reason: str = "",
+        claim: bool = False,
+    ) -> VoteSessionSnapshot | None:
+        if self.session != snapshot or snapshot.poll is None:
+            return None
+        poll = snapshot.poll
+        self.session = replace(
+            snapshot,
+            status=status,
+            poll=replace(
+                poll,
+                count_revision=poll.count_revision + 1,
+                count_attempts=poll.count_attempts + int(claim),
+                unreadable_cards=tuple(unreadable),
+                retry_at=retry_at,
+            ),
+        )
+        return self.session
+
+    async def pending_reviews(self, guild_id: int) -> Sequence[int]:
+        return []
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
         return self.due
@@ -712,7 +745,11 @@ async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability()
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     stranger = await service.close(12, Actor(account_id=8, discord_user_id=80, guild_id=10))
-    creator = await service.close(12, Actor(account_id=7, discord_user_id=70, guild_id=10))
+
+    async def recount(session: int, revision: int) -> tuple[bool, tuple[int, ...]]:
+        return False, ()
+
+    creator = await service.close(12, Actor(account_id=7, discord_user_id=70, guild_id=10), recount=recount)
 
     assert stranger.rejection is VoteRejection.NOT_AUTHORIZED
     assert creator.accepted
@@ -961,7 +998,7 @@ async def test_a_network_poll_records_its_scope() -> None:
 
 
 @pytest.mark.parametrize("recount_fails", [False, True])
-async def test_a_due_poll_is_recounted_before_it_closes_even_if_the_recount_fails(recount_fails: bool) -> None:
+async def test_a_due_poll_is_recounted_before_it_closes_only_if_the_recount_succeeds(recount_fails: bool) -> None:
     selections = (VoteSelection(account_id=7, guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
     poll = replace(poll_snapshot(guild_id=77), selections=selections)
     repository = FakeVoteRepository(poll)
@@ -971,17 +1008,18 @@ async def test_a_due_poll_is_recounted_before_it_closes_even_if_the_recount_fail
     service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
     recounted: list[int] = []
 
-    async def recount(vote_session_id: int) -> bool:
+    async def recount(vote_session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
         assert resolver.calls == []
         recounted.append(vote_session_id)
         if recount_fails:
             raise RuntimeError("Discord is down")
-        return True
+        return False, ()
 
     await service.close_due(recount=recount)
 
     assert recounted == [poll.id]
-    assert resolver.calls == [(7, 77)]
+    assert repository.session is not None
+    assert repository.session.status is (VoteStatus.COUNTING if recount_fails else VoteStatus.CLOSED)
 
 
 async def test_an_unlinked_discord_actor_cannot_cast_or_close_a_vote() -> None:
@@ -1010,3 +1048,64 @@ async def test_owner_guild_fallback_clears_all_membership_authority() -> None:
     )
     weighted = await service._weight_actor(actor, shared_snapshot(), OWNER_GUILD_ID)
     assert weighted == Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID)
+
+
+async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_ballots() -> None:
+    poll = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
+    repository = FakeVoteRepository(poll)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    attempts: list[int] = []
+
+    async def recount(session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
+        attempts.append(revision)
+        return False, (100,)
+
+    for _ in range(3):
+        assert repository.session is not None
+        repository.due = [repository.session]
+        assert not await service.close_due(recount=recount)
+
+    review = repository.session
+    assert review
+    assert review.poll
+    assert review.status is VoteStatus.REVIEW
+    assert review.poll.unreadable_cards == (100,)
+    manager = Actor(account_id=7, discord_user_id=70, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
+    recount_staff = replace(manager, capabilities=frozenset({"vote.poll.recount"}))
+    refused = await service.review_poll(review, recount_staff, "finalize", reason="Accept collected ballots")
+    assert refused.rejection is VoteRejection.NOT_AUTHORIZED
+    result = await service.review_poll(review, manager, "finalize", reason="Card deleted", recount=recount)
+    assert result.just_closed
+    assert result.session
+    assert result.session.status is VoteStatus.CLOSED
+    assert len(set(attempts)) == 3
+    stale = await service.review_poll(review, manager, "void", reason="Old preview")
+    assert stale.rejection is VoteRejection.CLOSED
+
+
+@pytest.mark.parametrize(("action", "status"), [("reopen", VoteStatus.OPEN), ("void", VoteStatus.VOID)])
+async def test_manager_can_resolve_a_paused_poll_without_recounting(action: str, status: VoteStatus) -> None:
+    snapshot = poll_snapshot(status=VoteStatus.REVIEW)
+    repository = FakeVoteRepository(snapshot)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    manager = Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
+    deadline = Instant.now().add(hours=1) if action == "reopen" else None
+    result = await service.review_poll(snapshot, manager, action, reason="Missing vote card", deadline=deadline)
+    assert result.session is not None
+    assert result.session.status is status
+
+
+async def test_retry_permission_can_read_current_cards_and_seal_a_complete_recount() -> None:
+    snapshot = poll_snapshot(status=VoteStatus.REVIEW, messages=(VoteMessage(100, 200, 10),))
+    repository = FakeVoteRepository(snapshot)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    staff = Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.recount"}))
+    reads = []
+
+    async def recount(session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
+        reads.append(session_id)
+        return False, ()
+
+    result = await service.review_poll(snapshot, staff, "retry", reason="", recount=recount)
+    assert reads == [snapshot.id]
+    assert result.just_closed

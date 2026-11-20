@@ -45,6 +45,7 @@ class Votes(VoteService):
         *,
         emoji: str | None = None,
         toggle: bool = True,
+        count_revision: int | None = None,
     ) -> CastVoteResult:
         self.casts.append((actor.require_account_id(), option_id, emoji, toggle))
         return CastVoteResult(self.snapshot, self.rejection)

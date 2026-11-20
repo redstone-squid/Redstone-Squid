@@ -466,6 +466,11 @@ VOTE_POLL_NETWORK_CREATE = _b.node(
     NodeScope.GUILD,
     tr(t"permissions-create-poll-carded = Create a poll carded in every server's vote channel."),
 )
+VOTE_POLL_RECOUNT = _b.node(
+    "vote.poll.recount",
+    NodeScope.GUILD,
+    tr(t"permissions-review-poll-recount = Inspect and retry an incomplete final poll count."),
+)
 VOTE_POLL_CLOSE_ANY = _b.node(
     "vote.poll.close_any",
     NodeScope.GUILD,

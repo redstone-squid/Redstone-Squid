@@ -2,10 +2,11 @@
 
 import contextlib
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Self, cast, override
+from typing import TYPE_CHECKING, Literal, Self, cast, override
 
 import discord
 from discord import app_commands
+from whenever import Instant
 
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
@@ -28,7 +29,8 @@ from squid.bot.voting.spec import VotingExports, extension
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
+from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
+from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -181,6 +183,79 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         except InvalidVoteConfigurationError as error:
             return sd.Response(text_node(error.message), audience="personal")
         return PollScreen(resolve_options, publish, allow_network=allow_network, draft=draft)
+
+    @sd.command(
+        name=tr(t"command-poll-review-name = poll-review"),
+        description=tr(t"command-poll-review-help = Inspect a paused poll or confirm a review decision."),
+        defer="private",
+    )
+    @app_commands.guild_only()
+    async def poll_review(
+        self,
+        request: sd.Request[Self, BotT],
+        poll_id: int | None = None,
+        action: Literal["inspect", "retry", "finalize", "reopen", "void"] = "inspect",
+        revision: int | None = None,
+        reason: str = "",
+        duration: str = "",
+    ) -> sd.CommandResult:
+        if not isinstance(request.user, discord.Member):
+            return text_node("Use this command in the poll's server.")
+        account = await self.bot.account_ids.resolve(self.bot.services.accounts, request.user.id)
+        actor = await resolve_actor(self.bot, request.user, account_id=account or 0)
+        if poll_id is None:
+            if (
+                not account
+                or actor.guild_id is None
+                or not actor.capabilities.intersection({VOTE_POLL_CLOSE_ANY.name, VOTE_POLL_RECOUNT.name})
+            ):
+                return text_node("Poll review permission in this server is required.")
+            pending = await self.vote_service.pending_reviews(actor.guild_id)
+            ids = ", ".join(map(str, pending)) or "none"
+            return text_node(f"Polls awaiting review: {ids}")
+        snapshot = await self.vote_service.get_session(poll_id)
+        if (
+            not account
+            or snapshot is None
+            or snapshot.poll is None
+            or not snapshot.can_review_poll(actor, recount_only=action in ("inspect", "retry"))
+        ):
+            return text_node("Poll management permission in the owning server is required.")
+        poll = snapshot.poll
+        if snapshot.status is not VoteStatus.REVIEW:
+            return text_node("This poll is not awaiting review.")
+        if action == "inspect" or revision != poll.count_revision:
+            missing = ", ".join(str(card) for card in poll.unreadable_cards) or "none"
+            readable = (
+                ", ".join(
+                    f"https://discord.com/channels/{card.guild_id}/{card.channel_id}/{card.id}"
+                    for card in snapshot.messages
+                    if card.id not in poll.unreadable_cards
+                )
+                or "none"
+            )
+            tallies = (
+                ", ".join(f"{option}: {score:g}" for option, score in snapshot.weighted_tallies().items())
+                or "no ballots"
+            )
+            return text_node(
+                f"Poll {poll_id} · {poll.question}\nCollected weighted totals: {tallies}\n"
+                f"Readable cards: {readable}\nUnreadable card IDs: {missing}. Changes visible only on those cards may be absent.\n"
+                f"Confirm with revision {poll.count_revision}. Retry reads current reactions. Finalize seals "
+                "these ballots. Reopen announces a new deadline (supply duration). Void discards the result. "
+                "Supply a reason for finalize, reopen or void."
+            )
+        try:
+            deadline = Instant.now().add(seconds=parse_poll_duration(duration)) if action == "reopen" else None
+            result = await self.vote_service.review_poll(
+                snapshot, actor, action, reason=reason, deadline=deadline, recount=self.reactions.count_cards
+            )
+        except InvalidVoteConfigurationError as error:
+            return text_node(error.message)
+        if result.rejection or result.session is None:
+            return text_node("The poll changed. Inspect it again before confirming.")
+        await self.bot.refresh_posts("vote_session", str(poll_id))
+        return text_node(f"Poll {poll_id}: {result.session.status.value}.")
 
     @sd.context_menu(name=to_locale_str(tr(t"command-vote-to-delete-name = Vote to Delete")), defer="private")
     async def delete_vote_context_menu(

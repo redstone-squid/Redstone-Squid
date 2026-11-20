@@ -55,6 +55,7 @@ class VotePollSummary(BaseModel):
     scope: PollScope
     """Whether the poll accepts ballots from one server or from every server."""
     deadline: datetime
+    voting_ended_at: datetime | None
 
 
 class OwnVoteSelection(BaseModel):
@@ -127,6 +128,7 @@ class VoteSessionDetail(BaseModel):
                     visibility=poll.visibility,
                     scope=poll.scope,
                     deadline=poll.deadline.to_stdlib(),
+                    voting_ended_at=None if poll.voting_ended_at is None else poll.voting_ended_at.to_stdlib(),
                 )
             ),
             own_selection=OwnVoteSelection.from_domain(own_selection) if own_selection is not None else None,

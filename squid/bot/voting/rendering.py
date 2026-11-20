@@ -127,7 +127,7 @@ def render_generic_poll(
     to do, so its card is inert and stays readable as a record.
     """
     nodes = _generic_poll_nodes(snapshot, voter_discord_ids)
-    if snapshot.status is not VoteStatus.CLOSED:
+    if snapshot.is_open:
         nodes.append(poll_controls())
     return render_payload(nodes)
 
@@ -144,6 +144,19 @@ def _generic_poll_nodes(
     options = snapshot.options_for_guild(poll.guild_id or 0)
     nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [poll_question(poll.question)]
 
+    if snapshot.status is VoteStatus.VOID:
+        nodes.append(sl.status("Poll voided."))
+        return nodes
+    if snapshot.status in (VoteStatus.REVIEW, VoteStatus.COUNTING):
+        if snapshot.status is VoteStatus.REVIEW:
+            nodes.append(
+                sl.status(
+                    sl.md(t"Voting paused · Awaiting review. Staff can use /poll-review with poll ID {snapshot.id}.")
+                )
+            )
+        else:
+            nodes.append(sl.status("Voting paused · Counting votes"))
+        return nodes
     if show_totals:
         raw = snapshot.raw_tallies()
         weighted = snapshot.weighted_tallies()
@@ -194,6 +207,12 @@ def _generic_poll_nodes(
             if len(winners) > 1
             else f"Winner: {winners[0]}"
         )
+        if poll.voting_ended_at is not None:
+            actual = sl.timestamp(poll.voting_ended_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)
+            nodes.append(sl.note(sl.md(t"Closed {actual}.")))
+            if (poll.voting_ended_at - poll.deadline).total("minutes") >= 15:
+                scheduled = sl.timestamp(poll.deadline.to_stdlib())
+                nodes.append(sl.note(sl.md(t"Scheduled for {scheduled}.")))
         nodes.append(sl.status(sl.md(t"Poll closed — {outcome}"), emphasis=sl.semantic.Emphasis.STRONG))
     else:
         nodes.append(

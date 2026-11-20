@@ -238,6 +238,14 @@ class GenericVoteSession(Base, kw_only=True):
         StrEnumText(PollScope), nullable=False, server_default=PollScope.GUILD.value
     )
     """Whether publication is limited to the owning guild or spans configured vote channels."""
+    voting_ended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    count_revision: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    count_attempts: Mapped[int] = mapped_column(default=0, server_default=text("0"))
+    retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    unreadable_cards: Mapped[list[int]] = mapped_column(JSONB, default_factory=list, server_default=text("'[]'"))
+    review_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'")
+    )
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 

@@ -140,6 +140,8 @@ class VoteReactionHandler:
         if not recovering and not snapshot.is_anonymous and previous is not None and previous.option_id != option.id:
             await self._remove_reaction(message, previous.emoji, member)
         result, changed = await self._set_reaction_selection(snapshot, actor, emoji, selected=True)
+        if result.rejection is VoteRejection.CLOSED:
+            return
         if result.rejection is not None:
             if snapshot.should_remove_reaction_on_cast():
                 await self._remove_reaction(message, payload.emoji, member)
@@ -189,6 +191,10 @@ class VoteReactionHandler:
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
         """Restore options after any clear without inferring that stored ballots vanished."""
         await self._restore_reactions(event.payload.message_id)
+
+    async def count_cards(self, session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
+        async with self._session_locks.hold(session_id):
+            return await self._recounter.count_cards(session_id, revision)
 
     def is_recounting(self, vote_session_id: int) -> bool:
         """Return whether a recount of this session is waiting or running."""
