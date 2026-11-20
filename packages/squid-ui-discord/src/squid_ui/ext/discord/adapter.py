@@ -21,10 +21,10 @@ from squid_ui.ext.discord.primitives.nodes import RawItem
 from squid_ui.ext.discord.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.extensions import ExtensionKind
 from squid_ui.interactions.forms import FormSpec
-from squid_ui.planning.adapter import AdapterProfile, ExtensionAdapter, PreparedExtension
+from squid_ui.planning.adapter import AdapterProfile, AdapterProfileView, ExtensionAdapter, PreparedExtension
 from squid_ui.planning.composition import AtomicContract, PlanningContext, ResourceIdentity, SharedUse
 from squid_ui.planning.resources import Axis, ResourceCost
-from squid_ui.planning.target import AnyTarget
+from squid_ui.planning.target import PlanningTarget
 
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 
@@ -121,7 +121,9 @@ def _measure_native_item(node: scene.Extension, resource: object, context: Plann
 DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(DiscordAdapterCapability)
 
 
-def _plan_form(spec: FormSpec, *, target: AnyTarget, localization: Localization, strict: bool) -> DiscordFormPlan:
+def _plan_form(
+    spec: FormSpec, *, target: PlanningTarget[Any, Any, Any, Any], localization: Localization, strict: bool
+) -> DiscordFormPlan:
     require_discord_py_target(target, DiscordAdapterCapability.MODAL_FORMS, "plan a modal form")
     return plan_form(spec, localization=localization, limits=target.limits.components, strict=strict)
 
@@ -133,7 +135,7 @@ def escape_text(value: str) -> str:
     )
 
 
-DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
+DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPy27Adapter] = AdapterProfile(
     DiscordPy27Adapter,
     "discord.py",
     ">=2.7,<2.8",
@@ -143,11 +145,7 @@ DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     form_planner=_plan_form,
     escape_text=escape_text,
 )
-"""Verified discord.py 2.7 profile, annotated at the family accepted by renderer defaults.
-
-The wider annotation accommodates BasedPyright's invariant inference for the frozen
-profile. The runtime family remains DiscordPy27Adapter.
-"""
+"""Verified discord.py 2.7 profile."""
 
 
 @cache
@@ -187,7 +185,7 @@ def discord_py_adapter_profile(
 
 
 def require_discord_py_capability(
-    profile: AdapterProfile[DiscordPyAdapter], capability: DiscordAdapterCapability, operation: str
+    profile: AdapterProfileView[DiscordPyAdapter], capability: DiscordAdapterCapability, operation: str
 ) -> None:
     """Verify the selected profile and installed discord.py at an adapter boundary."""
     if capability not in profile.capabilities:
@@ -208,14 +206,12 @@ def require_discord_py_capability(
 
 
 def require_discord_py_target(
-    target: AnyTarget, capability: DiscordAdapterCapability, operation: str
-) -> AdapterProfile[DiscordPyAdapter]:
+    target: PlanningTarget[Any, Any, Any, Any], capability: DiscordAdapterCapability, operation: str
+) -> AdapterProfileView[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter
     if (
-        # Dead to the checker, because `Target.adapter` is not optional. Kept because `AnyTarget`
-        # is fully erased and one can be built by untyped code, where naming the missing profile
-        # beats letting `issubclass` raise TypeError on None.
+        # Untyped callers can supply a target without an adapter.
         profile is None  # pyright: ignore[reportUnnecessaryComparison]
         or not issubclass(profile.family, DiscordPyAdapter)
     ):
@@ -223,6 +219,6 @@ def require_discord_py_target(
         raise LayoutInvariantError(message)
     # `issubclass` on `profile.family` proves the family but cannot narrow the profile's
     # own parameter -- there is no spelling for "this generic argument is that class".
-    narrowed = cast(AdapterProfile[DiscordPyAdapter], profile)
+    narrowed = cast(AdapterProfileView[DiscordPyAdapter], profile)
     require_discord_py_capability(narrowed, capability, operation)
     return narrowed

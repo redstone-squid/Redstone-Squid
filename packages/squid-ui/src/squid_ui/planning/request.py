@@ -15,7 +15,7 @@ from squid_ui.planning.composition import OccurrenceId
 from squid_ui.planning.identity import FingerprintCache
 from squid_ui.planning.pagination.navigation import PlannedNav
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
-from squid_ui.planning.target import Target
+from squid_ui.planning.target import PlanningTarget
 from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
@@ -118,7 +118,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     Caches are supplied separately because their contents outlive this call.
     """
 
-    target: Target[Any, BodyT, RenderTargetT, AdapterT]
+    target: PlanningTarget[Any, BodyT, RenderTargetT, AdapterT]
     chrome: Chrome = DEFAULT_CHROME
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE

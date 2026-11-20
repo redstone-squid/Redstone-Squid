@@ -26,7 +26,7 @@ from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.limits import LIMITS
 from squid_ui.ext.discord.messages.payload import MessageMode, MessagePayload, message_mode
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterProfileView
 from squid_ui.profiling import OperationRecorder
 
 _logger = logging.getLogger(__name__)
@@ -507,7 +507,7 @@ def reply_to(
     ephemeral: bool = False,
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
-    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> MessageDestination:
     """Create a destination that replies through the invoking command context.
 
@@ -604,7 +604,7 @@ def respond_to(
     wait: bool = False,
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
-    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     complete_deferred: bool = False,
 ) -> MessageDestination:
     """Create an interaction destination for an initial response or a follow-up.

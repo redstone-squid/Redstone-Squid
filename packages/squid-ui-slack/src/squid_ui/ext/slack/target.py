@@ -1,7 +1,5 @@
 """Slack Block Kit targets bound to the verified Slack SDK adapter."""
 
-from typing import overload
-
 from squid_ui.ext.slack import scene
 from squid_ui.ext.slack.adapter import SLACK_SDK_343_ADAPTER
 from squid_ui.ext.slack.protocol import (
@@ -26,81 +24,24 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 
 
-@overload
-def message(
-    *, limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS
-) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdk343Adapter]: ...
-
-
-@overload
-def message[ProfileT: SlackSdkAdapter](
-    *, adapter: AdapterProfile[ProfileT], limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS
-) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, ProfileT]: ...
-
-
-def message[ProfileT: SlackSdkAdapter](
-    *,
-    adapter: AdapterProfile[ProfileT] | None = None,
-    limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS,
-) -> (
-    Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, ProfileT]
-    | Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdk343Adapter]
-):
+def message[ProfileT: SlackSdkAdapter = SlackSdk343Adapter](
+    *, adapter: AdapterProfile[ProfileT] = SLACK_SDK_343_ADAPTER, limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS
+) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, ProfileT]:
     """A Slack Block Kit message target realized by the Slack SDK."""
-    if adapter is None:
-        return message_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return message_target(adapter=adapter, limits=limits)
 
 
-@overload
-def modal(
-    *, limits: SlackModalLimits = SLACK_MODAL_LIMITS
-) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdk343Adapter]: ...
-
-
-@overload
-def modal[ProfileT: SlackSdkAdapter](
-    *, adapter: AdapterProfile[ProfileT], limits: SlackModalLimits = SLACK_MODAL_LIMITS
-) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, ProfileT]: ...
-
-
-def modal[ProfileT: SlackSdkAdapter](
-    *,
-    adapter: AdapterProfile[ProfileT] | None = None,
-    limits: SlackModalLimits = SLACK_MODAL_LIMITS,
-) -> (
-    Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, ProfileT]
-    | Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdk343Adapter]
-):
+def modal[ProfileT: SlackSdkAdapter = SlackSdk343Adapter](
+    *, adapter: AdapterProfile[ProfileT] = SLACK_SDK_343_ADAPTER, limits: SlackModalLimits = SLACK_MODAL_LIMITS
+) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, ProfileT]:
     """A Slack Block Kit modal target realized by the Slack SDK."""
-    if adapter is None:
-        return modal_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return modal_target(adapter=adapter, limits=limits)
 
 
-@overload
-def home(
-    *, limits: SlackHomeLimits = SLACK_HOME_LIMITS
-) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdk343Adapter]: ...
-
-
-@overload
-def home[ProfileT: SlackSdkAdapter](
-    *, adapter: AdapterProfile[ProfileT], limits: SlackHomeLimits = SLACK_HOME_LIMITS
-) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, ProfileT]: ...
-
-
-def home[ProfileT: SlackSdkAdapter](
-    *,
-    adapter: AdapterProfile[ProfileT] | None = None,
-    limits: SlackHomeLimits = SLACK_HOME_LIMITS,
-) -> (
-    Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, ProfileT]
-    | Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdk343Adapter]
-):
+def home[ProfileT: SlackSdkAdapter = SlackSdk343Adapter](
+    *, adapter: AdapterProfile[ProfileT] = SLACK_SDK_343_ADAPTER, limits: SlackHomeLimits = SLACK_HOME_LIMITS
+) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, ProfileT]:
     """A Slack App Home target realized by the Slack SDK."""
-    if adapter is None:
-        return home_target(adapter=SLACK_SDK_343_ADAPTER, limits=limits)
     return home_target(adapter=adapter, limits=limits)
 
 

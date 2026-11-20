@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Self, overload
+from typing import Self
 
 from squid_ui.authoring.document import DocumentLike
 from squid_ui.capabilities import Capability
@@ -80,19 +80,9 @@ HTML_ADAPTER = AdapterProfile(
 )
 
 
-@overload
-def target() -> Target[HtmlLimits, scene.HtmlBody, HtmlTarget, HtmlAdapter]: ...
-
-
-@overload
-def target[AdapterT: HtmlAdapter](
-    *, adapter: AdapterProfile[AdapterT]
-) -> Target[HtmlLimits, scene.HtmlBody, HtmlTarget, AdapterT]: ...
-
-
-def target(
-    *, adapter: AdapterProfile[HtmlAdapter] = HTML_ADAPTER
-) -> Target[HtmlLimits, scene.HtmlBody, HtmlTarget, HtmlAdapter]:
+def target[ProfileT: HtmlAdapter = HtmlAdapter](
+    *, adapter: AdapterProfile[ProfileT] = HTML_ADAPTER
+) -> Target[HtmlLimits, scene.HtmlBody, HtmlTarget, ProfileT]:
     """Return a semantic HTML target realized by the selected HTML adapter."""
     return Target(HTML_DIALECT, adapter, HTML_LIMITS)
 

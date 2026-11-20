@@ -16,11 +16,11 @@ reader is using them. Messages merge again only when an anchor's child disappear
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from itertools import pairwise, product
-from typing import Any, cast
+from typing import Any
 
 from squid_ui import scene
-from squid_ui.authoring.document import Document, DocumentLike, PortableDocumentLike, as_document
-from squid_ui.authoring.semantic import KeepWithNext
+from squid_ui.authoring.document import Document, DocumentLike, as_document
+from squid_ui.authoring.semantic import KeepWithNext, LayoutNode
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan_request
@@ -28,6 +28,7 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanResult
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.presentation_state import ActivePagers, RegionLayoutState, RegionLayoutUpdate, RetainedCompositionUpdate
+from squid_ui.target_types import RenderTarget
 
 # Planning failures that a smaller document could avoid. An overflow can also come from
 # one oversized child; cutting cannot help then, and the original error is raised.
@@ -263,8 +264,8 @@ class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
         )
 
 
-def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
+def plan_spread[RenderTargetT: RenderTarget, AdapterT, BodyT: scene.Body](
+    rendered: DocumentLike[RenderTargetT] | LayoutNode | Sequence[LayoutNode],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
     max_messages: int,
@@ -294,7 +295,7 @@ def plan_spread[RenderTargetT, AdapterT, BodyT: scene.Body](
     if max_messages < 1:
         message = "max_messages must be at least 1"
         raise ValueError(message)
-    document = as_document(cast(DocumentLike[RenderTargetT], rendered))
+    document = as_document(rendered)
     search = _Search(document, request, cache)
     if max_messages > 1 and (cuts := search.retained(retained)) is not None:
         return search.spread(cuts)

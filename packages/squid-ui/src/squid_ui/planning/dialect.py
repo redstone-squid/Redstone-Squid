@@ -55,7 +55,9 @@ class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT](Pro
     @property
     def capabilities(self) -> frozenset[str]: ...
 
-    render_target: type[RenderTargetT]
+    @property
+    def render_target(self) -> type[RenderTargetT]: ...
+
     body_type: type[BodyT]
     default_limits: LimitsT
     realizes_extensions: bool

@@ -1,10 +1,10 @@
 """Public target-neutral planning dispatcher."""
 
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 from squid_ui import scene
-from squid_ui.authoring.document import DocumentLike, PortableDocumentLike
+from squid_ui.authoring.document import DocumentLike
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.pages import PagePosition
@@ -16,14 +16,14 @@ from squid_ui.planning.request import DEFAULT_SEARCH_BUDGET, CompositionOptions,
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.result import PlanResult, prepare_bindings
 from squid_ui.planning.snapshot import PlanningSnapshot
-from squid_ui.planning.target import Target
+from squid_ui.planning.target import PlanningTarget
 from squid_ui.presentation_state import PresentationState
 
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
+    rendered: DocumentLike[RenderTargetT],
     *,
-    target: Target[Any, BodyT, RenderTargetT, AdapterT],
+    target: PlanningTarget[Any, BodyT, RenderTargetT, AdapterT],
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -78,7 +78,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
 
 
 def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
+    rendered: DocumentLike[RenderTargetT],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
     cache: PlanCache | None = None,
@@ -86,11 +86,9 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
 ) -> PlanResult[BodyT]:
     """Compile an existing request and select callbacks for the adapter's frontend."""
     if request.composition is None or isinstance(request.composition, CompositionOptions):
-        result = plan_composition(
-            cast(DocumentLike[RenderTargetT], rendered), request, request.composition, cache=cache, snapshot=snapshot
-        )
+        result = plan_composition(rendered, request, request.composition, cache=cache, snapshot=snapshot)
     else:
-        result = request.composition.plan(cast(DocumentLike[RenderTargetT], rendered), request)
+        result = request.composition.plan(rendered, request)
     # Automatic composition prepares every reachable output inside its work
     # allowance. Cursor selection must not leave other pages with raw handlers.
     return (

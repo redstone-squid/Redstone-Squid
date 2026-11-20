@@ -38,7 +38,7 @@ from squid_ui.ext.discord.rendering.controls import (
 )
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterProfileView
 from squid_ui.planning.result import PlanResult
 
 type Accessory = (
@@ -251,7 +251,7 @@ class V2Renderer:
         limits: V2Limits = LIMITS,
         audit: bool = True,
         view_factory: ViewFactory = StaticView,
-        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+        adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
         cache: RenderProgramCache | None = None,
     ) -> None:
         require_discord_py_capability(adapter, DiscordAdapterCapability.RENDER_V2, "render Components V2")

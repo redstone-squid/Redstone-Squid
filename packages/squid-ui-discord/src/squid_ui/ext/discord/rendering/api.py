@@ -21,7 +21,7 @@ from squid_ui.ext.discord.messages.payload import MessageModeError, MessagePaylo
 from squid_ui.ext.discord.rendering.pipeline import RenderedMessage, plan_and_draw
 from squid_ui.ext.discord.rendering.v2 import V2Renderer, Wire
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
-from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPyAdapter
+from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
@@ -35,12 +35,12 @@ if TYPE_CHECKING:
     from squid_ui.ext.discord.request import Request
 
 
-def render_message(
+def render_message[ProfileT: DiscordPyAdapter = DiscordPy27Adapter](
     rendered: DocumentLike[ComponentsV2Target, Request[Any, Any]],
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
-    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, ProfileT] = DISCORD_V2_DPY27,
     cache: PlanCache | None = None,
     snapshot: PlanningSnapshot[scene.ComponentsV2] | None = None,
     profile: OperationRecorder | None = None,
@@ -60,10 +60,10 @@ def render_message(
     return RenderedMessage(payload, result)
 
 
-def render_static(
+def render_static[ProfileT: DiscordPyAdapter = DiscordPy27Adapter](
     nodes: DocumentLike[ComponentsV2Target, Request[Any, Any]] | Component[ComponentsV2Target, Request[Any, Any]],
     *,
-    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, ProfileT] = DISCORD_V2_DPY27,
     **options: Unpack[StaticPlanOptions],
 ) -> MessagePayload:
     """Render a sessionless Components V2 payload without mounting or sending it.
@@ -74,10 +74,10 @@ def render_static(
     return render_message(nodes.render() if isinstance(nodes, Component) else nodes, target=target, **options).payload
 
 
-def render_item(
+def render_item[ProfileT: DiscordPyAdapter = DiscordPy27Adapter](
     node: LayoutNode[ComponentsV2Target, Request[Any, Any]],
     *,
-    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, ProfileT] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,

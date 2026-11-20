@@ -3,14 +3,13 @@
 from enum import StrEnum
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import Protocol
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import DrawInvariantError
 from squid_ui.ext.slack.target_types import SlackSdk343Adapter, SlackSdkAdapter
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterProfile, AdapterProfileView
 
 
 class SlackAdapterCapability(StrEnum):
@@ -61,20 +60,7 @@ def slack_sdk_adapter_profile(
     return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities, frontend="slack")
 
 
-class SlackSdkProfile(Protocol):
-    """Adapter information the Slack renderer reads when checking SDK support."""
-
-    @property
-    def family(self) -> type[SlackSdkAdapter]: ...
-
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def version_expression(self) -> str: ...
-
-    @property
-    def capabilities(self) -> frozenset[str]: ...
+type SlackSdkProfile = AdapterProfileView[SlackSdkAdapter]
 
 
 def require_slack_sdk_capability(profile: SlackSdkProfile, capability: SlackAdapterCapability, operation: str) -> None:

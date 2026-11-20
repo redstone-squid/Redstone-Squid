@@ -12,7 +12,7 @@ from squid_ui.ext.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_
 from squid_ui.ext.discord.capabilities import DiscordAdapterCapability
 from squid_ui.ext.discord.messages.contracts import ErrorHook
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterProfileView
 from squid_ui.profiling import NoOpProfiler, Profiler
 from squid_ui.routing import Route, RouteTable
 
@@ -47,7 +47,7 @@ class Router[BotT: discord.Client]:
         on_error: ErrorHook | None = None,
         acknowledgement_timeout: float = 2.5,
         profiler: Profiler = _NOOP_PROFILER,
-        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+        adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
         require_discord_py_capability(adapter, DiscordAdapterCapability.DISPATCH, "dispatch routed interactions")
         namespace_group = namespace if isinstance(namespace, RouteGroup) else None

@@ -66,7 +66,7 @@ from squid_ui.ext.discord.primitives.nodes import (
 from squid_ui.ext.discord.rendering.classic import ClassicRenderer, Wire
 from squid_ui.ext.discord.rendering.pipeline import RenderedMessage, plan_and_draw
 from squid_ui.ext.discord.target import DISCORD_V1_DPY27
-from squid_ui.ext.discord.target_types import ClassicTarget, DiscordPyAdapter
+from squid_ui.ext.discord.target_types import ClassicTarget, DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.overflow import Never, Overflow
 from squid_ui.pages import PagePosition
 from squid_ui.palette import DEFAULT_PALETTE, Palette
@@ -146,12 +146,12 @@ def card(
     return Card(tuple(normalized), title, url, fields, footer, author, accent, image, thumbnail, timestamp)
 
 
-def render_message(
+def render_message[ProfileT: DiscordPyAdapter = DiscordPy27Adapter](
     rendered: DocumentLike[ClassicTarget, Request],
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
-    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
+    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, ProfileT] = DISCORD_V1_DPY27,
     cache: PlanCache | None = None,
     snapshot: PlanningSnapshot[scene.ClassicMessage] | None = None,
     profile: OperationRecorder | None = None,
@@ -171,10 +171,10 @@ def render_message(
     return RenderedMessage(payload, result)
 
 
-def render_static(
+def render_static[ProfileT: DiscordPyAdapter = DiscordPy27Adapter](
     nodes: DocumentLike[ClassicTarget, Request] | Component[ClassicTarget, Request],
     *,
-    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
+    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, ProfileT] = DISCORD_V1_DPY27,
     **options: Unpack[StaticPlanOptions],
 ) -> MessagePayload:
     """Render a sessionless classic payload without mounting or sending it.

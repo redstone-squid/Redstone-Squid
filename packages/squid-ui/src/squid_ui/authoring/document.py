@@ -30,7 +30,6 @@ type DocumentLike[RenderTargetT = RenderTarget, ContextT = object] = (
     | LayoutNode[RenderTargetT, ContextT]
     | Sequence[LayoutNode[RenderTargetT, ContextT]]
 )
-type PortableDocumentLike = DocumentLike[RenderTarget]
 
 
 def as_document[RenderTargetT, ContextT](

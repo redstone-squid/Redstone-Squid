@@ -37,7 +37,7 @@ from squid_ui.planning.result import (
 )
 from squid_ui.planning.snapshot import PlanningSnapshot
 from squid_ui.planning.spread import MessageSpread, plan_spread
-from squid_ui.planning.target import PreparedExtension, Target
+from squid_ui.planning.target import PlanningTarget, PreparedExtension, Target
 from squid_ui.target_types import Renderable, RenderTarget
 
 __all__ = [
@@ -65,6 +65,7 @@ __all__ = [
     "PlanReuse",
     "PlanSeverity",
     "PlanningSnapshot",
+    "PlanningTarget",
     "PreparedExtension",
     "RegionPolicy",
     "RenderTarget",

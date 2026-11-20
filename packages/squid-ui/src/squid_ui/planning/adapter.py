@@ -13,13 +13,15 @@ from squid_ui.scene.model import JsonValue
 if TYPE_CHECKING:
     from squid_ui.content.text import Localization
     from squid_ui.interactions.forms import FormSpec
-    from squid_ui.planning.target import AnyTarget
+    from squid_ui.planning.target import PlanningTarget
 
 
 class FormPlanner(Protocol):
     """Prepare a declared form for presentation without constructing frontend controls."""
 
-    def __call__(self, spec: FormSpec, *, target: AnyTarget, localization: Localization, strict: bool) -> object: ...
+    def __call__(
+        self, spec: FormSpec, *, target: PlanningTarget[Any, Any, Any, Any], localization: Localization, strict: bool
+    ) -> object: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +46,22 @@ class ExtensionAdapter[PayloadT, ResourceT](Protocol):
 def extension_capability(kind: str) -> str:
     """Return the shared capability name for an extension kind."""
     return f"extension.{kind}"
+
+
+class AdapterProfileView[FamilyT](Protocol):
+    """Adapter information a renderer reads when checking SDK support."""
+
+    @property
+    def family(self) -> type[FamilyT]: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def version_expression(self) -> str: ...
+
+    @property
+    def capabilities(self) -> frozenset[str]: ...
 
 
 @dataclass(frozen=True, slots=True)

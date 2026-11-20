@@ -5,6 +5,7 @@ check that their type parameters stay connected through planning. Concrete rende
 compatibility is checked separately in typing_renderers.py.
 """
 
+# pyright: reportUnnecessaryTypeIgnoreComment=true
 from typing import Any, assert_type
 
 import squid_ui.ext.html as html
@@ -65,6 +66,17 @@ assert_type(
     classic(adapter=discord_py),
     Target[ClassicLimits, discord_scene.ClassicMessage, ClassicTarget, DiscordPyAdapter],
 )
+
+
+def accepts_replaceable_target(
+    target: Target[V2Limits, discord_scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter],
+) -> None:
+    del target
+
+
+accepts_replaceable_target(v2(adapter=discord_py))
+accepts_replaceable_target(v2())  # pyright: ignore[reportArgumentType]  # The default adapter has a narrower family.
+
 assert_type(plan(Text("v2"), target=v2()), PlanResult[discord_scene.ComponentsV2])
 assert_type(plan(Text("classic"), target=classic()), PlanResult[discord_scene.ClassicMessage])
 assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[discord_scene.ComponentsV2])

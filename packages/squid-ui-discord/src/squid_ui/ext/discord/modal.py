@@ -35,7 +35,7 @@ from squid_ui.ext.discord.form_planning import _entity_defaults as _entity_defau
 from squid_ui.ext.discord.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.ext.discord.target_types import DiscordPyAdapter
 from squid_ui.interactions.forms import FormSpec, FormText, UploadedFile
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterProfileView
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ def build_modal(
     timeout: float | None = None,
     limits: ComponentLimits = COMPONENT_LIMITS,
     strict: bool = False,
-    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
     """Build a modal, truncating supported text fields to their Discord limits.
 
@@ -260,7 +260,7 @@ def build_form_modal(
     localization: Localization = NEUTRAL,
     limits: ComponentLimits = COMPONENT_LIMITS,
     strict: bool = False,
-    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    adapter: AdapterProfileView[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
     """Build native controls for a portable form schema and adapter capabilities.
 

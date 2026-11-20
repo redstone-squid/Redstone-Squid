@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, Self, TypeVar, cast
+from typing import Any, Protocol, Self
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
@@ -38,23 +38,32 @@ class TargetIdentity(Protocol):
     def capabilities(self) -> frozenset[str]: ...
 
 
-LimitsT = TypeVar("LimitsT", bound=TargetLimits)
-BodyT = TypeVar("BodyT", bound=scene.Body)
-RenderTargetT_co = TypeVar("RenderTargetT_co", covariant=True)
-AdapterT_co = TypeVar("AdapterT_co", covariant=True)
-"""Declared the old way, and covariant on purpose, in a package that otherwise uses PEP 695.
+class PlanningTarget[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, AdapterT](TargetIdentity, Protocol):
+    """Read-only target contract used by the planner and its backend."""
 
-`Target` reads its render target and adapter back out — through the `render_target` property
-and `AdapterProfile[AdapterT_co]` — so a `Target[.., ComponentsV2Target, DiscordPyAdapter]`
-must satisfy a parameter typed for the wider markers those refine. PEP 695 infers variance
-rather than letting it be declared, and there is no syntax to override the inference, so the
-old spelling is the only one that can say this. `Component` carries the mirror-image note for
-its contravariant parameter.
-"""
+    @property
+    def dialect(self) -> TargetDialect[LimitsT, BodyT, RenderTargetT]: ...
+
+    @property
+    def adapter(self) -> AdapterProfile[AdapterT]: ...
+
+    @property
+    def limits(self) -> LimitsT: ...
+
+    @property
+    def body_type(self) -> type[BodyT]: ...
+
+    @property
+    def extensions(self) -> Mapping[str, ExtensionAdapter[Any, Any]]: ...
+
+    @property
+    def capacities(self) -> Mapping[Axis, int]: ...
+
+    def reserve(self, cost: ResourceCost) -> Self: ...
 
 
 @dataclass(frozen=True, slots=True)
-class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
+class Target[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, AdapterT]:
     """Describe the display format and renderer library a layout is being planned for.
 
     The dialect defines the scene body, supported widgets, and planner backend. The
@@ -67,8 +76,8 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
     or adapter, so every planning stage sees the same remaining space.
     """
 
-    dialect: TargetDialect[LimitsT, BodyT, Any]
-    adapter: AdapterProfile[AdapterT_co]
+    dialect: TargetDialect[LimitsT, BodyT, RenderTargetT]
+    adapter: AdapterProfile[AdapterT]
     limits: LimitsT
     selected_adapter_capabilities: frozenset[str] | None = None
     """The adapter capabilities planning was frozen to, when a snapshot recorded a subset."""
@@ -102,8 +111,8 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
         return self.dialect.version
 
     @property
-    def render_target(self) -> type[RenderTargetT_co]:
-        return cast(type[RenderTargetT_co], self.dialect.render_target)
+    def render_target(self) -> type[RenderTargetT]:
+        return self.dialect.render_target
 
     @property
     def body_type(self) -> type[BodyT]:

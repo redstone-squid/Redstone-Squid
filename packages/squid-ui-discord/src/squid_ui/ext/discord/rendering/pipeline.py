@@ -92,9 +92,9 @@ def span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder 
         yield span_recorder
 
 
-def plan_and_draw[BodyT: scene.Body, RenderTargetT](
+def plan_and_draw[BodyT: scene.Body, RenderTargetT, ProfileT: DiscordPyAdapter](
     rendered: DocumentLike[RenderTargetT, Any],
-    request: PlanRequest[BodyT, RenderTargetT, DiscordPyAdapter],
+    request: PlanRequest[BodyT, RenderTargetT, ProfileT],
     *,
     drawer: MountedRenderer[BodyT],
     wire: Wire | None = None,
