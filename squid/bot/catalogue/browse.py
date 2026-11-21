@@ -2,7 +2,6 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from enum import StrEnum
 from functools import partial
 from typing import Any, Literal, Self, cast, override
 
@@ -15,7 +14,7 @@ from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE, record_brows
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.rows import build_row
 from squid.bot.catalogue.schematics.tools import SchematicTools
-from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, query_leaves, replace_clause
+from squid.bot.catalogue.search.clauses import CatalogueQuery, query_leaves
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.help import search_help
 from squid.bot.catalogue.search.labels import filter_label, sort_label
@@ -55,7 +54,6 @@ from squid.core.search.domain import RecordQuery, SearchMode, SearchRequest, Sea
 from squid.core.search.domain.query import (
     BooleanExpression,
     BooleanOperator,
-    ComparisonOperator,
     FieldExpression,
     NotExpression,
     QueryExpression,
@@ -70,10 +68,6 @@ type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Targe
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
 router = AppRoutes()
-
-
-_RECORD_TITLE_BUTTONS = (BaseTitle.SMALLEST, BaseTitle.FASTEST, BaseTitle.FIRST)
-_DEFAULT_RECORD_VERSION = VersionScope.ALL_TIME
 
 
 class _BuildSource:
@@ -625,7 +619,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         version = (
             expression.value
             if isinstance(expression, FieldExpression) and isinstance(expression.value, VersionScope)
-            else _DEFAULT_RECORD_VERSION
+            else VersionScope.ALL_TIME
         )
         return self._records.get(version)
 
@@ -725,9 +719,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._guided is not None:
             nodes.append(self._guided)
         if self._mode == "records":
-            expression = self._query.parsed.expression
-            selection = _record_filter(expression, "base_title", _RECORD_TITLE_BUTTONS)
-            titles = selection[1] if selection is not None else frozenset()
+            titles = self._query.record_titles
             nodes.extend(
                 (
                     sl.action_controls(
@@ -737,8 +729,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                                 label,
                                 partial(self._toggle_record_category, category),
                                 key=category,
-                                tone=sl.Tone.SUCCESS if category in titles else sl.Tone.NEUTRAL,
-                                available=selection is not None,
+                                tone=sl.Tone.SUCCESS if titles and category in titles else sl.Tone.NEUTRAL,
+                                available=titles is not None,
                             )
                             for category, label in (
                                 (BaseTitle.SMALLEST, tr(t"record-browser-smallest = Smallest")),
@@ -748,18 +740,17 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                         ),
                         sl.action_control(
                             tr(t"record-browser-all = All types"),
-                            self._all_types,
+                            partial(self._toggle_record_category, None),
                             key="all-standings",
-                            tone=sl.Tone.SUCCESS if selection is not None and not titles else sl.Tone.NEUTRAL,
-                            available=selection is not None,
+                            tone=sl.Tone.SUCCESS if titles == frozenset() else sl.Tone.NEUTRAL,
+                            available=titles is not None,
                         ),
                         key="record-categories",
                         display=sl.semantic.ControlDisplay.INDIVIDUAL,
                     ),
                 )
             )
-            version_filter = _record_filter(expression, "version_scope", tuple(VersionScope))
-            versions = version_filter[1] or {_DEFAULT_RECORD_VERSION} if version_filter is not None else ()
+            versions = self._query.record_versions
             nodes.append(
                 sl.action_controls(
                     *(
@@ -767,8 +758,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                             label,
                             partial(self._select_record_version, version),
                             key=version.value,
-                            tone=sl.Tone.SUCCESS if version in versions else sl.Tone.NEUTRAL,
-                            available=version_filter is not None,
+                            tone=sl.Tone.SUCCESS if versions and version in versions else sl.Tone.NEUTRAL,
+                            available=versions is not None,
                         )
                         for version, label in (
                             (VersionScope.ALL_TIME, tr(t"record-browser-all-time = All time")),
@@ -911,52 +902,16 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _search_parser(self) -> SearchQueryParser:
         return SearchQueryParser(self._search_fields, scope=self._search_scope)
 
-    async def _toggle_record_category(self, category: BaseTitle, _event: sl.PressEvent) -> None:
-        await self._edit_record_titles(category)
-
-    async def _all_types(self, _event: sl.PressEvent) -> None:
-        await self._edit_record_titles(None)
-
-    async def _edit_record_titles(self, toggle: BaseTitle | None) -> None:
-        expression = self._query.parsed.expression
-        selection = _record_filter(expression, "base_title", _RECORD_TITLE_BUTTONS)
-        if selection is None:
-            return
-        path, titles = selection
-        titles = titles ^ {toggle} if toggle is not None else frozenset()
-        parser = self._search_parser
-        field = parser.registry.resolve("base_title")
-        assert field is not None
-        clauses = tuple(FieldExpression(field, ComparisonOperator.EQUAL, title) for title in sorted(titles))
-        replacement = combine_clauses(BooleanOperator.OR, *clauses)
-        await self._edit_record_filter(path, replacement)
+    async def _toggle_record_category(self, category: BaseTitle | None, _event: sl.PressEvent) -> None:
+        await self._apply_record_filter(self._query.toggle_record_title(self._search_parser, category))
 
     async def _select_record_version(self, version: VersionScope, _event: sl.PressEvent) -> None:
-        selection = _record_filter(self._query.parsed.expression, "version_scope", tuple(VersionScope))
-        if selection is None:
-            return
-        path, versions = selection
-        if (versions or {_DEFAULT_RECORD_VERSION}) == {version}:
-            return
-        field = self._search_parser.registry.resolve("version_scope")
-        assert field is not None
-        await self._edit_record_filter(
-            path,
-            FieldExpression(field, ComparisonOperator.EQUAL, version)
-            if version is not _DEFAULT_RECORD_VERSION
-            else None,
-        )
+        await self._apply_record_filter(self._query.select_record_version(self._search_parser, version))
 
-    async def _edit_record_filter(self, path: tuple[int, ...] | None, replacement: QueryExpression | None) -> None:
-        expression = self._query.parsed.expression
-        if expression is not None and path is not None:
-            expression = replace_clause(expression, path, replacement)
-        elif expression is not None and replacement is not None:
-            expression = combine_clauses(BooleanOperator.AND, expression, replacement)
-        elif expression is None:
-            expression = replacement
-        query = self._query.with_expression(self._search_parser, expression)
-        if expression is not None or self._sort:
+    async def _apply_record_filter(self, query: CatalogueQuery | None) -> None:
+        if query is None:
+            return
+        if query.parsed.expression is not None or self._sort:
             if query != self._query:
                 await self._run_search(query, self._sort)
         else:
@@ -995,20 +950,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._results = None
             self._accept_search(query, sort)
             return
-        parsed = query.parsed
-        if isinstance(parsed, RecordQuery):
-            version_filter = _record_filter(expression, "version_scope", tuple(VersionScope))
-            if version_filter is not None and version_filter[0] is None:
-                parser = self._search_parser
-                field = parser.registry.resolve("version_scope")
-                assert field is not None
-                version_filter_clause = FieldExpression(field, ComparisonOperator.EQUAL, _DEFAULT_RECORD_VERSION)
-                effective = (
-                    combine_clauses(BooleanOperator.AND, expression, version_filter_clause)
-                    if expression is not None
-                    else version_filter_clause
-                )
-                parsed = query.with_expression(parser, effective).parsed
         request = SearchRequest(
             query.text,
             scope=self._search_scope,
@@ -1018,7 +959,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
             # One row per build, listing the records it holds, as /search shows results.
             group_by_build=True,
-            parsed_query=parsed,
+            parsed_query=query.effective_query(self._search_parser),
             anchor=focus.anchor if focus is not None else None,
         )
         page = await self._search_service.search(request)
@@ -1066,48 +1007,6 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _back(self, _event: sl.ActionEvent[Any]) -> None:
         self._selected = None
-
-
-def _record_filter[ValueT: StrEnum](
-    expression: QueryExpression | None, field: str, allowed: tuple[ValueT, ...]
-) -> tuple[tuple[int, ...] | None, frozenset[ValueT]] | None:
-    """Find the single clause or OR group that the record buttons can edit."""
-    if expression is None:
-        return None, frozenset()
-    conjuncts = (
-        tuple(((index,), clause) for index, clause in enumerate(expression.operands))
-        if isinstance(expression, BooleanExpression) and expression.operator is BooleanOperator.AND
-        else (((), expression),)
-    )
-    path = None
-    values: set[ValueT] = set()
-    for clause_path, clause in conjuncts:
-        alternatives = (
-            clause.operands
-            if isinstance(clause, BooleanExpression) and clause.operator is BooleanOperator.OR
-            else (clause,)
-        )
-        if not any(
-            isinstance(leaf, FieldExpression) and leaf.field.name == field
-            for _, item in query_leaves(clause)
-            for leaf in (item.operand if isinstance(item, NotExpression) else item,)
-        ):
-            continue
-        if path is not None:
-            return None
-        for item in alternatives:
-            if (
-                not isinstance(item, FieldExpression)
-                or item.field.name != field
-                or item.operator is not ComparisonOperator.EQUAL
-            ):
-                return None
-            value = next((value for value in allowed if value == item.value), None)
-            if value is None:
-                return None
-            values.add(value)
-        path = clause_path
-    return path, frozenset(values)
 
 
 def _query_summary(query: CatalogueQuery, *, records: bool) -> sl.TextLike:
