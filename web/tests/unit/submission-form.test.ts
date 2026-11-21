@@ -122,6 +122,12 @@ describe("submission form compatibility", () => {
     ).toThrow(SubmissionSchemaError);
   });
 
+  it("keeps protocol versions in the localized compatibility message", () => {
+    expect(() =>
+      validateSubmissionManifest(manifest({ minimum_protocol: 2, maximum_protocol: 3 }), "zh-CN"),
+    ).toThrow("此表单需要投稿协议 2 至 3。此浏览器支持版本 1。");
+  });
+
   it("rejects missing categories, repeated fields, unsupported controls, and required capabilities", () => {
     expect(() =>
       validateSubmissionManifest(manifest({ categories: manifest().categories.slice(0, 4) })),

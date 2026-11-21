@@ -39,7 +39,9 @@ export default defineConfig({
       env: {
         HOST: "127.0.0.1",
         PORT: String(APP_PORT),
-        API_BASE_URL: `http://0.0.0.0:${API_PORT}`,
+        // WebKit rejects fetches to the wildcard bind address. Use a distinct loopback host
+        // so browser tests still exercise credentialed cross-origin API requests.
+        API_BASE_URL: `http://127.0.0.2:${API_PORT}`,
         SITE_URL: "https://catalogue.redstone-squid.org",
         DISCORD_COMMUNITY_URL: "https://discord.gg/redstone",
         BOT_INVITE_URL: "https://discord.com/oauth2/authorize?client_id=fixture",

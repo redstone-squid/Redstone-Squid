@@ -42,6 +42,12 @@ describe("translations", () => {
     );
   });
 
+  it("uses the English singular only for one record holder", () => {
+    expect(translate("en", "record.holderCount", { count: 0 })).toBe("0 holders");
+    expect(translate("en", "record.holderCount", { count: 1 })).toBe("1 holder");
+    expect(translate("en", "record.holderCount", { count: 2 })).toBe("2 holders");
+  });
+
   it("translates known taxonomy and falls back to the canonical API label", () => {
     expect(translateTaxonomy("zh-CN", "fastest_smallest")).toBe("先最快，再最小");
     expect(translateTaxonomy("zh-CN", "official_seamless", "Seamless")).toBe("无缝");
