@@ -2,11 +2,26 @@ import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { FormSpecimen } from "../../src/features/workbench/FormSpecimen";
+import { translate } from "../../src/lib/i18n";
 import { Button } from "../../src/ui/react/Button";
 import { Dialog } from "../../src/ui/react/Dialog";
 import { Field } from "../../src/ui/react/Field";
 
 describe("Field composition", () => {
+  it("exposes invalid and disabled states in the workbench form", () => {
+    const { rerender } = render(<FormSpecimen locale="en" state="invalid" />);
+    const category = screen.getByRole("combobox", { name: translate("en", "trial.category") });
+    expect(category).toHaveAccessibleDescription(translate("en", "trial.required"));
+    expect(screen.getByRole("radio", { name: "Java" })).toBeChecked();
+
+    rerender(<FormSpecimen locale="en" state="disabled" />);
+    expect(category).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Java" })).toBeDisabled();
+    expect(
+      screen.getByRole("textbox", { name: translate("en", "build.description") }),
+    ).toBeDisabled();
+  });
   it("preserves external descriptions and classes alongside its own error", async () => {
     const user = userEvent.setup();
     const changed = vi.fn();
