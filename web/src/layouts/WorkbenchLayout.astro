@@ -13,6 +13,9 @@ type Props = {
   framework?: "react" | "svelte";
 };
 const { title, locale, theme, framework = "svelte" } = Astro.props;
+const query = new URLSearchParams({ lang: locale, framework, theme });
+const library =
+  Astro.url.pathname.replace(/\/$/, "") === "/design-system" ? "" : `/design-system?${query}`;
 const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
@@ -31,21 +34,20 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
     </a>
     <header class="sq-topbar">
       <a class="sq-brand" href="/">
-        <span class="sq-brand-mark" aria-hidden="true">
-          R
-        </span>{" "}
+        <img src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
-      <span class="sq-badge">{t("workbench.design-system-01")}</span>
+      <span class="sq-muted">{t("workbench.workbench")}</span>
     </header>
     <div class="sq-shell">
       <aside class="sq-sidebar">
         <p class="sq-kicker">{t("workbench.workbench")}</p>
         <nav aria-label={t("workbench.workbench")}>
-          <a href="#foundations">{t("workbench.foundations")}</a>
-          <a href="#components">{t("workbench.components")}</a>
-          <a href="#patterns">{t("workbench.page-patterns")}</a>
-          <a href="#states">{t("workbench.feedback-states")}</a>
+          <a href={`${library}#foundations`}>{t("workbench.foundations")}</a>
+          <a href={`${library}#components`}>{t("workbench.components")}</a>
+          <a href={`${library}#patterns`}>{t("workbench.page-patterns")}</a>
+          <a href={`${library}#states`}>{t("workbench.feedback-states")}</a>
+          <a href={`/design-system-trial?${query}`}>{t("trial.title")}</a>
         </nav>
         <p class="sq-sidebar-note">
           Astro + {framework === "svelte" ? "Svelte" : "React"}

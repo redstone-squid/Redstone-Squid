@@ -33,8 +33,20 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
   try {
     const page = await context.newPage();
     await page.goto("http://127.0.0.1:4321/design-system");
-    await expect(page.getByRole("heading", { name: "Built to build on." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Design system" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
+    await page.getByLabel("Variant", { exact: true }).selectOption("quiet");
+    await page.getByLabel("Size", { exact: true }).selectOption("small");
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    const preview = page.locator("#button-story").getByRole("link");
+    await expect(preview).toHaveClass(/sq-button--quiet/);
+    await expect(preview).toHaveClass(/sq-button--small/);
+    await page.getByRole("link", { name: "Dark theme", exact: true }).click();
+    await expect(preview).toHaveClass(/sq-button--quiet/);
+    await preview.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.getByRole("link", { name: "Foundations", exact: true }).click();
+    await expect(page).toHaveURL(/design-system\?.*#foundations$/);
     await page.getByRole("link", { name: "中文", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   } finally {

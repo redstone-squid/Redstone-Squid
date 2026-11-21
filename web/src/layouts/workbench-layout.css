@@ -16,15 +16,6 @@
     font-weight: 750;
     text-decoration: none;
   }
-  .sq-brand-mark {
-    display: grid;
-    place-items: center;
-    width: 2rem;
-    height: 2rem;
-    background: var(--accent);
-    color: var(--on-accent);
-    border-radius: var(--radius-sm);
-  }
   .sq-shell {
     display: grid;
     grid-template-columns: 13rem minmax(0, 1fr);
@@ -33,7 +24,13 @@
   }
   .sq-sidebar {
     padding: var(--space-7) var(--space-5);
-    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    align-self: start;
+    background: var(--surface);
+    border-radius: 0 0 var(--radius-md) 0;
+    border: 1px solid var(--border);
+    border-block-start: 0;
   }
   .sq-sidebar nav {
     display: grid;
@@ -98,7 +95,9 @@
       display: block;
     }
     .sq-sidebar {
-      border-right: 0;
+      position: static;
+      border: 0;
+      border-radius: 0;
       border-bottom: 1px solid var(--border);
       padding: var(--space-3) var(--space-4);
     }

@@ -1,0 +1,54 @@
+---
+import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
+import LinkButton from "../../ui/astro/LinkButton.astro";
+import { buttonStyles } from "../../ui/variants";
+
+type Props = { locale: Locale; framework: "react" | "svelte"; theme: "light" | "dark" };
+const { locale, framework, theme } = Astro.props;
+const t = (key: StaticMessageKey) => translate(locale, key);
+const params = Astro.url.searchParams;
+const variants = ["primary", "secondary", "quiet"] as const;
+const variant = variants.find((value) => value === params.get("variant")) ?? "primary";
+const size = params.get("size") === "small" ? "small" : "normal";
+const trial = new URLSearchParams({ lang: locale, theme, framework });
+---
+
+<div class="sq-story" id="button-story">
+  <div class="sq-story-preview">
+    <LinkButton {variant} {size} href={`/design-system-trial?${trial}`}>
+      {t("trial.title")} <span aria-hidden="true">→</span>
+    </LinkButton>
+  </div>
+  <div class="sq-story-settings">
+    <h3>{t("workbench.link-button")}</h3>
+    <form action="#button-story" method="get" class="sq-row">
+      <input type="hidden" name="lang" value={locale} />
+      <input type="hidden" name="theme" value={theme} />
+      <input type="hidden" name="framework" value={framework} />
+      <label class="sq-field">
+        {t("workbench.variant")}
+        <select class="sq-input" name="variant">
+          {variants.map((value) => (
+            <option value={value} selected={value === variant}>
+              {t(`workbench.${value}`)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label class="sq-field">
+        {t("workbench.size")}
+        <select class="sq-input" name="size">
+          {(["normal", "small"] as const).map((value) => (
+            <option value={value} selected={value === size}>
+              {t(`workbench.${value}`)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button class={buttonStyles({ size: "small" })} type="submit">
+        {t("workbench.apply")}
+      </button>
+    </form>
+    <code>{buttonStyles({ variant, size })}</code>
+  </div>
+</div>

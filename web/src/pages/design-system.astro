@@ -3,6 +3,7 @@ import { translate, type StaticMessageKey } from "../lib/i18n";
 import BuildPreview from "../features/builds/components/BuildPreview.astro";
 import "../features/workbench/workbench.css";
 import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
+import ButtonStory from "../features/workbench/ButtonStory.astro";
 import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import SvelteControls from "../features/workbench/Controls.svelte";
@@ -12,51 +13,63 @@ const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const locale = chinese ? "zh-CN" : "en";
+const preferences = (key: string, value: string) => {
+  const params = new URLSearchParams(Astro.url.searchParams);
+  params.set(key, value);
+  return `?${params}`;
+};
 const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
 <WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme} {framework}>
-  <header class="sq-page-heading">
+  <header class="sq-library-cover">
     <div>
-      <p class="sq-kicker">{t("workbench.the-foundation")}</p>
-      <h1>{t("workbench.built-to-build-on")}</h1>
-      <p class="sq-lede">{t("workbench.intro")}</p>
+      <h1>{t("workbench.page-title")}</h1>
+      <p class="sq-lede">{t("workbench.library-description")}</p>
+      <div class="sq-row">
+        <LinkButton href={preferences("lang", chinese ? "en" : "zh-CN")}>
+          {t("workbench.switch-language")}
+        </LinkButton>
+        <LinkButton href={preferences("theme", theme === "light" ? "dark" : "light")}>
+          {theme === "light" ? t("workbench.dark-theme") : t("workbench.light-theme")}
+        </LinkButton>
+      </div>
     </div>
-    <div class="sq-row">
-      <LinkButton href={`?lang=${chinese ? "en" : "zh-CN"}&theme=${theme}&framework=${framework}`}>
-        {t("workbench.switch-language")}
-      </LinkButton>
-      <LinkButton
-        href={`?lang=${locale}&theme=${theme === "light" ? "dark" : "light"}&framework=${framework}`}
-      >
-        {theme === "light" ? t("workbench.dark-theme") : t("workbench.light-theme")}
-      </LinkButton>
+    <div aria-hidden="true" class="sq-cover-art">
+      <img src="/fixtures/copper-door.svg" alt="" width="640" height="400" />
     </div>
   </header>
   <Panel
     id="foundations"
-    title={t("workbench.01-foundations")}
+    title={t("workbench.foundations")}
     description={t("workbench.foundations-description")}
   >
     <div class="sq-swatches">
       {["canvas", "surface", "accent", "success", "warning", "text"].map((token) => (
         <div>
           <div class={`sq-swatch sq-swatch--${token}`}></div>
-          <code>{token}</code>
+          <code>--{token}</code>
         </div>
       ))}
     </div>
     <div class="sq-token-footer">
-      <span>{t("workbench.system-typography-4px-spacing-scale")}</span>
-      <span>{t("workbench.light-dark-english")}</span>
+      <h3>{t("workbench.spacing")}</h3>
+      <div class="sq-ruler">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
+          <div>
+            <i style={`width:var(--space-${step})`}></i>
+            <code>--space-{step}</code>
+          </div>
+        ))}
+      </div>
     </div>
   </Panel>
   <Panel
     id="components"
-    title={t("workbench.02-components")}
+    title={t("workbench.components")}
     description={t("workbench.components-description")}
   >
-    {" "}
+    <ButtonStory {locale} {framework} {theme} />
     {framework === "svelte" ? (
       <SvelteControls client:load locale={locale} />
     ) : (
@@ -66,8 +79,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
     <div class="sq-section-heading">
       <div>
-        <p class="sq-kicker">{t("workbench.03-page-patterns")}</p>
-        <h2 id="patterns-title">{t("workbench.made-by-the-community")}</h2>
+        <h2 id="patterns-title">{t("workbench.page-patterns")}</h2>
       </div>
       <span class="sq-muted">
         {translate(locale, "workbench.build-count", { count: buildFixtures.length })}
@@ -97,7 +109,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   </section>
   <Panel
     id="states"
-    title={t("workbench.04-feedback-states")}
+    title={t("workbench.feedback-states")}
     description={t("workbench.states-description")}
   >
     <div class="sq-state-grid">

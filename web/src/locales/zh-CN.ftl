@@ -435,3 +435,15 @@ submitFlow-schematicDiscard = 移除
 submitFlow-schematicBounds = 占用范围，X × Y × Z
 submitFlow-schematicAccept = 使用此建议
 submitFlow-schematicUndetected = 未能检测类别、开口尺寸、方向或开启和关闭时间，请手动填写。
+
+workbench-link-button = 链接按钮
+workbench-variant = 样式
+workbench-size = 尺寸
+workbench-primary = 主要
+workbench-secondary = 次要
+workbench-quiet = 低调
+workbench-normal = 默认
+workbench-small = 紧凑
+workbench-apply = 应用
+workbench-library-description = 查看构建目录使用的设计变量，试用界面控件。
+workbench-spacing = 间距

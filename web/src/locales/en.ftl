@@ -438,3 +438,15 @@ submitFlow-schematicDiscard = Discard
 submitFlow-schematicBounds = occupied bounds, X × Y × Z
 submitFlow-schematicAccept = Use this suggestion
 submitFlow-schematicUndetected = Category, opening size, orientation, and opening/closing times could not be detected. Fill these in yourself.
+
+workbench-link-button = Link button
+workbench-variant = Variant
+workbench-size = Size
+workbench-primary = Primary
+workbench-secondary = Secondary
+workbench-quiet = Quiet
+workbench-normal = Default
+workbench-small = Compact
+workbench-apply = Apply
+workbench-library-description = Inspect the tokens and try the controls used across the build catalogue.
+workbench-spacing = Spacing

@@ -2,7 +2,8 @@
 
 Open `/design-system` for the component workbench. Its `lang=en|zh-CN` and
 `theme=light|dark` parameters make each review scenario directly addressable.
-The page is excluded from indexing and uses local fixture data, not live builds.
+The link button story stores its variant and size in the URL for sharing. Its
+preview opens the draft trial with the selected language, theme, and framework.
 
 `tokens.css` owns semantic colours, spacing, typography, motion, and layering.
 `base.css` owns document defaults; `components.css` owns primitive `sq-` styles.
