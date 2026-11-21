@@ -27,6 +27,7 @@ issues for the submitter to fix; the panel shows which of these happened.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 from typing import Any, Self, cast, override
@@ -95,7 +96,11 @@ type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target
 """Draws a build card exactly as posted builds are drawn; it needs the bot, which screens do not hold."""
 
 
-type _Projection = tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None]
+@dataclass(frozen=True, slots=True)
+class DraftProjection:
+    draft: StoredDraft
+    attachments: tuple[SuppliedAttachment, ...] = ()
+    result: FinalizationJobSnapshot | None = None
 
 
 class Phase(Enum):
@@ -154,10 +159,10 @@ class DraftWorkspace(sl.Reactive):
         self.render_card = render_card
         self._draft_id = draft.snapshot.id
         self._changes = changes
-        self._seed: _Projection | None = (draft, (), None)
+        self._seed: DraftProjection | None = DraftProjection(draft)
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> _Projection:
+    async def projection(self) -> DraftProjection:
         """Reload the draft when durable submission reconciliation publishes a change."""
         self._changes.watch()
         seed, self._seed = self._seed, None
@@ -168,7 +173,7 @@ class DraftWorkspace(sl.Reactive):
         state = self.projection.status
         return self._seed is not None or isinstance(state, sl.resources.Ready) or state.previous is not None
 
-    def _current(self) -> _Projection:
+    def _current(self) -> DraftProjection:
         if self._seed is not None:
             return self._seed
         state = self.projection.status
@@ -181,7 +186,7 @@ class DraftWorkspace(sl.Reactive):
 
     @property
     def draft(self) -> StoredDraft:
-        return self._current()[0]
+        return self._current().draft
 
     @property
     def category(self) -> str:
@@ -190,11 +195,11 @@ class DraftWorkspace(sl.Reactive):
     @property
     def attachments(self) -> tuple[SuppliedAttachment, ...]:
         """Files supplied to the draft, excluding discarded ones."""
-        return tuple(item for item in self._current()[1] if item.status is not IntakeStatus.DISCARDED)
+        return tuple(item for item in self._current().attachments if item.status is not IntakeStatus.DISCARDED)
 
     @property
     def result(self) -> FinalizationJobSnapshot | None:
-        return self._current()[2]
+        return self._current().result
 
     @property
     def answers(self) -> dict[str, JSONValue]:
@@ -282,12 +287,12 @@ class DraftWorkspace(sl.Reactive):
         else:
             self.projection.replace(current)
 
-    async def _read(self) -> _Projection:
+    async def _read(self) -> DraftProjection:
         actor = await self.resolve_actor()
         draft = await self.services.submission_drafts.get_accessible(self._draft_id, actor)
         attachments = await self.services.submission_intake.list(self._draft_id, actor)
         result = await self.services.submission_finalization.status(self._draft_id, actor)
-        return draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None
+        return DraftProjection(draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None)
 
     async def load_options(self, fields: Iterable[FormField]) -> None:
         """Fetch the current catalogue for each catalogue field, replacing any earlier copy."""
