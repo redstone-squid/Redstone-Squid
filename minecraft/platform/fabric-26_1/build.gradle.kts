@@ -12,7 +12,6 @@ dependencies {
     implementation(project(":platform:fabric-common"))
     // Bundle shared project modules so they need no separate installation.
     include(project(":protocol"))
-    include(project(":schematic-snapshot"))
     include(project(":core"))
     include(project(":platform:fabric-common"))
 }

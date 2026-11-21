@@ -3,6 +3,7 @@ package com.redstonesquid.minecraft.core.command
 import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.exceptions.CommandSyntaxException
+import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -87,6 +88,20 @@ class SquidCommandTreeTest {
     }
 
     @Test
+    fun `Paper selection commands are absent from the Fabric tree`() {
+        val paper = dispatcher(origin = MinecraftOrigin.PAPER) { _, _ -> 1 }
+        val fabric = dispatcher(origin = MinecraftOrigin.FABRIC) { _, _ -> 1 }
+        val paperCommands = paper.root.getChild("squid").children.map { it.name }.toSet()
+        val fabricCommands = fabric.root.getChild("squid").children.map { it.name }.toSet()
+
+        assertEquals(setOf("select", "pos1", "pos2", "selection", "server"), paperCommands - fabricCommands)
+        assertEquals(setOf("submit", "set", "unset", "cancel", "settings", "status", "link"), fabricCommands)
+        val player = TestSource(setOf("redstonesquid.submit"))
+        assertEquals(1, paper.execute("squid pos1", player))
+        assertFailsWith<CommandSyntaxException> { fabric.execute("squid pos1", player) }
+    }
+
+    @Test
     fun `draft fields and values are suggested from what the client already holds`() {
         val recorded = mutableListOf<Pair<SuggestionSlot, String?>>()
         val suggestions = SquidSuggestions<TestSource> { _, slot, field ->
@@ -147,11 +162,13 @@ class SquidCommandTreeTest {
 
     private fun dispatcher(
         suggestions: SquidSuggestions<TestSource> = noSuggestions(),
+        origin: MinecraftOrigin = MinecraftOrigin.PAPER,
         actions: CommandActions<TestSource>,
     ): CommandDispatcher<TestSource> =
         CommandDispatcher<TestSource>().also { dispatcher ->
             dispatcher.register(
                 SquidCommandTree.build(
+                    origin = origin,
                     access = CommandAccess { source, action -> action.permission in source.permissions },
                     actions = actions,
                     suggestions = suggestions,

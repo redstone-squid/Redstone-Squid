@@ -40,7 +40,7 @@ public class RedstoneSquidPaperPlugin : JavaPlugin() {
         val actions = PaperCommandActions(initialized)
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(
-                SquidCommandTree.build(PaperCommandAccess, actions).build(),
+                SquidCommandTree.build(MinecraftOrigin.PAPER, PaperCommandAccess, actions).build(),
                 "Create and edit a synchronized Redstone Squid draft",
             )
         }

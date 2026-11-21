@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
 import com.mojang.brigadier.suggestion.SuggestionProvider
+import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 
 public enum class CommandAudience {
     PLAYER,
@@ -17,14 +18,15 @@ public enum class SquidCommandAction(
     public val literal: String,
     public val permission: String,
     public val audience: CommandAudience,
+    public val paperOnly: Boolean = false,
 ) {
     SUBMIT("submit", "redstonesquid.submit", CommandAudience.PLAYER),
     SET("set", "redstonesquid.submit", CommandAudience.PLAYER),
     UNSET("unset", "redstonesquid.submit", CommandAudience.PLAYER),
-    SELECT("select", "redstonesquid.submit", CommandAudience.PLAYER),
-    POSITION_ONE("pos1", "redstonesquid.submit", CommandAudience.PLAYER),
-    POSITION_TWO("pos2", "redstonesquid.submit", CommandAudience.PLAYER),
-    SELECTION("selection", "redstonesquid.submit", CommandAudience.PLAYER),
+    SELECT("select", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
+    POSITION_ONE("pos1", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
+    POSITION_TWO("pos2", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
+    SELECTION("selection", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
     CANCEL("cancel", "redstonesquid.submit", CommandAudience.PLAYER),
     SETTINGS("settings", "redstonesquid.use", CommandAudience.PLAYER),
     STATUS("status", "redstonesquid.use", CommandAudience.PLAYER),
@@ -43,28 +45,26 @@ public fun interface CommandActions<S> {
     public fun execute(action: SquidCommandAction, context: CommandContext<S>): Int
 }
 
-/** Builds one native Brigadier tree for Paper and Fabric to register themselves. */
+/** Builds the native Brigadier tree for a Minecraft platform. */
 public object SquidCommandTree {
     public fun <S> build(
+        origin: MinecraftOrigin,
         access: CommandAccess<S>,
         actions: CommandActions<S>,
         suggestions: SquidSuggestions<S> = noSuggestions(),
     ): LiteralArgumentBuilder<S> {
         val root = LiteralArgumentBuilder.literal<S>("squid")
         SquidCommandAction.entries
-            .filter { it.audience == CommandAudience.PLAYER }
+            .filter { it.audience == CommandAudience.PLAYER && (!it.paperOnly || origin == MinecraftOrigin.PAPER) }
             .forEach { action -> root.then(playerActionNode(action, access, actions, suggestions)) }
 
-        val server = LiteralArgumentBuilder.literal<S>("server")
-            .requires { source ->
-                SquidCommandAction.entries
-                    .filter { it.audience == CommandAudience.SERVER_ADMIN }
-                    .any { access.canRun(source, it) }
-            }
-        SquidCommandAction.entries
-            .filter { it.audience == CommandAudience.SERVER_ADMIN }
-            .forEach { server.then(actionNode(it, access, actions)) }
-        root.then(server)
+        if (origin == MinecraftOrigin.PAPER) {
+            val serverActions = SquidCommandAction.entries.filter { it.audience == CommandAudience.SERVER_ADMIN }
+            val server = LiteralArgumentBuilder.literal<S>("server")
+                .requires { source -> serverActions.any { access.canRun(source, it) } }
+            serverActions.forEach { server.then(actionNode(it, access, actions)) }
+            root.then(server)
+        }
         return root
     }
 

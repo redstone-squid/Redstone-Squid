@@ -5,7 +5,6 @@ import com.mojang.brigadier.context.CommandContext
 import com.redstonesquid.minecraft.core.auth.EphemeralMinecraftSecretStore
 import com.redstonesquid.minecraft.core.command.CommandAccess
 import com.redstonesquid.minecraft.core.command.CommandActions
-import com.redstonesquid.minecraft.core.command.CommandAudience
 import com.redstonesquid.minecraft.core.command.SquidCommandAction
 import com.redstonesquid.minecraft.core.command.SquidCommandTree
 import com.redstonesquid.minecraft.core.http.BoundedJdkHttpTransport
@@ -41,7 +40,7 @@ public class RedstoneSquidFabricClient : ClientModInitializer {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             val actions: CommandActions<FabricClientCommandSource> = initialized?.let(::FabricCommandActions)
                 ?: UnavailableFabricCommandActions
-            dispatcher.register(SquidCommandTree.build(FabricCommandAccess, actions))
+            dispatcher.register(SquidCommandTree.build(MinecraftOrigin.FABRIC, CommandAccess { _, _ -> true }, actions))
         }
         ClientLifecycleEvents.CLIENT_STOPPING.register { workflow?.close() }
     }
@@ -70,11 +69,6 @@ public class RedstoneSquidFabricClient : ClientModInitializer {
         const val APPROVAL_URI_PROPERTY: String = "redstonesquid.approvalUri"
         const val APPROVAL_URI_ENV: String = "SQUID_MINECRAFT_APPROVAL_URI"
     }
-}
-
-private object FabricCommandAccess : CommandAccess<FabricClientCommandSource> {
-    override fun canRun(source: FabricClientCommandSource, action: SquidCommandAction): Boolean =
-        action.audience == CommandAudience.PLAYER
 }
 
 private class FabricCommandActions(
@@ -119,14 +113,11 @@ private class FabricCommandActions(
             SquidCommandAction.POSITION_ONE,
             SquidCommandAction.POSITION_TWO,
             SquidCommandAction.SELECTION,
-            -> notify(
-                "World capture and schematic upload are not available yet; no schematic was created.",
-            )
             SquidCommandAction.SERVER_CLAIM,
             SquidCommandAction.SERVER_STATUS,
             SquidCommandAction.SERVER_ROTATE,
             SquidCommandAction.SERVER_REVOKE,
-            -> notify("Server installation commands are unavailable in the Fabric client.")
+            -> error("Paper command registered in the Fabric client: ${action.literal}")
         }
         return 1
     }
