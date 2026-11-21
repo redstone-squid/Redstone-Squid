@@ -128,5 +128,5 @@ class NotificationSubscriptionDetail(BaseModel):
             id=subscription.id,
             kind=subscription.kind,
             subject_id=subscription.subject_id,
-            filter=None if subscription.record_filter is None else subscription.record_filter.as_dict(),
+            filter=None if subscription.record_filter is None else dict(subscription.record_filter.as_dict()),
         )
