@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import psycopg2
 import pytest
+from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -16,7 +17,6 @@ from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
-from alembic import command
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.migration_history import (
     HISTORY_TABLE,
