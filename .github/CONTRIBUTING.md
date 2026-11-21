@@ -28,7 +28,7 @@ uv run prek install       # installs the pre-commit and pre-push hooks
   changes should pass `uv run pytest --no-cov packages tests/architecture`, which is exactly what
   the release workflow runs.
 - **Types**: `just typecheck`. A clean tree reports zero errors, so any error it prints belongs
-  to your change.
+  to your change. To run CI's second checker, use `uv run --locked --no-editable basedpyright --level=error`.
 - **Formatting and linting**: ruff, enforced by the pre-commit hooks; `just lint` runs both.
 - **Screen layout**: `just ui-gallery` runs the bot's UI tests and writes every distinct Discord
   screen they render to `ui-gallery/index.html`, grouped by screen. Compare it before and after
