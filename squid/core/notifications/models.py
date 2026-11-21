@@ -1,6 +1,7 @@
 """SQLAlchemy notification preference, inbox, and delivery models."""
 
 import uuid
+from collections.abc import Mapping
 from typing import override
 
 from sqlalchemy import (
@@ -43,7 +44,9 @@ class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
     cache_ok = True
 
     @override
-    def process_bind_param(self, value: RecordSubscriptionFilter | None, dialect: Dialect) -> dict[str, object] | None:
+    def process_bind_param(
+        self, value: RecordSubscriptionFilter | None, dialect: Dialect
+    ) -> Mapping[str, object] | None:
         return None if value is None else value.as_dict()
 
     @override

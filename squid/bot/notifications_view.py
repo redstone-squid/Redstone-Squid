@@ -5,8 +5,6 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
 
-from pydantic import JsonValue
-
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
@@ -330,9 +328,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                     "create": {
                         "kind": kind.value,
                         "subject_id": None if subject_id is None else str(subject_id),
-                        "record_filter": None
-                        if record_filter is None
-                        else cast(dict[str, JsonValue], record_filter.as_dict()),
+                        "record_filter": None if record_filter is None else record_filter.as_dict(),
                     }
                 }
             ),

@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast, override
+from typing import Protocol, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue, StrictBool
@@ -185,9 +185,7 @@ class SubscriptionValues(SubscriptionTargetValues):
             id=row.id,
             kind=row.kind,
             subject_id=row.subject_id,
-            record_filter=None
-            if row.record_filter is None
-            else cast(dict[str, JsonValue], row.record_filter.as_dict()),
+            record_filter=None if row.record_filter is None else row.record_filter.as_dict(),
             enabled=row.enabled,
         )
 

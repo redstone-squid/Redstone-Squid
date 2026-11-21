@@ -18,6 +18,7 @@ from enum import StrEnum
 from typing import cast
 from uuid import UUID
 
+from pydantic import JsonValue
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, ValidationError
@@ -176,9 +177,9 @@ class TagPredicate:
             and self.value == other.value
         )
 
-    def as_dict(self) -> dict[str, object]:
+    def as_dict(self) -> dict[str, JsonValue]:
         """Return the tag ID, operator, and optional value for persistence."""
-        result: dict[str, object] = {"tag_id": self.tag_id, "operator": self.operator}
+        result: dict[str, JsonValue] = {"tag_id": self.tag_id, "operator": self.operator}
         if self.value is not None:
             result["value"] = self.value
         return result
@@ -214,17 +215,17 @@ class RecordSubscriptionFilter:
             )
         object.__setattr__(self, "tags", tuple(sorted(self.tags, key=lambda tag: tag.tag_id)))
 
-    def as_dict(self) -> dict[str, object]:
+    def as_dict(self) -> dict[str, JsonValue]:
         """Serialize the filter into a stable JSON shape."""
         return {
-            "build_kinds": sorted(self.build_kinds),
-            "base_titles": sorted(self.base_titles),
-            "version_scopes": sorted(self.version_scopes),
+            "build_kinds": [*sorted(self.build_kinds)],
+            "base_titles": [*sorted(self.base_titles)],
+            "version_scopes": [*sorted(self.version_scopes)],
             "tags": [predicate.as_dict() for predicate in self.tags],
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, object]) -> RecordSubscriptionFilter:
+    def from_dict(cls, value: Mapping[str, object]) -> RecordSubscriptionFilter:
         """Parse stored JSON, raising DataIntegrityError for invalid filter data."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):
