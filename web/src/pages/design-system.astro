@@ -4,6 +4,7 @@ import BuildPreview from "../features/builds/components/BuildPreview.astro";
 import "../features/workbench/workbench.css";
 import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
 import ButtonStory from "../features/workbench/ButtonStory.astro";
+import Badge from "../ui/astro/Badge.astro";
 import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import SvelteControls from "../features/workbench/Controls.svelte";
@@ -63,6 +64,19 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
         ))}
       </div>
     </div>
+    <details class="sq-type-specimens">
+      <summary>{t("workbench.typography")}</summary>
+      <div>
+        <div>
+          <code>--font-sans</code>
+          <p>{t("workbench.piston-door")}</p>
+        </div>
+        <div>
+          <code>--font-mono</code>
+          <p>5 × 5 × 3</p>
+        </div>
+      </div>
+    </details>
   </Panel>
   <Panel
     id="components"
@@ -114,22 +128,22 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   >
     <div class="sq-state-grid">
       <div class="sq-state">
-        <span class="sq-badge sq-badge--success">{t("workbench.confirmed")}</span>
+        <Badge tone="success">{t("workbench.confirmed")}</Badge>
         <h3>{t("workbench.ready-to-explore")}</h3>
         <p class="sq-muted">{t("workbench.confirmed-description")}</p>
       </div>
       <div class="sq-state">
-        <span class="sq-badge">{t("workbench.empty")}</span>
+        <Badge>{t("workbench.empty")}</Badge>
         <h3>{t("workbench.no-matching-builds")}</h3>
         <p class="sq-muted">{t("workbench.empty-description")}</p>
       </div>
       <div class="sq-state">
-        <span class="sq-badge sq-badge--warning">{t("workbench.unavailable")}</span>
+        <Badge tone="warning">{t("workbench.unavailable")}</Badge>
         <h3>{t("workbench.couldn-t-load-builds")}</h3>
         <p class="sq-muted">{t("workbench.unavailable-description")}</p>
       </div>
       <div class="sq-state" aria-label={t("workbench.loading-example")}>
-        <span class="sq-badge">{t("workbench.loading")}</span>
+        <Badge>{t("workbench.loading")}</Badge>
         <div class="sq-skeleton"></div>
         <div class="sq-skeleton sq-skeleton--short"></div>
         <span class="sq-muted">{t("workbench.fetching-builds")}</span>

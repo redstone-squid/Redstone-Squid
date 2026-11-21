@@ -108,6 +108,15 @@
     font-weight: 650;
     padding: var(--space-1) var(--space-2);
   }
+  :is(.sq-badge--success, .sq-badge--warning)::before {
+    content: "";
+    width: 0.45em;
+    height: 0.45em;
+    margin-inline-end: 0.5em;
+    border-radius: 50%;
+    align-self: center;
+    background: currentColor;
+  }
   .sq-badge--success {
     background: var(--success-soft);
     color: var(--success);

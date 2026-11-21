@@ -3,11 +3,9 @@
   .sq-swatches {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: var(--space-3);
   }
   .sq-swatch {
-    height: 4rem;
-    border-radius: var(--radius-sm);
+    height: clamp(3rem, 6vw, 5.5rem);
     border: 1px solid var(--border);
     margin-bottom: var(--space-2);
   }
@@ -138,15 +136,10 @@
     height: 100%;
     object-fit: cover;
   }
-  .sq-swatches {
-    gap: 0;
-  }
   .sq-swatches > div {
     min-width: 0;
   }
   .sq-swatch {
-    height: clamp(3rem, 6vw, 5.5rem);
-    border-radius: 0;
     border-inline-end: 0;
   }
   .sq-swatches > div:first-child .sq-swatch {
@@ -174,6 +167,37 @@
     height: 0.5rem;
     background: var(--accent);
     border-radius: 2px;
+  }
+  .sq-type-specimens {
+    border-top: 1px solid var(--border);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+  }
+  .sq-type-specimens summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  .sq-type-specimens > div {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+  .sq-type-specimens > div > div {
+    padding: var(--space-3);
+    background: var(--canvas);
+    border-radius: var(--radius-sm);
+  }
+  .sq-type-specimens code {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .sq-type-specimens p {
+    font-size: 1.5rem;
+  }
+  .sq-type-specimens > div > :last-child p {
+    font-family: var(--font-mono);
   }
   .sq-story {
     display: grid;
@@ -213,6 +237,7 @@
       height: 9rem;
     }
     .sq-cover-art img {
+      height: 9rem;
       object-fit: contain;
     }
     .sq-story {

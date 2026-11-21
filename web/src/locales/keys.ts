@@ -437,6 +437,7 @@ export const messageKeys = [
   "workbench.switch-language",
   "workbench.system-typography-4px-spacing-scale",
   "workbench.the-foundation",
+  "workbench.typography",
   "workbench.unavailable",
   "workbench.unavailable-description",
   "workbench.variant",

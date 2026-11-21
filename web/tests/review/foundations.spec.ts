@@ -35,8 +35,8 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
     await page.goto("http://127.0.0.1:4321/design-system");
     await expect(page.getByRole("heading", { name: "Design system" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
-    await page.getByLabel("Variant", { exact: true }).selectOption("quiet");
-    await page.getByLabel("Size", { exact: true }).selectOption("small");
+    await page.getByRole("combobox", { name: "Variant", exact: true }).selectOption("quiet");
+    await page.getByRole("combobox", { name: "Size", exact: true }).selectOption("small");
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const preview = page.locator("#button-story").getByRole("link");
     await expect(preview).toHaveClass(/sq-button--quiet/);

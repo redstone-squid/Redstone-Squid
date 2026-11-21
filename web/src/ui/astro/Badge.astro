@@ -1,0 +1,8 @@
+---
+type Props = { tone?: "neutral" | "success" | "warning" };
+const { tone = "neutral" } = Astro.props;
+---
+
+<span class:list={["sq-badge", tone !== "neutral" && `sq-badge--${tone}`]}>
+  <slot />
+</span>

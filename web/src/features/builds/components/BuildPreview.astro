@@ -1,5 +1,6 @@
 ---
 import "./build-preview.css";
+import Badge from "../../../ui/astro/Badge.astro";
 
 type Props = {
   build: {
@@ -44,7 +45,7 @@ const { build, labels, href, version, eager = false } = Astro.props;
     )}
   </div>
   <div class="sq-build-body">
-    <span class="sq-badge">{build.category}</span>
+    <Badge>{build.category}</Badge>
     <h3>{href ? <a href={href}>{build.title}</a> : build.title}</h3>
     <p class="sq-muted">{build.creator}</p>
     {version && <p class="sq-muted sq-build-version">{version}</p>}
