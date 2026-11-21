@@ -8,7 +8,6 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import (
-    BuildEmbeddingCoordinator,
     BuildLockManager,
     BuildUnitOfWork,
     DefaultVersionResolver,
@@ -29,14 +28,8 @@ from squid.unit_of_work import UnitOfWorkFactory
 class BuildService:
     """Save new builds and apply edits to existing builds.
 
-    Preparation resolves taxonomy names, fills default versions, and generates
-    an embedding before persistence. save and edit serve trusted callers;
-    apply_edit checks the requesting account's permission.
-
-    Edits prepare detached values, including embeddings, before acquiring a
-    build lease or row lock. Concurrent edits can prepare together; saving
-    reloads the build and rejects a changed revision. Authorized edits also
-    recheck the actor's permissions inside the write transaction.
+    Preparation resolves taxonomy before locking. Saving rechecks the revision
+    and permission in the write transaction.
     """
 
     def __init__(
@@ -44,7 +37,6 @@ class BuildService:
         locks: BuildLockManager,
         restrictions: RestrictionReader,
         versions: DefaultVersionResolver,
-        embeddings: BuildEmbeddingCoordinator,
         taxonomy: BuildTaxonomyResolver,
         *,
         uow_factory: UnitOfWorkFactory[BuildUnitOfWork],
@@ -54,7 +46,6 @@ class BuildService:
         self._locks = locks
         self._restrictions = restrictions
         self._versions = versions
-        self._embeddings = embeddings
         self._taxonomy = taxonomy
         self._permissions = permissions
 
@@ -86,10 +77,9 @@ class BuildService:
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
     ) -> Build:
-        """Prepare and persist a build, then update its embedding index.
+        """Prepare and persist a build.
 
-        This trusted entry point does not check permissions. Indexing happens after
-        the database commit, so an indexing failure does not undo the saved build.
+        This trusted entry point does not check permissions.
         """
         context = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
@@ -304,8 +294,7 @@ class BuildService:
         """Save prepared values within a short write scope.
 
         For existing builds, the application lease covers this scope, and
-        get_for_update holds a database row lock until commit. Embedding index
-        updates run after both locks have been released.
+        get_for_update holds a database row lock until commit.
         """
         # ORM identity columns may still be None before flush.
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -339,7 +328,6 @@ class BuildService:
                     await self.authorize_edit(actor, current, uow=uow)
                 await uow.builds.save(build)
                 await uow.commit()
-        await self._embeddings.index(build)
 
     async def _apply_patch(self, build: Build, patch: BuildEditPatch) -> None:
         """Apply a patch, including the showcase tags it cannot resolve itself, and prepare derived values."""
@@ -354,4 +342,3 @@ class BuildService:
         # last application-owned step, so the repository persists build.tags
         # verbatim and unresolvable names are recorded before anything is saved.
         await apply_build_taxonomy(build, self._taxonomy)
-        await self._embeddings.prepare(build)

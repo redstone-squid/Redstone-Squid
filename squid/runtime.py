@@ -33,6 +33,7 @@ from squid.core.diagnostics.log_capture import captured, install_log_capture
 from squid.core.edits.application import EditRunner
 from squid.core.events.application import DomainEventService
 from squid.core.events.infrastructure.listener import DomainEventWakeListener
+from squid.core.events.models import DomainEvent
 from squid.core.idempotency import IdempotencyService
 from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
 from squid.core.messages.application import MessageService
@@ -200,6 +201,7 @@ class WorkerServices:
     media_runner: MediaProcessingJobRunner | None
     media_cleanup: MediaStorageCleanup
     submission_finalization: SubmissionFinalizationWorker
+    index_build_embedding: Callable[[DomainEvent], Awaitable[None]]
     search_embeddings: SearchEmbeddingService
     refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
     record_queue_health: Callable[[], Awaitable[None]]

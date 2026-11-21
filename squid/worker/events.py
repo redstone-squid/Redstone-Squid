@@ -1,6 +1,5 @@
-"""Worker handlers and delivery retries for the core domain-event consumer."""
+"""Worker reactions for the core domain-event consumer."""
 
-import logging
 from typing import Protocol
 
 from squid.core.builds.history import BuildEditActor, HistoryOperation
@@ -9,7 +8,6 @@ from squid.core.notifications import NotificationService
 from squid.core.voting.application.services import VoteService
 from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
-logger = logging.getLogger(__name__)
 _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
     "build.submitted": frozenset({1, 2}),
     "build.confirmed": frozenset({1, 2, 3}),

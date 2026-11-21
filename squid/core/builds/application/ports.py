@@ -93,14 +93,6 @@ class BuildLockManager(Protocol):
     async def clean_stale(self, *, older_than: Instant) -> None: ...
 
 
-class BuildEmbeddingCoordinator(Protocol):
-    """Prepare and index build embeddings around relational persistence."""
-
-    async def prepare(self, build: Build) -> None: ...
-
-    async def index(self, build: Build) -> None: ...
-
-
 class DefaultVersionResolver(Protocol):
     """Resolve the default version used when a build omits compatibility."""
 

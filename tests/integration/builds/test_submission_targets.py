@@ -82,14 +82,6 @@ from tests.support.expansion import expansion_document
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
 
-class NoopEmbeddings:
-    async def prepare(self, build: Build) -> None:
-        del build
-
-    async def index(self, build: Build) -> None:
-        del build
-
-
 class NoApprovedTags:
     async def public_definitions(self) -> tuple[TagDefinition, ...]:
         return ()
@@ -303,7 +295,6 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         versions,
-        NoopEmbeddings(),
         BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         uow_factory=repository,
     )
@@ -356,7 +347,6 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
             BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             versions,
-            NoopEmbeddings(),
             BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             uow_factory=repository,
         ),
@@ -1113,7 +1103,6 @@ async def test_imported_door_with_unknown_facts_commits_and_reloads(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        NoopEmbeddings(),
         BuildTaxonomyService(uow_factory=factory),
         uow_factory=factory,
     )
@@ -1150,7 +1139,6 @@ async def test_external_links_and_separate_timings_survive_durable_finalization(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        NoopEmbeddings(),
         BuildTaxonomyService(uow_factory=factory),
         uow_factory=factory,
     )
@@ -1197,7 +1185,6 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        NoopEmbeddings(),
         BuildTaxonomyService(uow_factory=factory),
         uow_factory=factory,
     )

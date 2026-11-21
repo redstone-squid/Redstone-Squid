@@ -48,6 +48,10 @@ class OpenAIEmbeddingModel:
             await self._client.close()
 
     @property
+    def enabled(self) -> bool:
+        return self._client is not None
+
+    @property
     def model_name(self) -> str:
         """Return the provider model used to version persisted vectors."""
         return self._model
@@ -88,13 +92,19 @@ class PostgresBuildIndex:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
-    async def upsert(self, build_id: int, embedding: list[float]) -> None:
-        """Update an existing row's embedding; a missing build is left unchanged."""
+    async def fill_missing(self, build_id: int, revision: int, embedding: list[float]) -> bool:
+        """Install a vector only while the same revision still needs one."""
         if len(embedding) != EMBEDDING_DIMENSION:
             msg = f"Build embedding must contain exactly {EMBEDDING_DIMENSION} values."
             raise ValueError(msg)
         session = self._session()
-        await session.execute(update(Build).where(Build.id == build_id).values(embedding=embedding))
+        updated = await session.scalar(
+            update(Build)
+            .where(Build.id == build_id, Build.revision == revision, Build.embedding.is_(None))
+            .values(embedding=embedding)
+            .returning(Build.id)
+        )
+        return updated is not None
 
     async def find_nearest(self, embedding: list[float]) -> int | None:
         """Return the nearest vector by cosine distance, regardless of submission status.

@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 from functools import partial
-from typing import override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -10,6 +9,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.config import EMBEDDING_DIMENSION
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
@@ -40,16 +40,8 @@ from tests.support.build_edits import build_edit_session
 from tests.support.submission_targets import seed_account_and_version
 
 
-class Embeddings:
-    async def prepare(self, build: Build) -> None:
-        pass
-
-    async def index(self, build: Build) -> None:
-        raise AssertionError("The shared transaction persists its prepared vector atomically")
-
-
 async def setup(
-    sessions: async_sessionmaker[AsyncSession], embeddings: Embeddings | None = None
+    sessions: async_sessionmaker[AsyncSession],
 ) -> tuple[BuildService, EditExecutor[SqlAlchemyUnitOfWork], Actor, Build]:
     account_id = await seed_account_and_version(sessions)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
@@ -57,7 +49,6 @@ async def setup(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         VersionService(uow_factory=factory),
-        embeddings or Embeddings(),
         BuildTaxonomyService(uow_factory=factory),
         uow_factory=factory,
         permissions=PermissionService(uow_factory=factory),
@@ -168,19 +159,23 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
 
 
 async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_commit(
+    monkeypatch: pytest.MonkeyPatch,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     entered = anyio.Event()
     resume = anyio.Event()
 
-    class PausedEmbeddings(Embeddings):
-        @override
-        async def prepare(self, build: Build) -> None:
-            entered.set()
-            await resume.wait()
-
     sessions = migrated_session_factory
-    service, executor, actor, build = await setup(sessions, PausedEmbeddings())
+    service, executor, actor, build = await setup(sessions)
+    prepare = service.prepare_edit
+
+    async def pause(actor: Actor, build: Build, patch: BuildEditPatch, *, showcase_only: bool = False) -> Build:
+        result = await prepare(actor, build, patch, showcase_only=showcase_only)
+        entered.set()
+        await resume.wait()
+        return result
+
+    monkeypatch.setattr(service, "prepare_edit", pause)
     assert build.id is not None
     conflicted: list[RevisionConflictError] = []
 
@@ -357,3 +352,41 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
             ),
             actor,
         )
+
+
+async def test_build_events_and_vector_share_the_content_transaction(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    _, _, actor, build = await setup(sessions)
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    vector = [1.0] * EMBEDDING_DIMENSION
+    async with factory() as uow:
+        assert await uow.build_vectors.fill_missing(build.id, build.revision, vector)
+        await uow.commit()
+
+    async with factory() as uow, uow.builds.editing(actor=actor.require_account_id(), source="test"):
+        draft = await uow.builds.get_by_id(build.id)
+        assert draft is not None
+        draft.description = "rolled back"
+        await uow.builds.save(draft)
+
+    async with factory() as uow, uow.builds.editing(actor=actor.require_account_id(), source="test"):
+        current = await uow.builds.get_by_id(build.id)
+        assert current is not None
+        assert current.embedding is not None
+        current.description = "committed"
+        await uow.builds.save(current)
+        await uow.commit()
+
+    async with factory() as uow:
+        assert not await uow.build_vectors.fill_missing(build.id, build.revision, vector)
+        deliveries = await uow.domain_events.claim(consumer="build_embeddings", limit=10)
+        assert sorted(item.event.event_type for item in deliveries) == ["build.edited", "build.submitted"]
+        edited = next(item.event for item in deliveries if item.event.event_type == "build.edited")
+        assert edited.payload == {"revision": current.revision}
+        saved = await uow.builds.get_by_id(build.id)
+        assert saved is not None
+        assert saved.embedding is None
+        assert await uow.build_vectors.fill_missing(build.id, saved.revision, vector)
+        assert not await uow.build_vectors.fill_missing(build.id, saved.revision, vector)

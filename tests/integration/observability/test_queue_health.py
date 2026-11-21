@@ -11,6 +11,7 @@ from tests.support.unit_of_work import transact
 
 EXPECTED_QUEUES = {
     "discord_sync",
+    "domain_events.build_embeddings",
     "domain_events.core",
     "domain_events.discord",
     "record_recomputation",
@@ -33,6 +34,7 @@ async def test_every_queue_reports_including_consumers_with_no_outstanding_work(
     """A registered consumer with an empty delivery table still reports zero."""
     health = await _health(migrated_session_factory)
     assert set(health) == EXPECTED_QUEUES
+    assert health["domain_events.build_embeddings"].dead_letters == 0
     # This queue has no dead-letter state but must still report the same series.
     assert health["record_recomputation"].dead_letters == 0
 

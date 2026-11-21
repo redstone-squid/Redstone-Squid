@@ -1,6 +1,6 @@
 """Versioned build edits with the existing build audit scope.
 
-Conditional edits prepare taxonomy and embeddings before locking the build row.
+Conditional edits resolve taxonomy before locking the build row.
 Unconditional edits hold the lock throughout preparation to use the latest state.
 The final revision and permission check, audit entry, and recoverable operation
 outcome share one transaction. The row lock provides exclusion with every build
@@ -207,8 +207,6 @@ class BuildFieldsEdit:
             correlation_kind="edit_operation",
             correlation_id=str(command.operation_id),
         ):
-            # save also persists the prepared vector in PostgreSQL; no separate
-            # post-commit index write can overtake a newer build revision.
             await uow.builds.save(prepared.build)
         return (Revision(command.expected[0].target, prepared.build.revision),)
 

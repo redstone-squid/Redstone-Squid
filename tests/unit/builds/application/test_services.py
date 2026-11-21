@@ -153,22 +153,6 @@ class FakeVersions:
         return f"{edition} 1.21.0"
 
 
-class FakeEmbeddings:
-    def __init__(self, events: list[str] | None = None) -> None:
-        self.prepared: list[Build] = []
-        self.indexed: list[Build] = []
-        self.events = events
-
-    async def prepare(self, build: Build) -> None:
-        self.prepared.append(build)
-        build.embedding = [1.0, 2.0]
-
-    async def index(self, build: Build) -> None:
-        self.indexed.append(build)
-        if self.events is not None:
-            self.events.append("index")
-
-
 class FakeTaxonomyResolver:
     """Resolve configured restriction and pattern names to official tag assignments.
 
@@ -287,7 +271,6 @@ def build_service(
         locks or FakeBuildLocks(),
         FakeRestrictionRepository(),
         FakeVersions(),
-        FakeEmbeddings(),
         FakeTaxonomyResolver(),
         permissions=None if permissions is None else PermissionService(uow_factory=permission_uow_factory(permissions)),
         uow_factory=lambda: BuildScope(repository, permissions),
@@ -376,16 +359,19 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -
         )
 
 
-async def test_edit_rechecks_revision_after_preparation(existing_build: DoorBuild) -> None:
+async def test_edit_rechecks_revision_after_preparation(
+    existing_build: DoorBuild, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repository = FakeBuildRepository(existing_build)
     service = build_service(repository)
 
-    class ConcurrentEdit(FakeEmbeddings):
-        @override
-        async def prepare(self, build: Build) -> None:
-            existing_build.revision += 1
+    prepare = service._prepare_for_persistence
 
-    service._embeddings = ConcurrentEdit()
+    async def prepare_and_change(build: Build) -> None:
+        await prepare(build)
+        existing_build.revision += 1
+
+    monkeypatch.setattr(service, "_prepare_for_persistence", prepare_and_change)
     with pytest.raises(BuildRevisionMismatchError):
         await service.edit(
             42,
@@ -478,15 +464,13 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
     assert result.id == existing.id
 
 
-async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
+async def test_save_commits_without_waiting_for_an_embedding() -> None:
     repository = FakeBuildRepository()
-    embeddings = FakeEmbeddings(repository.events)
     locks = FakeBuildLocks()
     service = BuildService(
         locks,
         FakeRestrictionRepository(),
         FakeVersions(),
-        embeddings,
         FakeTaxonomyResolver(),
         uow_factory=lambda: BuildScope(repository),
     )
@@ -496,13 +480,11 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     await service.save(build, actor="test", operation="edit", source="test")
 
     assert build.versions == []
-    assert build.embedding == [1.0, 2.0]
+    assert build.embedding is None
     assert repository.saved == [build]
     assert locks.acquisitions == [(42, True, 30)]
     assert locks.releases == [42]
-    assert embeddings.prepared == [build]
-    assert embeddings.indexed == [build]
-    assert repository.events == ["save", "commit", "index"]
+    assert repository.events == ["save", "commit"]
 
 
 class TestAuthorizedEditing:
@@ -577,7 +559,9 @@ class TestAuthorizedEditing:
             await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
 
 
-async def test_permission_revoked_during_preparation_prevents_commit(existing_build: DoorBuild) -> None:
+async def test_permission_revoked_during_preparation_prevents_commit(
+    existing_build: DoorBuild, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class Permissions(EmptyPermissions):
         held = True
 
@@ -595,12 +579,13 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
     repository = FakeBuildRepository(existing_build)
     service = build_service(repository, permissions=permissions)
 
-    class RevokeDuringPreparation(FakeEmbeddings):
-        @override
-        async def prepare(self, build: Build) -> None:
-            permissions.held = False
+    prepare = service._prepare_for_persistence
 
-    service._embeddings = RevokeDuringPreparation()
+    async def prepare_and_change(build: Build) -> None:
+        await prepare(build)
+        permissions.held = False
+
+    monkeypatch.setattr(service, "_prepare_for_persistence", prepare_and_change)
     with pytest.raises(AuthorizationError):
         await service.apply_edit(Actor(account_id=2), 42, BuildEditPatch(extra_user_info="denied"))
     assert repository.saved == []

@@ -88,6 +88,14 @@ class DatabaseWorker:
                 "guild.voting_changed": (RefreshGuildVotingHandler(services.votes).handle,),
             },
         )
+        self._build_embeddings = DomainEventRunner(
+            services.events,
+            "build_embeddings",
+            {
+                "build.submitted": (services.index_build_embedding,),
+                "build.edited": (services.index_build_embedding,),
+            },
+        )
         self._job_specs = self._build_job_specs()
 
     @asynccontextmanager
@@ -156,6 +164,7 @@ class DatabaseWorker:
         event_interval = self._config.event_interval_seconds
         maintenance_interval = self._config.maintenance_interval_seconds
         jobs = [
+            job("build-embeddings", event_interval, self._build_embeddings.process_batch, critical=False),
             job("core-domain-events", event_interval, self._process_events),
             job(
                 "submission-schematics",

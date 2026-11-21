@@ -5,11 +5,16 @@ from typing import Protocol
 
 from squid.core.builds.domain import UnresolvedTaxonomy
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.errors import InvalidStateError
+from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class EmbeddingModel(Protocol):
     """Generate an embedding vector for text."""
+
+    @property
+    def enabled(self) -> bool: ...
 
     async def embed(self, text: str) -> list[float] | None: ...
 
@@ -17,29 +22,43 @@ class EmbeddingModel(Protocol):
 class BuildVectorIndex(Protocol):
     """Persist and query build embedding vectors."""
 
-    async def upsert(self, build_id: int, embedding: list[float]) -> None: ...
+    async def fill_missing(self, build_id: int, revision: int, embedding: list[float]) -> bool: ...
 
     async def find_nearest(self, embedding: list[float]) -> int | None: ...
 
 
 class BuildEmbeddingService:
-    """Generate, attach, index, and query build embeddings."""
+    """Index committed builds and resolve semantic queries."""
 
     def __init__(self, model: EmbeddingModel, *, uow_factory: UnitOfWorkFactory[BuildVectorUnitOfWork]) -> None:
         self._model = model
         self._uow_factory = uow_factory
 
-    async def prepare(self, build: Build) -> None:
-        """Generate and attach an embedding before relational persistence."""
-        build.embedding = await self._model.embed(_embedding_text(build))
-
-    async def index(self, build: Build) -> None:
-        """Index an already-persisted build when it has an embedding."""
-        # ORM identity columns may still be None before flush.
-        if build.id is not None and build.embedding is not None:  # pyright: ignore[reportUnnecessaryComparison]
-            async with self._uow_factory() as uow:
-                await uow.build_vectors.upsert(build.id, build.embedding)
+    async def handle(self, event: DomainEvent) -> None:
+        """Generate a missing vector and install it only on the revision read."""
+        versions = (1, 2) if event.event_type == "build.submitted" else (1,)
+        if event.schema_version not in versions:
+            raise UnsupportedEventVersionError
+        if not self._model.enabled:
+            return
+        async with self._uow_factory() as uow:
+            build = await uow.builds.get_by_id(event.aggregate_id)
+            if build is None or build.embedding is not None:
+                return
+            text = _embedding_text(build)
+            revision = build.revision
+        embedding = await self._model.embed(text)
+        if embedding is None:
+            message = "Configured provider returned no build embedding."
+            raise InvalidStateError(message)
+        async with self._uow_factory() as uow:
+            if await uow.build_vectors.fill_missing(event.aggregate_id, revision, embedding):
                 await uow.commit()
+                return
+            current = await uow.builds.get_by_id(event.aggregate_id)
+            if current is not None and current.embedding is None:
+                message = "Build changed while generating its embedding."
+                raise InvalidStateError(message)
 
     async def find_build_id(self, query: str) -> int | None:
         """Find the build nearest to a natural-language query."""
@@ -78,6 +97,13 @@ def _embedding_text(build: Build) -> str:
     return json.dumps(values, ensure_ascii=False)
 
 
+class EmbeddingBuildReader(Protocol):
+    async def get_by_id(self, build_id: int) -> Build | None: ...
+
+
 class BuildVectorUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def builds(self) -> EmbeddingBuildReader: ...
+
     @property
     def build_vectors(self) -> BuildVectorIndex: ...

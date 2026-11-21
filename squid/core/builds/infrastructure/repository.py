@@ -26,6 +26,7 @@ from squid.core.builds.application.queries import (
     PublicBuildTag,
 )
 from squid.core.builds.domain import BuildCategory, Credit, CreditAttribution, Info, Status, UnresolvedTaxonomy
+from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
@@ -41,6 +42,7 @@ from squid.core.builds.models import (
     ExtenderBuild,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
+from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
 from squid.core.settings.infrastructure.repository import ensure_server_settings
@@ -484,6 +486,7 @@ class BuildRepository:
         existing draft origin, or sponsor attribution.
         """
         build.edited_time = Instant.now()
+        build.embedding = None
 
         # ORM identity columns may still be None before flush.
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -491,7 +494,9 @@ class BuildRepository:
             await self._insert(session, build)
             await session.flush()
         else:
-            await self._update(self._session(), build)
+            session = self._session()
+            await self._update(session, build)
+            await publish_domain_event(session, BuildEdited(build.id, build.revision))
 
     async def _insert(self, session: AsyncSession, build: Build) -> None:
         """Insert a prepared build within the caller's transaction, including its database events."""

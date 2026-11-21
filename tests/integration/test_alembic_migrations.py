@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import psycopg2
 import pytest
-from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -17,6 +16,7 @@ from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
+from alembic import command
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.migration_history import (
     HISTORY_TABLE,
@@ -252,6 +252,7 @@ def test_migrations_create_schema_without_drift(
     assert set(queue_health_before) == {
         "discord_sync",
         "door_range_recomputation",
+        "domain_events.build_embeddings",
         "domain_events.core",
         "domain_events.discord",
         "record_recomputation",

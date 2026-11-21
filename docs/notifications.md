@@ -1,9 +1,9 @@
 # Notification system
 
-Redstone Squid uses its existing PostgreSQL domain-event log as the internal event bus. A separate Kafka, RabbitMQ,
-NATS, or Redis Streams deployment is not required at the current scale: event publication, consumer fanout, and the
-state change are committed in one database transaction. `LISTEN/NOTIFY` is only a low-latency wake hint; the worker
-always polls `domain_event_deliveries`, so a lost notification cannot lose work.
+A write records a fact where it decides a transition occurred. For example, a settings edit calls
+`await uow.emit(GuildVotingChanged(guild_id))` once when voting settings change. PostgreSQL commits the
+state, event, and consumer deliveries together. A subscriber registers its async callable under the
+event name in its consumer's handler map. Workers poll for deliveries even when a wake notification is lost.
 
 ## Delivery guarantees
 
@@ -29,9 +29,11 @@ The envelope contains `event_type`, `schema_version`, aggregate identity, occurr
 
 | Event | Version | Purpose |
 | --- | ---: | --- |
-| `build.submitted` | 1 | Staff/owner moderation alert |
-| `build.confirmed` | 2 | Submitter outcome and first-confirmation creator subscriptions |
-| `build.denied` | 2 | Submitter outcome |
+| `build.submitted` | 2 | Staff/owner moderation alert |
+| `build.edited` | 1 | Refresh the missing build vector after a content edit |
+| `guild.voting_changed` | 1 | Recalculate weights on open votes |
+| `build.confirmed` | 3 | Submitter outcome and first-confirmation creator subscriptions |
+| `build.denied` | 3 | Submitter outcome |
 | `record_run.activated` | 1 | Compare stable record title holders with the previous active run |
 | `vote_session.closed` | 1 | Existing vote outcome processing |
 

@@ -1,7 +1,7 @@
 """Deliver recorded facts to the subscribers in one named consumer."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 from squid.core.diagnostics.log_capture import work_lost
 from squid.core.events.application import DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
@@ -23,7 +23,7 @@ class DomainEventRunner:
         self,
         events: DomainEventService,
         consumer: str,
-        handlers: dict[str, tuple[EventHandler, ...]],
+        handlers: Mapping[str, tuple[EventHandler, ...]],
         *,
         required: frozenset[str] = frozenset(),
     ) -> None:

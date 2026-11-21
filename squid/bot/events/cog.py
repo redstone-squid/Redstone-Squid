@@ -6,7 +6,6 @@ The dispatcher acknowledges the delivery after its handlers succeed; a retry run
 again. Post content is kept current separately by the reconciliation workflow in squid.bot.sync.
 """
 
-import logging
 from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
@@ -19,7 +18,6 @@ from squid.runtime import JobHandle
 if TYPE_CHECKING:
     import squid.bot.app
 
-logger = logging.getLogger(__name__)
 
 CONSUMER = "discord"
 """The consumer name this process claims deliveries under, seeded by migration."""
