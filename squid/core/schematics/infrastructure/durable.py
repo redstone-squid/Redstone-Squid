@@ -16,7 +16,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import Any
 
 import anyio
 from anyio.abc import TaskGroup
@@ -94,7 +94,7 @@ class QueuedSchematicAnalyzer:
             )
         except SquidError as error:
             return AnalyzerCapabilities(available=False, unavailable_reason=error.public_detail())
-        return wire.decode_capabilities(cast(Mapping[str, Any], response.result["capabilities"]))
+        return wire.decode_capabilities(response.result["capabilities"])
 
     async def analyze(
         self,
@@ -116,7 +116,7 @@ class QueuedSchematicAnalyzer:
             (data,),
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
-        return wire.decode_analysis(cast(Mapping[str, Any], response.result["analysis"]))
+        return wire.decode_analysis(response.result["analysis"])
 
     async def convert(
         self,
@@ -153,7 +153,7 @@ class QueuedSchematicAnalyzer:
             (left, right),
             timeout_seconds=wait_timeout,
         )
-        return wire.decode_comparison(cast(Mapping[str, Any], response.result["comparison"]))
+        return wire.decode_comparison(response.result["comparison"])
 
     async def render(
         self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
@@ -189,7 +189,7 @@ class QueuedSchematicAnalyzer:
             (data,),
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
-        return wire.decode_simulation(cast(Mapping[str, Any], response.result["simulation"]))
+        return wire.decode_simulation(response.result["simulation"])
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
         self._require_enabled()

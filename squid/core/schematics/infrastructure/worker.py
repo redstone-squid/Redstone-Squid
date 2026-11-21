@@ -479,7 +479,7 @@ class SchematicWorkerPool:
             frame = await self._call("capabilities", {}, (), self._config.parse_timeout_seconds)
         except (SchematicWorkerCrashedError, SchematicTimeoutError, SchematicSupportUnavailableError) as exc:
             return AnalyzerCapabilities(available=False, unavailable_reason=exc.public_detail())
-        return wire.decode_capabilities(cast(Mapping[str, Any], _result(frame)["capabilities"]))
+        return wire.decode_capabilities(_result(frame)["capabilities"])
 
     async def analyze(
         self,
@@ -496,7 +496,7 @@ class SchematicWorkerPool:
             "lattice_max_block_count": self._config.lattice_max_block_count,
         }
         frame = await self._call("analyze", params, (data,), self._config.parse_timeout_seconds)
-        return wire.decode_analysis(cast(Mapping[str, Any], _result(frame)["analysis"]))
+        return wire.decode_analysis(_result(frame)["analysis"])
 
     async def convert(
         self, data: bytes, *, target: SchematicFormat, data_version: int | None = None
@@ -517,7 +517,7 @@ class SchematicWorkerPool:
         if timeout_seconds is not None:
             timeout = min(timeout, timeout_seconds)
         frame = await self._call("compare", {"preset": preset.value}, (left, right), timeout)
-        return wire.decode_comparison(cast(Mapping[str, Any], _result(frame)["comparison"]))
+        return wire.decode_comparison(_result(frame)["comparison"])
 
     async def render(
         self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
@@ -549,7 +549,7 @@ class SchematicWorkerPool:
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         params = {"request": wire.encode_simulation_request(request)}
         frame = await self._call("simulate", params, (data,), self._config.simulate_timeout_seconds)
-        return wire.decode_simulation(cast(Mapping[str, Any], _result(frame)["simulation"]))
+        return wire.decode_simulation(_result(frame)["simulation"])
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
         params = {"lattice": wire.encode_lattice(lattice), "counts": list(counts)}

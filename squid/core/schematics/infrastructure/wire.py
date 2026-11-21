@@ -478,7 +478,7 @@ def encode_analysis(analysis: SchematicAnalysis) -> Mapping[str, Any]:
     return _AnalysisJson.model_validate(dataclasses.asdict(analysis)).model_dump(mode="json")
 
 
-def decode_analysis(payload: Mapping[str, Any]) -> SchematicAnalysis:
+def decode_analysis(payload: object) -> SchematicAnalysis:
     return _ANALYSIS.validate_python(_AnalysisJson.model_validate(payload).model_dump())
 
 
@@ -494,7 +494,7 @@ def encode_comparison(comparison: SchematicComparison) -> Mapping[str, Any]:
     return _ComparisonJson.model_validate(dataclasses.asdict(comparison)).model_dump(mode="json")
 
 
-def decode_comparison(payload: Mapping[str, Any]) -> SchematicComparison:
+def decode_comparison(payload: object) -> SchematicComparison:
     return _COMPARISON.validate_python(_ComparisonJson.model_validate(payload).model_dump())
 
 
@@ -512,7 +512,7 @@ def encode_capabilities(capabilities: AnalyzerCapabilities) -> Mapping[str, Any]
     return _CapabilitiesJson.model_validate(dataclasses.asdict(capabilities)).model_dump(mode="json")
 
 
-def decode_capabilities(payload: Mapping[str, Any]) -> AnalyzerCapabilities:
+def decode_capabilities(payload: object) -> AnalyzerCapabilities:
     return _CAPABILITIES.validate_python(_CapabilitiesJson.model_validate(payload).model_dump())
 
 
@@ -636,7 +636,7 @@ def encode_simulation(result: SimulationResult) -> Mapping[str, Any]:
     return _SimulationJson.model_validate(dataclasses.asdict(result)).model_dump(mode="json")
 
 
-def decode_simulation(payload: Mapping[str, Any]) -> SimulationResult:
+def decode_simulation(payload: object) -> SimulationResult:
     return _SIMULATION.validate_python(_SimulationJson.model_validate(payload).model_dump())
 
 
