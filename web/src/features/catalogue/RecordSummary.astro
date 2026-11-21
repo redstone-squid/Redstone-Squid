@@ -28,3 +28,23 @@ const { record, locale, linked = true } = Astro.props;
     <RecordFreshness {record} {locale} />
   </p>
 </article>
+
+<style>
+  @layer tokens, base, components;
+  @layer components {
+    .catalogue-record {
+      display: grid;
+      align-content: start;
+      gap: var(--space-3);
+    }
+    .catalogue-record h3 {
+      font-size: 1.125rem;
+    }
+    .catalogue-record a {
+      text-decoration: none;
+    }
+    .catalogue-record a:hover {
+      text-decoration: underline;
+    }
+  }
+</style>

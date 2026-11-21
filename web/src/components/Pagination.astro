@@ -47,3 +47,14 @@ const nextHref = link(next);
     )}
   </nav>
 )}
+
+<style>
+  @layer tokens, base, components;
+  @layer components {
+    .catalogue-pagination {
+      display: flex;
+      gap: var(--space-4);
+      justify-content: space-between;
+    }
+  }
+</style>

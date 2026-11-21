@@ -83,7 +83,7 @@
   .catalogue-result p {
     margin-top: var(--space-2);
   }
-  .catalogue-empty {
+  .sq-panel.catalogue-empty {
     display: grid;
     justify-items: start;
     gap: var(--space-4);
@@ -104,28 +104,9 @@
     margin-top: var(--space-3);
     max-width: 42rem;
   }
-  .catalogue-pagination {
-    display: flex;
-    gap: var(--space-4);
-    justify-content: space-between;
-  }
   .catalogue-error {
     display: grid;
     gap: var(--space-4);
-  }
-  .catalogue-record {
-    display: grid;
-    align-content: start;
-    gap: var(--space-3);
-  }
-  .catalogue-record h3 {
-    font-size: 1.125rem;
-  }
-  .catalogue-record a {
-    text-decoration: none;
-  }
-  .catalogue-record a:hover {
-    text-decoration: underline;
   }
   @media (max-width: 65rem) {
     .catalogue-grid {

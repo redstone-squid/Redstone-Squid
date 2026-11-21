@@ -41,7 +41,7 @@
     font-weight: 400;
     color: var(--text-muted);
   }
-  textarea.sq-input {
+  textarea.sq-textarea {
     min-height: 6rem;
     resize: vertical;
   }

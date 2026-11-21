@@ -31,5 +31,5 @@
       {...props}
       {...attributes}
       bind:value
-      class={cx("sq-input", className)}></textarea>{/snippet}
+      class={cx("sq-input sq-textarea", className)}></textarea>{/snippet}
 </FieldFrame>

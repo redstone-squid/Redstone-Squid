@@ -103,7 +103,7 @@ export function TextareaField({
   return (
     <FieldFrame label={label} detail={detail} hint={hint} error={error} {...textarea}>
       {(attributes) => (
-        <textarea {...textarea} {...attributes} className={cx("sq-input", className)} />
+        <textarea {...textarea} {...attributes} className={cx("sq-input sq-textarea", className)} />
       )}
     </FieldFrame>
   );
