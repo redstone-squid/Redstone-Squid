@@ -1,0 +1,10 @@
+---
+import { noticeStyles, type NoticeProps } from "../variants";
+type Props = NoticeProps;
+const { title, tone, role } = Astro.props;
+---
+
+<div class={noticeStyles({ tone })} {role}>
+  {title && <strong>{title}</strong>}
+  <slot />
+</div>

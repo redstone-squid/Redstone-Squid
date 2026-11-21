@@ -1,6 +1,7 @@
 @layer tokens, base, components;
 @import "./tokens.css";
 @import "./components.css";
+@import "./patterns.css";
 @layer base {
   * {
     box-sizing: border-box;
