@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
-from squid.core.search.domain import RecordSearchHit, SearchRequest
+from squid.core.search.domain import RecordSearchHit, SearchRequest, SearchScope
 from squid.core.search.infrastructure.projection import (
     RecordHolderProjectionSource,
     RecordProjectionSource,
@@ -44,8 +44,9 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
         ("fastest 2x2 Bob", "result:1"),
         ("creator:Bob", "result:1"),
     ):
-        result = await service.search(SearchRequest(query))
-        assert result.hits[0].source_id == expected
+        for scope in (SearchScope.ALL, SearchScope.RECORDS):
+            result = await service.search(SearchRequest(query, scope=scope))
+            assert result.hits[0].source_id == expected
     page = await service.search(SearchRequest("seamless Alice"))
     assert page.total == 2
     general = next(hit for hit in page.hits if hit.source_id == "result:1")

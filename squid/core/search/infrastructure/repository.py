@@ -26,6 +26,7 @@ from squid.core.search.domain import (
     SearchScope,
     TextExpression,
 )
+from squid.core.search.domain.query import expression_applies_to
 from squid.core.search.infrastructure.compiler import compile_query
 from squid.core.search.infrastructure.results import ResultOrder, ResultPager
 from squid.core.search.models import SearchDocument
@@ -116,24 +117,35 @@ class PostgresSearchBackend(SearchBackend):
         terms = _ranking_text(query)
         # Record shorthand parses the leading base title as a filter. Keep it in
         # the heading comparison so "fastest 2x2 door" favors the general record.
+        record_query = request.scope is SearchScope.RECORDS or (
+            request.scope is SearchScope.ALL
+            and query.expression is not None
+            and expression_applies_to(query.expression, SearchScope.RECORDS)
+            and not expression_applies_to(query.expression, SearchScope.BUILDS)
+        )
         exact_match = SearchDocument.normalized_title == terms.casefold()
         heading = func.concat_ws(" ", SearchDocument.title, SearchDocument.subtitle)
-        if request.scope is SearchScope.RECORDS:
+        if record_query:
             exact_terms = " ".join(request.query.casefold().split())
             # Restrictions can appear in the subtitle. Trigram sets recognize the
             # same heading words even when the query puts a restriction first.
-            exact_match = func.similarity(heading, exact_terms) == 1.0
+            exact_match = or_(
+                (SearchDocument.resource_kind != "record") & exact_match,
+                (SearchDocument.resource_kind == "record") & (func.similarity(heading, exact_terms) == 1.0),
+            )
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
             RankingBranch.EXACT: await self._candidate_rows(session, predicate & exact_match, literal(1.0)),
             RankingBranch.FULL_TEXT: await self._fts_candidates(session, predicate, terms),
             RankingBranch.TRIGRAM: await self._trigram_candidates(session, predicate, terms),
         }
-        if request.scope is SearchScope.RECORDS:
+        if record_query:
             # A holder can match the same words as a category. Prefer records whose
             # own heading contains the terms, including any restriction in the subtitle.
             heading_matches = func.to_tsvector("simple", heading).bool_op("@@")(func.plainto_tsquery("simple", terms))
             branches[RankingBranch.RECORD_TITLE] = await self._candidate_rows(
-                session, predicate & heading_matches, func.similarity(heading, terms)
+                session,
+                predicate & (SearchDocument.resource_kind == "record") & heading_matches,
+                func.similarity(heading, terms),
             )
         warnings: tuple[str, ...] = ()
         if request.mode is SearchMode.SEMANTIC:
