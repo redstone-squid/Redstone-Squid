@@ -15,6 +15,7 @@ import com.redstonesquid.minecraft.protocol.DraftChangeRequest
 import com.redstonesquid.minecraft.protocol.DraftChangeResponse
 import com.redstonesquid.minecraft.protocol.DraftCreateRequest
 import com.redstonesquid.minecraft.protocol.DraftListResponse
+import com.redstonesquid.minecraft.protocol.DraftSchematicResponse
 import com.redstonesquid.minecraft.protocol.DraftSummary
 import com.redstonesquid.minecraft.protocol.FieldOperationRequest
 import com.redstonesquid.minecraft.protocol.FormManifest
@@ -273,6 +274,42 @@ public class SubmissionDraftClient(
         expectedStatus = 204,
     )
 
+    /** Reuse [uploadId] and the same file bytes if the response is uncertain. */
+    public fun uploadSchematic(
+        draftId: UUID,
+        uploadId: UUID,
+        filename: String,
+        bytes: ByteArray,
+    ): CompletableFuture<DraftSchematicResponse> {
+        require(filename.isNotBlank() && filename.length <= 255 && filename.none(Char::isISOControl)) {
+            "Invalid schematic filename."
+        }
+        val path = SubmissionApiPaths.DRAFT_SCHEMATICS_TEMPLATE.replace("{id}", draftId.toString())
+        return transport.executeJson(
+            authenticatedRequest(
+                BackendHttpMethod.PUT,
+                "$path/$uploadId?filename=${encodeQuery(filename)}",
+                binaryBody = bytes,
+            ),
+            "schematic upload",
+            FormProtocolJson::decodeDraftSchematic,
+        ).thenApply { source ->
+            require(UUID.fromString(source.id) == uploadId && source.filename == filename.trim()) {
+                "The backend returned a different schematic from the one uploaded."
+            }
+            source
+        }
+    }
+
+    public fun listSchematics(draftId: UUID): CompletableFuture<List<DraftSchematicResponse>> = transport.executeJson(
+        authenticatedRequest(
+            BackendHttpMethod.GET,
+            SubmissionApiPaths.DRAFT_SCHEMATICS_TEMPLATE.replace("{id}", draftId.toString()),
+        ),
+        "draft schematic list",
+        FormProtocolJson::decodeDraftSchematics,
+    )
+
     private fun authenticatedRequest(
         method: BackendHttpMethod,
         path: String,
@@ -280,6 +317,7 @@ public class SubmissionDraftClient(
         extraHeaders: Map<String, String> = emptyMap(),
         maxResponseBytes: Int = MAX_DRAFT_RESPONSE_BYTES,
         expectedGrantId: UUID? = null,
+        binaryBody: ByteArray? = null,
     ): BackendRequest = BackendRequest(
         method = method,
         pathAndQuery = path,
@@ -289,6 +327,7 @@ public class SubmissionDraftClient(
             "Pragma" to "no-cache",
         ) + extraHeaders,
         maxResponseBytes = maxResponseBytes,
+        binaryBody = binaryBody,
     )
 
     private fun authenticationHeaders(expectedGrantId: UUID? = null): Map<String, String> {

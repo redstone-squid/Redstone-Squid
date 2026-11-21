@@ -6,6 +6,7 @@ import java.net.URI
 import java.time.Duration
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -64,6 +65,32 @@ class BoundedJdkHttpTransportTest {
         assertEquals(secret, receivedAuthorization)
         assertEquals(302, redirect.statusCode)
         assertFalse(secret in request.toString())
+    }
+
+    @Test
+    fun `transport sends schematic PUT as unchanged binary bytes`() {
+        val local = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).also { server = it }
+        var receivedBytes: ByteArray? = null
+        var receivedContentType: String? = null
+        var receivedMethod: String? = null
+        local.createContext("/v1/schematic") { exchange ->
+            receivedMethod = exchange.requestMethod
+            receivedContentType = exchange.requestHeaders.getFirst("Content-Type")
+            receivedBytes = exchange.requestBody.use { it.readAllBytes() }
+            exchange.sendResponseHeaders(202, -1)
+            exchange.close()
+        }
+        local.start()
+
+        val bytes = byteArrayOf(0x1f, 0x8b.toByte(), 0, -1)
+        val response = localTransport(local).execute(
+            BackendRequest(BackendHttpMethod.PUT, "/schematic", maxResponseBytes = 1024, binaryBody = bytes),
+        ).join()
+
+        assertEquals(202, response.statusCode)
+        assertEquals("PUT", receivedMethod)
+        assertEquals("application/octet-stream", receivedContentType)
+        assertContentEquals(bytes, receivedBytes)
     }
 
     @Test

@@ -417,6 +417,36 @@ public data class DraftChangeResponse(
     public val replayed: Boolean,
 )
 
+public const val MAX_SCHEMATIC_UPLOAD_BYTES: Int = 16 * 1024 * 1024
+
+@Serializable
+public enum class DraftSchematicState {
+    @SerialName("uploading") UPLOADING,
+    @SerialName("pending") PENDING,
+    @SerialName("ready") READY,
+    @SerialName("rejected") REJECTED,
+    @SerialName("failed") FAILED,
+    @SerialName("deleting") DELETING,
+    @SerialName("deleted") DELETED,
+}
+
+@Serializable
+public data class DraftSchematicResponse(
+    public val id: String,
+    public val filename: String,
+    public val sha256: String?,
+    @SerialName("byte_size") public val byteSize: Int?,
+    public val state: DraftSchematicState,
+    public val primary: Boolean = false,
+    public val discarded: Boolean = false,
+) {
+    init {
+        requireCanonicalUuid(id, "schematic ID")
+        require(filename.isNotBlank() && filename.length <= 255) { "invalid schematic filename" }
+        require(byteSize == null || byteSize in 1..MAX_SCHEMATIC_UPLOAD_BYTES) { "invalid schematic size" }
+    }
+}
+
 /**
  * Strict JSON syntax with unknown properties ignored for additive protocol changes.
  * Manifest and draft-list decoders enforce byte limits; other decoders rely on transport bounds.
@@ -453,6 +483,10 @@ public object FormProtocolJson {
     public fun decodeStoredDraft(document: String): StoredDraft = json.decodeFromString(document)
 
     public fun decodeDraftChange(document: String): DraftChangeResponse = json.decodeFromString(document)
+
+    public fun decodeDraftSchematic(document: String): DraftSchematicResponse = json.decodeFromString(document)
+
+    public fun decodeDraftSchematics(document: String): List<DraftSchematicResponse> = json.decodeFromString(document)
 }
 
 private fun parseInstant(value: String, name: String): Instant = runCatching { Instant.parse(value) }

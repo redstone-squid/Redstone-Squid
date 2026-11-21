@@ -7,6 +7,7 @@ public object SubmissionApiPaths {
     public const val DRAFTS: String = "/submissions/drafts"
     public const val DRAFT_TEMPLATE: String = "/submissions/drafts/{id}"
     public const val DRAFT_CHANGES_TEMPLATE: String = "/submissions/drafts/{id}/changes"
+    public const val DRAFT_SCHEMATICS_TEMPLATE: String = "/submissions/drafts/{id}/schematics"
 }
 
 /** Canonical Minecraft authorization paths relative to the backend's `/v1` prefix. */

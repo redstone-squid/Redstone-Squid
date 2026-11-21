@@ -1,5 +1,6 @@
 package com.redstonesquid.minecraft.core.http
 
+import com.redstonesquid.minecraft.protocol.MAX_SCHEMATIC_UPLOAD_BYTES
 import java.io.InputStream
 import java.net.InetAddress
 import java.net.URI
@@ -22,6 +23,7 @@ public const val MAX_BACKEND_RESPONSE_BYTES: Int = 1024 * 1024
 public enum class BackendHttpMethod {
     GET,
     POST,
+    PUT,
     PATCH,
     DELETE,
 }
@@ -37,8 +39,10 @@ public class BackendRequest(
     headers: Map<String, String> = emptyMap(),
     public val maxResponseBytes: Int,
     public val requireNoStoreResponse: Boolean = false,
+    binaryBody: ByteArray? = null,
 ) {
     public val headers: Map<String, String> = java.util.Map.copyOf(headers)
+    internal val binaryBody: ByteArray?
 
     init {
         require(pathAndQuery.startsWith('/')) { "backend path must start with /" }
@@ -50,6 +54,13 @@ public class BackendRequest(
         require(body == null || body.encodeToByteArray().size <= MAX_BACKEND_REQUEST_BYTES) {
             "backend request body exceeds $MAX_BACKEND_REQUEST_BYTES bytes"
         }
+        require((binaryBody != null) == (method == BackendHttpMethod.PUT) && (binaryBody == null || body == null)) {
+            "PUT requires a binary request body"
+        }
+        require(binaryBody == null || binaryBody.size in 1..MAX_SCHEMATIC_UPLOAD_BYTES) {
+            "A schematic must be non-empty and at most 16 MiB."
+        }
+        this.binaryBody = binaryBody?.copyOf()
         require(maxResponseBytes in 1..MAX_BACKEND_RESPONSE_BYTES) { "invalid backend response byte budget" }
         require(headers.keys.map { it.lowercase(Locale.ROOT) }.distinct().size == headers.size) {
             "backend header names must be unique ignoring case"
@@ -184,6 +195,8 @@ public class BoundedJdkHttpTransport(
         return when (request.method) {
             BackendHttpMethod.GET -> builder.GET().build()
             BackendHttpMethod.POST -> builder.POST(bodyPublisher).build()
+            BackendHttpMethod.PUT -> builder.header("Content-Type", "application/octet-stream")
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(checkNotNull(request.binaryBody))).build()
             BackendHttpMethod.PATCH -> builder.method("PATCH", bodyPublisher).build()
             BackendHttpMethod.DELETE -> builder.method("DELETE", bodyPublisher).build()
         }
