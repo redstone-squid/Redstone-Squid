@@ -8,7 +8,6 @@ export type BundleManifest = Record<string, BundleChunk>;
 export type EntryBudget = {
   entries: string[];
   label: string;
-  renderers?: string[];
   initialKiB: number;
   completeKiB: number;
 };
@@ -42,10 +41,7 @@ export function evaluateBudgets(
   budgets: EntryBudget[],
   renderer: string,
 ): BudgetResult[] {
-  const declared = new Set([
-    renderer,
-    ...budgets.flatMap(({ entries, renderers }) => [...entries, ...(renderers ?? [])]),
-  ]);
+  const declared = new Set([renderer, ...budgets.flatMap(({ entries }) => entries)]);
   for (const [key, chunk] of Object.entries(manifest)) {
     if (chunk.isEntry && chunk.file.endsWith(".js") && !declared.has(key)) {
       throw new Error(
@@ -64,8 +60,8 @@ export function evaluateBudgets(
     return total;
   }
   const results = budgets.map((budget) => {
-    // Astro loads its React renderer independently of each island's imports.
-    const entries = [...budget.entries, ...(budget.renderers ?? [renderer])];
+    // Astro loads its Svelte renderer independently of each island's imports.
+    const entries = [...budget.entries, renderer];
     const initial = dependencyFiles(manifest, entries, false);
     const complete = dependencyFiles(manifest, entries, true);
     for (const file of complete) covered.add(file);

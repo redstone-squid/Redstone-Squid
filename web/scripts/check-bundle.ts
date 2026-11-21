@@ -7,27 +7,13 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    entries: ["src/features/workbench/Controls.tsx"],
-    label: "React workbench reference",
-    initialKiB: 110,
-    completeKiB: 140,
-  },
-  {
     entries: ["src/features/workbench/Controls.svelte"],
-    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
     label: "Design workbench (Svelte)",
     initialKiB: 65,
     completeKiB: 90,
   },
   {
-    entries: ["src/features/workbench/DraftTrial.tsx"],
-    label: "React draft trial",
-    initialKiB: 110,
-    completeKiB: 140,
-  },
-  {
     entries: ["src/features/workbench/DraftTrial.svelte"],
-    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
     label: "Svelte draft trial",
     initialKiB: 50,
     completeKiB: 80,
@@ -57,7 +43,7 @@ const results = evaluateBudgets(
   manifest,
   sizes,
   budgets,
-  "node_modules/@astrojs/react/dist/client.js",
+  "node_modules/@astrojs/svelte/dist/client.js",
 );
 const failures: string[] = [];
 for (const result of results) {

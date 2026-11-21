@@ -3,14 +3,14 @@ import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
 import LinkButton from "../../ui/astro/LinkButton.astro";
 import { buttonStyles } from "../../ui/variants";
 
-type Props = { locale: Locale; framework: "react" | "svelte"; theme: "light" | "dark" };
-const { locale, framework, theme } = Astro.props;
+type Props = { locale: Locale; theme: "light" | "dark" };
+const { locale, theme } = Astro.props;
 const t = (key: StaticMessageKey) => translate(locale, key);
 const params = Astro.url.searchParams;
 const variants = ["primary", "secondary", "quiet"] as const;
 const variant = variants.find((value) => value === params.get("variant")) ?? "primary";
 const size = params.get("size") === "small" ? "small" : "normal";
-const trial = new URLSearchParams({ lang: locale, theme, framework });
+const trial = new URLSearchParams({ lang: locale, theme });
 ---
 
 <div class="sq-story" id="button-story">

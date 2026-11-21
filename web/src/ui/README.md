@@ -39,8 +39,6 @@ monospace for technical values.
 
 Astro owns server-rendered routes. Catalogue pages share a placeholder in
 `CatalogueLayout` while they are rebuilt. Use Svelte for new interactive islands.
-The workbench's `framework=react` option selects the reference implementation for
-interactive comparisons.
 
 Use the Fluent catalogues in `src/locales` for both languages. After updating
 message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes.
@@ -58,6 +56,6 @@ Review the captured workflows in `review-gallery/index.html`.
 For an intentional visual change, inspect the refreshed screenshots before
 committing them and rerun the review against the saved baselines. Keep the OS,
 fonts, and browser revision consistent. `bun run test:compatibility` runs the
-framework comparison in Firefox and WebKit. Install their
+draft trial in Firefox and WebKit. Install their
 system libraries and pinned browsers first. Firefox skips the draft-form axe
 scan because revision 1572 crashes during that scan.

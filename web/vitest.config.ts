@@ -6,15 +6,11 @@ export default defineConfig({
   resolve: { conditions: ["browser"] },
   test: {
     environment: "jsdom",
-    include: ["tests/unit/**/*.test.{ts,tsx}"],
+    include: ["tests/unit/**/*.test.ts"],
     setupFiles: ["./tests/setup.ts"],
     coverage: {
       provider: "v8",
-      include: [
-        "src/lib/**/*.ts",
-        "src/ui/**/*.{ts,tsx,svelte}",
-        "src/features/**/*.{ts,tsx,svelte}",
-      ],
+      include: ["src/lib/**/*.ts", "src/ui/**/*.{ts,svelte}", "src/features/**/*.{ts,svelte}"],
       exclude: ["src/generated/**"],
       reporter: ["text", "json-summary"],
       thresholds: {

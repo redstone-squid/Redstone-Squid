@@ -1,6 +1,7 @@
 import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
+import FormSpecimen from "../../src/features/workbench/FormSpecimen.svelte";
 import Field from "../../src/ui/svelte/Field.svelte";
 import Harness from "./fixtures/SvelteDialogHarness.svelte";
 
@@ -29,6 +30,19 @@ describe("Svelte primitive contracts", () => {
     } finally {
       help.remove();
     }
+  });
+  it("exposes invalid and disabled states in the workbench form", async () => {
+    const { rerender } = render(FormSpecimen, { locale: "en", state: "invalid" });
+    const category = screen.getByRole("combobox", { name: "Category" });
+    expect(category).toHaveValue("");
+    expect(category).toHaveAccessibleDescription("This field is required.");
+    expect(screen.getByRole("radio", { name: "Java" })).toBeChecked();
+
+    await rerender({ state: "disabled" });
+    expect(category).toHaveValue("door");
+    expect(category).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Java" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Builder notes" })).toBeDisabled();
   });
   it("composes a secondary trigger and closes through controlled state", async () => {
     const user = userEvent.setup();

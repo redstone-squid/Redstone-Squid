@@ -5,8 +5,8 @@ import { importBoundaries } from "../../scripts/import-boundaries";
 RuleTester.describe = describe;
 RuleTester.it = it;
 const tester = new RuleTester({ languageOptions: { ecmaVersion: "latest", sourceType: "module" } });
-const ui = "/workspace/web/src/ui/react/Button.tsx";
-const feature = "/workspace/web/src/features/builds/Editor.tsx";
+const ui = "/workspace/web/src/ui/svelte/Button.svelte";
+const feature = "/workspace/web/src/features/builds/Editor.svelte";
 
 tester.run("frontend import boundaries", importBoundaries, {
   valid: [
@@ -15,15 +15,14 @@ tester.run("frontend import boundaries", importBoundaries, {
       code: 'import { Dialog } from "bits-ui";',
     },
     { filename: ui, code: 'import { Field } from "./Field";' },
-    { filename: ui, code: 'import { Dialog } from "radix-ui";' },
-    { filename: feature, code: 'import { Button } from "../../ui/react/Button";' },
+    { filename: feature, code: 'import { Button } from "../../ui/svelte/Button.svelte";' },
     { filename: "/workspace/web/src/features/builds/server.ts", code: 'import fs from "node:fs";' },
   ],
   invalid: [
     {
       filename: "/workspace/web/src/features/builds/Editor.svelte",
       code: 'import { Dialog } from "bits-ui";',
-      errors: [{ messageId: "radix" }],
+      errors: [{ messageId: "primitives" }],
     },
     {
       filename: "/workspace/web/src/features/builds/Editor.svelte",
@@ -38,16 +37,6 @@ tester.run("frontend import boundaries", importBoundaries, {
     },
     { filename: ui, code: 'export * from "../../lib/i18n";', errors: [{ messageId: "ui" }] },
     { filename: ui, code: 'import("../../generated/sdk.gen");', errors: [{ messageId: "ui" }] },
-    {
-      filename: feature,
-      code: 'import { Dialog } from "radix-ui";',
-      errors: [{ messageId: "radix" }],
-    },
-    {
-      filename: feature,
-      code: 'import("@radix-ui/react-dialog");',
-      errors: [{ messageId: "radix" }],
-    },
     {
       filename: feature,
       code: 'import { loader } from "./server";',

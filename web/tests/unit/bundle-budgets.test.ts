@@ -29,15 +29,6 @@ describe("workflow bundle budgets", () => {
     ]);
     expect([...dependencyFiles(manifest, ["island"], false)]).toEqual(["island.js", "shared.js"]);
   });
-  it("counts only the renderer selected by each framework's island", () => {
-    const result = evaluateBudgets(
-      manifest,
-      sizes,
-      [{ ...budgets[0], renderers: ["renderer"] }],
-      "unused-default",
-    );
-    expect(result[0]?.initialBytes).toBe(60);
-  });
   it("requires explicit coverage for new entry points", () => {
     expect(() =>
       evaluateBudgets(

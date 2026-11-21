@@ -3,27 +3,24 @@ import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import Panel from "../ui/astro/Panel.astro";
 import { translate } from "../lib/i18n";
-import { DraftTrial } from "../features/workbench/DraftTrial";
 import SvelteDraftTrial from "../features/workbench/DraftTrial.svelte";
 import "../features/workbench/workbench.css";
 const locale = Astro.url.searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
-const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const selected = Astro.url.searchParams.get("scenario");
 const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
 const uploadScenario = new URLSearchParams({
   lang: locale,
   theme,
-  framework,
   scenario: "upload-retry",
 });
 ---
 
-<WorkbenchLayout title={translate(locale, "trial.title")} locale={locale} {theme} {framework}>
+<WorkbenchLayout title={translate(locale, "trial.title")} locale={locale} {theme}>
   <header class="sq-page-heading">
     <h1>{translate(locale, "trial.title")}</h1>
     <div class="sq-between">
-      <p>{framework === "svelte" ? "Svelte 5" : "React"}</p>
+      <p>Svelte 5</p>
       <LinkButton
         href={`?${uploadScenario}`}
         size="small"
@@ -34,10 +31,6 @@ const uploadScenario = new URLSearchParams({
     </div>
   </header>
   <Panel id="trial" title={translate(locale, "trial.details")}>
-    {framework === "svelte" ? (
-      <SvelteDraftTrial client:load {locale} {scenario} />
-    ) : (
-      <DraftTrial client:load {locale} {scenario} />
-    )}
+    <SvelteDraftTrial client:load {locale} {scenario} />
   </Panel>
 </WorkbenchLayout>

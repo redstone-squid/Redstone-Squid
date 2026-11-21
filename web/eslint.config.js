@@ -1,8 +1,6 @@
 import eslint from "@eslint/js";
 import svelte from "eslint-plugin-svelte";
 import astro from "eslint-plugin-astro";
-import jsxA11y from "eslint-plugin-jsx-a11y";
-import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import { importBoundaries } from "./scripts/import-boundaries.ts";
@@ -24,13 +22,13 @@ export default tseslint.config(
     ],
   },
   eslint.configs.recommended,
-  ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: ["**/*.{ts,tsx}"] })),
+  ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: ["**/*.ts"] })),
   ...tseslint.configs.stylisticTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.ts"],
   })),
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.ts"],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
       parserOptions: {
@@ -38,13 +36,7 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: {
-      "jsx-a11y": jsxA11y,
-      "react-hooks": reactHooks,
-    },
     rules: {
-      ...jsxA11y.flatConfigs.recommended.rules,
-      ...reactHooks.configs.flat.recommended.rules,
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
       "@typescript-eslint/no-confusing-void-expression": "off",
       "@typescript-eslint/restrict-template-expressions": [
@@ -81,12 +73,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx,astro,svelte}", "src/**/*.astro/*.{js,ts}"],
+    files: ["src/**/*.{ts,astro,svelte}", "src/**/*.astro/*.{js,ts}"],
     plugins: { boundaries: { rules: { imports: importBoundaries } } },
     rules: { "boundaries/imports": "error" },
   },
   {
-    files: ["**/*.test.{ts,tsx}", "tests/**/*.ts"],
+    files: ["**/*.test.ts", "tests/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-argument": "off",

@@ -56,7 +56,7 @@ function delay(signal: AbortSignal, milliseconds: number): Promise<void> {
   });
 }
 
-/** Deterministic transport simulation shared by both framework trials. No data leaves the browser. */
+/** Deterministic transport simulation for the draft trial. No data leaves the browser. */
 export function createDraftFixture(scenario?: DraftScenario) {
   let failedOnce = false;
   return {

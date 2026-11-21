@@ -1,11 +1,10 @@
 import node from "@astrojs/node";
 import svelte from "@astrojs/svelte";
-import react from "@astrojs/react";
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
   adapter: node({ mode: "standalone" }),
-  integrations: [react(), svelte()],
+  integrations: [svelte()],
   output: "server",
   security: {
     checkOrigin: true,

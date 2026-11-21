@@ -10,10 +10,9 @@ type Props = {
   title: string;
   locale: "en" | "zh-CN";
   theme: "light" | "dark";
-  framework?: "react" | "svelte";
 };
-const { title, locale, theme, framework = "svelte" } = Astro.props;
-const query = new URLSearchParams({ lang: locale, framework, theme });
+const { title, locale, theme } = Astro.props;
+const query = new URLSearchParams({ lang: locale, theme });
 const library =
   Astro.url.pathname.replace(/\/$/, "") === "/design-system" ? "" : `/design-system?${query}`;
 const t = (key: StaticMessageKey): string => translate(locale, key);
@@ -53,9 +52,9 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
           <a href={`/design-system-trial?${query}`}>{t("trial.title")}</a>
         </nav>
         <p class="sq-sidebar-note">
-          Astro + {framework === "svelte" ? "Svelte" : "React"}
+          Astro + Svelte
           <br />
-          {framework === "svelte" ? "Bits UI" : "Radix primitives"}
+          Bits UI
         </p>
       </aside>
       <main id="main" class="sq-main">

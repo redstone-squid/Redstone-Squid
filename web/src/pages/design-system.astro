@@ -8,17 +8,15 @@ import Badge from "../ui/astro/Badge.astro";
 import Layout from "../ui/astro/Layout.astro";
 import Notice from "../ui/astro/Notice.astro";
 import BrowsingStories from "../features/catalogue/BrowsingStories.astro";
-import { FormSpecimen } from "../features/workbench/FormSpecimen";
+import FormSpecimen from "../features/workbench/FormSpecimen.svelte";
 import StoryOptions from "../features/workbench/StoryOptions.astro";
 import LayoutStory from "../features/workbench/LayoutStory.astro";
 import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import SvelteControls from "../features/workbench/Controls.svelte";
-import { Controls } from "../features/workbench/Controls";
 import { buildFixtures } from "../features/workbench/fixtures";
 const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
-const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const locale = chinese ? "zh-CN" : "en";
 const fieldStates = ["normal", "invalid", "disabled"] as const;
 const fieldState =
@@ -31,7 +29,7 @@ const preferences = (key: string, value: string) => {
 const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
-<WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme} {framework}>
+<WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme}>
   <header class="sq-library-cover">
     <div>
       <h1>{t("workbench.page-title")}</h1>
@@ -92,12 +90,8 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
     title={t("workbench.components")}
     description={t("workbench.components-description")}
   >
-    <ButtonStory {locale} {framework} {theme} />
-    {framework === "svelte" ? (
-      <SvelteControls client:load locale={locale} />
-    ) : (
-      <Controls client:load locale={locale} />
-    )}
+    <ButtonStory {locale} {theme} />
+    <SvelteControls client:load locale={locale} />
   </Panel>
   <Panel id="fields" title={t("workbench.form-controls")}>
     <Layout pattern="stack">
