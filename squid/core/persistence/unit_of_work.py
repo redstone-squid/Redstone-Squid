@@ -21,7 +21,7 @@ from squid.core.diagnostics.infrastructure.repository import PostgresErrorReport
 from squid.core.edits.domain import ConcurrentEditError
 from squid.core.edits.infrastructure import PostgresEditRepository
 from squid.core.errors import InvalidStateError
-from squid.core.events.infrastructure.repository import PostgresDomainEventRepository
+from squid.core.events.infrastructure.repository import PostgresDomainEventRepository, publish_domain_event
 from squid.core.idempotency.infrastructure.crypto import IdempotencyResponseCipher
 from squid.core.idempotency.infrastructure.repository import PostgresIdempotencyRepository
 from squid.core.media.infrastructure.repository import PostgresMediaJobRepository
@@ -57,6 +57,7 @@ from squid.core.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.core.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.core.versions.infrastructure.repository import VersionRepository
 from squid.core.voting.infrastructure.repository import VoteRepository
+from squid.unit_of_work import EventFact
 
 
 class SqlAlchemyUnitOfWork:
@@ -380,6 +381,9 @@ class SqlAlchemyUnitOfWork:
             raise
         self._state = "active"
         return self
+
+    async def emit(self, event: EventFact) -> None:
+        await publish_domain_event(self._active_session(), event)
 
     async def commit(self) -> None:
         """Commit the transaction and stop accepting repository operations."""

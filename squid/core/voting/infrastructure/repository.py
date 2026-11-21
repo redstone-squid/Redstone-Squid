@@ -591,13 +591,6 @@ class VoteRepository:
         row = await self._session().scalar(select(ServerSetting).where(ServerSetting.server_id == guild_id))
         assert row is not None
         row.revision += 1
-        await self._session().execute(
-            select(
-                func.public.publish_domain_event(
-                    "guild.voting_changed", 1, "guild", guild_id, func.jsonb_build_object()
-                )
-            )
-        )
 
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         return (await self.get_emoji_presets((guild_id,), kind)).get(guild_id)

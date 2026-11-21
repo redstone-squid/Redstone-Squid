@@ -2,12 +2,30 @@
 
 from collections.abc import Callable
 
-from sqlalchemy import ColumnElement, join, literal, select
+from sqlalchemy import ColumnElement, func, join, literal, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.events.application import DomainEventDelivery
 from squid.core.events.models import DomainEvent, DomainEventConsumer, DomainEventDeliveryRecord
 from squid.core.persistence.queue import ClaimedRowQueue, QueueHealthShape, QueueSpec
+from squid.unit_of_work import EventFact
+
+
+async def publish_domain_event(session: AsyncSession, event: EventFact) -> None:
+    """Append the fact and create consumer deliveries in the active transaction."""
+    await session.execute(
+        select(
+            func.public.publish_domain_event(
+                event.event_type,
+                event.schema_version,
+                event.aggregate_kind,
+                event.aggregate_id,
+                literal(event.payload(), type_=JSONB),
+            )
+        )
+    )
+
 
 DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
     name="domain_events",

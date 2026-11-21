@@ -17,6 +17,7 @@ from whenever import Instant
 from squid.core.builds.domain import Status
 from squid.core.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError
+from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.models import (
     CandidateBuild,
@@ -43,6 +44,7 @@ from squid.core.records.domain import (
     reduce_timing_variants,
 )
 from squid.core.records.domain.door_evidence import LiveDoorConfiguration
+from squid.core.records.domain.events import RecordRunActivated
 from squid.core.records.infrastructure.fingerprint import publication_fingerprint
 from squid.core.records.models import (
     ComputationRun,
@@ -438,25 +440,8 @@ class PostgresRecordRepository:
         run.completed_at = Instant.now()
         run.is_active = True
         await session.flush()
-        await session.execute(
-            select(
-                func.public.publish_domain_event(
-                    "record_run.activated",
-                    1,
-                    "record_run",
-                    run.id,
-                    func.jsonb_build_object(
-                        "previous_run_id",
-                        previous_run_id,
-                        "baseline",
-                        previous_run_id is None,
-                        "build_kind",
-                        batch.kind.value,
-                        "version_id",
-                        batch.version_id,
-                    ),
-                )
-            )
+        await publish_domain_event(
+            session, RecordRunActivated(run.id, previous_run_id, batch.kind.value, batch.version_id)
         )
         return run.id
 

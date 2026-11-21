@@ -3,12 +3,12 @@
 from collections.abc import Awaitable, Callable
 from contextlib import nullcontext
 from copy import deepcopy
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from types import TracebackType
 from typing import Self, override
 
 from squid.core.builds.history import BuildEditActor, HistoryOperation
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.unit_of_work import EventFact, UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass
@@ -22,6 +22,8 @@ class CommittedState[StateT]:
     value: StateT
     clone: Callable[[StateT], StateT] = deepcopy
     """Copy values for a transaction or commit; mapped entities can supply their own copier."""
+
+    events: list[EventFact] = field(default_factory=list)
 
 
 class FakeBuildEditing:
@@ -49,6 +51,7 @@ class FakeUnitOfWork[StateT]:
     """
 
     def __init__(self, committed: CommittedState[StateT]) -> None:
+        self._pending_events: list[EventFact] = []
         self._committed = committed
         self.state = committed.clone(committed.value)
 
@@ -64,7 +67,12 @@ class FakeUnitOfWork[StateT]:
     ) -> None:
         pass
 
+    async def emit(self, event: EventFact) -> None:
+        self._pending_events.append(event)
+
     async def commit(self) -> None:
+        self._committed.events.extend(self._pending_events)
+        self._pending_events.clear()
         self._committed.value = self._committed.clone(self.state)
 
 

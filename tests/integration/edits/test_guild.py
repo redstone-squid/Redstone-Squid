@@ -36,17 +36,6 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     async with factory() as uow:
         await uow.votes.set_role_weight(RoleWeight(GUILD, VoteKind.BUILD, 99, 2))
         await uow.commit()
-    async with migrated_session_factory() as session:
-        queued = await session.scalar(
-            select(DomainEventDeliveryRecord)
-            .join(DomainEvent)
-            .where(
-                DomainEvent.event_type == "guild.voting_changed",
-                DomainEvent.aggregate_id == GUILD,
-                DomainEventDeliveryRecord.consumer == "core",
-            )
-        )
-        assert queued is not None
     snapshot, current = await settings.guild_snapshot(GUILD)
     assert current > saved.outcome.revisions[0].value
     assert snapshot.voting[VoteKind.BUILD].weights == (RoleWeight(GUILD, VoteKind.BUILD, 99, 2),)
@@ -81,6 +70,19 @@ async def test_guild_voting_round_trip_and_current_authority(
         actor,
     )
     assert saved.receipt is not None
+    async with migrated_session_factory() as session:
+        queued = (
+            await session.scalars(
+                select(DomainEventDeliveryRecord)
+                .join(DomainEvent)
+                .where(
+                    DomainEvent.event_type == "guild.voting_changed",
+                    DomainEvent.aggregate_id == GUILD,
+                    DomainEventDeliveryRecord.consumer == "core",
+                )
+            )
+        ).all()
+        assert len(queued) == 1
     revoked = Actor(guild_id=GUILD, discord_user_id=17)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), revoked)

@@ -2,7 +2,20 @@
 
 from collections.abc import Callable
 from types import TracebackType
-from typing import Protocol, Self
+from typing import ClassVar, Protocol, Self
+
+
+class EventFact(Protocol):
+    """A business transition ready for transactional publication."""
+
+    event_type: ClassVar[str]
+    aggregate_kind: ClassVar[str]
+    schema_version: ClassVar[int]
+
+    @property
+    def aggregate_id(self) -> int: ...
+
+    def payload(self) -> dict[str, object]: ...
 
 
 class UnitOfWork(Protocol):
@@ -19,6 +32,8 @@ class UnitOfWork(Protocol):
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
     ) -> None: ...
+
+    async def emit(self, event: EventFact) -> None: ...
 
     async def commit(self) -> None: ...
 
