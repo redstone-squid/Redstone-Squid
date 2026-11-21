@@ -20,14 +20,9 @@ release revision, and its renderer version advances to `nucleation-0.12.2-video-
 
 ## Remaining rollout work
 
-- Verify the deployed synchronized-draft upload flow end to end. The upload endpoint and backend reader exist and are
-  wired into finalization; Paper/Fabric finalization still depends on the world-extraction adapters below.
-- Minecraft world capture and upload are planned in [minecraft-build-verification.md](../minecraft-build-verification.md),
-  [minecraft-schematic-upload.md](../minecraft-schematic-upload.md),
-  [minecraft-paper-world-capture.md](../minecraft-paper-world-capture.md), and
-  [minecraft-fabric-world-capture.md](../minecraft-fabric-world-capture.md). The platform adapters report capture
-  unavailable until those land.
-- Verify actual resource-pack rendering and the deployed upload-to-publication flow.
+- Verify deployed synchronized-draft uploads through publication and resource-pack rendering.
+- See the current plans for [Minecraft schematic uploads](../minecraft-schematic-upload.md) and
+  [Paper world capture](../minecraft-paper-world-capture.md).
 
 ## Deployment and stored data
 
@@ -66,7 +61,7 @@ code. Alembic has one head and its upgrade/downgrade schema-drift test passes.
 
 10 Kotlin tests passed in an isolated build of the snapshot and Fabric capture sources, with the pinned Kotlin/JUnit
 versions and production compiler flags. They cover preservation of nested inventories, text, commands, and identity
-fields, structural limits, deterministic output, and the updated golden schematic. The normal Minecraft build stops
-before compilation because its existing verification metadata lacks 11 dependency checksums. The isolated build kept
-verification enabled, adding only missing checksums verified against Maven Central to its temporary metadata; repository
-verification settings were not changed. Full Paper/Fabric assembly remains unverified.
+fields, structural limits, deterministic output, and the updated golden schematic. At the time, missing dependency
+checksums prevented the full workspace build. Commit `ffbb60a4e` updated those checksums and records a successful
+workspace build with strict dependency verification. The [Minecraft CI job](../../../.github/workflows/ci.yml)
+installs JDK 25 and builds and tests the workspace.

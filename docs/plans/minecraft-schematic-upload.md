@@ -1,48 +1,36 @@
-# Minecraft schematic selection and upload
+# Minecraft schematic uploads
 
-## Goal
+Let linked players attach schematics to synchronized drafts from Minecraft. Use
+the same draft API for [Paper world capture](minecraft-paper-world-capture.md)
+and for files exported by Litematica on Fabric. Fabric players can already attach
+these files to a draft on the web.
 
-Let a linked player select a cuboid, have the platform capture it, and upload it to their draft through the backend's
-synchronized-draft schematic API. This plan covers the platform-neutral parts in `minecraft/core` and `protocol`.
-World extraction itself is in [minecraft-paper-world-capture.md](minecraft-paper-world-capture.md) and
-[minecraft-fabric-world-capture.md](minecraft-fabric-world-capture.md).
+## Shared draft upload
 
-## What exists
+Add schematic routes and `DraftSchematicResponse` parsing to `protocol` and
+`SubmissionDraftClient`. The API lists, uploads, selects a primary file, and
+discards files under `/submissions/drafts/{draft_id}/schematics`.
 
-- `SchematicSnapshot` and `SpongeV3Writer` turn captured data into deterministic Sponge Schematic v3 bytes.
-- `CaptureBudget` limits a selection to 512 blocks per axis and 20 million blocks.
-- The command tree already declares `select`, `pos1`, `pos2`, and `selection`. Paper answers all four with
-  "not available yet".
-- The backend routes live under `/submissions/drafts/{draft_id}/schematics`: `GET` lists sources,
-  `PUT /{upload_id}?filename=` uploads raw bytes (202), `POST /{upload_id}/primary` selects the primary file, and
-  `DELETE /{upload_id}` discards one. Uploads are capped at 16 MiB and the `upload_id` is a client-chosen UUID that
-  makes retries safe.
+Send raw bytes as `application/octet-stream`. Enforce the 16 MiB limit before
+uploading and reuse the same client-generated upload UUID when retrying the same
+file. Keep file reads and HTTP requests off the game thread. Upload returns 202
+while validation runs. Poll the draft's schematic list with a time limit and
+report whether the upload is still validating, ready, or rejected. Draft
+finalization readiness comes from the backend.
 
-## Work
+Test the Kotlin response against `DraftSchematicResponse` in `contracts/openapi.json`.
+Use a fake transport to cover oversize files, upload retries, primary selection,
+discard, and validation rejection.
 
-1. Add the schematic paths to `SubmissionApiPaths` and a response DTO to `protocol` (`id`, `filename`, `sha256`,
-   `byte_size`, `state`, `primary`, `discarded`), parsed with the same bounded JSON rules as the other DTOs.
-2. Add `uploadSchematic`, `listSchematics`, `selectPrimary`, and `discardSchematic` to `SubmissionDraftClient`.
-   `BackendTransport` currently sends JSON, so it needs a bounded binary body with
-   `Content-Type: application/octet-stream`. Reuse one `upload_id` across retries of the same capture.
-3. Hold per-player selection state (two corner positions and dimension) in the core workflow behind a small port, so
-   Paper and Fabric supply only the world access. State is lost on restart, like credentials.
-4. Implement `select`, `pos1`, `pos2`, and `selection` in `MinecraftSubmissionWorkflow`. `selection` reports
-   dimensions, volume, and any budget violation before capture. A new `submit` step (name to be decided in review)
-   captures, encodes, checks the 16 MiB limit, uploads, and selects the file as primary.
-5. Capture and encoding run off the game thread only on detached snapshot data; the platform adapter takes the
-   snapshot on the thread that owns the world, then hands the value to core.
-6. Report upload states to the player: `uploaded`, still validating, rejected. Poll `GET` for the final state with a
-   bound, and never claim a draft is ready from the upload response alone; the backend's finalization readiness is
-   authoritative.
+## Fabric import
 
-## Decisions needed
+Players mark a region and save a `.litematic` in Litematica. Add a way to choose
+that local file and upload it to the current Squid draft. The player explicitly
+chooses which file to send. Litematica can only capture data available to the
+client in multiplayer, so a saved file can be missing server-side data.
 
-- The user-facing command that triggers capture and upload (`/squid upload`, or folding it into `/squid submit`).
-- Whether a draft may hold several captures from one session or the command replaces the previous one.
+## Open decisions
 
-## Tests
-
-Core tests with a fake transport: retry reuses the upload ID, oversize snapshots fail before any request, discard and
-primary selection call the right routes, and a rejected upload is reported rather than silently accepted. Add a
-contract check that the Kotlin DTO matches the backend's `DraftSchematicResponse` in `contracts/openapi.json`.
+- Which command starts capture on Paper and how players choose a file on Fabric.
+- Whether Minecraft can attach several schematics to the same draft and when
+  to mark a new attachment as primary.

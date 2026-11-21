@@ -1,9 +1,8 @@
 # Redstone Squid Minecraft clients
 
 This workspace contains the shared submission client and its Paper and Fabric
-adapters. It deliberately does not use Stick or bundle Nucleation: commands are
-native Brigadier trees, capture produces a small typed snapshot, and the backend
-validates and stores uploaded schematics without filtering their contents.
+adapters. Commands use Brigadier, and the backend validates and stores submitted
+schematics while preserving their original bytes.
 
 ## Building
 
@@ -19,8 +18,7 @@ The build needs JDK 25. With [mise](https://mise.jdx.dev/), run `mise install` i
 - `core`: platform-neutral submission services and the shared Brigadier tree.
 - `platform:paper`: a Paper 26.1.2 plugin entrypoint using lifecycle command
   registration.
-- `platform:fabric-common`: client capture/routing ports that contain no game
-  version classes.
+- `platform:fabric-common`: version-independent client submission routing.
 - `platform:fabric-26_1`: the Fabric 26.1.2 entrypoint and first version adapter.
 
 The shared core now contains a real JDK HTTP transport, Paper installation and
@@ -36,13 +34,12 @@ installation ID and secret only from an environment variable or JVM system
 property and keeps them in memory. An audited OS-vault adapter remains required
 before either platform may persist credentials.
 
-The platform entrypoints now wire `/squid link`, bounded server-side draft discovery,
-category draft creation/resume, status, cancellation, and manifest-aware `set`/`unset` edits. Device polling runs
-off the game thread and every result is dispatched back to the Paper/Fabric game
-thread. No command claims final submission, media, world capture, or schematic
-support. The native Brigadier tree remains a better fit than Stick here because
-the same command shape is registered against Paper and Fabric source types and
-all workflow behavior already lives in the platform-neutral core.
+The platform entrypoints wire `/squid link`, bounded server-side draft discovery,
+category draft creation/resume, status, cancellation, and manifest-aware `set`/`unset`
+edits. Device polling runs off the game thread, and results return to the game
+thread. Fabric players can export a `.litematic` with Litematica and attach it to
+their draft on the web. The [in-game upload plan](../docs/plans/minecraft-schematic-upload.md)
+covers uploading an existing export on Fabric and capturing a selection on Paper.
 
 ## Runtime configuration
 
@@ -104,13 +101,9 @@ Loader, Fabric API, and Fabric Language Kotlin at runtime.
 
 ## Safety invariants
 
-- A selection must be positive, no more than 512 blocks on an axis, and no more
-  than 20 million cells.
-- Snapshots validate resource ID syntax, block counts, and local entity positions.
-  They preserve supplied block/entity NBT, including inventories, text, commands,
-  and identity fields.
-- The writer emits only Sponge v3, uses sorted palettes/compounds, and fixes the
-  gzip header so identical snapshots produce identical bytes.
+- The standalone snapshot module limits selections to 512 blocks on an axis
+  and 20 million cells. Its Sponge v3 writer preserves supplied block and entity
+  NBT and produces identical bytes for identical snapshots.
 - Paper draft calls send both the installation credential and the short-lived
   player bearer; Fabric sends only its PKCE-issued player bearer. Draft origin is
   derived from that authenticated session, and client APIs never accept account
