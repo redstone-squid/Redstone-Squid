@@ -10,10 +10,10 @@ afterEach(() => {
   cleanupSvelte();
 });
 for (const framework of ["react", "svelte"] as const) {
-  const mount = (retryFirstSave = false) =>
+  const mount = (scenario?: "retry" | "upload-retry") =>
     framework === "react"
-      ? renderReact(<DraftTrial locale="en" retryFirstSave={retryFirstSave} />)
-      : renderSvelte(SvelteDraftTrial, { locale: "en", retryFirstSave });
+      ? renderReact(<DraftTrial locale="en" scenario={scenario} />)
+      : renderSvelte(SvelteDraftTrial, { locale: "en", scenario });
   describe(`${framework} draft trial`, () => {
     it("validates conditional fields, filters versions, uploads and recovers from server validation", async () => {
       const user = userEvent.setup();
@@ -49,7 +49,7 @@ for (const framework of ["react", "svelte"] as const) {
     });
     it("retains edits across a failed save and retries without requiring a hidden field", async () => {
       const user = userEvent.setup();
-      mount(true);
+      mount("retry");
       await user.type(screen.getByLabelText("Build title"), "Utility build");
       await user.selectOptions(screen.getByLabelText("Category"), "utility");
       expect(screen.queryByLabelText("Opening width")).not.toBeInTheDocument();
@@ -58,6 +58,17 @@ for (const framework of ["react", "svelte"] as const) {
       await user.click(await screen.findByRole("button", { name: "Retry save" }));
       expect(await screen.findByText("Draft saved.")).toBeVisible();
       expect(screen.getByLabelText("Build title")).toHaveValue("Utility build");
+    });
+    it("retries the selected file after an upload failure", async () => {
+      const user = userEvent.setup();
+      mount("upload-retry");
+      await user.upload(
+        screen.getByLabelText("Attach a schematic"),
+        new File(["fixture"], "retry.schem"),
+      );
+      await user.click(await screen.findByRole("button", { name: "Retry upload" }));
+      expect(await screen.findByText("Attached: retry.schem")).toBeVisible();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
     it("cancels an upload and disposes pending work on unmount", async () => {
       const user = userEvent.setup();

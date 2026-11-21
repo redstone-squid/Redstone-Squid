@@ -1,18 +1,24 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
 import { Button } from "../../ui/react/Button";
-import { Field } from "../../ui/react/Field";
+import { Field, SelectField } from "../../ui/react/Field";
+import { FilePicker } from "../../ui/react/FilePicker";
+import { Notice } from "../../ui/react/Notice";
+import { Progress } from "../../ui/react/Progress";
+import { layoutStyles } from "../../ui/variants";
 import {
   createDraftFixture,
+  draftFeedback,
+  type DraftPhase,
+  type DraftScenario,
   validateDraft,
   versionOptions,
   type DraftErrors,
   type DraftInput,
 } from "./draft-fixture";
 
-type Props = { locale: Locale; retryFirstSave: boolean };
-export function DraftTrial({ locale, retryFirstSave }: Props) {
-  const id = useId();
+type Props = { locale: Locale; scenario?: DraftScenario };
+export function DraftTrial({ locale, scenario }: Props) {
   const t = (key: StaticMessageKey): string => translate(locale, key);
   const [input, setInput] = useState<DraftInput>({
     title: "",
@@ -22,13 +28,15 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
   });
   const [search, setSearch] = useState("");
   const [errors, setErrors] = useState<DraftErrors>({});
-  const [phase, setPhase] = useState<"idle" | "saving" | "saved" | "uploading" | "error">("idle");
+  const [phase, setPhase] = useState<DraftPhase>("idle");
   const [progress, setProgress] = useState(0);
+  const [retryFile, setRetryFile] = useState<File>();
   const [attachment, setAttachment] = useState("");
-  const [api] = useState(() => createDraftFixture(retryFirstSave));
+  const [api] = useState(() => createDraftFixture(scenario));
   const operation = useRef<AbortController | null>(null);
   useEffect(() => () => operation.current?.abort(), []);
   const busy = phase === "saving" || phase === "uploading";
+  const feedback = draftFeedback(phase, errors);
   const versions = versionOptions.filter((version) =>
     version.toLowerCase().includes(search.toLowerCase()),
   );
@@ -61,6 +69,7 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
     operation.current?.abort();
     const controller = new AbortController();
     operation.current = controller;
+    setRetryFile(undefined);
     setProgress(0);
     setAttachment("");
     setPhase("uploading");
@@ -72,12 +81,15 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
       setAttachment(uploaded);
       setPhase("idle");
     } catch {
-      if (!controller.signal.aborted) setPhase("error");
+      if (!controller.signal.aborted) {
+        setRetryFile(file);
+        setPhase("idle");
+      }
     }
   }
   return (
     <form
-      className="sq-stack"
+      className={layoutStyles({ pattern: "stack" })}
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -94,18 +106,14 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
           onChange={(event) => update({ title: event.target.value })}
           error={errors.title ? t(`trial.${errors.title}`) : undefined}
         />
-        <div className="sq-field">
-          <label htmlFor={`${id}-category`}>{t("trial.category")}</label>
-          <select
-            className="sq-input"
-            id={`${id}-category`}
-            value={input.category}
-            onChange={(event) => update({ category: event.target.value as DraftInput["category"] })}
-          >
-            <option value="door">{t("trial.door")}</option>
-            <option value="utility">{t("trial.utility")}</option>
-          </select>
-        </div>
+        <SelectField
+          label={t("trial.category")}
+          value={input.category}
+          onChange={(event) => update({ category: event.target.value as DraftInput["category"] })}
+        >
+          <option value="door">{t("trial.door")}</option>
+          <option value="utility">{t("trial.utility")}</option>
+        </SelectField>
         {input.category === "door" && (
           <Field
             label={t("trial.width")}
@@ -125,52 +133,37 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
             update({ version: "" });
           }}
         />
-        <div className="sq-field">
-          <label htmlFor={`${id}-version`}>{t("workbench.minecraft-version")}</label>
-          <select
-            className="sq-input"
-            id={`${id}-version`}
-            value={input.version}
-            aria-invalid={Boolean(errors.version)}
-            aria-describedby={errors.version ? `${id}-version-error` : undefined}
-            required
-            onChange={(event) => update({ version: event.target.value })}
-          >
-            <option value="">{t("trial.choose-version")}</option>
-            {versions.map((version) => (
-              <option key={version} value={version}>
-                {version}
-              </option>
-            ))}
-          </select>
-          {errors.version && (
-            <p id={`${id}-version-error`} className="sq-error">
-              {t(`trial.${errors.version}`)}
-            </p>
-          )}
-        </div>
-        <div className="sq-field">
-          <label htmlFor={`${id}-upload`}>{t("trial.upload")}</label>
-          <input
-            id={`${id}-upload`}
-            type="file"
-            onChange={(event) => {
-              void upload(event.target.files?.[0]);
-              event.target.value = "";
-            }}
-          />
-        </div>
+        <SelectField
+          label={t("workbench.minecraft-version")}
+          value={input.version}
+          required
+          error={errors.version ? t(`trial.${errors.version}`) : undefined}
+          onChange={(event) => update({ version: event.target.value })}
+        >
+          <option value="">{t("trial.choose-version")}</option>
+          {versions.map((version) => (
+            <option key={version} value={version}>
+              {version}
+            </option>
+          ))}
+        </SelectField>
+        <FilePicker label={t("trial.upload")} onFiles={([file]) => void upload(file)} />
       </fieldset>
-      {phase === "uploading" && (
-        <div className="sq-field">
-          <label htmlFor={`${id}-progress`}>{t("trial.uploading")}</label>
-          <progress id={`${id}-progress`} max={100} value={progress}>
-            {progress}%
-          </progress>
-        </div>
+      {phase === "uploading" && <Progress label={t("trial.uploading")} value={progress} />}
+      {retryFile && (
+        <>
+          <Notice role="alert" tone="warning">
+            {t("trial.uploadFailure")}
+          </Notice>
+          <div className={layoutStyles({ pattern: "actions" })}>
+            <Button disabled={busy} onClick={() => void upload(retryFile)}>
+              {t("trial.retryUpload")}
+            </Button>
+          </div>
+        </>
       )}
       {attachment && <p>{translate(locale, "trial.attachment", { filename: attachment })}</p>}
-      <div className="sq-row">
+      <div className={layoutStyles({ pattern: "actions" })}>
         <Button type="submit" variant="primary" disabled={busy}>
           {t(
             phase === "saving"
@@ -191,17 +184,9 @@ export function DraftTrial({ locale, retryFirstSave }: Props) {
           </Button>
         )}
       </div>
-      <p role="status">
-        {t(
-          phase === "saved"
-            ? "trial.saved"
-            : phase === "error"
-              ? "trial.failed"
-              : Object.keys(errors).length
-                ? "trial.fix-errors"
-                : "trial.ready",
-        )}
-      </p>
+      <Notice role="status" tone={feedback.tone}>
+        {t(feedback.message)}
+      </Notice>
     </form>
   );
 }

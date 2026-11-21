@@ -8,6 +8,24 @@ export type DraftInput = {
 export type DraftErrors = Partial<
   Record<"title" | "width" | "version", "required" | "positive" | "reserved">
 >;
+export type DraftScenario = "retry" | "upload-retry";
+export type DraftPhase = "idle" | "saving" | "saved" | "uploading" | "error";
+
+const phaseMessages = {
+  idle: { tone: "info", message: "trial.ready" },
+  saving: { tone: "info", message: "trial.saving" },
+  saved: { tone: "success", message: "trial.saved" },
+  uploading: { tone: "info", message: "trial.uploading" },
+  error: { tone: "warning", message: "trial.failed" },
+} as const;
+
+export function draftFeedback(phase: DraftPhase, errors: DraftErrors) {
+  if (phase === "idle" && Object.keys(errors).length) {
+    return { tone: "warning", message: "trial.fix-errors" } as const;
+  }
+  return phaseMessages[phase];
+}
+
 export type SaveResult = { kind: "saved" } | { kind: "invalid"; errors: DraftErrors };
 
 export function validateDraft(input: DraftInput): DraftErrors {
@@ -39,12 +57,15 @@ function delay(signal: AbortSignal, milliseconds: number): Promise<void> {
 }
 
 /** Deterministic transport simulation shared by both framework trials. No data leaves the browser. */
-export function createDraftFixture(retryFirstSave: boolean) {
-  let attempts = 0;
+export function createDraftFixture(scenario?: DraftScenario) {
+  let failedOnce = false;
   return {
     async save(input: DraftInput, signal: AbortSignal): Promise<SaveResult> {
       await delay(signal, 180);
-      if (retryFirstSave && attempts++ === 0) throw new Error("Fixture connection failure");
+      if (scenario === "retry" && !failedOnce) {
+        failedOnce = true;
+        throw new Error("Fixture connection failure");
+      }
       if (input.title.trim().toLowerCase() === "reserved")
         return { kind: "invalid", errors: { title: "reserved" } };
       return { kind: "saved" };
@@ -56,6 +77,10 @@ export function createDraftFixture(retryFirstSave: boolean) {
     ): Promise<string> {
       for (const percent of [20, 40, 60, 80, 100]) {
         await delay(signal, 80);
+        if (scenario === "upload-retry" && percent === 40 && !failedOnce) {
+          failedOnce = true;
+          throw new Error("Fixture upload failure");
+        }
         onProgress(percent);
       }
       return file.name;

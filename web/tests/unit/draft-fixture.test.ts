@@ -13,7 +13,7 @@ describe("draft trial fixture", () => {
   it("clears pending transport timers when an operation aborts", async () => {
     vi.useFakeTimers();
     try {
-      const api = createDraftFixture(false);
+      const api = createDraftFixture();
       const controller = new AbortController();
       const upload = api.upload(new File(["fixture"], "door.schem"), controller.signal, vi.fn());
       const rejected = expect(upload).rejects.toMatchObject({ name: "AbortError" });
@@ -26,7 +26,7 @@ describe("draft trial fixture", () => {
     }
   });
   it("does not progress or save after cancellation", async () => {
-    const api = createDraftFixture(false);
+    const api = createDraftFixture();
     const controller = new AbortController();
     controller.abort();
     const progress = vi.fn();
