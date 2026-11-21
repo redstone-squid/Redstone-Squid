@@ -61,6 +61,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/build_versions.sql
 \ir public/TABLES/build_vote_sessions.sql
 \ir public/TABLES/builds.sql
+\ir public/TABLES/catalogue_preferences.sql
 \ir public/TABLES/cli_device_enrollments.sql
 \ir public/TABLES/cli_devices.sql
 \ir public/TABLES/cli_session_challenges.sql

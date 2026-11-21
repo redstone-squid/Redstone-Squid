@@ -2090,6 +2090,26 @@ COMMENT ON COLUMN public.builds.sponsor_installation_id IS 'Opaque Paper install
 
 
 --
+-- Name: catalogue_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalogue_preferences (
+    account_id integer NOT NULL,
+    scope text NOT NULL,
+    filters text NOT NULL,
+    sort text NOT NULL,
+    CONSTRAINT catalogue_preferences_scope_check CHECK ((scope = ANY (ARRAY['builds'::text, 'records'::text])))
+);
+
+
+--
+-- Name: TABLE catalogue_preferences; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.catalogue_preferences IS 'Saved catalogue filters and sort order for an account and tab.';
+
+
+--
 -- Name: cli_device_enrollments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2963,6 +2983,12 @@ CREATE TABLE public.generic_vote_sessions (
     visibility text NOT NULL,
     deadline timestamp with time zone NOT NULL,
     scope text DEFAULT 'guild'::text NOT NULL,
+    voting_ended_at timestamp with time zone,
+    retry_at timestamp with time zone,
+    count_revision integer DEFAULT 0 NOT NULL,
+    count_attempts integer DEFAULT 0 NOT NULL,
+    unreadable_cards jsonb DEFAULT '[]'::jsonb NOT NULL,
+    review_history jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT generic_vote_sessions_network_guild_check CHECK (((scope = 'guild'::text) OR (guild_id IS NOT NULL))),
     CONSTRAINT generic_vote_sessions_scope_check CHECK ((scope = ANY (ARRAY['guild'::text, 'network'::text]))),
     CONSTRAINT generic_vote_sessions_visibility_check CHECK ((visibility = ANY (ARRAY['anonymous_live'::text, 'visible_live'::text, 'anonymous_hidden'::text])))
@@ -5900,7 +5926,7 @@ CREATE TABLE public.vote_sessions (
     author_account_id integer NOT NULL,
     CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
     CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text]))),
-    CONSTRAINT vote_sessions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
+    CONSTRAINT vote_sessions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text, 'counting'::text, 'review'::text, 'void'::text]))),
     CONSTRAINT vote_sessions_threshold_kind_check CHECK (
 CASE
     WHEN (kind = 'generic'::text) THEN ((pass_threshold IS NULL) AND (fail_threshold IS NULL))
@@ -6253,6 +6279,14 @@ ALTER TABLE ONLY public.build_vote_sessions
 
 ALTER TABLE ONLY public.builds
     ADD CONSTRAINT builds_source_submission_draft_id_key UNIQUE (source_submission_draft_id);
+
+
+--
+-- Name: catalogue_preferences catalogue_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalogue_preferences
+    ADD CONSTRAINT catalogue_preferences_pkey PRIMARY KEY (account_id, scope);
 
 
 --
@@ -9539,6 +9573,14 @@ ALTER TABLE ONLY public.build_vote_sessions
 
 ALTER TABLE ONLY public.builds
     ADD CONSTRAINT builds_submitter_account_id_fkey FOREIGN KEY (submitter_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: catalogue_preferences catalogue_preferences_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalogue_preferences
+    ADD CONSTRAINT catalogue_preferences_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --

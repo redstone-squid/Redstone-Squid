@@ -5,6 +5,12 @@ CREATE TABLE public.generic_vote_sessions (
     visibility text NOT NULL,
     deadline timestamp with time zone NOT NULL,
     scope text DEFAULT 'guild'::text NOT NULL,
+    voting_ended_at timestamp with time zone,
+    retry_at timestamp with time zone,
+    count_revision integer DEFAULT 0 NOT NULL,
+    count_attempts integer DEFAULT 0 NOT NULL,
+    unreadable_cards jsonb DEFAULT '[]'::jsonb NOT NULL,
+    review_history jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT generic_vote_sessions_network_guild_check CHECK (((scope = 'guild'::text) OR (guild_id IS NOT NULL))),
     CONSTRAINT generic_vote_sessions_scope_check CHECK ((scope = ANY (ARRAY['guild'::text, 'network'::text]))),
     CONSTRAINT generic_vote_sessions_visibility_check CHECK ((visibility = ANY (ARRAY['anonymous_live'::text, 'visible_live'::text, 'anonymous_hidden'::text])))
