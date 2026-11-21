@@ -125,7 +125,7 @@ class Screen[ResultT = None, OwnerT = Any, ClientT: discord.Client = discord.Cli
         state = self.__dict__.get("_screen_flow")
         if state is None:
             state = _Flow[ResultT, OwnerT, ClientT]()
-            self.__dict__["_screen_flow"] = state
+            cast(dict[str, Any], self.__dict__)["_screen_flow"] = state
         return state
 
     @property

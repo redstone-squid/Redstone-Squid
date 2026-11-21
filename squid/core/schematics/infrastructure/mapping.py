@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from math import isfinite
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from squid.core.errors import DataIntegrityError
 from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
@@ -143,8 +143,7 @@ def _lattice_from_json(payload: object | None) -> AutostackLattice | None:
     if payload is None:
         return None
     value = _mapping(payload, field="lattice")
-    modes: tuple[Literal["1d", "2d"], ...] = ("1d", "2d")
-    mode = _literal(value["mode"], modes, field="lattice.mode")
+    mode = cast(Literal["1d", "2d"], _literal(value["mode"], ("1d", "2d"), field="lattice.mode"))
     vectors = tuple(
         _vector(vector, field="lattice.vectors item") for vector in _sequence(value["vectors"], field="lattice.vectors")
     )
@@ -184,7 +183,6 @@ def _simulation_from_json(payload: object | None) -> SimulationResult | None:
     value = _mapping(payload, field="simulation_evidence")
     input_position = value.get("input_position")
     source = value.get("input_source")
-    sources: tuple[Literal["insign", "heuristic", "manual"], ...] = ("insign", "heuristic", "manual")
     settled_tick = value.get("settled_tick")
     last_piston_tick = value.get("last_piston_tick")
     return SimulationResult(
@@ -195,7 +193,16 @@ def _simulation_from_json(payload: object | None) -> SimulationResult | None:
         input_position=(
             None if input_position is None else _vector(input_position, field="simulation_evidence.input_position")
         ),
-        input_source=(None if source is None else _literal(source, sources, field="simulation_evidence.input_source")),
+        # Cast for the same reason as `lattice.mode` above: `_literal` validates the value against
+        # its options at runtime, but the checker widens the type variable back to `str`.
+        input_source=(
+            None
+            if source is None
+            else cast(
+                Literal["insign", "heuristic", "manual"],
+                _literal(source, ("insign", "heuristic", "manual"), field="simulation_evidence.input_source"),
+            )
+        ),
         last_piston_tick=(
             None
             if last_piston_tick is None
@@ -296,7 +303,7 @@ def _string(value: object, *, field: str) -> str:
 
 def _literal[T: str](value: object, options: tuple[T, ...], *, field: str) -> T:
     for option in options:
-        if value == option:
+        if option == value:
             return option
     msg = f"{field} must be one of {options}"
     raise ValueError(msg)
