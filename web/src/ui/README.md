@@ -1,116 +1,65 @@
-# Design foundations
+# Catalogue design system
 
-Open `/design-system` for the component workbench. Its `lang=en|zh-CN` and
-`theme=light|dark` parameters make each review scenario directly addressable.
-The link button story stores its variant and size in the URL for sharing. Its
-preview opens the draft trial with the selected language, theme, and framework.
+Open `/design-system` to exercise the components used by the catalogue. Stories
+accept `lang=en|zh-CN` and `theme=light|dark`. Their URLs preserve the selected
+specimen so two people can review the same state. They use local fixtures.
 
-`tokens.css` owns semantic colours, spacing, typography, motion, and layering.
-`base.css` owns document defaults; `components.css` owns primitive `sq-` styles.
-Shell styles live in `layouts/workbench-layout.css`, workbench examples in
-`features/workbench/workbench.css`, and build previews beside their component
-in `features/builds/components/`. Keep new feature styles with their feature.
-Astro, Svelte, and the React comparison controls share the variants in `variants.ts`. Keep feature rules
-and API calls outside `ui/`. Use Bits UI for new interactive controls and Lucide for
-icons; icon-only buttons need accessible names. The layout serves Inter,
-JetBrains Mono, and Noto Sans SC from installed Fontsource packages so fonts do
-not depend on a third-party request during rendering or screenshot capture.
+## Composing a screen
 
-Home, builds, and search use `CatalogueLayout` and the shared design primitives.
-The home search is a native GET form; catalogue filters and suggestions use one
-Svelte island. Detail, record, and account pages retain the old layout until rebuilt.
-Both layouts share `DocumentHead` for canonical URLs, alternates, and metadata.
-The illustrations in `public/fixtures` are schematic examples, not real builds.
+| Need                                                              | Use                                                                                                                                                           |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page width, vertical rhythm, wrapping actions, responsive columns | Astro `Layout` or `layoutStyles` on the appropriate semantic HTML element in an island. Choose a pattern and, when needed, a compact, normal, or section gap. |
+| Section with a heading and description                            | `Panel`. Use a native heading for a section that needs no surface.                                                                                            |
+| Navigation or a command                                           | `LinkButton` for a URL, `Button` for an action, and the shared `buttonStyles` for equivalent native markup.                                                   |
+| User input                                                        | `Field` for text and numbers, `SelectField`, `TextareaField`, `CheckField`, and `FieldGroup` for related choices. Each renders native controls.               |
+| Suggestions and modal forms                                       | Svelte `Autocomplete` and `Dialog`. Feature code supplies options, cancellation-aware loaders, or form content.                                               |
+| State and feedback                                                | `Badge` for short metadata, `Notice` for messages and recovery actions, `Progress` for an operation with measurable progress.                                 |
+| Attachments                                                       | `FilePicker` handles file selection and reselection. The submission feature owns accepted formats, transport, progress, and retry.                            |
+| Browsing data                                                     | Reuse the catalogue's build previews, record summaries, pagination, language selector, and media gallery. They live beside their product code.                |
 
-Each layered stylesheet declares `tokens, base, components` before its rules.
-Astro may load feature CSS before layout CSS; this keeps base styles from winning
-over buttons or other components when bundles are split differently.
+A field takes its visible label, hint, error, and native control props. The
+component associates descriptions with the input and preserves caller-provided
+description IDs. Put the error against the field the user can correct. Use a
+notice for a failure that applies to the whole operation. Set its role according
+to how the message should be announced. Static notices need no live region.
 
-The shared autocomplete supports cursor-based replacements in advanced queries,
-IME input, cancellation, and dismissal. Feature code supplies its data loader;
-UI code knows neither locale catalogs nor API routes. Guided forms submit named
-fields with `mode=guided`, and the server composes their query. Mode links also
-work without JavaScript; hydrated switches retain both drafts and sort selection.
+Keep API calls, draft state, validation rules, and translations with the feature.
+For an ordinary screen, compose the existing pieces first. Keep CSS for a unique
+arrangement beside the feature. When multiple callers need the same behavior,
+promote it to a component and add a story using the production implementation.
 
-Use sentence case and the sans-serif font for headings, labels, and badges.
-Do not use all-caps styling or widely spaced monospace labels. Reserve monospace
-for code and technical values such as dimensions and timings.
+## Styles and rendering
 
-## Localization
+`tokens.css` defines the palette, type, spacing, focus, and motion values.
+`components.css`, `forms.css`, and `patterns.css` own the reusable styles.
+Shared styles declare the order of the tokens, base, and components layers so
+Astro can split route bundles without changing the cascade. The layouts serve
+the fonts locally. Use sentence case for headings, labels, and badges. Reserve
+monospace for technical values.
 
-Keep product copy factual and concise; avoid slogans and promotional labels.
-Language names, route prefixes, and metadata live in `LOCALES` in `lib/i18n.ts`.
-Both page shells use the same native language dropdown, which works without
-JavaScript and preserves query and pagination state.
+Astro owns server-rendered routes. Home, builds, and search use
+`CatalogueLayout`. Settings and submissions use shared components within the
+older page shell. Use Svelte for new interactive islands and the React equivalents
+inside existing React features. The workbench's `framework=react` option selects
+the reference implementation for interactive comparisons. The production React
+media gallery has its own story at `/design-system/media`.
 
-All website messages live in `src/locales/en.ftl` and `zh-CN.ftl`. Use Fluent
-variables and selectors for interpolation and pluralization. Call `translate`
-with a message key and variables in Astro, Svelte, or legacy React; do not branch on
-locale to embed translated prose in components. Pass the locale explicitly to
-islands so server and browser render the same language. The rendering frameworks escape
-formatted text; catalogs do not contain HTML.
-
-Run `bun run i18n:generate` after changing message IDs. The generated keys retain
-the existing dotted API (`builds.title` maps to Fluent's `builds-title`). Build
-and type checks reject malformed catalogs, duplicate or missing messages,
-variable mismatches, and stale generated keys. The runtime falls back to English
-for missing or unformattable translated messages, and throws if neither locale
-can format the requested message. Catalog validation keeps that fallback from
-hiding incomplete translations during development.
+Use the Fluent catalogues in `src/locales` for both languages. After updating
+message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes.
+The workbench uses a language query parameter. Both preserve search and pagination.
 
 ## Review
 
-From `web/`, run `bun run build`, then `bun run test:review`. Install the pinned
-browser first with `bunx playwright install chromium`. The tests start the app
-and fixture API. They check keyboard behavior, accessibility, server-rendered
-content, and eight visual combinations of language, theme, and viewport.
+From `web/`, run `bun run check`, `bun run build`, `bun run check:bundle`, and
+`bun run test:review`. Install the pinned browser with
+`bunx playwright install chromium`. Browser checks cover keyboard navigation,
+accessible names and descriptions, rendering without JavaScript, light and dark
+themes, desktop and mobile. `/design-system-trial` exercises a complete draft.
+Review the captured workflows in `review-gallery/index.html`.
 
-`bun run test:compatibility` runs the framework comparison and public discovery in Firefox and WebKit;
-install them with `bunx playwright install --with-deps firefox webkit`. These
-checks also run in CI, with reports under `playwright-report/compatibility/`.
-Draft-form axe scans run in Chromium because Playwright's Firefox revision 1572
-crashes during the scan in both implementations. Firefox still runs the complete
-workflow and dialog accessibility checks. Remove that restriction after checking
-a browser upgrade. Local WebKit validation requires its Linux system libraries.
-
-Open `review-gallery/index.html` for screenshots and successful workflow videos;
-`playwright-report/review/index.html` contains detailed failures and traces.
-The website review workflow uploads both on relevant pull requests. Gallery
-assets and videos are generated artifacts; only approved screenshot baselines
-are tracked in Git.
-
-Use `bun run test:review:update` for intentional visual changes, inspect the
-resulting PNG changes, then rerun `bun run test:review`. Generate and compare
-baselines with the same OS, fonts, and pinned browser. Do not approve differences
-merely to clear a failing check. Add fixtures for new states before building
-features that depend on them.
-
-## Island framework decision
-
-Use Svelte 5 for new islands. Astro still owns routes, page loading, metadata,
-and static composition. Keep validators, API adapters, and Fluent resources
-framework-neutral. Existing React production islands remain until their feature
-is rebuilt; avoid loading both runtimes on the same page during that migration.
-
-`/design-system` and `/design-system-trial` default to Svelte. Add
-`?framework=react` for the reference implementation; both routes accept
-`lang=zh-CN`, and the trial accepts `scenario=retry`. These are local simulations,
-not production submission endpoints. The trial includes conditional fields,
-version filtering, upload progress, cancellation, validation, and retry state.
-
-The same Chromium desktop/mobile checks cover both implementations, in both
-languages, including SSR without JavaScript, keyboard focus, and accessibility.
-The measured initial JavaScript (gzip, including renderer and shared imports)
-was approximately 57 KiB for the Svelte workbench versus 104 KiB for React, and
-43 KiB versus 91 KiB for the draft trial. Run `bun run build` followed by
-`bun run check:bundle` to reproduce measurements against the current lockfile.
-These are transfer-size measurements, not CPU or real-network benchmarks.
-
-Bindings and derived state make the tested local forms easier to follow, while
-Bits UI supplies the keyboard/focus behavior our components need. The tradeoff
-is additional Svelte tooling and slower combined builds while React coexists.
-Browser interaction tests remain authoritative for focus and layout; jsdom unit
-tests also cover binding, composition, validation, and cancellation. Keep the
-React trial as a migration reference, not a second API for new product features.
-Retire the mutation comparison when a production editing feature proves those
-patterns, retaining these measurements and the shared scenarios.
+For an intentional visual change, inspect the refreshed screenshots before
+committing them and rerun the review against the saved baselines. Keep the OS,
+fonts, and browser revision consistent. `bun run test:compatibility` runs the
+framework comparison and discovery flows in Firefox and WebKit. Install their
+system libraries and pinned browsers first. Firefox skips the draft-form axe
+scan because revision 1572 crashes during that scan.

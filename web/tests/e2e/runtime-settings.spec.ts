@@ -19,7 +19,16 @@ test("global settings preserve Discord IDs through browser editing", async ({ pa
     } else if (request.method() === "PATCH") {
       expect(request.headers()["csrf-token"]).toBe("test-csrf");
       expect(request.headers()["idempotency-key"]).toBeTruthy();
-      expect(request.postDataJSON()).toEqual({ welcome_channel_id: "1356094722531393681" });
+      const patch = request.postDataJSON() as { welcome_channel_id: string };
+      if (patch.welcome_channel_id === "invalid") {
+        await route.fulfill({
+          status: 422,
+          headers,
+          json: { title: "Invalid setting", status: 422, detail: "Enter a Discord channel ID." },
+        });
+        return;
+      }
+      expect(patch).toEqual({ welcome_channel_id: "1356094722531393681" });
       await route.fulfill({
         json: { ...settings, welcome_channel_id: "1356094722531393681" },
         headers,
@@ -30,8 +39,16 @@ test("global settings preserve Discord IDs through browser editing", async ({ pa
   });
   await page.goto("/admin/settings");
   await page.getByLabel("Setting", { exact: true }).selectOption("welcome_channel_id");
-  await page.getByLabel("Value", { exact: true }).fill("1356094722531393681");
-  await page.getByRole("button", { name: "Save setting" }).click();
+  const value = page.getByLabel("Value", { exact: true });
+  const save = page.getByRole("button", { name: "Save setting" });
+  await value.fill("invalid");
+  await save.click();
+  await expect(value).toHaveAccessibleDescription("Enter a Discord channel ID.");
+  await expect(value).toHaveAttribute("aria-invalid", "true");
+  await expect(value).toHaveValue("invalid");
+  await value.fill("1356094722531393681");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await save.click();
   await expect(page.getByRole("status")).toHaveText("Setting saved.");
   await expect(page.getByLabel("Value", { exact: true })).toHaveValue("1356094722531393681");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
