@@ -112,6 +112,9 @@ test("discovery / edits existing guided filters and switches mode without JavaSc
   const page = await context.newPage();
   try {
     await installDiscoveryMedia(page);
+    await page.goto("http://127.0.0.1:4321/builds?mode=guided&category=entrance&sort=width");
+    await expect(page.getByLabel("Category", { exact: true })).toHaveValue("entrance");
+    await expect(page.locator('select[name="sort"]')).toHaveValue("width");
     await page.goto("http://127.0.0.1:4321/builds?mode=guided&q=old&creator=CircuitSage");
     await page.getByLabel("Creator", { exact: true }).fill("Space Builder");
     await page.getByRole("button", { name: "Search", exact: true }).click();

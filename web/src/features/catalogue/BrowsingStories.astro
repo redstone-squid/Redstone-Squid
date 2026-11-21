@@ -1,0 +1,72 @@
+---
+import LanguageSelector from "../../components/LanguageSelector.astro";
+import Pagination from "../../components/Pagination.astro";
+import type { PublishedTitle } from "../../generated/types.gen";
+import { translate, type Locale } from "../../lib/i18n";
+import { readOffset } from "../../lib/pagination";
+import LinkButton from "../../ui/astro/LinkButton.astro";
+import Layout from "../../ui/astro/Layout.astro";
+import Panel from "../../ui/astro/Panel.astro";
+import { buildFixtures } from "../workbench/fixtures";
+import RecordSummary from "./RecordSummary.astro";
+import "./catalogue.css";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const url = new URL(Astro.url);
+url.hash = "browsing";
+const second = readOffset(url.searchParams) === 1;
+const build = buildFixtures[second ? 1 : 0];
+const record: PublishedTitle = {
+  id: second ? 2 : 1,
+  definition_id: 1,
+  title_id: build.id,
+  title: `${translate(locale, build.category)} · ${build.dimensions}`,
+  subtitle: translate(locale, build.category),
+  base_title: second ? "smallest" : "fastest",
+  build_kind: "door",
+  version_scope: "all_time",
+  status: "resolved",
+  holder_build_ids: [1],
+  computed_at: "2026-01-12T00:00:00Z",
+  refresh_pending: second,
+};
+---
+
+<Panel id="browsing" title={translate(locale, "workbench.browsing")}>
+  <Layout pattern="grid">
+    <Layout pattern="stack" gap="normal">
+      <RecordSummary {record} {locale} linked={false} />
+      <Pagination
+        {locale}
+        {url}
+        prev={second ? { offset: 0 } : null}
+        next={second ? null : { offset: 1 }}
+      />
+    </Layout>
+    <Layout class="browsing-controls" gap="compact">
+      <h3>{translate(locale, "nav.language")}</h3>
+      <LanguageSelector
+        {locale}
+        align="start"
+        hrefForLocale={(lang) => {
+          const target = new URL(url);
+          target.searchParams.set("lang", lang);
+          return `${target.pathname}${target.search}${target.hash}`;
+        }}
+      />
+      <h3>{translate(locale, "build.media")}</h3>
+      <LinkButton href={`/design-system/media${url.search}`}>
+        {translate(locale, "workbench.media-story")}
+      </LinkButton>
+    </Layout>
+  </Layout>
+</Panel>
+<style>
+  .browsing-controls {
+    justify-items: start;
+  }
+  .browsing-controls h3:not(:first-child) {
+    margin-top: var(--space-3);
+  }
+</style>

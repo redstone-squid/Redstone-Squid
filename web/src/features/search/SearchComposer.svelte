@@ -2,6 +2,7 @@
   import { untrack } from "svelte";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import SuggestField from "./SuggestField.svelte";
+  import SelectField from "../../ui/svelte/SelectField.svelte";
   import Field from "../../ui/svelte/Field.svelte";
   import Button from "../../ui/svelte/Button.svelte";
   import { type GuidedSearch } from "../../lib/search";
@@ -29,7 +30,6 @@
     initialSort?: string;
     initialMode?: Mode;
   } = $props();
-  const id = $props.id();
   let mode = $state(untrack(() => initialMode));
   let guided = $state<Required<GuidedSearch>>(
     untrack(() => ({
@@ -97,18 +97,14 @@
             label={t(`search.${field.name}`)}
             bind:value={guided[field.name]}
           />{/each}
-        <div class="sq-field">
-          <label for={`${id}-category`}>{t("search.category")}</label><select
-            class="sq-input"
-            id={`${id}-category`}
-            name="category"
-            bind:value={guided.category}
-            ><option value="">{t("search.allCategories")}</option
-            >{#each ["door", "entrance", "extender", "utility"] as category (category)}<option
-                value={category}>{translateTaxonomy(locale, category)}</option
-              >{/each}</select
-          >
-        </div>
+        <SelectField label={t("search.category")} name="category" bind:value={guided.category}>
+          <option value="">{t("search.allCategories")}</option>
+          {#each ["door", "entrance", "extender", "utility"] as category (category)}
+            <option value={category} selected={category === guided.category}
+              >{translateTaxonomy(locale, category)}</option
+            >
+          {/each}
+        </SelectField>
       </div>
       <details class="search-filters" bind:open={filtersOpen}>
         <summary>{t("search.moreFilters")}</summary>
@@ -146,18 +142,11 @@
       />
     {/if}
     <div class="search-actions">
-      <div class="sq-field">
-        <label for={`${id}-sort`}>{t("search.sort")}</label><select
-          class="sq-input"
-          id={`${id}-sort`}
-          name="sort"
-          bind:value={sort}
-        >
-          {#each [["", "search.sortRelevance"], ["-created_at", "search.sortNewest"], ["created_at", "search.sortOldest"], ["width", "search.sortWidth"], ["-width", "search.sortWidthDesc"]] as [value, key] (value)}<option
-              {value}>{t(key as StaticMessageKey)}</option
-            >{/each}
-        </select>
-      </div>
+      <SelectField label={t("search.sort")} name="sort" bind:value={sort}>
+        {#each [["", "search.sortRelevance"], ["-created_at", "search.sortNewest"], ["created_at", "search.sortOldest"], ["width", "search.sortWidth"], ["-width", "search.sortWidthDesc"]] as [value, key] (value)}
+          <option {value} selected={value === sort}>{t(key as StaticMessageKey)}</option>
+        {/each}
+      </SelectField>
       <a href={localizePath("/search/help", locale)}>{t("search.help")}</a>
       <Button type="submit" variant="primary"
         >{t("search.submit")} <span aria-hidden="true">→</span></Button

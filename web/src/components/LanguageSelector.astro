@@ -10,7 +10,7 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
 ---
 
 <details class="language-selector" data-align={align}>
-  <summary aria-label={translate(locale, "nav.language")}>
+  <summary aria-label={`${LOCALES[locale].label} · ${translate(locale, "nav.language")}`}>
     <span lang={locale}>{LOCALES[locale].label}</span>
     <span aria-hidden="true">⌄</span>
   </summary>
