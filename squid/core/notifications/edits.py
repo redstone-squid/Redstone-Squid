@@ -20,7 +20,13 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.notifications.application import NotificationRepository, NotificationUnitOfWork
-from squid.core.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
+from squid.core.notifications.domain import (
+    InboxVisibility,
+    NotificationPreferences,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+    SubscriptionTarget,
+)
 from squid.core.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.permissions.application.ports import PermissionUnitOfWork
@@ -41,8 +47,11 @@ def inbox_target(notification_id: int) -> EditTarget:
 
 
 class NotificationEditRepository(NotificationRepository, Protocol):
-    @override
-    async def lock_settings(self, account_id: int) -> int: ...
+    async def update_preferences(
+        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
+    ) -> NotificationPreferences | None: ...
+
+    async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool: ...
 
     async def advance_settings(self, account_id: int) -> int: ...
 
@@ -150,12 +159,24 @@ class NotificationPreferencesEdit(
         root.revision = result.revision
 
 
-class SubscriptionValues(BaseModel):
+class SubscriptionTargetValues(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    id: int
     kind: SubscriptionKind
     subject_id: UUID | None = None
     record_filter: dict[str, JsonValue] | None = None
+
+    def to_target(self) -> SubscriptionTarget:
+        try:
+            record_filter = (
+                None if self.record_filter is None else RecordSubscriptionFilter.from_dict(dict(self.record_filter))
+            )
+        except DataIntegrityError as error:
+            raise ValidationError(str(error)) from error
+        return SubscriptionTarget(self.kind, self.subject_id, record_filter)
+
+
+class SubscriptionValues(SubscriptionTargetValues):
+    id: int
     enabled: bool
 
     @classmethod
@@ -169,26 +190,6 @@ class SubscriptionValues(BaseModel):
             else cast(dict[str, JsonValue], row.record_filter.as_dict()),
             enabled=row.enabled,
         )
-
-    def filter(self) -> RecordSubscriptionFilter | None:
-        if self.record_filter is None:
-            return None
-        try:
-            return RecordSubscriptionFilter.from_dict(dict(self.record_filter))
-        except DataIntegrityError as error:
-            raise ValidationError(str(error)) from error
-
-    async def validate_target(self, repository: NotificationEditRepository) -> None:
-        if self.kind is SubscriptionKind.RECORD_FILTER:
-            if self.subject_id is not None or self.record_filter is None:
-                message = "A record-filter follow requires only a structured filter."
-                raise ValidationError(message)
-            self.filter()
-        elif self.subject_id is None or self.record_filter is not None:
-            message = "A creator or record follow requires only a subject ID."
-            raise ValidationError(message)
-        elif self.enabled and not await repository.subscription_target_exists(self.kind, self.subject_id):
-            raise NotificationSubscriptionNotFoundError
 
 
 class SubscriptionsValues(BaseModel):
@@ -205,6 +206,13 @@ class StatesValues(BaseModel):
 
 
 class NotificationSubscriptionsEdit(NotificationSettingsEdit):
+    @staticmethod
+    async def require_target(repository: NotificationEditRepository, target: SubscriptionTarget) -> None:
+        if target.subject_id is not None and not await repository.subscription_target_exists(
+            target.kind, target.subject_id
+        ):
+            raise NotificationSubscriptionNotFoundError
+
     async def prepare(self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         revision = await self.lock(uow, command)
         account_id = self.account_id(command)
@@ -213,63 +221,50 @@ class NotificationSubscriptionsEdit(NotificationSettingsEdit):
         before: list[SubscriptionValues] = []
         after: list[SubscriptionValues] = []
         if set(values) == {"create"}:
-            creation = values["create"]
-            if not isinstance(creation, dict):
-                message = "A follow requires a subject or filter."
-                raise ValidationError(message)
-            desired = SubscriptionValues.model_validate(creation | {"id": 0, "enabled": True})
-            await desired.validate_target(uow.notifications)
-            record_filter = desired.filter()
-            if record_filter is not None:
-                desired = desired.model_copy(update={"record_filter": record_filter.as_dict()})
-            existing = await uow.notifications.matching_subscription(
-                account_id, kind=desired.kind, subject_id=desired.subject_id, record_filter=desired.filter()
-            )
+            target = SubscriptionTargetValues.model_validate(values["create"]).to_target()
+            await self.require_target(uow.notifications, target)
+            existing = await uow.notifications.matching_subscription(account_id, target)
             if existing is None:
-                desired = desired.model_copy(update={"id": await uow.notifications.reserve_subscription_id()})
-                previous = desired.model_copy(update={"enabled": False})
-            else:
-                previous = SubscriptionValues.from_row(existing)
-                desired = previous.model_copy(update={"enabled": True})
+                existing = NotificationSubscription(
+                    id=await uow.notifications.reserve_subscription_id(),
+                    account_id=account_id,
+                    kind=target.kind,
+                    subject_id=target.subject_id,
+                    record_filter=target.record_filter,
+                    enabled=False,
+                )
+            previous = SubscriptionValues.from_row(existing)
             before.append(previous)
-            after.append(desired)
+            after.append(previous.model_copy(update={"enabled": True}))
         else:
             if set(values) == {"states"}:
-                requested = StatesValues.model_validate(values).states
-                desired_rows = []
-                for subscription_id, enabled in sorted(requested.items()):
-                    row = await uow.notifications.subscription(account_id, subscription_id)
-                    if row is None:
-                        raise NotificationSubscriptionNotFoundError
-                    desired_rows.append(SubscriptionValues.from_row(row).model_copy(update={"enabled": enabled}))
+                states = StatesValues.model_validate(values).states
+                requested_targets = {}
             else:
-                desired_rows = list(SubscriptionsValues.model_validate(values).subscriptions)
-            if len({row.id for row in desired_rows}) != len(desired_rows):
-                message = "A follow may occur only once in an edit."
-                raise ValidationError(message)
-            for desired in sorted(desired_rows, key=lambda row: row.id):
-                current = await uow.notifications.subscription(account_id, desired.id)
-                if current is None:
+                requested = SubscriptionsValues.model_validate(values).subscriptions
+                states = {item.id: item.enabled for item in requested}
+                if len(states) != len(requested):
+                    message = "A follow may occur only once in an edit."
+                    raise ValidationError(message)
+                requested_targets = {item.id: item.to_target() for item in requested}
+            active = {row.id: row.target for row in await uow.notifications.list_subscriptions(account_id)}
+            for subscription_id, enabled in sorted(states.items()):
+                row = await uow.notifications.subscription(account_id, subscription_id)
+                if row is None:
                     raise NotificationSubscriptionNotFoundError
-                previous = SubscriptionValues.from_row(current)
-                if previous.model_copy(update={"enabled": desired.enabled}) != desired:
+                if subscription_id in requested_targets and requested_targets[subscription_id] != row.target:
                     message = "A follow edit can only change whether it is enabled."
                     raise ValidationError(message)
-                await desired.validate_target(uow.notifications)
+                if enabled:
+                    await self.require_target(uow.notifications, row.target)
+                    active[row.id] = row.target
+                else:
+                    active.pop(row.id, None)
+                previous = SubscriptionValues.from_row(row)
                 before.append(previous)
-                after.append(desired)
-        active = {
-            row.id: SubscriptionValues.from_row(row) for row in await uow.notifications.list_subscriptions(account_id)
-        }
-        for row in after:
-            if row.enabled:
-                active[row.id] = row
-            else:
-                active.pop(row.id, None)
-        signatures = [(row.kind, row.subject_id, row.filter()) for row in active.values()]
-        if len(set(signatures)) != len(signatures):
-            message = "An equivalent follow is already enabled."
-            raise ValidationError(message)
+                after.append(previous.model_copy(update={"enabled": enabled}))
+
+            SubscriptionTarget.require_unique(active.values())
         return PreparedEdit(
             SubscriptionsValues(subscriptions=tuple(before)).values(),
             SubscriptionsValues(subscriptions=tuple(after)).values(),
@@ -290,7 +285,7 @@ class NotificationSubscriptionsEdit(NotificationSettingsEdit):
                     account_id=account_id,
                     kind=desired.kind,
                     subject_id=desired.subject_id,
-                    record_filter=desired.filter(),
+                    record_filter=desired.to_target().record_filter,
                     enabled=desired.enabled,
                 )
             else:

@@ -26,6 +26,7 @@ from squid.core.notifications.domain import (
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
+    SubscriptionTarget,
 )
 from squid.core.notifications.models import (
     InboxNotification,
@@ -143,18 +144,15 @@ class PostgresNotificationRepository:
     async def matching_subscription(
         self,
         account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None,
-        record_filter: RecordSubscriptionFilter | None,
+        target: SubscriptionTarget,
     ) -> NotificationSubscription | None:
         return await self._session().scalar(
             select(NotificationSubscription)
             .where(
                 NotificationSubscription.account_id == account_id,
-                NotificationSubscription.kind == kind,
-                NotificationSubscription.subject_id.is_not_distinct_from(subject_id),
-                NotificationSubscription.record_filter.is_not_distinct_from(record_filter),
+                NotificationSubscription.kind == target.kind,
+                NotificationSubscription.subject_id.is_not_distinct_from(target.subject_id),
+                NotificationSubscription.record_filter.is_not_distinct_from(target.record_filter),
             )
             .order_by(NotificationSubscription.enabled.desc(), NotificationSubscription.id)
             .limit(1)

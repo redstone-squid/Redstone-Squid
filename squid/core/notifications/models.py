@@ -23,7 +23,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-from squid.core.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
+from squid.core.notifications.domain import (
+    NotificationKind,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+    SubscriptionTarget,
+)
 from squid.core.persistence.base import Base
 from squid.core.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from squid.core.persistence.queue_models import DeadLetterColumns, QueueColumns
@@ -111,6 +116,10 @@ class NotificationSubscription(CreatedAtMixin, Base, kw_only=True):
     subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     record_filter: Mapped[RecordSubscriptionFilter | None] = mapped_column("filter", RecordFilterJSON(), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+
+    @property
+    def target(self) -> SubscriptionTarget:
+        return SubscriptionTarget(self.kind, self.subject_id, self.record_filter)
 
 
 class InboxNotification(CreatedAtMixin, Revisioned, Base, kw_only=True):

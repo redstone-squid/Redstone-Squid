@@ -15,6 +15,7 @@ from squid.core.notifications.domain import (
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
+    SubscriptionTarget,
 )
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
@@ -37,19 +38,10 @@ class NotificationRepository(Protocol):
     async def matching_subscription(
         self,
         account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None,
-        record_filter: RecordSubscriptionFilter | None,
+        target: SubscriptionTarget,
     ) -> NotificationSubscription | None: ...
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
-
-    async def update_preferences(
-        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences | None: ...
-
-    async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool: ...
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
 
@@ -130,9 +122,7 @@ class NotificationService:
             revision = await uow.notifications.lock_settings(account_id)
             row = await uow.notifications.matching_subscription(
                 account_id,
-                kind=kind,
-                subject_id=subject_id,
-                record_filter=record_filter,
+                SubscriptionTarget(kind, subject_id, record_filter),
             )
             return row, revision
 

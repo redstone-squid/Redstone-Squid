@@ -15,6 +15,7 @@ from squid.core.notifications.domain import (
 from squid.core.notifications.edits import (
     StatesValues,
     SubscriptionsValues,
+    SubscriptionTargetValues,
     SubscriptionValues,
 )
 from squid.core.notifications.models import NotificationSubscription
@@ -61,9 +62,9 @@ class NotificationEditRecorder:
             case "notifications.subscriptions":
                 creation = values["create"]
                 assert isinstance(creation, dict)
-                desired = SubscriptionValues.model_validate(creation | {"id": 0, "enabled": True})
+                desired = SubscriptionTargetValues.model_validate(creation).to_target()
                 row = await self.service.subscribe(
-                    account_id, kind=desired.kind, subject_id=desired.subject_id, record_filter=desired.filter()
+                    account_id, kind=desired.kind, subject_id=desired.subject_id, record_filter=desired.record_filter
                 )
                 stored = SubscriptionValues.from_row(row)
                 before = SubscriptionsValues(subscriptions=(stored.model_copy(update={"enabled": False}),)).values()

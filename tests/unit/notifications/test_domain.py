@@ -11,7 +11,7 @@ from squid.bot.notifications_cog import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import localization_for
 from squid.core.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
-from squid.core.notifications.domain import NotificationKind
+from squid.core.notifications.domain import NotificationKind, SubscriptionKind, SubscriptionTarget
 from squid_i18n import discord_text, resolve_text
 from squid_ui.content.text import Localization
 
@@ -24,6 +24,18 @@ def test_record_filter_round_trips_presence_and_exact_tag_predicates() -> None:
     )
 
     assert RecordSubscriptionFilter.from_dict(record_filter.as_dict()) == record_filter
+
+
+def test_follow_equivalence_matches_stored_filters() -> None:
+    def target(value: bool | int | float, *, reverse: bool = False) -> SubscriptionTarget:
+        tags = (TagPredicate(1), TagPredicate(2, "exact", value))
+        return SubscriptionTarget(
+            SubscriptionKind.RECORD_FILTER, record_filter=RecordSubscriptionFilter(tags=tags[::-1] if reverse else tags)
+        )
+
+    SubscriptionTarget.require_unique([target(value=True), target(1)])
+    with pytest.raises(ValueError, match="equivalent follow"):
+        SubscriptionTarget.require_unique([target(1), target(1.0, reverse=True)])
 
 
 def test_empty_record_filter_is_rejected() -> None:

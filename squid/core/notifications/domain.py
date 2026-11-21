@@ -12,7 +12,7 @@ it carries the message snapshot and identifiers needed to report that attempt's
 result without overwriting a newer claim.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
@@ -165,6 +165,17 @@ class TagPredicate:
                 tr(t"notifications-exact-predicate-value-required = exact predicates require a value")
             )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TagPredicate):
+            return NotImplemented
+        # JSONB distinguishes booleans from numbers, while Python equates True and 1.
+        return (
+            self.tag_id == other.tag_id
+            and self.operator == other.operator
+            and isinstance(self.value, bool) == isinstance(other.value, bool)
+            and self.value == other.value
+        )
+
     def as_dict(self) -> dict[str, object]:
         """Return the tag ID, operator, and optional value for persistence."""
         result: dict[str, object] = {"tag_id": self.tag_id, "operator": self.operator}
@@ -201,6 +212,7 @@ class RecordSubscriptionFilter:
                     t"contain only one predicate per tag"
                 )
             )
+        object.__setattr__(self, "tags", tuple(sorted(self.tags, key=lambda tag: tag.tag_id)))
 
     def as_dict(self) -> dict[str, object]:
         """Serialize the filter into a stable JSON shape."""
@@ -208,7 +220,7 @@ class RecordSubscriptionFilter:
             "build_kinds": sorted(self.build_kinds),
             "base_titles": sorted(self.base_titles),
             "version_scopes": sorted(self.version_scopes),
-            "tags": [predicate.as_dict() for predicate in sorted(self.tags, key=lambda item: item.tag_id)],
+            "tags": [predicate.as_dict() for predicate in self.tags],
         }
 
     @classmethod
@@ -253,6 +265,33 @@ class RecordSubscriptionFilter:
                     t"persisted record filter violates the notification contract"
                 )
             ) from error
+
+
+@dataclass(frozen=True, slots=True)
+class SubscriptionTarget:
+    """The subject or filter that identifies an equivalent follow within one account."""
+
+    kind: SubscriptionKind
+    subject_id: UUID | None = None
+    record_filter: RecordSubscriptionFilter | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind is SubscriptionKind.RECORD_FILTER:
+            if self.subject_id is not None or self.record_filter is None:
+                message = "A record-filter follow requires only a structured filter."
+                raise ValidationError(message)
+        elif self.subject_id is None or self.record_filter is not None:
+            message = "A creator or record follow requires only a subject ID."
+            raise ValidationError(message)
+
+    @staticmethod
+    def require_unique(targets: Iterable[SubscriptionTarget]) -> None:
+        seen: set[SubscriptionTarget] = set()
+        for target in targets:
+            if target in seen:
+                message = "An equivalent follow is already enabled."
+                raise ValidationError(message)
+            seen.add(target)
 
 
 @dataclass(frozen=True, slots=True)
