@@ -14,6 +14,7 @@ from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
+from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.media.application.jobs import MediaProcessingJobRunner
 from squid.core.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.core.schematics.infrastructure.durable import SchematicJobRunner
@@ -25,7 +26,6 @@ from squid.runtime import BackgroundTaskSupervisor, RuntimeJob, WorkerServices, 
 from squid.topics import open_topic_bridge
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,
-    CoreDomainEventRunner,
     MaterializeNotificationHandler,
     RefreshGuildVotingHandler,
 )
@@ -76,15 +76,16 @@ class DatabaseWorker:
         self._event_lock = asyncio.Lock()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
         notification_handler = MaterializeNotificationHandler(services.notifications)
-        self._events = CoreDomainEventRunner(
+        self._events = DomainEventRunner(
             services.events,
+            "core",
             {
-                "build.submitted": (notification_handler,),
-                "build.confirmed": (notification_handler,),
-                "build.denied": (notification_handler,),
-                "record_run.activated": (notification_handler,),
-                "vote_session.closed": (outcome_handler,),
-                "guild.voting_changed": (RefreshGuildVotingHandler(services.votes),),
+                "build.submitted": (notification_handler.handle,),
+                "build.confirmed": (notification_handler.handle,),
+                "build.denied": (notification_handler.handle,),
+                "record_run.activated": (notification_handler.handle,),
+                "vote_session.closed": (outcome_handler.handle,),
+                "guild.voting_changed": (RefreshGuildVotingHandler(services.votes).handle,),
             },
         )
         self._job_specs = self._build_job_specs()

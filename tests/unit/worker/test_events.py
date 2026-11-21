@@ -12,12 +12,12 @@ from squid.core.builds.application import BuildService
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.notifications import NotificationService
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,
-    CoreDomainEventRunner,
     MaterializeNotificationHandler,
     RefreshGuildVotingHandler,
 )
@@ -151,7 +151,7 @@ async def test_apply_build_vote_outcome_names_no_chat_client() -> None:
 async def test_core_runner_acknowledges_unhandled_events() -> None:
     delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
     events = EventRecorder(delivery)
-    runner = CoreDomainEventRunner(events, {})
+    runner = DomainEventRunner(events, "core", {})
 
     await runner.process_batch()
 
@@ -163,7 +163,7 @@ async def test_core_runner_retries_handler_failure() -> None:
     delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
     events = EventRecorder(delivery)
     handler = FailingHandler(RuntimeError("boom"))
-    runner = CoreDomainEventRunner(events, {"vote_session.closed": (handler,)})
+    runner = DomainEventRunner(events, "core", {"vote_session.closed": (handler.handle,)})
 
     await runner.process_batch()
 
@@ -178,7 +178,7 @@ async def test_core_runner_rejects_unsupported_event_versions_without_retry() ->
     events = EventRecorder(delivery)
     error = UnsupportedEventVersionError("future")
     handler = FailingHandler(error)
-    runner = CoreDomainEventRunner(events, {"vote_session.closed": (handler,)})
+    runner = DomainEventRunner(events, "core", {"vote_session.closed": (handler.handle,)})
 
     await runner.process_batch()
 

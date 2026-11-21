@@ -4,14 +4,12 @@ import logging
 from typing import Protocol
 
 from squid.core.builds.history import BuildEditActor, HistoryOperation
-from squid.core.diagnostics.log_capture import work_lost
-from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.notifications import NotificationService
 from squid.core.voting.application.services import VoteService
 from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
-CORE_CONSUMER = "core"
 _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
     "build.submitted": frozenset({1, 2}),
     "build.confirmed": frozenset({1, 2, 3}),
@@ -50,12 +48,6 @@ class BuildStatusWriter(Protocol):
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
     ) -> object: ...
-
-
-class CoreEventHandler(Protocol):
-    """Handle an event idempotently, including retries after another handler fails."""
-
-    async def handle(self, event: DomainEvent) -> None: ...
 
 
 class ApplyBuildVoteOutcomeHandler:
@@ -112,51 +104,3 @@ class MaterializeNotificationHandler:
             msg = f"Unsupported {event.event_type} schema version {event.schema_version}"
             raise UnsupportedEventVersionError(msg)
         await self._notifications.materialize(event)
-
-
-class CoreDomainEventRunner:
-    """Run handlers sequentially and acknowledge each delivery after all succeed.
-
-    Events with no registered handler are acknowledged. Unsupported schema versions
-    are rejected; other handler failures use the queue's retry policy. A retry runs
-    all handlers again, so each must tolerate previously completed side effects.
-    """
-
-    def __init__(self, events: DomainEventService, handlers: dict[str, tuple[CoreEventHandler, ...]]) -> None:
-        self._events = events
-        self._handlers = handlers
-
-    async def process_batch(self) -> None:
-        """Process a bounded batch; queue-operation errors propagate and stop the batch."""
-        for delivery in await self._events.claim(CORE_CONSUMER):
-            await self._process(delivery)
-
-    async def _process(self, delivery: DomainEventDelivery) -> None:
-        try:
-            for handler in self._handlers.get(delivery.event.event_type, ()):
-                await handler.handle(delivery.event)
-        except UnsupportedEventVersionError as error:
-            await self._events.reject(delivery, error)
-            logger.exception(
-                "Rejected a domain event with an unsupported schema version",
-                extra={
-                    "squid.event.id": delivery.event.id,
-                    "squid.event.type": delivery.event.event_type,
-                    "squid.event.schema_version": delivery.event.schema_version,
-                    **work_lost(),
-                },
-            )
-            return
-        except Exception as error:
-            dead_lettered = await self._events.fail(delivery, error)
-            if dead_lettered:
-                logger.exception(
-                    "Dead-lettered a core domain event after repeated handler failures",
-                    extra={
-                        "squid.event.id": delivery.event.id,
-                        "squid.event.type": delivery.event.event_type,
-                        **work_lost(),
-                    },
-                )
-            return
-        await self._events.complete(delivery)

@@ -2,29 +2,20 @@
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import discord
 
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.core.builds.domain import Status
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
+from squid.core.events.dispatcher import EventHandler
 from squid.core.voting.domain import DeleteLogVoteTarget, VoteSessionResult
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 logger = logging.getLogger(__name__)
-
-
-class DomainEventHandler(Protocol):
-    """React to one kind of recorded transition.
-
-    Delivery is at-least-once, so `handle` must be safe to run more than once for
-    the same event.
-    """
-
-    async def handle(self, event: DomainEvent) -> None: ...
 
 
 class PostSubmittedBuildHandler:
@@ -72,11 +63,11 @@ class DeleteVotedMessageHandler:
             await message.delete()
 
 
-def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[DomainEventHandler, ...]]:
+def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[EventHandler, ...]]:
     """Map each handled event type to the handlers that react to it."""
     return {
-        "build.submitted": (PostSubmittedBuildHandler(bot),),
+        "build.submitted": (PostSubmittedBuildHandler(bot).handle,),
         # Confirming a build enqueues reconciliation through the database, so the
         # reconciler owns publication of confirmed cards.
-        "vote_session.closed": (DeleteVotedMessageHandler(bot),),
+        "vote_session.closed": (DeleteVotedMessageHandler(bot).handle,),
     }

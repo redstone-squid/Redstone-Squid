@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
-from squid.bot.events.handlers import DomainEventHandler, build_handler_registry
-from squid.core.events import DomainEventDelivery, UnsupportedEventVersionError
+from squid.bot.events.handlers import build_handler_registry
+from squid.core.events.dispatcher import DomainEventRunner
 from squid.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 
@@ -31,7 +31,9 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self.handlers: dict[str, tuple[DomainEventHandler, ...]] = build_handler_registry(bot)
+        self._runner = DomainEventRunner(
+            bot.services.domain_events, CONSUMER, build_handler_registry(bot), required=DELIVERY_REQUIRED_EVENTS
+        )
         self._task: JobHandle | None = None
 
     @override
@@ -55,48 +57,7 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
         """
         await self.bot.wait_until_ready()
         with trace_span("squid.background.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            for delivery in await self.bot.services.domain_events.claim(CONSUMER):
-                await self._process(delivery)
-
-    async def _process(self, delivery: DomainEventDelivery) -> None:
-        handlers = self.handlers.get(delivery.event.event_type)
-        if not handlers:
-            if delivery.event.event_type in DELIVERY_REQUIRED_EVENTS:
-                error = RuntimeError(f"No Discord delivery handler for {delivery.event.event_type}")
-                await self.bot.services.domain_events.fail(delivery, error)
-                return
-            # Every registered consumer receives every event, so an unhandled type is
-            # normal rather than an error; acknowledge it instead of retrying forever.
-            await self.bot.services.domain_events.complete(delivery)
-            return
-        try:
-            # One failure retries the whole delivery, re-running the handlers that
-            # already succeeded. That is why every handler must be idempotent.
-            for handler in handlers:
-                await handler.handle(delivery.event)
-        except UnsupportedEventVersionError as error:
-            await self.bot.services.domain_events.reject(delivery, error)
-            logger.exception(
-                "Rejected a Discord domain event with an unsupported schema version",
-                extra={
-                    "squid.event.id": delivery.event.id,
-                    "squid.event.type": delivery.event.event_type,
-                    "squid.event.schema_version": delivery.event.schema_version,
-                },
-            )
-            return
-        except Exception as error:
-            dead_lettered = await self.bot.services.domain_events.fail(delivery, error)
-            if dead_lettered:
-                logger.exception(
-                    "Dead-lettered a domain event after repeated handler failures",
-                    extra={
-                        "squid.event.id": delivery.event.id,
-                        "squid.event.type": delivery.event.event_type,
-                    },
-                )
-            return
-        await self.bot.services.domain_events.complete(delivery)
+            await self._runner.process_batch()
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

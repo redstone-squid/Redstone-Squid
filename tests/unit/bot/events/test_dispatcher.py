@@ -1,14 +1,13 @@
 """Domain-event dispatcher tests."""
 
 from dataclasses import dataclass, field
-from typing import Any, override
+from typing import override
 
 from whenever import Instant
 
-from squid.bot.events.cog import DomainEventCog
+from squid.bot.events.cog import CONSUMER, DELIVERY_REQUIRED_EVENTS
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
-from squid.runtime import BotServices
-from tests.support.services import bot_services
+from squid.core.events.dispatcher import DomainEventRunner
 
 
 def _delivery(event_type: str = "build.confirmed", *, schema_version: int = 1) -> DomainEventDelivery:
@@ -57,26 +56,18 @@ class HandlerRecorder:
             raise self.error
 
 
-@dataclass(frozen=True, slots=True)
-class _Bot:
-    services: BotServices
-
-
-def _cog(*handlers: HandlerRecorder) -> tuple[Any, EventServiceRecorder]:
-    """Build a cog without starting its loop, so dispatch can be driven directly."""
+def _runner(*handlers: HandlerRecorder) -> tuple[DomainEventRunner, EventServiceRecorder]:
     events = EventServiceRecorder()
-    cog = DomainEventCog.__new__(DomainEventCog)
-    cog.bot = _Bot(bot_services(domain_events=events))
-    cog.handlers = {"build.confirmed": handlers} if handlers else {}
-    return cog, events
+    registry = {"build.confirmed": tuple(handler.handle for handler in handlers)}
+    return DomainEventRunner(events, CONSUMER, registry, required=DELIVERY_REQUIRED_EVENTS), events
 
 
 async def test_a_handled_event_is_acknowledged() -> None:
     handler = HandlerRecorder()
-    cog, events = _cog(handler)
+    runner, events = _runner(handler)
     delivery = _delivery()
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert handler.events == [delivery.event]
     assert events.completed == [delivery]
@@ -85,20 +76,20 @@ async def test_a_handled_event_is_acknowledged() -> None:
 
 async def test_an_unhandled_event_type_is_acknowledged_rather_than_retried() -> None:
     """Every consumer sees every event, so an unhandled type is normal."""
-    cog, events = _cog()
+    runner, events = _runner()
     delivery = _delivery("vote_session.closed")
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert events.completed == [delivery]
     assert events.failed == []
 
 
 async def test_missing_submission_delivery_handler_is_not_acknowledged() -> None:
-    cog, events = _cog()
+    runner, events = _runner()
     delivery = _delivery("build.submitted")
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert len(events.failed) == 1
     assert events.failed[0][0] == delivery
@@ -107,10 +98,10 @@ async def test_missing_submission_delivery_handler_is_not_acknowledged() -> None
 
 async def test_a_failing_handler_is_retried_and_not_acknowledged() -> None:
     handler = HandlerRecorder(RuntimeError("boom"))
-    cog, events = _cog(handler)
+    runner, events = _runner(handler)
     delivery = _delivery()
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert len(events.failed) == 1
     assert events.completed == []
@@ -118,10 +109,10 @@ async def test_a_failing_handler_is_retried_and_not_acknowledged() -> None:
 
 async def test_an_unsupported_event_version_is_rejected() -> None:
     handler = HandlerRecorder(UnsupportedEventVersionError("unsupported"))
-    cog, events = _cog(handler)
+    runner, events = _runner(handler)
     delivery = _delivery(schema_version=99)
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert len(events.rejected) == 1
     assert events.failed == []
@@ -130,10 +121,10 @@ async def test_an_unsupported_event_version_is_rejected() -> None:
 
 async def test_every_handler_for_one_event_type_runs() -> None:
     first, second = HandlerRecorder(), HandlerRecorder()
-    cog, events = _cog(first, second)
+    runner, events = _runner(first, second)
     delivery = _delivery()
 
-    await cog._process(delivery)
+    await runner.process(delivery)
 
     assert first.events == [delivery.event]
     assert second.events == [delivery.event]
@@ -143,9 +134,9 @@ async def test_every_handler_for_one_event_type_runs() -> None:
 async def test_a_failing_handler_stops_the_ones_after_it_and_retries_the_delivery() -> None:
     """The whole delivery retries, which is why handlers must be idempotent."""
     failing, later = HandlerRecorder(RuntimeError("boom")), HandlerRecorder()
-    cog, events = _cog(failing, later)
+    runner, events = _runner(failing, later)
 
-    await cog._process(_delivery())
+    await runner.process(_delivery())
 
     assert later.events == []
     assert len(events.failed) == 1
