@@ -1,4 +1,5 @@
 @layer tokens, base, components;
+@import "./forms.css";
 @layer components {
   .sq-muted,
   .sq-lede {

@@ -27,8 +27,10 @@ describe("Field composition", () => {
     const input = screen.getByRole("textbox", { name: "Build name" });
     expect(input).toHaveClass("sq-input", "wide-field");
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input).toHaveAccessibleDescription("All names are public. Name is required.");
-    expect(screen.queryByText("Use a short name.")).not.toBeInTheDocument();
+    expect(input).toHaveAccessibleDescription(
+      "All names are public. Use a short name. Name is required.",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Name is required.");
     await user.type(input, "Door");
     expect(changed).toHaveBeenCalledTimes(4);
   });
