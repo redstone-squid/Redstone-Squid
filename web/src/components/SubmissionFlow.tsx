@@ -58,6 +58,7 @@ type Props = {
 type Copy = {
   loading: string;
   unavailableTitle: string;
+  requestFailed: (status: number) => string;
   unavailable: string;
   incompatibleTitle: string;
   chooseTitle: string;
@@ -100,6 +101,7 @@ type Copy = {
 const copyFor = (locale: Locale): Copy => ({
   loading: translate(locale, "submitFlow.loading"),
   unavailableTitle: translate(locale, "submitFlow.unavailableTitle"),
+  requestFailed: (status) => translate(locale, "submitFlow.requestFailed", { status }),
   unavailable: translate(locale, "submitFlow.unavailable"),
   incompatibleTitle: translate(locale, "submitFlow.incompatibleTitle"),
   chooseTitle: translate(locale, "submitFlow.chooseTitle"),
@@ -178,7 +180,7 @@ function failureMessage(error: SubmissionApiError, copy: Copy): string {
   if (error.kind === "authentication") return copy.auth;
   if (error.kind === "consent") return copy.consent;
   if (error.kind === "unavailable") return copy.unavailable;
-  return error.message;
+  return error.problem ? error.message : copy.requestFailed(error.status);
 }
 
 function mediaFailureMessage(error: SubmissionApiError, copy: Copy): string {
@@ -588,7 +590,6 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   if (blockingError) {
     return (
       <section className="surface submission-alert" role="alert">
-        <p className="kicker">FORM / STOPPED</p>
         <h2>{blockingError.title}</h2>
         <p>{blockingError.message}</p>
         <Button type="button" onClick={() => window.location.reload()}>
@@ -624,7 +625,10 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     return (
       <section className="surface submission-start">
         <p className="kicker">
-          FORM / {manifest.schema_id} / R{manifest.revision}
+          {translate(locale, "submitFlow.formLabel", {
+            id: manifest.schema_id,
+            revision: manifest.revision,
+          })}
         </p>
         <h2>{copy.chooseTitle}</h2>
         <p>{copy.chooseBody}</p>
@@ -781,7 +785,6 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         className="surface submission-section submission-finalization"
         aria-labelledby="submission-finalization"
       >
-        <p className="kicker">FINALIZE / PENDING BUILD</p>
         <h2 id="submission-finalization">{copy.submissionTitle}</h2>
         <p>{copy.submissionBody}</p>
         <p className="submission-note">{copy.schematicNote}</p>

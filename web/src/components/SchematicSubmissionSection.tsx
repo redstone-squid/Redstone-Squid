@@ -8,7 +8,7 @@ import type {
 import { Button } from "../ui/react/Button";
 import { FilePicker } from "../ui/react/FilePicker";
 import { Notice } from "../ui/react/Notice";
-import type { SubmissionApi } from "../lib/submission-api";
+import { SubmissionApiError, type SubmissionApi } from "../lib/submission-api";
 import { translate, type StaticMessageKey, type Locale } from "../lib/i18n";
 
 type Props = {
@@ -21,6 +21,15 @@ type Props = {
   onMutation: (operation: () => Promise<unknown>) => Promise<void>;
   onAccept: (suggestion: SchematicFieldSuggestion) => void;
 };
+
+function schematicErrorMessage(error: unknown, locale: Locale): string {
+  if (error instanceof SubmissionApiError && !error.problem) {
+    return error.kind === "unavailable"
+      ? translate(locale, "submitFlow.unavailableTitle")
+      : translate(locale, "submitFlow.requestFailed", { status: error.status });
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 export default function SchematicSubmissionSection({
   api,
@@ -57,7 +66,7 @@ export default function SchematicSubmissionSection({
           timer = setTimeout(() => void load(), 1500);
         }
       } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) setLoadError(schematicErrorMessage(error, locale));
       }
     };
     void load();
@@ -65,14 +74,14 @@ export default function SchematicSubmissionSection({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [api, draftId, refresh]);
+  }, [api, draftId, locale, refresh]);
 
   const mutate = async (operation: () => Promise<unknown>) => {
     setActionError(undefined);
     try {
       await onMutation(operation);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setActionError(schematicErrorMessage(error, locale));
     } finally {
       setRefresh((value) => value + 1);
     }

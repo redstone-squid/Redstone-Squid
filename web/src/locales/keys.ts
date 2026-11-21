@@ -303,6 +303,7 @@ export const messageKeys = [
   "submitFlow.deleteDraft",
   "submitFlow.draftLabel",
   "submitFlow.draftRevision",
+  "submitFlow.formLabel",
   "submitFlow.incompatibleTitle",
   "submitFlow.isPrimary",
   "submitFlow.limits",
@@ -315,6 +316,7 @@ export const messageKeys = [
   "submitFlow.optional",
   "submitFlow.pending",
   "submitFlow.remove",
+  "submitFlow.requestFailed",
   "submitFlow.required",
   "submitFlow.retry",
   "submitFlow.saveBeforeSubmit",
@@ -549,11 +551,13 @@ export type MessageVariables = {
   "record.timingVariant": { number: string | number };
   "submitFlow.completed": { id: string | number };
   "submitFlow.draftLabel": { id: string | number; revision: string | number };
+  "submitFlow.formLabel": { id: string | number; revision: string | number };
   "submitFlow.limits": {
     images: string | number;
     size: string | number;
     videos: string | number;
   };
+  "submitFlow.requestFailed": { status: string | number };
   "submitFlow.schemaCapability": { capability: string | number };
   "submitFlow.schemaCategories": { categories: string | number };
   "submitFlow.schemaCategory": { category: string | number };
