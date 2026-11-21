@@ -37,9 +37,7 @@ before either platform may persist credentials.
 The platform entrypoints wire `/squid link`, bounded server-side draft discovery,
 category draft creation/resume, status, cancellation, and manifest-aware `set`/`unset`
 edits. Device polling runs off the game thread, and results return to the game
-thread. Fabric players can export a `.litematic` with Litematica and attach it to
-their draft on the web. The [in-game upload plan](../docs/plans/minecraft-schematic-upload.md)
-covers uploading an existing export on Fabric and capturing a selection on Paper.
+thread.
 
 ## Runtime configuration
 
@@ -80,6 +78,26 @@ retries first reconcile the authoritative list, then reuse the exact request bod
 idempotency key only while the original grant and 24-hour replay window remain valid.
 This recovers draft sessions after restart once the player links again; credential
 persistence still requires the planned OS-vault adapter.
+
+## Schematic uploads
+
+Open a draft with `/squid submit` before uploading.
+
+- **Paper.** Stand at one corner and run `/squid select`. Stand at the opposite
+  corner and run `/squid pos2`. Use `/squid pos1` to move the first corner and
+  `/squid selection` to check the size. `/squid upload` captures both corners and
+  everything between them as a Java structure `.nbt`. The region must be in the
+  player's current world, with all chunks loaded, at most 512 blocks per axis,
+  and at most 262,144 blocks total. The capture includes entities and block
+  entity data as saved by Paper's structure API.
+- **Fabric.** Save the area in Litematica, then run `/squid upload My Build.litematic`.
+  Give the filename, including the extension, directly inside this instance's
+  `schematics` folder. For a custom Litematica directory or subfolder, copy the
+  export into the instance's `schematics` folder or attach it on the web.
+
+Uploads have a 16 MiB limit. The game reports the backend's validation result
+when available. Use the web draft to choose the primary schematic, remove
+attachments, or finalize the submission.
 
 ## Build
 

@@ -21,8 +21,9 @@ release revision, and its renderer version advances to `nucleation-0.12.2-video-
 ## Remaining rollout work
 
 - Verify deployed synchronized-draft uploads through publication and resource-pack rendering.
-- See the current plans for [Minecraft schematic uploads](../minecraft-schematic-upload.md) and
-  [Paper world capture](../minecraft-paper-world-capture.md).
+- Verify [Paper and Fabric uploads](../../../minecraft/README.md#schematic-uploads) on Minecraft 26.1.2.
+  On Paper, compare a captured region with its source, including block states, sign text, container contents,
+  and entities. Measure capture time on a large selection.
 
 ## Deployment and stored data
 
