@@ -154,7 +154,7 @@ class CompleteIdempotentResponseMiddleware:
                 await send(message)
                 return
             if message["type"] == "http.response.body":
-                buffered_body_bytes += len(cast(bytes, message.get("body", b"")))
+                buffered_body_bytes += len(message.get("body", b""))
                 if buffered_body_bytes > response_limit:
                     msg = f"An idempotent response exceeds the {response_limit}-byte replay limit."
                     raise RuntimeError(msg)
@@ -276,9 +276,7 @@ def _stored_response(messages: list[Message], *, max_bytes: int) -> StoredRespon
         for name, value in start["headers"]
         if name.decode("latin-1").casefold() in _REPLAYED_HEADERS
     )
-    body = b"".join(
-        cast(bytes, message.get("body", b"")) for message in messages if message["type"] == "http.response.body"
-    )
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
     if len(body) > max_bytes:
         msg = f"An idempotent response exceeds the {max_bytes}-byte replay limit."
         raise RuntimeError(msg)

@@ -655,7 +655,7 @@ def autocomplete[OwnerT, ClientT: discord.Client, **P]() -> Callable[
                 if len(choice.name) > 100:
                     message = "autocomplete choice labels are limited to 100 characters"
                     raise ValueError(message)
-                choices.append(cast(app_commands.Choice[ChoiceValue], choice))
+                choices.append(choice)
             return choices
 
         outward.__signature__ = _external_signature(callback, discord.Interaction)  # type: ignore[attr-defined]

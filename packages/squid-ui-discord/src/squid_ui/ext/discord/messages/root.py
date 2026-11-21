@@ -856,7 +856,7 @@ class MessageRoot[
             try:
                 if self.max_messages > 1:
                     spread = plan_spread(
-                        cast(Document[RenderTargetT, Any], self._document_for(tree)),
+                        self._document_for(tree),
                         PlanRequest(
                             target=self.target,
                             chrome=self._chrome,
@@ -883,7 +883,7 @@ class MessageRoot[
                     )
                 else:
                     result = plan_document(
-                        cast(Document[RenderTargetT, Any], self._document_for(tree)),
+                        self._document_for(tree),
                         target=self.target,
                         chrome=self._chrome,
                         localization=self.localization,

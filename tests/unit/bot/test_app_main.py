@@ -226,7 +226,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     try:
         await bot_app.RedstoneSquid.setup_hook(bot)
 
-        assert cast(SchedulingRecorder, bot.background_tasks).starts == [
+        assert bot.background_tasks.starts == [
             (layout_job, "layout-runtime"),
             (metrics_job, "interaction-metrics"),
         ]

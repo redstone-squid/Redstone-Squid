@@ -110,7 +110,7 @@ class _SourceDetails:
             kind = "context"
             user = getattr(source, "author", None)
             interaction = getattr(source, "interaction", None)
-            context = cast(Replyable, source)
+            context = source
         else:
             message = f"{type(source).__name__} is not an interaction, command context, or message"
             raise TypeError(message)

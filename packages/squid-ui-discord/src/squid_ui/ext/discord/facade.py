@@ -7,7 +7,7 @@ not leave interactive panels calling back into it.
 """
 
 from collections.abc import Hashable, Sequence
-from typing import TYPE_CHECKING, Any, Unpack, cast
+from typing import TYPE_CHECKING, Any, Unpack
 
 import anyio
 
@@ -17,7 +17,7 @@ from squid_ui import paragraph
 from squid_ui.content.text import Localization
 from squid_ui.ext.discord._shutdown import cleanup_outside_action
 from squid_ui.ext.discord.audience import Audience
-from squid_ui.ext.discord.contracts import DocumentContent, FacadeContent, RequestSource, SendDestination
+from squid_ui.ext.discord.contracts import FacadeContent, RequestSource, SendDestination
 from squid_ui.ext.discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui.ext.discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui.ext.discord.lifetime import CloseReason, Lifetime
@@ -121,7 +121,7 @@ class Scope[OwnerT = Any, ClientT: discord.Client = discord.Client]:
                 return MessagePayload.classic(view=content)
         rendered = content.render() if isinstance(content, Component) else content
         return render_static(
-            cast(DocumentContent[ClientT], rendered),
+            rendered,
             target=defaults.target,
             chrome=defaults.chrome,
             localization=selected,

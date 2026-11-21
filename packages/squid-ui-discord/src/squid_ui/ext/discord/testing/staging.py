@@ -349,7 +349,7 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request[Any, A
                 message = f"staging live content produced {type(result).__name__}"
                 raise TypeError(message)
             staged = StagedUI(
-                cast(Presented[ComponentT], result),
+                result,
                 client=client,
                 user_id=user_id,
                 interaction=interaction,
