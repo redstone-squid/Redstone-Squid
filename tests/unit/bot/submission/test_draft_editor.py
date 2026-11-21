@@ -701,7 +701,7 @@ async def test_answer_history_reverses_saved_values_without_reverting_other_fiel
     assert drafts.current.snapshot.answers["display_name"] == "Saved name"
 
 
-@pytest.mark.parametrize("operation", ["add", "replace", "use", "failed-add"])
+@pytest.mark.parametrize("operation", ["add", "replace", "use", "failed-add", "failed-replace"])
 async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch: pytest.MonkeyPatch) -> None:
     services, drafts = setup()
     services = replace(services, submission_uploads=Mock(stage=AsyncMock()))
@@ -718,20 +718,25 @@ async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch:
     ).workspace
     resolve_actor.return_value = actor
     drafts.required_actor = actor
-    register = AsyncMock(side_effect=OSError("download failed") if operation == "failed-add" else None)
+    register = AsyncMock(side_effect=OSError("download failed") if operation.startswith("failed-") else None)
     retained = AsyncMock()
     fail = AsyncMock()
     monkeypatch.setattr(draft_intake, "register_uploaded_file", register)
     monkeypatch.setattr(draft_intake, "receive_retained_file", retained)
     monkeypatch.setattr(services.submission_intake, "fail", fail)
     # Attachment edit outcomes are covered by the edit service tests.
-    monkeypatch.setattr(ws.edits, "bind", Mock(return_value=Mock(save=AsyncMock())))
+    save = AsyncMock()
+    monkeypatch.setattr(ws.edits, "bind", Mock(return_value=Mock(save=save)))
     source = sl.forms.UploadedFile("file.png", "image/png", 4, "", AsyncMock(return_value=b"file"))
     file_id = uuid4()
     if operation in {"add", "failed-add"}:
         await ws.add_files((source,))
     elif operation == "replace":
         assert await ws.replace_file(file_id, source) is not None
+    elif operation == "failed-replace":
+        assert await ws.replace_file(file_id, source) is None
+        save.assert_not_awaited()
+        fail.assert_not_awaited()
     else:
         await ws.use_file(file_id)
 
@@ -745,6 +750,7 @@ async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch:
         register.assert_awaited_once()
         assert register.call_args.args[:3] == (services, draft_id, actor)
     if operation == "failed-add":
+        save.assert_awaited_once()
         fail.assert_awaited_once()
         assert fail.call_args.args[:2] == (draft_id, actor)
 

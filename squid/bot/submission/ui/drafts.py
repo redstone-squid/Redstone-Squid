@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 from typing import Any, Self, cast, override
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -61,7 +61,7 @@ from squid.core.submissions.application import FinalizationJobSnapshot, StoredDr
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
 from squid.core.submissions.application.build_target import preview_build
 from squid.core.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
-from squid.core.submissions.application.intake import SuppliedAttachment, classify_supplied_file
+from squid.core.submissions.application.intake import SuppliedAttachment
 from squid.core.submissions.domain import (
     ChoiceOption,
     DraftStatus,
@@ -158,6 +158,7 @@ class DraftWorkspace(sl.Reactive):
         self.manifest = manifest
         self.render_card = render_card
         self._draft_id = draft.snapshot.id
+        self.uploads = draft_intake.DraftUploads(services, self._draft_id, resolve_actor, self.edits)
         self._changes = changes
         self._seed: DraftProjection | None = DraftProjection(draft)
 
@@ -338,28 +339,7 @@ class DraftWorkspace(sl.Reactive):
 
     async def add_files(self, files: Sequence[sl.forms.UploadedFile], *, base_revision: int | None = None) -> None:
         revision = self.draft.snapshot.revision if base_revision is None else base_revision
-        memberships = tuple(
-            FileMembership(
-                source_id=uuid4(),
-                present=True,
-                filename=file.name,
-                kind=classify_supplied_file(file.name, file.media_type),
-            )
-            for file in files
-        )
-        failed = 0
-        await self.services.submission_uploads.stage(self._draft_id, await self.resolve_actor(), revision, memberships)
-        for item, file in zip(memberships, files, strict=True):
-            try:
-                await draft_intake.register_uploaded_file(
-                    self.services, self._draft_id, await self.resolve_actor(), item.source_id, file
-                )
-            except Exception:
-                await self.services.submission_intake.fail(self._draft_id, await self.resolve_actor(), item.source_id)
-                failed += 1
-        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
-            AttachmentValues(files=memberships).edit_values(), tr(t"draft-history-add-files = Add submission files")
-        )
+        failed = await self.uploads.add(files, revision, tr(t"draft-history-add-files = Add submission files"))
         self.notice = (
             md_tr(
                 t"draft-editor-files-failed = {failed} of the files could not be added. "
@@ -440,30 +420,15 @@ class DraftWorkspace(sl.Reactive):
     ) -> UUID | None:
         """Register hidden replacement bytes, then atomically swap the two references."""
         revision = self.draft.snapshot.revision if base_revision is None else base_revision
-        replacement = FileMembership(
-            source_id=uuid4(),
-            present=True,
-            filename=source.name,
-            kind=classify_supplied_file(source.name, source.media_type),
+        replacement = await self.uploads.replace(
+            file_id, source, revision, tr(t"draft-history-replace-file = Replace submission file")
         )
-        await self.services.submission_uploads.stage(
-            self._draft_id, await self.resolve_actor(), revision, (replacement,)
+        self.notice = (
+            tr(t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it.")
+            if replacement is None
+            else ""
         )
-        try:
-            await draft_intake.register_uploaded_file(
-                self.services, self._draft_id, await self.resolve_actor(), replacement.source_id, source
-            )
-        except Exception:
-            self.notice = tr(
-                t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
-            )
-            return None
-        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
-            AttachmentValues(files=(FileMembership(source_id=file_id, present=False), replacement)).edit_values(),
-            tr(t"draft-history-replace-file = Replace submission file"),
-        )
-        self.notice = ""
-        return replacement.source_id
+        return replacement
 
 
 class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):

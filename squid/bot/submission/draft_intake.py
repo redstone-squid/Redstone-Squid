@@ -8,23 +8,82 @@ processing state before admitting the build.
 
 import logging
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 import aiohttp
 import anyio
 import discord
 
+from squid.bot.edit_controller import EditController
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
+from squid.core.submissions.application.edits import draft_target
+from squid.core.submissions.application.intake import classify_supplied_file
 from squid.core.submissions.domain.intake import IntakeStatus
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.runtime import BotServices
+from squid_ui.content.text import TextLike
 from squid_ui.interactions.forms import UploadedFile
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class DraftUploads:
+    services: BotServices
+    draft_id: UUID
+    resolve_actor: Callable[[], Awaitable[Actor]]
+    edits: EditController
+
+    async def _stage(self, files: Sequence[UploadedFile], revision: int) -> tuple[FileMembership, ...]:
+        memberships = tuple(
+            FileMembership(
+                source_id=uuid4(),
+                present=True,
+                filename=file.name,
+                kind=classify_supplied_file(file.name, file.media_type),
+            )
+            for file in files
+        )
+        await self.services.submission_uploads.stage(self.draft_id, await self.resolve_actor(), revision, memberships)
+        return memberships
+
+    async def add(self, files: Sequence[UploadedFile], revision: int, label: TextLike) -> int:
+        """Keep failed additions visible and return the number that need attention."""
+        memberships = await self._stage(files, revision)
+        failed = 0
+        for item, file in zip(memberships, files, strict=True):
+            try:
+                await register_uploaded_file(
+                    self.services, self.draft_id, await self.resolve_actor(), item.source_id, file
+                )
+            except Exception:
+                await self.services.submission_intake.fail(self.draft_id, await self.resolve_actor(), item.source_id)
+                failed += 1
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self.draft_id), revision).save(
+            AttachmentValues(files=memberships).edit_values(), label
+        )
+        return failed
+
+    async def replace(self, original: UUID, file: UploadedFile, revision: int, label: TextLike) -> UUID | None:
+        """Swap references in one edit once the replacement bytes are registered."""
+        (replacement,) = await self._stage((file,), revision)
+        try:
+            await register_uploaded_file(
+                self.services, self.draft_id, await self.resolve_actor(), replacement.source_id, file
+            )
+        except Exception:
+            return None
+        files = (FileMembership(source_id=original, present=False), replacement)
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self.draft_id), revision).save(
+            AttachmentValues(files=files).edit_values(), label
+        )
+        return replacement.source_id
 
 
 async def receive_attachments(
