@@ -105,6 +105,23 @@ for (const locale of ["en", "zh-CN"]) {
   });
 }
 
+test("autocomplete preserves typing and focus during hydration", async ({ page }) => {
+  const scripts = Promise.withResolvers<undefined>();
+  await page.route("**/_astro/*.js", async (route) => {
+    await scripts.promise;
+    await route.continue();
+  });
+  await page.goto("/builds", { waitUntil: "commit" });
+  const keywords = page.getByRole("combobox", { name: "Keywords" });
+  try {
+    await keywords.fill("do");
+  } finally {
+    scripts.resolve(undefined);
+  }
+  await expect(page.getByRole("option", { name: "door", exact: true })).toBeVisible();
+  await expect(keywords).toHaveValue("do");
+});
+
 test("discovery / edits existing guided filters and switches mode without JavaScript", async ({
   browser,
 }) => {

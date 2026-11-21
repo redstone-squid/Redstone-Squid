@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   export type Suggestion = { value: string; label: string; description?: string | null };
   export type Suggestions = {
     items: Suggestion[];
@@ -41,6 +41,14 @@
   let failed = $state(false);
   let cursor = $state<number | null>(null);
   const visible = $derived(focused && !dismissed && !composing ? result.items : []);
+
+  onMount(() => {
+    // A visitor can start typing into the server-rendered field before hydration.
+    if (input && document.activeElement === input) {
+      focused = true;
+      cursor = input.selectionStart;
+    }
+  });
 
   $effect(() => {
     const query = value;
@@ -117,7 +125,6 @@
   const attributes = $derived({
     id,
     name,
-    value,
     maxlength: maxLength,
     role: "combobox" as const,
     autocomplete: "off" as const,
@@ -148,8 +155,8 @@
 
 <div class="sq-field sq-autocomplete">
   <label for={id}>{label}</label>
-  {#if multiline}<textarea class="sq-input" {...attributes} bind:this={input} rows="3"
-    ></textarea>{:else}<input class="sq-input" {...attributes} bind:this={input} />{/if}
+  {#if multiline}<textarea class="sq-input" {...attributes} bind:value bind:this={input} rows="3"
+    ></textarea>{:else}<input class="sq-input" {...attributes} bind:value bind:this={input} />{/if}
   {#if visible.length}
     <ul class="sq-suggestions" id={listId} role="listbox" aria-label={suggestionsLabel}>
       {#each visible as item, index (index)}
