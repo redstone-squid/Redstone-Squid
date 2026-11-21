@@ -118,10 +118,12 @@ export const messageKeys = [
   "footer.discord",
   "footer.invite",
   "footer.note",
+  "gallery.image",
   "gallery.next",
   "gallery.open",
   "gallery.position",
   "gallery.previous",
+  "gallery.render",
   "home.communityBody",
   "home.communityTitle",
   "home.intro",
@@ -299,7 +301,10 @@ export const messageKeys = [
   "submitFlow.dead",
   "submitFlow.deleteConfirm",
   "submitFlow.deleteDraft",
+  "submitFlow.draftLabel",
+  "submitFlow.draftRevision",
   "submitFlow.incompatibleTitle",
+  "submitFlow.isPrimary",
   "submitFlow.limits",
   "submitFlow.loading",
   "submitFlow.mediaBody",
@@ -315,6 +320,12 @@ export const messageKeys = [
   "submitFlow.saveBeforeSubmit",
   "submitFlow.saved",
   "submitFlow.saving",
+  "submitFlow.schemaCapability",
+  "submitFlow.schemaCategories",
+  "submitFlow.schemaCategory",
+  "submitFlow.schemaDuplicate",
+  "submitFlow.schemaField",
+  "submitFlow.schemaProtocol",
   "submitFlow.schematicAccept",
   "submitFlow.schematicBounds",
   "submitFlow.schematicDiscard",
@@ -381,6 +392,21 @@ export const messageKeys = [
   "trial.uploadScenario",
   "trial.utility",
   "trial.width",
+  "uploadMedia.image",
+  "uploadMedia.output",
+  "uploadMedia.video",
+  "uploadMedia.video_thumbnail",
+  "uploadState.completed",
+  "uploadState.dead",
+  "uploadState.deleted",
+  "uploadState.deleting",
+  "uploadState.discarded",
+  "uploadState.failed",
+  "uploadState.pending",
+  "uploadState.processing",
+  "uploadState.ready",
+  "uploadState.rejected",
+  "uploadState.uploading",
   "validation.duration-unit",
   "validation.number",
   "workbench.01-foundations",
@@ -487,7 +513,9 @@ export type MessageVariables = {
   "credit.row": { number: string | number };
   "error.reference": { id: string | number };
   "error.status": { status: string | number };
+  "gallery.image": { number: string | number };
   "gallery.position": { current: string | number; total: string | number };
+  "gallery.render": { number: string | number };
   "issue.above_maximum": { subject: string | number };
   "issue.below_minimum": { subject: string | number };
   "issue.media_processing": { subject: string | number };
@@ -520,10 +548,21 @@ export type MessageVariables = {
   "record.lastChecked": { date: string | number };
   "record.timingVariant": { number: string | number };
   "submitFlow.completed": { id: string | number };
+  "submitFlow.draftLabel": { id: string | number; revision: string | number };
   "submitFlow.limits": {
     images: string | number;
     size: string | number;
     videos: string | number;
+  };
+  "submitFlow.schemaCapability": { capability: string | number };
+  "submitFlow.schemaCategories": { categories: string | number };
+  "submitFlow.schemaCategory": { category: string | number };
+  "submitFlow.schemaDuplicate": { field: string | number };
+  "submitFlow.schemaField": { field: string | number };
+  "submitFlow.schemaProtocol": {
+    max: string | number;
+    min: string | number;
+    supported: string | number;
   };
   "submitFlow.tagValue": { tag: string | number };
   "trial.attachment": { filename: string | number };

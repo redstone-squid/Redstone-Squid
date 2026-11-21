@@ -47,7 +47,7 @@ const navItems = [
         >
           <Brand locale={locale} />
         </a>
-        <nav class="main-nav" aria-label="Primary">
+        <nav class="main-nav" aria-label={translate(locale, "nav.primary")}>
           {navItems.map(([key, href]) => (
             <a
               href={localizePath(href, locale)}

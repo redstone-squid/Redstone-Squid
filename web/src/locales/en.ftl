@@ -70,7 +70,10 @@ record-kind = Build kind
 record-versionScope = Version scope
 record-status = Record title status
 record-computed = Computed { $date }
-record-holderCount = { $count } holder(s)
+record-holderCount = { $count ->
+    [one] { $count } holder
+   *[other] { $count } holders
+    }
 record-configuration = Configuration for this record
 record-alternativeConfigurations = This build holds the record; the winning configuration remains undecided between these alternatives.
 record-parameters = Parameters
@@ -485,3 +488,30 @@ credit-remove = Remove credit
 trial-uploadFailure = The upload failed. Retry with the same file or choose another.
 trial-retryUpload = Retry upload
 trial-uploadScenario = Simulate upload failure
+
+gallery-render = Render { $number }
+gallery-image = Image { $number }
+submitFlow-draftRevision = This browser cannot reopen the saved draft with the current form. Your draft has been kept.
+submitFlow-schemaProtocol = This form requires submission protocol { $min }–{ $max }. This browser supports { $supported }.
+submitFlow-schemaCategories = This form is missing supported categories: { $categories }.
+submitFlow-schemaDuplicate = The form repeats field { $field }.
+submitFlow-schemaField = This browser cannot safely render field { $field }.
+submitFlow-schemaCapability = This browser lacks the required capability { $capability }.
+submitFlow-schemaCategory = Draft category { $category } is missing from the current form.
+submitFlow-draftLabel = Draft { $id } · Revision { $revision }
+submitFlow-isPrimary = Primary schematic
+uploadState-uploading = Uploading
+uploadState-pending = Awaiting analysis
+uploadState-ready = Ready
+uploadState-rejected = Rejected
+uploadState-failed = Analysis failed
+uploadState-deleting = Deleting
+uploadState-deleted = Deleted
+uploadState-processing = Processing
+uploadState-completed = Processed
+uploadState-dead = Processing failed
+uploadState-discarded = Discarded
+uploadMedia-image = Image
+uploadMedia-video = Video
+uploadMedia-output = Output
+uploadMedia-video_thumbnail = Video thumbnail

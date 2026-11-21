@@ -40,17 +40,20 @@ export function formatTag(locale: Locale, tag: PublicBuildTag): string {
 }
 
 /** Collect HTTPS renders before images, preserving order within each group. */
-export function buildMedia(build: { links: { renders: string[]; images: string[] } }): MediaItem[] {
+export function buildMedia(
+  locale: Locale,
+  build: { links: { renders: string[]; images: string[] } },
+): MediaItem[] {
   return [
     ...build.links.renders.map((url, index) => ({
       kind: "render" as const,
       url,
-      label: `Render ${index + 1}`,
+      label: translate(locale, "gallery.render", { number: index + 1 }),
     })),
     ...build.links.images.map((url, index) => ({
       kind: "image" as const,
       url,
-      label: `Image ${index + 1}`,
+      label: translate(locale, "gallery.image", { number: index + 1 }),
     })),
   ].filter((item): item is MediaItem => safeHttpsUrl(item.url) !== undefined);
 }

@@ -246,7 +246,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
 
   const loadEditorResources = useCallback(
     async (form: FormManifestResponse, current: StoredDraftResponse) => {
-      const sections = sectionsForDraft(form, current);
+      const sections = sectionsForDraft(form, current, locale);
       const sources = [
         ...new Set(
           sections.flatMap((section) =>
@@ -279,14 +279,14 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         });
       await Promise.all([optionTask, mediaTask, statusTask]);
     },
-    [api, copy],
+    [api, copy, locale],
   );
 
   useEffect(() => {
     let active = true;
     void api
       .currentForm()
-      .then(validateSubmissionManifest)
+      .then((form) => validateSubmissionManifest(form, locale))
       .then(async (form) => {
         if (!active) return;
         setManifest(form);
@@ -297,11 +297,10 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
           if (
             resumed.origin !== "web" ||
             resumed.schema_id !== form.schema_id ||
-            resumed.schema_revision !== form.revision
+            resumed.schema_revision !== form.revision ||
+            !form.categories.some((category) => category.code === resumed.category)
           ) {
-            throw new SubmissionSchemaError(
-              "The saved draft uses a form revision this browser cannot safely resume.",
-            );
+            throw new SubmissionSchemaError(translate(locale, "submitFlow.draftRevision"));
           }
           installDraft(resumed);
           void loadEditorResources(form, resumed);
@@ -329,7 +328,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     return () => {
       active = false;
     };
-  }, [api, copy, installDraft, loadEditorResources]);
+  }, [api, copy, installDraft, loadEditorResources, locale]);
 
   useEffect(() => {
     if (!draft || !media?.media.some((item) => item.status === "processing")) return;
@@ -649,7 +648,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     );
   }
 
-  const sections = sectionsForDraft(manifest, draft);
+  const sections = sectionsForDraft(manifest, draft, locale);
   const visibleAnswers = materializedAnswers(sections, answers);
   const fieldLabels = Object.fromEntries(
     sections.flatMap((section) => section.fields.map((field) => [field.id, field.label])),
@@ -666,7 +665,10 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
       <div className="submission-toolbar">
         <div>
           <p className="kicker">
-            DRAFT / {draft.id.slice(0, 8)} / R{draft.revision}
+            {translate(locale, "submitFlow.draftLabel", {
+              id: draft.id.slice(0, 8),
+              revision: draft.revision,
+            })}
           </p>
           <p className="submission-save-state" role="status">
             {pendingFields.size > 0 ? copy.saving : copy.saved}
@@ -765,6 +767,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
       )}
 
       <MediaSection
+        locale={locale}
         copy={copy}
         media={media}
         error={mediaError}
@@ -997,6 +1000,7 @@ function FieldEditor({
 }
 
 function MediaSection({
+  locale,
   copy,
   media,
   error,
@@ -1006,6 +1010,7 @@ function MediaSection({
   onDiscard,
 }: {
   copy: Copy;
+  locale: Locale;
   media?: DraftMediaListResponse;
   error?: string;
   uploading: boolean;
@@ -1047,13 +1052,13 @@ function MediaSection({
                 .map((item) => (
                   <li key={item.id}>
                     <div>
-                      <strong>{item.kind}</strong>
+                      <strong>{translate(locale, `uploadMedia.${item.kind}`)}</strong>
                       <span className={`submission-status submission-status--${item.status}`}>
-                        {item.status}
+                        {translate(locale, `uploadState.${item.status}`)}
                       </span>
                       {item.artifacts.map((artifact) => (
                         <small key={artifact.role}>
-                          {artifact.role}:{" "}
+                          {translate(locale, `uploadMedia.${artifact.role}`)} ·{" "}
                           {Number.isFinite(artifact.width) && Number.isFinite(artifact.height)
                             ? `${artifact.width}×${artifact.height} `
                             : ""}

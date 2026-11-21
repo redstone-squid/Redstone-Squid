@@ -41,7 +41,7 @@ if (!buildId) {
     Astro.locals.responseStatus = error.status;
   }
 }
-const media = build ? buildMedia(build) : [];
+const media = build ? buildMedia(locale, build) : [];
 const canonicalPath = buildId ? localizePath(`/builds/${buildId}`, locale) : Astro.url.pathname;
 const description =
   build?.description?.slice(0, 220) ||

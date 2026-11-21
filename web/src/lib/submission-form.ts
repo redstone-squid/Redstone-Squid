@@ -63,13 +63,20 @@ export class SubmissionSchemaError extends Error {
  * Checks protocol compatibility, required categories, duplicate fields per category, controls,
  * value kinds, and required capabilities. Server-side answer validation remains authoritative.
  */
-export function validateSubmissionManifest(manifest: FormManifestResponse): FormManifestResponse {
+export function validateSubmissionManifest(
+  manifest: FormManifestResponse,
+  locale: Locale = "en",
+): FormManifestResponse {
   if (
     manifest.minimum_protocol > SUBMISSION_PROTOCOL ||
     manifest.maximum_protocol < SUBMISSION_PROTOCOL
   ) {
     throw new SubmissionSchemaError(
-      `This form requires submission protocol ${manifest.minimum_protocol}–${manifest.maximum_protocol}; this browser supports ${SUBMISSION_PROTOCOL}.`,
+      translate(locale, "submitFlow.schemaProtocol", {
+        min: manifest.minimum_protocol,
+        max: manifest.maximum_protocol,
+        supported: SUBMISSION_PROTOCOL,
+      }),
     );
   }
 
@@ -79,7 +86,9 @@ export function validateSubmissionManifest(manifest: FormManifestResponse): Form
   );
   if (missingCategories.length > 0) {
     throw new SubmissionSchemaError(
-      `This form is missing supported categories: ${missingCategories.join(", ")}.`,
+      translate(locale, "submitFlow.schemaCategories", {
+        categories: new Intl.ListFormat(locale).format(missingCategories),
+      }),
     );
   }
 
@@ -89,14 +98,18 @@ export function validateSubmissionManifest(manifest: FormManifestResponse): Form
       for (const field of section.fields) {
         if (!field.origins.includes("web")) continue;
         if (fieldIds.has(`${category.code}:${field.id}`)) {
-          throw new SubmissionSchemaError(`The form repeats field ${field.id}.`);
+          throw new SubmissionSchemaError(
+            translate(locale, "submitFlow.schemaDuplicate", { field: field.id }),
+          );
         }
         fieldIds.add(`${category.code}:${field.id}`);
         if (
           !SUPPORTED_CONTROLS.has(field.control) ||
           !SUPPORTED_VALUE_KINDS.has(field.value_kind)
         ) {
-          throw new SubmissionSchemaError(`The browser cannot safely render field ${field.id}.`);
+          throw new SubmissionSchemaError(
+            translate(locale, "submitFlow.schemaField", { field: field.id }),
+          );
         }
         if (
           field.required &&
@@ -106,7 +119,9 @@ export function validateSubmissionManifest(manifest: FormManifestResponse): Form
           )
         ) {
           throw new SubmissionSchemaError(
-            `The browser is missing required capability ${field.required_capability}.`,
+            translate(locale, "submitFlow.schemaCapability", {
+              capability: field.required_capability,
+            }),
           );
         }
       }
@@ -118,10 +133,13 @@ export function validateSubmissionManifest(manifest: FormManifestResponse): Form
 export function sectionsForDraft(
   manifest: FormManifestResponse,
   draft: StoredDraftResponse,
+  locale: Locale = "en",
 ): FormSectionResponse[] {
   const category = manifest.categories.find((candidate) => candidate.code === draft.category);
   if (!category) {
-    throw new SubmissionSchemaError(`Draft category ${draft.category} is not in the current form.`);
+    throw new SubmissionSchemaError(
+      translate(locale, "submitFlow.schemaCategory", { category: draft.category }),
+    );
   }
   return [...manifest.common_sections, ...category.sections]
     .map((section) => ({

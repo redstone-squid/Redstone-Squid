@@ -46,15 +46,15 @@ describe("safe media", () => {
       cardPreview({ ...summary, preview: { kind: "image", url: "http://unsafe.test/a" } }),
     ).toBeUndefined();
     expect(
-      buildMedia({
+      buildMedia("zh-CN", {
         links: {
           renders: ["https://media.example/r1", "http://unsafe.test/r2"],
           images: ["https://media.example/i1"],
         },
       }),
     ).toEqual([
-      { kind: "render", url: "https://media.example/r1", label: "Render 1" },
-      { kind: "image", url: "https://media.example/i1", label: "Image 1" },
+      { kind: "render", url: "https://media.example/r1", label: "渲染图 1" },
+      { kind: "image", url: "https://media.example/i1", label: "图片 1" },
     ]);
     expect(externalLinks(["https://example.org/a", "ftp://example.org/b", "bad"])).toEqual([
       "https://example.org/a",

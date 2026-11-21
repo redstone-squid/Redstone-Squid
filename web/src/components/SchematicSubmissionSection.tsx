@@ -111,9 +111,9 @@ export default function SchematicSubmissionSection({
       <ul>
         {files.map((file) => (
           <li key={file.id}>
-            {file.filename} — {file.state}
+            {file.filename} — {t(`uploadState.${file.state}`)}
             {file.primary ? (
-              ` (${t("submitFlow.schematicPrimary")})`
+              ` (${t("submitFlow.isPrimary")})`
             ) : (
               <Button
                 size="small"
