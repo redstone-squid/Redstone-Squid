@@ -80,7 +80,22 @@ if (q) {
                   <Badge>{translate(locale, "search.resultRecord")}</Badge>
                   <div>
                     <h2>{result.record.title}</h2>
-                    <p>{result.record.subtitle ?? result.record.build_title}</p>
+                    {result.record.subtitle && <p>{result.record.subtitle}</p>}
+                    {result.record.holders?.map((holder) => (
+                      <p>
+                        <a href={localizePath(`/builds/${holder.build_id}`, locale)}>
+                          #{holder.build_id} {holder.title}
+                        </a>
+                        {holder.creators.length > 0 && ` · ${holder.creators.join(", ")}`}
+                      </p>
+                    ))}
+                    {!result.record.holders?.length && result.record.build_id > 0 && (
+                      <p>
+                        <a href={localizePath(`/builds/${result.record.build_id}`, locale)}>
+                          #{result.record.build_id} {result.record.build_title}
+                        </a>
+                      </p>
+                    )}
                   </div>
                   <LinkButton href={localizePath(`/records/${result.record.record_id}`, locale)}>
                     {translate(locale, "common.viewRecord")}

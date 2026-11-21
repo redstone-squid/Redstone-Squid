@@ -1,6 +1,5 @@
 """Build browser actions participate in the UI's state transactions."""
 
-from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
@@ -268,11 +267,7 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
     hit = RecordSearchHit("result:10", record.title, None, 9, "Door 9", "smallest", "all_time", holder_build_ids=(7, 9))
-    # The selected record also moves off the first page inside its holder's record list.
-    others = tuple(replace(hit, source_id=f"result:{index}", title=f"Other record {index}") for index in range(5))
-    service.search.return_value = SearchPage(
-        (BuildSearchHit("9", "Door 9", "confirmed", records=(*others, hit)),), total=1, next=None, prev=None
-    )
+    service.search.return_value = SearchPage((hit,), total=1, next=None, prev=None)
     async with stage(screen, owner=object()) as ui:
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
@@ -285,14 +280,14 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
         await ui.press(ui.key_for("holder-7"))
         await pick_sort(ui, "width", monkeypatch)
 
-        assert service.search.call_args.args[0].anchor == SearchResultAnchor("build", "9")
+        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", "result:10")
         assert screen._sort == "width"
         assert screen._results is not None
         assert screen._results.focus == SearchFocus(
-            SearchResultAnchor("build", "9"), record_id="result:10", holder_id=7, show_records=True
+            SearchResultAnchor("record", "result:10"), record_id="result:10", show_records=True
         )
         assert "Build #7" in ui.texts()
-        await ui.press(ui.key_for("search-back-records"))
+        await ui.press(ui.key_for("linked-build.back"))
         assert f"## {record.title}" in ui.texts()
         ui.assert_within_limits()
 

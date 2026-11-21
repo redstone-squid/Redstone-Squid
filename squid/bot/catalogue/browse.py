@@ -957,8 +957,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             sort=SearchSort.parse(sort or None),
             page_size=CATALOGUE_PAGE_SIZE,
             visible_statuses=frozenset(status.name.lower() for status in self._statuses),
-            # One row per build, listing the records it holds, as /search shows results.
-            group_by_build=True,
+            group_by_build=self._search_scope is SearchScope.BUILDS,
             parsed_query=query.effective_query(self._search_parser),
             anchor=focus.anchor if focus is not None else None,
         )
@@ -970,6 +969,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             load_build=self._queries.get,
             render_build=self._render_build,
             build_detail=self._detail,
+            open_holder=self._open_holder,
         )
         restored = focus is not None and await results.restore_focus(focus)
         self._results = results

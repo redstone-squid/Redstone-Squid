@@ -24632,6 +24632,12 @@
             },
             "type": "array"
           },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/RecordSearchHolder"
+            },
+            "type": "array"
+          },
           "matched": {
             "type": "boolean",
             "default": true
@@ -24660,6 +24666,29 @@
           "version_scope"
         ],
         "title": "RecordSearchEntry"
+      },
+      "RecordSearchHolder": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "creators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "creators",
+          "title"
+        ],
+        "title": "RecordSearchHolder"
       },
       "RecordSearchResult": {
         "properties": {

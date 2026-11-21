@@ -352,8 +352,10 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
         build_detail: BuildDetailFactory | None = None,
+        open_holder: Callable[[int, sl.PressEvent], Awaitable[None]] | None = None,
     ) -> None:
         self._build_detail = build_detail
+        self._open_holder = open_holder
         self._restored_detail: tuple[int, _GroupedBuildDetail] | None = None
         request = replace(request, offset=request.offset if page.offset is None else page.offset, anchor=None)
         self._source = _SearchSource(service, request, page)
@@ -446,7 +448,21 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             raise sl.errors.LayoutInvariantError(message)
         return current.loaded
 
-    def _detail(self, hit: SearchHit) -> _SearchDetail | _GroupedBuildDetail:
+    def _detail(self, hit: SearchHit) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        if (
+            isinstance(hit, RecordSearchHit)
+            and self._open_holder is not None
+            and (not hit.build_id or len(hit.holder_build_ids) > 1)
+        ):
+            return record_standings(
+                _highlighted(hit.title_match or SearchText(hit.title)),
+                hit.subtitle,
+                hit.base_title,
+                hit.version_scope,
+                hit.holder_build_ids,
+                self._open_holder,
+                details=tuple(sl.paragraph(line) for line in _holder_lines(hit)),
+            )
         if isinstance(hit, BuildSearchHit) and self._source.base_request.group_by_build:
             restored = self._restored_detail
             if restored is not None and restored[0] == self._browser.session.visit:
@@ -490,7 +506,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
 
 def _build_id(hit: SearchHit) -> int | None:
     if isinstance(hit, RecordSearchHit):
-        return hit.build_id
+        return hit.build_id or None
     if isinstance(hit, BuildSearchHit) and hit.source_id.isdigit():
         return int(hit.source_id)
     return None
@@ -540,13 +556,25 @@ def _heading_subtitle(hit: SearchHit, request: SearchRequest) -> str | None:
     """Return the subtitle of the record heading a grouped record result, if any."""
     if isinstance(hit, BuildSearchHit) and request.group_by_build and request.scope is SearchScope.RECORDS:
         return hit.records[0].subtitle if hit.records else None
-    return None
+    return hit.subtitle if isinstance(hit, RecordSearchHit) else None
 
 
 def _record_line(record: RecordSearchHit) -> Text:
     """Show a record with its subtitle; many records share a title and differ only by restrictions."""
     title = _highlighted(record.title_match or SearchText(record.title))
     return record_row(title, record.subtitle)
+
+
+def _holder_lines(hit: RecordSearchHit) -> tuple[Text, ...]:
+    lines: list[Text] = []
+    for holder in hit.holders:
+        line = build_row(holder.build_id, holder.title, (None, None, None))
+        if holder.creators:
+            line += " · " + ", ".join(holder.creators)
+        lines.append(line)
+    if not lines and hit.build_id:
+        lines.append(build_row(hit.build_id, hit.build_title, (None, None, None)))
+    return tuple(lines)
 
 
 def _result_label(hit: SearchHit, request: SearchRequest) -> str:
@@ -592,7 +620,7 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
             lines.append(tr(t"search-grouped-more-records = +{count} more records"))
         return Text.join("\n", lines)
     if isinstance(hit, RecordSearchHit):
-        return _record_line(hit)
+        return Text.join("\n", (_record_line(hit), *_holder_lines(hit)))
     return Text.join("\n", (_highlighted(hit.title_match or SearchText(hit.title)), _metadata_label(hit.metadata_kind)))
 
 

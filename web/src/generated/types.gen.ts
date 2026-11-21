@@ -1745,8 +1745,18 @@ export type RecordSearchEntry = {
         [key: string]: string | number | number | boolean;
     };
     holder_build_ids?: Array<number>;
+    holders?: Array<RecordSearchHolder>;
     matched?: boolean;
     title_match?: SearchText | null;
+};
+
+/**
+ * RecordSearchHolder
+ */
+export type RecordSearchHolder = {
+    build_id: number;
+    title: string;
+    creators: Array<string>;
 };
 
 /**

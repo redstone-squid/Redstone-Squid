@@ -32,6 +32,7 @@ from squid.core.search.domain import (
     SortDirection,
 )
 from squid.core.search.domain.fields import FieldDefinition, FieldType
+from squid.core.search.domain.models import RecordSearchHolder
 from squid.core.settings.application import SettingsService
 from squid.runtime import BotServices
 from squid_i18n import source_text
@@ -203,7 +204,7 @@ async def test_records_remain_an_explicit_search_target() -> None:
 
     assert search.requests[0].scope is SearchScope.RECORDS
     assert search.requests[0].query == "kind:door"
-    assert search.requests[0].group_by_build
+    assert not search.requests[0].group_by_build
 
 
 async def test_a_sort_of_only_a_minus_sign_is_a_user_error() -> None:
@@ -390,6 +391,22 @@ def grouped_build() -> BuildSearchHit:
             ),
         ),
     )
+
+
+def test_record_result_lists_each_holder_with_its_credits() -> None:
+    record = replace(
+        grouped_build().records[0],
+        holders=(
+            RecordSearchHolder(42, "Seamless Door", ("Alice", "Bob")),
+            RecordSearchHolder(57, "Flush Door", ("Casey",)),
+        ),
+    )
+    description = source_text(_result_description(record, SearchRequest("smallest")), format="plain")
+    assert description.splitlines() == [
+        "Smallest 2x2 Door · Java Edition",
+        "#42 Seamless Door · Alice, Bob",
+        "#57 Flush Door · Casey",
+    ]
 
 
 def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() -> None:

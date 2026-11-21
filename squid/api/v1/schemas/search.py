@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
 from squid.core.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
+from squid.core.search.domain.models import RecordSearchHolder
 
 
 class SearchSuggestions(BaseModel):
@@ -36,6 +37,7 @@ class RecordSearchEntry(BaseModel):
     tags: list[str]
     metrics: dict[str, str | int | float | bool]
     holder_build_ids: list[int] = Field(default_factory=list)
+    holders: list[RecordSearchHolder] = Field(default_factory=list)
     matched: bool = True
     title_match: SearchText | None = None
 
@@ -52,6 +54,7 @@ class RecordSearchEntry(BaseModel):
             tags=list(hit.tags),
             metrics=dict(hit.metrics),
             holder_build_ids=list(hit.holder_build_ids),
+            holders=list(hit.holders),
             matched=hit.matched,
             title_match=hit.title_match,
         )
