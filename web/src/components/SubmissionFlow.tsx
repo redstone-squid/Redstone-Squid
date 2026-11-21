@@ -1,7 +1,11 @@
+import { Field, SelectField, TextareaField, CheckField, FieldGroup } from "../ui/react/Field";
+import { FilePicker } from "../ui/react/FilePicker";
+import { Notice } from "../ui/react/Notice";
+import { Button } from "../ui/react/Button";
 import SchematicSubmissionSection from "./SchematicSubmissionSection";
 import { CreditEditor } from "./CreditEditor";
 import { ShowcaseTagEditor } from "./ShowcaseTagEditor";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ChoiceOptionResponse,
@@ -475,8 +479,8 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     }
   };
 
-  const uploadFiles = async (files: FileList | null) => {
-    if (!draft || !media || !files) return;
+  const uploadFiles = async (files: File[]) => {
+    if (!draft || !media || !files.length) return;
     setUploading(true);
     setMediaError(undefined);
     let imageCount = media.media.filter(
@@ -486,7 +490,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
       (item) => item.kind === "video" && !new Set(["dead", "discarded"]).has(item.status),
     ).length;
     try {
-      for (const file of [...files]) {
+      for (const file of files) {
         const kind: MediaKind | undefined = file.type.startsWith("image/")
           ? "image"
           : file.type.startsWith("video/")
@@ -588,9 +592,9 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         <p className="kicker">FORM / STOPPED</p>
         <h2>{blockingError.title}</h2>
         <p>{blockingError.message}</p>
-        <button className="button" type="button" onClick={() => window.location.reload()}>
+        <Button type="button" onClick={() => window.location.reload()}>
           {copy.retry}
-        </button>
+        </Button>
       </section>
     );
   }
@@ -626,28 +630,21 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         <h2>{copy.chooseTitle}</h2>
         <p>{copy.chooseBody}</p>
         {actionError && <ActionError error={actionError} copy={copy} signInUrl={signInUrl} />}
-        <div className="field">
-          <label htmlFor="submission-category">{copy.category}</label>
-          <select
-            id="submission-category"
-            value={selectedCategory}
-            onChange={(event) => setSelectedCategory(event.currentTarget.value)}
-          >
-            {manifest.categories.map((category) => (
-              <option key={category.code} value={category.code}>
-                {category.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          className="button button--primary"
-          type="button"
-          disabled={busy}
-          onClick={() => void beginDraft()}
+        <SelectField
+          label={copy.category}
+          id="submission-category"
+          value={selectedCategory}
+          onChange={(event) => setSelectedCategory(event.currentTarget.value)}
         >
+          {manifest.categories.map((category) => (
+            <option key={category.code} value={category.code}>
+              {category.label}
+            </option>
+          ))}
+        </SelectField>
+        <Button variant="primary" type="button" disabled={busy} onClick={() => void beginDraft()}>
           {busy ? copy.loading : copy.start}
-        </button>
+        </Button>
       </section>
     );
   }
@@ -676,14 +673,9 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
           </p>
         </div>
         {draftEditable && finalization?.status !== "completed" && (
-          <button
-            className="button"
-            type="button"
-            disabled={busy || locked}
-            onClick={() => void deleteDraft()}
-          >
+          <Button type="button" disabled={busy || locked} onClick={() => void deleteDraft()}>
             {copy.deleteDraft}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -767,9 +759,9 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
       })}
 
       {optionsError && (
-        <p className="submission-inline-error" role="alert">
+        <Notice tone="danger" role="alert">
           {copy.choicesUnavailable}
-        </p>
+        </Notice>
       )}
 
       <MediaSection
@@ -791,9 +783,9 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         <p>{copy.submissionBody}</p>
         <p className="submission-note">{copy.schematicNote}</p>
         {Object.keys(saveErrors).length > 0 && (
-          <p className="submission-inline-error" role="alert">
+          <Notice tone="danger" role="alert">
             {copy.saveBeforeSubmit}
-          </p>
+          </Notice>
         )}
         {finalization && (
           <FinalizationStatus
@@ -804,14 +796,14 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
           />
         )}
         {finalization?.status !== "completed" && (
-          <button
-            className="button button--primary"
+          <Button
+            variant="primary"
             type="button"
             disabled={busy || locked || pendingFields.size > 0}
             onClick={() => void submit()}
           >
             {busy ? copy.submitting : copy.submit}
-          </button>
+          </Button>
         )}
       </section>
     </div>
@@ -828,14 +820,14 @@ function ActionError({
   signInUrl: string;
 }) {
   return (
-    <div className="submission-inline-error" role="alert">
+    <Notice tone="danger" role="alert">
       <p>{failureMessage(error, copy)}</p>
       {error.kind === "authentication" && (
         <a className="button button--primary" href={signInUrl}>
           {copy.signIn}
         </a>
       )}
-    </div>
+    </Notice>
   );
 }
 
@@ -866,13 +858,8 @@ function FieldEditor({
   locale,
   onCommit,
 }: FieldEditorProps) {
-  const id = useId();
   const [raw, setRaw] = useState(() => fieldInputValue(field, value));
   const [parseError, setParseError] = useState<string>();
-  const describedBy =
-    [field.help_text ? `${id}-help` : null, error || issue || parseError ? `${id}-error` : null]
-      .filter(Boolean)
-      .join(" ") || undefined;
   const commitRaw = () => {
     const parsed = parseFieldInput(field, raw, locale);
     setParseError(parsed.error);
@@ -881,39 +868,34 @@ function FieldEditor({
   const state = pending ? copy.saving : field.required ? copy.required : copy.optional;
   const message =
     parseError ?? error ?? (issue ? issueMessage(issue, field.label, locale) : undefined);
-  const invalid = message ? true : undefined;
+  const frame = {
+    label: field.label,
+    hint: field.help_text,
+    error: message,
+    detail: state,
+    disabled,
+  };
 
   if (field.control === "credits") {
     return (
-      <div className="field submission-field submission-field--wide">
-        <label>
-          {field.label} <small>({state})</small>
-        </label>
+      <FieldGroup {...frame} className="submission-field--wide">
         <CreditEditor
+          locale={locale}
           value={Array.isArray(value) ? (value as CreditAnswer[]) : []}
           disabled={disabled}
           onCommit={onCommit}
         />
-        {message && (
-          <small className="field-error" role="alert">
-            {message}
-          </small>
-        )}
-      </div>
+      </FieldGroup>
     );
   }
 
   if (field.control === "showcase_tags") {
     return (
-      <fieldset
-        className="field submission-field submission-field--wide"
-        aria-invalid={invalid}
-        aria-describedby={describedBy}
+      <FieldGroup
+        {...frame}
         disabled={disabled || optionsLoading}
+        className="submission-field--wide"
       >
-        <legend>
-          {field.label} <small>({state})</small>
-        </legend>
         <ShowcaseTagEditor
           value={Array.isArray(value) ? value.filter(isShowcaseTagAnswer) : []}
           options={options ?? []}
@@ -923,163 +905,94 @@ function FieldEditor({
           onCommit={onCommit}
         />
         {optionsLoading && <small>{copy.loading}</small>}
-        {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
-        {message && (
-          <small className="field-error" id={`${id}-error`} role="alert">
-            {message}
-          </small>
-        )}
-      </fieldset>
+      </FieldGroup>
     );
   }
 
   if (field.control === "boolean") {
     return (
-      <div className="field submission-field submission-field--boolean">
-        <label htmlFor={id}>
-          <input
-            id={id}
-            type="checkbox"
-            checked={draftValue(value) === true}
-            disabled={disabled}
-            aria-invalid={invalid}
-            aria-describedby={describedBy}
-            onChange={(event) => onCommit(event.currentTarget.checked)}
-          />
-          <span>
-            {field.label} <small>({state})</small>
-          </span>
-        </label>
-        {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
-        {message && (
-          <small className="field-error" id={`${id}-error`} role="alert">
-            {message}
-          </small>
-        )}
-      </div>
+      <CheckField
+        {...frame}
+        checked={draftValue(value) === true}
+        onChange={(event) => onCommit(event.currentTarget.checked)}
+      />
     );
   }
 
   if (field.control === "multi_choice") {
     const selected = Array.isArray(draftValue(value)) ? (draftValue(value) as string[]) : [];
     return (
-      <fieldset
-        className="field submission-field"
-        aria-invalid={invalid}
-        aria-describedby={describedBy}
-        disabled={disabled || optionsLoading}
-      >
-        <legend>
-          {field.label} <small>({state})</small>
-        </legend>
+      <FieldGroup {...frame} disabled={disabled || optionsLoading}>
         <div className="submission-check-grid">
           {(options ?? []).map((option) => (
-            <label key={option.value}>
-              <input
-                type="checkbox"
-                checked={selected.includes(option.value)}
-                onChange={(event) =>
-                  onCommit(
-                    event.currentTarget.checked
-                      ? [...selected, option.value]
-                      : selected.filter((value) => value !== option.value),
-                  )
-                }
-              />
-              <span>{option.label}</span>
-            </label>
+            <CheckField
+              key={option.value}
+              label={option.label}
+              checked={selected.includes(option.value)}
+              onChange={(event) =>
+                onCommit(
+                  event.currentTarget.checked
+                    ? [...selected, option.value]
+                    : selected.filter((value) => value !== option.value),
+                )
+              }
+            />
           ))}
         </div>
         {optionsLoading && <small>{copy.loading}</small>}
-        {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
-        {message && (
-          <small className="field-error" id={`${id}-error`} role="alert">
-            {message}
-          </small>
-        )}
-      </fieldset>
+      </FieldGroup>
     );
   }
 
   if (field.control === "choice") {
     return (
-      <div className="field submission-field">
-        <label htmlFor={id}>
-          {field.label} <small>({state})</small>
-        </label>
-        <select
-          id={id}
-          value={typeof draftValue(value) === "string" ? String(value) : ""}
-          required={field.required}
-          disabled={disabled || optionsLoading}
-          aria-invalid={invalid}
-          aria-describedby={describedBy}
-          onChange={(event) => onCommit(event.currentTarget.value || undefined)}
-        >
-          <option value="">{optionsLoading ? copy.loading : copy.chooseOption}</option>
-          {(options ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
-        {message && (
-          <small className="field-error" id={`${id}-error`} role="alert">
-            {message}
-          </small>
-        )}
-      </div>
+      <SelectField
+        {...frame}
+        value={typeof draftValue(value) === "string" ? String(value) : ""}
+        required={field.required}
+        disabled={disabled || optionsLoading}
+        onChange={(event) => onCommit(event.currentTarget.value || undefined)}
+      >
+        <option value="">{optionsLoading ? copy.loading : copy.chooseOption}</option>
+        {(options ?? []).map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </SelectField>
     );
   }
 
-  const multiline = field.repeatable || (field.constraints.max_length ?? 0) > 500;
+  const text = {
+    ...frame,
+    value: raw,
+    required: field.required,
+    maxLength: field.constraints.max_length ?? undefined,
+    onBlur: commitRaw,
+  };
+  if (field.repeatable || (field.constraints.max_length ?? 0) > 500) {
+    return (
+      <div className="submission-field--wide">
+        <TextareaField
+          {...text}
+          hint={[field.repeatable && copy.onePerLine, field.help_text].filter(Boolean).join(" ")}
+          maxLength={field.repeatable ? undefined : text.maxLength}
+          onChange={(event) => setRaw(event.currentTarget.value)}
+        />
+      </div>
+    );
+  }
   return (
-    <div className={`field submission-field${multiline ? " submission-field--wide" : ""}`}>
-      <label htmlFor={id}>
-        {field.label} <small>({state})</small>
-      </label>
-      {multiline ? (
-        <textarea
-          id={id}
-          value={raw}
-          required={field.required}
-          disabled={disabled}
-          maxLength={field.repeatable ? undefined : (field.constraints.max_length ?? undefined)}
-          aria-invalid={invalid}
-          aria-describedby={describedBy}
-          onChange={(event) => setRaw(event.currentTarget.value)}
-          onBlur={commitRaw}
-        />
-      ) : (
-        <input
-          id={id}
-          type={field.control === "number" ? "number" : "text"}
-          inputMode={
-            field.control === "number" || field.control === "duration" ? "decimal" : undefined
-          }
-          value={raw}
-          required={field.required}
-          disabled={disabled}
-          min={field.constraints.minimum ?? undefined}
-          max={field.constraints.maximum ?? undefined}
-          minLength={field.constraints.min_length ?? undefined}
-          maxLength={field.constraints.max_length ?? undefined}
-          placeholder={field.control === "duration" ? "10gt / 5rt / 0.5s" : undefined}
-          aria-invalid={invalid}
-          aria-describedby={describedBy}
-          onChange={(event) => setRaw(event.currentTarget.value)}
-          onBlur={commitRaw}
-        />
-      )}
-      {field.repeatable && <small>{copy.onePerLine}</small>}
-      {field.help_text && <small id={`${id}-help`}>{field.help_text}</small>}
-      {message && (
-        <small className="field-error" id={`${id}-error`} role="alert">
-          {message}
-        </small>
-      )}
-    </div>
+    <Field
+      {...text}
+      type={field.control === "number" ? "number" : "text"}
+      inputMode={field.control === "number" || field.control === "duration" ? "decimal" : undefined}
+      min={field.constraints.minimum ?? undefined}
+      max={field.constraints.maximum ?? undefined}
+      minLength={field.constraints.min_length ?? undefined}
+      placeholder={field.control === "duration" ? "10gt / 5rt / 0.5s" : undefined}
+      onChange={(event) => setRaw(event.currentTarget.value)}
+    />
   );
 }
 
@@ -1097,18 +1010,17 @@ function MediaSection({
   error?: string;
   uploading: boolean;
   disabled: boolean;
-  onFiles: (files: FileList | null) => Promise<void>;
+  onFiles: (files: File[]) => Promise<void>;
   onDiscard: (item: DraftMediaResponse) => Promise<void>;
 }) {
-  const inputId = useId();
   return (
     <section className="surface submission-section" aria-labelledby="submission-media">
       <h2 id="submission-media">{copy.mediaTitle}</h2>
       <p>{copy.mediaBody}</p>
       {error && (
-        <p className="submission-inline-error" role="alert">
+        <Notice tone="danger" role="alert">
           {error}
-        </p>
+        </Notice>
       )}
       {media ? (
         <>
@@ -1119,25 +1031,13 @@ function MediaSection({
               readableBytes(media.limits.max_upload_bytes),
             )}
           </p>
-          <div className="submission-upload-controls">
-            <label className="button" htmlFor={inputId}>
-              {uploading ? copy.uploadBusy : copy.upload}
-            </label>
-            <input
-              className="visually-hidden"
-              id={inputId}
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              disabled={disabled || uploading}
-              onChange={(event) => {
-                const input = event.currentTarget;
-                void onFiles(input.files).finally(() => {
-                  input.value = "";
-                });
-              }}
-            />
-          </div>
+          <FilePicker
+            label={uploading ? copy.uploadBusy : copy.upload}
+            accept="image/*,video/*"
+            multiple
+            disabled={disabled || uploading}
+            onFiles={(files) => void onFiles(files)}
+          />
           {media.media.filter((item) => item.status !== "discarded").length === 0 ? (
             <p>{copy.noMedia}</p>
           ) : (
@@ -1161,14 +1061,9 @@ function MediaSection({
                         </small>
                       ))}
                     </div>
-                    <button
-                      className="button"
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => void onDiscard(item)}
-                    >
+                    <Button type="button" disabled={disabled} onClick={() => void onDiscard(item)}>
                       {copy.remove}
-                    </button>
+                    </Button>
                   </li>
                 ))}
             </ul>

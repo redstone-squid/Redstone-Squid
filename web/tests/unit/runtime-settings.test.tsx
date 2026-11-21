@@ -78,7 +78,13 @@ it("preserves the entered probability and reports a refused write", async () => 
   fireEvent.click(screen.getByRole("button", { name: "Save setting" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Probability is outside its range.");
   expect(client.update).toHaveBeenCalledWith({ welcome_forward_chance: 2 }, settings.revision);
-  expect(screen.getByLabelText("Value")).toHaveValue(2);
+  const input = screen.getByLabelText("Value");
+  expect(input).toHaveValue(2);
+  expect(input).toHaveAccessibleDescription("Probability is outside its range.");
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(input, { target: { value: "0.5" } });
+  expect(input).not.toHaveAccessibleDescription();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.queryByText("Setting saved.")).not.toBeInTheDocument();
 });
 

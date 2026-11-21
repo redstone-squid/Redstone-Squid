@@ -6,6 +6,7 @@ it("preserves provider subjects when changing contribution roles", () => {
   const onCommit = vi.fn();
   render(
     <CreditEditor
+      locale="en"
       disabled={false}
       value={[
         {
@@ -38,6 +39,7 @@ it("clears an old provider ID when changing its namespace", () => {
   const onCommit = vi.fn();
   render(
     <CreditEditor
+      locale="en"
       disabled={false}
       value={[
         {

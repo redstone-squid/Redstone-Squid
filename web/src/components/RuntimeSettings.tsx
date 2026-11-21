@@ -1,3 +1,6 @@
+import { SelectField, Field } from "../ui/react/Field";
+import { Notice } from "../ui/react/Notice";
+import { Button } from "../ui/react/Button";
 import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
 
 import type { RuntimeSettingsDetail } from "../generated/types.gen";
@@ -47,6 +50,7 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [valueError, setValueError] = useState<string>();
   const [auth, setAuth] = useState(false);
   const [consent, setConsent] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -83,6 +87,7 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
     if (!settings || busy) return;
     setBusy(true);
     setSaved(false);
+    setValueError(undefined);
     setError(null);
     const previous = settings[selected];
     const parsed = Array.isArray(previous)
@@ -104,18 +109,36 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
       const failure = asSubmissionError(caught);
       setAuth(failure.kind === "authentication");
       setConsent(failure.kind === "consent");
-      setError(failure.message);
+      if (failure.status === 422) setValueError(failure.message);
+      else setError(failure.message);
     } finally {
       setBusy(false);
     }
   }
+
+  const valueField = {
+    id: "runtime-value",
+    label: translate(locale, "settings.value"),
+    error: valueError,
+    value,
+    disabled: busy,
+    onChange(event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+      setValue(event.currentTarget.value);
+      setValueError(undefined);
+      setSaved(false);
+    },
+  };
 
   return (
     <section
       className="surface runtime-settings"
       aria-label={translate(locale, "settings.global-settings")}
     >
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <Notice tone="danger" role="alert">
+          {error}
+        </Notice>
+      )}
       {auth && (
         <a href={api.signInUrl(window.location.href)}>{translate(locale, "settings.sign-in")}</a>
       )}
@@ -139,8 +162,8 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
             )}
           </p>
           <form onSubmit={(event) => void save(event)}>
-            <label htmlFor="runtime-setting">{translate(locale, "settings.setting")}</label>
-            <select
+            <SelectField
+              label={translate(locale, "settings.setting")}
               id="runtime-setting"
               value={selected}
               disabled={busy}
@@ -149,6 +172,7 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
                 setSelected(name);
                 setValue(display(settings[name]));
                 setSaved(false);
+                setValueError(undefined);
               }}
             >
               {(Object.keys(labels) as Setting[]).map((name) => (
@@ -156,36 +180,31 @@ export default function RuntimeSettings({ locale, config, api: suppliedApi }: Pr
                   {translate(locale, labels[name])}
                 </option>
               ))}
-            </select>
-            <label htmlFor="runtime-value">{translate(locale, "settings.value")}</label>
+            </SelectField>
             {typeof settings[selected] === "boolean" ? (
-              <select
-                id="runtime-value"
-                value={value}
-                disabled={busy}
-                onChange={(event) => setValue(event.target.value)}
-              >
+              <SelectField {...valueField}>
                 <option value="true">{translate(locale, "settings.enabled")}</option>
                 <option value="false">{translate(locale, "settings.disabled")}</option>
-              </select>
+              </SelectField>
             ) : (
-              <input
-                id="runtime-value"
-                value={value}
-                disabled={busy}
+              <Field
+                {...valueField}
                 type={typeof settings[selected] === "number" ? "number" : "text"}
                 step={selected === "welcome_forward_chance" ? "any" : "1"}
                 required={!Array.isArray(settings[selected])}
-                onChange={(event) => setValue(event.target.value)}
               />
             )}
-            <button className="button button--primary" type="submit" disabled={busy}>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy
                 ? translate(locale, "settings.saving")
                 : translate(locale, "settings.save-setting")}
-            </button>
+            </Button>
           </form>
-          {saved && <p role="status">{translate(locale, "settings.setting-saved")}</p>}
+          {saved && (
+            <Notice tone="success" role="status">
+              {translate(locale, "settings.setting-saved")}
+            </Notice>
+          )}
           <dl>
             {(Object.keys(labels) as Setting[]).map((name) => (
               <div key={name}>

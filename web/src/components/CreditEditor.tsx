@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { Field, FieldGroup, SelectField } from "../ui/react/Field";
+import { Button } from "../ui/react/Button";
+import { type Locale, translate } from "../lib/i18n";
 import type { CreditAnswer } from "../lib/submission-form";
 
 const kinds = [
@@ -7,13 +10,15 @@ const kinds = [
   ["minecraft_java", "Minecraft Java"],
   ["minecraft_bedrock", "Minecraft Bedrock"],
 ];
-const roles = ["creator", "designer", "layout", "contributor"];
+const roles = ["creator", "designer", "layout", "contributor"] as const;
 
 export function CreditEditor({
+  locale,
   value,
   disabled,
   onCommit,
 }: {
+  locale: Locale;
   value: CreditAnswer[];
   disabled: boolean;
   onCommit: (credits: CreditAnswer[]) => void;
@@ -32,81 +37,73 @@ export function CreditEditor({
   };
   return (
     <div
-      className="submission-field--wide"
+      className="sq-stack"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) save();
       }}
     >
       {credits.map((credit, index) => (
-        <fieldset key={index} disabled={disabled}>
-          <legend>Credit {index + 1}</legend>
-          <label>
-            Name{" "}
-            <input
-              value={credit.name}
-              required
-              maxLength={255}
-              onChange={(event) => update(index, { name: event.target.value })}
-            />
-          </label>
-          <label>
-            Identity{" "}
-            <select
-              value={credit.kind}
-              onChange={(event) =>
-                update(index, {
-                  kind: event.target.value,
-                  username: null,
-                  subject: null,
-                })
-              }
-            >
-              {kinds.map(([kind, label]) => (
-                <option key={kind} value={kind}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <FieldGroup
+          key={index}
+          disabled={disabled}
+          label={translate(locale, "credit.row", { number: index + 1 })}
+        >
+          <Field
+            label={translate(locale, "credit.name")}
+            value={credit.name}
+            required
+            maxLength={255}
+            onChange={(event) => update(index, { name: event.target.value })}
+          />
+          <SelectField
+            label={translate(locale, "credit.identity")}
+            value={credit.kind}
+            onChange={(event) =>
+              update(index, { kind: event.target.value, username: null, subject: null })
+            }
+          >
+            {kinds.map(([kind, name]) => (
+              <option key={kind} value={kind}>
+                {kind === "name" ? translate(locale, "credit.name") : name}
+              </option>
+            ))}
+          </SelectField>
           {credit.kind !== "name" && (
             <>
-              <label>
-                Username (optional){" "}
-                <input
-                  value={credit.username ?? ""}
-                  onChange={(event) =>
-                    update(index, { username: event.target.value || null, subject: null })
-                  }
-                />
-              </label>
-              <label>
-                {credit.kind === "minecraft_java"
-                  ? "UUID"
-                  : credit.kind === "discord"
-                    ? "Discord ID"
-                    : "XUID"}{" "}
-                (optional)
-                <input
-                  value={credit.subject ?? ""}
-                  onChange={(event) => update(index, { subject: event.target.value || null })}
-                />
-              </label>
+              <Field
+                label={translate(locale, "credit.username")}
+                detail={translate(locale, "submitFlow.optional")}
+                value={credit.username ?? ""}
+                onChange={(event) =>
+                  update(index, { username: event.target.value || null, subject: null })
+                }
+              />
+              <Field
+                label={
+                  credit.kind === "minecraft_java"
+                    ? "UUID"
+                    : credit.kind === "discord"
+                      ? translate(locale, "credit.discord-id")
+                      : "XUID"
+                }
+                detail={translate(locale, "submitFlow.optional")}
+                value={credit.subject ?? ""}
+                onChange={(event) => update(index, { subject: event.target.value || null })}
+              />
             </>
           )}
-          <label>
-            Contribution{" "}
-            <select
-              value={credit.role}
-              onChange={(event) => update(index, { role: event.target.value })}
-            >
-              {roles.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
+          <SelectField
+            label={translate(locale, "credit.contribution")}
+            value={credit.role}
+            onChange={(event) => update(index, { role: event.target.value })}
+          >
+            {roles.map((role) => (
+              <option key={role} value={role}>
+                {translate(locale, `credit.${role}`)}
+              </option>
+            ))}
+          </SelectField>
+          <Button
             type="button"
             onClick={() => {
               const next = credits.filter((_, position) => position !== index);
@@ -114,11 +111,11 @@ export function CreditEditor({
               onCommit(next);
             }}
           >
-            Remove credit
-          </button>
-        </fieldset>
+            {translate(locale, "credit.remove")}
+          </Button>
+        </FieldGroup>
       ))}
-      <button
+      <Button
         type="button"
         disabled={disabled}
         onClick={() =>
@@ -128,8 +125,8 @@ export function CreditEditor({
           ])
         }
       >
-        Add credit
-      </button>
+        {translate(locale, "credit.add")}
+      </Button>
     </div>
   );
 }
