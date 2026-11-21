@@ -9,6 +9,7 @@
     gap: var(--space-4);
   }
   .sq-container {
+    display: grid;
     inline-size: 100%;
     max-inline-size: var(--content-width);
     margin-inline: auto;

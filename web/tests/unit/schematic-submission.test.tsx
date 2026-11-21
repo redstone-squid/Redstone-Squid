@@ -14,12 +14,10 @@ describe("schematic suggestions", () => {
         .mockResolvedValue([
           { id: "upload", filename: "door.schem", state: "ready", primary: true },
         ]),
-      schematicSuggestions: vi
-        .fn()
-        .mockResolvedValue({
-          suggestions: [suggestion],
-          detections: [{ field_id: "category", status: "not_detected" }],
-        }),
+      schematicSuggestions: vi.fn().mockResolvedValue({
+        suggestions: [suggestion],
+        detections: [{ field_id: "category", status: "not_detected" }],
+      }),
     } as unknown as SubmissionApi;
     render(
       <SchematicSubmissionSection
@@ -42,10 +40,13 @@ describe("schematic suggestions", () => {
     expect(onAccept).toHaveBeenCalledWith(suggestion);
   });
 
-  it("retains the upload identity and refreshes after upload", async () => {
+  it("retains upload errors through refresh and lets the user retry the same file", async () => {
     const api = {
       listSchematics: vi.fn().mockResolvedValue([]),
-      uploadSchematic: vi.fn().mockResolvedValue({ state: "pending" }),
+      uploadSchematic: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Upload interrupted"))
+        .mockResolvedValue({ state: "pending" }),
     } as unknown as SubmissionApi;
     render(
       <SchematicSubmissionSection
@@ -61,10 +62,12 @@ describe("schematic suggestions", () => {
         onAccept={vi.fn()}
       />,
     );
-    await userEvent.upload(
-      screen.getByLabelText("Upload schematic"),
-      new File(["schematic"], "door.schem"),
-    );
+    const input = screen.getByLabelText("Upload schematic");
+    const file = new File(["schematic"], "door.schem");
+    await userEvent.upload(input, file);
+    await waitFor(() => expect(api.listSchematics).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Upload interrupted");
+    await userEvent.upload(input, file);
     await waitFor(() =>
       expect(api.uploadSchematic).toHaveBeenCalledWith(
         "draft",
@@ -72,6 +75,7 @@ describe("schematic suggestions", () => {
         expect.any(String),
       ),
     );
-    await waitFor(() => expect(api.listSchematics).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.listSchematics).toHaveBeenCalledTimes(3));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

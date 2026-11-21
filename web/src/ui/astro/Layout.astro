@@ -2,10 +2,13 @@
 import type { HTMLAttributes } from "astro/types";
 import { layoutStyles, type LayoutVariants } from "../variants";
 
-type Props = HTMLAttributes<"div"> & LayoutVariants;
-const { pattern, gap, class: className, ...rest } = Astro.props;
+type Props = HTMLAttributes<"div"> &
+  LayoutVariants & {
+    as?: "div" | "section" | "article" | "header" | "footer" | "main" | "aside" | "nav";
+  };
+const { as: Tag = "div", pattern, gap, class: className, ...rest } = Astro.props;
 ---
 
-<div class={layoutStyles({ pattern, gap, className })} {...rest}>
+<Tag class={layoutStyles({ pattern, gap, className })} {...rest}>
   <slot />
-</div>
+</Tag>

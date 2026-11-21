@@ -5,6 +5,9 @@ import type {
   SchematicFieldSuggestion,
   SchematicSubmissionSuggestions,
 } from "../generated/types.gen";
+import { Button } from "../ui/react/Button";
+import { FilePicker } from "../ui/react/FilePicker";
+import { Notice } from "../ui/react/Notice";
 import type { SubmissionApi } from "../lib/submission-api";
 import { translate, type StaticMessageKey, type Locale } from "../lib/i18n";
 
@@ -31,7 +34,9 @@ export default function SchematicSubmissionSection({
 }: Props) {
   const [files, setFiles] = useState<DraftSchematicResponse[]>([]);
   const [result, setResult] = useState<SchematicSubmissionSuggestions>();
-  const [error, setError] = useState<string>();
+  const [loadError, setLoadError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+  const error = actionError ?? loadError;
   const [refresh, setRefresh] = useState(0);
   const t = (key: StaticMessageKey) => translate(locale, key);
 
@@ -47,12 +52,12 @@ export default function SchematicSubmissionSection({
         if (cancelled) return;
         setFiles(files);
         setResult(result);
-        setError(undefined);
+        setLoadError(undefined);
         if (files.some((file) => file.state === "pending" || file.state === "uploading")) {
           timer = setTimeout(() => void load(), 1500);
         }
       } catch (error) {
-        if (!cancelled) setError(error instanceof Error ? error.message : String(error));
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
       }
     };
     void load();
@@ -63,11 +68,12 @@ export default function SchematicSubmissionSection({
   }, [api, draftId, refresh]);
 
   const mutate = async (operation: () => Promise<unknown>) => {
+    setActionError(undefined);
     try {
       await onMutation(operation);
-      setRefresh((value) => value + 1);
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
       setRefresh((value) => value + 1);
     }
   };
@@ -76,26 +82,32 @@ export default function SchematicSubmissionSection({
     <section className="surface submission-section" aria-labelledby="schematic-intake-title">
       <h2 id="schematic-intake-title">{t("submitFlow.schematicTitle")}</h2>
       <p>{t("submitFlow.schematicHelp")}</p>
-      <label>
-        {t("submitFlow.schematicUpload")}
-        <input
-          type="file"
-          accept=".schem,.schematic,.litematic,.nbt,.mcstructure"
+      <FilePicker
+        label={t("submitFlow.schematicUpload")}
+        accept=".schem,.schematic,.litematic,.nbt,.mcstructure"
+        disabled={disabled}
+        onFiles={([file]) => {
+          if (!file) return;
+          const uploadId = crypto.randomUUID();
+          void mutate(() => api.uploadSchematic(draftId, file, uploadId));
+        }}
+      />
+      {error && (
+        <Notice tone="danger" role="alert">
+          {error}
+        </Notice>
+      )}
+      <div>
+        <Button
           disabled={disabled}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) {
-              const uploadId = crypto.randomUUID();
-              void mutate(() => api.uploadSchematic(draftId, file, uploadId));
-            }
+          onClick={() => {
+            setActionError(undefined);
+            setRefresh((value) => value + 1);
           }}
-        />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="button" disabled={disabled} onClick={() => setRefresh((value) => value + 1)}>
-        {t("submitFlow.schematicRefresh")}
-      </button>
+        >
+          {t("submitFlow.schematicRefresh")}
+        </Button>
+      </div>
       <ul>
         {files.map((file) => (
           <li key={file.id}>
@@ -103,21 +115,21 @@ export default function SchematicSubmissionSection({
             {file.primary ? (
               ` (${t("submitFlow.schematicPrimary")})`
             ) : (
-              <button
-                type="button"
+              <Button
+                size="small"
                 disabled={disabled}
                 onClick={() => void mutate(() => api.selectPrimarySchematic(draftId, file.id))}
               >
                 {t("submitFlow.schematicPrimary")}
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              size="small"
               disabled={disabled}
               onClick={() => void mutate(() => api.discardSchematic(draftId, file.id))}
             >
               {t("submitFlow.schematicDiscard")}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -142,9 +154,9 @@ export default function SchematicSubmissionSection({
               })
               .join(", ")}
             <p>{suggestion.evidence}</p>
-            <button type="button" disabled={disabled} onClick={() => onAccept(suggestion)}>
+            <Button size="small" disabled={disabled} onClick={() => onAccept(suggestion)}>
               {t("submitFlow.schematicAccept")}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
