@@ -1,0 +1,23 @@
+<article class="sq-panel catalogue-record">
+  <slot />
+</article>
+
+<style>
+  @layer tokens, base, components;
+  @layer components {
+    .catalogue-record {
+      display: grid;
+      align-content: start;
+      gap: var(--space-3);
+    }
+    .catalogue-record :global(h3) {
+      font-size: 1.125rem;
+    }
+    .catalogue-record :global(a) {
+      text-decoration: none;
+    }
+    .catalogue-record :global(a):hover {
+      text-decoration: underline;
+    }
+  }
+</style>

@@ -1,4 +1,6 @@
 ---
+import SummaryCard from "../features/catalogue/SummaryCard.astro";
+import Badge from "../ui/astro/Badge.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import BuildCard from "../features/builds/components/BuildCard.astro";
 import ErrorPanel from "../features/catalogue/ErrorPanel.astro";
@@ -74,29 +76,26 @@ if (q) {
             if ("build" in result) return <BuildCard build={result.build} locale={locale} />;
             if ("record" in result)
               return (
-                <article class="sq-panel catalogue-record">
-                  <span class="sq-badge">{translate(locale, "search.resultRecord")}</span>
+                <SummaryCard>
+                  <Badge>{translate(locale, "search.resultRecord")}</Badge>
                   <div>
                     <h2>{result.record.title}</h2>
                     <p>{result.record.subtitle ?? result.record.build_title}</p>
                   </div>
-                  <a
-                    class="sq-button sq-button--secondary"
-                    href={localizePath(`/records/${result.record.record_id}`, locale)}
-                  >
+                  <LinkButton href={localizePath(`/records/${result.record.record_id}`, locale)}>
                     {translate(locale, "common.viewRecord")}
-                  </a>
-                </article>
+                  </LinkButton>
+                </SummaryCard>
               );
             return (
-              <article class="sq-panel catalogue-record">
-                <span class="sq-badge">{translate(locale, "search.resultMetadata")}</span>
+              <SummaryCard>
+                <Badge>{translate(locale, "search.resultMetadata")}</Badge>
                 <div>
                   <h2>{result.metadata.title}</h2>
                   <p>{result.metadata.description ?? result.metadata.aliases.join(" · ")}</p>
                 </div>
-                <span class="sq-badge">{result.metadata.metadata_kind}</span>
-              </article>
+                <Badge>{result.metadata.metadata_kind}</Badge>
+              </SummaryCard>
             );
           })}
         </div>

@@ -1,4 +1,5 @@
 ---
+import SummaryCard from "./SummaryCard.astro";
 import Badge from "../../ui/astro/Badge.astro";
 import RecordFreshness from "../../components/RecordFreshness.astro";
 import type { PublishedTitle } from "../../generated/types.gen";
@@ -7,7 +8,7 @@ type Props = { record: PublishedTitle; locale: Locale; linked?: boolean };
 const { record, locale, linked = true } = Astro.props;
 ---
 
-<article class="sq-panel catalogue-record">
+<SummaryCard>
   <span class="sq-kicker">
     #{record.id} / {translateTaxonomy(locale, record.base_title)}
   </span>
@@ -27,24 +28,4 @@ const { record, locale, linked = true } = Astro.props;
     {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })} ·{" "}
     <RecordFreshness {record} {locale} />
   </p>
-</article>
-
-<style>
-  @layer tokens, base, components;
-  @layer components {
-    .catalogue-record {
-      display: grid;
-      align-content: start;
-      gap: var(--space-3);
-    }
-    .catalogue-record h3 {
-      font-size: 1.125rem;
-    }
-    .catalogue-record a {
-      text-decoration: none;
-    }
-    .catalogue-record a:hover {
-      text-decoration: underline;
-    }
-  }
-</style>
+</SummaryCard>
