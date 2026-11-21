@@ -10,6 +10,7 @@ import com.redstonesquid.minecraft.core.command.SquidCommandTree
 import com.redstonesquid.minecraft.core.http.BoundedJdkHttpTransport
 import com.redstonesquid.minecraft.core.http.MinecraftClientEndpoints
 import com.redstonesquid.minecraft.core.submission.MinecraftSubmissionWorkflow
+import com.redstonesquid.minecraft.fabric.LitematicaExport
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 import java.util.Locale
 import java.util.concurrent.Executor
@@ -107,6 +108,16 @@ private class FabricCommandActions(
                     notify("Usage: /squid unset <field>")
                 } else {
                     workflow.unsetField(playerId, locale, field, notify)
+                }
+            }
+            SquidCommandAction.UPLOAD -> {
+                val filename = optionalArgument(context, "filename")
+                if (filename == null) {
+                    notify("Use /squid upload <filename.litematic> for a file in your instance's schematics folder.")
+                } else {
+                    workflow.uploadSchematic(playerId, locale, notify) {
+                        LitematicaExport.fromFile(Minecraft.getInstance().gameDirectory.toPath().resolve("schematics"), filename)
+                    }
                 }
             }
             SquidCommandAction.SELECT,

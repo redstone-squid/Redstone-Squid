@@ -95,10 +95,30 @@ class SquidCommandTreeTest {
         val fabricCommands = fabric.root.getChild("squid").children.map { it.name }.toSet()
 
         assertEquals(setOf("select", "pos1", "pos2", "selection", "server"), paperCommands - fabricCommands)
-        assertEquals(setOf("submit", "set", "unset", "cancel", "settings", "status", "link"), fabricCommands)
+        assertEquals(setOf("submit", "set", "unset", "upload", "cancel", "settings", "status", "link"), fabricCommands)
         val player = TestSource(setOf("redstonesquid.submit"))
         assertEquals(1, paper.execute("squid pos1", player))
         assertFailsWith<CommandSyntaxException> { fabric.execute("squid pos1", player) }
+    }
+
+    @Test
+    fun `only Fabric accepts a filename for schematic upload`() {
+        val player = TestSource(setOf("redstonesquid.submit"))
+        var filename: String? = null
+        val fabric = dispatcher(origin = MinecraftOrigin.FABRIC) { action, context ->
+            assertEquals(SquidCommandAction.UPLOAD, action)
+            filename = StringArgumentType.getString(context, "filename")
+            1
+        }
+        val paper = dispatcher(origin = MinecraftOrigin.PAPER) { action, _ ->
+            assertEquals(SquidCommandAction.UPLOAD, action)
+            1
+        }
+
+        assertEquals(1, paper.execute("squid upload", player))
+        assertFailsWith<CommandSyntaxException> { paper.execute("squid upload Door.litematic", player) }
+        assertEquals(1, fabric.execute("squid upload Workshop Door.litematic", player))
+        assertEquals("Workshop Door.litematic", filename)
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.redstonesquid.minecraft.core.http.BackendHttpMethod
 import com.redstonesquid.minecraft.core.http.BackendTransportException
 import com.redstonesquid.minecraft.core.http.RecordingBackendTransport
 import com.redstonesquid.minecraft.core.http.jsonResponse
+import com.redstonesquid.minecraft.protocol.MAX_SCHEMATIC_UPLOAD_BYTES
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
 import com.redstonesquid.minecraft.protocol.SubmissionApiPaths
 import java.net.URI
@@ -20,7 +21,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.jupiter.api.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -112,6 +115,77 @@ class MinecraftSubmissionWorkflowTest {
         )
         assertTrue(checkNotNull(transport.requests.last().headers["Idempotency-Key"]).contains(":delete:"))
         workflow.close()
+    }
+
+    @Test
+    fun `schematic upload retries the same bytes and refreshes the draft before the next edit`() {
+        val playerId = UUID.fromString("123e4567-e89b-12d3-a456-426614174001")
+        val draftPath = "${SubmissionApiPaths.DRAFTS}/123e4567-e89b-12d3-a456-426614174040"
+        val bytes = byteArrayOf(0x1f, 0x8b.toByte(), 0, -1)
+        val uploads = AtomicInteger()
+        val ready = CountDownLatch(1)
+        var uploadId = ""
+        fun metadata(state: String): String = """{"id":"$uploadId","filename":"A & B.litematic",
+            "sha256":"${"a".repeat(64)}","byte_size":4,"state":"$state","primary":true}"""
+
+        val transport = RecordingBackendTransport { request ->
+            when {
+                request.pathAndQuery == SubmissionApiPaths.CURRENT_FORM -> jsonResponse(body = manifestJson())
+                request.pathAndQuery == SubmissionApiPaths.DRAFTS && request.method == BackendHttpMethod.GET ->
+                    jsonResponse(body = draftListJson())
+                request.pathAndQuery == SubmissionApiPaths.DRAFTS -> jsonResponse(201, draftJson(revision = 1))
+                request.pathAndQuery == draftPath -> jsonResponse(body = draftJson(revision = 2))
+                request.pathAndQuery == "$draftPath/schematics" -> jsonResponse(body = "[${metadata("ready")}]")
+                request.pathAndQuery == "$draftPath/changes" -> {
+                    assertTrue("\"base_revision\":2" in checkNotNull(request.body))
+                    jsonResponse(body = """{"draft":${draftJson(revision = 3)},"replayed":false}""")
+                }
+                request.method == BackendHttpMethod.PUT -> {
+                    uploadId = request.pathAndQuery.substringAfterLast('/').substringBefore('?')
+                    assertTrue(request.pathAndQuery.endsWith("?filename=A+%26+B.litematic"))
+                    assertTrue(checkNotNull(request.headers["Authorization"]).startsWith("Bearer sqpt_"))
+                    assertContentEquals(bytes, request.binaryBody)
+                    if (uploads.incrementAndGet() == 1) jsonResponse(503, "{}")
+                    else jsonResponse(202, metadata("pending"))
+                }
+                else -> error("unexpected request: $request")
+            }
+        }
+        MinecraftSubmissionWorkflow(
+            origin = MinecraftOrigin.FABRIC,
+            transport = transport,
+            secretStore = authorizedFabricStore(playerId),
+            approvalFallbackUri = URI("https://fallback.example.test/link"),
+            callbackExecutor = Executor(Runnable::run),
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+        ).use { workflow ->
+            workflow.submit(playerId, "en-US", "door") {}
+            workflow.uploadSchematic(playerId, "en-US", { message ->
+                if (message.contains("passed validation")) ready.countDown()
+            }) {
+                SchematicExport("A & B.litematic") { it.write(bytes) }
+            }
+
+            assertTrue(ready.await(8, TimeUnit.SECONDS))
+            val attempts = transport.requests.filter { it.method == BackendHttpMethod.PUT }
+            assertEquals(2, attempts.size)
+            assertEquals(attempts[0].pathAndQuery, attempts[1].pathAndQuery)
+            val messages = mutableListOf<String>()
+            workflow.setField(playerId, "en-US", "description", "compact", messages::add)
+            assertTrue(messages.any { "revision 3" in it })
+        }
+    }
+
+    @Test
+    fun `schematic export stops writing at the upload byte limit`() {
+        val chunk = ByteArray(1024 * 1024)
+        val oversized = SchematicExport("large.nbt") { output ->
+            repeat(MAX_SCHEMATIC_UPLOAD_BYTES / chunk.size) { output.write(chunk) }
+            output.write(1)
+        }
+
+        val error = assertFailsWith<IllegalArgumentException> { oversized.read() }
+        assertTrue(checkNotNull(error.message).contains("16 MiB"))
     }
 
     @Test

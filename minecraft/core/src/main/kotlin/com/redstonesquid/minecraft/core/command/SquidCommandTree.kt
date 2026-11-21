@@ -27,6 +27,7 @@ public enum class SquidCommandAction(
     POSITION_ONE("pos1", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
     POSITION_TWO("pos2", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
     SELECTION("selection", "redstonesquid.submit", CommandAudience.PLAYER, paperOnly = true),
+    UPLOAD("upload", "redstonesquid.submit", CommandAudience.PLAYER),
     CANCEL("cancel", "redstonesquid.submit", CommandAudience.PLAYER),
     SETTINGS("settings", "redstonesquid.use", CommandAudience.PLAYER),
     STATUS("status", "redstonesquid.use", CommandAudience.PLAYER),
@@ -56,7 +57,7 @@ public object SquidCommandTree {
         val root = LiteralArgumentBuilder.literal<S>("squid")
         SquidCommandAction.entries
             .filter { it.audience == CommandAudience.PLAYER && (!it.paperOnly || origin == MinecraftOrigin.PAPER) }
-            .forEach { action -> root.then(playerActionNode(action, access, actions, suggestions)) }
+            .forEach { action -> root.then(playerActionNode(action, origin, access, actions, suggestions)) }
 
         if (origin == MinecraftOrigin.PAPER) {
             val serverActions = SquidCommandAction.entries.filter { it.audience == CommandAudience.SERVER_ADMIN }
@@ -81,6 +82,7 @@ public object SquidCommandTree {
 
     private fun <S> playerActionNode(
         action: SquidCommandAction,
+        origin: MinecraftOrigin,
         access: CommandAccess<S>,
         actions: CommandActions<S>,
         suggestions: SquidSuggestions<S>,
@@ -121,6 +123,12 @@ public object SquidCommandTree {
                 ).suggests(provider(suggestions, SuggestionSlot.UNSET_FIELD))
                     .executes { actions.execute(action, it) },
             )
+            SquidCommandAction.UPLOAD -> if (origin == MinecraftOrigin.FABRIC) {
+                node.then(
+                    RequiredArgumentBuilder.argument<S, String>("filename", StringArgumentType.greedyString())
+                        .executes { actions.execute(action, it) },
+                )
+            }
             else -> Unit
         }
         return node

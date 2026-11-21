@@ -37,7 +37,9 @@ public class RedstoneSquidPaperPlugin : JavaPlugin() {
             return
         }
         workflow = initialized
-        val actions = PaperCommandActions(initialized)
+        val capture = PaperSchematicCapture()
+        server.pluginManager.registerEvents(capture, this)
+        val actions = PaperCommandActions(initialized, capture)
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(
                 SquidCommandTree.build(MinecraftOrigin.PAPER, PaperCommandAccess, actions).build(),
@@ -77,6 +79,7 @@ private object PaperCommandAccess : CommandAccess<CommandSourceStack> {
 
 private class PaperCommandActions(
     private val workflow: MinecraftSubmissionWorkflow,
+    private val capture: PaperSchematicCapture,
 ) : CommandActions<CommandSourceStack> {
     override fun execute(action: SquidCommandAction, context: CommandContext<CommandSourceStack>): Int {
         if (action.audience == CommandAudience.SERVER_ADMIN) {
@@ -121,13 +124,13 @@ private class PaperCommandActions(
                     workflow.unsetField(player.uniqueId, player.locale().toLanguageTag(), field, notify)
                 }
             }
-            SquidCommandAction.SELECT,
-            SquidCommandAction.POSITION_ONE,
-            SquidCommandAction.POSITION_TWO,
-            SquidCommandAction.SELECTION,
-            -> notify(
-                "World capture and schematic upload are not available yet; no schematic was created.",
-            )
+            SquidCommandAction.SELECT -> notify(capture.mark(player, first = true, reset = true))
+            SquidCommandAction.POSITION_ONE -> notify(capture.mark(player, first = true))
+            SquidCommandAction.POSITION_TWO -> notify(capture.mark(player, first = false))
+            SquidCommandAction.SELECTION -> notify(capture.describe(player))
+            SquidCommandAction.UPLOAD -> workflow.uploadSchematic(player.uniqueId, player.locale().toLanguageTag(), notify) {
+                capture.capture(player)
+            }
             SquidCommandAction.SERVER_CLAIM,
             SquidCommandAction.SERVER_STATUS,
             SquidCommandAction.SERVER_ROTATE,

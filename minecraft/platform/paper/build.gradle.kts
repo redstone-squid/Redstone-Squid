@@ -8,6 +8,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":schematic-snapshot"))
     compileOnly(libs.paper.api)
 
     testImplementation(libs.junit.jupiter)

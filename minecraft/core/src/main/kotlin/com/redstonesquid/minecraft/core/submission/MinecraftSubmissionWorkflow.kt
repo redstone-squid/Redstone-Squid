@@ -13,12 +13,15 @@ import com.redstonesquid.minecraft.core.auth.PlayerGrantKey
 import com.redstonesquid.minecraft.core.command.SquidSuggestion
 import com.redstonesquid.minecraft.core.command.SuggestionSlot
 import com.redstonesquid.minecraft.core.http.BackendApiException
+import com.redstonesquid.minecraft.core.http.BackendProtocolException
 import com.redstonesquid.minecraft.core.http.BackendTransport
 import com.redstonesquid.minecraft.core.http.BackendTransportException
 import com.redstonesquid.minecraft.core.settings.RuntimeSettingsClient
 import com.redstonesquid.minecraft.protocol.ClientCapabilities
 import com.redstonesquid.minecraft.protocol.CURRENT_PROTOCOL_VERSION
 import com.redstonesquid.minecraft.protocol.DraftListResponse
+import com.redstonesquid.minecraft.protocol.DraftSchematicResponse
+import com.redstonesquid.minecraft.protocol.DraftSchematicState
 import com.redstonesquid.minecraft.protocol.DraftSummary
 import com.redstonesquid.minecraft.protocol.FormCapabilityNegotiator
 import com.redstonesquid.minecraft.protocol.FormField
@@ -33,6 +36,7 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -43,7 +47,7 @@ import kotlinx.serialization.json.JsonElement
  * Players link their account through browser approval, then use `/squid submit` to create or resume
  * a draft and `set`/`unset` to save individual answers. Each bounded in-memory player session caches
  * the selected draft and its form; the backend retains the draft across client restarts.
- * Here `submit` opens the editor: capture, media uploads, and final submission are not implemented.
+ * Use `/squid upload` to attach a schematic to the open draft.
  *
  * Invoke commands and suggestions on the platform's game thread, and provide a callback executor
  * that returns asynchronous results to that thread. Immediate notifications run on the caller's
@@ -63,6 +67,10 @@ public class MinecraftSubmissionWorkflow(
     private val authorization = MinecraftDeviceAuthorizationClient(transport, secretStore, clock)
     private val sessions = LinkedHashMap<UUID, PlayerSession>()
     private val instanceId = UUID.randomUUID().toString()
+    private val schematicWorker = Executors.newSingleThreadExecutor(
+        Thread.ofPlatform().daemon().name("redstone-squid-schematic").factory(),
+    )
+    private val schematicSlots = Semaphore(2)
 
     init {
         require(approvalFallbackUri.scheme.equals("https", ignoreCase = true) && approvalFallbackUri.host != null) {
@@ -270,6 +278,67 @@ public class MinecraftSubmissionWorkflow(
         mutateField(playerId, locale, fieldId, null, unset = true, notify)
     }
 
+    /** Runs [prepare] on the game thread after checking the active draft and upload capacity. */
+    public fun uploadSchematic(
+        playerId: UUID,
+        locale: String,
+        notify: (String) -> Unit,
+        prepare: () -> SchematicExport,
+    ) {
+        if (!requireGrant(playerId, notify)) return
+        val session = synchronized(sessions) { sessions[playerId] }
+        val draft = session?.draft
+        if (session == null || draft == null || draft.status !in EDITABLE_DRAFT_STATUSES) {
+            notify("Open an editable draft with /squid submit first.")
+            return
+        }
+        val client = draftClient(playerId, locale)
+        synchronized(session) {
+            if (session.busy) {
+                notify("A Redstone Squid draft operation is already in progress.")
+                return
+            }
+            if (!schematicSlots.tryAcquire()) {
+                notify("Redstone Squid is already handling two schematic uploads. Try again shortly.")
+                return
+            }
+            session.busy = true
+        }
+        val draftId = UUID.fromString(draft.id)
+        val uploadId = UUID.randomUUID()
+        val prepared = runCatching { CompletableFuture.supplyAsync(prepare()::read, schematicWorker) }
+            .getOrElse { error -> CompletableFuture.failedFuture(error) }
+        val upload = prepared.thenCompose { file ->
+            check(!scheduler.isShutdown)
+            sendSchematicAndRefreshDraft(client, draftId, uploadId, file)
+        }
+
+        upload.whenComplete { result, failure ->
+            schematicSlots.release()
+            dispatch {
+                if (scheduler.isShutdown) return@dispatch
+                if (failure != null) {
+                    finishSubmit(playerId, session)
+                    notify(safeFailure(failure))
+                    return@dispatch
+                }
+                val (source, refreshed, uploadFailure) = checkNotNull(result)
+                if (refreshed != null && refreshed.schemaId == draft.schemaId &&
+                    refreshed.schemaRevision == draft.schemaRevision && refreshed.category == draft.category &&
+                    refreshed.status in EDITABLE_DRAFT_STATUSES
+                ) {
+                    synchronized(session) { session.draft = refreshed }
+                } else {
+                    clearCurrentDraft(session, draft.id)
+                    notify("Use /squid submit to reopen the draft before editing it again.")
+                }
+                finishSubmit(playerId, session)
+                if (uploadFailure != null) notify(safeFailure(uploadFailure))
+                else reportSchematic(client, draftId, checkNotNull(source), notify)
+            }
+        }
+    }
+
     /**
      * Offers the current draft ID, fields, and inline choices from this player's cached session.
      * Brigadier requests these as the player types on the game thread, so suggestions use only
@@ -313,7 +382,84 @@ public class MinecraftSubmissionWorkflow(
      */
     override fun close() {
         scheduler.shutdownNow()
+        schematicWorker.shutdownNow()
         synchronized(sessions) { sessions.clear() }
+    }
+
+    private fun sendSchematicAndRefreshDraft(
+        client: SubmissionDraftClient,
+        draftId: UUID,
+        uploadId: UUID,
+        file: SchematicFile,
+    ): CompletableFuture<SchematicUploadResult> = sendSchematic(client, draftId, uploadId, file)
+        .handle { source, failure ->
+            // Reserving the upload advances the draft revision even if storing the bytes fails.
+            val refresh = runCatching { client.getDraft(draftId) }
+                .getOrElse { error -> CompletableFuture.failedFuture(error) }
+            refresh.handle { refreshed, _ -> SchematicUploadResult(source, refreshed, failure) }
+        }.thenCompose { it }
+
+    private fun sendSchematic(
+        client: SubmissionDraftClient,
+        draftId: UUID,
+        uploadId: UUID,
+        file: SchematicFile,
+        attempt: Int = 1,
+    ): CompletableFuture<DraftSchematicResponse> = client.uploadSchematic(draftId, uploadId, file.filename, file.bytes)
+        .exceptionallyCompose { failure ->
+            val cause = unwrap(failure)
+            val retryable = when (cause) {
+                is BackendApiException -> cause.statusCode in 500..599
+                is BackendTransportException -> cause !is BackendProtocolException
+                else -> false
+            }
+            if (!retryable || attempt >= 3 || scheduler.isShutdown) {
+                CompletableFuture.failedFuture(failure)
+            } else {
+                CompletableFuture.runAsync({}, CompletableFuture.delayedExecutor(1, TimeUnit.SECONDS, scheduler))
+                    .thenCompose { sendSchematic(client, draftId, uploadId, file, attempt + 1) }
+            }
+        }
+
+    private fun reportSchematic(
+        client: SubmissionDraftClient,
+        draftId: UUID,
+        source: DraftSchematicResponse,
+        notify: (String) -> Unit,
+        pollsRemaining: Int = 8,
+    ) {
+        if (scheduler.isShutdown) return
+        val name = safeChatText(source.filename)
+        when {
+            source.discarded -> notify("Schematic '$name' was removed from the draft.")
+            source.state == DraftSchematicState.READY -> {
+                notify("Schematic '$name' passed validation.")
+                if (!source.primary) notify("You can choose the primary schematic in the web draft.")
+            }
+            source.state in setOf(DraftSchematicState.UPLOADING, DraftSchematicState.PENDING) -> {
+                if (pollsRemaining == 0) {
+                    notify("Schematic '$name' is still validating. Check the web draft for its status.")
+                    return
+                }
+                if (pollsRemaining == 8) notify("Uploaded '$name'. Redstone Squid is validating it.")
+                scheduler.schedule({
+                    val poll = runCatching { client.listSchematics(draftId) }
+                        .getOrElse { error -> CompletableFuture.failedFuture(error) }
+                    poll.whenComplete { sources, failure ->
+                        dispatch {
+                            if (failure != null) {
+                                notify("Check the web draft for the validation status of '$name'.")
+                            } else {
+                                val current = sources?.singleOrNull { it.id == source.id }
+                                if (current == null) notify("Schematic '$name' was removed from the draft.")
+                                else reportSchematic(client, draftId, current, notify, pollsRemaining - 1)
+                            }
+                        }
+                    }
+                }, 2, TimeUnit.SECONDS)
+            }
+            else -> notify("Schematic '$name' could not be validated. Check the web draft for details.")
+        }
     }
 
     private fun continueSubmit(
@@ -988,6 +1134,12 @@ public class MinecraftSubmissionWorkflow(
         var manifest: FormManifest? = null
         var draft: StoredDraft? = null
     }
+
+    private data class SchematicUploadResult(
+        val source: DraftSchematicResponse?,
+        val draft: StoredDraft?,
+        val failure: Throwable?,
+    )
 
     private companion object {
         val SUPPORTED_CONTROLS: Set<String> = setOf("text", "number", "choice", "multi_choice", "duration", "boolean", "credits")

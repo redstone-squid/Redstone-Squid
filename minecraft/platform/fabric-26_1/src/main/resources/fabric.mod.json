@@ -3,7 +3,7 @@
   "id": "redstone_squid",
   "version": "0.1.0-SNAPSHOT",
   "name": "Redstone Squid",
-  "description": "Capture and submit redstone builds to Redstone Squid.",
+  "description": "Attach Litematica exports to Redstone Squid submission drafts.",
   "authors": [
     "Redstone Squid contributors"
   ],
