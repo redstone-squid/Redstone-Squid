@@ -1,6 +1,6 @@
 ---
 import type { ComponentProps } from "astro/types";
-import LanguageSelector from "../components/LanguageSelector.astro";
+import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
 import { getRuntimeConfig } from "../lib/config";
 import { localizePath, translate, type Locale, type StaticMessageKey } from "../lib/i18n";
@@ -10,7 +10,6 @@ import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
 import "../ui/base.css";
 import "./catalogue-layout.css";
-import "../features/catalogue/catalogue.css";
 type Props = ComponentProps<typeof DocumentHead> & { locale: Locale };
 const { locale } = Astro.props;
 const t = (key: StaticMessageKey) => translate(locale, key);

@@ -4,10 +4,7 @@ import path from "node:path";
 
 const pages = [
   ["home", "http://127.0.0.1:4321/"],
-  ["builds", "http://127.0.0.1:4321/builds"],
-  ["build-detail", "http://127.0.0.1:4321/builds/1"],
-  ["record-detail", "http://127.0.0.1:4321/records/11"],
-  ["chinese-about", "http://127.0.0.1:4321/zh-cn/about"],
+  ["chinese-home", "http://127.0.0.1:4321/zh-cn"],
 ] as const;
 const thresholds = { performance: 0.9, "best-practices": 0.95, seo: 0.95 } as const;
 const servers: ChildProcess[] = [];

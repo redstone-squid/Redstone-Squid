@@ -1,25 +1,19 @@
 ---
-import MediaGallery from "../../components/MediaGallery";
-import { buildFixtures } from "../../features/workbench/fixtures";
 import WorkbenchLayout from "../../layouts/WorkbenchLayout.astro";
 import { translate } from "../../lib/i18n";
-import type { MediaItem } from "../../lib/view-models";
 import LinkButton from "../../ui/astro/LinkButton.astro";
 
 const params = Astro.url.searchParams;
 const locale = params.get("lang") === "zh-CN" ? "zh-CN" : "en";
 const theme = params.get("theme") === "dark" ? "dark" : "light";
 const title = translate(locale, "build.media");
-const items: MediaItem[] = buildFixtures.flatMap((build) =>
-  build.image ? [{ kind: "render", url: build.image, label: build.title }] : [],
-);
 ---
 
-<WorkbenchLayout {locale} {theme} {title} framework="react">
+<WorkbenchLayout {locale} {theme} {title}>
   <header class="sq-page-heading">
     <h1>{title}</h1>
+    <p>{translate(locale, "placeholder.rebuilding")}</p>
   </header>
-  <MediaGallery client:load {locale} {title} {items} />
   <div>
     <LinkButton href={`/design-system?${params}#browsing`}>
       {translate(locale, "workbench.browsing")}

@@ -2,8 +2,6 @@ import path from "node:path";
 
 import { test } from "@playwright/test";
 
-import { installMediaRoutes } from "./support";
-
 test("captures curated documentation layouts", async ({ page }, testInfo) => {
   test.skip(process.env.DOCS_SCREENSHOTS !== "1", "On-demand documentation capture only.");
   const desktop = testInfo.project.name === "chromium-desktop";
@@ -12,7 +10,6 @@ test("captures curated documentation layouts", async ({ page }, testInfo) => {
     !desktop && !mobile,
     "Only the curated English desktop and Chinese mobile projects capture docs.",
   );
-  await installMediaRoutes(page);
   const localePrefix = desktop ? "" : "/zh-cn";
   const language = desktop ? "en-desktop" : "zh-cn-mobile";
   const pages = [

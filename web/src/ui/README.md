@@ -15,7 +15,7 @@ specimen so two people can review the same state. They use local fixtures.
 | Suggestions and modal forms                                       | Svelte `Autocomplete` and `Dialog`. Feature code supplies options, cancellation-aware loaders, or form content.                                               |
 | State and feedback                                                | `Badge` for short metadata, `Notice` for messages and recovery actions, `Progress` for an operation with measurable progress.                                 |
 | Attachments                                                       | `FilePicker` handles file selection and reselection. The submission feature owns accepted formats, transport, progress, and retry.                            |
-| Browsing data                                                     | Reuse the catalogue's build previews, record summaries, pagination, language selector, and media gallery. They live beside their product code.                |
+| Browsing data                                                     | Reuse the catalogue's build previews, record summaries, pagination, and language selector.                                                                    |
 
 A field takes its visible label, hint, error, and native control props. The
 component associates descriptions with the input and preserves caller-provided
@@ -37,16 +37,14 @@ Astro can split route bundles without changing the cascade. The layouts serve
 the fonts locally. Use sentence case for headings, labels, and badges. Reserve
 monospace for technical values.
 
-Astro owns server-rendered routes. Home, builds, and search use
-`CatalogueLayout`. Settings and submissions use shared components within the
-older page shell. Use Svelte for new interactive islands and the React equivalents
-inside existing React features. The workbench's `framework=react` option selects
-the reference implementation for interactive comparisons. The production React
-media gallery has its own story at `/design-system/media`.
+Astro owns server-rendered routes. Catalogue pages share a placeholder in
+`CatalogueLayout` while they are rebuilt. Use Svelte for new interactive islands.
+The workbench's `framework=react` option selects the reference implementation for
+interactive comparisons.
 
 Use the Fluent catalogues in `src/locales` for both languages. After updating
 message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes.
-The workbench uses a language query parameter. Both preserve search and pagination.
+The workbench uses a language query parameter. The language selector preserves the URL query.
 
 ## Review
 
@@ -60,6 +58,6 @@ Review the captured workflows in `review-gallery/index.html`.
 For an intentional visual change, inspect the refreshed screenshots before
 committing them and rerun the review against the saved baselines. Keep the OS,
 fonts, and browser revision consistent. `bun run test:compatibility` runs the
-framework comparison and discovery flows in Firefox and WebKit. Install their
+framework comparison in Firefox and WebKit. Install their
 system libraries and pinned browsers first. Firefox skips the draft-form axe
 scan because revision 1572 crashes during that scan.

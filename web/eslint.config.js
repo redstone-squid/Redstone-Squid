@@ -68,10 +68,7 @@ export default tseslint.config(
     files: ["**/*.astro", "**/*.astro/*.{js,ts}"],
   },
   {
-    files: [
-      "src/components/RemoteImage.astro",
-      "src/features/builds/components/BuildPreview.astro",
-    ],
+    files: ["src/features/builds/components/BuildPreview.astro"],
     rules: {
       // The Astro adapter flags img's onerror despite the recommended img lifecycle exception.
       // Keep keyboard and pointer checks; error/load only handle image loading, not user input.

@@ -33,7 +33,7 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
 <style>
   .language-selector {
     position: relative;
-    color: var(--text, var(--ink));
+    color: var(--text);
     font-size: 0.875rem;
   }
   summary {
@@ -42,7 +42,7 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
     gap: 0.75rem;
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border, var(--line));
+    border: 1px solid var(--border);
     border-radius: 0.375rem;
     cursor: pointer;
     list-style: none;
@@ -63,9 +63,9 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
     margin: 0.375rem 0 0;
     padding: 0.25rem;
     list-style: none;
-    border: 1px solid var(--border, var(--line));
+    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    background: var(--surface, var(--deepslate-900));
+    background: var(--surface);
     box-shadow: var(--shadow);
   }
   .language-selector[data-align="start"] ul {
@@ -83,6 +83,6 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
   }
   .language-selector a:hover,
   .language-selector a[aria-current] {
-    background: var(--surface-muted, var(--deepslate-800));
+    background: var(--surface-muted);
   }
 </style>

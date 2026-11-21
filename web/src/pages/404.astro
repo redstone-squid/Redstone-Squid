@@ -1,6 +1,5 @@
 ---
-import StatusPage from "../views/StatusPage.astro";
-import { localeFromPath } from "../lib/i18n";
+import PlaceholderPage from "../views/PlaceholderPage.astro";
 ---
 
-<StatusPage locale={localeFromPath(Astro.url.pathname)} status={404} />
+<PlaceholderPage status={404} />

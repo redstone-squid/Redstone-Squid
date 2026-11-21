@@ -1,7 +1,7 @@
 ---
 import SummaryCard from "./SummaryCard.astro";
 import Badge from "../../ui/astro/Badge.astro";
-import RecordFreshness from "../../components/RecordFreshness.astro";
+import RecordFreshness from "./RecordFreshness.astro";
 import type { PublishedTitle } from "../../generated/types.gen";
 import { localizePath, translate, translateTaxonomy, type Locale } from "../../lib/i18n";
 type Props = { record: PublishedTitle; locale: Locale; linked?: boolean };

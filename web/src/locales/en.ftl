@@ -517,3 +517,5 @@ uploadMedia-image = Image
 uploadMedia-video = Video
 uploadMedia-output = Output
 uploadMedia-video_thumbnail = Video thumbnail
+
+placeholder-rebuilding = The Redstone Squid website is being rebuilt.

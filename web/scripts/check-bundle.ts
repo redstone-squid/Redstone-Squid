@@ -7,43 +7,6 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    entries: ["src/features/search/SearchComposer.svelte"],
-    renderers: ["node_modules/@astrojs/svelte/dist/client.js"],
-    label: "Public search / catalogue",
-    initialKiB: 55,
-    completeKiB: 75,
-  },
-  {
-    entries: ["src/components/MediaGallery.tsx"],
-    label: "Public build detail",
-    initialKiB: 100,
-    completeKiB: 125,
-  },
-  {
-    entries: ["src/components/SubmissionFlow.tsx"],
-    label: "Submission editor",
-    initialKiB: 110,
-    completeKiB: 160,
-  },
-  {
-    entries: ["src/components/CliLink.tsx"],
-    label: "CLI linking",
-    initialKiB: 110,
-    completeKiB: 125,
-  },
-  {
-    entries: ["src/components/MinecraftLink.tsx"],
-    label: "Minecraft linking",
-    initialKiB: 110,
-    completeKiB: 125,
-  },
-  {
-    entries: ["src/components/RuntimeSettings.tsx"],
-    label: "Runtime settings",
-    initialKiB: 110,
-    completeKiB: 140,
-  },
-  {
     entries: ["src/features/workbench/Controls.tsx"],
     label: "React workbench reference",
     initialKiB: 110,

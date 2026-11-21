@@ -1,103 +1,27 @@
 import type { APIRoute } from "astro";
 
-import { fetchBuilds, fetchRecords } from "../lib/api";
 import { getRuntimeConfig } from "../lib/config";
-import { localizePath, type Locale } from "../lib/i18n";
+import { SUPPORTED_LOCALES, localizePath } from "../lib/i18n";
 
-const CACHE_MS = 60 * 60 * 1_000;
-// Process-local cache of successful crawls; an expired entry is not served on refresh failure.
-let cached: { expiresAt: number; xml: string } | undefined;
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function urlEntry(siteUrl: string, path: string, lastModified?: string): string {
-  const alternates = (["en", "zh-CN"] as const)
-    .map(
-      (locale) =>
-        `<xhtml:link rel="alternate" hreflang="${locale}" href="${escapeXml(new URL(localizePath(path, locale), siteUrl).toString())}"/>`,
-    )
+export const GET: APIRoute = () => {
+  const { siteUrl } = getRuntimeConfig();
+  const homes = SUPPORTED_LOCALES.map((locale) => {
+    const url = new URL(localizePath("/", locale), siteUrl).href
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;");
+    return { locale, url };
+  });
+  const alternates = homes
+    .map(({ locale, url }) => `<xhtml:link rel="alternate" hreflang="${locale}" href="${url}"/>`)
     .join("");
-  return `<url><loc>${escapeXml(new URL(path, siteUrl).toString())}</loc>${alternates}${lastModified ? `<lastmod>${escapeXml(lastModified)}</lastmod>` : ""}</url>`;
-}
-
-async function cataloguePaths(locale: Locale): Promise<{ path: string; modified?: string }[]> {
-  const paths: { path: string; modified?: string }[] = [
-    { path: "/" },
-    { path: "/builds" },
-    { path: "/records" },
-    { path: "/search" },
-    { path: "/search/help" },
-    { path: "/about" },
-  ];
-  // Identifier anchors, not offsets: a full crawl has to survive collections deeper than the
-  // API's offset clamp, and only the keyset chain is unbounded.
-  let buildAfterId: number | undefined;
-  do {
-    const page = await fetchBuilds(locale, { afterId: buildAfterId, pageSize: 50 });
-    paths.push(
-      ...page.items.map((build) => ({
-        path: `/builds/${build.id}`,
-        ...(build.updated_at ? { modified: build.updated_at } : {}),
-      })),
-    );
-    buildAfterId = page.next?.after_id ?? undefined;
-  } while (buildAfterId);
-
-  let recordAfterId: number | undefined;
-  do {
-    const page = await fetchRecords(locale, { afterId: recordAfterId, pageSize: 50 });
-    paths.push(
-      ...page.items.map((record) => ({
-        path: `/records/${record.id}`,
-        modified: record.computed_at,
-      })),
-    );
-    recordAfterId = page.next?.after_id ?? undefined;
-  } while (recordAfterId);
-  return paths;
-}
-
-export const GET: APIRoute = async () => {
-  if (cached && cached.expiresAt > Date.now()) {
-    return new Response(cached.xml, {
+  const entries = homes.map(({ url }) => `<url><loc>${url}</loc>${alternates}</url>`).join("");
+  return new Response(
+    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entries}</urlset>`,
+    {
       headers: {
         "Content-Type": "application/xml; charset=utf-8",
         "Cache-Control": "public, max-age=3600",
       },
-    });
-  }
-  try {
-    const config = getRuntimeConfig();
-    const paths = await cataloguePaths("en");
-    const entries = paths.flatMap(({ path, modified }) =>
-      (["en", "zh-CN"] as const).map((locale) =>
-        urlEntry(config.siteUrl, localizePath(path, locale), modified),
-      ),
-    );
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entries.join("")}</urlset>`;
-    cached = { xml, expiresAt: Date.now() + CACHE_MS };
-    return new Response(xml, {
-      headers: {
-        "Content-Type": "application/xml; charset=utf-8",
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "sitemap_generation_failed",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-    return new Response("Sitemap temporarily unavailable", {
-      status: 503,
-      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
-    });
-  }
+    },
+  );
 };

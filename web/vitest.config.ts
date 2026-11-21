@@ -12,7 +12,6 @@ export default defineConfig({
       provider: "v8",
       include: [
         "src/lib/**/*.ts",
-        "src/components/**/*.tsx",
         "src/ui/**/*.{ts,tsx,svelte}",
         "src/features/**/*.{ts,tsx,svelte}",
       ],

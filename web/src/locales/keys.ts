@@ -189,6 +189,7 @@ export const messageKeys = [
   "nav.search",
   "nav.skip",
   "nav.submit",
+  "placeholder.rebuilding",
   "record.alternativeConfigurations",
   "record.baseTitle",
   "record.closingReset",

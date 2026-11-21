@@ -511,3 +511,5 @@ uploadMedia-image = 图片
 uploadMedia-video = 视频
 uploadMedia-output = 处理结果
 uploadMedia-video_thumbnail = 视频缩略图
+
+placeholder-rebuilding = 红石鱿鱼网站正在重建。
