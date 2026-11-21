@@ -70,13 +70,13 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
     )
     await screen.on_load()
     with transaction():
-        await screen._change_rule(submission(), base_revision=7)
+        await screen._change_rule(submission(), target=screen._access_target(7))
         await screen._confirm_change(AsyncMock())
     assert runner.execute.call_args.args[0].expected == (Revision(PERMISSION_GRAPH, 7),)
     assert screen._revision == 8
     assert len(screen.edits.undoable) == 1
     with transaction():
-        await screen._change_rule(submission(), base_revision=7)
+        await screen._change_rule(submission(), target=screen._access_target(7))
     with transaction(), pytest.raises(RevisionConflictError):
         await screen._confirm_change(AsyncMock())
     # The modal sends the revision it displayed rather than rebasing onto the newer one.
@@ -106,7 +106,7 @@ async def test_selected_role_assignment_does_not_resolve_a_new_role_with_the_sam
     screen._save = saved
     event = submission(operation="assign", scope="guild", reason="", slug="replacement")
     await screen._change_assignment(
-        event, base_revision=7, role=PermissionRole(id=15, slug="original", name="Original")
+        event, target=screen._access_target(7), role=PermissionRole(id=15, slug="original", name="Original")
     )
     saved.assert_not_awaited()
     await screen._confirm_change(AsyncMock())
@@ -306,7 +306,7 @@ async def test_revoked_grant_cannot_confirm_review() -> None:
         grants=grants(PERM_GRANT_GUILD),
         actor=AsyncMock(),
     )
-    await screen._change_rule(submission(), base_revision=7)
+    await screen._change_rule(submission(), target=screen._access_target(7))
     rendered = str(commit_render(make_layout_bot().ui.mount(screen, access=sd.Owner(7), timeout=300)).to_components())
     assert "Review access change" in rendered
     assert "Alex" in rendered

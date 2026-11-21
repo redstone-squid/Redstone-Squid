@@ -67,6 +67,16 @@ type ActorProvider = Callable[[], Awaitable[Actor]]
 _DENIED = tr(t"access-change-forbidden = You are no longer allowed to change access controls.")
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AccessTarget:
+    account_id: int | None
+    discord_role_id: int | None
+    scope_guild_id: int | None
+    subject: str
+    member_id: int | None
+    revision: int
+
+
 @dataclass(frozen=True)
 class AccessChange:
     values: GrantValues | AssignmentValues
@@ -590,10 +600,19 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             title=tr(t"access-view-rules-and-assignments = Direct rules and assigned bot roles"),
         )
 
+    def _access_target(self, revision: int) -> AccessTarget:
+        return AccessTarget(
+            account_id=self._account_id,
+            discord_role_id=self._discord_role_id,
+            scope_guild_id=self._scope_id,
+            subject=self._subject_label,
+            member_id=self._member_id,
+            revision=revision,
+        )
+
     def _subject_forms(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if not (self._may_grant or self._may_manage_roles):
             return ()
-        target = (self._account_id, self._discord_role_id, self._scope_id)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
             sl.action_controls(
                 self._may_grant
@@ -613,10 +632,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                     key="custom-pattern",
                     on_submit=partial(
                         self._change_rule,
-                        target=target,
-                        subject=self._subject_label,
-                        member_id=self._member_id,
-                        base_revision=self._revision,
+                        target=self._access_target(self._revision),
                     ),
                 ),
                 key="subject-forms",
@@ -633,10 +649,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         key="rule",
                         on_submit=partial(
                             self._change_rule,
-                            target=target,
-                            subject=self._subject_label,
-                            member_id=self._member_id,
-                            base_revision=revision,
+                            target=self._access_target(revision),
                             pattern=pattern,
                         ),
                     ),
@@ -661,10 +674,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         key="assignment",
                         on_submit=partial(
                             self._change_assignment,
-                            target=target,
-                            subject=self._subject_label,
-                            member_id=self._member_id,
-                            base_revision=revision,
+                            target=self._access_target(revision),
                             role=role,
                         ),
                     ),
@@ -1115,30 +1125,26 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         self,
         event: sl.SubmitEvent[ContextT],
         *,
-        target: tuple[int | None, int | None, int | None] | None = None,
-        subject: str | None = None,
-        member_id: int | None = None,
-        base_revision: int | None = None,
+        target: AccessTarget,
         pattern: str | None = None,
     ) -> None:
-        account, discord_role, scope = target or (self._account_id, self._discord_role_id, self._scope_id)
         effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(
             str(event.values["operation"])
         )
         values = GrantValues(
             pattern=pattern or str(event.values["pattern"]),
             effect=effect,
-            account_id=account,
-            discord_role_id=discord_role,
+            account_id=target.account_id,
+            discord_role_id=target.discord_role_id,
             guild_id=self._guild_id,
-            scope_guild_id=scope,
+            scope_guild_id=target.scope_guild_id,
             reason=str(event.values.get("reason") or "") or None,
         )
         self._review = AccessChange(
             values,
-            self._revision if base_revision is None else base_revision,
-            subject or self._subject_label,
-            member_id,
+            target.revision,
+            target.subject,
+            target.member_id,
             pattern or str(event.values["pattern"]),
             str(event.values["operation"]),
         )
@@ -1148,29 +1154,25 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         self,
         event: sl.SubmitEvent[ContextT],
         *,
-        target: tuple[int | None, int | None, int | None] | None = None,
-        subject: str | None = None,
-        member_id: int | None = None,
-        base_revision: int | None = None,
+        target: AccessTarget,
         role: PermissionRole | None = None,
     ) -> None:
-        account, discord_role, scope = target or (self._account_id, self._discord_role_id, self._scope_id)
         if role is None:
             role = await self._admin.role(str(event.values["slug"]), guild_id=self._guild_id)
         values = AssignmentValues(
             role_id=role.id,
             present=event.values["operation"] == "assign",
-            account_id=account,
-            discord_role_id=discord_role,
+            account_id=target.account_id,
+            discord_role_id=target.discord_role_id,
             guild_id=self._guild_id,
-            scope_guild_id=scope,
+            scope_guild_id=target.scope_guild_id,
             reason=str(event.values.get("reason") or "") or None,
         )
         self._review = AccessChange(
             values,
-            self._revision if base_revision is None else base_revision,
-            subject or self._subject_label,
-            member_id,
+            target.revision,
+            target.subject,
+            target.member_id,
             role.name,
             str(event.values["operation"]),
         )
