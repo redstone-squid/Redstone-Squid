@@ -44,7 +44,13 @@ try {
             <BuildCard build={build} locale={locale} />
           ))}
         </div>
-        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
+        <Pagination
+          appearance="legacy"
+          locale={locale}
+          next={page!.next}
+          prev={page!.prev}
+          url={Astro.url}
+        />
       </>
     ) : (
       <div class="empty-state">{translate(locale, "builds.empty")}</div>

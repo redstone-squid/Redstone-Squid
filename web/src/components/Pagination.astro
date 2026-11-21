@@ -1,4 +1,6 @@
 ---
+import { buttonStyles } from "../ui/variants";
+import { PAGE_PARAMS } from "../lib/pagination";
 import type { PageAnchor } from "../generated/types.gen";
 import { translate, type Locale } from "../lib/i18n";
 
@@ -7,27 +9,21 @@ type Props = {
   next: PageAnchor | null;
   prev: PageAnchor | null;
   url: URL;
-  class?: string;
-  linkClass?: string;
+  appearance?: "catalogue" | "legacy";
 };
-const {
-  locale,
-  next,
-  prev,
-  url,
-  class: className = "pagination",
-  linkClass = "pagination-link",
-} = Astro.props;
+const { locale, next, prev, url, appearance = "catalogue" } = Astro.props;
+const legacy = appearance === "legacy";
+const linkClass = legacy ? "pagination-link" : buttonStyles();
 
 /** Address one adjacent page, replacing whichever parameter addressed the current one. */
 function link(anchor: PageAnchor | null): string | null {
   if (!anchor) return null;
   const target = new URL(url);
-  for (const name of ["offset", "after_id", "before_id"]) target.searchParams.delete(name);
+  for (const name of PAGE_PARAMS) target.searchParams.delete(name);
   if (anchor.after_id != null) target.searchParams.set("after_id", String(anchor.after_id));
   else if (anchor.before_id != null) target.searchParams.set("before_id", String(anchor.before_id));
   else if (anchor.offset != null) target.searchParams.set("offset", String(anchor.offset));
-  return `${target.pathname}${target.search}`;
+  return `${target.pathname}${target.search}${target.hash}`;
 }
 
 const previousHref = link(prev);
@@ -35,7 +31,10 @@ const nextHref = link(next);
 ---
 
 {(previousHref || nextHref) && (
-  <nav class={className} aria-label={translate(locale, "nav.pagination")}>
+  <nav
+    class={legacy ? "pagination" : "catalogue-pagination"}
+    aria-label={translate(locale, "nav.pagination")}
+  >
     {previousHref && (
       <a class={linkClass} href={previousHref} rel="prev">
         {translate(locale, "common.previous")}

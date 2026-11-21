@@ -1,9 +1,10 @@
 ---
+import Badge from "../../ui/astro/Badge.astro";
 import RecordFreshness from "../../components/RecordFreshness.astro";
 import type { PublishedTitle } from "../../generated/types.gen";
 import { localizePath, translate, translateTaxonomy, type Locale } from "../../lib/i18n";
-type Props = { record: PublishedTitle; locale: Locale };
-const { record, locale } = Astro.props;
+type Props = { record: PublishedTitle; locale: Locale; linked?: boolean };
+const { record, locale, linked = true } = Astro.props;
 ---
 
 <article class="sq-panel catalogue-record">
@@ -11,12 +12,16 @@ const { record, locale } = Astro.props;
     #{record.id} / {translateTaxonomy(locale, record.base_title)}
   </span>
   <h3>
-    <a href={localizePath(`/records/${record.id}`, locale)}>{record.title}</a>
+    {linked ? (
+      <a href={localizePath(`/records/${record.id}`, locale)}>{record.title}</a>
+    ) : (
+      record.title
+    )}
   </h3>
   {record.subtitle && <p class="sq-muted">{record.subtitle}</p>}
   <div class="sq-row">
-    <span class="sq-badge">{translateTaxonomy(locale, record.build_kind)}</span>
-    <span class="sq-badge">{translateTaxonomy(locale, record.version_scope)}</span>
+    <Badge>{translateTaxonomy(locale, record.build_kind)}</Badge>
+    <Badge>{translateTaxonomy(locale, record.version_scope)}</Badge>
   </div>
   <p class="sq-muted">
     {translate(locale, "record.holderCount", { count: record.holder_build_ids.length })} ·{" "}

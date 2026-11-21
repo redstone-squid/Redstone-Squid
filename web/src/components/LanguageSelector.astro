@@ -1,8 +1,12 @@
 ---
 import { LOCALES, SUPPORTED_LOCALES, localizePath, translate, type Locale } from "../lib/i18n";
-type Props = { locale: Locale; align?: "start" | "end" };
-const { locale, align = "end" } = Astro.props;
+type Props = {
+  locale: Locale;
+  align?: "start" | "end";
+  hrefForLocale?: (locale: Locale) => string;
+};
 const path = `${Astro.url.pathname}${Astro.url.search}`;
+const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang) } = Astro.props;
 ---
 
 <details class="language-selector" data-align={align}>
@@ -14,7 +18,7 @@ const path = `${Astro.url.pathname}${Astro.url.search}`;
     {SUPPORTED_LOCALES.map((language) => (
       <li>
         <a
-          href={localizePath(path, language)}
+          href={hrefForLocale(language)}
           lang={language}
           hreflang={language}
           aria-current={language === locale ? "true" : undefined}

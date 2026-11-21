@@ -66,14 +66,7 @@ try {
             <BuildCard build={build} locale={locale} />
           ))}
         </div>
-        <Pagination
-          class="catalogue-pagination"
-          linkClass="sq-button sq-button--secondary"
-          locale={locale}
-          next={page!.next}
-          prev={page!.prev}
-          url={Astro.url}
-        />
+        <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
       </section>
     ) : (
       <section class="sq-panel catalogue-empty">

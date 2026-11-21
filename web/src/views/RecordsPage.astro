@@ -46,6 +46,14 @@ try {
     ) : (
       <div class="empty-state">{translate(locale, "records.empty")}</div>
     )}
-    {page && <Pagination locale={locale} next={page.next} prev={page.prev} url={Astro.url} />}
+    {page && (
+      <Pagination
+        appearance="legacy"
+        locale={locale}
+        next={page.next}
+        prev={page.prev}
+        url={Astro.url}
+      />
+    )}
   </div>
 </BaseLayout>
