@@ -5,6 +5,12 @@ import "../features/workbench/workbench.css";
 import WorkbenchLayout from "../layouts/WorkbenchLayout.astro";
 import ButtonStory from "../features/workbench/ButtonStory.astro";
 import Badge from "../ui/astro/Badge.astro";
+import Layout from "../ui/astro/Layout.astro";
+import Notice from "../ui/astro/Notice.astro";
+import BrowsingStories from "../features/catalogue/BrowsingStories.astro";
+import { FormSpecimen } from "../features/workbench/FormSpecimen";
+import StoryOptions from "../features/workbench/StoryOptions.astro";
+import LayoutStory from "../features/workbench/LayoutStory.astro";
 import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import SvelteControls from "../features/workbench/Controls.svelte";
@@ -14,6 +20,9 @@ const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const framework = Astro.url.searchParams.get("framework") === "react" ? "react" : "svelte";
 const locale = chinese ? "zh-CN" : "en";
+const fieldStates = ["normal", "invalid", "disabled"] as const;
+const fieldState =
+  fieldStates.find((value) => value === Astro.url.searchParams.get("fieldState")) ?? "normal";
 const preferences = (key: string, value: string) => {
   const params = new URLSearchParams(Astro.url.searchParams);
   params.set(key, value);
@@ -90,6 +99,19 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       <Controls client:load locale={locale} />
     )}
   </Panel>
+  <Panel id="fields" title={t("workbench.form-controls")}>
+    <Layout pattern="stack">
+      <StoryOptions
+        label={t("workbench.field-state")}
+        parameter="fieldState"
+        selected={fieldState}
+        section="fields"
+        options={fieldStates.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+      />
+      <FormSpecimen {locale} state={fieldState} />
+    </Layout>
+  </Panel>
+  <LayoutStory {locale} />
   <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
     <div class="sq-section-heading">
       <div>
@@ -121,33 +143,38 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       ))}
     </div>
   </section>
+  <BrowsingStories {locale} />
   <Panel
     id="states"
     title={t("workbench.feedback-states")}
     description={t("workbench.states-description")}
   >
-    <div class="sq-state-grid">
-      <div class="sq-state">
-        <Badge tone="success">{t("workbench.confirmed")}</Badge>
-        <h3>{t("workbench.ready-to-explore")}</h3>
-        <p class="sq-muted">{t("workbench.confirmed-description")}</p>
-      </div>
-      <div class="sq-state">
+    <Layout pattern="grid">
+      <Notice tone="success" title={t("workbench.ready-to-explore")}>
+        {t("workbench.confirmed-description")}
+      </Notice>
+      <Notice tone="info" title={t("workbench.no-matching-builds")}>
+        {t("workbench.empty-description")}
+      </Notice>
+      <Notice tone="warning" title={t("workbench.couldn-t-load-builds")}>
+        {t("workbench.unavailable-description")}
+      </Notice>
+      <Notice tone="danger" title={t("workbench.check-the-highlighted-field")}>
+        {t("workbench.enter-a-title-for-your-build")}
+      </Notice>
+    </Layout>
+    <div class="sq-badge-preview">
+      <h3>{t("workbench.status-badges")}</h3>
+      <Layout pattern="row" gap="compact">
         <Badge>{t("workbench.empty")}</Badge>
-        <h3>{t("workbench.no-matching-builds")}</h3>
-        <p class="sq-muted">{t("workbench.empty-description")}</p>
-      </div>
-      <div class="sq-state">
+        <Badge tone="success">{t("workbench.confirmed")}</Badge>
         <Badge tone="warning">{t("workbench.unavailable")}</Badge>
-        <h3>{t("workbench.couldn-t-load-builds")}</h3>
-        <p class="sq-muted">{t("workbench.unavailable-description")}</p>
-      </div>
-      <div class="sq-state" aria-label={t("workbench.loading-example")}>
-        <Badge>{t("workbench.loading")}</Badge>
-        <div class="sq-skeleton"></div>
-        <div class="sq-skeleton sq-skeleton--short"></div>
-        <span class="sq-muted">{t("workbench.fetching-builds")}</span>
-      </div>
+      </Layout>
+    </div>
+    <div class="sq-loading-preview">
+      <p>{t("workbench.fetching-builds")}</p>
+      <div class="sq-skeleton"></div>
+      <div class="sq-skeleton sq-skeleton--short"></div>
     </div>
   </Panel>
   <footer class="sq-workbench-footer">

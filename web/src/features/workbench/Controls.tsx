@@ -66,7 +66,7 @@ export function Controls({ locale }: { locale: Locale }) {
         </Button>
         <Button disabled>{t("workbench.unavailable")}</Button>
       </div>
-      <div className="sq-field-grid">
+      <div className="sq-grid">
         <Field
           label={t("workbench.creator")}
           hint={t("workbench.public-name-shown-on-the-build")}

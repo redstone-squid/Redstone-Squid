@@ -4,6 +4,8 @@
   import Check from "@lucide/svelte/icons/check";
   import Plus from "@lucide/svelte/icons/plus";
   import Button from "../../ui/svelte/Button.svelte";
+  import { versionOptions } from "./draft-fixture";
+  import Autocomplete from "../../ui/svelte/Autocomplete.svelte";
   import Field from "../../ui/svelte/Field.svelte";
   import Dialog from "../../ui/svelte/Dialog.svelte";
   let { locale }: { locale: Locale } = $props();
@@ -58,16 +60,24 @@
     >
     <Button disabled>{t("workbench.unavailable")}</Button>
   </div>
-  <div class="sq-field-grid">
+  <div class="sq-grid">
     <Field
       label={t("workbench.creator")}
       hint={t("workbench.public-name-shown-on-the-build")}
       placeholder="CircuitSage"
     />
-    <Field
+    <Autocomplete
+      name="specimen-version"
       label={t("workbench.minecraft-version")}
-      value="1.21"
-      error={t("workbench.choose-java-or-bedrock-as-well")}
+      suggestionsLabel={t("search.suggestions")}
+      errorLabel={t("search.suggestionError")}
+      minLength={0}
+      load={(query) =>
+        Promise.resolve({
+          items: versionOptions
+            .filter((value) => value.toLowerCase().includes(query.trim().toLowerCase()))
+            .map((value) => ({ value, label: value })),
+        })}
     />
   </div>
   <p class="sq-inline-note">

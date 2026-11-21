@@ -69,3 +69,38 @@ test("reflows at 320px and retains controls in forced colours", async ({ page })
   await page.getByRole("button", { name: "新建草稿" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
+
+test("shares the selected field state and layout", async ({ page }) => {
+  await page.goto("/design-system?theme=dark&layout=row#fields");
+  const fields = page.getByRole("region", { name: "Form controls" });
+  await fields.getByRole("link", { name: "Invalid" }).click();
+  const category = fields.getByRole("combobox", { name: "Category" });
+  await expect(category).toHaveAttribute("aria-invalid", "true");
+  await expect(category).toHaveAccessibleDescription("This field is required.");
+  await fields.getByRole("link", { name: "Disabled" }).click();
+  await expect(category).toBeDisabled();
+  await expect(fields.getByRole("radio", { name: "Java", exact: true })).toBeDisabled();
+
+  const layouts = page.getByRole("region", { name: "Layouts", exact: true });
+  await expect(layouts.getByRole("link", { name: "Row", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  await layouts.getByRole("link", { name: "Stack", exact: true }).click();
+  await layouts.getByRole("link", { name: "Compact", exact: true }).click();
+  await expect(layouts.locator("code")).toContainText('<Layout pattern="stack" gap="compact">');
+  await page.reload();
+  await expect(category).toBeDisabled();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("chooses a fixture suggestion using the keyboard", async ({ page }) => {
+  await page.goto("/design-system#components");
+  const input = page.getByRole("combobox", { name: "Minecraft version", exact: true });
+  await input.fill("Java");
+  await expect(page.getByRole("option", { name: "Java 1.21.4" })).toBeVisible();
+  await input.press("ArrowDown");
+  await input.press("Enter");
+  await expect(input).toHaveValue("Java 1.21.4");
+  await expect(input).toHaveAttribute("aria-expanded", "false");
+});

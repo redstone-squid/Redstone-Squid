@@ -1,0 +1,25 @@
+---
+type Props = {
+  label: string;
+  parameter: string;
+  selected: string;
+  section: string;
+  options: { value: string; label: string }[];
+};
+const { label, parameter, selected, section, options } = Astro.props;
+---
+
+<nav class="sq-story-options" aria-label={label}>
+  {options.map((option) => {
+    const params = new URLSearchParams(Astro.url.searchParams);
+    params.set(parameter, option.value);
+    return (
+      <a
+        href={`?${params}#${section}`}
+        aria-current={option.value === selected ? "true" : undefined}
+      >
+        {option.label}
+      </a>
+    );
+  })}
+</nav>

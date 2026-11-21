@@ -22,9 +22,11 @@ const trial = new URLSearchParams({ lang: locale, theme, framework });
   <div class="sq-story-settings">
     <h3>{t("workbench.link-button")}</h3>
     <form action="#button-story" method="get" class="sq-row">
-      <input type="hidden" name="lang" value={locale} />
-      <input type="hidden" name="theme" value={theme} />
-      <input type="hidden" name="framework" value={framework} />
+      {[...params]
+        .filter(([key]) => key !== "variant" && key !== "size")
+        .map(([key, value]) => (
+          <input type="hidden" name={key} {value} />
+        ))}
       <label class="sq-field">
         {t("workbench.variant")}
         <select class="sq-input" name="variant">

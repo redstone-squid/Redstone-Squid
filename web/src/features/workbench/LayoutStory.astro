@@ -1,0 +1,49 @@
+---
+import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
+import Layout from "../../ui/astro/Layout.astro";
+import Panel from "../../ui/astro/Panel.astro";
+import StoryOptions from "./StoryOptions.astro";
+import { buildFixtures } from "./fixtures";
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const t = (key: StaticMessageKey) => translate(locale, key);
+const patterns = ["stack", "row", "grid"] as const;
+const pattern = patterns.find((value) => value === Astro.url.searchParams.get("layout")) ?? "grid";
+const gaps = ["compact", "normal", "section"] as const;
+const gap = gaps.find((value) => value === Astro.url.searchParams.get("gap")) ?? "normal";
+const { creator, dimensions, timing } = buildFixtures[0];
+---
+
+<Panel id="layouts" title={t("workbench.layouts")}>
+  <div class="sq-specimen-tools">
+    <StoryOptions
+      label={t("workbench.layouts")}
+      parameter="layout"
+      selected={pattern}
+      section="layouts"
+      options={patterns.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+    />
+    <StoryOptions
+      label={t("workbench.spacing")}
+      parameter="gap"
+      selected={gap}
+      section="layouts"
+      options={gaps.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+    />
+  </div>
+  <div class="sq-layout-preview">
+    <Layout {pattern} {gap}>
+      {[
+        [t("workbench.creator"), creator],
+        [t("workbench.dimensions"), dimensions],
+        [t("workbench.opening"), timing],
+      ].map(([term, value]) => (
+        <dl>
+          <dt>{term}</dt>
+          <dd>{value}</dd>
+        </dl>
+      ))}
+    </Layout>
+  </div>
+  <code class="sq-specimen-code">{`<Layout pattern="${pattern}" gap="${gap}">`}</code>
+</Panel>
