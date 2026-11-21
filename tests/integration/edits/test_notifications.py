@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.domain import AccountConsent, ClaimMethod
-from squid.core.accounts.models import CreatorAlias
+from squid.core.accounts.errors import ConsentRequiredError
+from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.actors import Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
@@ -93,6 +94,18 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
         expected = {follows[0].id: "Discovered builder", follows[1].id: "Latest wording"}
     snapshot = await NotificationService(uow_factory=factory).editor_snapshot(owner.id)
     assert dict(snapshot.labels) == expected
+    executor = EditExecutor(
+        factory, {SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(PermissionService(uow_factory=factory))}
+    )
+    repeated = await executor.execute(
+        EditCommand(
+            SUBSCRIPTIONS_EDIT,
+            (Revision(notification_target(owner.id), snapshot.preferences.revision),),
+            EditValues.of({"create": {"kind": "creator", "subject_id": str(creator.public_creator_id)}}),
+        ),
+        Actor(account_id=owner.id),
+    )
+    assert not repeated.outcome.changed
 
 
 async def test_preferences_and_follows_compete_on_one_account_revision(
@@ -257,6 +270,11 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         actor,
     )
     assert saved.receipt is not None
+    repeated = await executor.execute(
+        EditCommand(INBOX_EDIT, saved.outcome.revisions, saved.receipt.command.values), actor
+    )
+    assert not repeated.outcome.changed
+    assert repeated.outcome.revisions == saved.outcome.revisions
     await arrive()
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.outcome.revisions == (Revision(inbox_target(first.id), 3),)
@@ -271,3 +289,46 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     assert staff_saved.receipt is not None
     with pytest.raises(NotificationNotFoundError):
         await executor.execute(staff_saved.receipt.undo(staff_saved.outcome.revisions), actor)
+
+    repeated = await executor.execute(
+        EditCommand(INBOX_EDIT, undone.outcome.revisions, EditValues.of({"states": {str(first.id): False}})), actor
+    )
+    assert not repeated.outcome.changed
+    assert repeated.outcome.revisions == undone.outcome.revisions
+
+
+@pytest.mark.parametrize("gate", ["owner", "web", "consent"])
+async def test_read_edit_requires_current_inbox_access(
+    migrated_session_factory: async_sessionmaker[AsyncSession], gate: str
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    executor = EditExecutor(factory, {INBOX_EDIT: InboxReadEdit(PermissionService(uow_factory=factory))})
+    async with factory() as uow:
+        owner = await uow.accounts.create(consent=AccountConsent.grant_current())
+        other = await uow.accounts.create(consent=AccountConsent.grant_current())
+        await uow.notifications.update_preferences(owner.id, web_enabled=gate != "web", dm_enabled=False)
+        await uow.notifications.update_preferences(other.id, web_enabled=True, dm_enabled=False)
+        await uow.commit()
+    async with migrated_session_factory.begin() as session:
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=1)
+        session.add(event)
+        await session.flush()
+        kind = NotificationKind.BUILD_CONFIRMED
+        item = InboxNotification(
+            account_id=owner.id,
+            event_id=event.id,
+            kind=kind,
+            payload={},
+            web_visible=True,
+            source_key=NotificationSource(event.id, kind).key_for(owner.id),
+        )
+        session.add(item)
+        if gate == "consent":
+            account = await session.get_one(Account, owner.id)
+            account.consent_version = None
+            account.consented_at = None
+    command = EditCommand(
+        INBOX_EDIT, (Revision(inbox_target(item.id), item.revision),), EditValues.of({"states": {str(item.id): True}})
+    )
+    with pytest.raises(ConsentRequiredError if gate == "consent" else NotificationNotFoundError):
+        await executor.execute(command, Actor(account_id=other.id if gate == "owner" else owner.id))

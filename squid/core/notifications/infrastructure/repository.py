@@ -253,31 +253,6 @@ class PostgresNotificationRepository:
             statement = select(exists().where(RecordTitle.public_id == subject_id))
         return bool(await session.scalar(statement))
 
-    async def add_subscription(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None,
-        record_filter: RecordSubscriptionFilter | None,
-    ) -> NotificationSubscription:
-        await self.lock_settings(account_id)
-        existing = await self.matching_subscription(
-            account_id, kind=kind, subject_id=subject_id, record_filter=record_filter
-        )
-        if existing is not None and existing.enabled:
-            return existing
-        if existing is None:
-            existing = NotificationSubscription(
-                account_id=account_id, kind=kind, subject_id=subject_id, record_filter=record_filter
-            )
-            self._session().add(existing)
-        else:
-            existing.enabled = True
-        await self.advance_settings(account_id)
-        await self._session().flush()
-        return existing
-
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         session = self._session()
         rows = (
@@ -327,15 +302,6 @@ class PostgresNotificationRepository:
         )
         return tuple((row[0], row[1]) for row in rows)
 
-    async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
-        await self.lock_settings(account_id)
-        row = await self.subscription(account_id, subscription_id)
-        if row is None or not row.enabled:
-            return False
-        row.enabled = False
-        await self.advance_settings(account_id)
-        return True
-
     async def list_inbox(
         self,
         account_id: int,
@@ -372,34 +338,6 @@ class PostgresNotificationRepository:
             visibility=visibility,
         )
         return await session.scalar(statement) or 0
-
-    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
-        self._session()
-        return await self._set_read_state(account_id, notification_id, visibility=visibility, read=True)
-
-    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
-        self._session()
-        return await self._set_read_state(account_id, notification_id, visibility=visibility, read=False)
-
-    async def _set_read_state(
-        self,
-        account_id: int,
-        notification_id: int,
-        *,
-        visibility: InboxVisibility,
-        read: bool,
-    ) -> bool:
-        session = self._session()
-        updated = await session.scalar(
-            update(InboxNotification)
-            .where(InboxNotification.id == notification_id, *_inbox_predicates(account_id, visibility))
-            .values(
-                read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None,
-                revision=InboxNotification.revision + 1,
-            )
-            .returning(InboxNotification.id)
-        )
-        return updated is not None
 
     # Create notifications from events and expire retained notifications.
 

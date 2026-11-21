@@ -20,7 +20,6 @@ from squid.core.notifications.domain import (
     NotificationCandidate,
     NotificationKind,
     PendingNotificationDelivery,
-    RecordSubscriptionFilter,
     SubscriptionKind,
 )
 from squid.core.notifications.infrastructure.repository import (
@@ -271,16 +270,13 @@ async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums
     await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(Account.id))).one()
-    await transact(
-        repository,
-        lambda uow: uow.notifications.add_subscription(
-            account_id,
-            kind=SubscriptionKind.CREATOR,
-            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-            record_filter=None,
-        ),
-        commit=True,
-    )
+        session.add(
+            NotificationSubscription(
+                account_id=account_id,
+                kind=SubscriptionKind.CREATOR,
+                subject_id=UUID("11111111-1111-1111-1111-111111111111"),
+            )
+        )
 
     async with async_session_factory() as session:
         notification_kind = (await session.scalars(select(InboxNotification.kind))).one()
@@ -334,112 +330,6 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
         assert delivery.dead_at is not None
         assert notification is not None
         assert notification.web_visible is True
-
-
-async def test_read_state_changes_are_idempotent_and_visibility_safe(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    await _seed_delivery(async_session_factory)
-    async with async_session_factory.begin() as session:
-        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
-        ordinary_id = (await session.scalars(select(InboxNotification.id))).one()
-        event = DomainEvent(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
-        session.add(event)
-        await session.flush()
-        staff = InboxNotification(
-            account_id=account_id,
-            event_id=event.id,
-            source_key="event:2:staff:1",
-            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-            payload={"build_id": 43},
-            web_visible=True,
-        )
-        session.add(staff)
-        await session.flush()
-        staff_id = staff.id
-
-    ordinary = InboxVisibility()
-    staff = InboxVisibility(include_staff=True)
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_read(account_id, ordinary_id, visibility=ordinary),
-            commit=True,
-        )
-        is True
-    )
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_read(account_id, ordinary_id, visibility=ordinary),
-            commit=True,
-        )
-        is True
-    )
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_unread(account_id, ordinary_id, visibility=ordinary),
-            commit=True,
-        )
-        is True
-    )
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_unread(account_id, ordinary_id, visibility=ordinary),
-            commit=True,
-        )
-        is True
-    )
-    assert (
-        await transact(
-            repository, lambda uow: uow.notifications.mark_read(account_id, staff_id, visibility=ordinary), commit=True
-        )
-        is False
-    )
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_read(account_id + 1, ordinary_id, visibility=staff),
-            commit=True,
-        )
-        is False
-    )
-    assert (
-        await transact(
-            repository, lambda uow: uow.notifications.mark_read(account_id, staff_id, visibility=staff), commit=True
-        )
-        is True
-    )
-
-
-@pytest.mark.parametrize("gate", ["web", "consent"])
-async def test_read_state_changes_require_current_inbox_eligibility(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-    gate: str,
-) -> None:
-    await _seed_delivery(async_session_factory)
-    async with async_session_factory.begin() as session:
-        account = (await session.scalars(select(Account))).one()
-        notification_id = (await session.scalars(select(InboxNotification.id))).one()
-        if gate == "web":
-            profile = (await session.scalars(select(NotificationProfile))).one()
-            profile.web_enabled = False
-        else:
-            account.consent_version = None
-            account.consented_at = None
-
-    assert (
-        await transact(
-            repository,
-            lambda uow: uow.notifications.mark_read(account.id, notification_id, visibility=InboxVisibility()),
-            commit=True,
-        )
-        is False
-    )
 
 
 async def test_inbox_count_and_both_keyset_directions_share_visibility(
@@ -595,63 +485,6 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
         assert await session.scalar(select(InboxNotification)) is None
         assert await session.scalar(select(NotificationDeliveryRecord)) is None
         assert await session.scalar(select(DomainEvent)) is None
-
-
-async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    async with async_session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
-        session.add(account)
-        await session.flush()
-        account_id = account.id
-
-    first = await transact(
-        repository,
-        lambda uow: uow.notifications.add_subscription(
-            account_id,
-            kind=SubscriptionKind.CREATOR,
-            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-            record_filter=None,
-        ),
-        commit=True,
-    )
-    second = await transact(
-        repository,
-        lambda uow: uow.notifications.add_subscription(
-            account_id,
-            kind=SubscriptionKind.CREATOR,
-            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-            record_filter=None,
-        ),
-        commit=True,
-    )
-    filtered = await transact(
-        repository,
-        lambda uow: uow.notifications.add_subscription(
-            account_id,
-            kind=SubscriptionKind.RECORD_FILTER,
-            subject_id=None,
-            record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
-        ),
-        commit=True,
-    )
-    filtered_again = await transact(
-        repository,
-        lambda uow: uow.notifications.add_subscription(
-            account_id,
-            kind=SubscriptionKind.RECORD_FILTER,
-            subject_id=None,
-            record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
-        ),
-        commit=True,
-    )
-
-    assert first.id == second.id
-    assert filtered.id == filtered_again.id
-    async with async_session_factory() as session:
-        assert len((await session.scalars(select(NotificationSubscription))).all()) == 2
 
 
 @pytest.mark.parametrize(("recipient_count", "expected_statements"), [(0, 0), (1, 3), (100, 3)])
