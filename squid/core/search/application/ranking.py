@@ -19,6 +19,7 @@ from squid_i18n import md_tr
 class RankingBranch(StrEnum):
     """Candidate sources fused into the final ranking."""
 
+    RECORD_TITLE = "record_title"
     EXACT = "exact"
     FULL_TEXT = "full_text"
     TRIGRAM = "trigram"
@@ -26,6 +27,7 @@ class RankingBranch(StrEnum):
 
 
 DEFAULT_RRF_WEIGHTS: Mapping[RankingBranch, float] = {
+    RankingBranch.RECORD_TITLE: 4.0,
     RankingBranch.EXACT: 4.0,
     RankingBranch.FULL_TEXT: 2.0,
     RankingBranch.TRIGRAM: 1.0,

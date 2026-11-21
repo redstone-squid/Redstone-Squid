@@ -18,7 +18,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from sqlalchemy import case, delete, func, literal_column, select
+from sqlalchemy import Text, case, cast, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -119,8 +119,8 @@ class RecordHolderProjectionSource:
 
     build_id: int
     title: str
-    subtitle: str | None
     metric: dict[str, object]
+    creators: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,14 +487,17 @@ class SearchProjectionLoader:
         if row is None:
             return None
         result, definition = row
-        holders = tuple(
-            (
-                await self._session.scalars(
-                    select(TitleHolder)
-                    .where(TitleHolder.result_id == result_id)
-                    .order_by(TitleHolder.rank, TitleHolder.build_id)
-                )
-            ).all()
+        # Holder snapshots carry the record category title. The build document
+        # supplies the actual build title and its public credits in one join.
+        holders = await self._session.execute(
+            select(TitleHolder, SearchDocument.title, SearchDocument.document_data["creators"])
+            .join(
+                SearchDocument,
+                (SearchDocument.resource_kind == "build")
+                & (SearchDocument.source_key == cast(TitleHolder.build_id, Text)),
+            )
+            .where(TitleHolder.result_id == result_id, SearchDocument.status == "confirmed")
+            .order_by(TitleHolder.rank, TitleHolder.build_id)
         )
         return build_record_projection(
             RecordProjectionSource(
@@ -513,11 +516,11 @@ class SearchProjectionLoader:
             tuple(
                 RecordHolderProjectionSource(
                     build_id=holder.build_id,
-                    title=holder.title,
-                    subtitle=holder.subtitle,
+                    title=title,
+                    creators=tuple(creators or ()),
                     metric=holder.metric_snapshot,
                 )
-                for holder in holders
+                for holder, title, creators in holders
             ),
         )
 
@@ -604,6 +607,19 @@ class SearchProjectionWorker:
                             await self._store.delete_document(resource_kind, source_key)
                         else:
                             await self._store.replace(projection)
+                    if resource_kind == "build" and source_key.isdecimal():
+                        await self._session.execute(
+                            select(
+                                func.upsert_search_projection_request(
+                                    "record", func.concat("result:", TitleResult.id), "upsert"
+                                )
+                            )
+                            .select_from(TitleResult)
+                            .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
+                            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+                            .where(TitleHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
+                            .order_by(TitleResult.id)
+                        )
                     await self._store.complete(item_id, token)
                 succeeded += 1
             except Exception as error:
@@ -656,7 +672,7 @@ def build_record_projection(
     source: RecordProjectionSource,
     holders: Sequence[RecordHolderProjectionSource] = (),
 ) -> SearchProjection:
-    """Index the record title and retain its ranked holders separately."""
+    """Index each record with the builds and creators that currently hold it."""
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
     tags = (source.base_title, source.build_kind, source.version_scope)
@@ -665,6 +681,7 @@ def build_record_projection(
         source_key=f"result:{source.result_id}",
         title=source.title,
         subtitle=source.subtitle,
+        description="\n".join(" ".join((holder.title, *holder.creators)) for holder in holders) or None,
         status=source.status,
         tags=tags,
         document_data={
@@ -674,6 +691,9 @@ def build_record_projection(
             "build_kind": source.build_kind,
             "version_scope": source.version_scope,
             "category_key": source.category_key,
+            "holders": [
+                {"build_id": holder.build_id, "title": holder.title, "creators": holder.creators} for holder in holders
+            ],
             "holder_build_ids": holder_ids,
             "build_title": first_holder.title if first_holder is not None else source.title,
             "holder_metrics": {str(holder.build_id): holder.metric for holder in holders},
@@ -686,6 +706,10 @@ def build_record_projection(
             ProjectionFacet("record_state", "current"),
             ProjectionFacet("kind", source.build_kind),
             ProjectionFacet("version_scope", source.version_scope),
+            *(
+                ProjectionFacet("creator", name)
+                for name in dict.fromkeys(n for holder in holders for n in holder.creators)
+            ),
             *(ProjectionFacet("holder", str(build_id)) for build_id in holder_ids),
         ),
     )

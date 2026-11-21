@@ -2,8 +2,13 @@
 
 from typing import Literal, cast
 
+from pydantic import TypeAdapter
+
 from squid.core.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
+from squid.core.search.domain.models import RecordSearchHolder
 from squid.core.search.models import SearchDocument
+
+_HOLDERS = TypeAdapter(tuple[RecordSearchHolder, ...])
 
 
 def public_identity(document: SearchDocument) -> tuple[Literal["build", "record", "metadata"], str]:
@@ -40,6 +45,8 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
             build_title=_string(data, "build_title", document.title),
             base_title=_string(data, "base_title", "unknown"),
             version_scope=_string(data, "version_scope", "all-time"),
+            holder_build_ids=tuple(holder_ids) if isinstance(holder_ids, list | tuple) else (),
+            holders=_HOLDERS.validate_python(data.get("holders", ())),
             score=score,
             tags=tags,
             metrics=cast(dict[str, str | int | float | bool], metrics),

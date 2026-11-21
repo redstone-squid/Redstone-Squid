@@ -107,6 +107,15 @@ class SearchMatch:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordSearchHolder:
+    """A current holder and the public credits for its build."""
+
+    build_id: int
+    title: str
+    creators: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RecordSearchHit:
     """A computed record search result."""
 
@@ -121,6 +130,7 @@ class RecordSearchHit:
     tags: tuple[str, ...] = ()
     metrics: dict[str, str | int | float | bool] = field(default_factory=dict)
     holder_build_ids: tuple[int, ...] = ()
+    holders: tuple[RecordSearchHolder, ...] = ()
     matched: bool = True
     title_match: SearchText | None = None
     resource_kind: Literal["record"] = field(default="record", init=False)

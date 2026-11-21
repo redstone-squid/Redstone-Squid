@@ -114,11 +114,27 @@ class PostgresSearchBackend(SearchBackend):
         ranked even when more match the filters.
         """
         terms = _ranking_text(query)
+        # Record shorthand parses the leading base title as a filter. Keep it in
+        # the heading comparison so "fastest 2x2 door" favors the general record.
+        exact_match = SearchDocument.normalized_title == terms.casefold()
+        heading = func.concat_ws(" ", SearchDocument.title, SearchDocument.subtitle)
+        if request.scope is SearchScope.RECORDS:
+            exact_terms = " ".join(request.query.casefold().split())
+            # Restrictions can appear in the subtitle. Trigram sets recognize the
+            # same heading words even when the query puts a restriction first.
+            exact_match = func.similarity(heading, exact_terms) == 1.0
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
-            RankingBranch.EXACT: await self._exact_candidates(session, predicate, terms),
+            RankingBranch.EXACT: await self._candidate_rows(session, predicate & exact_match, literal(1.0)),
             RankingBranch.FULL_TEXT: await self._fts_candidates(session, predicate, terms),
             RankingBranch.TRIGRAM: await self._trigram_candidates(session, predicate, terms),
         }
+        if request.scope is SearchScope.RECORDS:
+            # A holder can match the same words as a category. Prefer records whose
+            # own heading contains the terms, including any restriction in the subtitle.
+            heading_matches = func.to_tsvector("simple", heading).bool_op("@@")(func.plainto_tsquery("simple", terms))
+            branches[RankingBranch.RECORD_TITLE] = await self._candidate_rows(
+                session, predicate & heading_matches, func.similarity(heading, terms)
+            )
         warnings: tuple[str, ...] = ()
         if request.mode is SearchMode.SEMANTIC:
             if query_embedding is None:
@@ -134,14 +150,6 @@ class PostgresSearchBackend(SearchBackend):
                     logger.exception("Semantic search candidate lookup failed")
                     warnings = (_SEMANTIC_WARNING,)
         return {candidate.document_id: candidate for candidate in reciprocal_rank_fusion(branches)}, warnings
-
-    async def _exact_candidates(
-        self, session: AsyncSession, predicate: ColumnElement[bool], terms: str
-    ) -> tuple[RankedCandidate, ...]:
-        # Every exact match is equally good, so the candidate tie-break alone orders this branch.
-        return await self._candidate_rows(
-            session, predicate & (SearchDocument.normalized_title == terms.casefold()), literal(1.0)
-        )
 
     async def _fts_candidates(
         self, session: AsyncSession, predicate: ColumnElement[bool], terms: str

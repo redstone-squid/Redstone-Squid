@@ -147,7 +147,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("restriction", FieldType.TEXT, ranked=True),
         FieldDefinition("type", FieldType.TEXT, ranked=True),
         FieldDefinition("pattern", FieldType.TEXT, ranked=True),
-        FieldDefinition("creator", FieldType.TEXT, ranked=True),
+        FieldDefinition("creator", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("version", FieldType.TEXT),
         FieldDefinition(
             "status",

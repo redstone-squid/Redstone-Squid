@@ -131,11 +131,16 @@ class ResultPager:
         }
         scores = {row.unit_id: float(row.order_value) if ranked is not None else None for row in rows}
         if not self.request.group_by_build:
-            hits = tuple(document_hit(documents[unit_id], scores[unit_id]) for unit_id in unit_ids)
-            return SearchSlice(hits, total, warnings, page_offset)
+            hits: list[SearchHit] = []
+            for unit_id in unit_ids:
+                hit = document_hit(documents[unit_id], scores[unit_id])
+                if isinstance(hit, RecordSearchHit):
+                    hit = replace(hit, title_match=highlight_title(hit.title, self.query))
+                hits.append(hit)
+            return SearchSlice(tuple(hits), total, warnings, page_offset)
         # Use every match rather than the ranked ones, so a hit also lists matches outside the candidate pool.
-        hits = await self._grouped_hits(matches, unit_ids, documents, scores, ranked or {})
-        return SearchSlice(hits, total, warnings, page_offset)
+        grouped_hits = await self._grouped_hits(matches, unit_ids, documents, scores, ranked or {})
+        return SearchSlice(grouped_hits, total, warnings, page_offset)
 
     @property
     def _descending(self) -> bool:
@@ -299,6 +304,7 @@ class ResultPager:
                     build_id=int(build_key),
                     build_title=build_titles[build_key],
                     holder_build_ids=tuple(visible_holders[document.id]),
+                    holders=tuple(holder for holder in hit.holders if holder.build_id in visible_holders[document.id]),
                     metrics=cast(dict[str, str | int | float | bool], holder_metrics),
                     matched=bool(matched) and self.request.scope is not SearchScope.BUILDS,
                     title_match=highlight_title(hit.title, self.query) if matched else SearchText(hit.title),
