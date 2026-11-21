@@ -391,7 +391,7 @@ about-adminDescription = 供全局管理员管理机器人行为。
 validation-duration-unit = 请明确时间单位：游戏刻 (gt)、红石刻 (rt) 或秒 (s)。
 validation-number = 请输入有效数字。
 
-trial-title = 草稿流程对比
+trial-title = 草稿流程
 trial-disclaimer = 仅供测试：上传和服务器响应均在本地模拟。数据不会离开此页面。标题 Reserved 会触发服务器验证。
 trial-details = 作品详情
 trial-category = 类别

@@ -397,7 +397,7 @@ about-adminDescription = Global administrators can configure bot behavior here.
 validation-duration-unit = Use an explicit unit: game ticks (gt), redstone ticks (rt), or seconds (s).
 validation-number = Enter a valid number.
 
-trial-title = Draft workflow comparison
+trial-title = Draft workflow
 trial-disclaimer = Fixture only: uploads and server responses are simulated locally. No data leaves this page. The title Reserved triggers server validation.
 trial-details = Build details
 trial-category = Category
