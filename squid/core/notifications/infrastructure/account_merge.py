@@ -12,7 +12,7 @@ them. All changes remain in the caller's account-merge transaction.
 
 import uuid
 
-from sqlalchemy import Delete, and_, case, delete, func, literal, or_, select, update
+from sqlalchemy import Select, and_, case, delete, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import Insert, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -63,11 +63,15 @@ def _merge_notification_profile_statement(*, survivor: int, absorbed: int) -> In
     )
 
 
-def _collapse_notification_subscriptions_statement(*, survivor: int, absorbed: int) -> Delete:
+def _duplicate_subscriptions(*, survivor: int, absorbed: int) -> Select[int, int, bool]:
     absorbed_row = aliased(NotificationSubscription, name="absorbed_subscription")
     survivor_row = aliased(NotificationSubscription, name="survivor_subscription")
-    duplicate_ids = (
-        select(absorbed_row.id)
+    return (
+        select(
+            absorbed_row.id.label("absorbed_id"),
+            survivor_row.id.label("survivor_id"),
+            absorbed_row.enabled.label("enabled"),
+        )
         .join(
             survivor_row,
             and_(
@@ -80,7 +84,6 @@ def _collapse_notification_subscriptions_statement(*, survivor: int, absorbed: i
         )
         .where(absorbed_row.account_id == absorbed)
     )
-    return delete(NotificationSubscription).where(NotificationSubscription.id.in_(duplicate_ids))
 
 
 async def merge_account_notifications(session: AsyncSession, *, survivor: int, absorbed: int) -> None:
@@ -98,16 +101,25 @@ async def merge_account_notifications(session: AsyncSession, *, survivor: int, a
     )
     await session.execute(_merge_notification_profile_statement(survivor=survivor, absorbed=absorbed))
     await session.execute(delete(NotificationProfile).where(NotificationProfile.account_id == absorbed))
-    await session.execute(_collapse_notification_subscriptions_statement(survivor=survivor, absorbed=absorbed))
+    duplicates = _duplicate_subscriptions(survivor=survivor, absorbed=absorbed).subquery()
+    duplicate_follows = await session.execute(
+        select(duplicates.c.absorbed_id, duplicates.c.survivor_id).where(duplicates.c.enabled)
+    )
+    remapped_follows = {old_id: new_id for old_id, new_id in duplicate_follows}
+    await session.execute(
+        delete(NotificationSubscription).where(NotificationSubscription.id.in_(select(duplicates.c.absorbed_id)))
+    )
     await session.execute(
         update(NotificationSubscription)
         .where(NotificationSubscription.account_id == absorbed)
         .values(account_id=survivor)
     )
-    await _canonicalize_notifications(session, survivor=survivor, absorbed=absorbed)
+    await _canonicalize_notifications(session, survivor=survivor, absorbed=absorbed, remapped_follows=remapped_follows)
 
 
-async def _canonicalize_notifications(session: AsyncSession, *, survivor: int, absorbed: int) -> None:
+async def _canonicalize_notifications(
+    session: AsyncSession, *, survivor: int, absorbed: int, remapped_follows: dict[int, int]
+) -> None:
     """Rewrite recipient-bound idempotency keys and merge any resulting collisions."""
     notifications = tuple(
         (
@@ -155,6 +167,10 @@ async def _canonicalize_notifications(session: AsyncSession, *, survivor: int, a
                     "delivery_account_id": delivery.account_id,
                     "notification_account_id": notification.account_id,
                 },
+            )
+        if delivery.account_id == absorbed and delivery.subscription_ids is not None and remapped_follows:
+            delivery.subscription_ids = sorted(
+                {remapped_follows.get(follow_id, follow_id) for follow_id in delivery.subscription_ids}
             )
     # Current keys are unique per recipient, so each absorbed row has at most one survivor.
     survivor_by_source = {
@@ -250,6 +266,11 @@ def _coalesce_notification_deliveries(
         return
     live = tuple(delivery for delivery in (survivor, absorbed) if delivery.dead_at is None)
     if live:
+        survivor.subscription_ids = (
+            None
+            if any(delivery.subscription_ids is None for delivery in live)
+            else sorted({follow_id for delivery in live for follow_id in delivery.subscription_ids or ()})
+        )
         survivor.available_at = min(delivery.available_at for delivery in live)
         survivor.dead_at = None
         survivor.last_error = next((delivery.last_error for delivery in live if delivery.last_error is not None), None)

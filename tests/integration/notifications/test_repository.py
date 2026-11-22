@@ -332,6 +332,72 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
         assert notification.web_visible is True
 
 
+async def test_unfollowing_cancels_only_dms_that_lose_their_last_reason(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    legacy_id = await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
+        first, second = [
+            NotificationSubscription(
+                account_id=account_id, kind=SubscriptionKind.RECORD, subject_id=UUID(int=record_id)
+            )
+            for record_id in (1, 2)
+        ]
+        event = DomainEvent(event_type="record_run.activated", aggregate_kind="record_run", aggregate_id=1)
+        session.add_all([first, second, event])
+        await session.flush()
+        candidates = [
+            NotificationCandidate(
+                account_id=account_id,
+                source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
+                kind=NotificationKind.RECORD_GAINED,
+                payload={"build_id": build_id},
+                subscription_ids=follows,
+            )
+            for build_id, follows in (
+                (10, (first.id,)),
+                (11, (first.id, second.id)),
+                (12, None),
+                (13, (first.id,)),
+            )
+        ]
+        async with repository() as uow:
+            await uow.notifications._insert_candidates(session, event=event, candidates=candidates[:3])
+
+    async with repository() as uow:
+        follow = await uow.notifications.subscription(account_id, first.id)
+        assert follow is not None
+        follow.enabled = False
+        await uow.notifications.save_subscription(follow)
+        await uow.commit()
+
+    # Simulate an event worker using a match it found just before the unfollow.
+    async with async_session_factory.begin() as session, repository() as uow:
+        await uow.notifications._insert_candidates(session, event=event, candidates=candidates)
+        rows = (
+            await session.execute(
+                select(NotificationDeliveryRecord, InboxNotification.payload).join(
+                    InboxNotification, InboxNotification.id == NotificationDeliveryRecord.notification_id
+                )
+            )
+        ).all()
+        by_build = {payload["build_id"]: delivery for delivery, payload in rows}
+        assert set(by_build) == {10, 11, 12, 42}
+        assert by_build[10].dead_at is not None
+        assert by_build[11].subscription_ids == [second.id]
+        assert by_build[11].dead_at is None
+        assert by_build[12].dead_at is None
+        assert by_build[42].id == legacy_id
+        assert by_build[42].dead_at is None
+        inbox = await session.scalar(
+            select(InboxNotification).where(InboxNotification.source_key == candidates[0].source_key)
+        )
+        assert inbox is not None
+        assert inbox.web_visible
+
+
 async def test_inbox_count_and_both_keyset_directions_share_visibility(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],

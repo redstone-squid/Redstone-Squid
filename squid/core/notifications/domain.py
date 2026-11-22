@@ -118,6 +118,7 @@ class NotificationCandidate:
     source_key: str
     kind: NotificationKind
     payload: Mapping[str, object]
+    subscription_ids: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

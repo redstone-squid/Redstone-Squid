@@ -3554,6 +3554,7 @@ CREATE TABLE public.notification_deliveries (
     sent_at timestamp with time zone,
     dead_at timestamp with time zone,
     last_error text,
+    subscription_ids bigint[],
     CONSTRAINT notification_deliveries_attempts_nonnegative CHECK ((attempts >= 0)),
     CONSTRAINT notification_deliveries_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
     CONSTRAINT notification_deliveries_generation_positive CHECK ((generation > 0))

@@ -235,7 +235,11 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
             ]
         )
         event = DomainEvent(event_type="record_run.activated", aggregate_kind="record_run", aggregate_id=5)
-        session.add(event)
+        survivor_follow, absorbed_follow = [
+            NotificationSubscription(account_id=account_id, kind=SubscriptionKind.RECORD, subject_id=uuid.UUID(int=42))
+            for account_id in (survivor.id, absorbed.id)
+        ]
+        session.add_all([event, survivor_follow, absorbed_follow])
         await session.flush()
         notification = InboxNotification(
             account_id=absorbed.id,
@@ -257,7 +261,11 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
             )
         )
         await session.flush()
-        session.add(NotificationDeliveryRecord(notification_id=notification.id, account_id=absorbed.id))
+        session.add(
+            NotificationDeliveryRecord(
+                notification_id=notification.id, account_id=absorbed.id, subscription_ids=[absorbed_follow.id]
+            )
+        )
         event_value = DomainEvent(
             id=event.id,
             event_type=event.event_type,
@@ -301,6 +309,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
     assert merged[0].source_key == f"event:{event.id}:record-build:42:account:{survivor.id}"
     assert delivery.account_id == survivor.id
     assert delivery.generation > stale_claim.generation
+    assert delivery.subscription_ids == [survivor_follow.id]
 
 
 async def test_simultaneous_reversed_merges_lock_in_one_order_and_choose_one_winner(

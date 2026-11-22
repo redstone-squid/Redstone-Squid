@@ -2,12 +2,12 @@
 
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, delete, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Select, case, delete, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,8 +167,29 @@ class PostgresNotificationRepository:
 
     async def save_subscription(self, row: NotificationSubscription) -> None:
         await self.lock_settings(row.account_id)
-        self._session().add(row)
-        await self._session().flush()
+        session = self._session()
+        session.add(row)
+        await session.flush()
+        if not row.enabled:
+            delivery = NotificationDeliveryRecord
+            remaining = func.array_remove(delivery.subscription_ids, row.id)
+            cancel = func.cardinality(remaining) == 0
+            await session.execute(
+                update(delivery)
+                .where(
+                    delivery.account_id == row.account_id,
+                    delivery.sent_at.is_(None),
+                    delivery.dead_at.is_(None),
+                    delivery.subscription_ids.contains([row.id]),
+                )
+                .values(
+                    subscription_ids=remaining,
+                    dead_at=case((cancel, func.now()), else_=delivery.dead_at),
+                    claimed_at=case((cancel, None), else_=delivery.claimed_at),
+                    claim_token=case((cancel, None), else_=delivery.claim_token),
+                    last_error=case((cancel, "All matching follows were removed"), else_=delivery.last_error),
+                )
+            )
 
     async def lock_inbox(
         self, account_id: int, ids: tuple[int, ...], *, visibility: InboxVisibility
@@ -563,17 +584,18 @@ class PostgresNotificationRepository:
         # Followers hear about a build's first confirmation, not every later review outcome.
         creator_ids = tuple(await self._creator_public_ids(session, build.id))
         if creator_ids:
-            subscriber_ids = (
+            subscriptions = (
                 await session.execute(
-                    select(NotificationSubscription.account_id)
-                    .where(
+                    select(NotificationSubscription.account_id, NotificationSubscription.id).where(
                         NotificationSubscription.kind == SubscriptionKind.CREATOR,
                         NotificationSubscription.subject_id.in_(creator_ids),
                         NotificationSubscription.enabled.is_(True),
                     )
-                    .distinct()
                 )
-            ).scalars()
+            ).all()
+            follows_by_account: dict[int, list[int]] = defaultdict(list)
+            for account_id, subscription_id in subscriptions:
+                follows_by_account[account_id].append(subscription_id)
             candidates.extend(
                 NotificationCandidate(
                     account_id=account_id,
@@ -582,8 +604,9 @@ class PostgresNotificationRepository:
                         account_id
                     ),
                     payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
+                    subscription_ids=tuple(sorted(follows)),
                 )
-                for account_id in subscriber_ids
+                for account_id, follows in follows_by_account.items()
             )
         await self._insert_candidates(session, event=event, candidates=candidates)
 
@@ -620,8 +643,9 @@ class PostgresNotificationRepository:
                         account_id
                     ),
                     payload=payload,
+                    subscription_ids=None if follows is None else tuple(sorted(follows)),
                 )
-                for account_id in sorted(recipients_by_build[build_id])
+                for account_id, follows in recipients_by_build[build_id].items()
             )
         await self._insert_candidates(session, event=event, candidates=candidates)
 
@@ -635,6 +659,33 @@ class PostgresNotificationRepository:
         if not candidates:
             return
         account_ids = {candidate.account_id for candidate in candidates}
+        follow_ids = {follow_id for candidate in candidates for follow_id in candidate.subscription_ids or ()}
+        if follow_ids:
+            # Serialize queue insertion with settings edits, then recheck the matches
+            # found before taking the locks.
+            await session.execute(
+                select(Account.id).where(Account.id.in_(account_ids)).order_by(Account.id).with_for_update()
+            )
+            subscriptions = await session.execute(
+                select(NotificationSubscription.account_id, NotificationSubscription.id).where(
+                    NotificationSubscription.id.in_(follow_ids), NotificationSubscription.enabled.is_(True)
+                )
+            )
+            active_follows = {(account_id, follow_id) for account_id, follow_id in subscriptions}
+            candidates = [
+                candidate
+                if candidate.subscription_ids is None
+                else replace(
+                    candidate,
+                    subscription_ids=tuple(
+                        follow_id
+                        for follow_id in candidate.subscription_ids
+                        if (candidate.account_id, follow_id) in active_follows
+                    ),
+                )
+                for candidate in candidates
+            ]
+        candidates = [candidate for candidate in candidates if candidate.subscription_ids != ()]
         profiles = {
             profile.account_id: profile
             for profile in (
@@ -683,10 +734,21 @@ class PostgresNotificationRepository:
                 ),
             )
         )
+        delivery_columns = ["notification_id", "account_id"]
+        tracked = {
+            candidate.source_key: literal(
+                list(candidate.subscription_ids), NotificationDeliveryRecord.subscription_ids.type
+            )
+            for candidate in candidates
+            if candidate.subscription_ids is not None
+        }
+        if tracked:
+            delivery_columns.append("subscription_ids")
+            deliverable = deliverable.add_columns(case(tracked, value=InboxNotification.source_key))
         await session.execute(
             insert(NotificationDeliveryRecord)
             .from_select(
-                [NotificationDeliveryRecord.notification_id, NotificationDeliveryRecord.account_id],
+                delivery_columns,
                 deliverable,
             )
             .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
@@ -772,14 +834,14 @@ class PostgresNotificationRepository:
     async def _record_gain_recipients(
         session: AsyncSession,
         gains: dict[int, tuple[_RecordGain, ...]],
-    ) -> dict[int, set[int]]:
-        """Collect creators and matching subscribers once per build.
+    ) -> dict[int, dict[int, set[int] | None]]:
+        """Collect matching follows per build and recipient, using None for credited creators.
 
         Matching any gained record qualifies a subscriber. The resulting message
         includes all of that build's gains, even when only one matched the filter.
         """
         build_ids = set(gains)
-        recipients = {build_id: set() for build_id in build_ids}
+        recipients: dict[int, dict[int, set[int] | None]] = {build_id: {} for build_id in build_ids}
         if not build_ids:
             return recipients
         credits = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
@@ -793,7 +855,7 @@ class PostgresNotificationRepository:
         ).all()
         creator_ids: dict[int, set[UUID]] = defaultdict(set)
         for build_id, account_id, public_creator_id in creator_rows:
-            recipients[build_id].add(account_id)
+            recipients[build_id][account_id] = None
             creator_ids[build_id].add(public_creator_id)
 
         relevant_subjects: set[UUID] = set().union(*creator_ids.values())
@@ -804,6 +866,7 @@ class PostgresNotificationRepository:
                     NotificationSubscription.account_id,
                     NotificationSubscription.kind,
                     NotificationSubscription.subject_id,
+                    NotificationSubscription.id,
                 ).where(
                     NotificationSubscription.kind.in_((SubscriptionKind.CREATOR, SubscriptionKind.RECORD)),
                     NotificationSubscription.subject_id.in_(relevant_subjects),
@@ -811,7 +874,7 @@ class PostgresNotificationRepository:
                 )
             )
         ).all()
-        for account_id, kind, subject_id in exact_subscriptions:
+        for account_id, kind, subject_id, subscription_id in exact_subscriptions:
             for build_id, build_gains in gains.items():
                 subjects = (
                     creator_ids[build_id]
@@ -819,11 +882,17 @@ class PostgresNotificationRepository:
                     else {gain.record_id for gain in build_gains}
                 )
                 if subject_id in subjects:
-                    recipients[build_id].add(account_id)
+                    follows = recipients[build_id].setdefault(account_id, set())
+                    if follows is not None:
+                        follows.add(subscription_id)
 
         filter_rows = (
             await session.execute(
-                select(NotificationSubscription.account_id, NotificationSubscription.record_filter).where(
+                select(
+                    NotificationSubscription.account_id,
+                    NotificationSubscription.record_filter,
+                    NotificationSubscription.id,
+                ).where(
                     NotificationSubscription.kind == SubscriptionKind.RECORD_FILTER,
                     NotificationSubscription.enabled.is_(True),
                 )
@@ -845,13 +914,15 @@ class PostgresNotificationRepository:
             tags_by_build[build_id][tag_id] = (
                 numeric if numeric is not None else text_value if text_value is not None else boolean
             )
-        for account_id, raw_filter in filter_rows:
+        for account_id, raw_filter, subscription_id in filter_rows:
             if raw_filter is None:
                 continue
             record_filter = raw_filter
             for build_id, build_gains in gains.items():
                 if any(_filter_matches(record_filter, gain, tags_by_build[build_id]) for gain in build_gains):
-                    recipients[build_id].add(account_id)
+                    follows = recipients[build_id].setdefault(account_id, set())
+                    if follows is not None:
+                        follows.add(subscription_id)
         return recipients
 
 

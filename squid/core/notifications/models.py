@@ -18,7 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -204,3 +204,5 @@ class NotificationDeliveryRecord(QueueColumns, DeadLetterColumns, Base, kw_only=
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     sent_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    # NULL means no follow is required or the delivery predates follow tracking.
+    subscription_ids: Mapped[list[int] | None] = mapped_column(ARRAY(BigInteger), default=None)
