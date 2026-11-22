@@ -15,7 +15,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.profile_render import identity_label as _identity_label
-from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields
+from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields, provider_label
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import CardField, tr
 from squid.core.accounts.application import AccountService
@@ -84,10 +84,12 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         account_id: int,
         actor_id: int,
         request_consent: ConsentRequest,
+        discord_username: str | None = None,
     ) -> None:
         self._accounts = accounts
         self._account_id = account_id
         self._actor_id = actor_id
+        self._discord_username = discord_username
         self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
@@ -138,67 +140,67 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 thumbnail=media[0] if media else None,
             )
         ]
-        if self.identities:
-            nodes.append(
-                sl.choices(
-                    *(
-                        sl.choice(
-                            _identity_label(identity),
-                            key=str(identity.id),
-                            description=self.identity_detail(identity),
-                        )
-                        for identity in self.identities
-                        # ORM identity columns may still be None before flush.
-                        if identity.id is not None  # pyright: ignore[reportUnnecessaryComparison]
-                    ),
-                    key="identity",
-                    selection=sl.controlled(
-                        (str(self.selected_id),) if self.selected_id is not None else (), self._selection_changed
-                    ),
-                )
-            )
         identity = self.selected
-        # Each row pairs a visibility toggle with the other action on the same thing. The identity
-        # toggle needs a selected identity to show a real state; Unlink stays visible, greyed out,
-        # while there are identities to select.
         if self.identities:
-            nodes.append(
-                sl.action_controls(
-                    identity is not None
-                    and sl.toggle(
-                        tr(t"account-view-selected-identity = Selected identity"),
-                        key="identity_visibility",
-                        on=sl.controlled(identity.is_public, self._toggle_identity),
-                        on_label=tr(t"account-view-shown-on-page = Shown on page"),
-                        off_label=tr(t"account-view-hidden-from-page = Hidden from page"),
+            nodes.extend(
+                (
+                    sl.note(
+                        tr(
+                            t"account-view-select-linked-account = Select a linked account to change its visibility or unlink it."
+                        )
                     ),
-                    sl.action_control(
-                        tr(t"account-view-unlink = Unlink"),
-                        self._unlink,
-                        key="unlink",
-                        tone=sl.Tone.DANGER,
-                        available=identity is not None,
-                        guard=sp.guards.confirm(self._unlink_warning()),
+                    sl.choices(
+                        *(
+                            sl.choice(
+                                self._picker_label(linked),
+                                key=str(linked.id),
+                                description=self._identity_visibility(linked),
+                            )
+                            for linked in self.identities
+                            # ORM identity columns may still be None before flush.
+                            if linked.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+                        ),
+                        key="identity",
+                        selection=sl.controlled(
+                            (str(self.selected_id),) if self.selected_id is not None else (), self._selection_changed
+                        ),
                     ),
-                    key="identity-actions",
                 )
             )
         nodes.append(
             sl.action_controls(
-                sl.toggle(
-                    tr(t"account-view-creator-page = Creator page"),
-                    key="page_visibility",
-                    on=sl.controlled(not self.page_hidden, self._toggle_page),
-                    on_label=tr(t"account-view-shown = Shown"),
-                    off_label=tr(t"account-view-hidden-2 = Hidden"),
-                ),
                 sl.action_control(
-                    tr(t"account-view-edit-page = Edit page"),
+                    tr(t"account-view-edit-page = Edit profile"),
                     self._edit_page,
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                key="page-actions",
+                sl.toggle(
+                    tr(t"account-view-creator-page = Profile"),
+                    key="page_visibility",
+                    on=sl.controlled(not self.page_hidden, self._toggle_page),
+                    on_label=tr(t"account-view-shown = Public"),
+                    off_label=tr(t"account-view-hidden-2 = Hidden"),
+                ),
+                identity is not None
+                and sl.toggle(
+                    tr(t"account-view-selected-identity = Account"),
+                    key="identity_visibility",
+                    on=sl.controlled(identity.is_public, self._toggle_identity),
+                    on_label=tr(t"account-view-shown-on-page = Shown"),
+                    off_label=tr(t"account-view-hidden-from-page = Hidden"),
+                ),
+                bool(self.identities)
+                and sl.action_control(
+                    tr(t"account-view-unlink = Unlink account"),
+                    self._unlink,
+                    key="unlink",
+                    tone=sl.Tone.DANGER,
+                    available=identity is not None,
+                    guard=sp.guards.confirm(self._unlink_warning()),
+                ),
+                key="profile-actions",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             )
         )
         nodes.extend(self.edits.refresh_controls())
@@ -313,12 +315,25 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         # The creator page's visibility is shown on its toggle, so it is not repeated here.
         return fields
 
-    def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:
-        visibility = (
-            tr(t"account-view-shown-publicly = shown publicly")
+    def _picker_label(self, identity: AccountIdentity) -> sl.TextLike:
+        provider = provider_label(identity.provider)
+        name = identity.display_name or identity.subject
+        if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._actor_id:
+            name = self._discord_username or identity.display_name
+            if name is None:
+                return tr(t"account-view-current-discord = Your Discord account")
+        return md_tr(t"account-view-account-option = {provider} — {name}")
+
+    @staticmethod
+    def _identity_visibility(identity: AccountIdentity) -> sl.TextLike:
+        return (
+            tr(t"account-view-shown-publicly = Shown on your profile")
             if identity.is_public
-            else tr(t"account-view-hidden = hidden")
+            else tr(t"account-view-hidden = Hidden from your profile")
         )
+
+    def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:
+        visibility = self._identity_visibility(identity)
         age = (
             sl.md(discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R"))
             if identity.verified_at is not None
@@ -347,7 +362,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
     def _footer(self) -> sl.TextLike | None:
         if self.page_hidden:
             return tr(
-                t"account-hidden-page-credit-note = A hidden page still lists the "
-                t"creator names you hold, because that credit is what attributes your builds."
+                t"account-hidden-page-credit-note = Your profile is hidden. Your credited names still appear on your builds."
             )
         return None

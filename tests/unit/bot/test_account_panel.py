@@ -1076,6 +1076,28 @@ async def test_identity_visibility_needs_a_selected_identity() -> None:
     assert find(tree, sl.semantic.ActionControl, key="unlink").available is False
 
 
+def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
+    panel = _overview(
+        accounts=AccountMutationService(),
+        account_id=ACCOUNT_ID,
+        actor_id=AUTHOR_ID,
+        discord_username="redbuilder",
+        request_consent=no_consent_request,
+    )
+    panel._identities = (DISCORD, replace(JAVA, is_public=False))
+
+    picker = find(render_tree(panel), sl.semantic.Choices, key="identity")
+
+    assert [resolve_text(option.label, NEUTRAL).content for option in picker.choices] == [
+        "Discord — redbuilder",
+        "Minecraft (Java) — Notch",
+    ]
+    assert [resolve_text(option.description, NEUTRAL).content for option in picker.choices] == [
+        "Shown on your profile",
+        "Hidden from your profile",
+    ]
+
+
 async def test_account_focus_before_and_after_load_preserves_user_selection() -> None:
     account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
 
