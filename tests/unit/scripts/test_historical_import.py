@@ -13,9 +13,15 @@ import discord
 import httpx2
 import openai
 import pytest
+import wrapture
 
 from scripts import populate_db_with_logs_historical_messages as importer
-from squid.core.submissions.application.inference_runs import InferenceStatus
+from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.models import Account
+from squid.core.actors import Actor
+from squid.core.builds.application import BuildInferenceInput
+from squid.core.builds.domain import BuildInput
+from squid.core.submissions.application.inference_runs import InferenceCandidate, InferenceStatus
 from squid.runtime import BotServices
 
 
@@ -24,7 +30,12 @@ def message(identifier: int, author: int = 1, *, bot: bool = False, reply: int |
         discord.Message,
         SimpleNamespace(
             id=identifier,
-            author=SimpleNamespace(id=author, bot=bot),
+            author=SimpleNamespace(id=author, bot=bot, display_name=f"Builder {author}", name=f"builder{author}"),
+            content=f"Build log message {identifier}",
+            channel=SimpleNamespace(id=42),
+            guild=None,
+            attachments=(),
+            mentions=(),
             created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=identifier),
             reference=SimpleNamespace(message_id=reply) if reply is not None else None,
         ),
@@ -45,19 +56,25 @@ class Channel:
 
 
 def services(*, consent: bool = True) -> BotServices:
+    account = Account(id=7, consent=AccountConsent.grant_current())
     return cast(
         BotServices,
         SimpleNamespace(
             accounts=SimpleNamespace(
-                get_account_by_identity=AsyncMock(
-                    return_value=SimpleNamespace(id=7, needs_consent_refresh=False) if consent else None
-                )
+                get_account_by_identity=AsyncMock(return_value=account if consent else None),
+                get_or_create_identity=AsyncMock(return_value=account),
             ),
             submission_inference=SimpleNamespace(
-                public_status=AsyncMock(side_effect=[None, InferenceStatus(42, None, 1, "completed", ("a", "b"))])
+                public_status=AsyncMock(side_effect=[None, InferenceStatus(42, None, 1, "completed", ("a", "b"))]),
+                resume=AsyncMock(return_value=None),
+                infer=AsyncMock(
+                    side_effect=lambda run_id, owner, *_args, **_kwargs: tuple(
+                        InferenceCandidate(uuid4(), run_id, owner, BuildInput()) for _ in range(2)
+                    )
+                ),
             ),
             builds=SimpleNamespace(list_ids_for_source_message=AsyncMock(return_value=[])),
-            build_inference=SimpleNamespace(infer=AsyncMock(return_value=[object(), object()])),
+            build_inference=SimpleNamespace(infer=AsyncMock(return_value=[BuildInput(), BuildInput()])),
         ),
     )
 
@@ -80,47 +97,52 @@ async def test_grouping_obeys_reply_gap_and_count_limits() -> None:
     assert channel.history_options == {"limit": 10, "oldest_first": True, "after": None, "before": None}
 
 
-async def test_dry_run_only_calls_unretained_inference(monkeypatch: pytest.MonkeyPatch) -> None:
-    assemble = AsyncMock(return_value=object())
-    ingest = AsyncMock()
-    monkeypatch.setattr(importer, "assemble_bundle", assemble)
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+async def test_dry_run_only_calls_unretained_inference() -> None:
+    runtime = services()
     result = await importer.process_group(
-        importer.MessageBundle((message(1),), ()), services(), importer.ImportOptions("x", dry_run=True)
+        importer.MessageBundle((message(2),), (message(1, author=8),)),
+        runtime,
+        importer.ImportOptions("x", dry_run=True),
     )
     assert result.inferred_candidates == 2
     assert result.processed == 1
-    ingest.assert_not_awaited()
-    assemble.assert_awaited_once()
+    retained = cast(AsyncMock, runtime.submission_inference.infer)
+    retained.assert_not_awaited()
+    infer = cast(AsyncMock, runtime.build_inference.infer)
+    infer.assert_awaited_once()
+    (inputs,) = infer.await_args.args
+    assert isinstance(inputs, BuildInferenceInput)
+    assert [(item.message_id, item.content) for item in inputs.primary] == [(2, "Build log message 2")]
+    assert [item.message_id for item in inputs.context] == [1]
 
 
-async def test_unconsented_author_is_skipped_before_inference(monkeypatch: pytest.MonkeyPatch) -> None:
-    ingest = AsyncMock()
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+async def test_unconsented_author_is_skipped_before_inference() -> None:
+    runtime = services(consent=False)
     result = await importer.process_group(
-        importer.MessageBundle((message(1),), ()), services(consent=False), importer.ImportOptions("x")
+        importer.MessageBundle((message(1),), ()), runtime, importer.ImportOptions("x")
     )
     assert result.skipped_consent == 1
-    ingest.assert_not_awaited()
+    cast(AsyncMock, runtime.submission_inference.public_status).assert_not_awaited()
+    cast(AsyncMock, runtime.accounts.get_or_create_identity).assert_not_awaited()
 
 
-async def test_real_import_reuses_shared_resumable_intake(monkeypatch: pytest.MonkeyPatch) -> None:
-    ingest = AsyncMock(return_value=uuid4())
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+async def test_real_import_uses_the_shared_retained_run() -> None:
     bundle = importer.MessageBundle((message(1),), ())
     runtime = services()
+    run_id = importer.message_bundle_run_id(bundle.primary)
     result = await importer.process_group(bundle, runtime, importer.ImportOptions("x", include_images=False))
+
     assert result.processed == 1
-    ingest.assert_awaited_once_with(
-        bundle.primary,
-        bundle.preceding,
-        runtime,
-        model="x",
-        reasoning_effort=None,
-        include_images=False,
-        retry_failed=False,
-    )
     assert result.inferred_candidates == 2
+    cast(AsyncMock, runtime.submission_inference.resume).assert_awaited_once_with(run_id, Actor(account_id=7))
+    infer = cast(AsyncMock, runtime.submission_inference.infer)
+    infer.assert_awaited_once()
+    actual_run, owner, inputs = infer.await_args.args
+    assert (actual_run, owner) == (run_id, 7)
+    assert isinstance(inputs, BuildInferenceInput)
+    assert [item.message_id for item in inputs.primary] == [1]
+    assert not inputs.images
+    assert infer.await_args.kwargs == {"model": "x", "reasoning_effort": None, "source_files": ()}
 
 
 @pytest.mark.parametrize(("existing", "skipped", "failed"), [([True, True], 1, 0), ([True, False], 0, 1)])
@@ -204,16 +226,8 @@ async def test_retained_run_resumes_even_when_a_candidate_is_already_saved(monke
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
-async def test_channel_consent_allows_import_without_account_consent(
-    monkeypatch: pytest.MonkeyPatch, dry_run: bool
-) -> None:
+async def test_channel_consent_allows_import_without_account_consent(dry_run: bool) -> None:
     runtime = services(consent=False)
-    lookup = AsyncMock(side_effect=AssertionError("Channel consent must not read or update account consent"))
-    monkeypatch.setattr(runtime.accounts, "get_account_by_identity", lookup)
-    assemble = AsyncMock(return_value=object())
-    ingest = AsyncMock(return_value=uuid4())
-    monkeypatch.setattr(importer, "assemble_bundle", assemble)
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
     arguments = importer.parse_args(["--channel-consent"])
     options = importer.ImportOptions("x", dry_run=dry_run, channel_consent=arguments.channel_consent)
 
@@ -221,25 +235,19 @@ async def test_channel_consent_allows_import_without_account_consent(
 
     assert result.processed == 1
     assert result.skipped_consent == 0
-    lookup.assert_not_awaited()
-    if dry_run:
-        assert result.inferred_candidates == 2
-        assemble.assert_awaited_once()
-        ingest.assert_not_awaited()
-    else:
-        ingest.assert_awaited_once()
-        assemble.assert_not_awaited()
+    assert result.inferred_candidates == 2
+    cast(AsyncMock, runtime.accounts.get_account_by_identity).assert_not_awaited()
+    assert cast(AsyncMock, runtime.build_inference.infer).await_count == int(dry_run)
+    assert cast(AsyncMock, runtime.submission_inference.infer).await_count == int(not dry_run)
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
-async def test_credit_exhaustion_stops_before_later_bundles(monkeypatch: pytest.MonkeyPatch, dry_run: bool) -> None:
+async def test_credit_exhaustion_stops_before_later_bundles(dry_run: bool) -> None:
     response = httpx2.Response(402, request=httpx2.Request("POST", "https://example.invalid/chat"))
     error = openai.APIStatusError("Insufficient credits", response=response, body={"code": 402})
-    infer = AsyncMock(side_effect=error)
     runtime = services()
-    monkeypatch.setattr(importer, "assemble_bundle", AsyncMock(return_value=object()))
-    monkeypatch.setattr(importer, "ingest_message_bundle", infer)
-    monkeypatch.setattr(runtime.build_inference, "infer", infer)
+    infer = cast(AsyncMock, (runtime.build_inference if dry_run else runtime.submission_inference).infer)
+    infer.side_effect = error
     channel = Channel([message(i, i) for i in range(1, 10)])
     with pytest.raises(importer.ImportStopped) as stopped:
         await importer.process_channel(
@@ -329,19 +337,17 @@ def test_resume_log_reports_inclusive_message_and_original_upper_bound(caplog: p
     assert "Keep --after, --limit, channel order, and grouping unchanged" in caplog.text
 
 
-async def test_retry_failed_reuses_intake_and_reports_retained_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
-    ingest = AsyncMock(return_value=uuid4())
-    monkeypatch.setattr(importer, "ingest_message_bundle", ingest)
+async def test_retry_failed_reuses_intake_and_reports_retained_candidates() -> None:
     runtime = services()
     arguments = importer.parse_args(["--retry-failed"])
-
-    summary = await importer.process_group(
-        importer.MessageBundle((message(1),), ()),
-        runtime,
-        importer.ImportOptions("x", retry_failed=arguments.retry_failed),
-    )
+    intake = wrapture.binding(importer, "ingest_message_bundle")
+    with wrapture.timeline(intake):
+        summary = await importer.process_group(
+            importer.MessageBundle((message(1),), ()),
+            runtime,
+            importer.ImportOptions("x", retry_failed=arguments.retry_failed),
+        )
+        intake.events.finished().with_args(retry_failed=True).assert_once()
 
     assert summary.inferred_candidates == 2
     assert summary.failed == 0
-    assert ingest.await_args is not None
-    assert ingest.await_args.kwargs["retry_failed"] is True
