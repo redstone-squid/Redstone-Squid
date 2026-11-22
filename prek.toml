@@ -15,6 +15,7 @@ hooks = [
 [[repos]]
 repo = "local"
 hooks = [
+    { id = "terminology", name = "check project terminology", entry = "uv run --locked python -m scripts.check_terminology", language = "system", pass_filenames = false, always_run = true },
     { id = "ruff-check", name = "ruff check", entry = "uv run --locked ruff check --fix --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
     { id = "ruff-format", name = "ruff format", entry = "uv run --locked ruff format --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
     { id = "web-format", name = "web Prettier", entry = '''bash -c 'cd web && exec bun run prettier --write -- "${@#web/}"' --''', language = "system", files = '^web/.*\.(astro|css|js|jsonc?|md|svelte|ts)$', exclude = '^web/(src/generated/|openapi\.json$)', stages = ["pre-commit"] },

@@ -155,6 +155,9 @@ jobs:
           fi
           printf '%s\n' 'All files have a corresponding rule in .gitattributes'
 
+      - name: Check project terminology
+        run: uv run --locked python -m scripts.check_terminology
+
       - name: Check linting
         run: uv run --locked ruff check --extend-select I
 
