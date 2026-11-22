@@ -222,7 +222,7 @@ class SectionEditorScreen(sd.Screen[None]):
         return (sl.block(*children, accent=sl.AccentRole.BRAND), *self.workspace.history_controls())
 
     def _picker(self, field: FormField, value: JSONValue, chosen: ShowcaseTagEditor | None = None) -> list[Any]:
-        """A catalogue field's current choice and one page of its options.
+        """A catalogue field's current choice and its option menus.
 
         `chosen` replaces the summary of the current choice, for a field with its own editor.
         """
@@ -299,7 +299,6 @@ class SectionEditorScreen(sd.Screen[None]):
                 *windows,
                 key=f"picker_{field.id}",
                 title="",
-                page_size=1,
                 page=InitialPage(
                     anchor=sl.element_ref(SelectMenu, f"pick_{field.id}_{first_window}"),
                 ),
@@ -336,7 +335,7 @@ class SectionEditorScreen(sd.Screen[None]):
             picked = [stored.get(key, ShowcaseTag(key)) for key in event.values]
             value = [tag.to_json() for tag in (*retained, *picked)]
         elif field.value_kind is ValueKind.STRING_LIST:
-            # A select menu reports only its own page; keep the choices made on other pages.
+            # A select menu reports only its own options. Keep choices made in other menus.
             retained = [item for item in _as_list(ws.stored_answers.get(field.id)) if item not in visible]
             value = [*retained, *event.values]
         else:

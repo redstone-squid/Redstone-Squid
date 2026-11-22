@@ -89,7 +89,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                     ),
                 ).unbreakable()
             )
-        nodes.append(sl.region(*windows, key="candidates", title="", page_size=1))
+        nodes.append(sl.region(*windows, key="candidates", title=""))
         current = next((item for item in self.candidates if str(item.id) == self.selected), None)
         details: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         if current is not None:

@@ -487,18 +487,19 @@ async def test_public_visibility_reveals_required_license_and_permission() -> No
     assert [field.id for field in rights.fields] == ["schematic_visibility", "schematic_license", "rights_attestation"]
 
 
-async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
+async def test_picker_shows_the_current_choice_in_the_second_menu() -> None:
     services, drafts = setup()
-    # Web drafts are still asked for the exported version, which is a paged catalogue field.
+    # Web drafts are still asked for the exported version, which is a catalogue field.
     drafts.current = replace(drafts.current, origin=SubmissionOrigin.WEB)
     editor = await open_editor(services, drafts)
-    # The stub catalogue lists Java 1.30 down to 1.1, so 1.2 is on the second page.
+    # The stub catalogue lists Java 1.30 down to 1.1, so 1.2 is in the second menu.
     with transaction() as tx:
         await editor.workspace.save_values(tx, {"source_version": "Java 1.2"})
     child = SectionEditorScreen(editor.workspace, "dimensions_versions")
     async with stage(child, owner=object()) as ui:
         text = "\n".join(ui.texts())
-        assert "Page 2 of 2" in text
+        ui.control(ui.key_for("pick_source_version_0"))
+        assert "Page 2 of 2" not in text
         assert "Choices on other pages are kept" not in text
         menu = ui.control(ui.key_for("pick_source_version_25")).payload
         assert [option["label"] for option in menu["options"] if option.get("default")] == ["Java 1.2"]
@@ -859,7 +860,7 @@ async def test_credit_editor_pages_and_edits_rows_beyond_the_first_window() -> N
         ui.assert_within_limits()
 
 
-async def test_catalogue_picker_keeps_selection_across_runtime_pages() -> None:
+async def test_catalogue_picker_keeps_selection_across_menus() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts)
     ws = editor.workspace
@@ -870,12 +871,6 @@ async def test_catalogue_picker_keeps_selection_across_runtime_pages() -> None:
     child = SectionEditorScreen(ws, "taxonomy")
     async with stage(child, owner=object()) as ui:
         await ui.select(ui.key_for("pick_restrictions_0"), ["restriction-0"])
-        next_page = next(
-            key
-            for key in ui.root.snapshot().handler_keys
-            if "__cursor_next." in key and key.endswith("picker_restrictions")
-        )
-        await ui.press(next_page)
         await ui.select(ui.key_for("pick_restrictions_25"), ["restriction-30"])
         assert ws.stored_answers["restrictions"] == ["restriction-0", "restriction-30"]
         await ui.select(ui.key_for("pick_restrictions_25"), [])
@@ -885,6 +880,5 @@ async def test_catalogue_picker_keeps_selection_across_runtime_pages() -> None:
             await form.submit({"query": ""})
             ui.control(ui.key_for("pick_restrictions_0"))
             assert not ui.root.presentation.pending_reveals
-            await ui.press(next_page)
             ui.control(ui.key_for("pick_restrictions_25"))
         ui.assert_within_limits()
