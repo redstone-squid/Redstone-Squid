@@ -25,3 +25,15 @@ def test_structured_and_negative_text_query_is_filter_only() -> None:
     query = SearchQueryParser().parse("status:approved volume<50 NOT title:broken")
 
     assert is_filter_only(query)
+
+
+def test_a_creator_id_filters_without_ranking() -> None:
+    by_id = SearchQueryParser().parse("creator:9D10EB8E-3BD0-44D6-A207-A6A4DC564E58")
+    by_name = SearchQueryParser().parse('creator:"Red Stone"')
+
+    assert isinstance(by_id.expression, FieldExpression)
+    assert isinstance(by_name.expression, FieldExpression)
+    assert by_id.expression.stored() == ("creator_id", "9d10eb8e-3bd0-44d6-a207-a6a4dc564e58")
+    assert by_name.expression.stored() == ("creator", "Red Stone")
+    assert is_filter_only(by_id)
+    assert not is_filter_only(by_name)

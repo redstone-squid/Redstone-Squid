@@ -1,5 +1,6 @@
 """Turn parsed search expressions into SQLAlchemy predicates with bound values."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
@@ -190,6 +191,7 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
         return _compile_direct(expression)
     # Use a separate EXISTS for each clause: a document may satisfy two clauses
     # through different indexed values. EXISTS keeps each matching document unique.
+    storage_name, stored_value = expression.stored()
     filter_value = SearchDocumentFilter
     value_column = {
         FieldType.TEXT: filter_value.text_value,
@@ -205,13 +207,15 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
     elif field.name in {"kind", "orientation"}:
         comparison = func.lower(value_column) == str(expression.value).casefold()
     else:
-        comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
+        comparison = _comparison(
+            cast(ColumnElement[object], value_column), replace(expression, value=stored_value), field.value_type
+        )
     predicate = (
         select(filter_value.document_id)
         .where(
             filter_value.document_id == SearchDocument.id,
             filter_value.holder_build_id.is_(None),
-            filter_value.field_name == (field.storage_name or field.name),
+            filter_value.field_name == storage_name,
             comparison,
         )
         .correlate(SearchDocument)

@@ -61,11 +61,12 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
         source,
         (
             RecordHolderProjectionSource(42, "2x2 Seamless Door", {"opening": 4}, ("Alice",)),
-            RecordHolderProjectionSource(57, "2x2 Compact Door", {"opening": 4}, ("Bob",)),
+            RecordHolderProjectionSource(57, "2x2 Compact Door", {"opening": 4}, ("Bob",), ("bob-id",)),
         ),
     )
     assert held.description == "2x2 Seamless Door Alice\n2x2 Compact Door Bob"
     assert ProjectionFilter("creator", "Bob") in held.filters
+    assert ProjectionFilter("creator_id", "bob-id") in held.filters
     assert held.title == source.title
     assert held.subtitle == source.subtitle
     assert held.document_data["holder_build_ids"] == (42, 57)

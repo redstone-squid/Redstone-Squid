@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from typing import ClassVar
+from uuid import UUID
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.i18n import tr
@@ -37,6 +38,9 @@ class ComparisonOperator(StrEnum):
 
 type ScalarValue = str | int | float | Decimal | bool
 
+CREATOR_ID_STORAGE = "creator_id"
+"""Where builds index the public IDs of their credited creators."""
+
 
 @dataclass(frozen=True, slots=True)
 class RangeValue:
@@ -62,6 +66,24 @@ class FieldExpression:
     operator: ComparisonOperator
     value: ScalarValue | RangeValue
     phrase: bool = False
+
+    def stored(self) -> tuple[str, ScalarValue | RangeValue]:
+        """Return the storage key and value to compare.
+
+        `creator:` takes a credited name or a public creator ID. IDs are stored apart from
+        names, so crediting a build to the text of someone's ID does not list it as theirs.
+        """
+        if self.field.name == "creator" and isinstance(self.value, str):
+            try:
+                return CREATOR_ID_STORAGE, str(UUID(self.value))
+            except ValueError:
+                pass
+        return self.field.storage_name or self.field.name, self.value
+
+    @property
+    def ranked(self) -> bool:
+        """Whether the value also counts as text for relevance ranking. A creator ID does not."""
+        return self.field.ranked and self.stored()[0] != CREATOR_ID_STORAGE
 
     def applies_to(self, scope: SearchScope) -> bool:
         if isinstance(self.value, RangeValue):

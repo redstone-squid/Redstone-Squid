@@ -25,7 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
-from squid.core.accounts.models import CreatorAlias
+from squid.core.accounts.infrastructure.attribution import attributed_credits
+from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.domain.titles import format_build_category
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.loading import BuildLoader
@@ -47,6 +48,7 @@ from squid.core.records.models import (
     RecordHolder,
     RecordResult,
 )
+from squid.core.search.domain import CREATOR_ID_STORAGE
 from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
     SearchDocument,
@@ -128,6 +130,7 @@ class RecordHolderProjectionSource:
     title: str
     metric: dict[str, object]
     creators: tuple[str, ...] = ()
+    creator_ids: tuple[str, ...] = ()
 
     def filters(self, build_kind: str) -> tuple[ProjectionFilter, ...]:
         filters = [ProjectionFilter("holder", str(self.build_id), self.build_id)]
@@ -422,6 +425,19 @@ class SearchProjectionLoader:
             if assignment.definition.authority == "official" and assignment.definition.semantic_kind == "pattern"
         )
         creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
+        attributed = attributed_credits()
+        creator_ids = tuple(
+            str(public_id)
+            for public_id in (
+                await self._session.scalars(
+                    select(Account.public_creator_id)
+                    .join(attributed, attributed.c.account_id == Account.id)
+                    .where(attributed.c.build_id == build_id)
+                    .distinct()
+                    .order_by(Account.public_creator_id)
+                )
+            ).all()
+        )
         version_names = tuple(_version_name(version) for version in versions)
         dimensions = {
             name: value
@@ -434,6 +450,7 @@ class SearchProjectionLoader:
         filters = [
             *build_tag_name_filters(approved_assignments),
             *(ProjectionFilter("creator", name) for name in creator_names),
+            *(ProjectionFilter(CREATOR_ID_STORAGE, public_id) for public_id in creator_ids),
             *(ProjectionFilter("version", name) for name in version_names),
             ProjectionFilter("status", build.submission_status.name.lower()),
             ProjectionFilter("kind", build.category or "unknown"),
@@ -486,6 +503,7 @@ class SearchProjectionLoader:
                 "category": build.category,
                 "dimensions": dimensions,
                 "creators": creator_names,
+                "creator_ids": creator_ids,
                 "restrictions": restriction_names,
                 "types": type_names,
                 "tags": assigned_tag_names,
@@ -510,7 +528,12 @@ class SearchProjectionLoader:
         # Holder snapshots carry the record category title. The build document
         # supplies the actual build title and its public credits in one join.
         holders = await self._session.execute(
-            select(RecordHolder, SearchDocument.title, SearchDocument.document_data["creators"])
+            select(
+                RecordHolder,
+                SearchDocument.title,
+                SearchDocument.document_data["creators"],
+                SearchDocument.document_data["creator_ids"],
+            )
             .join(
                 SearchDocument,
                 (SearchDocument.resource_kind == "build")
@@ -539,9 +562,10 @@ class SearchProjectionLoader:
                     build_id=holder.build_id,
                     title=title,
                     creators=tuple(creators or ()),
+                    creator_ids=tuple(creator_ids or ()),
                     metric=holder.metric_snapshot,
                 )
-                for holder, title, creators in holders
+                for holder, title, creators, creator_ids in holders
             ),
         )
 
@@ -811,6 +835,10 @@ def build_record_projection(
             *(
                 ProjectionFilter("creator", name)
                 for name in dict.fromkeys(n for holder in holders for n in holder.creators)
+            ),
+            *(
+                ProjectionFilter(CREATOR_ID_STORAGE, public_id)
+                for public_id in dict.fromkeys(i for holder in holders for i in holder.creator_ids)
             ),
             *(value for holder in holders for value in holder.filters(source.build_kind)),
         ),

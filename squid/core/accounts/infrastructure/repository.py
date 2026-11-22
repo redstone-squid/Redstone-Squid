@@ -6,7 +6,7 @@ import secrets
 import uuid
 from collections.abc import Callable, Sequence
 
-from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
+from sqlalchemy import case, delete, func, literal, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -38,6 +38,7 @@ from squid.core.accounts.errors import (
     MinecraftAccountNotFoundError,
 )
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
+from squid.core.accounts.infrastructure.attribution import BUILD_CREDITS, attributed_credits
 from squid.core.accounts.infrastructure.consent import account_consent_current
 from squid.core.accounts.models import (
     Account,
@@ -57,17 +58,6 @@ from squid.core.persistence.account_merge import AccountMergeContext
 from squid.core.persistence.revisions import flush_revision
 from squid.core.persistence.types import InstantUTC
 from squid_i18n import md_tr
-
-_BUILD_CREDITS = table(
-    "build_credits", column("alias_id"), column("build_id"), column("kind"), column("subject"), column("name")
-)
-"""A lightweight handle for attribution counts and verified provider references.
-
-Deliberately not `squid.core.builds.models.BuildCredit`: importing that mapper pulls the
-whole `Build` relationship graph into the accounts context, which both couples the two contexts and
-makes importing this module depend on the builds tags being imported first. All that is wanted
-here is a count.
-"""
 
 
 def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> Account:
@@ -521,8 +511,8 @@ class AccountRepository:
         # One grouped count for every alias at once: a creator page renders every name they
         # hold, and a count per name would be an N+1 on the most public read in the system.
         credit_counts = (
-            select(_BUILD_CREDITS.c.alias_id, func.count().label("build_count"))
-            .group_by(_BUILD_CREDITS.c.alias_id)
+            select(BUILD_CREDITS.c.alias_id, func.count().label("build_count"))
+            .group_by(BUILD_CREDITS.c.alias_id)
             .subquery()
         )
         alias_rows = (
@@ -533,35 +523,16 @@ class AccountRepository:
                 .order_by(CreatorAlias.normalized_name)
             )
         ).all()
-        provider = case(
-            (_BUILD_CREDITS.c.kind == "discord", "discord"),
-            (_BUILD_CREDITS.c.kind == "minecraft_java", "java"),
-            (_BUILD_CREDITS.c.kind == "minecraft_bedrock", "bedrock"),
-        )
-        # A private login identity must not reveal its association through public build credits.
-        public_references = (
-            select(_BUILD_CREDITS.c.name, _BUILD_CREDITS.c.build_id)
-            .join(
-                AccountIdentity,
-                (AccountIdentity.subject == _BUILD_CREDITS.c.subject) & (AccountIdentity.provider == provider),
-            )
-            .where(AccountIdentity.account_id == account.id, AccountIdentity.is_public.is_(True))
-            .union_all(
-                select(CreatorAlias.name, _BUILD_CREDITS.c.build_id)
-                .join(CreatorAlias, CreatorAlias.id == _BUILD_CREDITS.c.alias_id)
-                .where(CreatorAlias.account_id == account.id)
-            )
-            .subquery()
-        )
-        provider_rows = (
+        attributed = attributed_credits()
+        attributed_rows = (
             await session.execute(
-                select(public_references.c.name, func.count(func.distinct(public_references.c.build_id))).group_by(
-                    public_references.c.name
-                )
+                select(attributed.c.name, func.count(func.distinct(attributed.c.build_id)))
+                .where(attributed.c.account_id == account.id)
+                .group_by(attributed.c.name)
             )
         ).all()
         counts = {name: count for name, count in alias_rows}
-        counts.update({name: count for name, count in provider_rows})
+        counts.update({name: count for name, count in attributed_rows})
         return CreatorProfileRecord(
             public_id=public_id,
             account_id=account.id,
@@ -778,7 +749,7 @@ class AccountRepository:
         if alias_row is not None:
             alias, public_creator_id = alias_row
             build_count = await session.scalar(
-                select(func.count()).select_from(_BUILD_CREDITS).where(_BUILD_CREDITS.c.alias_id == alias.id)
+                select(func.count()).select_from(BUILD_CREDITS).where(BUILD_CREDITS.c.alias_id == alias.id)
             )
             credit = CreditPreview(
                 name=alias.name,
