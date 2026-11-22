@@ -14,7 +14,14 @@ from squid.core.builds.models import Build, DoorBuild
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.domain import MetadataSearchHit, RecordSearchHit, SearchPage, SearchRequest, SearchScope
+from squid.core.search.domain import (
+    BuildSearchHit,
+    MetadataSearchHit,
+    RecordSearchHit,
+    SearchPage,
+    SearchRequest,
+    SearchScope,
+)
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_member, staff_permissions
@@ -126,9 +133,11 @@ class CatalogueSearch(SearchService):
         self.requests.append(request)
         if request.scope is SearchScope.RECORDS:
             hit = RecordSearchHit("7", "Smallest spiral door", None, 5, "Aurora", "smallest", "all_time")
-        else:
-            assert request.scope is SearchScope.METADATA
+        elif request.scope is SearchScope.METADATA:
             hit = MetadataSearchHit("9", "Spiral piston layout", "pattern")
+        else:
+            assert request.scope is SearchScope.BUILDS
+            hit = BuildSearchHit("73", "Five-wide door", "approved")
         return SearchPage((hit,), total=1, next=None, prev=None)
 
 
@@ -162,6 +171,30 @@ async def test_catalogue_search_uses_the_selected_scope(
         assert not result.response.ephemeral
         assert any(title in line for line in displayed_text(result.response.message))
         assert [(r.scope, r.query) for r in search.requests] == [(scope, query)]
+
+
+@pytest.mark.parametrize("mention", ["<@{bot_id}>", "<@!{bot_id}>"])
+async def test_mention_searches_builds(mention: str) -> None:
+    search = CatalogueSearch()
+    services = bot_services(
+        accounts=WorkspaceAccounts(),
+        permissions=staff_permissions(),
+        build_queries=CatalogueQueries(),
+        search=search,
+        settings=BuildLogSettings(),
+    )
+    async with command_environment(EXTENSION, services=services) as (bot, env):
+        assert bot.user is not None
+        channel = env.guild.create_text_channel("catalogue")
+        reader = env.guild.add_member(env.create_user("reader"))
+
+        await reader.send(channel, f"{mention.format(bot_id=bot.user.id)} width:5  ")
+
+        assert [(request.scope, request.query) for request in search.requests] == [(SearchScope.BUILDS, "width:5")]
+        result = channel.last_message
+        assert result is not None
+        assert not result.flags.ephemeral
+        assert any("Five-wide door" in line for line in displayed_text(result))
 
 
 async def test_browse_by_id_hides_an_unpublished_build_from_a_reader() -> None:

@@ -3,9 +3,8 @@
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
-import pytest
 from discord.ext import commands
 
 from squid.bot.submission.cog import BuildCommands
@@ -33,27 +32,6 @@ async def test_a_real_command_error_passes_through_untouched() -> None:
     )
 
     assert result is None
-
-
-@pytest.mark.parametrize("mention", ["<@42>", "<@!42>"])
-async def test_mentions_search_builds(mention: str) -> None:
-    context = SimpleNamespace(
-        command=None,
-        message=SimpleNamespace(content=f"{mention}   width:5  "),
-        bot=SimpleNamespace(user=SimpleNamespace(id=42)),
-        invoked_parents=[],
-        invoked_subcommand=None,
-    )
-    request = SimpleNamespace(defer=AsyncMock(), respond=AsyncMock())
-    screen = object()
-    cog = SimpleNamespace(ui=SimpleNamespace(request=AsyncMock(return_value=request)))
-
-    with patch("squid.bot.submission.cog.open_search", AsyncMock(return_value=screen)) as open_search:
-        await BuildCommands.mention_fallback_search(cast(Any, cog), cast(Any, context), commands.CommandNotFound())
-
-    open_search.assert_awaited_once_with(request, query="width:5")
-    request.defer.assert_awaited_once_with("public")
-    request.respond.assert_awaited_once_with(screen)
 
 
 async def test_non_mention_unknown_commands_are_ignored() -> None:
