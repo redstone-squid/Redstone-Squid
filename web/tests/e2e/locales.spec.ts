@@ -1,9 +1,12 @@
+import { LOCALES } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
 import { expect, test } from "../support/test";
 
 test("the language selector preserves a detail URL and its query", async ({ page }) => {
   await page.goto("/tags/zero-tick?view=compact");
-  await page.getByLabel("English · Language").click();
-  await page.getByRole("link", { name: "简体中文" }).click();
+  const header = page.getByRole("banner");
+  await header.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
+  await header.getByRole("link", { name: LOCALES["zh-CN"].label }).click();
   await expect(page).toHaveURL("/zh-cn/tags/zero-tick?view=compact");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
 });

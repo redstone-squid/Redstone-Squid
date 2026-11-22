@@ -1,3 +1,4 @@
+import * as m from "@/locales/messages.gen";
 import { expect, test } from "../support/test";
 
 test("serves an installable web app manifest", async ({ request }) => {
@@ -24,6 +25,7 @@ test.describe("with a service worker", () => {
     await page.reload();
     await context.setOffline(true);
     await page.goto("/zh-cn/builds");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("你已离线");
+    await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(m.offlineTitle("zh-CN"));
   });
 });

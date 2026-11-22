@@ -157,6 +157,9 @@ declaration and explain surprising decisions beside the code that depends on the
   live in `tests/support/servers.ts`.
 
 Name tests for the behavior they protect. Keep the action and outcome visible in each test.
+Use generated catalogue messages for accessible names in interaction tests. Assert errors on
+their fields and feedback in the relevant status region. Use literal expectations for fixture
+data, public URLs, and tests that verify translation output.
 
 ## Checks
 

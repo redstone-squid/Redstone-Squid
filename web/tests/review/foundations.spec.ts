@@ -1,3 +1,5 @@
+import { LOCALES } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
 import { localizePath } from "@/locales/locale";
 import { buttonStyles } from "@/ui/variants";
 import { expect, test } from "../support/test";
@@ -35,22 +37,27 @@ test.describe("with JavaScript disabled", () => {
 
   test("public workbench content renders without JavaScript", async ({ page }) => {
     await page.goto("/design-system");
-    await expect(page.getByRole("heading", { name: "Design system" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: m.workbenchPageTitle("en") })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
-    await page.getByRole("combobox", { name: "Variant", exact: true }).selectOption("quiet");
-    await page.getByRole("combobox", { name: "Size", exact: true }).selectOption("small");
-    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: m.workbenchVariant("en"), exact: true })
+      .selectOption("quiet");
+    await page
+      .getByRole("combobox", { name: m.workbenchSize("en"), exact: true })
+      .selectOption("small");
+    await page.getByRole("button", { name: m.workbenchApply("en"), exact: true }).click();
     const preview = page.locator("#button-story").getByRole("link");
     const quietSmall = buttonStyles({ variant: "quiet", size: "small" });
     await expect(preview).toContainClass(quietSmall);
-    await page.getByRole("link", { name: "Dark theme", exact: true }).click();
+    await page.getByRole("link", { name: m.workbenchDarkTheme("en"), exact: true }).click();
     await expect(preview).toContainClass(quietSmall);
     await preview.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await page.getByRole("link", { name: "Foundations", exact: true }).click();
+    await page.getByRole("link", { name: m.workbenchFoundations("en"), exact: true }).click();
     await expect(page).toHaveURL(/design-system\?.*#foundations$/);
-    await page.getByLabel("English · Language").first().click();
-    await page.getByRole("link", { name: "简体中文", exact: true }).first().click();
+    const header = page.getByRole("banner");
+    await header.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
+    await header.getByRole("link", { name: LOCALES["zh-CN"].label, exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   });
 });
@@ -60,35 +67,35 @@ test("reflows at 320px and retains controls in forced colours", async ({ page })
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/zh-cn/design-system");
   await page.keyboard.press("Tab");
-  const skipLink = page.getByRole("link", { name: "跳至内容" });
+  const skipLink = page.getByRole("link", { name: m.workbenchSkipToContent("zh-CN") });
   await expect(skipLink).toBeFocused();
   await expect(skipLink).toHaveCSS("clip-path", "none");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await expect(page.getByRole("button", { name: "新建草稿" })).toBeVisible();
-  await page.getByRole("button", { name: "新建草稿" }).click();
+  const newDraft = page.getByRole("button", { name: m.workbenchNewDraft("zh-CN") });
+  await expect(newDraft).toBeVisible();
+  await newDraft.click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
 test("shares the selected field state and layout", async ({ page }) => {
   await page.goto("/design-system?theme=dark&layout=row#fields");
-  const fields = page.getByRole("region", { name: "Form controls" });
-  await fields.getByRole("link", { name: "Invalid" }).click();
-  const category = fields.getByRole("combobox", { name: "Category" });
+  const fields = page.getByRole("region", { name: m.workbenchFormControls("en") });
+  await fields.getByRole("link", { name: m.workbenchInvalid("en") }).click();
+  const category = fields.getByRole("combobox", { name: m.trialCategory("en") });
   await expect(category).toHaveAttribute("aria-invalid", "true");
-  await expect(category).toHaveAccessibleDescription("This field is required.");
-  await fields.getByRole("link", { name: "Disabled" }).click();
+  await expect(category).toHaveAccessibleDescription(m.trialRequired("en"));
+  await fields.getByRole("link", { name: m.workbenchDisabled("en") }).click();
   await expect(category).toBeDisabled();
   await expect(fields.getByRole("radio", { name: "Java", exact: true })).toBeDisabled();
 
-  const layouts = page.getByRole("region", { name: "Layouts", exact: true });
-  await expect(layouts.getByRole("link", { name: "Row", exact: true })).toHaveAttribute(
-    "aria-current",
-    "true",
-  );
-  await layouts.getByRole("link", { name: "Stack", exact: true }).click();
-  await layouts.getByRole("link", { name: "Compact", exact: true }).click();
+  const layouts = page.getByRole("region", { name: m.workbenchLayouts("en"), exact: true });
+  await expect(
+    layouts.getByRole("link", { name: m.workbenchRow("en"), exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  await layouts.getByRole("link", { name: m.workbenchStack("en"), exact: true }).click();
+  await layouts.getByRole("link", { name: m.workbenchCompact("en"), exact: true }).click();
   await expect(layouts.locator("code")).toContainText('<Layout pattern="stack" gap="compact">');
   await page.reload();
   await expect(category).toBeDisabled();
@@ -97,7 +104,10 @@ test("shares the selected field state and layout", async ({ page }) => {
 
 test("chooses a fixture suggestion using the keyboard", async ({ page }) => {
   await page.goto("/design-system#components");
-  const input = page.getByRole("combobox", { name: "Minecraft version", exact: true });
+  const input = page.getByRole("combobox", {
+    name: m.workbenchMinecraftVersion("en"),
+    exact: true,
+  });
   await input.fill("Java");
   await expect(page.getByRole("option", { name: "Java 1.21.4" })).toBeVisible();
   await input.press("ArrowDown");

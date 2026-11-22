@@ -1,3 +1,4 @@
+import * as m from "@/locales/messages.gen";
 import { expect, test } from "../support/test";
 
 const routes = [
@@ -16,17 +17,18 @@ const routes = [
   "/submit",
 ];
 
-for (const [prefix, locale, message] of [
-  ["", "en", "The Redstone Squid website is being rebuilt."],
-  ["/zh-cn", "zh-CN", "红石鱿鱼网站正在重建。"],
+for (const [prefix, locale] of [
+  ["", "en"],
+  ["/zh-cn", "zh-CN"],
 ] as const) {
   test(`catalogue routes show placeholders in ${locale}`, async ({ page }) => {
     for (const route of routes) {
       const response = await page.goto(`${prefix}${route}`);
       expect(response?.status(), route).toBe(200);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-      await expect(page.getByText(message, { exact: true })).toBeVisible();
+      const main = page.getByRole("main");
+      await expect(main.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await expect(main.getByText(m.placeholderRebuilding(locale), { exact: true })).toBeVisible();
       await expect(page.locator("astro-island")).toHaveCount(0);
       const path = new URL(route, "https://catalogue.invalid").pathname;
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
