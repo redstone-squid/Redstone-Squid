@@ -4,9 +4,9 @@ import asyncio
 import json
 import sys
 from collections.abc import AsyncIterator
+from functools import partial
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 from anyio import CancelScope, create_task_group, fail_after, sleep
@@ -72,6 +72,7 @@ async def test_task_group_cancellation_reaps_child_and_drains_its_pipes(
     ready = tmp_path / "ready"
     script = f"""
 import os
+from functools import partial
 from pathlib import Path
 Path({str(ready)!r}).touch()
 while True:
@@ -217,15 +218,29 @@ async def test_missing_ffprobe_has_a_stable_non_content_error() -> None:
 
 
 async def test_cancelled_processing_removes_every_staged_output(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, child_processes: list[asyncio.subprocess.Process]
 ) -> None:
-    processor = FfmpegMediaProcessor()
-    monkeypatch.setattr(processor, "_run", AsyncMock(side_effect=asyncio.CancelledError))
+    ready = tmp_path / "poster-started"
+    executable = tmp_path / "ffmpeg"
+    executable.write_text(
+        f"""#!{sys.executable}
+import sys
+import time
+from pathlib import Path
+Path(sys.argv[-1]).write_bytes(b'partial poster')
+Path({str(ready)!r}).touch()
+time.sleep(60)
+"""
+    )
+    executable.chmod(0o755)
+    processor = FfmpegMediaProcessor(ffmpeg=str(executable))
+    job = tmp_path / "job"
+    job.mkdir()
     request = MediaProcessingRequest(
         kind=MediaKind.VIDEO,
-        source_path=tmp_path / "source",
-        output_path=tmp_path / "output",
-        poster_path=tmp_path / "poster",
+        source_path=job / "source",
+        output_path=job / "output",
+        poster_path=job / "poster",
     )
     probe = MediaProbe(
         container_names=("matroska",),
@@ -238,10 +253,18 @@ async def test_cancelled_processing_removes_every_staged_output(
     )
 
     request.source_path.write_bytes(b"video")
-    with pytest.raises(asyncio.CancelledError):
-        await processor.process(request, probe=probe, source_bytes=1, limits=MediaLimits())
+    process = partial(processor.process, request, probe=probe, source_bytes=5, limits=MediaLimits())
+    with fail_after(5):
+        async with create_task_group() as tasks:
+            tasks.start_soon(process)
+            while not ready.exists():
+                await sleep(0.001)
+            assert len(list(job.glob(".processing-*"))) == 2
+            tasks.cancel_scope.cancel()
 
-    assert list(tmp_path.iterdir()) == [request.source_path]
+    (child,) = child_processes
+    assert child.returncode is not None
+    assert list(job.iterdir()) == [request.source_path]
 
 
 def test_failed_output_publication_rolls_back_only_owned_files(tmp_path: Path) -> None:

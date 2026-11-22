@@ -2,15 +2,16 @@
 
 from dataclasses import replace
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.engine import IteratorResult
+from sqlalchemy.engine.result import SimpleResultMetaData
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.builds.domain import BuildStatus
-from squid.core.builds.models import DoorBuild, OtherBuild
-from squid.core.errors import DataIntegrityError
+from squid.core.builds.models import Build, DoorBuild, OtherBuild
 from squid.core.search.infrastructure.projection import (
     ProjectionFacet,
     RecordHolderProjectionSource,
@@ -147,6 +148,15 @@ def test_an_unapproved_tag_is_not_indexed() -> None:
     assert build_tag_projection(_tag_source(semantic_kind="pattern", moderation_status="pending")) is None
 
 
+async def _project_build(build: Build) -> SearchProjection | None:
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = build
+    metadata = SimpleResultMetaData(("value",))
+    session.scalars.side_effect = lambda _: IteratorResult(metadata, iter(())).scalars()
+    session.execute.side_effect = lambda _: IteratorResult(metadata, iter(()))
+    return await SearchProjectionLoader(session).load("build", str(build.id))
+
+
 @pytest.mark.parametrize("semantic_kind", list(TagSemanticKind))
 @pytest.mark.parametrize("status", [TagModerationStatus.APPROVED, TagModerationStatus.PENDING])
 async def test_build_aliases_are_searchable_only_for_approved_assignments(
@@ -165,14 +175,7 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
     build.id = 42
     build.submission_status = BuildStatus.APPROVED
     build.submission_time = build.edited_time = Instant.now()
-    session = AsyncMock(spec=AsyncSession)
-    session.scalar.return_value = build
-    session.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
-    loader = SearchProjectionLoader(session)
-    loader._build_mapper = MagicMock()
-    loader._build_mapper.load = AsyncMock(side_effect=DataIntegrityError("Incomplete title"))
-
-    projection = await loader.load("build", "42")
+    projection = await _project_build(build)
 
     assert projection is not None
     if status is TagModerationStatus.APPROVED:
@@ -200,16 +203,7 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool) ->
     build.width, build.height, build.depth = 10, 12, 5
     build.submission_status = BuildStatus.APPROVED
     build.submission_time = build.edited_time = now
-    session = AsyncMock(spec=AsyncSession)
-    session.scalar.return_value = build
-    rows = MagicMock()
-    rows.all.return_value = []
-    session.scalars.return_value = rows
-    loader = SearchProjectionLoader(session)
-    loader._build_mapper = MagicMock()
-    loader._build_mapper.load = AsyncMock(side_effect=DataIntegrityError("Incomplete title"))
-
-    projection = await loader.load("build", "42")
+    projection = await _project_build(build)
 
     assert projection is not None
     facets = {facet.field_name: facet.value for facet in projection.facets}
