@@ -12,7 +12,7 @@ from squid.bot.posts.renderers import BuildCardRenderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildStatus, Credit
 from squid.core.builds.models import Build, OtherBuild
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain import Setting
@@ -106,3 +106,24 @@ async def test_only_confirmed_builds_reach_build_channels(status: BuildStatus | 
     else:
         assert posts == ()
     assert settings.requested == (["Builds"] if status is BuildStatus.APPROVED else [])
+
+
+@pytest.mark.parametrize("credited", [True, False])
+async def test_a_credited_build_post_links_to_its_creators(credited: bool) -> None:
+    build = OtherBuild(id=7, submission_status=BuildStatus.APPROVED)
+    build.credits = [Credit(name="Notch")] if credited else []
+    channels = {300: Mock(spec=discord.TextChannel, id=300, guild=Guild(10))}
+    bot = make_layout_bot(
+        guilds=[Guild(10), Guild(20), Guild(30)],
+        get_channel=channels.get,
+        media_previews=MediaPreviewClient(),
+        services=bot_services(build_queries=BuildQueries(build), settings=Settings()),
+    )
+
+    posts = await BuildCardRenderer(cast(Any, bot)).desired("7")
+
+    assert posts is not None
+    view = posts[0].payload.view
+    assert view is not None
+    custom_ids = {getattr(item, "custom_id", None) for item in view.walk_children()}
+    assert ("ui:/builds/7/creators" in custom_ids) is credited

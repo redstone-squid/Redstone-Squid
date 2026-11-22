@@ -12,7 +12,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.catalogue.browse import BuildBrowseScreen, _BuildDetail
+from squid.bot.catalogue.browse import BuildBrowseScreen, _BuildDetail, _open_credit
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.results import SearchFocus
@@ -373,7 +373,7 @@ async def test_each_credit_opens_its_creator_page_or_searches_its_name() -> None
     state = detail.projection.status
     assert isinstance(state, sl.resources.Ready)
     build, _, _, owners = state.value
-    await detail._open_credit(build, owners, event)
+    await _open_credit(build.credits, owners, event)
 
     router.resolve.assert_called_once_with(f"/creators/{owner}")
     router.dispatch.assert_awaited_once()

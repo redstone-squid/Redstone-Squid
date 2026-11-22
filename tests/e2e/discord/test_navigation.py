@@ -9,14 +9,14 @@ import wrapture
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import ConsentPrompt
 from squid.bot.accounts.workspace import AccountWorkspace
-from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCreatorsScreen
 from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildStatus, Credit
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.search.application import SearchService
@@ -32,8 +32,10 @@ NAVIGATION = "squid.bot.navigation.cog"
 
 
 class BuildQueries(BuildQueryService):
-    def __init__(self, status: BuildStatus | None) -> None:
+    def __init__(self, status: BuildStatus | None, credits: list[Credit] | None = None) -> None:
         self.build = None if status is None else DoorBuild(id=12, submission_status=status)
+        if self.build is not None:
+            self.build.credits = credits or []
 
     @override
     async def get(self, build_id: int) -> Build | None:
@@ -77,6 +79,33 @@ async def test_build_visibility_is_checked_before_opening(status: BuildStatus | 
         else:
             assert "That build is unavailable." in text
             assert "Submission ID: 12" not in text
+
+
+@pytest.mark.parametrize(
+    ("status", "credits", "opens"),
+    [
+        (BuildStatus.APPROVED, [Credit(name="Notch")], True),
+        (BuildStatus.APPROVED, [], False),
+        (BuildStatus.PENDING, [Credit(name="Notch")], False),
+    ],
+)
+async def test_build_creators_open_only_for_approved_credited_builds(
+    status: BuildStatus, credits: list[Credit], opens: bool
+) -> None:
+    accounts = WorkspaceAccounts()
+    services = bot_services(accounts=accounts, build_queries=BuildQueries(status, credits))
+    async with command_environment(NAVIGATION, services=services) as (bot, env):
+        bot.ui_router.mount("builds", BuildCreatorsScreen.open)
+        channel = env.guild.create_text_channel("builds")
+        member = env.guild.add_member(env.create_user("reader"))
+
+        result = await member.slash(channel, "open", address="/builds/12/creators")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        text = "\n".join(displayed_text(result.response.message))
+        assert ("Creators of" in text) is opens
+        assert ("That build is unavailable." in text) is not opens
 
 
 class UnavailableDrafts(SubmissionDraftService):

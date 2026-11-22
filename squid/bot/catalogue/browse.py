@@ -1,6 +1,6 @@
 """Canonical build catalogue, review, and schematic workspace."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Literal, Self, cast, override
@@ -31,7 +31,7 @@ from squid.core.accounts.models import CataloguePreference
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
-from squid.core.builds.domain import BuildStatus, CreditRole, EditAccess
+from squid.core.builds.domain import BuildStatus, Credit, CreditRole, EditAccess
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues
@@ -218,7 +218,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(
         self,
-    ) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], bool, dict[int, UUID]]:
+    ) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], bool, Mapping[int, UUID]]:
         self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
@@ -248,43 +248,13 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             return (node, self._decision)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
         if build.credits:
-            nodes.append(self._creators(build, owners))
+            nodes.append(credit_choices(build.credits, owners))
         if actions := self._detail_actions(build, has_schematic=has_schematic):
             nodes.append(actions)
         nodes.extend(self.controller.controls())
         if has_schematic:
             nodes.append(self.schematics)
         return nodes
-
-    def _creators(
-        self, build: Build, owners: dict[int, UUID]
-    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        """Open each credit's creator page, or the builds credited to a name nobody has claimed."""
-        return sl.choices(
-            *(
-                sl.choice(
-                    credit.name if credit.role is CreditRole.CREATOR else f"{credit.name} ({credit.role.value})",
-                    key=str(position),
-                    description=tr(t"build-credit-open-page = Open creator page")
-                    if position in owners
-                    else tr(t"build-credit-search-name = Builds credited to this name"),
-                )
-                for position, credit in enumerate(build.credits[:MAX_CREDITS_LISTED])
-            ),
-            key="creators",
-            selection=sl.controlled((), partial(self._open_credit, build, owners)),
-        )
-
-    async def _open_credit(self, build: Build, owners: dict[int, UUID], event: sd.ChoiceEvent[RedstoneSquid]) -> None:
-        position = int(event.selected[0])
-        request = event.context
-        if (public_id := owners.get(position)) is not None:
-            # Dispatched by address: the creator page module imports this one.
-            router = request.client.ui_router
-            await router.dispatch(request, router.resolve(f"/creators/{public_id}"))
-            return
-        query = f"creator:{render_value(build.credits[position].name, quoted=True)}"
-        await request.respond(await BuildBrowseScreen.create_search(request, query=query, typed=False))
 
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
@@ -949,6 +919,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             sort=self._sort,
             on_apply=selected,
             actions=self._search_actions,
+            creators=self._creator_names,
         )
 
     @property
@@ -1082,6 +1053,70 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     async def _back(self, _event: sl.ActionEvent[Any]) -> None:
         self._selected = None
+
+
+class BuildCreatorsScreen(sd.Screen[None, Any, RedstoneSquid]):
+    """The creators of one approved build, opened from its published post."""
+
+    policy = sd.ResponseSpec(audience="personal", timeout=300)
+
+    def __init__(self, build: Build, owners: Mapping[int, UUID]) -> None:
+        self.build = build
+        self.owners = owners
+
+    @router.route("/builds/{build_id}/creators")
+    @classmethod
+    async def open(cls, request: AppRequest, build_id: int) -> Self:
+        """Open the creators of an approved build that credits anyone."""
+        build = await request.client.services.build_queries.get(build_id)
+        if build is None or build.submission_status is not BuildStatus.APPROVED or not build.credits:
+            raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
+        return cls(build, await request.client.services.accounts.credit_owners(build_id))
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
+        title = self.build.one_line_title
+        return (
+            sl.heading(tr(t"build-creators-heading = Creators of {title}")),
+            credit_choices(self.build.credits, self.owners),
+        )
+
+
+def credit_choices(
+    credits: Sequence[Credit], owners: Mapping[int, UUID]
+) -> sl.LayoutNode[ComponentsV2Target, AppRequest]:
+    """Open each credit's creator page, or the builds credited to a name nobody has claimed.
+
+    `owners` maps credit positions to the public creator IDs they belong to.
+    """
+    return sl.choices(
+        *(
+            sl.choice(
+                credit.name if credit.role is CreditRole.CREATOR else f"{credit.name} ({credit.role.value})",
+                key=str(position),
+                description=tr(t"build-credit-open-page = Open creator page")
+                if position in owners
+                else tr(t"build-credit-search-name = Builds credited to this name"),
+            )
+            for position, credit in enumerate(credits[:MAX_CREDITS_LISTED])
+        ),
+        key="creators",
+        selection=sl.controlled((), partial(_open_credit, credits, owners)),
+    )
+
+
+async def _open_credit(
+    credits: Sequence[Credit], owners: Mapping[int, UUID], event: sd.ChoiceEvent[RedstoneSquid]
+) -> None:
+    position = int(event.selected[0])
+    request = event.context
+    if (public_id := owners.get(position)) is not None:
+        # Dispatched by address: the creator page module imports this one.
+        router = request.client.ui_router
+        await router.dispatch(request, router.resolve(f"/creators/{public_id}"))
+        return
+    query = f"creator:{render_value(credits[position].name, quoted=True)}"
+    await request.respond(await BuildBrowseScreen.create_search(request, query=query, typed=False))
 
 
 def _query_summary(query: CatalogueQuery, *, records: bool, creators: Mapping[str, str]) -> sl.TextLike:

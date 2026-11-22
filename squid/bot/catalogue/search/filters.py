@@ -87,8 +87,10 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         sort: str,
         on_apply: Callable[[SearchSelection], Awaitable[None]],
         actions: Callable[[], tuple[sl.semantic.ActionControl[sd.Request[Any, RedstoneSquid]], ...]] | None = None,
+        creators: Mapping[str, str] | None = None,
     ) -> None:
         self.service = service
+        self.creators = creators
         self.scope = scope
         self.query = query
         self.sort = sort
@@ -233,7 +235,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             form = self._text_form(operand, negated=negated)
         return sl.action_controls(
             sl.form(
-                filter_label(item),
+                filter_label(item, self.creators),
                 form,
                 key=f"edit-{index}",
                 on_submit=partial(self._edit_clause, index),

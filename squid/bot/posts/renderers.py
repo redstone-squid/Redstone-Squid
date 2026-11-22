@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, cast, final, override
 
 import discord
 
+import squid_ui as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
-from squid.bot.ui import render_payload
+from squid.bot.ui import render_payload, tr
 from squid.core.builds.domain import BuildStatus
 from squid.core.posts.domain import ResourceKind
 
@@ -40,13 +41,22 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if build.submission_status != BuildStatus.APPROVED:
             return ()
 
-        payload = render_payload(
-            [
-                await render_build_card(
-                    build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
-                )
-            ]
+        card = await render_build_card(
+            build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
         )
+        assert build.id is not None
+        # Imported here because the catalogue imports squid.bot.app, which imports this module.
+        from squid.bot.catalogue.browse import BuildCreatorsScreen
+
+        creators = sl.action_controls(
+            sl.routed_action_control(
+                tr(t"build-post-creators = Creators"),
+                BuildCreatorsScreen.open.custom_id(build_id=build.id),
+                key="creators",
+            ),
+            key="build-post-actions",
+        )
+        payload = render_payload([card, creators] if build.credits else [card])
         configured = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), "Builds")
         channels = (self.bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
         return [

@@ -10,7 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
 import squid_ui.ext.discord as sd
-from squid.bot.catalogue.browse import BuildBrowseScreen
+from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCreatorsScreen
 from squid.bot.catalogue.search.contextual import SEARCH_COMMAND_NAME, SEARCH_SCOPE_NAME, search_autocomplete
 from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
@@ -392,6 +392,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
         BuildBrowseScreen.open_index,
         BuildBrowseScreen.open_detail,
         BuildBrowseScreen.open_creator_builds,
+        BuildCreatorsScreen.open,
         open_consent_prompt,
         review_attachments,
         edit_build,
