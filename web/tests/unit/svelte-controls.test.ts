@@ -22,13 +22,13 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
       const title = screen.getByRole("textbox", {
         name: m.workbenchBuildTitle(locale),
       });
-      expect(title).toHaveAttribute("aria-invalid", "true");
+      expect(title).toBeInvalid();
       expect(title).toHaveAccessibleDescription(m.workbenchEnterATitleForYourBuild(locale));
       await user.type(title, "Copper Bolt");
       await user.click(save);
       expect(screen.getByRole("status")).toHaveTextContent(m.workbenchExampleDraftSaved(locale));
       await user.type(title, " revised");
-      expect(screen.getByRole("status").textContent).toBe("");
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
       await user.click(screen.getByRole("button", { name: m.workbenchCloseDialog(locale) }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });

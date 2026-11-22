@@ -5,6 +5,7 @@ import FormSpecimen from "@/workbench/FormSpecimen.svelte";
 import Field from "@/ui/svelte/Field.svelte";
 import Harness from "./fixtures/SvelteDialogHarness.svelte";
 import { buttonStyles, inputClass } from "@/ui/variants";
+import * as m from "@/locales/messages.gen";
 
 describe("Svelte primitive contracts", () => {
   it("merges field classes and descriptions while preserving caller invalid semantics", () => {
@@ -33,16 +34,16 @@ describe("Svelte primitive contracts", () => {
   });
   it("exposes invalid and disabled states in the workbench form", async () => {
     const { rerender } = render(FormSpecimen, { state: "invalid" });
-    const category = screen.getByRole("combobox", { name: "Category" });
+    const category = screen.getByRole("combobox", { name: m.trialCategory() });
     expect(category).toHaveValue("");
-    expect(category).toHaveAccessibleDescription("This field is required.");
+    expect(category).toHaveAccessibleDescription(m.trialRequired());
     expect(screen.getByRole("radio", { name: "Java" })).toBeChecked();
 
     await rerender({ state: "disabled" });
     expect(category).toHaveValue("door");
     expect(category).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Java" })).toBeDisabled();
-    expect(screen.getByRole("textbox", { name: "Builder notes" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: m.buildDescription() })).toBeDisabled();
   });
   it("composes a secondary trigger and closes through controlled state", async () => {
     const user = userEvent.setup();

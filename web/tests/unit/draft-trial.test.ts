@@ -1,90 +1,107 @@
-import { render, screen } from "@testing-library/svelte";
+import { render, screen, waitFor, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import DraftTrial from "@/workbench/DraftTrial.svelte";
+import * as m from "@/locales/messages.gen";
 
 describe("Draft trial", () => {
   it("requires a title and a positive whole opening width for a door", async () => {
     const user = userEvent.setup();
     render(DraftTrial);
-    await user.type(screen.getByLabelText("Opening width"), "1.5");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(screen.getByLabelText("Build title")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Opening width")).toHaveAccessibleDescription(
-      "Enter a positive whole number.",
-    );
+    const title = screen.getByRole("textbox", { name: m.workbenchBuildTitle() });
+    const width = screen.getByRole("textbox", { name: m.trialWidth() });
+    await user.type(width, "1.5");
+    await user.click(screen.getByRole("button", { name: m.workbenchSaveDraft() }));
+    expect(title).toBeInvalid();
+    expect(title).toHaveAccessibleDescription(m.trialRequired());
+    expect(width).toBeInvalid();
+    expect(width).toHaveAccessibleDescription(m.trialPositive());
   });
 
   it("shows matching Minecraft versions as the visitor types", async () => {
     const user = userEvent.setup();
     render(DraftTrial);
-    await user.type(screen.getByLabelText("Find a version"), "1.21.4");
-    expect(screen.getByRole("option", { name: "Java 1.21.4" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Bedrock 1.21.50" })).not.toBeInTheDocument();
+    const version = screen.getByRole("combobox", { name: m.workbenchMinecraftVersion() });
+    const search = screen.getByRole("searchbox", { name: m.trialFindVersion() });
+    await user.type(search, "1.21.4");
+    expect(
+      within(version)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(["", "Java 1.21.4"]);
   });
 
   it("allows the visitor to correct a rejected title and save", async () => {
     const user = userEvent.setup();
     render(DraftTrial);
-    const title = screen.getByLabelText("Build title");
-    const save = screen.getByRole("button", { name: "Save draft" });
+    const title = screen.getByRole("textbox", { name: m.workbenchBuildTitle() });
+    const save = screen.getByRole("button", { name: m.workbenchSaveDraft() });
+    const status = screen.getByRole("status");
     await user.type(title, "Reserved");
-    await user.type(screen.getByLabelText("Opening width"), "5");
-    await user.selectOptions(screen.getByLabelText("Minecraft version"), "Java 1.21.4");
+    await user.type(screen.getByRole("textbox", { name: m.trialWidth() }), "5");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: m.workbenchMinecraftVersion() }),
+      "Java 1.21.4",
+    );
     await user.click(save);
-    expect(await screen.findByText("This title is already taken.")).toBeVisible();
+    await waitFor(() => expect(title).toHaveAccessibleDescription(m.trialReserved()));
+    expect(title).toBeInvalid();
     await user.clear(title);
     await user.type(title, "Copper Bolt");
+    expect(title).toBeValid();
     await user.click(save);
-    expect(await screen.findByText("Draft saved.")).toBeVisible();
+    await waitFor(() => expect(status).toHaveTextContent(m.trialSaved()));
     await user.type(title, " revised");
-    expect(screen.getByRole("status")).toHaveTextContent("Ready to edit.");
+    expect(status).toHaveTextContent(m.trialReady());
   });
 
   it("blocks saving while a schematic uploads and shows the attachment when it finishes", async () => {
     const user = userEvent.setup();
     render(DraftTrial);
-    const save = screen.getByRole("button", { name: "Save draft" });
-    await user.upload(
-      screen.getByLabelText("Attach a schematic"),
-      new File(["fixture"], "door.schem"),
-    );
+    const save = screen.getByRole("button", { name: m.workbenchSaveDraft() });
+    const file = new File(["fixture"], "door.schem");
+    await user.upload(screen.getByLabelText(m.trialUpload()), file);
     expect(screen.getByRole("progressbar")).toBeVisible();
     expect(save).toBeDisabled();
-    expect(await screen.findByText("Attached: door.schem")).toBeVisible();
+    expect(await screen.findByText(m.trialAttachment({ filename: file.name }))).toBeVisible();
     expect(save).toBeEnabled();
   });
   it("retains edits across a failed save and retries without requiring a hidden field", async () => {
     const user = userEvent.setup();
     render(DraftTrial, { scenario: "retry" });
-    await user.type(screen.getByLabelText("Build title"), "Utility build");
-    await user.selectOptions(screen.getByLabelText("Category"), "utility");
-    expect(screen.queryByLabelText("Opening width")).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Minecraft version"), "Java 1.21.4");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    await user.click(await screen.findByRole("button", { name: "Retry save" }));
-    expect(await screen.findByText("Draft saved.")).toBeVisible();
-    expect(screen.getByLabelText("Build title")).toHaveValue("Utility build");
+    const title = screen.getByRole("textbox", { name: m.workbenchBuildTitle() });
+    const status = screen.getByRole("status");
+    await user.type(title, "Utility build");
+    await user.selectOptions(screen.getByRole("combobox", { name: m.trialCategory() }), "utility");
+    expect(screen.queryByRole("textbox", { name: m.trialWidth() })).not.toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: m.workbenchMinecraftVersion() }),
+      "Java 1.21.4",
+    );
+    await user.click(screen.getByRole("button", { name: m.workbenchSaveDraft() }));
+    await user.click(await screen.findByRole("button", { name: m.trialRetry() }));
+    await waitFor(() => expect(status).toHaveTextContent(m.trialSaved()));
+    expect(title).toHaveValue("Utility build");
   });
   it("retries the selected file after an upload failure", async () => {
     const user = userEvent.setup();
     render(DraftTrial, { scenario: "upload-retry" });
-    await user.upload(
-      screen.getByLabelText("Attach a schematic"),
-      new File(["fixture"], "retry.schem"),
-    );
-    await user.click(await screen.findByRole("button", { name: "Retry upload" }));
-    expect(await screen.findByText("Attached: retry.schem")).toBeVisible();
+    const file = new File(["fixture"], "retry.schem");
+    await user.upload(screen.getByLabelText(m.trialUpload()), file);
+    expect(await screen.findByRole("alert")).toHaveTextContent(m.trialUploadFailure());
+    await user.click(await screen.findByRole("button", { name: m.trialRetryUpload() }));
+    expect(await screen.findByText(m.trialAttachment({ filename: file.name }))).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
   it("cancels an upload and disposes pending work on unmount", async () => {
     const user = userEvent.setup();
     const view = render(DraftTrial);
-    const upload = screen.getByLabelText("Attach a schematic");
-    await user.upload(upload, new File(["fixture"], "first.schem"));
-    await user.click(screen.getByRole("button", { name: "Cancel operation" }));
+    const upload = screen.getByLabelText(m.trialUpload());
+    const file = new File(["fixture"], "first.schem");
+    await user.upload(upload, file);
+    await user.click(screen.getByRole("button", { name: m.trialCancel() }));
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("Attached: first.schem")).not.toBeInTheDocument();
+    expect(screen.queryByText(m.trialAttachment({ filename: file.name }))).not.toBeInTheDocument();
     await user.upload(upload, new File(["fixture"], "second.schem"));
     const abort = vi.spyOn(AbortController.prototype, "abort");
     try {
