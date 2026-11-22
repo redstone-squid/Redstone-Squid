@@ -135,30 +135,9 @@ from squid.core.starboard.application.edits import (
     StarboardDeletion,
     StarboardEdit,
 )
-from squid.core.submissions.application import (
-    CheckedInFormManifestRegistry,
-    SubmissionDraftService,
-    SubmissionFinalizationService,
-    SubmissionFinalizationWorker,
-    SubmissionFormService,
-    SubmissionPreparation,
-)
-from squid.core.submissions.application.artifact_readiness import (
-    AuthoritativeDraftArtifactReadiness,
-)
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
-from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
-from squid.core.submissions.application.build_target import SubmissionBuildPreparation
-from squid.core.submissions.application.commit import BuildSubmissionExecutor
 from squid.core.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
-from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
-from squid.core.submissions.application.intake import SubmissionAttachmentIntake
-from squid.core.submissions.application.recalculation import RecalculationProposalService
-from squid.core.submissions.application.schematic_inference import SchematicSubmissionInference
-from squid.core.submissions.application.schematics import DraftSchematicService
-from squid.core.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
-from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
-from squid.core.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
+from squid.core.submissions.bootstrap import SubmissionServices
 from squid.core.suggestions.application import SuggestionService
 from squid.core.suggestions.application.queries import SuggestionQueryService
 from squid.core.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
@@ -378,8 +357,8 @@ class _ServiceGraph:
         return EditExecutor(
             self.uow_factory,
             {
-                DRAFT_ATTACHMENTS: DraftAttachmentsEdit(self.submission_drafts, self.media_job_service.limits),
-                DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
+                DRAFT_ATTACHMENTS: DraftAttachmentsEdit(self.submissions.drafts, self.media_job_service.limits),
+                DRAFT_ANSWERS: DraftAnswersEdit(self.submissions.drafts),
                 ALIAS_EDIT: TagAliasEdit(self.permissions),
                 PROPOSAL_EDIT: TagProposalEdit(),
                 MODERATION_EDIT: TagModerationEdit(self.permissions),
@@ -517,91 +496,24 @@ class _ServiceGraph:
         return TagService(uow_factory=self.uow_factory)
 
     @cached_property
-    def submission_manifests(self) -> CheckedInFormManifestRegistry:
-        return CheckedInFormManifestRegistry()
-
-    @cached_property
-    def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions), self.submission_manifests)
-
-    @cached_property
-    def submission_drafts(self) -> SubmissionDraftService:
-        return SubmissionDraftService(
-            self.submission_manifests,
-            inferred_capacity=self.config.submissions.inferred_draft_capacity,
+    def submissions(self) -> SubmissionServices:
+        return SubmissionServices(
+            uow_factory=self.uow_factory,
             permissions=self.permissions,
-            uow_factory=self.uow_factory,
-        )
-
-    @cached_property
-    def submission_inference(self) -> SubmissionInferenceRuns:
-        return SubmissionInferenceRuns(
-            self.build_inference,
-            self.artifacts,
-            PydanticInferenceRunCodec(),
-            uow_factory=self.uow_factory,
-            capacity=self.config.submissions.inferred_draft_capacity,
-            permissions=self.permissions,
-        )
-
-    @cached_property
-    def submission_uploads(self) -> DraftAttachmentUploads:
-        return DraftAttachmentUploads(self.submission_drafts, self.uow_factory)
-
-    @cached_property
-    def submission_intake(self) -> SubmissionAttachmentIntake:
-        return SubmissionAttachmentIntake(
-            self.submission_drafts, self.submission_schematics, self.media_jobs, uow_factory=self.uow_factory
-        )
-
-    @cached_property
-    def submission_recalculations(self) -> RecalculationProposalService:
-        return RecalculationProposalService(
-            self.builds,
-            self.permissions,
-            uow_factory=self.uow_factory,
-        )
-
-    @cached_property
-    def submission_schematics(self) -> DraftSchematicService:
-        return DraftSchematicService(
-            self.submission_drafts,
-            self.artifacts,
-            uow_factory=self.uow_factory,
-            ingestor=self.schematics,
-            inference=SchematicSubmissionInference(self.submission_forms, self.version_service),
-            max_bytes=self.config.schematics.max_upload_bytes,
-        )
-
-    @cached_property
-    def submission_finalization(self) -> SubmissionFinalizationService:
-        readiness = AuthoritativeDraftArtifactReadiness(
-            self.media_job_service,
-            self.submission_schematics,
-            intake=self.submission_intake,
-            media_limits=MediaLimits(),
-        )
-        sponsors = (
-            PaperSponsorResolver(self.minecraft_installations)
-            if self.config.minecraft_auth.sponsor_attribution_enabled and self.minecraft_installations is not None
-            else None
-        )
-        return SubmissionFinalizationService(
-            self.submission_drafts,
-            SubmissionPreparation(readiness, sponsors),
-            uow_factory=self.uow_factory,
-        )
-
-    @cached_property
-    def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
-        return SubmissionFinalizationWorker(
-            BuildSubmissionExecutor(
-                SubmissionBuildPreparation(self.builds, self.tags, self.version_service),
-                drafts=self.submission_drafts,
-                uow_factory=self.uow_factory,
+            builds=self.builds,
+            build_inference=self.build_inference,
+            artifacts=self.artifacts,
+            schematics=self.schematics,
+            media_metadata=self.media_job_service,
+            media_jobs=self.media_jobs,
+            suggestions=self.suggestions,
+            tags=self.tags,
+            version_service=self.version_service,
+            minecraft_installations=(
+                self.minecraft_installations if self.config.minecraft_auth.sponsor_attribution_enabled else None
             ),
-            preparation=self.submission_finalization,
-            uow_factory=self.uow_factory,
+            inferred_capacity=self.config.submissions.inferred_draft_capacity,
+            max_schematic_bytes=self.config.schematics.max_upload_bytes,
         )
 
     @cached_property
@@ -814,13 +726,13 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,
-        submission_forms=graph.submission_forms,
-        submission_drafts=graph.submission_drafts,
-        submission_finalization=graph.submission_finalization,
-        submission_schematics=graph.submission_schematics,
-        submission_recalculations=graph.submission_recalculations,
-        submission_intake=graph.submission_intake,
-        submission_inference=graph.submission_inference,
+        submission_forms=graph.submissions.forms,
+        submission_drafts=graph.submissions.drafts,
+        submission_finalization=graph.submissions.finalization,
+        submission_schematics=graph.submissions.draft_schematics,
+        submission_recalculations=graph.submissions.recalculations,
+        submission_intake=graph.submissions.intake,
+        submission_inference=graph.submissions.inference,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -839,14 +751,14 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         builds=graph.builds,
         error_reports=graph.error_reports,
         build_inference=graph.build_inference,
-        submission_forms=graph.submission_forms,
-        submission_drafts=graph.submission_drafts,
-        submission_finalization=graph.submission_finalization,
-        submission_schematics=graph.submission_schematics,
-        submission_recalculations=graph.submission_recalculations,
-        submission_intake=graph.submission_intake,
-        submission_uploads=graph.submission_uploads,
-        submission_inference=graph.submission_inference,
+        submission_forms=graph.submissions.forms,
+        submission_drafts=graph.submissions.drafts,
+        submission_finalization=graph.submissions.finalization,
+        submission_schematics=graph.submissions.draft_schematics,
+        submission_recalculations=graph.submissions.recalculations,
+        submission_intake=graph.submissions.intake,
+        submission_uploads=graph.submissions.uploads,
+        submission_inference=graph.submissions.inference,
         restrictions=graph.restrictions,
         build_queries=graph.build_queries,
         messages=MessageService(uow_factory=graph.uow_factory),
@@ -919,16 +831,16 @@ def create_worker_services(
         schematic_renders=SchematicRenderJobService(uow_factory=graph.uow_factory),
         media_runner=graph.media_runner,
         media_cleanup=graph.media_cleanup,
-        submission_finalization=graph.submission_finalization_worker,
+        submission_finalization=graph.submissions.finalization_worker,
         index_build_embedding=graph.embedding_service.handle,
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(refresh_search_index, graph.uow_factory),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=purge_mutation_outcomes,
-        expire_submission_drafts=graph.submission_drafts.expire_due,
-        cleanup_submission_schematics=graph.submission_schematics.cleanup,
-        process_submission_schematics=graph.submission_schematics.process_pending,
-        cleanup_submission_inference=graph.submission_inference.cleanup,
+        expire_submission_drafts=graph.submissions.drafts.expire_due,
+        cleanup_submission_schematics=graph.submissions.draft_schematics.cleanup,
+        process_submission_schematics=graph.submissions.draft_schematics.process_pending,
+        cleanup_submission_inference=graph.submissions.inference.cleanup,
     )
 
 
