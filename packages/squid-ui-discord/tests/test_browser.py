@@ -17,13 +17,13 @@ async def test_detail_steps_cross_windows_and_return_to_the_containing_overview(
         list_source(("a", "b", "c")), identity=str, label=str, detail=lambda item: f"Detail {item}", fetch_size=2
     )
     async with stage(browser, owner=object()) as ui:
-        await ui.select(ui.key_for("browser.open"), ["b"])
+        await ui.select("browser.open", ["b"])
         assert "Detail b" in ui.texts()
-        await ui.press(ui.key_for("browser.item-next"))
+        await ui.press("browser.item-next")
         assert "Detail c" in ui.texts()
-        await ui.press(ui.key_for("browser.item-previous"))
+        await ui.press("browser.item-previous")
         assert "Detail b" in ui.texts()
-        await ui.press(ui.key_for("browser.back"))
+        await ui.press("browser.back")
         assert "a" in " ".join(ui.texts())
 
 
@@ -37,13 +37,13 @@ async def test_back_reveals_the_focused_item_without_overriding_later_layout_pag
         fetch_size=8,
     )
     async with stage(browser, owner=object()) as ui:
-        await ui.select(ui.key_for("browser.open"), ["7"])
+        await ui.select("browser.open", ["7"])
         assert "Detail 7" in ui.texts()
-        await ui.press(ui.key_for("browser.back"))
+        await ui.press("browser.back")
         assert any("Entry 7:" in text for text in ui.texts())
         before = ui.root.presentation.cursor("browser.items").position.page
         assert before > 0
-        await ui.press(ui.key_for("__cursor_previous.browser.items"))
+        await ui.press("__cursor_previous.browser.items")
         assert ui.root.presentation.cursor("browser.items").position.page == before - 1
 
 
@@ -65,12 +65,12 @@ async def test_back_during_a_boundary_fetch_does_not_reopen_the_fetched_detail()
     source = Source()
     browser = sp.Browser(source, identity=str, label=str, detail=lambda item: f"Detail {item}", fetch_size=1)
     async with stage(browser, owner=object()) as ui:
-        await ui.select(ui.key_for("browser.open"), ["a"])
+        await ui.select("browser.open", ["a"])
         with anyio.fail_after(3):
             async with anyio.create_task_group() as tasks:
-                tasks.start_soon(ui.press, ui.key_for("browser.item-next"))
+                tasks.start_soon(ui.press, "browser.item-next")
                 await source.started.wait()
-                tasks.start_soon(ui.press, ui.key_for("browser.back"))
+                tasks.start_soon(ui.press, "browser.back")
                 await anyio.wait_all_tasks_blocked()
                 assert browser.session.focus is None
                 source.release.set()
@@ -89,7 +89,7 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
         fetch_size=8,
     )
     async with stage(browser, owner=object()) as ui:
-        await ui.select(ui.key_for("browser.open"), ["7"])
+        await ui.select("browser.open", ["7"])
         previous = ui.root.presentation.cursor("browser.items").position
         with monkeypatch.context() as patch:
 
@@ -98,7 +98,7 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
 
             patch.setattr(ui.root, "_deliver", failed_delivery)
             with pytest.raises(RuntimeError, match="delivery failed"):
-                await ui.press(ui.key_for("browser.back"))
+                await ui.press("browser.back")
         assert ui.root.presentation.cursor("browser.items").position == previous
         assert ui.root.presentation.pending_reveals
         assert "Detail 7" in ui.texts()
@@ -132,7 +132,6 @@ async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeyp
         first = " ".join(ui.texts())
         assert all(text in first for text in ("A", "B", "C1", "Page 1"))
         assert "C2" not in first
-        key = ui.key_for("flow.next")
         with monkeypatch.context() as patch:
 
             async def fail(*args: object, **kwargs: object) -> None:
@@ -140,9 +139,9 @@ async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeyp
 
             patch.setattr(ui.root, "_deliver", fail)
             with pytest.raises(RuntimeError, match="delivery failed"):
-                await ui.press(key)
+                await ui.press("flow.next")
         assert " ".join(ui.texts()) == first
-        await ui.press(key)
+        await ui.press("flow.next")
         second = " ".join(ui.texts())
         assert all(text in second for text in ("C2", "D", "Page 2"))
         assert "C1" not in second
@@ -171,12 +170,12 @@ async def test_flow_numbers_reappear_at_origin_after_opening_mid_collection() ->
     async with stage(flow, owner=object()) as ui:
         assert "B" in ui.texts()
         assert "Page" not in " ".join(ui.texts())
-        await ui.press(ui.key_for("flow.next"))
+        await ui.press("flow.next")
         assert "C" in ui.texts()
         assert "Page" not in " ".join(ui.texts())
-        await ui.press(ui.key_for("flow.first"))
+        await ui.press("flow.first")
         assert "Page 1" in " ".join(ui.texts())
-        await ui.press(ui.key_for("flow.next"))
+        await ui.press("flow.next")
         assert "Page 2" in " ".join(ui.texts())
         assert "B" in ui.texts()
 
@@ -206,7 +205,7 @@ async def test_flow_resumes_a_timed_out_fill_on_next() -> None:
         async with stage(flow, owner=object()) as ui:
             assert "A" in ui.texts()
             assert "B" not in ui.texts()
-            await ui.press(ui.key_for("flow.next"))
+            await ui.press("flow.next")
             assert "B" in ui.texts()
             assert "Page 2" in " ".join(ui.texts())
 
@@ -231,7 +230,7 @@ async def test_flow_fits_the_delivered_view_and_resumes_at_the_selected_cut() ->
         assert parts[0] in ui.texts()
         assert parts[1] not in ui.texts()
         assert "Page 1" in " ".join(ui.texts())
-        await ui.press(ui.key_for("flow.next"))
+        await ui.press("flow.next")
         assert parts[0] not in ui.texts()
         assert all(part in ui.texts() for part in parts[1:])
         assert "Page 2" in " ".join(ui.texts())

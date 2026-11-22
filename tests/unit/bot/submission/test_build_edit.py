@@ -73,13 +73,13 @@ async def test_editor_renders_both_histories_when_saved_refresh_fails() -> None:
     with sl.runtime.transaction() as tx:
         await screen.workspace.save_values(tx, {"version_compatibility": "1.21"})
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("review"))
-        await ui.press(ui.key_for("apply"))
+        await ui.press("review")
+        await ui.press("apply")
 
         assert screen.controller.refresh_failed
         assert screen.controller.undoable
         assert screen.workspace.history.can_undo
-        assert ui.key_for("refresh-saved")
+        ui.control("refresh-saved")
 
 
 async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
@@ -120,7 +120,7 @@ async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_r
         commands = [registration] if registered else []
         command = "</search:2>" if registered else "`/search`"
         with patch.object(client.tree, "fetch_commands", new=AsyncMock(return_value=commands)):
-            launch = await ui.press(ui.key_for("search-patterns"))
+            launch = await ui.press("search-patterns")
         assert launch.deferrals[0].kwargs["ephemeral"] is True
         prompt = launch.edits[0].kwargs["content"]
         assert prompt.endswith(f"Use {command} here within two minutes. Leave `scope` empty.")

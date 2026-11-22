@@ -498,12 +498,12 @@ async def test_picker_shows_the_current_choice_in_the_second_menu() -> None:
     child = SectionEditorScreen(editor.workspace, "dimensions_versions")
     async with stage(child, owner=object()) as ui:
         text = "\n".join(ui.texts())
-        ui.control(ui.key_for("pick_source_version_0"))
+        ui.control("pick_source_version_0")
         assert "Page 2 of 2" not in text
         assert "Choices on other pages are kept" not in text
-        menu = ui.control(ui.key_for("pick_source_version_25")).payload
+        menu = ui.control("pick_source_version_25").payload
         assert [option["label"] for option in menu["options"] if option.get("default")] == ["Java 1.2"]
-        await ui.select(ui.key_for("pick_source_version_25"), ["Java 1.1"])
+        await ui.select("pick_source_version_25", ["Java 1.1"])
         assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
         assert "Minecraft version: Java 1.1" in rendered_text(editor)
 
@@ -793,7 +793,7 @@ async def test_credit_row_edit_keeps_provider_identity_and_evidence() -> None:
     child = SectionEditorScreen(ws, "identity")
     revision = ws.revision
     async with stage(child, owner=object()) as ui:
-        form = await ui.press_for_form(ui.key_for("edit-0"))
+        form = await ui.press_for_form("edit-0")
         await form.submit({"name": "New display", "role": ["designer"]})
     assert ws.stored_answers["credits"] == [replace(original, name="New display", role=CreditRole.DESIGNER).to_json()]
     assert drafts.changes[-1].base_revision == revision
@@ -824,7 +824,7 @@ async def test_credit_reference_form_preserves_existing_evidence(
     child = SectionEditorScreen(ws, "identity")
     async with stage(child, owner=object()) as ui:
         assert "Advanced credit lines" not in ui.texts()
-        form = await ui.press_for_form(ui.key_for("identity-reference"))
+        form = await ui.press_for_form("identity-reference")
         await form.submit({"kind": [kind], "reference": reference, "name": "New builder", "role": ["designer"]})
     expected = Credit(
         kind=CreditKind.DISCORD if kind == "discord_username" else CreditKind(kind),
@@ -846,12 +846,12 @@ async def test_credit_editor_pages_and_edits_rows_beyond_the_first_window() -> N
         await ws.save_values(tx, {"credits": [credit.to_json() for credit in credits]})
     child = SectionEditorScreen(ws, "identity")
     async with stage(child, owner=object()) as ui:
-        ui.control(ui.key_for("edit-0"))
+        ui.control("edit-0")
         next_page = next(
             key for key in ui.root.snapshot().handler_keys if "__cursor_next." in key and key.endswith("credits")
         )
         await ui.press(next_page)
-        form = await ui.press_for_form(ui.key_for("edit-5"))
+        form = await ui.press_for_form("edit-5")
         await form.submit({"name": "Updated builder", "role": ["designer"]})
         saved = ws.stored_answers["credits"]
         assert isinstance(saved, list)
@@ -870,15 +870,15 @@ async def test_catalogue_picker_keeps_selection_across_menus() -> None:
     ws.option_sets = {**ws.option_sets, field.option_source: options}
     child = SectionEditorScreen(ws, "taxonomy")
     async with stage(child, owner=object()) as ui:
-        await ui.select(ui.key_for("pick_restrictions_0"), ["restriction-0"])
-        await ui.select(ui.key_for("pick_restrictions_25"), ["restriction-30"])
+        await ui.select("pick_restrictions_0", ["restriction-0"])
+        await ui.select("pick_restrictions_25", ["restriction-30"])
         assert ws.stored_answers["restrictions"] == ["restriction-0", "restriction-30"]
-        await ui.select(ui.key_for("pick_restrictions_25"), [])
+        await ui.select("pick_restrictions_25", [])
         assert ws.stored_answers["restrictions"] == ["restriction-0"]
         for _ in range(2):
-            form = await ui.press_for_form(ui.key_for("search_restrictions"))
+            form = await ui.press_for_form("search_restrictions")
             await form.submit({"query": ""})
-            ui.control(ui.key_for("pick_restrictions_0"))
+            ui.control("pick_restrictions_0")
             assert not ui.root.presentation.pending_reveals
-            ui.control(ui.key_for("pick_restrictions_25"))
+            ui.control("pick_restrictions_25")
         ui.assert_within_limits()

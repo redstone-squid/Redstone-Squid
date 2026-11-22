@@ -53,14 +53,14 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     browser.session.replace(loaded)
 
     async with stage(browser, owner=object()) as ui:
-        await ui.select(ui.key_for("browser.open"), ["a"])
+        await ui.select("browser.open", ["a"])
         assert browser.opened == Entry("a", "A")
         assert built == ["a"], "one detail per open, not one per render"
         await ui.root.refresh()
-        await ui.press(ui.key_for("browser.item-next"))
+        await ui.press("browser.item-next")
         assert browser.opened == Entry("b", "B")
         assert built == ["a", "b"]
-        await ui.press(ui.key_for("browser.back"))
+        await ui.press("browser.back")
         assert browser.opened is None
         assert not ui.root.presentation.pending_reveals
 

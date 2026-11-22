@@ -235,7 +235,7 @@ async def test_saved_drafts_paginate_all_entries(
                 for item in iter_component_payloads(view.to_components())
                 if (route := item.get("custom_id")) in expected
             )
-            next_key = ui.key_for("__cursor_next.saved-drafts")
+            next_key = "__cursor_next.saved-drafts"
             if ui.control(next_key).payload.get("disabled"):
                 break
             await ui.press(next_key)

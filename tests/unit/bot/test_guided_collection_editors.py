@@ -18,7 +18,7 @@ async def test_vote_row_edit_preserves_option_identity_and_weight() -> None:
     before = VoteOption("👍", VoteChoice.GENERIC, identifier="stable", label="Yes", multiplier=2, guild_id=7)
     screen = VoteEmojiEditor(Mock(spec=discord.Guild, id=7), VoteKind.GENERIC, (before,))
     async with stage(screen, owner=object()) as ui:
-        form = await ui.press_for_form(ui.key_for("edit-0"))
+        form = await ui.press_for_form("edit-0")
         await form.submit({"emoji": "✅", "label": "Proceed"})
         option = screen.options[0]
         assert (option.emoji, option.label) == ("✅", "Proceed")
@@ -40,7 +40,7 @@ async def test_video_input_selection_preserves_camera_and_explicit_activations()
     screen = VideoEditor(recipe, candidates=((4, 5, 6),), submit=submit)
     await screen._use_input((4, 5, 6), Mock(spec=sd.PressEvent))
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("render"))
+        await ui.press("render")
         submit.assert_awaited_once()
         result = submit.call_args.args[1]
         assert result.interactions == (VideoInteraction(tick=10, position=(4, 5, 6)), recipe.interactions[1])
@@ -66,7 +66,7 @@ async def test_static_video_omits_saved_activation_rows() -> None:
     screen = VideoEditor(VideoRenderRequest(), submit=submit)
     screen.simulate = False
     async with stage(screen, owner=object()) as ui:
-        await ui.press(ui.key_for("render"))
+        await ui.press("render")
     result = submit.call_args.args[1]
     assert result.interactions == ()
     assert not result.simulation_enabled

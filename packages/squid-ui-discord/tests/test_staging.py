@@ -61,9 +61,9 @@ async def test_stage_drives_facade_dispatch_and_forms_by_semantic_key() -> None:
         assert denied.response.send_message.await_count == 1
         assert screen.count == 0
 
-        await ui.press("editor.add")
-        await ui.select("editor.filter", ["redstone"])
-        form = await ui.press_for_form("editor.rename")
+        await ui.press("add")
+        await ui.select("filter", ["redstone"])
+        form = await ui.press_for_form("rename")
         form.assert_within_limits()
         await form.submit({"name": "New name"})
 
@@ -109,27 +109,30 @@ async def test_invoke_uses_the_real_slash_and_prefix_wrappers() -> None:
     prefix.send.assert_awaited_once()
 
 
-async def test_local_control_lookup_requires_a_unique_suffix() -> None:
-    class Parent(sd.Screen):
-        def __init__(self) -> None:
-            self.first = Editor()
-            self.second = Editor()
-
+async def test_control_lookup_prefers_full_keys_and_requires_unique_suffixes() -> None:
+    class Parent(Editor):
         @override
-        def render(self) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
-            return sl.stack(self.first, self.second)
+        def render(self) -> sl.LayoutNode:
+            return sl.action_controls(
+                sl.action_control("Add directly", self.add, key="add"),
+                sl.action_control("Add to first", self.add, key="first.editor.add"),
+                sl.action_control("Add to second", self.add, key="second.editor.add"),
+                key="actions",
+            )
 
     async with sd.testing.stage(Editor(), owner=object()) as ui:
-        assert ui.key_for("add") == "editor.add"
-        assert ui.key_for("editor.add") == "editor.add"
-        with pytest.raises(KeyError, match="found "):
-            ui.key_for("missing")
-        with pytest.raises(KeyError, match="found "):
-            ui.key_for("ditor.add")
+        assert ui.control("add").key == "editor.add"
+        assert ui.control("editor.add").key == "editor.add"
+        with pytest.raises(KeyError, match="no rendered control 'missing'"):
+            ui.control("missing")
+        with pytest.raises(KeyError, match=r"no rendered control 'ditor\.add'"):
+            ui.control("ditor.add")
 
     async with sd.testing.stage(Parent(), owner=object()) as ui:
-        with pytest.raises(KeyError, match="expected one control"):
-            ui.key_for("editor.add")
+        assert ui.control("add").key == "add"
+        with pytest.raises(KeyError, match=r"ambiguous control .*first\.editor\.add, second\.editor\.add"):
+            ui.control("editor.add")
+        assert ui.control("second.editor.add").label == "Add to second"
 
 
 async def test_long_semantic_keys_survive_native_id_shortening() -> None:
@@ -145,10 +148,10 @@ async def test_long_semantic_keys_survive_native_id_shortening() -> None:
 
     parent = Parent()
     async with sd.testing.stage(parent, owner=object()) as ui:
-        key = ui.key_for("editor.add")
-        assert key == f"{namespace}.editor.add"
-        assert len(ui.control(key).payload["custom_id"]) <= 100
-        await ui.press(key)
+        control = ui.control("editor.add")
+        assert control.key == f"{namespace}.editor.add"
+        assert len(control.custom_id) <= 100
+        await ui.press("editor.add")
         assert parent.editor.count == 1
 
 

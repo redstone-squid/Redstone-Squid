@@ -88,7 +88,7 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(kind
 
     parent = Parent()
     async with stage(parent, owner=object()) as ui:
-        interaction = await ui.press(ui.key_for("open"))
+        interaction = await ui.press("open")
         assert parent.presented is not None, interaction.sends
         child = StagedUI(parent.presented, client=ui._client, user_id=1, interaction=ui.interaction)
         with anyio.fail_after(2):
@@ -96,9 +96,9 @@ async def test_lookup_returns_the_selected_identity_only_after_confirmation(kind
                 await anyio.sleep(0.01)
         has_search = any(key.endswith("lookup.search") for key in child.root.snapshot().handler_keys)
         assert has_search == (kind == SourceKind.QUERIED)
-        await child.select(child.key_for("lookup.results"), ["second"])
+        await child.select("lookup.results", ["second"])
         assert parent.value == ""
-        await child.press(child.key_for("confirm" if confirm else "cancel"))
+        await child.press("confirm" if confirm else "cancel")
         assert parent.value == ("second" if confirm else "")
         assert not ui.root.finished
         assert child.root.finished

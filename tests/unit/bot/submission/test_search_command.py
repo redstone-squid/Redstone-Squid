@@ -308,8 +308,8 @@ async def test_registered_fields_survive_opening_the_catalogue(scope: SearchTarg
     async with stage(screen, owner=object()) as ui:
         assert "custom_flag:true" in screen._query.text
         assert search.requests[0].query == screen._query.text
-        await ui.press(ui.key_for("guided-search"))
-        ui.control(ui.key_for("edit-0"))
+        await ui.press("guided-search")
+        ui.control("edit-0")
         ui.assert_within_limits()
 
 
@@ -332,7 +332,7 @@ async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_pa
     request = SearchRequest("door width:2", page_size=5)
     screen = SearchScreen(service, request, await service.search(request))
     async with stage(screen, owner=object()) as ui:
-        form = await ui.press_for_form(ui.key_for("search.seek.jump"))
+        form = await ui.press_for_form("search.seek.jump")
         await form.submit({"page": "37"})
         assert service.requests[-1].offset == 180
         assert service.requests[-1].query == request.query
@@ -470,15 +470,15 @@ async def test_grouped_record_and_holder_navigation_preserves_the_search_page() 
         render_build=render,
     )
     async with stage(screen, owner=object()) as ui:
-        await ui.select(ui.key_for("search.open"), ["build:42"])
+        await ui.select("search.open", ["build:42"])
         assert "Build card #42" in ui.texts()
-        await ui.press(ui.key_for("search-show-records"))
-        await ui.select(ui.key_for("search-records.open"), ["result:1"])
-        await ui.press(ui.key_for("holder-57"))
+        await ui.press("search-show-records")
+        await ui.select("search-records.open", ["result:1"])
+        await ui.press("holder-57")
         assert "Build card #57" in ui.texts()
-        await ui.press(ui.key_for("search-back-records"))
+        await ui.press("search-back-records")
         assert any("Smallest **2x2** Door" in text for text in ui.texts())
-        await ui.press(ui.key_for("search.back"))
+        await ui.press("search.back")
         assert screen.request.offset == 10
         assert screen.hits == (hit,)
         assert loaded == [42, 57]
@@ -507,9 +507,9 @@ async def test_many_grouped_records_and_ties_remain_browsable_within_discord_lim
     )
     async with stage(screen, owner=object()) as ui:
         assert any("+10 more records" in text for text in ui.texts())
-        await ui.select(ui.key_for("search.open"), ["build:42"])
-        await ui.press(ui.key_for("search-show-records"))
-        await ui.select(ui.key_for("search-records.open"), ["result:0"])
+        await ui.select("search.open", ["build:42"])
+        await ui.press("search-show-records")
+        await ui.select("search-records.open", ["result:0"])
         assert any("Lowest volume" in text for text in ui.texts())
         assert any("Tied holders" in text for text in ui.texts())
         ui.assert_within_limits()

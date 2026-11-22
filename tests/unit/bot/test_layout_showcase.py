@@ -52,10 +52,10 @@ async def test_catalogue_preview_tabs_fit_discord() -> None:
     async with sd.testing.stage(CataloguePreview(), owner=object()) as ui:
         assert any("Lowest volume" in text for text in ui.texts())
         ui.assert_within_limits()
-        await ui.press(ui.key_for("catalogue-preview.search"))
+        await ui.press("catalogue-preview.search")
         assert any("Smallest **2x2** Seamless Door" in text for text in ui.texts())
         ui.assert_within_limits()
-        await ui.press(ui.key_for("catalogue-preview.build"))
+        await ui.press("catalogue-preview.build")
         assert any("Submission ID: 42" in text for text in ui.texts())
         ui.assert_within_limits()
 

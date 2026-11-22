@@ -112,7 +112,7 @@ async def test_stage_surfaces_reported_overflow_and_preserves_live_handlers(repo
         before = ui.root.snapshot().handler_keys
         generation = ui.root.generation
         with pytest.raises(UnsolvableLayoutError) as caught:
-            await ui.press(ui.key_for("expand"))
+            await ui.press("expand")
         screen.expanded = False
         assert observed == ([caught.value] if reported else [])
         assert str(caught.value.context["screen"]).endswith(".OverflowingScreen")

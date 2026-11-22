@@ -102,7 +102,11 @@ def _sequence(value: object) -> Sequence[object]:
 
 
 class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
-    """A facade-presented component; the stage context ends its root."""
+    """A facade-presented component; the stage context ends its root.
+
+    Control lookups and actions accept a full semantic key or a unique
+    dot-delimited suffix.
+    """
 
     def __init__(
         self,
@@ -191,33 +195,27 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
         """
         return [text for view, _, _ in self._views() for text in payload_texts(view)]
 
-    def key_for(self, local_key: str) -> str:
-        """Resolve a unique local control key without depending on component namespaces.
-
-        Match a complete key or a dot-delimited suffix. Ambiguous matches raise;
-        pass a longer suffix or use control() with an exact key to disambiguate.
-        """
-        matches = [
-            key for key in self.root.snapshot().handler_keys if key == local_key or key.endswith(f".{local_key}")
-        ]
-        if len(matches) != 1:
-            message = f"expected one control matching {local_key!r}, found {matches!r}"
-            raise KeyError(message)
-        return matches[0]
-
     def control(self, key: str) -> StagedControl:
         """Select one currently rendered control by stable semantic key."""
         return self._located(key)[0]
 
     def _located(self, key: str) -> tuple[StagedControl, int, int | None]:
         """A control with the generation and message id a press on it would carry."""
+        keys = self.root.snapshot().handler_keys
+        if key not in keys:
+            matches = [candidate for candidate in keys if candidate.endswith(f".{key}")]
+            if len(matches) > 1:
+                message = f"ambiguous control {key!r}; matching semantic keys: {', '.join(matches)}"
+                raise KeyError(message)
+            if matches:
+                key = matches[0]
         for view, generation, message_id in self._views():
             expected = control_id(self.root.id, generation, key)
             payloads = iter_component_payloads(view.to_components())
             payload = next((candidate for candidate in payloads if candidate.get("custom_id") == expected), None)
             if payload is not None:
                 return StagedControl(key, expected, payload), generation, message_id
-        available = ", ".join(self.root.snapshot().handler_keys)
+        available = ", ".join(keys)
         message = f"no rendered control {key!r}; available semantic keys: {available}"
         raise KeyError(message)
 
@@ -235,7 +233,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
             raise TypeError(message)
         interaction = self._press_source(message_id, user_id)
         await self.root.dispatch(
-            key,
+            control.key,
             cast(discord.Interaction, interaction.source),
             generation=generation,
         )
@@ -256,7 +254,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request[Any, Any]]]:
             raise TypeError(message)
         interaction = self._press_source(message_id, user_id)
         await self.root.dispatch(
-            key,
+            control.key,
             cast(discord.Interaction, interaction.source),
             list(values),
             generation=generation,
