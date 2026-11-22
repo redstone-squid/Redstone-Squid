@@ -71,4 +71,13 @@ output. Docker's `local` logging driver rotates logs per container. For retentio
 container replacements, configure log forwarding to your backend. The optional
 OpenTelemetry collector handles traces and metrics.
 
+With the edge overlay, `SQUID_OBSERVABILITY_ENABLED=true` also enables Astro
+request traces. Astro sends them to the same collector, using the `-web`
+service name suffix and the configured sampling ratio. Start the collector
+with the `observability` profile. To check propagation, open an API-backed
+catalogue page and look for the same trace ID in the web and API spans.
+The bundled collector logs received telemetry. Configure a trace exporter
+in [the collector configuration](../deploy/otel-collector.yaml) for persistent
+storage and search.
+
 For optional media workers, see [Media processing deployment](media-processing.md).

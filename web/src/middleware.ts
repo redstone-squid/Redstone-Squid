@@ -1,9 +1,23 @@
-import { defineMiddleware } from "astro:middleware";
+import { SpanKind } from "@opentelemetry/api";
+import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
 import { getRuntimeConfig } from "@/server/config";
 import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
+import { traceHttp } from "@/server/telemetry";
+
+const traceRequest = defineMiddleware((context, next) =>
+  traceHttp(
+    "catalogue request",
+    SpanKind.SERVER,
+    {
+      "http.request.method": context.request.method,
+      "http.route": context.routePattern,
+    },
+    next,
+  ),
+);
 
 /**
  * Set up request locals and log each request.
@@ -13,7 +27,7 @@ import { withRequestLocale } from "@/server/request-locale";
  * Configuration is read here so a bad deployment fails with a 500 before the page starts
  * streaming, rather than truncating a 200 response.
  */
-export const onRequest = defineMiddleware(async (context, next) => {
+const catalogueRequest = defineMiddleware(async (context, next) => {
   const startedAt = performance.now();
   const { pathname, search } = context.url;
   const prefixed = localeFromPath(pathname);
@@ -48,3 +62,5 @@ export const onRequest = defineMiddleware(async (context, next) => {
     throw error;
   }
 });
+
+export const onRequest = sequence(traceRequest, catalogueRequest);

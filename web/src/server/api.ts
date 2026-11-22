@@ -1,7 +1,9 @@
 import { createClient, type Client } from "@/generated/client";
 import type { Locale } from "@/locales/locale";
+import { context, propagation, SpanKind } from "@opentelemetry/api";
 import { z } from "zod";
 import type { RuntimeConfig } from "./config";
+import { traceHttp } from "./telemetry";
 
 const API_TIMEOUT_MS = 5_000;
 
@@ -60,9 +62,22 @@ export function unwrap<T>(result: {
 }
 
 function timedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const timeout = AbortSignal.timeout(API_TIMEOUT_MS);
-  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-  return fetch(input, { ...init, signal });
+  const request = new Request(input, init);
+  return traceHttp(
+    "catalogue API request",
+    SpanKind.CLIENT,
+    {
+      "http.request.method": request.method,
+      "server.address": new URL(request.url).hostname,
+    },
+    () => {
+      propagation.inject(context.active(), request.headers, {
+        set: (headers, key, value) => headers.set(key, value),
+      });
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(API_TIMEOUT_MS)]);
+      return fetch(request, { signal });
+    },
+  );
 }
 
 /** Create the per-request client that middleware stores as `Astro.locals.api`. */

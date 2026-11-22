@@ -18,11 +18,20 @@ services:
     image: ${WEB_IMAGE:-redstone-squid-web:local}
     restart: unless-stopped
     environment:
+      SQUID_OBSERVABILITY_ENABLED: ${SQUID_OBSERVABILITY_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${SQUID_OBSERVABILITY_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: ${SQUID_OBSERVABILITY_SERVICE_NAME:-redstone-squid}-web
+      OTEL_PROPAGATORS: tracecontext
+      OTEL_LOGS_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: ${SQUID_OBSERVABILITY_SAMPLE_RATIO:-1.0}
       API_BASE_URL: ${API_BASE_URL:-${SITE_URL:?SITE_URL must be the public catalogue origin}}
       SITE_URL: ${SITE_URL:?SITE_URL must be the public catalogue origin}
       DISCORD_COMMUNITY_URL: ${DISCORD_COMMUNITY_URL:-https://discord.gg/redstone}
       BOT_INVITE_URL: ${BOT_INVITE_URL:-https://discord.com/oauth2/authorize?client_id=528946065668308992&scope=bot%20applications.commands}
     networks:
+      default: {}
       edge:
         aliases:
           - redstone-web
