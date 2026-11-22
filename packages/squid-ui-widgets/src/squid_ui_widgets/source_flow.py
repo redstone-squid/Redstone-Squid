@@ -1,11 +1,10 @@
 """Browse a forward-only flow of paragraphs across source batches."""
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import override
-
-import anyio
 
 from squid_reactivity import state
 from squid_ui.authoring.document import DocumentLike
@@ -78,13 +77,18 @@ class SourceFlow[ItemT](Component):
                 if next_batch is None:
                     break
                 if content:
+                    now = asyncio.get_running_loop().time()
                     if deadline is None:
-                        deadline = anyio.current_time() + self.fill_timeout
-                    if deadline <= anyio.current_time():
+                        deadline = now + self.fill_timeout
+                    if deadline <= now:
                         break
-                    with anyio.CancelScope(deadline=deadline) as fill:
-                        loaded = await self.loader.load(next_batch)
-                    if fill.cancelled_caught:
+                    fill = asyncio.timeout_at(deadline)
+                    try:
+                        async with fill:
+                            loaded = await self.loader.load(next_batch)
+                    except TimeoutError:
+                        if not fill.expired():
+                            raise
                         break
                 else:
                     loaded = await self.loader.load(next_batch)
