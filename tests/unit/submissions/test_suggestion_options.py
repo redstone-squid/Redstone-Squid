@@ -66,7 +66,7 @@ class FakeSuggestionRepository:
     authority and build-kind filters are not modeled here.
     """
 
-    async def tags(
+    async def tag_entries(
         self,
         semantic_kind: str,
         *,
