@@ -16020,7 +16020,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/infrastructure/repository.py:683"
+      "squid/core/records/infrastructure/repository.py:684"
     ]
   },
   "records-record-not-found-title": {

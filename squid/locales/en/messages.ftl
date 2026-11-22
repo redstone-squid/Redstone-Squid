@@ -4883,7 +4883,7 @@ records-record-category-category = Record category { $definition_id } is a { $ac
 # squid/core/records/errors.py:26
 records-record-category-not-found = Record category not found.
 
-# squid/core/records/infrastructure/repository.py:683
+# squid/core/records/infrastructure/repository.py:684
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/core/records/errors.py:13
