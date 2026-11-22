@@ -26,6 +26,8 @@ ALTER TABLE ONLY public.account_identities
 
 CREATE INDEX account_identities_account_provider_idx ON public.account_identities USING btree (account_id, provider);
 
+CREATE TRIGGER account_identities_enqueue_credited_builds AFTER INSERT OR DELETE OR UPDATE OF account_id, provider, subject, is_public ON public.account_identities FOR EACH ROW EXECUTE FUNCTION public.enqueue_identity_credited_builds();
+
 ALTER TABLE ONLY public.account_identities
     ADD CONSTRAINT account_identities_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 

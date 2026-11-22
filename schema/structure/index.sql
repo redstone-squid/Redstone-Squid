@@ -24,6 +24,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_source_preview_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_computed_record_search_projection.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_identity_credited_builds.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_record_tag_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_registered_door_ranges.sql

@@ -699,6 +699,32 @@ $$;
 
 
 --
+-- Name: enqueue_identity_credited_builds(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_identity_credited_builds() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    PERFORM public.upsert_search_projection_request('build', credited.build_id::text, 'upsert')
+    FROM (
+        SELECT DISTINCT bc.build_id
+        FROM public.build_credits bc
+        JOIN (VALUES (OLD.provider, OLD.subject), (NEW.provider, NEW.subject)) AS changed(provider, subject)
+            ON bc.subject = changed.subject
+            AND bc.kind = CASE changed.provider
+                WHEN 'discord' THEN 'discord'
+                WHEN 'java' THEN 'minecraft_java'
+                WHEN 'bedrock' THEN 'minecraft_bedrock'
+            END
+        ORDER BY bc.build_id
+    ) AS credited;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: enqueue_metadata_search_projection(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8934,6 +8960,13 @@ CREATE INDEX web_sessions_account_idx ON public.web_sessions USING btree (accoun
 --
 
 CREATE INDEX web_sessions_active_idx ON public.web_sessions USING btree (expires_at) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: account_identities account_identities_enqueue_credited_builds; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER account_identities_enqueue_credited_builds AFTER INSERT OR DELETE OR UPDATE OF account_id, provider, subject, is_public ON public.account_identities FOR EACH ROW EXECUTE FUNCTION public.enqueue_identity_credited_builds();
 
 
 --
