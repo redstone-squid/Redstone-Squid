@@ -68,19 +68,38 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 4. Cover pure logic with a Vitest test in `tests/unit` and the route with a Playwright
    test in `tests/e2e`. Check both locales.
 
+## Styling
+
+Components style themselves with Tailwind utilities; pages only compose components, and lint
+rejects `class` attributes in `src/pages`. Colors exist only as theme tokens: each theme is one
+block in `src/ui/themes.css`, written in `oklch()`, listed in `src/ui/themes.ts`, and mapped to
+utilities such as `bg-surface` and `text-fg-muted` in `src/ui/app.css`. Lint rejects unknown
+classes and arbitrary colors. Classes are joined with `cn`, never merged at runtime, so give each
+cva variant sole ownership of the properties it sets. See `src/ui/README.md`.
+
+## Routes that move
+
+Never delete a public URL. When a page moves, add `old → new` to `src/server/redirects.ts`;
+middleware redirects it in every locale, and tests check the table against `src/pages`.
+
+The site installs as an app: `src/sw.ts` shows `/offline` when a navigation fails and never
+caches pages. Regenerate icons from `public/favicon.svg` with `bun run pwa:icons`.
+
 ## Libraries
 
 Use these before writing your own. Ask before adding a library that overlaps one of them.
 
-| Need                                                     | Use                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| Accessible interactive primitives (dialogs, menus)       | `bits-ui`, wrapped in `src/ui`                         |
-| Validating untrusted data: API errors, URLs, JSON input  | `zod`                                                  |
-| Utilities such as debounce, groupBy, pick, or retry      | `es-toolkit`                                           |
-| Svelte state helpers: debounced values, watch, listeners | `runed`                                                |
-| Icons                                                    | `@lucide/svelte`                                       |
-| Class variants                                           | `class-variance-authority`, as in `src/ui/variants.ts` |
-| Mocking the API in unit tests                            | `msw`, as in `tests/unit/server-api.test.ts`           |
+| Need                                                     | Use                                                                    |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Accessible interactive primitives (dialogs, menus)       | `bits-ui`, wrapped in `src/ui`                                         |
+| Validating untrusted data: API errors, URLs, JSON input  | `zod`                                                                  |
+| Utilities such as debounce, groupBy, pick, or retry      | `es-toolkit`                                                           |
+| Svelte state helpers: debounced values, watch, listeners | `runed`                                                                |
+| Icons                                                    | `@lucide/svelte`                                                       |
+| Class variants                                           | `class-variance-authority`, as in `src/ui/variants.ts`                 |
+| Mocking the API in unit tests                            | `msw`, as in `tests/unit/server-api.test.ts`                           |
+| Fetching from the browser inside an island               | `@tanstack/svelte-query`; pages load data on the server                |
+| Date arithmetic: durations, time zones, "3 days ago"     | `temporal-polyfill` (Node 24 lacks Temporal); format dates in messages |
 
 `knip.jsonc` lists libraries installed ahead of their first use; remove an entry once code
 imports it.
