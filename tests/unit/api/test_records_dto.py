@@ -26,20 +26,20 @@ from squid.core.pagination import Page, PageAnchor
 from squid.core.records.application import PublicRecordQueryService, RecordService
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
-from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, TitleResolution, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, RecordResolution, ResolutionStatus, VersionScope
 from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
-_RECORD = PublishedTitle(
-    id=7,
+_RECORD = PublishedRecordResult(
+    result_id=7,
     definition_id=3,
-    title_id=UUID("22222222-2222-2222-2222-222222222222"),
+    record_id=UUID("22222222-2222-2222-2222-222222222222"),
     title="Fastest 2x3 door",
     subtitle="All versions",
-    base_title=BaseTitle.FASTEST,
+    criterion=RecordCriterion.FASTEST,
     build_kind=BuildKind.DOOR,
     version_scope=VersionScope.ALL_TIME,
     status=ResolutionStatus.RESOLVED,
@@ -49,12 +49,12 @@ _RECORD = PublishedTitle(
     refresh_pending=True,
 )
 _RECORD_JSON = {
-    "id": 7,
+    "result_id": 7,
     "definition_id": 3,
-    "title_id": "22222222-2222-2222-2222-222222222222",
+    "record_id": "22222222-2222-2222-2222-222222222222",
     "title": "Fastest 2x3 door",
     "subtitle": "All versions",
-    "base_title": BaseTitle.FASTEST.value,
+    "criterion": RecordCriterion.FASTEST.value,
     "build_kind": BuildKind.DOOR.value,
     "version_scope": VersionScope.ALL_TIME.value,
     "status": ResolutionStatus.RESOLVED.value,
@@ -93,11 +93,11 @@ async def test_record_listing_dto_preserves_json_and_declares_public_fields() ->
     # The HTTP wrapper may be transformed by the DTO, but the service's frozen page stays intact.
     assert page.items == (record,)
     schemas = app.openapi_schema.to_schema()["components"]["schemas"]
-    public = schemas["PublishedTitle"]
+    public = schemas["PublishedRecordResult"]
     assert set(public["properties"]) == PublicRecordDTO.config.include
     assert public["properties"]["holder_build_ids"]["type"] == "array"
     assert public["properties"]["computed_at"]["format"] == "date-time"
-    assert public["properties"]["title_id"]["format"] == "uuid"
+    assert public["properties"]["record_id"]["format"] == "uuid"
 
 
 @pytest.mark.parametrize("expanded", [False, True])
@@ -125,10 +125,10 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         DoorRecordEvidence(
             evaluation=LiveDoorRecord(
                 opening=(2, 3, 1),
-                base_title=BaseTitle.FASTEST,
+                criterion=RecordCriterion.FASTEST,
                 version_id=None,
                 evaluated_at=_RECORD.computed_at,
-                resolution=TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
+                resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
                 holder_configuration_ids=(0,),
                 provisional_configuration_ids=(),
                 configurations=(
@@ -163,7 +163,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
 
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
-        response = await client.get(f"/records/{_RECORD.title_id}")
+        response = await client.get(f"/records/{_RECORD.record_id}")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -202,10 +202,10 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
     records = create_autospec(RecordService, instance=True)
     records.lookup_door.return_value = LiveDoorRecord(
         opening=(9999, 3, 1),
-        base_title=BaseTitle.SMALLEST,
+        criterion=RecordCriterion.SMALLEST,
         version_id=None,
         evaluated_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
-        resolution=TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
+        resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
         holder_configuration_ids=(0,),
         provisional_configuration_ids=(),
         configurations=(
@@ -297,7 +297,7 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
             {"height": 3, "maximum": 1.5},
             {"height": 3, "minimum": 5, "maximum": 4},
             {"height": 3, "axis": "height"},
-            {"height": 3, "base_title": "fastest"},
+            {"height": 3, "criterion": "fastest"},
             {"height": 3, "unexpected": True},
         ):
             response = await client.post("/records/lookup/door/ranges", json=invalid)

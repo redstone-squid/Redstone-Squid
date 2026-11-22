@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.records.domain import VersionScope
-from squid.core.records.models import RecordTitle, TitleDefinition
+from squid.core.records.models import Record, RecordDefinition
 from squid.core.search.models import SearchDocument, SearchDocumentFacet
 from squid.core.suggestions.application.queries import DocumentEntry, TaxonomyEntry
 from squid.core.tags.domain import TagValueType
@@ -121,17 +121,17 @@ class PostgresSuggestionRepository:
         `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
         statement = (
-            select(TitleDefinition.id, TitleDefinition.title, RecordTitle.build_kind)
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
-            .where(RecordTitle.version_scope == VersionScope.ALL_TIME)
+            select(RecordDefinition.id, RecordDefinition.title, Record.build_kind)
+            .join(Record, Record.public_id == RecordDefinition.record_id)
+            .where(Record.version_scope == VersionScope.ALL_TIME)
         )
         terms = query.strip()
         if terms:
-            condition = TitleDefinition.title.ilike(f"%{terms}%")
+            condition = RecordDefinition.title.ilike(f"%{terms}%")
             if terms.isdigit():
-                condition = or_(condition, TitleDefinition.id == int(terms))
+                condition = or_(condition, RecordDefinition.id == int(terms))
             statement = statement.where(condition)
-        statement = statement.order_by(TitleDefinition.title, TitleDefinition.id).limit(limit)
+        statement = statement.order_by(RecordDefinition.title, RecordDefinition.id).limit(limit)
         session = self._session()
         return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
@@ -206,18 +206,18 @@ class PostgresSuggestionRepository:
         without a definition are omitted.
         """
         latest = (
-            select(TitleDefinition.title_id, TitleDefinition.title, TitleDefinition.subtitle)
-            .distinct(TitleDefinition.title_id)
-            .order_by(TitleDefinition.title_id, TitleDefinition.id.desc())
+            select(RecordDefinition.record_id, RecordDefinition.title, RecordDefinition.subtitle)
+            .distinct(RecordDefinition.record_id)
+            .order_by(RecordDefinition.record_id, RecordDefinition.id.desc())
             .subquery()
         )
-        statement = select(RecordTitle.public_id, latest.c.title, latest.c.subtitle).join(
-            latest, latest.c.title_id == RecordTitle.public_id
+        statement = select(Record.public_id, latest.c.title, latest.c.subtitle).join(
+            latest, latest.c.record_id == Record.public_id
         )
         terms = query.strip()
         if terms:
             statement = statement.where(or_(latest.c.title.ilike(f"%{terms}%"), latest.c.subtitle.ilike(f"%{terms}%")))
-        statement = statement.order_by(latest.c.title, RecordTitle.public_id).limit(limit)
+        statement = statement.order_by(latest.c.title, Record.public_id).limit(limit)
         session = self._session()
         rows = (await session.execute(statement)).all()
         return [(str(row.public_id), row.title, row.subtitle) for row in rows]

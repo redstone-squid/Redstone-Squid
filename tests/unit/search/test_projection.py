@@ -40,7 +40,7 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
         status="unresolved",
         history_complete=True,
         gap_reasons={},
-        base_title="fastest",
+        criterion="fastest",
         build_kind="door",
         version_scope="all_time",
         category_key="door:door|2x2|t[20]|Door:r[]:p[]",

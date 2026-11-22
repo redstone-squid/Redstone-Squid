@@ -25,20 +25,20 @@ from squid.core.records.application.models import (
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
-    ComputedRecord,
-    PublishedTitle,
+    ComputedRecordResult,
+    PublishedRecordResult,
     RecordGap,
-    TitleDiagnosticGap,
+    RecordNameDiagnostic,
 )
 from squid.core.records.application.ports import RecomputeLease
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
+    RecordCriterion,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -55,15 +55,15 @@ from squid.core.records.models import (
     ExtenderTimingVariant,
     FacetKind,
     MaterializationSource,
+    Record,
+    RecordDefinition,
+    RecordHolder,
+    RecordHolderHistory,
     RecordInputGeneration,
     RecordRecomputeQueueItem,
+    RecordResult,
     RecordSettings,
-    RecordTitle,
     RulesRevision,
-    TitleDefinition,
-    TitleHolder,
-    TitleHolderHistory,
-    TitleResult,
 )
 from squid.core.tags.infrastructure.loading import assignment_units
 from squid.core.tags.models import TagAssignment, TagDefinition, display_conversion_scale
@@ -92,15 +92,15 @@ RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
 class _DefinitionWrite:
     """A title definition's mutable presentation and canonical taxonomy membership."""
 
-    base_title: BaseTitle
+    criterion: RecordCriterion
     category_key: str
     title: FormattedTitle
     source: MaterializationSource
     facets: tuple[tuple[FacetKind, int], ...]
 
     @property
-    def key(self) -> tuple[BaseTitle, str]:
-        return self.base_title, self.category_key
+    def key(self) -> tuple[RecordCriterion, str]:
+        return self.criterion, self.category_key
 
 
 class PostgresRecordRepository:
@@ -369,9 +369,9 @@ class PostgresRecordRepository:
         await session.flush()
 
         definitions = await self._ensure_definitions(session, batch)
-        results: list[tuple[ComputedRecord, TitleDefinition, TitleResult]] = []
+        results: list[tuple[ComputedRecordResult, RecordDefinition, RecordResult]] = []
         for computed, definition in zip(batch.records, definitions, strict=True):
-            result = TitleResult(
+            result = RecordResult(
                 run_id=run.id,
                 definition_id=definition.id,
                 status=computed.resolution.status,
@@ -386,13 +386,13 @@ class PostgresRecordRepository:
             results.append((computed, definition, result))
 
         await session.flush()
-        history_chains: list[list[TitleHolderHistory]] = []
+        history_chains: list[list[RecordHolderHistory]] = []
         for computed, definition, result in results:
             candidates_by_id = {candidate.build_id: candidate for candidate in computed.category.candidates}
             for build_id in computed.resolution.holder_ids:
                 candidate = candidates_by_id[build_id]
                 session.add(
-                    TitleHolder(
+                    RecordHolder(
                         result_id=result.id,
                         build_id=build_id,
                         rank=1,
@@ -403,11 +403,11 @@ class PostgresRecordRepository:
                     )
                 )
 
-            history_chain: list[TitleHolderHistory] = []
+            history_chain: list[RecordHolderHistory] = []
             for period in computed.history:
                 for build_id in period.build_ids:
                     candidate = candidates_by_id[build_id]
-                    history = TitleHolderHistory(
+                    history = RecordHolderHistory(
                         run_id=run.id,
                         definition_id=definition.id,
                         build_id=build_id,
@@ -450,42 +450,42 @@ class PostgresRecordRepository:
         """List decisive gaps from currently active computation runs."""
         session = self._session()
         statement = (
-            select(TitleDefinition, TitleResult)
-            .options(selectinload(TitleDefinition.record_title))
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
-            .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
-            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+            select(RecordDefinition, RecordResult)
+            .options(selectinload(RecordDefinition.record))
+            .join(Record, Record.public_id == RecordDefinition.record_id)
+            .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
+            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
             .where(
                 ComputationRun.is_active.is_(True),
-                TitleResult.status == ResolutionStatus.UNRESOLVED,
+                RecordResult.status == ResolutionStatus.UNRESOLVED,
             )
         )
         if kind is not None:
-            statement = statement.where(RecordTitle.build_kind == kind)
+            statement = statement.where(Record.build_kind == kind)
         rows = (await session.execute(statement)).all()
         return tuple(_gap_from_row(definition, result) for definition, result in rows)
 
-    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
         """List active canonical titles containing formatter diagnostics."""
         session = self._session()
         statement = (
-            select(TitleDefinition)
-            .options(selectinload(TitleDefinition.record_title))
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
-            .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
-            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+            select(RecordDefinition)
+            .options(selectinload(RecordDefinition.record))
+            .join(Record, Record.public_id == RecordDefinition.record_id)
+            .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
+            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
             .where(
                 ComputationRun.is_active.is_(True),
-                TitleDefinition.title_diagnostics != [],
+                RecordDefinition.title_diagnostics != [],
             )
             .distinct()
-            .order_by(TitleDefinition.id)
+            .order_by(RecordDefinition.id)
         )
         if kind is not None:
-            statement = statement.where(RecordTitle.build_kind == kind)
+            statement = statement.where(Record.build_kind == kind)
         definitions = (await session.execute(statement)).scalars()
         return tuple(
-            TitleDiagnosticGap(
+            RecordNameDiagnostic(
                 definition_id=definition.id,
                 title=definition.title,
                 diagnostics=tuple(definition.title_diagnostics),
@@ -494,12 +494,12 @@ class PostgresRecordRepository:
             for definition in definitions
         )
 
-    async def get_published_record(self, result_id: int) -> PublishedTitle | None:
+    async def get_published_record(self, result_id: int) -> PublishedRecordResult | None:
         """Return a published result by its public result identifier."""
         records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
-    async def get_latest_record(self, record_id: UUID) -> PublishedTitle | None:
+    async def get_latest_record(self, record_id: UUID) -> PublishedRecordResult | None:
         """Return the active result for the stable record identifier."""
         records = await self._active_records(record_id=record_id, limit=1)
         return records[0] if records else None
@@ -514,7 +514,7 @@ class PostgresRecordRepository:
         limit: int,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> Sequence[PublishedTitle]:
+    ) -> Sequence[PublishedRecordResult]:
         """List one page of published results in display order.
 
         ID anchors page relative to the display order; a `before_id` page is fetched in reversed
@@ -537,17 +537,17 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(func.count())
-            .select_from(TitleResult)
-            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+            .select_from(RecordResult)
+            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
             .where(ComputationRun.is_active.is_(True))
         )
         if resolved_only:
-            statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
+            statement = statement.where(RecordResult.status == ResolutionStatus.RESOLVED)
         if version_scope is not None:
             statement = (
-                statement.join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
-                .join(TitleDefinition.record_title)
-                .where(RecordTitle.version_scope == version_scope)
+                statement.join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
+                .join(RecordDefinition.record)
+                .where(Record.version_scope == version_scope)
             )
         return await session.scalar(statement) or 0
 
@@ -563,42 +563,42 @@ class PostgresRecordRepository:
         limit: int,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> tuple[PublishedTitle, ...]:
+    ) -> tuple[PublishedRecordResult, ...]:
         session = self._session()
         statement = (
             select(
-                TitleResult,
-                TitleDefinition,
+                RecordResult,
+                RecordDefinition,
                 ComputationRun.last_checked_at,
                 func.coalesce(ComputationRun.checked_generation < RecordInputGeneration.generation, True),
             )
-            .options(selectinload(TitleDefinition.record_title))
-            .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
-            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+            .options(selectinload(RecordDefinition.record))
+            .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
+            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
             .outerjoin(RecordInputGeneration, RecordInputGeneration.build_kind == ComputationRun.build_kind)
             .where(ComputationRun.is_active.is_(True))
         )
         include_evidence = result_id is not None or record_id is not None
         if not include_evidence:
-            statement = statement.options(defer(TitleResult.door_evidence))
+            statement = statement.options(defer(RecordResult.door_evidence))
         if resolved_only:
-            statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
+            statement = statement.where(RecordResult.status == ResolutionStatus.RESOLVED)
         if version_scope is not None:
-            statement = statement.join(TitleDefinition.record_title).where(RecordTitle.version_scope == version_scope)
+            statement = statement.join(RecordDefinition.record).where(Record.version_scope == version_scope)
         if result_id is not None:
-            statement = statement.where(TitleResult.id == result_id)
+            statement = statement.where(RecordResult.id == result_id)
         if record_id is not None:
-            statement = statement.where(TitleDefinition.title_id == record_id)
+            statement = statement.where(RecordDefinition.record_id == record_id)
         reverse = before_id is not None
         if before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
             statement = statement.where(
-                TitleResult.id > before_id if descending else TitleResult.id < before_id
-            ).order_by(TitleResult.id.asc() if descending else TitleResult.id.desc())
+                RecordResult.id > before_id if descending else RecordResult.id < before_id
+            ).order_by(RecordResult.id.asc() if descending else RecordResult.id.desc())
         else:
             if after_id is not None:
-                statement = statement.where(TitleResult.id < after_id if descending else TitleResult.id > after_id)
-            statement = statement.order_by(TitleResult.id.desc() if descending else TitleResult.id.asc())
+                statement = statement.where(RecordResult.id < after_id if descending else RecordResult.id > after_id)
+            statement = statement.order_by(RecordResult.id.desc() if descending else RecordResult.id.asc())
         if offset:
             statement = statement.offset(offset)
         rows = (await session.execute(statement.limit(limit))).all()
@@ -609,22 +609,22 @@ class PostgresRecordRepository:
         result_ids = [result.id for result, _definition, _checked_at, _pending in rows]
         holder_rows = (
             await session.execute(
-                select(TitleHolder.result_id, TitleHolder.build_id)
-                .where(TitleHolder.result_id.in_(result_ids))
-                .order_by(TitleHolder.result_id, TitleHolder.rank, TitleHolder.build_id)
+                select(RecordHolder.result_id, RecordHolder.build_id)
+                .where(RecordHolder.result_id.in_(result_ids))
+                .order_by(RecordHolder.result_id, RecordHolder.rank, RecordHolder.build_id)
             )
         ).all()
         holders: dict[int, list[int]] = {}
         for holder_result_id, build_id in holder_rows:
             holders.setdefault(holder_result_id, []).append(build_id)
         return tuple(
-            PublishedTitle(
-                id=result.id,
+            PublishedRecordResult(
+                result_id=result.id,
                 definition_id=definition.id,
-                title_id=definition.title_id,
+                record_id=definition.record_id,
                 title=definition.title,
                 subtitle=definition.subtitle,
-                base_title=definition.base_title,
+                criterion=definition.criterion,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
                 status=result.status,
@@ -643,11 +643,11 @@ class PostgresRecordRepository:
         session = self._session()
         keys = (
             await session.execute(
-                select(RecordTitle.category_key)
-                .join(TitleDefinition, TitleDefinition.title_id == RecordTitle.public_id)
+                select(Record.category_key)
+                .join(RecordDefinition, RecordDefinition.record_id == Record.public_id)
                 .where(
-                    RecordTitle.build_kind == kind,
-                    TitleDefinition.materialization_source == MaterializationSource.PUBLIC_LOOKUP,
+                    Record.build_kind == kind,
+                    RecordDefinition.materialization_source == MaterializationSource.PUBLIC_LOOKUP,
                 )
                 .distinct()
             )
@@ -663,9 +663,9 @@ class PostgresRecordRepository:
         """Return the parsed category identity of one stored definition."""
         session = self._session()
         key = await session.scalar(
-            select(RecordTitle.category_key)
-            .join(TitleDefinition, TitleDefinition.title_id == RecordTitle.public_id)
-            .where(TitleDefinition.id == definition_id)
+            select(Record.category_key)
+            .join(RecordDefinition, RecordDefinition.record_id == Record.public_id)
+            .where(RecordDefinition.id == definition_id)
         )
         if key is None:
             return None
@@ -683,7 +683,7 @@ class PostgresRecordRepository:
         self,
         rules_revision_id: int,
         category: CategoryIdentity,
-        titles: Mapping[BaseTitle, FormattedTitle],
+        titles: Mapping[RecordCriterion, FormattedTitle],
     ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
         session = self._session()
@@ -695,13 +695,13 @@ class PostgresRecordRepository:
             version_id=None,
             writes=tuple(
                 _DefinitionWrite(
-                    base_title,
+                    criterion,
                     category.key,
                     title,
                     MaterializationSource.PUBLIC_LOOKUP,
                     tuple((FacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
                 )
-                for base_title, title in titles.items()
+                for criterion, title in titles.items()
             ),
         )
 
@@ -785,7 +785,7 @@ class PostgresRecordRepository:
             if (candidate := _extender_candidate(extender, timing_by_build.get(extender.id, ()))) is not None
         )
 
-    async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[TitleDefinition, ...]:
+    async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[RecordDefinition, ...]:
         return await self._write_definitions(
             session,
             rules_revision_id=batch.rules_revision_id,
@@ -794,7 +794,7 @@ class PostgresRecordRepository:
             version_id=batch.version_id,
             writes=tuple(
                 _DefinitionWrite(
-                    computed.base_title,
+                    computed.criterion,
                     computed.category.identity.key,
                     computed.title,
                     MaterializationSource(computed.category.source),
@@ -813,7 +813,7 @@ class PostgresRecordRepository:
         scope: VersionScope,
         version_id: int | None,
         writes: Sequence[_DefinitionWrite],
-    ) -> tuple[TitleDefinition, ...]:
+    ) -> tuple[RecordDefinition, ...]:
         """Persist one scope in bulk, preserving stable IDs and explicit public requests."""
         if not writes:
             return ()
@@ -821,27 +821,25 @@ class PostgresRecordRepository:
         ordered = sorted({write.key: write for write in writes}.values(), key=lambda write: write.key)
         scope_values: dict[str, object] = {"build_kind": kind, "version_scope": scope, "version_id": version_id}
         identities = [
-            dict(scope_values, base_title=write.base_title, category_key=write.category_key) for write in ordered
+            dict(scope_values, criterion=write.criterion, category_key=write.category_key) for write in ordered
         ]
         # RETURNING enables SQLAlchemy's paged insertmanyvalues path instead of one statement
         # per definition. Passing parameter rows separately keeps large catalogues below bind limits.
         await session.execute(
-            insert(RecordTitle)
-            .on_conflict_do_nothing(constraint="record_titles_identity_key")
-            .returning(RecordTitle.public_id),
+            insert(Record).on_conflict_do_nothing(constraint="record_titles_identity_key").returning(Record.public_id),
             identities,
         )
         categories = await session.scalars(
-            select(RecordTitle).where(
-                RecordTitle.build_kind == kind,
-                RecordTitle.version_scope == scope,
-                RecordTitle.version_id.is_not_distinct_from(version_id),
-                RecordTitle.base_title.in_({write.base_title for write in ordered}),
-                RecordTitle.category_key.in_({write.category_key for write in ordered}),
+            select(Record).where(
+                Record.build_kind == kind,
+                Record.version_scope == scope,
+                Record.version_id.is_not_distinct_from(version_id),
+                Record.criterion.in_({write.criterion for write in ordered}),
+                Record.category_key.in_({write.category_key for write in ordered}),
             )
         )
-        public_ids = {(row.base_title, row.category_key): row.public_id for row in categories}
-        statement = insert(TitleDefinition)
+        public_ids = {(row.criterion, row.category_key): row.public_id for row in categories}
+        statement = insert(RecordDefinition)
         statement = statement.on_conflict_do_update(
             constraint="title_definitions_identity_key",
             set_={
@@ -853,16 +851,16 @@ class PostgresRecordRepository:
                         statement.excluded.materialization_source == MaterializationSource.PUBLIC_LOOKUP,
                         statement.excluded.materialization_source,
                     ),
-                    else_=TitleDefinition.materialization_source,
+                    else_=RecordDefinition.materialization_source,
                 ),
             },
-        ).returning(TitleDefinition)
+        ).returning(RecordDefinition)
         definitions = await session.scalars(
             statement,
             [
                 dict(
                     rules_revision_id=rules_revision_id,
-                    title_id=public_ids[write.key],
+                    record_id=public_ids[write.key],
                     title=write.title.title,
                     subtitle=write.title.subtitle,
                     title_diagnostics=[diagnostic.as_dict() for diagnostic in write.title.diagnostics],
@@ -872,7 +870,7 @@ class PostgresRecordRepository:
             ],
             execution_options={"render_nulls": True},
         )
-        by_category = {row.title_id: row for row in definitions}
+        by_category = {row.record_id: row for row in definitions}
         by_key = {key: by_category[public_id] for key, public_id in public_ids.items() if public_id in by_category}
         facets = {
             (by_key[write.key].id, facet_kind, facet_id): order
@@ -1093,7 +1091,7 @@ def _door_size(door: DoorBuild) -> str:
     return f"{door.door_width}x{door.door_height}"
 
 
-def _holder_configurations(computed: ComputedRecord, build_id: int) -> tuple[LiveDoorConfiguration, ...]:
+def _holder_configurations(computed: ComputedRecordResult, build_id: int) -> tuple[LiveDoorConfiguration, ...]:
     if computed.door_evidence is None:
         return ()
     evaluation = computed.door_evidence.evaluation
@@ -1101,7 +1099,7 @@ def _holder_configurations(computed: ComputedRecord, build_id: int) -> tuple[Liv
     return tuple(c for c in evaluation.configurations if c.id in ids and c.build_id == build_id)
 
 
-def _holder_completion(computed: ComputedRecord, candidate: Candidate) -> Instant | None:
+def _holder_completion(computed: ComputedRecordResult, candidate: Candidate) -> Instant | None:
     if computed.door_evidence is None:
         return Instant(candidate.completion_at) if candidate.completion_at is not None else None
     dates = {c.completion_at for c in _holder_configurations(computed, candidate.build_id)}
@@ -1109,12 +1107,12 @@ def _holder_completion(computed: ComputedRecord, candidate: Candidate) -> Instan
     return Instant(date) if date is not None else None
 
 
-def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str, object]:
+def _metric_snapshot(computed: ComputedRecordResult, candidate: Candidate) -> dict[str, object]:
     configurations = _holder_configurations(computed, candidate.build_id)
     if computed.door_evidence is not None:
         metrics = tuple(
             _fixed_metric_snapshot(
-                computed.base_title,
+                computed.criterion,
                 Candidate(c.build_id, c.completion_at, c.volume, tuple(TimingVariant(v) for v in c.timing_variants)),
             )
             for c in configurations
@@ -1130,18 +1128,18 @@ def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str
             if values:
                 snapshot[key] = values[0] if all(v == values[0] for v in values) else None
         return snapshot
-    return _fixed_metric_snapshot(computed.base_title, candidate)
+    return _fixed_metric_snapshot(computed.criterion, candidate)
 
 
-def _fixed_metric_snapshot(base_title: BaseTitle, candidate: Candidate) -> dict[str, object]:
+def _fixed_metric_snapshot(criterion: RecordCriterion, candidate: Candidate) -> dict[str, object]:
     snapshot: dict[str, object] = {}
-    if base_title in (
-        BaseTitle.FASTEST_SMALLEST,
-        BaseTitle.SMALLEST,
-        BaseTitle.SMALLEST_FASTEST,
+    if criterion in (
+        RecordCriterion.FASTEST_SMALLEST,
+        RecordCriterion.SMALLEST,
+        RecordCriterion.SMALLEST_FASTEST,
     ):
         snapshot["volume"] = candidate.fixed_volume
-    if base_title is BaseTitle.FIRST:
+    if criterion is RecordCriterion.FIRST:
         snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
         return snapshot
     reduction = reduce_timing_variants(candidate.timing_variants)
@@ -1149,7 +1147,7 @@ def _fixed_metric_snapshot(base_title: BaseTitle, candidate: Candidate) -> dict[
     return snapshot
 
 
-def _gap_from_row(definition: TitleDefinition, result: TitleResult) -> RecordGap:
+def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordGap:
     missing = result.gap_reasons.get("missing", [])
     entries = cast(list[object], missing) if isinstance(missing, list) else []
     build_ids: list[int] = []
@@ -1167,7 +1165,7 @@ def _gap_from_row(definition: TitleDefinition, result: TitleResult) -> RecordGap
         definition_id=definition.id,
         title=definition.title,
         subtitle=definition.subtitle,
-        base_title=definition.base_title,
+        criterion=definition.criterion,
         build_ids=tuple(build_ids),
         fields=tuple(fields),
         build_kind=definition.build_kind,

@@ -39,9 +39,9 @@ from squid.core.errors import DataIntegrityError
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.models import (
     ComputationRun,
-    TitleDefinition,
-    TitleHolder,
-    TitleResult,
+    RecordDefinition,
+    RecordHolder,
+    RecordResult,
 )
 from squid.core.search.models import (
     SearchDocument,
@@ -105,7 +105,7 @@ class RecordProjectionSource:
     status: str
     history_complete: bool
     gap_reasons: dict[str, object]
-    base_title: str
+    criterion: str
     build_kind: str
     version_scope: str
     category_key: str
@@ -477,11 +477,11 @@ class SearchProjectionLoader:
     async def _computed_record(self, result_id: int) -> SearchProjection | None:
         row = (
             await self._session.execute(
-                select(TitleResult, TitleDefinition)
-                .options(selectinload(TitleDefinition.record_title))
-                .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
-                .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
-                .where(TitleResult.id == result_id, ComputationRun.is_active.is_(True))
+                select(RecordResult, RecordDefinition)
+                .options(selectinload(RecordDefinition.record))
+                .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
+                .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
+                .where(RecordResult.id == result_id, ComputationRun.is_active.is_(True))
             )
         ).one_or_none()
         if row is None:
@@ -490,14 +490,14 @@ class SearchProjectionLoader:
         # Holder snapshots carry the record category title. The build document
         # supplies the actual build title and its public credits in one join.
         holders = await self._session.execute(
-            select(TitleHolder, SearchDocument.title, SearchDocument.document_data["creators"])
+            select(RecordHolder, SearchDocument.title, SearchDocument.document_data["creators"])
             .join(
                 SearchDocument,
                 (SearchDocument.resource_kind == "build")
-                & (SearchDocument.source_key == cast(TitleHolder.build_id, Text)),
+                & (SearchDocument.source_key == cast(RecordHolder.build_id, Text)),
             )
-            .where(TitleHolder.result_id == result_id, SearchDocument.status == "confirmed")
-            .order_by(TitleHolder.rank, TitleHolder.build_id)
+            .where(RecordHolder.result_id == result_id, SearchDocument.status == "confirmed")
+            .order_by(RecordHolder.rank, RecordHolder.build_id)
         )
         return build_record_projection(
             RecordProjectionSource(
@@ -506,7 +506,7 @@ class SearchProjectionLoader:
                 status=result.status,
                 history_complete=result.history_complete,
                 gap_reasons=result.gap_reasons,
-                base_title=definition.base_title,
+                criterion=definition.criterion,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
                 category_key=definition.category_key,
@@ -611,14 +611,14 @@ class SearchProjectionWorker:
                         await self._session.execute(
                             select(
                                 func.upsert_search_projection_request(
-                                    "record", func.concat("result:", TitleResult.id), "upsert"
+                                    "record", func.concat("result:", RecordResult.id), "upsert"
                                 )
                             )
-                            .select_from(TitleResult)
-                            .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
-                            .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
-                            .where(TitleHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
-                            .order_by(TitleResult.id)
+                            .select_from(RecordResult)
+                            .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
+                            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
+                            .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
+                            .order_by(RecordResult.id)
                         )
                     await self._store.complete(item_id, token)
                 succeeded += 1
@@ -675,7 +675,7 @@ def build_record_projection(
     """Index each record with the builds and creators that currently hold it."""
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
-    tags = (source.base_title, source.build_kind, source.version_scope)
+    tags = (source.criterion, source.build_kind, source.version_scope)
     return SearchProjection(
         resource_kind="record",
         source_key=f"result:{source.result_id}",
@@ -687,7 +687,7 @@ def build_record_projection(
         document_data={
             "result_id": source.result_id,
             "definition_id": source.definition_id,
-            "base_title": source.base_title,
+            "base_title": source.criterion,
             "build_kind": source.build_kind,
             "version_scope": source.version_scope,
             "category_key": source.category_key,
@@ -702,7 +702,7 @@ def build_record_projection(
             "gap_reasons": source.gap_reasons,
         },
         facets=(
-            ProjectionFacet("base_title", source.base_title),
+            ProjectionFacet("base_title", source.criterion),
             ProjectionFacet("record_state", "current"),
             ProjectionFacet("kind", source.build_kind),
             ProjectionFacet("version_scope", source.version_scope),

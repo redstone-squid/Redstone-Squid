@@ -19,7 +19,7 @@ from squid_ui.content.text import Localization
 def test_record_filter_round_trips_presence_and_exact_tag_predicates() -> None:
     record_filter = RecordSubscriptionFilter(
         build_kinds=frozenset({"door"}),
-        base_titles=frozenset({"fastest"}),
+        criteria=frozenset({"fastest"}),
         tags=(TagPredicate(4), TagPredicate(7, "exact", 3.5)),
     )
 

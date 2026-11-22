@@ -20,20 +20,20 @@ from squid.core.records.application.models import (
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
-    PublishedTitle,
+    PublishedRecordResult,
     RecordGap,
     RecordLookupRequest,
-    TitleDiagnosticGap,
+    RecordNameDiagnostic,
 )
 from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease
 from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     DoorCategory,
     FormattedTitle,
+    RecordCriterion,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -108,15 +108,15 @@ class FakeRuns:
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
-        self.requested_titles: dict[str, dict[BaseTitle, FormattedTitle]] = {}
+        self.requested_titles: dict[str, dict[RecordCriterion, FormattedTitle]] = {}
         self.definition_identities: dict[int, CategoryIdentity] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
-        self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
+        self.title_gap_rows: tuple[RecordNameDiagnostic, ...] = ()
         self.queued: tuple[BuildKind, ...] = ()
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
-        self.published_records: dict[int, PublishedTitle] = {}
+        self.published_records: dict[int, PublishedRecordResult] = {}
 
     async def active_rules_revision_id(self) -> int:
         return 7
@@ -140,14 +140,14 @@ class FakeRuns:
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         return self.gap_rows
 
-    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
         return self.title_gap_rows
 
-    async def get_published_record(self, result_id: int) -> PublishedTitle | None:
+    async def get_published_record(self, result_id: int) -> PublishedRecordResult | None:
         return self.published_records.get(result_id)
 
-    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedTitle | None:
-        return next((result for result in self.published_records.values() if result.title_id == record_id), None)
+    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedRecordResult | None:
+        return next((result for result in self.published_records.values() if result.record_id == record_id), None)
 
     async def list_published_records(
         self,
@@ -159,7 +159,7 @@ class FakeRuns:
         limit: int,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> Sequence[PublishedTitle]:
+    ) -> Sequence[PublishedRecordResult]:
         ordered = sorted(
             (
                 key
@@ -195,7 +195,7 @@ class FakeRuns:
         self,
         rules_revision_id: int,
         category: CategoryIdentity,
-        titles: Mapping[BaseTitle, FormattedTitle],
+        titles: Mapping[RecordCriterion, FormattedTitle],
     ) -> None:
         assert rules_revision_id == 7
         self.requested.setdefault(category.kind, []).append(category)
@@ -245,14 +245,14 @@ def _public_build(build_id: int) -> PublicBuildSummary:
     )
 
 
-def _published_record(*holder_build_ids: int) -> PublishedTitle:
-    return PublishedTitle(
-        id=7,
+def _published_record(*holder_build_ids: int) -> PublishedRecordResult:
+    return PublishedRecordResult(
+        result_id=7,
         definition_id=3,
-        title_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        record_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle=None,
-        base_title=BaseTitle.FASTEST,
+        criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -311,11 +311,11 @@ async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None
     assert summary.resolved == 20
     batch = runs.batches[0]
     shared = [record for record in batch.records if record.category.identity.restriction_ids == (1,)]
-    first = next(record for record in shared if record.base_title is BaseTitle.FIRST)
-    smallest = next(record for record in shared if record.base_title is BaseTitle.SMALLEST)
-    fastest = next(record for record in shared if record.base_title is BaseTitle.FASTEST)
-    fastest_smallest = next(record for record in shared if record.base_title is BaseTitle.FASTEST_SMALLEST)
-    smallest_fastest = next(record for record in shared if record.base_title is BaseTitle.SMALLEST_FASTEST)
+    first = next(record for record in shared if record.criterion is RecordCriterion.FIRST)
+    smallest = next(record for record in shared if record.criterion is RecordCriterion.SMALLEST)
+    fastest = next(record for record in shared if record.criterion is RecordCriterion.FASTEST)
+    fastest_smallest = next(record for record in shared if record.criterion is RecordCriterion.FASTEST_SMALLEST)
+    smallest_fastest = next(record for record in shared if record.criterion is RecordCriterion.SMALLEST_FASTEST)
     assert first.resolution.holder_ids == (1,)
     assert smallest.resolution.holder_ids == (1,)
     assert fastest.resolution.holder_ids == (2,)
@@ -367,12 +367,12 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
         if record.category.identity.restriction_values == ((7, "at_most", "4"),)
     ]
     assert {record.resolution.holder_ids for record in threshold_three} == {(1,)}
-    assert {record.base_title: record.resolution.holder_ids for record in threshold_four} == {
-        BaseTitle.FIRST: (1,),
-        BaseTitle.FASTEST: (2,),
-        BaseTitle.SMALLEST: (2,),
-        BaseTitle.FASTEST_SMALLEST: (2,),
-        BaseTitle.SMALLEST_FASTEST: (2,),
+    assert {record.criterion: record.resolution.holder_ids for record in threshold_four} == {
+        RecordCriterion.FIRST: (1,),
+        RecordCriterion.FASTEST: (2,),
+        RecordCriterion.SMALLEST: (2,),
+        RecordCriterion.FASTEST_SMALLEST: (2,),
+        RecordCriterion.SMALLEST_FASTEST: (2,),
     }
     assert {record.title.title for record in threshold_four} == {
         "First 2x2 Door",
@@ -479,11 +479,11 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     identity = runs.requested[BuildKind.DOOR][0]
     assert identity.restriction_ids == tuple(range(1, 10))
     titles = runs.requested_titles[identity.key]
-    assert set(titles) == set(BaseTitle)
+    assert set(titles) == set(RecordCriterion)
     assert all("2x2" in text.title for text in titles.values())
     assert all(identity.base_key not in text.title for text in titles.values())
     exact = [record for record in runs.batches[0].records if len(record.category.identity.restriction_ids) == 9]
-    assert {record.base_title for record in exact} == set(BaseTitle)
+    assert {record.criterion for record in exact} == set(RecordCriterion)
     assert all(record.category.source == "public_lookup" for record in exact)
 
 
@@ -558,7 +558,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         definition_id=1,
         title="Fastest 2x2 Door",
         subtitle=None,
-        base_title=BaseTitle.FASTEST,
+        criterion=RecordCriterion.FASTEST,
         build_ids=(4,),
         fields=("closing",),
         build_kind=BuildKind.DOOR,
@@ -580,7 +580,7 @@ async def test_public_record_query_preserves_holder_order() -> None:
     builds = FakePublicBuilds((_public_build(42), _public_build(41)))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].title_id)
+    detail = await service.get(runs.published_records[7].record_id)
 
     assert detail is not None
     assert [build.id for build in detail.holder_builds] == [41, 42]
@@ -596,10 +596,10 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
     )
 
     with pytest.raises(DataIntegrityError) as exc_info:
-        await service.get(runs.published_records[7].title_id)
+        await service.get(runs.published_records[7].record_id)
 
     assert exc_info.value.context == {
-        "record_id": str(runs.published_records[7].title_id),
+        "record_id": str(runs.published_records[7].record_id),
         "unavailable_holder_build_ids": [42],
     }
 
@@ -615,7 +615,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     builds = FakePublicBuilds(())
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].title_id)
+    detail = await service.get(runs.published_records[7].record_id)
 
     assert detail is not None
     assert detail.holder_builds == ()
@@ -630,7 +630,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
         replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
     ],
 )
-async def test_public_record_query_rejects_status_holder_corruption(result: PublishedTitle) -> None:
+async def test_public_record_query_rejects_status_holder_corruption(result: PublishedRecordResult) -> None:
     runs = FakeRuns()
     runs.published_records[7] = result
     service = PublicRecordQueryService(
@@ -638,10 +638,10 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
     )
 
     with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
-        await service.get(runs.published_records[7].title_id)
+        await service.get(runs.published_records[7].record_id)
 
     assert exc_info.value.context == {
-        "record_id": str(runs.published_records[7].title_id),
+        "record_id": str(runs.published_records[7].record_id),
         "status": result.status.value,
         "holder_build_ids": list(result.holder_build_ids),
     }
@@ -657,7 +657,7 @@ async def test_public_record_query_returns_none_for_unknown_record() -> None:
 @pytest.mark.asyncio
 async def test_title_gaps_delegates_active_definition_query() -> None:
     runs = FakeRuns()
-    gap = TitleDiagnosticGap(
+    gap = RecordNameDiagnostic(
         definition_id=1,
         title="Fastest Mystery 2x2 Door",
         diagnostics=({"code": "unknown_token", "message": "Unknown term.", "terms": ["Mystery"]},),
@@ -918,7 +918,7 @@ async def test_ordinary_records_evaluate_families_and_keep_the_source_evidence()
         assert configuration.volume == 10
         assert configuration.timing_variants == ((3, None, None, None, None, None),)
         assert configuration.completion_at is None
-        assert record.resolution.holder_ids == ((1,) if record.base_title is BaseTitle.FIRST else (2,))
+        assert record.resolution.holder_ids == ((1,) if record.criterion is RecordCriterion.FIRST else (2,))
         assert not record.history_complete
         assert record.history == ()
 
@@ -936,7 +936,7 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
     records = runs.batches[-1].records
     assert len(records) == 5
     assert {r.category.identity.base_key for r in records} == {"door|9999x2|t[20]|Door"}
-    smallest = next(r for r in records if r.base_title is BaseTitle.SMALLEST)
+    smallest = next(r for r in records if r.criterion is RecordCriterion.SMALLEST)
     assert smallest.resolution.holder_ids == (2,)
     assert smallest.door_evidence is not None
     assert smallest.door_evidence.evaluation.configurations[0].volume == 49995
@@ -953,7 +953,7 @@ async def test_ordinary_records_exclude_unproven_expansion_sizes(unknown: bool) 
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
     await computation.rebuild(kinds=(BuildKind.DOOR,))
-    smallest = next(r for r in runs.batches[0].records if r.base_title is BaseTitle.SMALLEST)
+    smallest = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert smallest.resolution.status is ResolutionStatus.RESOLVED
     assert smallest.resolution.holder_ids == (1,)
     assert smallest.resolution.gaps == ()
@@ -976,11 +976,11 @@ async def test_family_population_respects_version_and_category_identity() -> Non
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
     await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
-    all_time = next(r for r in runs.batches[0].records if r.base_title is BaseTitle.SMALLEST)
+    all_time = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert all_time.resolution.holder_ids == (2,)
     assert all_time.door_evidence is not None
     assert {c.build_id for c in all_time.door_evidence.evaluation.configurations} == {1, 2}
-    current = next(r for r in runs.batches[1].records if r.base_title is BaseTitle.SMALLEST)
+    current = next(r for r in runs.batches[1].records if r.criterion is RecordCriterion.SMALLEST)
     assert current.resolution.holder_ids == (1,)
     assert current.door_evidence is None
 
@@ -1011,7 +1011,7 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
     records = runs.batches[0].records
     # No empty "Flush 2x2" category appears, and the fixed-only category keeps its history.
     assert {record.category.identity.restriction_ids for record in records} == {()}
-    smallest = next(record for record in records if record.base_title is BaseTitle.SMALLEST)
+    smallest = next(record for record in records if record.criterion is RecordCriterion.SMALLEST)
     assert smallest.door_evidence is None
     assert smallest.history_complete
     assert [period.build_ids for period in smallest.history] == [(1,)]

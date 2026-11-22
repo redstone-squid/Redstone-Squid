@@ -50,14 +50,14 @@ async def open_search(
     mode: SearchMode = SearchMode.LEXICAL,
     query: str,
 ) -> BuildBrowseScreen | SearchScreen:
-    """Open the requested search target, inferring records from base_title when scope is omitted."""
+    """Open the requested search target, inferring records from criterion when scope is omitted."""
     if scope is None:
         parsed = SearchQueryParser(await request.client.services.search.fields()).parse(query)
         leaves = query_leaves(parsed.expression) if parsed.expression is not None else ()
         fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
         scope = (
             SearchTarget.records
-            if any(isinstance(field, FieldExpression) and field.field.name == "base_title" for field in fields)
+            if any(isinstance(field, FieldExpression) and field.field.name == "criterion" for field in fields)
             else SearchTarget.builds
         )
     if scope in (SearchTarget.builds, SearchTarget.records):

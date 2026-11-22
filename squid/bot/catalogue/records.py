@@ -1,7 +1,7 @@
 """Inspect unresolved record results and request category lookups or rebuilds.
 
-Diagnostics identify a TitleDefinition by its integer definition ID. That rules_revision-specific
-definition is distinct from the stable RecordTitle record_title UUID used by record
+Diagnostics identify a RecordDefinition by its integer definition ID. That rules_revision-specific
+definition is distinct from the stable Record record_title UUID used by record
 subscriptions. Lookup accepts a definition ID or an exact category; the record
 service persists the requested category and recomputes its records.
 """
@@ -19,7 +19,7 @@ from squid.bot.lookup import pick
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
-from squid.core.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
+from squid.core.records.application import RebuildSummary, RecordGap, RecordLookupRequest, RecordNameDiagnostic
 from squid.core.records.domain import BuildKind
 from squid.core.suggestions.domain import Suggestion
 from squid_i18n import Text, md_tr
@@ -31,7 +31,7 @@ class RecordOperations(Protocol):
 
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
 
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]: ...
 
     async def materialize_definition(
         self,
@@ -83,7 +83,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     _gaps: sp.Browser[RecordGap, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
-    _titles: sp.Browser[TitleDiagnosticGap, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
+    _titles: sp.Browser[RecordNameDiagnostic, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(
         None, opaque=True
     )
     _tabs: sp.ComponentDriver[sp.TabsState, ComponentsV2Target, sd.Request[Any, RedstoneSquid]] | None = sl.state(

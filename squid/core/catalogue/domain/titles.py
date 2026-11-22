@@ -20,7 +20,7 @@ from squid.core.i18n import tr
 class TitleSection(StrEnum):
     """A semantic section of a catalogue title."""
 
-    BASE_TITLE = "base_title"
+    CRITERION = "criterion"
     WIRING = "wiring"
     ANIMATED = "animated"
     SIZE = "size"
@@ -335,10 +335,10 @@ class RulesTitleFormatter:
         )
         return FormattedTitle.from_tokens(title_tokens, subtitle_tokens, diagnostics)
 
-    def format_record(self, base_title: str, category: FormattedTitle) -> FormattedTitle:
+    def format_record(self, criterion: str, category: FormattedTitle) -> FormattedTitle:
         """Prefix the base title while preserving the category's subtitle and diagnostics."""
-        record_name = base_title.replace("_", " ").title()
-        record_token = _fixed_token(record_name, TitleSection.BASE_TITLE)
+        record_name = criterion.replace("_", " ").title()
+        record_token = _fixed_token(record_name, TitleSection.CRITERION)
         category_tokens = category.title_tokens or (_fixed_token(category.title, TitleSection.FIXED_NOUN),)
         title_tokens = (record_token, *category_tokens)
         return FormattedTitle(

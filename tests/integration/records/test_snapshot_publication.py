@@ -16,7 +16,7 @@ from squid.core.records.application.models import ComputationBatch, RebuildSumma
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import BuildKind
-from squid.core.records.models import ComputationRun, RecordInputGeneration, RecordRecomputeQueueItem, TitleHolder
+from squid.core.records.models import ComputationRun, RecordHolder, RecordInputGeneration, RecordRecomputeQueueItem
 from squid.core.tags.models import UnitDefinition
 from tests.support.build_edits import build_edit_session
 
@@ -85,7 +85,7 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
         active = (await session.scalars(select(ComputationRun).where(ComputationRun.is_active))).one()
         assert active.checked_generation is not None
         assert active.checked_generation > inputs[0].input_generation
-        holders = (await session.scalars(select(TitleHolder))).all()
+        holders = (await session.scalars(select(RecordHolder))).all()
         assert holders
         assert all(holder.metric_snapshot.get("volume") == 50 for holder in holders)
 
@@ -134,7 +134,7 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
             )
         ).one()
         initial_generation = active.checked_generation
-        holders = (await session.scalars(select(TitleHolder))).all()
+        holders = (await session.scalars(select(RecordHolder))).all()
         assert holders
         assert all(holder.metric_snapshot.get("volume") == 100 for holder in holders)
 
@@ -163,7 +163,7 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         assert initial_generation is not None
         assert active.checked_generation > initial_generation
         # Previous publication evidence remains available after catch-up.
-        volumes = {holder.metric_snapshot.get("volume") for holder in await session.scalars(select(TitleHolder))}
+        volumes = {holder.metric_snapshot.get("volume") for holder in await session.scalars(select(RecordHolder))}
         assert volumes == {50, 100}
 
 

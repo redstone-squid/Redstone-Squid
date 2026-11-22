@@ -10,14 +10,14 @@ from uuid import UUID
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
-    TitleResolution,
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
@@ -105,15 +105,15 @@ class CategoryCandidates:
 
 
 @dataclass(frozen=True, slots=True)
-class ComputedRecord:
+class ComputedRecordResult:
     """One record definition and its calculated outcome."""
 
-    base_title: BaseTitle
+    criterion: RecordCriterion
     scope: VersionScope
     version_id: int | None
     category: CategoryCandidates
     title: FormattedTitle
-    resolution: TitleResolution
+    resolution: RecordResolution
     history: tuple[HolderHistoryEntry, ...] = ()
     history_complete: bool = True
     door_evidence: DoorRecordEvidence | None = None
@@ -135,7 +135,7 @@ class ComputationBatch:
     rules_revision_id: int
     kind: BuildKind
     version_id: int | None
-    records: tuple[ComputedRecord, ...]
+    records: tuple[ComputedRecordResult, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,15 +145,15 @@ class RecordGap:
     definition_id: int
     title: str
     subtitle: str | None
-    base_title: BaseTitle
+    criterion: RecordCriterion
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]
     build_kind: BuildKind
 
 
 @dataclass(frozen=True, slots=True)
-class TitleDiagnosticGap:
-    """A canonical record title containing unknown or contradictory taxonomy."""
+class RecordNameDiagnostic:
+    """A record name with unknown or contradictory taxonomy."""
 
     definition_id: int
     title: str
@@ -162,19 +162,19 @@ class TitleDiagnosticGap:
 
 
 @dataclass(frozen=True, slots=True)
-class PublishedTitle:
+class PublishedRecordResult:
     """One result belonging to the active computation run for its kind and version.
 
-    `id` identifies this run's result. `definition_id` identifies a definition within
-    its rules revision, while `title_id` stays stable across rules revisions and runs.
+    `result_id` identifies this run's result. `definition_id` identifies a definition within
+    its rules revision, while `record_id` stays stable across rules revisions and runs.
     """
 
-    id: int
+    result_id: int
     definition_id: int
-    title_id: UUID
+    record_id: UUID
     title: str
     subtitle: str | None
-    base_title: BaseTitle
+    criterion: RecordCriterion
     build_kind: BuildKind
     version_scope: VersionScope
     status: ResolutionStatus
@@ -192,7 +192,7 @@ class PublishedTitle:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicRecordDetail(PublishedTitle):
+class PublicRecordDetail(PublishedRecordResult):
     """One published result with its complete ordered public holders.
 
     `holder_builds` follows the order of `holder_build_ids`. The REST API serializes
@@ -202,7 +202,7 @@ class PublicRecordDetail(PublishedTitle):
     holder_builds: tuple[PublicBuildSummary, ...]
 
     @classmethod
-    def with_holders(cls, result: PublishedTitle, holder_builds: Sequence[PublicBuildSummary]) -> Self:
+    def with_holders(cls, result: PublishedRecordResult, holder_builds: Sequence[PublicBuildSummary]) -> Self:
         """Attach the holders' public summaries to a published result."""
         return cls(
             **{field.name: getattr(result, field.name) for field in fields(result)},

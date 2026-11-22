@@ -6,44 +6,44 @@ from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.engine import default
 
 from squid.core.persistence.types import StrEnumText
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
 from squid.core.records.models import (
     ComputationRun,
     ComputationStatus,
     DefinitionFacet,
     FacetKind,
     MaterializationSource,
+    Record,
+    RecordDefinition,
     RecordRecomputeQueueItem,
-    RecordTitle,
-    TitleDefinition,
-    TitleResult,
+    RecordResult,
 )
 
 _MAPPINGS = (
-    (TitleDefinition.__table__, "materialization_source", MaterializationSource),
-    (RecordTitle.__table__, "base_title", BaseTitle),
-    (RecordTitle.__table__, "build_kind", BuildKind),
-    (RecordTitle.__table__, "version_scope", VersionScope),
+    (RecordDefinition.__table__, "materialization_source", MaterializationSource),
+    (Record.__table__, "criterion", RecordCriterion),
+    (Record.__table__, "build_kind", BuildKind),
+    (Record.__table__, "version_scope", VersionScope),
     (DefinitionFacet.__table__, "facet_kind", FacetKind),
     (ComputationRun.__table__, "build_kind", BuildKind),
     (ComputationRun.__table__, "status", ComputationStatus),
-    (TitleResult.__table__, "status", ResolutionStatus),
+    (RecordResult.__table__, "status", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "build_kind", BuildKind),
 )
 
 _CHECKS = (
     (
-        TitleDefinition.__table__,
+        RecordDefinition.__table__,
         "title_definitions_materialization_source_check",
         MaterializationSource,
     ),
-    (RecordTitle.__table__, "record_titles_base_title_check", BaseTitle),
-    (RecordTitle.__table__, "record_titles_build_kind_check", BuildKind),
-    (RecordTitle.__table__, "record_titles_version_scope_check", VersionScope),
+    (Record.__table__, "record_titles_base_title_check", RecordCriterion),
+    (Record.__table__, "record_titles_build_kind_check", BuildKind),
+    (Record.__table__, "record_titles_version_scope_check", VersionScope),
     # title_definition_facets_kind_check admits only restrictions; candidate facets use the other kinds.
     (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
     (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
-    (TitleResult.__table__, "title_results_status_check", ResolutionStatus),
+    (RecordResult.__table__, "title_results_status_check", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "record_recompute_queue_build_kind_check", BuildKind),
 )
 

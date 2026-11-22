@@ -17,7 +17,7 @@ from itertools import pairwise
 from math import lcm
 from typing import Literal, Self
 
-from pydantic import field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from squid.core.builds.domain.expansion_evaluation import (
     ExpansionDiagnostic,
@@ -37,7 +37,7 @@ from squid.core.builds.domain.expansion_math import (
 )
 from squid.core.records.application.live import DoorRecordCategory, LookupDimension
 from squid.core.records.application.models import CandidateBuild
-from squid.core.records.domain.models import BaseTitle
+from squid.core.records.domain.models import RecordCriterion
 from squid.core.records.domain.region_math import (
     ArithmeticBudget,
     RegionArithmeticError,
@@ -69,7 +69,9 @@ class DoorRangeQuery(DoorRecordCategory):
 
     follow_current_version: bool = False
     axis: Literal["width"] = "width"
-    base_title: Literal[BaseTitle.SMALLEST] = BaseTitle.SMALLEST
+    criterion: Literal[RecordCriterion.SMALLEST] = Field(
+        default=RecordCriterion.SMALLEST, validation_alias=AliasChoices("criterion", "base_title")
+    )
     height: LookupDimension
     depth: LookupDimension = 1
     minimum: LookupDimension = 1

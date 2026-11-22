@@ -6,12 +6,12 @@ from datetime import datetime
 from itertools import groupby
 
 from squid.core.records.application.models import HolderHistoryEntry
-from squid.core.records.domain.models import BaseTitle, Candidate, ResolutionStatus
+from squid.core.records.domain.models import Candidate, RecordCriterion, ResolutionStatus
 from squid.core.records.domain.resolution import resolve_record
 
 
 def reconstruct_history(
-    base_title: BaseTitle,
+    criterion: RecordCriterion,
     methods: Sequence[str],
     candidates: Sequence[Candidate],
 ) -> tuple[HolderHistoryEntry, ...]:
@@ -30,7 +30,7 @@ def reconstruct_history(
     periods: list[HolderHistoryEntry] = []
     for completion_at, group in groupby(dated, key=_known_completion):
         active.extend(group)
-        resolution = resolve_record(base_title, active, methods)
+        resolution = resolve_record(criterion, active, methods)
         if resolution.status is not ResolutionStatus.RESOLVED:
             if periods and periods[-1].held_until is None:
                 periods[-1] = replace(periods[-1], held_until=completion_at)

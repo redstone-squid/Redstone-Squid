@@ -82,14 +82,10 @@ already-declared file does not advance the draft revision; changing its membersh
 Architecture tests cover entity equality, explicit relationship loading, model dependencies, and transaction ownership.
 Repository integration tests check detached access, round trips, revision guards, preview isolation, and transaction behavior.
 
-Record persistence follows the rules document's vocabulary. A `BaseTitle` (first, fastest, smallest, fastest smallest,
-or smallest fastest) combines with a build kind, version scope, and record category to form a stable `RecordTitle`
-in `record_titles`. Its `title_id` survives recomputation and rules changes. `VersionScope.UP_TO_DATE` is stored as
-`up_to_date`; `all_time` includes every qualifying version.
+A `Record` combines a criterion, build kind, version scope, and record category. The criteria are First,
+Fastest, Smallest, Fastest Smallest, and Smallest Fastest. Its UUID, `record_id`, survives recomputation and rules
+changes. All-time records include every qualifying version. Up-to-date records are scoped to a Minecraft version.
 
-A `TitleDefinition` in `title_definitions` stores a title's wording under a `RulesRevision` in `rules_revisions`.
-The revision identifies the rules document hash and calculator/formatter versions. `DefinitionFacet` rows in
-`title_definition_facets` capture the definition's taxonomy. A `ComputationRun` in `record_computation_runs` produces
-`TitleResult` rows in `title_results`, with tied holders in `title_holders` and chronology in `title_holder_history`.
-Public queries return results from the active run, so `result_id` and `definition_id` have different lifetimes
-from the stable `title_id`.
+A `RecordDefinition` stores the record name and taxonomy under a `RulesRevision`. A `ComputationRun` produces
+`RecordResult` rows, with zero or more `RecordHolder` rows and a separate holder history. The public detail URL
+takes the stable `record_id` and reads the active result. Pagination uses the calculation's `result_id`.

@@ -1,7 +1,7 @@
 ---
 import LanguageSelector from "../layouts/LanguageSelector.astro";
 import Pagination from "../features/catalogue/Pagination.astro";
-import type { PublishedTitle } from "../generated/types.gen";
+import type { PublishedRecordResult } from "../generated/types.gen";
 import { translate, type Locale } from "../lib/i18n";
 import { readOffset } from "../lib/pagination";
 import LinkButton from "../ui/astro/LinkButton.astro";
@@ -16,13 +16,13 @@ const url = new URL(Astro.url);
 url.hash = "browsing";
 const second = readOffset(url.searchParams) === 1;
 const build = buildFixtures[second ? 1 : 0];
-const record: PublishedTitle = {
-  id: second ? 2 : 1,
+const record: PublishedRecordResult = {
+  result_id: second ? 2 : 1,
   definition_id: 1,
-  title_id: build.id,
+  record_id: build.id,
   title: `${translate(locale, build.category)} · ${build.dimensions}`,
   subtitle: translate(locale, build.category),
-  base_title: second ? "smallest" : "fastest",
+  criterion: second ? "smallest" : "fastest",
   build_kind: "door",
   version_scope: "all_time",
   status: "resolved",

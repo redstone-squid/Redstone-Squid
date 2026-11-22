@@ -886,7 +886,7 @@ bot-consent-value =
     `{ $uuid }`
 
 # squid/bot/notifications_view.py:453
-bot-notifications-view-base-title = Base title
+bot-notifications-view-base-title = Record criterion
 
 # squid/bot/notifications_view.py:444
 bot-notifications-view-build-kind = Build kind
@@ -1192,7 +1192,7 @@ bot-submission-build-browse-approve = Approve
 # squid/bot/catalogue/browse.py:453
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1055
+# squid/bot/catalogue/browse.py:1053
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/catalogue/browse.py:316
@@ -1216,7 +1216,7 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/catalogue/browse.py:229
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1053
+# squid/bot/catalogue/browse.py:1051
 bot-submission-build-browse-open-build = Open build
 
 # squid/bot/catalogue/browse.py:652
@@ -1310,8 +1310,8 @@ bot-submission-search-open-this-build-directly = Open this build directly.
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
-    { "*" }*Base title**
-    { $base_title } · { $version_scope }
+    { "*" }*Record criterion**
+    { $criterion } · { $version_scope }
 
 # squid/bot/catalogue/search/results.py:533
 bot-submission-search-view-creator = Creator
@@ -1781,7 +1781,7 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:143
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:1022
+# squid/bot/catalogue/browse.py:1020
 browse-query-all-builds = All builds
 
 # squid/bot/catalogue/browse.py:1020
@@ -4749,18 +4749,18 @@ record-rule-smallest = Lowest volume; earliest completion breaks a tie.
 record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.
 
 # squid/bot/submission/cog.py:171
-record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest.
+record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:smallest.
 
 # squid/bot/catalogue/records.py:247
 records-active-version = the active version
 
-# squid/core/records/application/services.py:750, squid/core/records/application/services.py:781
+# squid/core/records/application/services.py:751, squid/core/records/application/services.py:782
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:488
 records-category-id = Category definition #{ $definition_id }
 
-# squid/core/records/errors.py:29, squid/core/records/errors.py:45
+# squid/core/records/errors.py:27, squid/core/records/errors.py:43
 records-category-not-found-title = Record category not found
 
 # squid/bot/catalogue/records.py:258, squid/bot/catalogue/records.py:399
@@ -4775,7 +4775,7 @@ records-choose-version = Use another version
 # squid/bot/catalogue/records.py:241
 records-diagnostics-loading = Loading record diagnostics.
 
-# squid/core/records/errors.py:15
+# squid/core/records/errors.py:12
 records-errors-record-not-found = Record not found.
 
 # squid/bot/catalogue/records.py:297
@@ -4790,7 +4790,7 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:285
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:794
+# squid/core/records/application/services.py:795
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/core/records/domain/models.py:115
@@ -4817,7 +4817,7 @@ records-maintenance-tools = Recompute
 # squid/core/records/domain/categories.py:50
 records-maximum-category-size = Maximum category size cannot be negative.
 
-# squid/core/records/errors.py:44
+# squid/core/records/errors.py:42
 records-no-confirmed-build = No confirmed build satisfies the requested record category.
 
 # squid/bot/catalogue/records.py:246
@@ -4832,7 +4832,7 @@ records-no-unresolved-categories = Every active record category has the evidence
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:711
+# squid/core/records/application/services.py:712
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:464
@@ -4844,19 +4844,19 @@ records-recompute-definition = Recompute definition
 # squid/bot/catalogue/records.py:188, squid/bot/catalogue/records.py:393, squid/bot/catalogue/records.py:441
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/core/records/application/services.py:535
+# squid/core/records/application/services.py:536
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
-# squid/core/records/errors.py:28
+# squid/core/records/errors.py:26
 records-record-category-not-found = Record category not found.
 
-# squid/core/records/infrastructure/repository.py:666
+# squid/core/records/infrastructure/repository.py:675
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
-# squid/core/records/errors.py:16
+# squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:812
+# squid/core/records/application/services.py:813
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:492
@@ -5127,7 +5127,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:225
+# squid/core/search/application/fields.py:226
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:95
@@ -5176,7 +5176,7 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 search-expects-number = { $field_name } expects a number
 
 # squid/bot/catalogue/search/labels.py:61
-search-field-base-title = Record type
+search-field-base-title = Record criterion
 
 # squid/bot/catalogue/search/labels.py:73
 search-field-completion-at = Completed
@@ -5353,7 +5353,7 @@ search-reference-record-scope = Record filters describe the record. To filter by
 search-reference-record-title = `title:door`
 
 # squid/bot/catalogue/search/help.py:55
-search-reference-record-type = `base_title:` { $base_titles }
+search-reference-record-type = `criterion:` { $criteria }
 
 # squid/bot/catalogue/search/help.py:70
 search-reference-record-types = The Smallest, Fastest and First buttons match records of any selected type, together with your query.
@@ -5373,7 +5373,7 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:63
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:220
+# squid/core/search/application/fields.py:221
 search-search-numbers-finite = Search numbers must be finite
 
 # squid/core/search/application/services.py:71

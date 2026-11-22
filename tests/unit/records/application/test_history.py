@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from squid.core.records.application.history import reconstruct_history
-from squid.core.records.domain.models import DOOR_TIMING_METHODS, BaseTitle, Candidate, TimingVariant
+from squid.core.records.domain.models import DOOR_TIMING_METHODS, Candidate, RecordCriterion, TimingVariant
 
 
 def test_unresolved_comparison_closes_previous_holder_period() -> None:
@@ -14,7 +14,7 @@ def test_unresolved_comparison_closes_previous_holder_period() -> None:
         Candidate(3, completion_at=resolved, timing_variants=(TimingVariant((9, 2)),)),
     )
 
-    history = reconstruct_history(BaseTitle.FASTEST, DOOR_TIMING_METHODS, candidates)
+    history = reconstruct_history(RecordCriterion.FASTEST, DOOR_TIMING_METHODS, candidates)
 
     assert [period.build_ids for period in history] == [(1,), (3,)]
     assert history[0].held_until == uncertain
@@ -26,7 +26,7 @@ def test_unresolved_final_comparison_does_not_leave_a_current_holder() -> None:
     early = datetime(2020, 1, 1, tzinfo=UTC)
     uncertain = datetime(2021, 1, 1, tzinfo=UTC)
     history = reconstruct_history(
-        BaseTitle.FASTEST,
+        RecordCriterion.FASTEST,
         DOOR_TIMING_METHODS,
         (
             Candidate(1, completion_at=early, timing_variants=(TimingVariant((10, 2)),)),

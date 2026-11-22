@@ -2,13 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.domain.expansion_evaluation import ExpansionDiagnostic, PointStatus
-from squid.core.records.domain import BaseTitle, TitleResolution
+from squid.core.records.domain import RecordCriterion, RecordResolution
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,10 +44,10 @@ class LiveDoorRecord:
     """
 
     opening: tuple[int, int, int]
-    base_title: BaseTitle
+    criterion: Annotated[RecordCriterion, Field(validation_alias=AliasChoices("criterion", "base_title"))]
     version_id: int | None
     evaluated_at: datetime
-    resolution: TitleResolution
+    resolution: RecordResolution
     holder_configuration_ids: tuple[int, ...]
     provisional_configuration_ids: tuple[int, ...]
     configurations: tuple[LiveDoorConfiguration, ...]

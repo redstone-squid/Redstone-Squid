@@ -14,17 +14,17 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.services import RecordComputationService, RecordService
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, TimingVariant
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, TimingVariant
 from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.records.infrastructure.repository import PostgresRecordRepository
 from squid.core.records.models import (
     ComputationRun,
     DoorTimingVariant,
+    Record,
+    RecordDefinition,
     RecordRecomputeQueueItem,
-    RecordTitle,
     RulesRevision,
-    TitleDefinition,
 )
 from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
@@ -82,7 +82,7 @@ async def test_live_lookup_does_not_materialize_large_sizes(
         session.add_all([family, fixed])
         await session.flush()
         family_id, fixed_id = family.id, fixed.id
-    models = (RecordTitle, TitleDefinition, ComputationRun, RulesRevision, RecordRecomputeQueueItem)
+    models = (Record, RecordDefinition, ComputationRun, RulesRevision, RecordRecomputeQueueItem)
     async with sessions() as session:
         before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
     factory = partial(SqlAlchemyUnitOfWork, sessions)
@@ -93,7 +93,7 @@ async def test_live_lookup_does_not_materialize_large_sizes(
         result = await service.lookup_door(DoorRecordLookup(opening=(6, 3, 1)))
         assert result.resolution.holder_ids == (family_id,)
         assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
-        fastest = await service.lookup_door(DoorRecordLookup(opening=(6, 3, 1), base_title=BaseTitle.FASTEST))
+        fastest = await service.lookup_door(DoorRecordLookup(opening=(6, 3, 1), criterion=RecordCriterion.FASTEST))
         assert fastest.resolution.holder_ids == (family_id,)
         large = await service.lookup_door(DoorRecordLookup(opening=(9999, 3, 1)))
         assert large.resolution.holder_ids == (family_id,)
@@ -211,7 +211,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         session.add_all([family, fixed, other_version, pending])
         await session.flush()
         family_id, fixed_id, version_id = family.id, fixed.id, version.id
-    models = (RecordTitle, TitleDefinition, ComputationRun, RulesRevision, RecordRecomputeQueueItem)
+    models = (Record, RecordDefinition, ComputationRun, RulesRevision, RecordRecomputeQueueItem)
     async with sessions() as session:
         before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
     factory = partial(SqlAlchemyUnitOfWork, sessions)

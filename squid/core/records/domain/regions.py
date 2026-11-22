@@ -15,7 +15,7 @@ from itertools import combinations, pairwise
 from math import lcm
 
 from squid.core.builds.domain.expansion_math import ExpressionError, Formula, Polynomial
-from squid.core.records.domain.models import Candidate, CandidateGap, ResolutionStatus, TitleResolution
+from squid.core.records.domain.models import Candidate, CandidateGap, RecordResolution, ResolutionStatus
 from squid.core.records.domain.region_math import (
     ArithmeticBudget,
     RegionArithmeticError,
@@ -78,7 +78,7 @@ class SmallestRecordRegion:
     """
 
     domain: IntegerProgression
-    resolution: TitleResolution
+    resolution: RecordResolution
     holder_configuration_ids: tuple[int, ...] = ()
     provisional_configuration_ids: tuple[int, ...] = ()
 
@@ -251,12 +251,12 @@ def _resolve_region(
     def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(sorted({sources_by_id[id].build_id for id in ids}))
 
-    resolution = TitleResolution(
+    resolution = RecordResolution(
         result.status,
         build_ids(result.holder_ids),
         build_ids(result.provisional_holder_ids),
         tuple(dict.fromkeys(CandidateGap(sources_by_id[gap.build_id].build_id, gap.field) for gap in result.gaps)),
     )
     if resolution.status is ResolutionStatus.UNRESOLVED and len(resolution.provisional_holder_ids) == 1:
-        resolution = TitleResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
+        resolution = RecordResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
     return SmallestRecordRegion(domain, resolution, result.holder_ids, result.provisional_holder_ids)

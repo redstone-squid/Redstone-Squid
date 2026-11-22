@@ -12,11 +12,11 @@ from squid.core.builds.domain.expansion_evaluation import (
 )
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.models import CandidateBuild, CategoryIdentity
-from squid.core.records.domain import BaseTitle, BuildKind
+from squid.core.records.domain import BuildKind, RecordCriterion
 
 
 def door_category_lookup(
-    identity: CategoryIdentity, *, base_title: BaseTitle = BaseTitle.SMALLEST, version_id: int | None = None
+    identity: CategoryIdentity, *, criterion: RecordCriterion = RecordCriterion.SMALLEST, version_id: int | None = None
 ) -> DoorRecordLookup | None:
     if identity.kind is not BuildKind.DOOR:
         return None
@@ -34,7 +34,7 @@ def door_category_lookup(
                 "type_ids": tuple(int(value) for value in types[2:-1].split(",") if value),
                 "restriction_ids": identity.restriction_ids,
                 "restriction_values": identity.restriction_values,
-                "base_title": base_title,
+                "criterion": criterion,
                 "version_id": version_id,
             }
         )

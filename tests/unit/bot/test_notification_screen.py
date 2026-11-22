@@ -200,7 +200,7 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
             "follow-filter",
             {
                 "build_kind": "door",
-                "base_title": None,
+                "criterion": None,
                 "version_scope": "up_to_date",
                 "tag_value": "compact",
             },
@@ -229,7 +229,7 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
             "follow-filter",
             {
                 "build_kind": None,
-                "base_title": None,
+                "criterion": None,
                 "version_scope": None,
                 "tag_value": None,
             },

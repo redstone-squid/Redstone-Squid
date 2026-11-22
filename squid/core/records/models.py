@@ -1,15 +1,15 @@
-"""Persist record titles and their results under revisions of the rules.
+"""Persist records and their results under rules revisions.
 
-A BaseTitle is first, fastest, smallest, fastest smallest, or smallest fastest.
-RecordTitle combines a base title, build kind, version scope, and record category
-into a stable public identity. TitleDefinition stores its wording under one
+A RecordCriterion is first, fastest, smallest, fastest smallest, or smallest fastest.
+Record combines a criterion, build kind, version scope, and record category
+into a stable public identity. RecordDefinition stores its wording under one
 RulesRevision, identified by the rules document hash and calculator/formatter
 versions. DefinitionFacet stores a definition's taxonomy facets.
 
-ComputationRun groups outcomes for one build kind and version. TitleResult is a
-definition's outcome in that run; TitleHolder stores each tied record title holder.
-TitleHolderHistory records previous holders. Public queries use the active run,
-so result IDs change on recomputation while title IDs remain stable.
+ComputationRun groups outcomes for one build kind and version. RecordResult is a
+definition's outcome in that run; RecordHolder stores each holder.
+RecordHolderHistory records previous holders. Public queries use the active run,
+so result IDs change on recomputation while record IDs remain stable.
 """
 
 import uuid
@@ -36,7 +36,7 @@ from whenever import Instant
 from squid.core.persistence.base import Base
 from squid.core.persistence.queue_models import QueueColumns
 from squid.core.persistence.types import InstantUTC, StrEnumText
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
 from squid.core.records.domain.models import FacetKind, MaterializationSource
 from squid.core.records.persistence_types import DoorRecordEvidenceJSON
@@ -89,8 +89,8 @@ class RulesRevision(Base, kw_only=True):
     )
 
 
-class TitleDefinition(Base, kw_only=True):
-    """The wording of one stable record title under a rules revision."""
+class RecordDefinition(Base, kw_only=True):
+    """The name and taxonomy of a record under a rules revision."""
 
     __tablename__ = "title_definitions"
     __table_args__ = (
@@ -103,7 +103,8 @@ class TitleDefinition(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    title_id: Mapped[uuid.UUID] = mapped_column(
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        "title_id",
         UUID(as_uuid=True),
         ForeignKey("record_titles.public_id", name="title_definitions_title_id_fkey", ondelete="RESTRICT"),
         nullable=False,
@@ -113,7 +114,7 @@ class TitleDefinition(Base, kw_only=True):
         ForeignKey("rules_revisions.id", name="title_definitions_rules_revision_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    record_title: Mapped[RecordTitle] = relationship(lazy="raise_on_sql", init=False, repr=False)
+    record: Mapped[Record] = relationship(lazy="raise_on_sql", init=False, repr=False)
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
@@ -128,28 +129,28 @@ class TitleDefinition(Base, kw_only=True):
     )
 
     @property
-    def base_title(self) -> BaseTitle:
-        return self.record_title.base_title
+    def criterion(self) -> RecordCriterion:
+        return self.record.criterion
 
     @property
     def build_kind(self) -> BuildKind:
-        return self.record_title.build_kind
+        return self.record.build_kind
 
     @property
     def version_scope(self) -> VersionScope:
-        return self.record_title.version_scope
+        return self.record.version_scope
 
     @property
     def version_id(self) -> int | None:
-        return self.record_title.version_id
+        return self.record.version_id
 
     @property
     def category_key(self) -> str:
-        return self.record_title.category_key
+        return self.record.category_key
 
 
-class RecordTitle(Base, kw_only=True):
-    """A stable public identity for a record title across rules revisions."""
+class Record(Base, kw_only=True):
+    """A record with a stable public identity across rules revisions."""
 
     __tablename__ = "record_titles"
     __table_args__ = (
@@ -180,7 +181,7 @@ class RecordTitle(Base, kw_only=True):
     public_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    base_title: Mapped[BaseTitle] = mapped_column(StrEnumText(BaseTitle), nullable=False)
+    criterion: Mapped[RecordCriterion] = mapped_column("base_title", StrEnumText(RecordCriterion), nullable=False)
     build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
     version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
@@ -285,7 +286,7 @@ class ComputationRun(Base, kw_only=True):
     last_checked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 
-class TitleResult(Base, kw_only=True):
+class RecordResult(Base, kw_only=True):
     """The outcome for one definition in a computation run."""
 
     __tablename__ = "title_results"
@@ -331,7 +332,7 @@ class TitleResult(Base, kw_only=True):
     )
 
 
-class TitleHolder(Base, kw_only=True):
+class RecordHolder(Base, kw_only=True):
     """A co-holder of a resolved computed record."""
 
     __tablename__ = "title_holders"
@@ -357,7 +358,7 @@ class TitleHolder(Base, kw_only=True):
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 
-class TitleHolderHistory(Base, kw_only=True):
+class RecordHolderHistory(Base, kw_only=True):
     """A reconstructed interval in a definition's beaten-record chronology."""
 
     __tablename__ = "title_holder_history"

@@ -10,7 +10,7 @@ from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, E
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
 from squid.core.records.application.models import CandidateBuild
-from squid.core.records.domain import BaseTitle, BuildKind, Candidate, ResolutionStatus, TimingVariant
+from squid.core.records.domain import BuildKind, Candidate, RecordCriterion, ResolutionStatus, TimingVariant
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -58,12 +58,14 @@ def family(*branches: ExpansionBranch, parameter: ExpansionParameter | None = No
     )
 
 
-def lookup(*sources: CandidateBuild, title: BaseTitle = BaseTitle.SMALLEST, width: int = 6) -> LiveDoorRecord:
-    return evaluate_door_record(DoorRecordLookup(opening=(width, 3, 1), base_title=title), sources, evaluated_at=NOW)
+def lookup(
+    *sources: CandidateBuild, title: RecordCriterion = RecordCriterion.SMALLEST, width: int = 6
+) -> LiveDoorRecord:
+    return evaluate_door_record(DoorRecordLookup(opening=(width, 3, 1), criterion=title), sources, evaluated_at=NOW)
 
 
-@pytest.mark.parametrize("title", [BaseTitle.SMALLEST, BaseTitle.FASTEST])
-def test_family_competes_in_fixed_size_category(title: BaseTitle) -> None:
+@pytest.mark.parametrize("title", [RecordCriterion.SMALLEST, RecordCriterion.FASTEST])
+def test_family_competes_in_fixed_size_category(title: RecordCriterion) -> None:
     result = lookup(fixed(), family(), title=title)
     assert result.resolution.holder_ids == (2,)
     assert result.holder_configuration_ids == (1,)
@@ -77,8 +79,8 @@ def test_family_competes_in_fixed_size_category(title: BaseTitle) -> None:
 def test_family_does_not_borrow_sample_measurements_or_completion() -> None:
     source = family(branch(volume="1000", opening_time="100"))
     assert lookup(fixed(), source).resolution.holder_ids == (1,)
-    assert lookup(fixed(), source, title=BaseTitle.FASTEST).resolution.holder_ids == (1,)
-    result = lookup(source, title=BaseTitle.FIRST)
+    assert lookup(fixed(), source, title=RecordCriterion.FASTEST).resolution.holder_ids == (1,)
+    result = lookup(source, title=RecordCriterion.FIRST)
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
     assert any(d.code == "unverified_completion" for d in result.configurations[0].diagnostics)
 
@@ -90,11 +92,13 @@ def test_completion_tie_stays_unresolved_across_builds() -> None:
     assert [(gap.build_id, gap.field) for gap in result.resolution.gaps] == [(2, "completion_at")]
 
 
-@pytest.mark.parametrize("title", [BaseTitle.FASTEST_SMALLEST, BaseTitle.SMALLEST_FASTEST])
-def test_alternatives_do_not_mix_volume_and_speed(title: BaseTitle) -> None:
+@pytest.mark.parametrize("title", [RecordCriterion.FASTEST_SMALLEST, RecordCriterion.SMALLEST_FASTEST])
+def test_alternatives_do_not_mix_volume_and_speed(title: RecordCriterion) -> None:
     source = family(branch("10", "10"), branch("100", "1"))
     competitor = (
-        fixed(volume=10, opening_time=5) if title is BaseTitle.FASTEST_SMALLEST else fixed(volume=20, opening_time=1)
+        fixed(volume=10, opening_time=5)
+        if title is RecordCriterion.FASTEST_SMALLEST
+        else fixed(volume=20, opening_time=1)
     )
     result = lookup(competitor, source, title=title)
     assert result.resolution.holder_ids == (1,)
@@ -108,8 +112,8 @@ def test_same_build_alternatives_do_not_require_completion_to_identify_holder() 
     assert result.provisional_configuration_ids == (0, 1)
 
 
-@pytest.mark.parametrize("title", list(BaseTitle))
-def test_unknown_membership_does_not_block_official_holder(title: BaseTitle) -> None:
+@pytest.mark.parametrize("title", list(RecordCriterion))
+def test_unknown_membership_does_not_block_official_holder(title: RecordCriterion) -> None:
     source = family(parameter=ExpansionParameter(name="n", minimum=1, initial_steps=(), repeating_steps=(1,)))
     result = lookup(fixed(), source, title=title)
     assert result.resolution.status is ResolutionStatus.RESOLVED
@@ -181,7 +185,7 @@ def test_each_branch_reduces_its_own_slowest_timing_variant() -> None:
             ),
         }
     )
-    assert lookup(fixed(), family(source_branch), title=BaseTitle.FASTEST).resolution.holder_ids == (1,)
+    assert lookup(fixed(), family(source_branch), title=RecordCriterion.FASTEST).resolution.holder_ids == (1,)
 
 
 @pytest.mark.parametrize("opening", [(0, 3, 1), (-1, 3, 1), (True, 3, 1), (1.5, 3, 1), (2**31, 3, 1), (3, 1)])

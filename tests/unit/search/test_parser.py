@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.core.records.domain import BaseTitle, ResolutionStatus
+from squid.core.records.domain import RecordCriterion, ResolutionStatus
 from squid.core.search.application import (
     DEFAULT_FIELD_REGISTRY,
     FieldDefinition,
@@ -152,7 +152,7 @@ def test_parser_coerces_units_for_database_defined_data_tag() -> None:
 @pytest.mark.parametrize("prefix", ["smallest", "fastest", "fastest smallest", "smallest fastest"])
 def test_parser_expands_leading_record_titles(prefix: str) -> None:
     parser = SearchQueryParser()
-    expected = f"base_title:{prefix.replace(' ', '_')}"
+    expected = f"criterion:{prefix.replace(' ', '_')}"
 
     assert parser.parse(prefix).expression == parser.parse(expected).expression
     parsed = parser.parse(f"  {prefix.upper()} kind:door width<=5")
@@ -171,8 +171,8 @@ def test_parser_expands_leading_record_titles(prefix: str) -> None:
         ("(fastest) door", "(fastest AND door)"),
         ("smallestish door", "smallestish AND door"),
         ("title:fastest", "title:fastest"),
-        ("fastest base_title:smallest", "fastest AND base_title:smallest"),
-        ("smallest NOT BASE_TITLE:fastest", "smallest AND NOT base_title:fastest"),
+        ("fastest criterion:smallest", "fastest AND criterion:smallest"),
+        ("smallest NOT CRITERION:fastest", "smallest AND NOT criterion:fastest"),
     ],
 )
 def test_parser_preserves_literal_text_and_explicit_record_filters(query: str, normalized: str) -> None:
@@ -187,7 +187,7 @@ def test_record_prefix_preserves_boolean_precedence_and_error_positions() -> Non
 
     assert (
         parser.parse("fastest door OR extender").expression
-        == parser.parse("base_title:fastest door OR extender").expression
+        == parser.parse("criterion:fastest door OR extender").expression
     )
     with pytest.raises(QuerySyntaxError) as captured:
         parser.parse("fastest smallest AND")
@@ -209,14 +209,14 @@ def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
     assert isinstance(records.expression, FieldExpression)
     assert records.expression.value is ResolutionStatus.RESOLVED
     assert isinstance(shorthand.expression, FieldExpression)
-    assert shorthand.expression.value is BaseTitle.FASTEST
+    assert shorthand.expression.value is RecordCriterion.FASTEST
     assert SearchQueryParser(scope=SearchScope.BUILDS).parse("Fastest").expression == TextExpression("Fastest")
 
 
 @pytest.mark.parametrize(
     ("scope", "query", "error"),
     [
-        (SearchScope.BUILDS, "base_title:first", "cannot be used"),
+        (SearchScope.BUILDS, "criterion:first", "cannot be used"),
         (SearchScope.BUILDS, "status:resolved", "expects one of"),
         (SearchScope.RECORDS, "door OR NOT width:5", "cannot be used"),
         (SearchScope.RECORDS, "status:confirmed", "expects one of"),

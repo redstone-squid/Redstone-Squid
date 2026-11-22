@@ -149,7 +149,7 @@ async def test_no_sort_option_leaves_relevance_ordering_alone() -> None:
         ("fastest 5x5", "fastest"),
         ("smallest fastest 5x5", "smallest_fastest"),
         ("FASTEST smallest 5x5", "fastest_smallest"),
-        ("base_title:smallest 5x5", "smallest"),
+        ("criterion:smallest 5x5", "smallest"),
     ],
 )
 async def test_record_title_search_defaults_to_the_records_tab(query: str, title: str) -> None:
@@ -161,7 +161,7 @@ async def test_record_title_search_defaults_to_the_records_tab(query: str, title
     assert screen._mode == "records"
     assert search.requests[0].scope is SearchScope.RECORDS
     assert search.requests[0].query == query
-    assert screen._query.parsed.normalized == f"base_title:{title} AND 5x5"
+    assert screen._query.parsed.normalized == f"criterion:{title} AND 5x5"
     async with stage(screen, owner=object()) as ui:
         ui.assert_within_limits()
 
@@ -194,7 +194,7 @@ async def test_explicit_record_scope_expands_shorthand_without_status_filter() -
 
     assert isinstance(screen, BuildBrowseScreen)
     assert search.requests[0].query == "smallest 5x5"
-    assert screen._query.parsed.normalized == "base_title:smallest AND 5x5"
+    assert screen._query.parsed.normalized == "criterion:smallest AND 5x5"
 
 
 async def test_records_remain_an_explicit_search_target() -> None:

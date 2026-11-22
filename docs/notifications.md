@@ -34,11 +34,11 @@ The envelope contains `event_type`, `schema_version`, aggregate identity, occurr
 | `guild.voting_changed` | 1 | Recalculate weights on open votes |
 | `build.confirmed` | 3 | Submitter outcome and first-confirmation creator subscriptions |
 | `build.denied` | 3 | Submitter outcome |
-| `record_run.activated` | 1 | Compare stable record title holders with the previous active run |
+| `record_run.activated` | 1 | Compare holders of each record with the previous active run |
 | `vote_session.closed` | 1 | Existing vote outcome processing |
 
 The first active record run for a scope is a baseline and intentionally sends no record-gain notifications. Later
-runs group every record title newly gained by the same build into one notification per recipient.
+runs group every record newly gained by the same build into one notification per recipient.
 
 ## Consent, preferences, and subscriptions
 
@@ -49,7 +49,7 @@ Disabling DMs cancels pending sends; enabling them later does not release a surp
 Subscriptions may target:
 
 - a public creator UUID, which intentionally groups every public alias claimed by the same account;
-- a stable record title UUID, which survives record rules_revision and computation-run changes; or
+- a stable record UUID, which survives rules revisions and recomputation; or
 - a structured record filter with optional build-kind, base-title, version-scope, tag-presence, and exact tag-value
   predicates. Omitted fields are wildcards.
 

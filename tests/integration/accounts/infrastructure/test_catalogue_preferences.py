@@ -21,7 +21,7 @@ async def test_catalogue_preferences_replace_and_clear_one_tab(
     for account_id, scope, filters, sort in (
         (first_id, "builds", "width:3", "width"),
         (second_id, "builds", "", "-width"),
-        (first_id, "records", "base_title:fastest", ""),
+        (first_id, "records", "criterion:fastest", ""),
         (first_id, "builds", "width:5", "-width"),
     ):
         async with factory() as uow:
@@ -33,7 +33,7 @@ async def test_catalogue_preferences_replace_and_clear_one_tab(
         rows = await uow.accounts.catalogue_preferences(first_id)
         assert {(row.scope, row.filters, row.sort) for row in rows} == {
             ("builds", "width:5", "-width"),
-            ("records", "base_title:fastest", ""),
+            ("records", "criterion:fastest", ""),
         }
         await uow.accounts.save_catalogue_preference(
             CataloguePreference(account_id=first_id, scope="builds", filters="", sort="")

@@ -26,7 +26,7 @@ from squid.core.i18n import tr
 from squid_i18n import md_tr
 
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
-_BASE_TITLES = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
+_RECORD_CRITERIA = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
 _VERSION_SCOPES = frozenset({"all_time", "up_to_date"})
 
 
@@ -194,17 +194,17 @@ class RecordSubscriptionFilter:
     """
 
     build_kinds: frozenset[str] = frozenset()
-    base_titles: frozenset[str] = frozenset()
+    criteria: frozenset[str] = frozenset()
     version_scopes: frozenset[str] = frozenset()
     tags: tuple[TagPredicate, ...] = ()
 
     def __post_init__(self) -> None:
-        if not any((self.build_kinds, self.base_titles, self.version_scopes, self.tags)):
+        if not any((self.build_kinds, self.criteria, self.version_scopes, self.tags)):
             raise ValidationError(
                 tr(t"notifications-record-filter-predicate-limit = a record filter must contain at least one predicate")
             )
         _validate_values(self.build_kinds, _BUILD_KINDS, "build kind")
-        _validate_values(self.base_titles, _BASE_TITLES, "base title")
+        _validate_values(self.criteria, _RECORD_CRITERIA, "base title")
         _validate_values(self.version_scopes, _VERSION_SCOPES, "version scope")
         if len({predicate.tag_id for predicate in self.tags}) != len(self.tags):
             raise ValidationError(
@@ -219,7 +219,7 @@ class RecordSubscriptionFilter:
         """Serialize the filter into a stable JSON shape."""
         return {
             "build_kinds": [*sorted(self.build_kinds)],
-            "base_titles": [*sorted(self.base_titles)],
+            "base_titles": [*sorted(self.criteria)],
             "version_scopes": [*sorted(self.version_scopes)],
             "tags": [predicate.as_dict() for predicate in self.tags],
         }
@@ -255,7 +255,7 @@ class RecordSubscriptionFilter:
         try:
             return cls(
                 build_kinds=_string_set(value.get("build_kinds", []), "build_kinds"),
-                base_titles=_string_set(value.get("base_titles", []), "base_titles"),
+                criteria=_string_set(value.get("base_titles", []), "criteria"),
                 version_scopes=_string_set(value.get("version_scopes", []), "version_scopes"),
                 tags=tuple(tags),
             )

@@ -2,19 +2,19 @@
 import SummaryCard from "./SummaryCard.astro";
 import Badge from "../../ui/astro/Badge.astro";
 import RecordFreshness from "./RecordFreshness.astro";
-import type { PublishedTitle } from "../../generated/types.gen";
+import type { PublishedRecordResult } from "../../generated/types.gen";
 import { localizePath, translate, translateTaxonomy, type Locale } from "../../lib/i18n";
-type Props = { record: PublishedTitle; locale: Locale; linked?: boolean };
+type Props = { record: PublishedRecordResult; locale: Locale; linked?: boolean };
 const { record, locale, linked = true } = Astro.props;
 ---
 
 <SummaryCard>
   <span class="sq-kicker">
-    {translateTaxonomy(locale, record.base_title)}
+    {translateTaxonomy(locale, record.criterion)}
   </span>
   <h3>
     {linked ? (
-      <a href={localizePath(`/records/${record.title_id}`, locale)}>{record.title}</a>
+      <a href={localizePath(`/records/${record.record_id}`, locale)}>{record.title}</a>
     ) : (
       record.title
     )}

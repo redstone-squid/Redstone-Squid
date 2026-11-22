@@ -98,7 +98,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
                 source_hash=f"record-{result_id}",
                 document_data={
                     "holder_build_ids": holders,
-                    "base_title": title.split()[0].casefold(),
+                    "criterion": title.split()[0].casefold(),
                     "version_scope": "all_time",
                     "metric": {"volume": 24},
                     "holder_metrics": {str(holder): {"volume": 24, "width": width} for holder in holders},
@@ -114,7 +114,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
             session.add(
                 SearchDocumentFacet(
                     document_id=document.id,
-                    field_name="base_title",
+                    field_name="criterion",
                     ordinal=0,
                     text_value=title.split()[0].casefold(),
                 )
@@ -208,7 +208,7 @@ async def test_record_scope_includes_only_matching_records(
 ) -> None:
     await seed_grouped_records(async_session_factory)
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
-    page = await search(backend, SearchRequest("base_title:smallest", group_by_build=True))
+    page = await search(backend, SearchRequest("criterion:smallest", group_by_build=True))
     assert page.total == 2
     for hit in page.hits:
         assert isinstance(hit, BuildSearchHit)

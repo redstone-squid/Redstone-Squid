@@ -28,14 +28,14 @@ from squid.core.records.application.models import (
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
-    ComputedRecord,
+    ComputedRecordResult,
     PublicRecordDetail,
-    PublishedTitle,
+    PublishedRecordResult,
     QueueProcessSummary,
     RebuildSummary,
     RecordGap,
     RecordLookupRequest,
-    TitleDiagnosticGap,
+    RecordNameDiagnostic,
 )
 from squid.core.records.application.ports import (
     DoorRangeAnalyzer,
@@ -46,16 +46,16 @@ from squid.core.records.application.ports import (
 )
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
     RulesTitleFormatter,
     TitleFormatter,
-    TitleResolution,
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
@@ -70,7 +70,7 @@ class RecordComputationService:
     """Compare confirmed builds and publish replacement record results.
 
     Categories group builds by features such as door size and restrictions.
-    Within each category, the base title selects the comparison: first,
+    Within each category, the record criterion selects the comparison: first,
     fastest, smallest, or a combination. An all-time scope considers every
     confirmed candidate; a current scope considers those supporting the pinned
     Minecraft version. Resolution can retain tied holders or report missing
@@ -183,15 +183,15 @@ class RecordComputationService:
                 categories[identity.key] = category
 
         scope = VersionScope.ALL_TIME if version_id is None else VersionScope.UP_TO_DATE
-        records: list[ComputedRecord] = []
+        records: list[ComputedRecordResult] = []
         for category in categories.values():
             ids = {candidate.build_id for candidate in category.candidates}
             sources = tuple(source for source in scoped if source.candidate.build_id in ids)
             families = tuple(source for source in sources if source.expansion is not None)
             evaluation: LiveDoorRecord | None = None
-            for base_title in _base_titles(kind):
+            for criterion in _base_titles(kind):
                 evidence = None
-                query = door_category_lookup(category.identity, base_title=base_title, version_id=version_id)
+                query = door_category_lookup(category.identity, criterion=criterion, version_id=version_id)
                 if families and query is not None:
                     evaluation = (
                         evaluate_door_record(query, sources, evaluated_at=snapshot.captured_at)
@@ -210,18 +210,18 @@ class RecordComputationService:
                         ),
                     )
                 else:
-                    resolution = _resolve_record(base_title, kind, category.candidates)
+                    resolution = _resolve_record(criterion, kind, category.candidates)
                 records.append(
-                    ComputedRecord(
-                        base_title=base_title,
+                    ComputedRecordResult(
+                        criterion=criterion,
                         scope=scope,
                         version_id=version_id,
                         category=category,
-                        title=self._formatter.format_record(base_title, category.category_text),
+                        title=self._formatter.format_record(criterion, category.category_text),
                         resolution=resolution,
                         history=()
                         if evidence is not None
-                        else reconstruct_history(base_title, _timing_methods(kind), category.candidates),
+                        else reconstruct_history(criterion, _timing_methods(kind), category.candidates),
                         history_complete=evidence is None
                         and all(candidate.completion_at is not None for candidate in category.candidates),
                         door_evidence=evidence,
@@ -381,11 +381,11 @@ class RecordComputationService:
             source=MaterializationSource.PUBLIC_LOOKUP if source == "public_lookup" else MaterializationSource.EAGER,
         )
 
-    def format_record_titles(self, category: CategoryCandidates) -> dict[BaseTitle, FormattedTitle]:
-        """Render the base titles a definition stores for this category."""
+    def format_record_titles(self, category: CategoryCandidates) -> dict[RecordCriterion, FormattedTitle]:
+        """Format a record name for each criterion in this category."""
         return {
-            base_title: self._formatter.format_record(base_title, category.category_text)
-            for base_title in _base_titles(category.identity.kind)
+            criterion: self._formatter.format_record(criterion, category.category_text)
+            for criterion in _base_titles(category.identity.kind)
         }
 
 
@@ -416,12 +416,12 @@ class RecordService:
         async with self._uow_factory() as uow:
             return await uow.records.list_gaps(kind=kind)
 
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
-        """Return active canonical record titles requiring taxonomy review."""
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
+        """Return active record names requiring taxonomy review."""
         async with self._uow_factory() as uow:
             return await uow.records.list_title_gaps(kind=kind)
 
-    async def get(self, result_id: int) -> PublishedTitle | None:
+    async def get(self, result_id: int) -> PublishedRecordResult | None:
         """Return one published computed record result."""
         async with self._uow_factory() as uow:
             return await uow.records.get_published_record(result_id)
@@ -434,7 +434,7 @@ class RecordService:
         page_size: int = 20,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> Page[PublishedTitle]:
+    ) -> Page[PublishedRecordResult]:
         """Return one page of published record results in display order."""
         async with self._uow_factory() as uow:
             rows = await uow.records.list_published_records(
@@ -455,7 +455,7 @@ class RecordService:
                     resolved_only=resolved_only, version_scope=version_scope
                 ),
                 keyset=True,
-                id_of=lambda record: record.id,
+                id_of=lambda record: record.result_id,
             )
 
     async def lookup_door(self, request: DoorRecordLookup) -> LiveDoorRecord:
@@ -798,15 +798,15 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
     )
 
 
-def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
+def _base_titles(kind: BuildKind) -> tuple[RecordCriterion, ...]:
     shared = (
-        BaseTitle.FASTEST,
-        BaseTitle.SMALLEST,
-        BaseTitle.FASTEST_SMALLEST,
-        BaseTitle.SMALLEST_FASTEST,
+        RecordCriterion.FASTEST,
+        RecordCriterion.SMALLEST,
+        RecordCriterion.FASTEST_SMALLEST,
+        RecordCriterion.SMALLEST_FASTEST,
     )
     if kind is BuildKind.DOOR:
-        return (BaseTitle.FIRST, *shared)
+        return (RecordCriterion.FIRST, *shared)
     if kind is BuildKind.EXTENDER:
         return shared
     kind_name = kind.value
@@ -814,8 +814,8 @@ def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
 
 
 def _resolve_record(
-    base_title: BaseTitle,
+    criterion: RecordCriterion,
     kind: BuildKind,
     candidates: Iterable[Candidate],
-) -> TitleResolution:
-    return resolve_record(base_title, candidates, _timing_methods(kind))
+) -> RecordResolution:
+    return resolve_record(criterion, candidates, _timing_methods(kind))

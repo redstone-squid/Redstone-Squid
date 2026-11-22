@@ -6,7 +6,7 @@ from functools import partial
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.core.records.domain.models import BaseTitle
+from squid.core.records.domain.models import RecordCriterion
 from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -19,7 +19,7 @@ def record_row(title: sl.TextLike, subtitle: str | None) -> Text:
 def record_standings(
     title: sl.TextLike,
     subtitle: str | None,
-    base_title: str,
+    criterion: str,
     version_scope: str,
     holders: Sequence[int],
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
@@ -35,7 +35,7 @@ def record_standings(
         sl.heading(title),
         sl.paragraph(subtitle) if subtitle else None,
         sl.note(f"{build_kind} · {scope}" if build_kind else scope),
-        sl.paragraph(rule) if (rule := _comparison_rule(base_title)) else None,
+        sl.paragraph(rule) if (rule := _comparison_rule(criterion)) else None,
         *details,
         sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if len(holders) > 1 else None,
         sl.action_controls(
@@ -55,17 +55,17 @@ def record_standings(
     )
 
 
-def _comparison_rule(base_title: str) -> sl.TextLike | None:
-    match base_title:
-        case BaseTitle.FIRST:
+def _comparison_rule(criterion: str) -> sl.TextLike | None:
+    match criterion:
+        case RecordCriterion.FIRST:
             return tr(t"record-rule-first = Earliest known completion date.")
-        case BaseTitle.SMALLEST:
+        case RecordCriterion.SMALLEST:
             return tr(t"record-rule-smallest = Lowest volume; earliest completion breaks a tie.")
-        case BaseTitle.FASTEST:
+        case RecordCriterion.FASTEST:
             return tr(t"record-rule-fastest = Fastest worst-case timing; earliest completion breaks a tie.")
-        case BaseTitle.FASTEST_SMALLEST:
+        case RecordCriterion.FASTEST_SMALLEST:
             return tr(t"record-rule-fastest-smallest = Lowest volume, then fastest timing, then earliest completion.")
-        case BaseTitle.SMALLEST_FASTEST:
+        case RecordCriterion.SMALLEST_FASTEST:
             return tr(t"record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest completion.")
         case _:
             return None

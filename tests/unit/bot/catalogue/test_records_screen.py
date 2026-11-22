@@ -17,10 +17,10 @@ from squid.core.records.application import (
     RecordComputationService,
     RecordGap,
     RecordLookupRequest,
+    RecordNameDiagnostic,
     RecordService,
-    TitleDiagnosticGap,
 )
-from squid.core.records.domain import BaseTitle, BuildKind
+from squid.core.records.domain import BuildKind, RecordCriterion
 from squid.core.suggestions.domain import Suggestion
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
@@ -35,11 +35,11 @@ class RecordRecorder(RecordService):
     @override
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         self.gap_reads += 1
-        return (RecordGap(1, "Smallest door", None, BaseTitle.SMALLEST, (7,), ("volume",), BuildKind.DOOR),)
+        return (RecordGap(1, "Smallest door", None, RecordCriterion.SMALLEST, (7,), ("volume",), BuildKind.DOOR),)
 
     @override
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
-        return (TitleDiagnosticGap(2, "Unknown door", ({"code": "unknown"},), BuildKind.DOOR),)
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
+        return (RecordNameDiagnostic(2, "Unknown door", ({"code": "unknown"},), BuildKind.DOOR),)
 
     @override
     async def materialize_definition(
@@ -127,7 +127,7 @@ async def test_records_use_tabs_and_browsers_for_diagnostics() -> None:
 
 
 async def test_lookup_materializes_and_refreshes_diagnostics() -> None:
-    """A numeric lookup selects a TitleDefinition definition, then refreshes its evidence diagnostics."""
+    """A numeric lookup selects a RecordDefinition definition, then refreshes its evidence diagnostics."""
     harness = make_screen()
     screen = harness.screen
     await screen.on_load()
@@ -222,7 +222,7 @@ async def test_large_diagnostics_render_within_discord_limits() -> None:
                 i,
                 f"Record category {i} with a descriptive title",
                 None,
-                BaseTitle.SMALLEST,
+                RecordCriterion.SMALLEST,
                 (i,),
                 ("volume",),
                 BuildKind.DOOR,

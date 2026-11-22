@@ -44,8 +44,8 @@ from squid.core.permissions.domain.catalogue import (
     RECORD_ENTRY_REBUILD,
 )
 from squid.core.records.application import RecordService
-from squid.core.records.application.models import PublishedTitle
-from squid.core.records.domain import BaseTitle, VersionScope
+from squid.core.records.application.models import PublishedRecordResult
+from squid.core.records.domain import RecordCriterion, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -612,7 +612,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         return tuple(nodes)
 
     @property
-    def _record_browser(self) -> sp.Browser[PublishedTitle, ComponentsV2Target, sd.Request] | None:
+    def _record_browser(self) -> sp.Browser[PublishedRecordResult, ComponentsV2Target, sd.Request] | None:
         if self._mode != "records":
             return None
         expression = self._query.parsed.expression
@@ -733,9 +733,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                                 available=titles is not None,
                             )
                             for category, label in (
-                                (BaseTitle.SMALLEST, tr(t"record-browser-smallest = Smallest")),
-                                (BaseTitle.FASTEST, tr(t"record-browser-fastest = Fastest")),
-                                (BaseTitle.FIRST, tr(t"record-browser-first = First")),
+                                (RecordCriterion.SMALLEST, tr(t"record-browser-smallest = Smallest")),
+                                (RecordCriterion.FASTEST, tr(t"record-browser-fastest = Fastest")),
+                                (RecordCriterion.FIRST, tr(t"record-browser-first = First")),
                             )
                         ),
                         sl.action_control(
@@ -902,7 +902,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _search_parser(self) -> SearchQueryParser:
         return SearchQueryParser(self._search_fields, scope=self._search_scope)
 
-    async def _toggle_record_category(self, category: BaseTitle | None, _event: sl.PressEvent) -> None:
+    async def _toggle_record_category(self, category: RecordCriterion | None, _event: sl.PressEvent) -> None:
         await self._apply_record_filter(self._query.toggle_record_title(self._search_parser, category))
 
     async def _select_record_version(self, version: VersionScope, _event: sl.PressEvent) -> None:
@@ -984,7 +984,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 if focus is not None:
                     return focus
             elif (browser := self._record_browser) is not None and (record := browser.opened) is not None:
-                record_id = f"result:{record.id}"
+                record_id = f"result:{record.result_id}"
                 return SearchFocus(SearchResultAnchor("record", record_id), record_id=record_id, show_records=True)
         if self._selected is not None:
             build = self._selected.opened

@@ -169,7 +169,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             "query": sd.Option(
                 name=tr(t"command-records-query-name = query"),
                 description=tr(
-                    t"record-search-query-help = Name, keywords, or filters, e.g. kind:door base_title:smallest."
+                    t"record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:smallest."
                 ),
                 autocomplete=suggests("search_query"),
             )

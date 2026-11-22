@@ -9,14 +9,14 @@ from squid.core.records.domain.formatting import (
     TitleFormatter,
 )
 from squid.core.records.domain.models import (
-    BaseTitle,
     BuildKind,
     Candidate,
     CandidateGap,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
     TimingMethod,
     TimingVariant,
-    TitleResolution,
     VersionScope,
 )
 from squid.core.records.domain.resolution import (
@@ -29,7 +29,6 @@ from squid.core.records.domain.resolution import (
 )
 
 __all__ = [
-    "BaseTitle",
     "BuildKind",
     "Candidate",
     "CandidateGap",
@@ -37,12 +36,13 @@ __all__ = [
     "DoorCategory",
     "ExtenderCategory",
     "FormattedTitle",
+    "RecordCriterion",
+    "RecordResolution",
     "ResolutionStatus",
     "RulesTitleFormatter",
     "TimingMethod",
     "TimingVariant",
     "TitleFormatter",
-    "TitleResolution",
     "VersionScope",
     "generate_category_subsets",
     "reduce_timing_variants",

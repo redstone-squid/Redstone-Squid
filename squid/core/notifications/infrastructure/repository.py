@@ -38,10 +38,10 @@ from squid.core.permissions.domain import BuiltinRoleKeys
 from squid.core.permissions.models import PermissionRole, PermissionRoleAssignment
 from squid.core.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.core.records.models import (
-    RecordTitle,
-    TitleDefinition,
-    TitleHolder,
-    TitleResult,
+    Record,
+    RecordDefinition,
+    RecordHolder,
+    RecordResult,
 )
 from squid.core.tags.models import TagAssignment
 
@@ -86,10 +86,10 @@ def _most_recent_discord_identity_id(account_column):
 
 @dataclass(frozen=True, slots=True)
 class _RecordGain:
-    title_id: UUID
+    record_id: UUID
     build_id: int
     title: str
-    base_title: str
+    criterion: str
     build_kind: str
     version_scope: str
 
@@ -248,7 +248,7 @@ class PostgresNotificationRepository:
                 )
             )
         else:
-            statement = select(exists().where(RecordTitle.public_id == subject_id))
+            statement = select(exists().where(Record.public_id == subject_id))
         return bool(await session.scalar(statement))
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
@@ -268,9 +268,9 @@ class PostgresNotificationRepository:
     async def subscription_labels(self, account_id: int) -> Sequence[tuple[int, str]]:
         """Resolve enabled follows using public aliases and the latest record title."""
         latest = (
-            select(TitleDefinition.title_id, TitleDefinition.title)
-            .distinct(TitleDefinition.title_id)
-            .order_by(TitleDefinition.title_id, TitleDefinition.id.desc())
+            select(RecordDefinition.record_id, RecordDefinition.title)
+            .distinct(RecordDefinition.record_id)
+            .order_by(RecordDefinition.record_id, RecordDefinition.id.desc())
             .subquery()
         )
         aliases = (
@@ -285,7 +285,7 @@ class PostgresNotificationRepository:
             .outerjoin(
                 latest,
                 (NotificationSubscription.kind == SubscriptionKind.RECORD)
-                & (latest.c.title_id == NotificationSubscription.subject_id),
+                & (latest.c.record_id == NotificationSubscription.subject_id),
             )
             .outerjoin(
                 aliases,
@@ -603,9 +603,9 @@ class PostgresNotificationRepository:
                 "build_id": build_id,
                 "records": [
                     {
-                        "title_id": str(gain.title_id),
+                        "title_id": str(gain.record_id),
                         "title": gain.title,
-                        "base_title": gain.base_title,
+                        "base_title": gain.criterion,
                         "build_kind": gain.build_kind,
                         "version_scope": gain.version_scope,
                     }
@@ -737,35 +737,35 @@ class PostgresNotificationRepository:
         new_rows = (
             await session.execute(
                 select(
-                    TitleDefinition.title_id,
-                    TitleHolder.build_id,
-                    TitleDefinition.title,
-                    RecordTitle.base_title,
-                    RecordTitle.build_kind,
-                    RecordTitle.version_scope,
+                    RecordDefinition.record_id,
+                    RecordHolder.build_id,
+                    RecordDefinition.title,
+                    Record.criterion,
+                    Record.build_kind,
+                    Record.version_scope,
                 )
-                .select_from(TitleDefinition)
-                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
-                .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
-                .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
-                .where(TitleResult.run_id == run_id)
+                .select_from(RecordDefinition)
+                .join(Record, Record.public_id == RecordDefinition.record_id)
+                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
+                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
+                .where(RecordResult.run_id == run_id)
             )
         ).all()
         old_holders = set(
             await session.execute(
-                select(TitleDefinition.title_id, TitleHolder.build_id)
-                .select_from(TitleDefinition)
-                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
-                .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
-                .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
-                .where(TitleResult.run_id == previous_run_id)
+                select(RecordDefinition.record_id, RecordHolder.build_id)
+                .select_from(RecordDefinition)
+                .join(Record, Record.public_id == RecordDefinition.record_id)
+                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
+                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
+                .where(RecordResult.run_id == previous_run_id)
             )
         )
         grouped: dict[int, list[_RecordGain]] = defaultdict(list)
-        for title_id, build_id, title, base_title, build_kind, version_scope in new_rows:
-            if (title_id, build_id) in old_holders:
+        for record_id, build_id, title, criterion, build_kind, version_scope in new_rows:
+            if (record_id, build_id) in old_holders:
                 continue
-            grouped[build_id].append(_RecordGain(title_id, build_id, title, base_title, build_kind, version_scope))
+            grouped[build_id].append(_RecordGain(record_id, build_id, title, criterion, build_kind, version_scope))
         return {build_id: tuple(values) for build_id, values in grouped.items()}
 
     @staticmethod
@@ -797,7 +797,7 @@ class PostgresNotificationRepository:
             creator_ids[build_id].add(public_creator_id)
 
         relevant_subjects: set[UUID] = set().union(*creator_ids.values())
-        relevant_subjects.update(gain.title_id for build_gains in gains.values() for gain in build_gains)
+        relevant_subjects.update(gain.record_id for build_gains in gains.values() for gain in build_gains)
         exact_subscriptions = (
             await session.execute(
                 select(
@@ -816,7 +816,7 @@ class PostgresNotificationRepository:
                 subjects = (
                     creator_ids[build_id]
                     if kind is SubscriptionKind.CREATOR
-                    else {gain.title_id for gain in build_gains}
+                    else {gain.record_id for gain in build_gains}
                 )
                 if subject_id in subjects:
                     recipients[build_id].add(account_id)
@@ -898,7 +898,7 @@ def _filter_matches(
 ) -> bool:
     if record_filter.build_kinds and gain.build_kind not in record_filter.build_kinds:
         return False
-    if record_filter.base_titles and gain.base_title not in record_filter.base_titles:
+    if record_filter.criteria and gain.criterion not in record_filter.criteria:
         return False
     if record_filter.version_scopes and gain.version_scope not in record_filter.version_scopes:
         return False

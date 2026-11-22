@@ -9,13 +9,13 @@ from collections.abc import Iterable, Sequence
 from typing import assert_never
 
 from squid.core.records.domain.models import (
-    BaseTitle,
     Candidate,
     CandidateGap,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
     TimingReduction,
     TimingVariant,
-    TitleResolution,
 )
 
 
@@ -56,18 +56,18 @@ def reduce_timing_variants(variants: Sequence[TimingVariant]) -> TimingReduction
     return TimingReduction(timing=TimingVariant(tuple(reduced)))
 
 
-def resolve_smallest(candidates: Iterable[Candidate]) -> TitleResolution:
+def resolve_smallest(candidates: Iterable[Candidate]) -> RecordResolution:
     """Resolve the fixed-volume record, consulting completion only for a tie."""
     active = _smallest_pool(candidates)
     if not active:
-        return TitleResolution(status=ResolutionStatus.NO_CANDIDATE)
+        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
 
     if len(active) == 1:
         return _resolved(active)
     return _resolve_completion_tie(active)
 
 
-def resolve_fastest(candidates: Iterable[Candidate], methods: Sequence[str]) -> TitleResolution:
+def resolve_fastest(candidates: Iterable[Candidate], methods: Sequence[str]) -> RecordResolution:
     """Compare each build's slowest variant, using lower-priority methods only for ties.
 
     `methods` names timing slots in priority order and supplies gap field names.
@@ -82,11 +82,11 @@ def resolve_fastest(candidates: Iterable[Candidate], methods: Sequence[str]) -> 
     return _resolve_completion_tie(active)
 
 
-def resolve_first(candidates: Iterable[Candidate]) -> TitleResolution:
+def resolve_first(candidates: Iterable[Candidate]) -> RecordResolution:
     """Resolve the earliest provable completion date."""
     eligible = [candidate for candidate in candidates if candidate.completion_at is not None]
     if not eligible:
-        return TitleResolution(status=ResolutionStatus.NO_CANDIDATE)
+        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
 
     earliest = min(candidate.completion_at for candidate in eligible if candidate.completion_at is not None)
     return _resolved(candidate for candidate in eligible if candidate.completion_at == earliest)
@@ -95,18 +95,18 @@ def resolve_first(candidates: Iterable[Candidate]) -> TitleResolution:
 def resolve_fastest_smallest(
     candidates: Iterable[Candidate],
     methods: Sequence[str],
-) -> TitleResolution:
+) -> RecordResolution:
     """Resolve the fastest build in the minimum-volume pool."""
     active = _smallest_pool(candidates)
     if not active:
-        return TitleResolution(status=ResolutionStatus.NO_CANDIDATE)
+        return RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
     return resolve_fastest(active, methods)
 
 
 def resolve_smallest_fastest(
     candidates: Iterable[Candidate],
     methods: Sequence[str],
-) -> TitleResolution:
+) -> RecordResolution:
     """Resolve the smallest build in the fastest-timing pool."""
     active, incomplete = _fastest_pool(candidates, methods)
     if incomplete is not None:
@@ -125,7 +125,7 @@ def _smallest_pool(candidates: Iterable[Candidate]) -> list[Candidate]:
 def _fastest_pool(
     candidates: Iterable[Candidate],
     methods: Sequence[str],
-) -> tuple[list[Candidate], TitleResolution | None]:
+) -> tuple[list[Candidate], RecordResolution | None]:
     candidate_reductions = [(candidate, reduce_timing_variants(candidate.timing_variants)) for candidate in candidates]
     active = [
         (candidate, reduction)
@@ -133,7 +133,7 @@ def _fastest_pool(
         if reduction.timing is not None and reduction.timing.values[0] is not None
     ]
     if not active:
-        return [], TitleResolution(status=ResolutionStatus.NO_CANDIDATE)
+        return [], RecordResolution(status=ResolutionStatus.NO_CANDIDATE)
 
     for index, method in enumerate(methods):
         if len(active) == 1:
@@ -149,7 +149,7 @@ def _fastest_pool(
         if missing:
             return (
                 [],
-                TitleResolution(
+                RecordResolution(
                     status=ResolutionStatus.UNRESOLVED,
                     provisional_holder_ids=_candidate_ids(candidate for candidate, _ in active),
                     gaps=tuple(missing),
@@ -173,12 +173,12 @@ def _fastest_pool(
     return [candidate for candidate, _ in active], None
 
 
-def _resolve_completion_tie(candidates: Sequence[Candidate]) -> TitleResolution:
+def _resolve_completion_tie(candidates: Sequence[Candidate]) -> RecordResolution:
     missing = tuple(
         CandidateGap(candidate.build_id, "completion_at") for candidate in candidates if candidate.completion_at is None
     )
     if missing:
-        return TitleResolution(
+        return RecordResolution(
             status=ResolutionStatus.UNRESOLVED,
             provisional_holder_ids=_candidate_ids(candidates),
             gaps=missing,
@@ -188,8 +188,8 @@ def _resolve_completion_tie(candidates: Sequence[Candidate]) -> TitleResolution:
     return _resolved(candidate for candidate in candidates if candidate.completion_at == earliest)
 
 
-def _resolved(candidates: Iterable[Candidate]) -> TitleResolution:
-    return TitleResolution(
+def _resolved(candidates: Iterable[Candidate]) -> RecordResolution:
+    return RecordResolution(
         status=ResolutionStatus.RESOLVED,
         holder_ids=_candidate_ids(candidates),
     )
@@ -199,18 +199,20 @@ def _candidate_ids(candidates: Iterable[Candidate]) -> tuple[int, ...]:
     return tuple(sorted(candidate.build_id for candidate in candidates))
 
 
-def resolve_record(base_title: BaseTitle, candidates: Iterable[Candidate], methods: Sequence[str]) -> TitleResolution:
+def resolve_record(
+    criterion: RecordCriterion, candidates: Iterable[Candidate], methods: Sequence[str]
+) -> RecordResolution:
     """Apply a record's comparison order using the kind's timing methods."""
-    match base_title:
-        case BaseTitle.FIRST:
+    match criterion:
+        case RecordCriterion.FIRST:
             return resolve_first(candidates)
-        case BaseTitle.SMALLEST:
+        case RecordCriterion.SMALLEST:
             return resolve_smallest(candidates)
-        case BaseTitle.FASTEST:
+        case RecordCriterion.FASTEST:
             return resolve_fastest(candidates, methods)
-        case BaseTitle.FASTEST_SMALLEST:
+        case RecordCriterion.FASTEST_SMALLEST:
             return resolve_fastest_smallest(candidates, methods)
-        case BaseTitle.SMALLEST_FASTEST:
+        case RecordCriterion.SMALLEST_FASTEST:
             return resolve_smallest_fastest(candidates, methods)
         case _:
-            assert_never(base_title)
+            assert_never(criterion)

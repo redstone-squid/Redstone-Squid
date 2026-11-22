@@ -3,7 +3,7 @@ import type { DoorRecordEvidence } from "../../src/generated/types.gen";
 export const doorEvidence: DoorRecordEvidence = {
   evaluation: {
     opening: [6, 3, 1],
-    base_title: "smallest",
+    criterion: "smallest",
     version_id: null,
     evaluated_at: "2026-08-10T12:00:00Z",
     resolution: { status: "resolved", holder_ids: [1] },

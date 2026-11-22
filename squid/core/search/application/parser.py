@@ -93,7 +93,7 @@ class SearchQueryParser:
     `width:3 piston OR slime` means `(width:3 AND piston) OR slime`.
 
     Leading unquoted `smallest`, `fastest`, or their two-word combinations are
-    shorthand for a base_title filter. Queries with an explicit base_title field
+    shorthand for a criterion filter. Queries with an explicit criterion field
     retain their literal text. Quoting the leading word also keeps it literal.
 
     Parsing stores tokens on this instance; do not share it across threads.
@@ -151,7 +151,7 @@ class SearchQueryParser:
         """Render a query so that parsing it preserves its meaning."""
         rendered = _render_expression(expression)
         first_word = rendered.partition(" ")[0].casefold()
-        field = self.registry.resolve("base_title")
+        field = self.registry.resolve("criterion")
         if field is None or not any(first_word == prefix[0] for prefix in _RECORD_PREFIXES):
             return rendered
         pending = [expression]
@@ -167,7 +167,7 @@ class SearchQueryParser:
         return f"({rendered})"
 
     def _expand_record_prefix(self, tokens: tuple[_Token, ...]) -> tuple[_Token, ...]:
-        field = self.registry.resolve("base_title")
+        field = self.registry.resolve("criterion")
         if field is None:
             return tokens
         for token, following in pairwise(tokens):

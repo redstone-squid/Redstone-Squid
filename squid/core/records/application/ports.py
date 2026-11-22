@@ -11,12 +11,12 @@ from squid.core.records.application.models import (
     CandidateBuild,
     CategoryIdentity,
     ComputationBatch,
-    PublishedTitle,
+    PublishedRecordResult,
     RecordGap,
-    TitleDiagnosticGap,
+    RecordNameDiagnostic,
 )
 from squid.core.records.application.snapshots import RecordSnapshot
-from squid.core.records.domain import BaseTitle, BuildKind, FormattedTitle, VersionScope
+from squid.core.records.domain import BuildKind, FormattedTitle, RecordCriterion, VersionScope
 from squid.unit_of_work import UnitOfWork
 
 
@@ -102,11 +102,11 @@ class RecordRunRepository(Protocol):
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
 
-    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
+    async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]: ...
 
-    async def get_published_record(self, result_id: int) -> PublishedTitle | None: ...
+    async def get_published_record(self, result_id: int) -> PublishedRecordResult | None: ...
 
-    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedTitle | None: ...
+    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedRecordResult | None: ...
 
     async def list_published_records(
         self,
@@ -118,7 +118,7 @@ class RecordRunRepository(Protocol):
         limit: int,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> Sequence[PublishedTitle]: ...
+    ) -> Sequence[PublishedRecordResult]: ...
 
     async def count_published_records(
         self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
@@ -132,7 +132,7 @@ class RecordRunRepository(Protocol):
         self,
         rules_revision_id: int,
         category: CategoryIdentity,
-        titles: Mapping[BaseTitle, FormattedTitle],
+        titles: Mapping[RecordCriterion, FormattedTitle],
     ) -> None: ...
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease: ...

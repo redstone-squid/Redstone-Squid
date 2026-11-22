@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Sequence
 
 from squid.core.i18n import SUPPORTED_LOCALES
-from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.registry import SuggestionSource
@@ -74,10 +74,10 @@ def static_sources() -> tuple[SuggestionSource, ...]:
             kind_label="build_kind",
         ),
         SuggestionSource(
-            id="base_titles",
-            provider=StaticProvider.of([item.value for item in BaseTitle], kind="base_title"),
+            id="criteria",
+            provider=StaticProvider.of([item.value for item in RecordCriterion], kind="criterion"),
             kind=SourceKind.ENUMERABLE,
-            kind_label="base_title",
+            kind_label="criterion",
         ),
         SuggestionSource(
             id="version_scopes",

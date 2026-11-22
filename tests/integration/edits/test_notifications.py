@@ -37,9 +37,9 @@ from squid.core.notifications.errors import NotificationNotFoundError
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.domain.models import MaterializationSource
-from squid.core.records.models import RecordTitle, RulesRevision, TitleDefinition
+from squid.core.records.models import Record, RecordDefinition, RulesRevision
 
 
 async def test_follow_labels_resolve_public_names_and_latest_titles(
@@ -59,8 +59,8 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
                 claim_method=ClaimMethod.VERIFIED_IGN,
             )
         )
-        title = RecordTitle(
-            base_title=BaseTitle.SMALLEST,
+        title = Record(
+            criterion=RecordCriterion.SMALLEST,
             build_kind=BuildKind.DOOR,
             version_scope=VersionScope.ALL_TIME,
             category_key="discovery-test",
@@ -74,8 +74,8 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
             session.add(revision)
             await session.flush()
             session.add(
-                TitleDefinition(
-                    title_id=title.public_id,
+                RecordDefinition(
+                    record_id=title.public_id,
                     rules_revision_id=revision.id,
                     title=wording,
                     materialization_source=MaterializationSource.EAGER,

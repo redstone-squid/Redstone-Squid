@@ -17,16 +17,16 @@ from squid.core.records.application.models import (
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
-    ComputedRecord,
+    ComputedRecordResult,
     HolderHistoryEntry,
 )
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     FormattedTitle,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
-    TitleResolution,
     VersionScope,
 )
 from squid.core.records.domain.models import FacetKind
@@ -34,9 +34,9 @@ from squid.core.records.models import (
     ComputationRun,
     DefinitionFacet,
     MaterializationSource,
+    RecordDefinition,
+    RecordHolderHistory,
     RulesRevision,
-    TitleDefinition,
-    TitleHolderHistory,
 )
 from squid.core.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
@@ -63,13 +63,13 @@ def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
         category_text=FormattedTitle("2x3 Door"),
         candidates=candidates,
     )
-    computed = ComputedRecord(
-        base_title=BaseTitle.SMALLEST,
+    computed = ComputedRecordResult(
+        criterion=RecordCriterion.SMALLEST,
         scope=VersionScope.ALL_TIME,
         version_id=None,
         category=record_title,
         title=FormattedTitle("Smallest 2x3 Door"),
-        resolution=TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(build_ids[-1],)),
+        resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(build_ids[-1],)),
         history=tuple(
             HolderHistoryEntry(
                 build_ids=(candidate.build_id,),
@@ -123,9 +123,9 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         history = (
             (
                 await session.execute(
-                    select(TitleHolderHistory)
-                    .where(TitleHolderHistory.run_id == current_run)
-                    .order_by(TitleHolderHistory.held_from)
+                    select(RecordHolderHistory)
+                    .where(RecordHolderHistory.run_id == current_run)
+                    .order_by(RecordHolderHistory.held_from)
                 )
             )
             .scalars()
@@ -157,10 +157,10 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
     )
     assert len(published) == 1
     async with records() as uow:
-        latest = await uow.records.get_latest_record(original.title_id)
+        latest = await uow.records.get_latest_record(original.record_id)
     assert latest is not None
-    assert latest.id == published[0].id
-    assert latest.id != original.id
+    assert latest.result_id == published[0].result_id
+    assert latest.result_id != original.result_id
     assert published[0].title == "Updated smallest door"
     assert published[0].holder_build_ids == (build_ids[-1],)
     assert isinstance(published[0].computed_at, datetime)
@@ -203,9 +203,9 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
         records=tuple(
             replace(
                 template,
-                base_title=base_title,
+                criterion=criterion,
                 title=FormattedTitle(
-                    base_title.value, subtitle="First completion" if base_title is BaseTitle.FIRST else None
+                    criterion.value, subtitle="First completion" if criterion is RecordCriterion.FIRST else None
                 ),
                 category=replace(
                     template.category,
@@ -220,13 +220,13 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
                 history=(),
             )
             for size in range(1, 221)
-            for base_title in BaseTitle
+            for criterion in RecordCriterion
         ),
     )
     with record_queries(sessions) as first_queries:
         await transact(records, lambda uow: uow.records.activate(batch), commit=True)
     identity = batch.records[0].category.identity
-    titles = {base_title: FormattedTitle(f"Requested {base_title.value}") for base_title in BaseTitle}
+    titles = {criterion: FormattedTitle(f"Requested {criterion.value}") for criterion in RecordCriterion}
     await transact(
         records, lambda uow: uow.records.save_requested_category(batch.rules_revision_id, identity, titles), commit=True
     )
@@ -234,9 +234,9 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
 
     async with sessions() as session:
         original = {
-            (row.base_title, row.category_key): (row.id, row.title_id)
+            (row.criterion, row.category_key): (row.id, row.record_id)
             for row in (
-                await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.record_title)))
+                await session.scalars(select(RecordDefinition).options(selectinload(RecordDefinition.record)))
             ).all()
         }
     with record_queries(sessions) as repeated_queries:
@@ -259,7 +259,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
 
     async with sessions() as session:
         definitions = (
-            await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.record_title)))
+            await session.scalars(select(RecordDefinition).options(selectinload(RecordDefinition.record)))
         ).all()
         facets = (await session.scalars(select(DefinitionFacet))).all()
     assert len(definitions) == 1105
@@ -267,9 +267,9 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
     assert all(facet.facet_kind is FacetKind.RESTRICTION for facet in facets)
     assert all(facet.display_order == 0 for facet in facets if facet.facet_id == 1)
     for definition in definitions:
-        key = (definition.base_title, definition.category_key)
+        key = (definition.criterion, definition.category_key)
         if key in original:
-            assert (definition.id, definition.title_id) == original[key]
+            assert (definition.id, definition.record_id) == original[key]
         if definition.category_key in {identity.key, requested.key}:
             assert definition.materialization_source is MaterializationSource.PUBLIC_LOOKUP
     for queries in (first_queries, repeated_queries):
@@ -306,19 +306,19 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
     async with sessions() as session:
         next_definitions = (
             await session.scalars(
-                select(TitleDefinition)
-                .options(selectinload(TitleDefinition.record_title))
-                .where(TitleDefinition.rules_revision_id == next_rules_revision_id)
+                select(RecordDefinition)
+                .options(selectinload(RecordDefinition.record))
+                .where(RecordDefinition.rules_revision_id == next_rules_revision_id)
             )
         ).all()
     assert len(next_definitions) == 10
     for definition in next_definitions:
-        previous_id, previous_public_id = original[(definition.base_title, definition.category_key)]
+        previous_id, previous_public_id = original[(definition.criterion, definition.category_key)]
         assert definition.id != previous_id
         if definition.version_scope is VersionScope.ALL_TIME:
-            assert definition.title_id == previous_public_id
+            assert definition.record_id == previous_public_id
         else:
-            assert definition.title_id != previous_public_id
+            assert definition.record_id != previous_public_id
 
 
 async def test_unchanged_publication_preserves_ids_and_events(

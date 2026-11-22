@@ -33,7 +33,7 @@ from squid.core.notifications.edits import (
     notification_target,
 )
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
-from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.suggestions.domain import Suggestion
 from squid.core.tags.domain import TagValueType
 from squid_i18n import md_tr
@@ -382,18 +382,18 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
 
     async def _follow_filter(self, event: sd.SubmitEvent[RedstoneSquid], *, tag: Suggestion | None = None) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
-        base_title = self._optional_text(event.values.get("base_title"))
+        criterion = self._optional_text(event.values.get("base_title"))
         version_scope = self._optional_text(event.values.get("version_scope"))
         tag_id = None if tag is None else int(tag.value)
         tag_value = cast(str | float | bool | None, event.values.get("tag_value"))
         if isinstance(tag_value, str):
             tag_value = tag_value.strip() or None
-        if not any((build_kind, base_title, version_scope, tag_id is not None)):
+        if not any((build_kind, criterion, version_scope, tag_id is not None)):
             await event.notice(tr(t"notifications-record-filter-required = Choose at least one record filter."))
             return
         record_filter = RecordSubscriptionFilter(
             build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
-            base_titles=frozenset({base_title}) if base_title else frozenset(),
+            criteria=frozenset({criterion}) if criterion else frozenset(),
             version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
             tags=()
             if tag_id is None
@@ -449,12 +449,12 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                     ),
                 ),
                 sl.forms.ChoiceField(
-                    key="base_title",
-                    label=tr(t"bot-notifications-view-base-title = Base title"),
+                    key="criterion",
+                    label=tr(t"bot-notifications-view-base-title = Record criterion"),
                     required=False,
                     options=tuple(
                         sl.forms.ChoiceOption(item.value, item.value.replace("_", " ").title(), item.value)
-                        for item in BaseTitle
+                        for item in RecordCriterion
                     ),
                 ),
                 sl.forms.ChoiceField(
@@ -628,7 +628,7 @@ def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
     """Format a structured subscription filter as readable predicate values."""
     parts = [
         ", ".join(sorted(values))
-        for values in (record_filter.build_kinds, record_filter.base_titles, record_filter.version_scopes)
+        for values in (record_filter.build_kinds, record_filter.criteria, record_filter.version_scopes)
         if values
     ]
     parts.extend(

@@ -1,8 +1,8 @@
 ---
-import type { PublishedTitle } from "../../generated/types.gen";
+import type { PublishedRecordResult } from "../../generated/types.gen";
 import { formatDate, translate, type Locale } from "../../lib/i18n";
 
-type Props = { record: PublishedTitle; locale: Locale };
+type Props = { record: PublishedRecordResult; locale: Locale };
 const { record, locale } = Astro.props;
 ---
 

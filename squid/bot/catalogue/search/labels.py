@@ -35,7 +35,7 @@ _SYMBOLS = {
 
 
 def field_label(name: str) -> sl.TextLike:
-    """Return the display name of a search field, such as "Base title" for `base_title`."""
+    """Return the display name of a search field, such as "Record criterion" for `criterion`."""
     match name:
         case "title":
             return tr(t"search-field-title = Title")
@@ -57,8 +57,8 @@ def field_label(name: str) -> sl.TextLike:
             return tr(t"search-field-status = Status")
         case "kind":
             return tr(t"search-field-kind = Kind")
-        case "base_title":
-            return tr(t"search-field-base-title = Record type")
+        case "criterion":
+            return tr(t"search-field-base-title = Record criterion")
         case "version_scope":
             return tr(t"search-field-version-scope = Version scope")
         case "width":

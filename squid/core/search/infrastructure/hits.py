@@ -43,7 +43,7 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
             subtitle=document.subtitle,
             build_id=build_id,
             build_title=_string(data, "build_title", document.title),
-            base_title=_string(data, "base_title", "unknown"),
+            criterion=_string(data, "base_title", "unknown"),
             version_scope=_string(data, "version_scope", "all-time"),
             holder_build_ids=tuple(holder_ids) if isinstance(holder_ids, list | tuple) else (),
             holders=_HOLDERS.validate_python(data.get("holders", ())),

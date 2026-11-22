@@ -65,10 +65,10 @@ async def test_a_field_value_is_read_from_the_index() -> None:
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        ("base_title:", ["fastest", "fastest_smallest", "first", "smallest", "smallest_fastest"]),
-        ("base_title:FAST", ["fastest", "fastest_smallest"]),
-        ('base_title:"small', ['"smallest"', '"smallest_fastest"']),
-        ("base_title:unknown", []),
+        ("criterion:", ["fastest", "fastest_smallest", "first", "smallest", "smallest_fastest"]),
+        ("criterion:FAST", ["fastest", "fastest_smallest"]),
+        ('criterion:"small', ['"smallest"', '"smallest_fastest"']),
+        ("criterion:unknown", []),
     ],
 )
 async def test_base_titles_are_suggested_without_indexed_records(query: str, expected: list[str]) -> None:
@@ -82,7 +82,7 @@ async def test_base_titles_are_suggested_without_indexed_records(query: str, exp
 
 async def test_base_title_suggestions_respect_the_limit() -> None:
     instance, _ = provider()
-    result = await instance.suggest(SuggestionRequest(source="search_query", query="base_title:", limit=2))
+    result = await instance.suggest(SuggestionRequest(source="search_query", query="criterion:", limit=2))
 
     assert [item.value for item in result.items] == ["fastest", "fastest_smallest"]
 
@@ -107,7 +107,7 @@ async def test_catalogue_completions_use_the_scoped_registry() -> None:
         SuggestionRequest(source="search_fields", context={"scope": "records"})
     )
     names = {item.suggestion.value for item in fields}
-    assert {"kind", "base_title", "status"} <= names
+    assert {"kind", "criterion", "status"} <= names
     assert "width" not in names
 
 

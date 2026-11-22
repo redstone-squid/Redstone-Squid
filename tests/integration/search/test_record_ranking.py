@@ -23,7 +23,7 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
         status="resolved",
         history_complete=True,
         gap_reasons={},
-        base_title="fastest",
+        criterion="fastest",
         build_kind="door",
         version_scope="all_time",
         category_key="door",

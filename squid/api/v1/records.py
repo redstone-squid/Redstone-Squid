@@ -33,25 +33,25 @@ from squid.api.security import requires
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
-from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.published_points import PublishedDoorPoint
 from squid.core.records.application.range_snapshots import RangePublication
 from squid.core.records.errors import RecordNotFoundError
 
 
-class PublicRecordDTO(DataclassDTO[PublishedTitle]):
+class PublicRecordDTO(DataclassDTO[PublishedRecordResult]):
     """Serialize published record facts directly without another Python record model."""
 
-    __schema_name__ = "PublishedTitle"
+    __schema_name__ = "PublishedRecordResult"
 
     config = DTOConfig(
         include={
-            "id",
+            "result_id",
             "definition_id",
-            "title_id",
+            "record_id",
             "title",
             "subtitle",
-            "base_title",
+            "criterion",
             "build_kind",
             "version_scope",
             "status",
@@ -65,7 +65,7 @@ class PublicRecordDTO(DataclassDTO[PublishedTitle]):
 
 
 # Result identifiers ascend with computation, so recency needs no separate indexed column.
-_SORT_FIELDS = frozenset({"id"})
+_SORT_FIELDS = frozenset({"result_id"})
 
 
 @get(
@@ -99,12 +99,12 @@ async def list_records(
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[PublishedTitle]:
+) -> Page[PublishedRecordResult]:
     """List authoritative published record results."""
-    _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
+    _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-result_id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)
-    return Page[PublishedTitle].from_domain(page)
+    return Page[PublishedRecordResult].from_domain(page)
 
 
 @post(

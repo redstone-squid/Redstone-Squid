@@ -124,7 +124,7 @@ class RecordSearchHit:
     subtitle: str | None
     build_id: int
     build_title: str
-    base_title: str
+    criterion: str
     version_scope: str
     score: float | None = None
     tags: tuple[str, ...] = ()

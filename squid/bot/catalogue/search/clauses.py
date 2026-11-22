@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Self
 
-from squid.core.records.domain import BaseTitle, VersionScope
+from squid.core.records.domain import RecordCriterion, VersionScope
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain.query import (
     BooleanExpression,
@@ -69,14 +69,16 @@ class CatalogueQuery:
         return CatalogueQuery(parsed)
 
     @property
-    def record_titles(self) -> frozenset[BaseTitle] | None:
+    def record_titles(self) -> frozenset[RecordCriterion] | None:
         """Return selected titles, or None when the buttons cannot edit the expression."""
         selection = self._title_filter()
         return selection[1] if selection is not None else None
 
-    def _title_filter(self) -> tuple[tuple[int, ...] | None, frozenset[BaseTitle]] | None:
+    def _title_filter(self) -> tuple[tuple[int, ...] | None, frozenset[RecordCriterion]] | None:
         return _record_filter(
-            self.parsed.expression, "base_title", (BaseTitle.SMALLEST, BaseTitle.FASTEST, BaseTitle.FIRST)
+            self.parsed.expression,
+            "criterion",
+            (RecordCriterion.SMALLEST, RecordCriterion.FASTEST, RecordCriterion.FIRST),
         )
 
     @property
@@ -89,14 +91,14 @@ class CatalogueQuery:
     def _version_filter(self) -> tuple[tuple[int, ...] | None, frozenset[VersionScope]] | None:
         return _record_filter(self.parsed.expression, "version_scope", tuple(VersionScope))
 
-    def toggle_record_title(self, parser: SearchQueryParser, title: BaseTitle | None) -> CatalogueQuery | None:
+    def toggle_record_title(self, parser: SearchQueryParser, title: RecordCriterion | None) -> CatalogueQuery | None:
         """Toggle one title, or clear the title selection when given None."""
         selection = self._title_filter()
         if selection is None:
             return None
         path, titles = selection
         titles = titles ^ {title} if title is not None else frozenset()
-        field = parser.registry.resolve("base_title")
+        field = parser.registry.resolve("criterion")
         assert field is not None
         clauses = (FieldExpression(field, ComparisonOperator.EQUAL, item) for item in sorted(titles))
         return self._replace_filter(parser, path, combine_clauses(BooleanOperator.OR, *clauses))

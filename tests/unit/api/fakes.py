@@ -67,7 +67,7 @@ from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.core.permissions.domain import Pattern
 from squid.core.records.application import PublicRecordQueryService, RecordService
-from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangePublication
 from squid.core.records.domain import VersionScope
@@ -505,7 +505,7 @@ class MockRecords(RecordService):
         """Publish no records."""
 
     @override
-    async def get(self, result_id: int) -> PublishedTitle | None:
+    async def get(self, result_id: int) -> PublishedRecordResult | None:
         return None
 
     @override
@@ -517,8 +517,8 @@ class MockRecords(RecordService):
         page_size: int = 20,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
-    ) -> Page[PublishedTitle]:
-        return cast(Page[PublishedTitle], _EMPTY_PAGE)
+    ) -> Page[PublishedRecordResult]:
+        return cast(Page[PublishedRecordResult], _EMPTY_PAGE)
 
 
 class MockPublicRecords(PublicRecordQueryService):

@@ -71,7 +71,7 @@ class RecordFilterInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     build_kinds: set[Literal["door", "entrance", "extender", "utility"]] = Field(default_factory=set)
-    base_titles: set[Literal["first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"]] = Field(
+    criteria: set[Literal["first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"]] = Field(
         default_factory=set
     )
     version_scopes: set[Literal["all_time", "up_to_date"]] = Field(default_factory=set)
@@ -80,14 +80,14 @@ class RecordFilterInput(BaseModel):
     def to_domain(self) -> RecordSubscriptionFilter:
         return RecordSubscriptionFilter(
             build_kinds=frozenset(self.build_kinds),
-            base_titles=frozenset(self.base_titles),
+            criteria=frozenset(self.criteria),
             version_scopes=frozenset(self.version_scopes),
             tags=tuple(tag.to_domain() for tag in self.tags),
         )
 
 
 class NotificationSubscriptionCreate(BaseModel):
-    """A subscription to a creator, a record title, or a record filter.
+    """A subscription to a creator, a record, or a record filter.
 
     Creator and record subscriptions require subject_id and forbid filter.
     Record-filter subscriptions require filter and forbid subject_id.
@@ -124,9 +124,12 @@ class NotificationSubscriptionDetail(BaseModel):
 
     @classmethod
     def from_domain(cls, subscription: NotificationSubscription) -> NotificationSubscriptionDetail:
+        criteria_filter = None if subscription.record_filter is None else subscription.record_filter.as_dict()
+        if criteria_filter is not None:
+            criteria_filter["criteria"] = criteria_filter.pop("base_titles")
         return cls(
             id=subscription.id,
             kind=subscription.kind,
             subject_id=subscription.subject_id,
-            filter=None if subscription.record_filter is None else dict(subscription.record_filter.as_dict()),
+            filter=criteria_filter,
         )

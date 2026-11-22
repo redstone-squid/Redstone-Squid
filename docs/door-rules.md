@@ -26,7 +26,7 @@ We currently have support and recognise records for these types of builds.
 
 * [Utilitie](#2.4-utilities)s
 
-Builds can break with every Minecraft update. To acknowledge this, builds working in the latest version have an additional and may compete in additional “up-to-date” record titlesbuilds not working in the latest version have **\[BROKEN\]** appended to the title.
+Builds that work in the latest Minecraft version can also compete for up-to-date records. Builds that no longer work have **\[BROKEN\]** appended to their names.
 
 ## 2.1 Piston Doors {#2.1-piston-doors}
 
@@ -544,9 +544,9 @@ Despite being in accordance with section 2, a build is eligible for Record Title
 
 # 4 Record Classification
 
-Record Titles have the form ‘**\<base title\>** **\<record category\>**’.
+A record name combines its criterion and category, as in **Smallest 3×3 piston door**.
 
-1) **\<base title\>** are the fields in which a build must be optimal in order to be eligible for a Record Title. There are 5 types:
+1) The **record criterion** determines how qualifying builds are compared. There are five criteria:
 
    1) **FIRST**.
 
@@ -558,7 +558,7 @@ Record Titles have the form ‘**\<base title\>** **\<record category\>**’.
 
    5) **SMALLEST FASTEST**.
 
-2) **\<record category\>** is the name of the build as covered in [2.1](#2.1-piston-doors), [2.2](#2.2-entrances), [2.3](#2.3-piston-extenders) and [2.4](#2.4-utilities).
+2) The **record category** describes the builds being compared, as covered in [2.1](#2.1-piston-doors), [2.2](#2.2-entrances), [2.3](#2.3-piston-extenders) and [2.4](#2.4-utilities).
 
 ## 4.1 First
 
@@ -566,7 +566,7 @@ A build is considered **FIRST** if there is no other build in the same \<record 
 
 ## 4.2 Smallest (Volume) {#4.2-smallest-(volume)}
 
-A build is considered **SMALLEST** if there is no other build in the same \<record category\> with a smaller volume. If there are multiple builds tied in volume, the SMALLEST record title holder is the one with an earlier proveable date of completion.
+A build is considered **SMALLEST** if there is no other build in the same \<record category\> with a smaller volume. If there are multiple builds tied in volume, the SMALLEST record holder is the one with an earlier proveable date of completion.
 
 **Volume \= width \* height \* depth** of the circuitrywiring of the build, measured along the x, y, and z dimensions, rounded up to the nearest integer. If the build is EXPANDABLE, there are additional guidelines, please scroll down three paragraphs. Both blocks and entities are considered in volume calculation, per the definition of circuitrywiring.
 
@@ -617,7 +617,7 @@ CONTAINED **Volume:** The diagram on the right explains how to convert an uncont
 
 **This section only applies to piston doors, entrances and piston extenders.**
 
-A build is considered **FASTEST** if there is no other build in the same **\<record category\>** with a smaller time, using an equally or higher ranked method. If there are still multiple builds tied after all timing methods are considered, the **FASTEST** record title holder is the one with an earlier proveable date of completion.
+A build is considered **FASTEST** if there is no other build in the same **\<record category\>** with a smaller time, using an equally or higher ranked method. If there are still multiple builds tied after all timing methods are considered, the **FASTEST** record holder is the one with an earlier proveable date of completion.
 
 Methods for measuring the time of different types of builds are listed below. The time should be measured in-game using gameticks or seconds, where 1 second \= 20 gameticks. **Use repeater input when timing.** Note that a record must work with both player input and repeater input, so this is always possible. The ending time of any block or piston movement is measured using the following method:
 
@@ -665,7 +665,7 @@ Methods of measuring the time of a piston extender, ranked in **order of priorit
 
 3. RETRACTION RESET TIME: time from the end of RETRACTION TIME to the time which the door can be extended again.
 
-   NOTE: “retracted // extended again” requires the build to be functional and satisfy the above times claimed for record title at any time point of (de)activation thereafter; Reset times are negative when the extender can be extended//retracted before the end of RETRACTION // EXTENSION TIME.
+   NOTE: “retracted // extended again” requires the build to be functional and satisfy the above times claimed for the record at any time point of (de)activation thereafter; Reset times are negative when the extender can be extended//retracted before the end of RETRACTION // EXTENSION TIME.
 
 4. EXTENSION RESET TIME.
 

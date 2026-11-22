@@ -9413,7 +9413,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.PublishedTitle_"
+                  "$ref": "#/components/schemas/Page_litestar.dto._backend.PublishedRecordResult_"
                 }
               }
             }
@@ -18202,19 +18202,6 @@
         ],
         "title": "AvatarDetail"
       },
-      "BaseTitle": {
-        "type": "string",
-        "enum": [
-          "first",
-          "fastest",
-          "smallest",
-          "fastest_smallest",
-          "smallest_fastest"
-        ],
-        "title": "BaseTitle",
-        "description": "A metric by which records are classified.",
-        "default": "smallest"
-      },
       "BuildCategory": {
         "type": "string",
         "enum": [
@@ -20008,7 +19995,7 @@
             "const": "width",
             "default": "width"
           },
-          "base_title": {
+          "criterion": {
             "type": "string",
             "const": "smallest",
             "default": "smallest"
@@ -20195,8 +20182,8 @@
             ],
             "type": "array"
           },
-          "base_title": {
-            "$ref": "#/components/schemas/BaseTitle"
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
           }
         },
         "type": "object",
@@ -22268,8 +22255,8 @@
             ],
             "type": "array"
           },
-          "base_title": {
-            "$ref": "#/components/schemas/BaseTitle"
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
           },
           "version_id": {
             "oneOf": [
@@ -22286,7 +22273,7 @@
             "format": "date-time"
           },
           "resolution": {
-            "$ref": "#/components/schemas/TitleResolution"
+            "$ref": "#/components/schemas/RecordResolution"
           },
           "holder_configuration_ids": {
             "items": {
@@ -22309,8 +22296,8 @@
         },
         "type": "object",
         "required": [
-          "base_title",
           "configurations",
+          "criterion",
           "evaluated_at",
           "holder_configuration_ids",
           "opening",
@@ -22817,11 +22804,11 @@
         ],
         "title": "Page[InboxNotificationDetail]"
       },
-      "Page_litestar.dto._backend.PublishedTitle_": {
+      "Page_litestar.dto._backend.PublishedRecordResult_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/PublishedTitle"
+              "$ref": "#/components/schemas/PublishedRecordResult"
             },
             "type": "array"
           },
@@ -22856,7 +22843,7 @@
           "prev",
           "total"
         ],
-        "title": "Page[PublishedTitle]"
+        "title": "Page[PublishedRecordResult]"
       },
       "Page_litestar.dto._backend.TagDetail_": {
         "properties": {
@@ -23687,13 +23674,13 @@
       },
       "PublicRecordDetail": {
         "properties": {
-          "id": {
+          "result_id": {
             "type": "integer"
           },
           "definition_id": {
             "type": "integer"
           },
-          "title_id": {
+          "record_id": {
             "type": "string",
             "format": "uuid"
           },
@@ -23710,8 +23697,8 @@
               }
             ]
           },
-          "base_title": {
-            "$ref": "#/components/schemas/BaseTitle"
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
           },
           "build_kind": {
             "$ref": "#/components/schemas/BuildKind"
@@ -23776,17 +23763,17 @@
         },
         "type": "object",
         "required": [
-          "base_title",
           "build_kind",
           "computed_at",
+          "criterion",
           "definition_id",
           "holder_build_ids",
           "holder_builds",
-          "id",
+          "record_id",
+          "result_id",
           "status",
           "subtitle",
           "title",
-          "title_id",
           "version_scope"
         ],
         "title": "PublicRecordDetail"
@@ -23890,15 +23877,15 @@
         ],
         "title": "PublishedPointStatus"
       },
-      "PublishedTitle": {
+      "PublishedRecordResult": {
         "properties": {
-          "id": {
+          "result_id": {
             "type": "integer"
           },
           "definition_id": {
             "type": "integer"
           },
-          "title_id": {
+          "record_id": {
             "type": "string",
             "format": "uuid"
           },
@@ -23915,8 +23902,8 @@
               }
             ]
           },
-          "base_title": {
-            "$ref": "#/components/schemas/BaseTitle"
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
           },
           "build_kind": {
             "$ref": "#/components/schemas/BuildKind"
@@ -23965,19 +23952,19 @@
         },
         "type": "object",
         "required": [
-          "base_title",
           "build_kind",
           "computed_at",
+          "criterion",
           "definition_id",
           "holder_build_ids",
-          "id",
+          "record_id",
+          "result_id",
           "status",
           "subtitle",
           "title",
-          "title_id",
           "version_scope"
         ],
-        "title": "PublishedTitle"
+        "title": "PublishedRecordResult"
       },
       "RangeAttempt": {
         "properties": {
@@ -24512,6 +24499,19 @@
         ],
         "title": "RecalculationProposalResponse"
       },
+      "RecordCriterion": {
+        "type": "string",
+        "enum": [
+          "first",
+          "fastest",
+          "smallest",
+          "fastest_smallest",
+          "smallest_fastest"
+        ],
+        "title": "RecordCriterion",
+        "description": "A metric by which records are classified.",
+        "default": "smallest"
+      },
       "RecordFilterInput": {
         "properties": {
           "build_kinds": {
@@ -24526,7 +24526,7 @@
             },
             "type": "array"
           },
-          "base_titles": {
+          "criteria": {
             "items": {
               "type": "string",
               "enum": [
@@ -24572,6 +24572,39 @@
         "title": "RecordOperator",
         "description": "How a tag assignment satisfies a record-category predicate."
       },
+      "RecordResolution": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          },
+          "holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "provisional_holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RecordResolution"
+      },
       "RecordSearchEntry": {
         "properties": {
           "record_id": {
@@ -24596,7 +24629,7 @@
           "build_title": {
             "type": "string"
           },
-          "base_title": {
+          "criterion": {
             "type": "string"
           },
           "version_scope": {
@@ -24656,9 +24689,9 @@
         },
         "type": "object",
         "required": [
-          "base_title",
           "build_id",
           "build_title",
+          "criterion",
           "metrics",
           "record_id",
           "subtitle",
@@ -25608,7 +25641,7 @@
             "$ref": "#/components/schemas/IntegerProgression"
           },
           "resolution": {
-            "$ref": "#/components/schemas/TitleResolution"
+            "$ref": "#/components/schemas/RecordResolution"
           },
           "holder_configuration_ids": {
             "items": {
@@ -26216,39 +26249,6 @@
         ],
         "title": "TagValueType",
         "description": "The scalar value attached to a tag."
-      },
-      "TitleResolution": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ResolutionStatus"
-          },
-          "holder_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "default": []
-          },
-          "provisional_holder_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "default": []
-          },
-          "gaps": {
-            "items": {
-              "$ref": "#/components/schemas/CandidateGap"
-            },
-            "type": "array",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "TitleResolution"
       },
       "UploadCapabilities": {
         "properties": {

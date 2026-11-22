@@ -11,9 +11,9 @@ from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetail
 from squid.core.builds.application import PublicBuildPreview, PublicBuildSummary
 from squid.core.builds.domain import MediaTypeLiteral, Status
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
-from squid.core.records.application.models import PublicRecordDetail, PublishedTitle
+from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.services import PublicRecordQueryService
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition
 from squid.sponsors import PublicSponsor
@@ -49,14 +49,14 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
     return build
 
 
-def published_record(*holder_build_ids: int) -> PublishedTitle:
-    return PublishedTitle(
-        id=7,
+def published_record(*holder_build_ids: int) -> PublishedRecordResult:
+    return PublishedRecordResult(
+        result_id=7,
         definition_id=3,
-        title_id=UUID("22222222-2222-2222-2222-222222222222"),
+        record_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
-        base_title=BaseTitle.FASTEST,
+        criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -66,7 +66,7 @@ def published_record(*holder_build_ids: int) -> PublishedTitle:
 
 
 class PublicRecordFake(PublicRecordQueryService):
-    def __init__(self, record: PublishedTitle, builds: list[Build]) -> None:
+    def __init__(self, record: PublishedRecordResult, builds: list[Build]) -> None:
         self.record = record
         self.builds = tuple(PublicBuildSummary.from_build(build) for build in builds)
         self.requests: list[UUID] = []
@@ -74,7 +74,7 @@ class PublicRecordFake(PublicRecordQueryService):
     @override
     async def get(self, record_id: UUID) -> PublicRecordDetail | None:
         self.requests.append(record_id)
-        if record_id != self.record.title_id:
+        if record_id != self.record.record_id:
             return None
         return PublicRecordDetail.with_holders(self.record, self.builds)
 
@@ -172,11 +172,11 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
     records = PublicRecordFake(record, [catalogue_build(41), catalogue_build(42)])
 
-    detail = await get_record.fn(record.title_id, records)
+    detail = await get_record.fn(record.record_id, records)
 
     assert detail.holder_build_ids == (41, 42)
     assert [build.id for build in detail.holder_builds] == [41, 42]
-    assert records.requests == [record.title_id]
+    assert records.requests == [record.record_id]
 
 
 def test_detail_details_are_keyed_by_the_build_category() -> None:

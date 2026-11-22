@@ -52,6 +52,8 @@ class RangeSource(BaseModel):
 
 def canonical_range_query(query: DoorRangeQuery) -> str:
     value = query.model_dump(mode="json")
+    # Range registrations are keyed by the original canonical JSON.
+    value["base_title"] = value.pop("criterion")
     # Preserve existing fixed/all-time registration keys across this addition.
     if not query.follow_current_version:
         value.pop("follow_current_version")

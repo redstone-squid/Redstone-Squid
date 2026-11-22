@@ -19,12 +19,12 @@ from squid.core.builds.domain.expansion_evaluation import (
 )
 from squid.core.records.application.models import CandidateBuild, CategoryIdentity
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
     TimingVariant,
-    TitleResolution,
 )
 from squid.core.records.domain.door_evidence import LiveDoorConfiguration, LiveDoorRecord
 from squid.core.records.domain.models import DOOR_TIMING_METHODS, CandidateGap
@@ -76,7 +76,7 @@ class DoorRecordLookup(DoorRecordCategory):
     """A concrete opening and title in a taxonomy category."""
 
     opening: tuple[LookupDimension, LookupDimension, LookupDimension]
-    base_title: BaseTitle = BaseTitle.SMALLEST
+    criterion: RecordCriterion = RecordCriterion.SMALLEST
 
     @field_validator("opening", mode="before")
     @classmethod
@@ -173,12 +173,12 @@ def resolve_door_configurations(
         if configuration.membership is PointStatus.SUPPORTED
     )
     methods = tuple(method.value for method in DOOR_TIMING_METHODS)
-    result = resolve_record(request.base_title, eligible, methods)
+    result = resolve_record(request.criterion, eligible, methods)
 
     def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
         return tuple(sorted({configurations[id].build_id for id in ids}))
 
-    resolution = TitleResolution(
+    resolution = RecordResolution(
         result.status,
         holder_ids=build_ids(result.holder_ids),
         provisional_holder_ids=build_ids(result.provisional_holder_ids),
@@ -189,10 +189,10 @@ def resolve_door_configurations(
     # Ties between alternatives of the same build cannot change the build-level
     # holder, even when missing facts prevent selecting its winning branch.
     if resolution.status is ResolutionStatus.UNRESOLVED and len(resolution.provisional_holder_ids) == 1:
-        resolution = TitleResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
+        resolution = RecordResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
     return LiveDoorRecord(
         request.opening,
-        request.base_title,
+        request.criterion,
         request.version_id,
         evaluated_at,
         resolution,

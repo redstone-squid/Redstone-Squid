@@ -1,7 +1,7 @@
-from squid.core.records.models import RecordTitle, TitleDefinition, TitleResult
+from squid.core.records.models import Record, RecordDefinition, RecordResult
 
 
 def test_record_vocabulary_preserves_physical_tables() -> None:
-    assert RecordTitle.__tablename__ == "record_titles"
-    assert TitleDefinition.__tablename__ == "title_definitions"
-    assert TitleResult.__tablename__ == "title_results"
+    assert Record.__tablename__ == "record_titles"
+    assert RecordDefinition.__tablename__ == "title_definitions"
+    assert RecordResult.__tablename__ == "title_results"

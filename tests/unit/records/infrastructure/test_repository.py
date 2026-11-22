@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from squid.core.builds.models import ExtenderBuild
 from squid.core.records.application.models import CategoryIdentity
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
+    RecordCriterion,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -25,9 +25,9 @@ from squid.core.records.infrastructure.repository import (
 from squid.core.records.models import (
     ComputationRun,
     MaterializationSource,
-    RecordTitle,
-    TitleDefinition,
-    TitleResult,
+    Record,
+    RecordDefinition,
+    RecordResult,
 )
 from tests.support.schema import model_table
 
@@ -47,21 +47,21 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 
 def test_gap_rows_carry_the_definition_title() -> None:
-    definition = TitleDefinition(
-        title_id=uuid.uuid4(),
+    definition = RecordDefinition(
+        record_id=uuid.uuid4(),
         rules_revision_id=1,
         title="Fastest 2x2 Door",
         subtitle="All-time",
         materialization_source=MaterializationSource.EAGER,
     )
-    definition.record_title = RecordTitle(
-        base_title=BaseTitle.FASTEST,
+    definition.record_title = Record(
+        criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         category_key="door:door|2x2|t[20]|Door:r[]:p[]",
     )
     definition.id = 5
-    result = TitleResult(
+    result = RecordResult(
         run_id=1,
         definition_id=5,
         status=ResolutionStatus.UNRESOLVED,
@@ -78,18 +78,18 @@ def test_gap_rows_carry_the_definition_title() -> None:
 
 
 def test_title_definitions_persist_canonical_title_metadata() -> None:
-    assert {"title", "subtitle", "title_diagnostics"} <= set(TitleDefinition.__table__.columns.keys())
+    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordDefinition.__table__.columns.keys())
 
 
 def test_title_definitions_allow_every_base_title() -> None:
-    table = model_table(RecordTitle)
+    table = model_table(Record)
     constraint = next(
         constraint
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint) and constraint.name == "record_titles_base_title_check"
     )
 
-    assert all(base_title.value in str(constraint.sqltext) for base_title in BaseTitle)
+    assert all(criterion.value in str(constraint.sqltext) for criterion in RecordCriterion)
 
 
 def test_active_run_identity_is_global_across_rules_revisions() -> None:

@@ -32,8 +32,8 @@ from squid.core.permissions.domain.catalogue import (
     RECORD_ENTRY_INSPECT,
 )
 from squid.core.records.application import RecordService
-from squid.core.records.application.models import PublishedTitle, RecordGap, TitleDiagnosticGap
-from squid.core.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
+from squid.core.records.application.models import PublishedRecordResult, RecordGap, RecordNameDiagnostic
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -250,13 +250,13 @@ async def test_sort_keeps_the_focused_build_on_its_new_page(entry: str, monkeypa
 
 async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: pytest.MonkeyPatch) -> None:
     records = AsyncMock(spec=RecordService)
-    record = PublishedTitle(
-        id=10,
+    record = PublishedRecordResult(
+        result_id=10,
         definition_id=1,
-        title_id=uuid4(),
+        record_id=uuid4(),
         title="Smallest 2x2 door",
         subtitle=None,
-        base_title=BaseTitle.SMALLEST,
+        criterion=RecordCriterion.SMALLEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -399,13 +399,13 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(
         items=(
-            PublishedTitle(
-                id=10,
+            PublishedRecordResult(
+                result_id=10,
                 definition_id=1,
-                title_id=uuid4(),
+                record_id=uuid4(),
                 title="Smallest 2x2 door",
                 subtitle=None,
-                base_title=BaseTitle.SMALLEST,
+                criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
                 status=ResolutionStatus.RESOLVED,
@@ -467,13 +467,13 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(
         items=tuple(
-            PublishedTitle(
-                id=index,
+            PublishedRecordResult(
+                result_id=index,
                 definition_id=index,
-                title_id=uuid4(),
+                record_id=uuid4(),
                 title=title,
                 subtitle=None,
-                base_title=BaseTitle.SMALLEST,
+                criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
                 status=ResolutionStatus.RESOLVED,
@@ -487,10 +487,11 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
         prev=None,
     )
     records.gaps.return_value = tuple(
-        RecordGap(index, title, None, BaseTitle.SMALLEST, (7,), ("width",), BuildKind.DOOR) for index in range(count)
+        RecordGap(index, title, None, RecordCriterion.SMALLEST, (7,), ("width",), BuildKind.DOOR)
+        for index in range(count)
     )
     records.title_gaps.return_value = tuple(
-        TitleDiagnosticGap(index, title, ({"code": "unknown"},), BuildKind.DOOR) for index in range(count)
+        RecordNameDiagnostic(index, title, ({"code": "unknown"},), BuildKind.DOOR) for index in range(count)
     )
     tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
@@ -527,7 +528,7 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
 async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
     records = AsyncMock()
     records.gaps.return_value = (
-        RecordGap(1, "Smallest 2x2 door", None, BaseTitle.SMALLEST, (7,), ("width",), BuildKind.DOOR),
+        RecordGap(1, "Smallest 2x2 door", None, RecordCriterion.SMALLEST, (7,), ("width",), BuildKind.DOOR),
     )
     records.title_gaps.return_value = ()
     tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
@@ -580,7 +581,7 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("smallest"))
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "base_title:smallest"
+        assert request.query == "criterion:smallest"
         assert request.scope is SearchScope.RECORDS
         assert "## Search results" in ui.texts()
 
@@ -588,16 +589,16 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
 async def test_record_versions_filter_compact_standings_and_search() -> None:
     records = AsyncMock(spec=RecordService)
 
-    async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedTitle]:
+    async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedRecordResult]:
         assert kwargs["resolved_only"] is True
         current = version_scope is VersionScope.UP_TO_DATE
-        record = PublishedTitle(
-            id=2 if current else 1,
+        record = PublishedRecordResult(
+            result_id=2 if current else 1,
             definition_id=1,
-            title_id=uuid4(),
+            record_id=uuid4(),
             title="Fastest piston door" if current else "Smallest piston door",
             subtitle=None,
-            base_title=BaseTitle.FASTEST if current else BaseTitle.SMALLEST,
+            criterion=RecordCriterion.FASTEST if current else RecordCriterion.SMALLEST,
             build_kind=BuildKind.DOOR,
             version_scope=version_scope,
             status=ResolutionStatus.RESOLVED,
@@ -617,10 +618,10 @@ async def test_record_versions_filter_compact_standings_and_search() -> None:
         assert ui.control(ui.key_for("up_to_date")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
-        assert request.parsed_query.normalized == "version_scope:up_to_date AND base_title:fastest"
+        assert request.parsed_query.normalized == "version_scope:up_to_date AND criterion:fastest"
         await ui.press(ui.key_for("all_time"))
         request = service.search.call_args.args[0]
-        assert request.parsed_query.normalized == "base_title:fastest AND version_scope:all_time"
+        assert request.parsed_query.normalized == "criterion:fastest AND version_scope:all_time"
         assert ui.control(ui.key_for("all_time")).payload["style"] == 3
         ui.assert_within_limits()
 
@@ -635,7 +636,7 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         await ui.press(ui.key_for("fastest"))
         request = service.search.call_args.args[0]
-        assert request.query == 'title:"vault door" AND (base_title:fastest OR base_title:smallest)'
+        assert request.query == 'title:"vault door" AND (criterion:fastest OR criterion:smallest)'
         assert request.sort is not None
         assert request.sort.field == "created_at"
         assert screen._guided is not None
@@ -646,13 +647,13 @@ async def test_record_toggles_preserve_text_and_sort_and_can_be_combined_or_remo
         assert service.search.call_args.args[0].query == request.query
         await ui.press(ui.key_for("smallest"))
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
-        assert service.search.call_args.args[0].query == 'title:"vault door" AND base_title:fastest'
+        assert service.search.call_args.args[0].query == 'title:"vault door" AND criterion:fastest'
         await ui.press(ui.key_for("fastest"))
         assert service.search.call_args.args[0].query == 'title:"vault door"'
         ui.assert_within_limits()
 
 
-@pytest.mark.parametrize("query", ["smallest door", 'door AND BASE_TITLE:"smallest"'])
+@pytest.mark.parametrize("query", ["smallest door", 'door AND CRITERION:"smallest"'])
 async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
     screen = _screen(initial_id=None)
     screen._mode = "records"
@@ -662,14 +663,14 @@ async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
         await ui.press(ui.key_for("fastest"))
         assert screen._guided is not None
-        assert "(base_title:fastest OR base_title:smallest)" in screen._guided.query.text
+        assert "(criterion:fastest OR criterion:smallest)" in screen._guided.query.text
         await ui.press(ui.key_for("smallest"))
         expression = screen._query.parsed.expression
         assert expression in (
-            SearchQueryParser().parse("door AND base_title:fastest").expression,
-            SearchQueryParser().parse("base_title:fastest AND door").expression,
+            SearchQueryParser().parse("door AND criterion:fastest").expression,
+            SearchQueryParser().parse("criterion:fastest AND door").expression,
         )
-        await ui.press(ui.key_for("remove-0" if screen._query.text.startswith("base_title") else "remove-1"))
+        await ui.press(ui.key_for("remove-0" if screen._query.text.startswith("criterion") else "remove-1"))
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
         assert screen._guided.query.text == "door"
         assert screen._sort == "-created_at"
@@ -678,10 +679,10 @@ async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
 @pytest.mark.parametrize(
     "query",
     [
-        "NOT base_title:smallest",
-        "base_title:smallest OR kind:door",
-        "base_title:smallest AND base_title:fastest",
-        "base_title:fastest_smallest",
+        "NOT criterion:smallest",
+        "criterion:smallest OR kind:door",
+        "criterion:smallest AND criterion:fastest",
+        "criterion:fastest_smallest",
     ],
 )
 async def test_record_buttons_leave_complex_title_filters_to_the_editor(query: str) -> None:
@@ -697,7 +698,7 @@ async def test_all_types_preserves_literal_keywords() -> None:
     screen = _screen(initial_id=None)
     screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
-        await submit_search(ui, "fastest AND base_title:smallest")
+        await submit_search(ui, "fastest AND criterion:smallest")
         await ui.press(ui.key_for("all-standings"))
         assert screen._query.text == "(fastest)"
         assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
@@ -717,7 +718,7 @@ async def test_all_types_clears_title_filters_and_preserves_other_filters() -> N
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert "## Records" in ui.texts()
         # With a typed query, the query and sort stay and the search reruns without types.
-        await submit_search(ui, "door base_title:smallest", "-created_at")
+        await submit_search(ui, "door criterion:smallest", "-created_at")
         await ui.press(ui.key_for("all-standings"))
         assert screen._query.text == "door"
         assert screen._sort == "-created_at"
@@ -763,7 +764,7 @@ async def test_record_toggles_are_visible_on_build_details() -> None:
         await ui.press(ui.key_for("first"))
         assert "## Search results" in ui.texts()
         assert screen._selected is None
-        assert screen._query.text == "base_title:first"
+        assert screen._query.text == "criterion:first"
 
 
 async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
@@ -774,7 +775,7 @@ async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
         original_results = screen._results
         cast(AsyncMock, screen._search_service).search.side_effect = RuntimeError("search unavailable")
         await ui.press(ui.key_for("fastest"))
-        assert screen._query.text == "base_title:smallest"
+        assert screen._query.text == "criterion:smallest"
         assert screen._results is original_results
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
         assert ui.control(ui.key_for("fastest")).payload["style"] == 2
@@ -816,7 +817,7 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         if records:
             assert ui.control(ui.key_for("fastest")).payload["style"] == 3
         assert screen._query.text == (
-            "kind:door AND base_title:fastest AND version_scope:all_time"
+            "kind:door AND criterion:fastest AND version_scope:all_time"
             if records
             else "door AND width<=5 AND height<=6"
         )
@@ -900,13 +901,13 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
     record_service = AsyncMock(spec=RecordService)
     record_service.list_page.return_value = Page(
         items=tuple(
-            PublishedTitle(
-                id=index,
+            PublishedRecordResult(
+                result_id=index,
                 definition_id=index,
-                title_id=uuid4(),
+                record_id=uuid4(),
                 title=f"Smallest door {index}",
                 subtitle=None,
-                base_title=BaseTitle.SMALLEST,
+                criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
                 status=ResolutionStatus.RESOLVED,
@@ -1238,7 +1239,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         assert service.search.call_args.args[0].scope is SearchScope.RECORDS
         assert service.search.call_args.args[0].query == shared
 
-        record_query = shared + "base_title:smallest status:resolved"
+        record_query = shared + "criterion:smallest status:resolved"
         await submit_search(ui, record_query, "-updated_at")
         await ui.press(ui.key_for("all-builds"))
         assert screen._query.text == shared
@@ -1249,12 +1250,12 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         await ui.press(ui.key_for("all-records"))
         assert (
             screen._query.text
-            == 'kind:door AND (title:"vault door" OR piston) AND base_title:smallest AND status:resolved'
+            == 'kind:door AND (title:"vault door" OR piston) AND criterion:smallest AND status:resolved'
         )
         assert screen._sort == "-updated_at"
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
 
-        await submit_search(ui, "kind:door base_title:fastest status:resolved", "-updated_at")
+        await submit_search(ui, "kind:door criterion:fastest status:resolved", "-updated_at")
         await ui.press(ui.key_for("all-builds"))
         request = service.search.call_args.args[0]
         assert request.scope is SearchScope.BUILDS
@@ -1263,7 +1264,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
 
         await ui.press(ui.key_for("reset"))
         await ui.press(ui.key_for("all-records"))
-        assert screen._query.text == "base_title:fastest AND status:resolved"
+        assert screen._query.text == "criterion:fastest AND status:resolved"
         assert screen._sort == "-updated_at"
         assert ui.control(ui.key_for("fastest")).payload["style"] == 3
         ui.assert_within_limits()
@@ -1281,7 +1282,7 @@ async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() 
         await ui.press(ui.key_for("record-tools"))
         await ui.press(ui.key_for("all-records"))
         assert screen._query == CatalogueQuery(RecordQuery(None, ""))
-        record_query = "title:door OR base_title:fastest"
+        record_query = "title:door OR criterion:fastest"
         await submit_search(ui, record_query)
 
         await ui.press(ui.key_for("record-tools"))
@@ -1463,7 +1464,7 @@ async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
     assert "piston" not in preference.filters
     accounts.catalogue_preferences.return_value = [
         preference,
-        CataloguePreference(account_id=1, scope="records", filters="base_title:fastest", sort=""),
+        CataloguePreference(account_id=1, scope="records", filters="criterion:fastest", sort=""),
     ]
     reopened = _screen(initial_id=None, records=AsyncMock(spec=RecordService))
     reopened._accounts = accounts
@@ -1472,7 +1473,7 @@ async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
     assert reopened._query.parsed == reopened._search_parser.parse("width<=5 OR width>=10")
     assert reopened._results is not None
     await reopened._switch("records", press_event())
-    assert reopened._query.text == "base_title:fastest"
+    assert reopened._query.text == "criterion:fastest"
     await reopened._reset_search(press_event())
     reset = accounts.save_catalogue_preference.await_args.args[0]
     assert (reset.scope, reset.filters, reset.sort) == ("records", "", "")

@@ -8,7 +8,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.core.builds.domain import BuildCategory
-from squid.core.records.domain import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid_i18n import md_tr
 from squid_ui.authoring.semantic import Fields, Paragraph
 from squid_ui.content.text import Text
@@ -21,14 +21,14 @@ BUILD_EXAMPLES = (
     (tr(t"search-example-dates = Completion date range"), "completion_at:[2025-01-01 TO 2026-01-01]"),
 )
 RECORD_EXAMPLES = (
-    (tr(t"search-example-fastest = All-time fastest doors"), "kind:door base_title:fastest version_scope:all_time"),
+    (tr(t"search-example-fastest = All-time fastest doors"), "kind:door criterion:fastest version_scope:all_time"),
     (
         tr(t"search-example-extenders = Current smallest extenders"),
-        "kind:extender base_title:smallest version_scope:up_to_date",
+        "kind:extender criterion:smallest version_scope:up_to_date",
     ),
     (
         tr(t"search-example-combined = Combined record titles"),
-        "base_title:fastest_smallest OR base_title:smallest_fastest",
+        "criterion:fastest_smallest OR criterion:smallest_fastest",
     ),
 )
 
@@ -40,7 +40,7 @@ def search_help(
 ) -> sp.Tabs[ComponentsV2Target, sd.Request]:
     """Build the tabbed search reference shown above the catalogue's active view."""
     if records:
-        base_titles = ", ".join(title.value for title in BaseTitle)
+        criteria = ", ".join(title.value for title in RecordCriterion)
         kinds = ", ".join(kind.value for kind in BuildKind)
         scopes = ", ".join(scope.value for scope in VersionScope)
         fields = (
@@ -52,7 +52,7 @@ def search_help(
             ),
             _entry(
                 tr(t"search-reference-label-record-type = Record type"),
-                md_tr(t"search-reference-record-type = `base_title:` {base_titles}"),
+                md_tr(t"search-reference-record-type = `criterion:` {criteria}"),
             ),
             _entry(
                 tr(t"search-reference-label-kind = Kind"),

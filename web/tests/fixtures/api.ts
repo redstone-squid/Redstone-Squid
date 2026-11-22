@@ -11,7 +11,7 @@ import type {
   BuildSchematicsListResponse,
   ProblemDetail,
   PublicRecordDetail,
-  PublishedTitle,
+  PublishedRecordResult,
   SearchSuggestions,
   SuggestionPage,
 } from "../../src/generated/types.gen";
@@ -115,12 +115,12 @@ const detail: BuildDetail = {
 
 const records = [
   {
-    id: 11,
+    result_id: 11,
     definition_id: 4,
-    title_id: "11111111-1111-1111-1111-111111111111",
+    record_id: "11111111-1111-1111-1111-111111111111",
     title: "Fastest 5×5 seamless door",
     subtitle: "Java, all time",
-    base_title: "fastest_smallest",
+    criterion: "fastest_smallest",
     build_kind: "door",
     version_scope: "all_time",
     status: "resolved",
@@ -128,26 +128,27 @@ const records = [
     computed_at: frozenDate,
   },
   {
-    id: 12,
+    result_id: 12,
     definition_id: 5,
-    title_id: "22222222-2222-2222-2222-222222222222",
+    record_id: "22222222-2222-2222-2222-222222222222",
     title: "Smallest piston extender",
     subtitle: null,
-    base_title: "smallest",
+    criterion: "smallest",
     build_kind: "extender",
     version_scope: "up_to_date",
     status: "resolved",
     holder_build_ids: [3],
     computed_at: frozenDate,
   },
-] satisfies [PublishedTitle, PublishedTitle];
+] satisfies [PublishedRecordResult, PublishedRecordResult];
 
 const recordDetail: PublicRecordDetail = { ...records[0], holder_builds: [builds[0]] };
 const expandableRecord: PublicRecordDetail = {
   ...records[0],
-  id: 13,
+  result_id: 13,
+  record_id: "33333333-3333-3333-3333-333333333333",
   title: "Smallest 6×3 door",
-  base_title: "smallest",
+  criterion: "smallest",
   door_evidence: doorEvidence,
   holder_builds: [
     {
@@ -215,7 +216,7 @@ function recordPage(url: URL): RecordsListResponse {
       items: [records[1]],
       total: 2,
       next: null,
-      prev: { offset: null, after_id: null, before_id: records[1].id },
+      prev: { offset: null, after_id: null, before_id: records[1].result_id },
     };
   }
   return {
@@ -283,8 +284,8 @@ async function routeRequest(request: Request): Promise<Response> {
     return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
-  if (url.pathname === `/v1/records/${recordDetail.title_id}`) return json(recordDetail satisfies PublicRecordDetail);
-  if (url.pathname === `/v1/records/${expandableRecord.title_id}`) return json(expandableRecord);
+  if (url.pathname === `/v1/records/${recordDetail.record_id}`) return json(recordDetail satisfies PublicRecordDetail);
+  if (url.pathname === `/v1/records/${expandableRecord.record_id}`) return json(expandableRecord);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/search/suggest") {
@@ -319,7 +320,7 @@ async function routeRequest(request: Request): Promise<Response> {
             subtitle: records[0].subtitle,
             build_id: 1,
             build_title: builds[0].title,
-            base_title: records[0].base_title,
+            criterion: records[0].criterion,
             version_scope: records[0].version_scope,
             tags: ["door"],
             metrics: { opening_time: 8 },

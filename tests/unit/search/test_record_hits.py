@@ -18,7 +18,7 @@ def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:
         document_data={
             "holder_build_ids": [7, 9],
             "metric": {"volume": 24},
-            "base_title": "smallest",
+            "criterion": "smallest",
             "version_scope": "all_time",
         },
     )

@@ -7,15 +7,15 @@ from squid.core.records.application.models import (
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
-    ComputedRecord,
+    ComputedRecordResult,
 )
 from squid.core.records.domain import (
-    BaseTitle,
     BuildKind,
     Candidate,
     FormattedTitle,
+    RecordCriterion,
+    RecordResolution,
     ResolutionStatus,
-    TitleResolution,
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
@@ -34,13 +34,13 @@ def batch() -> ComputationBatch:
         BuildKind.DOOR,
         None,
         (
-            ComputedRecord(
-                BaseTitle.SMALLEST,
+            ComputedRecordResult(
+                RecordCriterion.SMALLEST,
                 VersionScope.ALL_TIME,
                 None,
                 category,
                 FormattedTitle("Smallest 2x2 Door"),
-                TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(1,)),
+                RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(1,)),
             ),
         ),
     )

@@ -229,7 +229,7 @@ def test_nonintegral_modulo_operand_remains_unknown_without_a_short_circuit() ->
     [
         {"height": 0},
         {"height": 3, "axis": "height"},
-        {"height": 3, "base_title": "fastest"},
+        {"height": 3, "criterion": "fastest"},
         {"height": True},
         {"height": 3, "minimum": 7, "maximum": 6},
         {"height": 3, "restriction_values": [[7, "exact", "3"]]},

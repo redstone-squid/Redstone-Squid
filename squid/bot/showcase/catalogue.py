@@ -10,7 +10,7 @@ from squid.bot.submission.build_card import build_card
 from squid.bot.ui import tr
 from squid.core.builds.domain import Status
 from squid.core.builds.models import DoorBuild
-from squid.core.records.domain.models import BaseTitle, BuildKind, VersionScope
+from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
@@ -24,7 +24,7 @@ class CataloguePreview(sd.Screen):
         published = record_standings(
             title,
             subtitle,
-            BaseTitle.SMALLEST,
+            RecordCriterion.SMALLEST,
             VersionScope.ALL_TIME,
             holders,
             self._open_holder,
@@ -33,7 +33,7 @@ class CataloguePreview(sd.Screen):
         search = record_standings(
             sl.md(t"Smallest **2x2** Seamless Door"),
             subtitle,
-            BaseTitle.SMALLEST,
+            RecordCriterion.SMALLEST,
             VersionScope.ALL_TIME,
             holders,
             self._open_holder,

@@ -5,15 +5,15 @@ import json
 
 from pydantic import TypeAdapter
 
-from squid.core.records.application.models import ComputationBatch, ComputedRecord
+from squid.core.records.application.models import ComputationBatch, ComputedRecordResult
 
-_RECORD = TypeAdapter(ComputedRecord)
+_RECORD = TypeAdapter(ComputedRecordResult)
 
 
 def publication_fingerprint(batch: ComputationBatch) -> str:
     """Ignore evaluation times and candidates that supply no published evidence."""
     records: list[object] = []
-    for record in sorted(batch.records, key=lambda r: (r.category.identity.key, r.base_title.value)):
+    for record in sorted(batch.records, key=lambda r: (r.category.identity.key, r.criterion.value)):
         document = _RECORD.dump_python(record, mode="json")
         published_ids = set(record.resolution.holder_ids)
         published_ids.update(build_id for period in record.history for build_id in period.build_ids)
@@ -27,7 +27,7 @@ def publication_fingerprint(batch: ComputationBatch) -> str:
             document["door_evidence"]["sources"].sort(key=lambda source: source["build_id"])
         records.append(document)
     value = {
-        "fingerprint_version": 1,
+        "fingerprint_version": 2,
         "rules_revision_id": batch.rules_revision_id,
         "kind": batch.kind.value,
         "version_id": batch.version_id,

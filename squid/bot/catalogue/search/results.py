@@ -309,7 +309,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
         return record_standings(
             _highlighted(record.title_match or SearchText(record.title)),
             record.subtitle,
-            record.base_title,
+            record.criterion,
             record.version_scope,
             record.holder_build_ids,
             self._open_holder,
@@ -457,7 +457,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             return record_standings(
                 _highlighted(hit.title_match or SearchText(hit.title)),
                 hit.subtitle,
-                hit.base_title,
+                hit.criterion,
                 hit.version_scope,
                 hit.holder_build_ids,
                 self._open_holder,
@@ -629,15 +629,15 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
         tags = ", ".join(tag for tag in hit.tags)
         build_title = hit.build_title
         build_id = hit.build_id
-        base_title = hit.base_title
+        criterion = hit.criterion
         version_scope = hit.version_scope
         fields = md_tr(
             t"""
             bot-submission-search-view-build-base-title =
                 {{ "*" }}*Build**
                 {build_title} ({build_id!s})
-                {{ "*" }}*Base title**
-                {base_title} · {version_scope}
+                {{ "*" }}*Record criterion**
+                {criterion} · {version_scope}
             """,
         )
         if hit.metrics:

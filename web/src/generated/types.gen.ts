@@ -55,13 +55,6 @@ export type AvatarDetail = {
 };
 
 /**
- * BaseTitle
- *
- * A metric by which records are classified.
- */
-export type BaseTitle = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest';
-
-/**
  * BuildCategory
  *
  * The categories of the builds.
@@ -497,7 +490,7 @@ export type DoorRangeQuery = {
     version_id?: number | null;
     follow_current_version?: boolean;
     axis?: 'width';
-    base_title?: 'smallest';
+    criterion?: 'smallest';
     height: number;
     depth?: number;
     minimum?: number;
@@ -549,7 +542,7 @@ export type DoorRecordLookup = {
         number,
         number
     ];
-    base_title?: BaseTitle;
+    criterion?: RecordCriterion;
 };
 
 /**
@@ -1141,10 +1134,10 @@ export type LiveDoorRecord = {
         number,
         number
     ];
-    base_title: BaseTitle;
+    criterion: RecordCriterion;
     version_id: number | null;
     evaluated_at: string;
-    resolution: TitleResolution;
+    resolution: RecordResolution;
     holder_configuration_ids: Array<number>;
     provisional_configuration_ids: Array<number>;
     configurations: Array<LiveDoorConfiguration>;
@@ -1309,10 +1302,10 @@ export type PageLitestarDtoBackendInboxNotificationDetail = {
 };
 
 /**
- * Page[PublishedTitle]
+ * Page[PublishedRecordResult]
  */
-export type PageLitestarDtoBackendPublishedTitle = {
-    items: Array<PublishedTitle>;
+export type PageLitestarDtoBackendPublishedRecordResult = {
+    items: Array<PublishedRecordResult>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -1549,12 +1542,12 @@ export type PublicBuildTag = {
  * PublicRecordDetail
  */
 export type PublicRecordDetail = {
-    id: number;
+    result_id: number;
     definition_id: number;
-    title_id: string;
+    record_id: string;
     title: string;
     subtitle: string | null;
-    base_title: BaseTitle;
+    criterion: RecordCriterion;
     build_kind: BuildKind;
     version_scope: VersionScope;
     status: ResolutionStatus;
@@ -1593,15 +1586,15 @@ export type PublishedDoorPoint = {
 export type PublishedPointStatus = 'published' | 'not_published' | 'outside_query';
 
 /**
- * PublishedTitle
+ * PublishedRecordResult
  */
-export type PublishedTitle = {
-    id: number;
+export type PublishedRecordResult = {
+    result_id: number;
     definition_id: number;
-    title_id: string;
+    record_id: string;
     title: string;
     subtitle: string | null;
-    base_title: BaseTitle;
+    criterion: RecordCriterion;
     build_kind: BuildKind;
     version_scope: VersionScope;
     status: ResolutionStatus;
@@ -1713,11 +1706,18 @@ export type RecalculationProposalResponse = {
 };
 
 /**
+ * RecordCriterion
+ *
+ * A metric by which records are classified.
+ */
+export type RecordCriterion = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest';
+
+/**
  * RecordFilterInput
  */
 export type RecordFilterInput = {
     build_kinds?: Array<'door' | 'entrance' | 'extender' | 'utility'>;
-    base_titles?: Array<'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest'>;
+    criteria?: Array<'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest'>;
     version_scopes?: Array<'all_time' | 'up_to_date'>;
     tags?: Array<TagPredicateInput>;
 };
@@ -1730,6 +1730,16 @@ export type RecordFilterInput = {
 export type RecordOperator = 'present' | 'exact' | 'at_most' | 'at_least';
 
 /**
+ * RecordResolution
+ */
+export type RecordResolution = {
+    status: ResolutionStatus;
+    holder_ids?: Array<number>;
+    provisional_holder_ids?: Array<number>;
+    gaps?: Array<CandidateGap>;
+};
+
+/**
  * RecordSearchEntry
  */
 export type RecordSearchEntry = {
@@ -1738,7 +1748,7 @@ export type RecordSearchEntry = {
     subtitle: string | null;
     build_id: number;
     build_title: string;
-    base_title: string;
+    criterion: string;
     version_scope: string;
     tags: Array<string>;
     metrics: {
@@ -2024,7 +2034,7 @@ export type ShowcaseTag = {
  */
 export type SmallestRecordRegion = {
     domain: IntegerProgression;
-    resolution: TitleResolution;
+    resolution: RecordResolution;
     holder_configuration_ids?: Array<number>;
     provisional_configuration_ids?: Array<number>;
 };
@@ -2209,16 +2219,6 @@ export type TagSemanticKind = 'restriction' | 'pattern' | 'showcase';
  * The scalar value attached to a tag.
  */
 export type TagValueType = 'none' | 'numeric' | 'text' | 'boolean';
-
-/**
- * TitleResolution
- */
-export type TitleResolution = {
-    status: ResolutionStatus;
-    holder_ids?: Array<number>;
-    provisional_holder_ids?: Array<number>;
-    gaps?: Array<CandidateGap>;
-};
 
 /**
  * UploadCapabilities
@@ -5459,7 +5459,7 @@ export type RecordsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendPublishedTitle;
+    200: PageLitestarDtoBackendPublishedRecordResult;
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];
