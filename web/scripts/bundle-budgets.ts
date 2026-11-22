@@ -10,6 +10,8 @@ export type EntryBudget = {
   label: string;
   initialKiB: number;
   completeKiB: number;
+  /** Svelte islands also load Astro's Svelte renderer; plain page scripts do not. */
+  renderer?: boolean;
 };
 export type BudgetResult = EntryBudget & { initialBytes: number; completeBytes: number };
 
@@ -49,10 +51,18 @@ export function evaluateBudgets(
       );
     }
   }
+  // Astro writes small page scripts into the HTML instead of emitting them, so they cost no
+  // separate download; once one outgrows the inline limit it is emitted and measured.
+  const inlined = new Set(
+    Object.entries(manifest)
+      .filter(([key, chunk]) => key.includes("?astro&type=script") && !sizes.has(chunk.file))
+      .map(([, chunk]) => chunk.file),
+  );
   const covered = new Set<string>();
   function bytes(files: Set<string>): number {
     let total = 0;
     for (const file of files) {
+      if (inlined.has(file)) continue;
       const size = sizes.get(file);
       if (size === undefined) throw new Error(`Missing emitted JavaScript: ${file}`);
       total += size;
@@ -61,7 +71,7 @@ export function evaluateBudgets(
   }
   const results = budgets.map((budget) => {
     // Astro loads its Svelte renderer independently of each island's imports.
-    const entries = [...budget.entries, renderer];
+    const entries = budget.renderer === false ? budget.entries : [...budget.entries, renderer];
     const initial = dependencyFiles(manifest, entries, false);
     const complete = dependencyFiles(manifest, entries, true);
     for (const file of complete) covered.add(file);

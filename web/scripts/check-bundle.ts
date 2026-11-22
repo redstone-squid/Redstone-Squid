@@ -7,6 +7,14 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
+    // Loads on every page, so it must stay tiny.
+    entries: ["src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts"],
+    label: "Service worker registration (every page)",
+    initialKiB: 1,
+    completeKiB: 1,
+    renderer: false,
+  },
+  {
     entries: ["src/workbench/Controls.svelte"],
     label: "Design workbench (Svelte)",
     initialKiB: 47,

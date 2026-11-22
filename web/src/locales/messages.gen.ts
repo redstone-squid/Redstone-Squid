@@ -1806,3 +1806,29 @@ export function placeholderRebuilding(locale: Locale = getLocale()): string {
       return "[" + "Ţĥé Ŕéđšţöñé Šǫûîđ ŵéƀšîţé îš ƀéîñĝ ŕéƀûîļţ." + "··················]";
   }
 }
+
+/** You are offline */
+export function offlineTitle(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "You are offline";
+    case "zh-CN":
+      return "你已离线";
+    case "en-XA":
+      return "[" + "Ýöû åŕé öƒƒļîñé" + "······]";
+  }
+}
+
+/** This page needs a connection. Reconnect and try again. */
+export function offlineBody(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "This page needs a connection. Reconnect and try again.";
+    case "zh-CN":
+      return "此页面需要联网。请连接网络后重试。";
+    case "en-XA":
+      return (
+        "[" + "Ţĥîš þåĝé ñééđš å çöññéçţîöñ. Ŕéçöññéçţ åñđ ţŕý åĝåîñ." + "······················]"
+      );
+  }
+}

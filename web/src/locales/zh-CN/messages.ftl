@@ -146,3 +146,6 @@ trial-retry-upload = 重新上传
 trial-upload-scenario = 模拟上传失败
 
 placeholder-rebuilding = 红石鱿鱼网站正在重建。
+
+offline-title = 你已离线
+offline-body = 此页面需要联网。请连接网络后重试。

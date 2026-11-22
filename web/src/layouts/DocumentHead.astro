@@ -8,7 +8,8 @@ type Props = {
   /** Path without a locale prefix; defaults to the current route. */
   canonicalPath?: string;
   noindex?: boolean;
-  image?: string;
+  /** Share image, ideally 1200×630. A site-relative `src` is resolved against the site URL. */
+  image?: { src: string; alt: string };
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
 };
 
@@ -20,6 +21,10 @@ const canonical = new URL(localizePath(canonicalPath), config.siteUrl).toString(
 const defaultUrl = new URL(localizePath(canonicalPath, DEFAULT_LOCALE), config.siteUrl).toString();
 // The pseudo-locale exists for development and review only.
 const noindex = Astro.props.noindex === true || LOCALES[locale].pseudo;
+const image = Astro.props.image && {
+  src: new URL(Astro.props.image.src, config.siteUrl).toString(),
+  alt: Astro.props.image.alt,
+};
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData
   ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
@@ -41,16 +46,24 @@ const jsonLd = Astro.props.structuredData
 ))}
 <link rel="alternate" hreflang="x-default" href={defaultUrl} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={m.siteName()} />
 <meta property="og:locale" content={LOCALES[locale].openGraph} />
+{PUBLIC_LOCALES.filter((language) => language !== locale).map((language) => (
+  <meta property="og:locale:alternate" content={LOCALES[language].openGraph} />
+))}
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
 <meta property="og:url" content={canonical} />
-{Astro.props.image && <meta property="og:image" content={Astro.props.image} />}
-<meta name="twitter:card" content={Astro.props.image ? "summary_large_image" : "summary"} />
+{image && <meta property="og:image" content={image.src} />}
+{image && <meta property="og:image:alt" content={image.alt} />}
+<meta name="twitter:card" content={image ? "summary_large_image" : "summary"} />
+{image && <meta name="twitter:image" content={image.src} />}
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 <title>{title}</title>
 {/* eslint-disable-next-line astro/no-set-html-directive -- jsonLd is escaped above. */}
 {jsonLd && <script is:inline type="application/ld+json" set:html={jsonLd} />}
+<script src="./register-service-worker.ts"></script>

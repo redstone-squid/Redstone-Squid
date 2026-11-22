@@ -152,3 +152,6 @@ trial-retry-upload = Retry upload
 trial-upload-scenario = Simulate upload failure
 
 placeholder-rebuilding = The Redstone Squid website is being rebuilt.
+
+offline-title = You are offline
+offline-body = This page needs a connection. Reconnect and try again.
