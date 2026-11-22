@@ -26,6 +26,7 @@ from squid.core.search.domain.query import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     RangeValue,
     TextExpression,
@@ -186,8 +187,14 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             self._change_field,
             key="change-field",
         )
+        presence = sl.form(
+            tr(t"guided-search-check-presence = Check presence"),
+            self._presence_form(field),
+            key=f"{field.name}.presence",
+            on_submit=partial(self._add_presence, field),
+        )
         if field.name in VALUE_SOURCES and self.filter_picker is not None:
-            return (heading, self.filter_picker, sl.action_controls(change, key="filter-step"))
+            return (heading, self.filter_picker, sl.action_controls(presence, change, key="filter-step"))
         values = _menu_values(field, self.scope)
         if values:
             return (
@@ -197,7 +204,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     key=f"{field.name}.value-choice",
                     selection=sl.controlled((), partial(self._choose_menu_value, field)),
                 ),
-                sl.action_controls(change, key="filter-step"),
+                sl.action_controls(presence, change, key="filter-step"),
             )
         return (
             heading,
@@ -208,6 +215,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     key=f"{field.name}.value",
                     on_submit=partial(self._add, field),
                 ),
+                presence,
                 change,
                 key="filter-step",
                 display=sl.semantic.ControlDisplay.INDIVIDUAL,
@@ -217,12 +225,16 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     def _clause_row(self, index: int, item: QueryExpression) -> GuidedNode:
         operand = item.operand if isinstance(item, NotExpression) else item
         negated = isinstance(item, NotExpression)
+        if isinstance(operand, PresenceExpression):
+            form = self._presence_form(operand.field, is_set=operand.is_set != negated)
+        elif isinstance(operand, FieldExpression):
+            form = self._field_form(operand.field, operand, negated=negated)
+        else:
+            form = self._text_form(operand, negated=negated)
         return sl.action_controls(
             sl.form(
                 filter_label(item),
-                self._field_form(operand.field, operand, negated=negated)
-                if isinstance(operand, FieldExpression)
-                else self._text_form(operand, negated=negated),
+                form,
                 key=f"edit-{index}",
                 on_submit=partial(self._edit_clause, index),
             ),
@@ -325,6 +337,24 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         )
         return sl.forms.FormSpec[sd.Request[Any, Any]](label, tuple(fields))
 
+    def _presence_form(
+        self, field: FieldDefinition, *, is_set: bool = True
+    ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
+        return sl.forms.FormSpec[sd.Request[Any, Any]](
+            field_label(field.name),
+            (
+                sl.forms.ChoiceField(
+                    key="presence",
+                    label=tr(t"guided-search-field-presence = Field presence"),
+                    default="set" if is_set else "missing",
+                    options=(
+                        sl.forms.ChoiceOption("set", tr(t"guided-search-is-set = Is set"), "set"),
+                        sl.forms.ChoiceOption("missing", tr(t"guided-search-is-not-set = Is not set"), "missing"),
+                    ),
+                ),
+            ),
+        )
+
     def _text_form(
         self, item: QueryExpression, *, negated: bool = False
     ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
@@ -353,11 +383,12 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     async def _edit_clause(self, index: int, event: sd.SubmitEvent[RedstoneSquid]) -> None:
         item = self.clauses[index]
         item = item.operand if isinstance(item, NotExpression) else item
-        replacement = (
-            self._field_expression(item.field, event)
-            if isinstance(item, FieldExpression)
-            else TextExpression(str(event.values["value"]), phrase=True)
-        )
+        if isinstance(item, PresenceExpression):
+            replacement = PresenceExpression(item.field, is_set=event.values["presence"] == "set")
+        elif isinstance(item, FieldExpression):
+            replacement = self._field_expression(item.field, event)
+        else:
+            replacement = TextExpression(str(event.values["value"]), phrase=True)
         self._replace(index, NotExpression(replacement) if event.values.get("negated") else replacement)
         await self._refresh()
 
@@ -502,6 +533,9 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         value = self._field_expression(field, event)
         addition = NotExpression(value) if event.values.get("negated") else value
         await self._apply_filter(field, addition, event)
+
+    async def _add_presence(self, field: FieldDefinition, event: sd.SubmitEvent[RedstoneSquid]) -> None:
+        await self._apply_filter(field, PresenceExpression(field, is_set=event.values["presence"] == "set"), event)
 
     async def _apply_filter(self, field: FieldDefinition, addition: QueryExpression, event: sl.ActionEventView) -> None:
         if self.selected != field:

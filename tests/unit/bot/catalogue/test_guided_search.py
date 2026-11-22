@@ -324,6 +324,22 @@ async def test_filter_picker_has_specific_search_copy_and_shows_search_text(monk
         assert ui.control("value").payload["label"] == "Set Width filter"
 
 
+async def test_presence_filter_can_be_added_and_edited(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _suggestions(("search_fields", (Candidate.create("volume", "Volume"),)))
+    screen = editor("title:door")
+    async with stage(screen, owner=object()) as ui:
+        _install(ui, monkeypatch, service)
+        await ui.press("field")
+        await _choose(ui, "filter-lookup", "volume")
+        form = await ui.press_for_form("volume.presence")
+        await form.submit({"presence": "missing"})
+        assert screen.query.text == "title:door AND volume IS NOT SET"
+        assert ui.control("edit-1").payload["label"] == "Volume is not set"
+        form = await ui.press_for_form("edit-1")
+        await form.submit({"presence": "set"})
+        assert screen.query.text == "title:door AND volume IS SET"
+
+
 async def test_not_filter_button_preserves_and_can_remove_negation() -> None:
     screen = editor("NOT width:3 OR height:5")
     async with stage(screen, owner=object()) as ui:

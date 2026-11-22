@@ -13,6 +13,7 @@ from squid.core.search.domain.query import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     RecordQuery,
     TextExpression,
@@ -54,7 +55,9 @@ class CatalogueQuery:
                 term
                 for term in terms
                 if all(
-                    isinstance(leaf.operand if isinstance(leaf, NotExpression) else leaf, FieldExpression)
+                    isinstance(
+                        leaf.operand if isinstance(leaf, NotExpression) else leaf, FieldExpression | PresenceExpression
+                    )
                     for _, leaf in query_leaves(term)
                 )
             ),
@@ -193,7 +196,7 @@ def query_leaves(
             leaf for index, item in enumerate(expression.operands) for leaf in query_leaves(item, (*path, index))
         )
     if isinstance(expression, NotExpression):
-        if isinstance(expression.operand, FieldExpression | TextExpression):
+        if isinstance(expression.operand, FieldExpression | PresenceExpression | TextExpression):
             return ((path, expression),)
         return query_leaves(expression.operand, (*path, 0))
     return ((path, expression),)
@@ -239,7 +242,7 @@ def _record_filter[ValueT: StrEnum](
             else (clause,)
         )
         if not any(
-            isinstance(leaf, FieldExpression) and leaf.field.name == field
+            isinstance(leaf, FieldExpression | PresenceExpression) and leaf.field.name == field
             for _, item in query_leaves(clause)
             for leaf in (item.operand if isinstance(item, NotExpression) else item,)
         ):

@@ -16,6 +16,7 @@ from squid.core.search.domain.query import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     RangeValue,
     ScalarValue,
@@ -107,6 +108,11 @@ def filter_label(clause: QueryExpression) -> sl.TextLike:
     if isinstance(clause, TextExpression):
         words = truncate_display_text(clause.value, _VALUE_LIMIT)
         return tr(t"search-filter-keywords = Keywords: {words}")
+    if isinstance(clause, PresenceExpression):
+        name = field_label(clause.field.name)
+        if clause.is_set:
+            return tr(t"search-filter-is-set = {name} is set")
+        return tr(t"search-filter-is-not-set = {name} is not set")
     if isinstance(clause, FieldExpression):
         return _comparison_label(clause.field, clause.operator, clause.value)
     return type(clause).__name__

@@ -188,6 +188,10 @@ def search_help(
                                     t'search-reference-operators = - Quote phrases: `title:"vault door"`. Compare '
                                     t"numbers and dates with `<`, `<=`, `>`, `>=` or a range like `[3 TO 5]`."
                                 ),
+                                md_tr(
+                                    t"search-reference-presence = - Use `volume IS SET` for a known volume or "
+                                    t"`volume IS NOT SET` for a missing one."
+                                ),
                                 md_tr(t"search-reference-sort = - Order results with Sort, not in the query."),
                                 tr(
                                     t"search-reference-empty = - No results? Remove filters one at a time. Filters "

@@ -10,7 +10,7 @@ from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid.core.search.domain.query import FieldExpression, NotExpression
+from squid.core.search.domain.query import FieldExpression, NotExpression, PresenceExpression
 
 
 class SearchTarget(StrEnum):
@@ -57,7 +57,10 @@ async def open_search(
         fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
         scope = (
             SearchTarget.records
-            if any(isinstance(field, FieldExpression) and field.field.name == "criterion" for field in fields)
+            if any(
+                isinstance(field, FieldExpression | PresenceExpression) and field.field.name == "criterion"
+                for field in fields
+            )
             else SearchTarget.builds
         )
     if scope in (SearchTarget.builds, SearchTarget.records):

@@ -3416,6 +3416,9 @@ guided-search-cancel-batch = Cancel adding filters
 # squid/bot/catalogue/search/filters.py:185
 guided-search-change-field = Choose another field
 
+# squid/bot/catalogue/search/filters.py:191
+guided-search-check-presence = Check presence
+
 # squid/bot/catalogue/search/filters.py:149
 guided-search-close-filters = Close filters
 
@@ -3428,11 +3431,20 @@ guided-search-edit-query = Type a query
 # squid/bot/catalogue/search/filters.py:333
 guided-search-edit-text = Edit keywords
 
+# squid/bot/catalogue/search/filters.py:348
+guided-search-field-presence = Field presence
+
 # squid/bot/catalogue/search/filters.py:180
 guided-search-filter-heading = Filter by { $name }
 
 # squid/bot/catalogue/search/filters.py:178
 guided-search-filter-progress = Filter by { $name } ({ $step } of { $total })
+
+# squid/bot/catalogue/search/filters.py:352
+guided-search-is-not-set = Is not set
+
+# squid/bot/catalogue/search/filters.py:351
+guided-search-is-set = Is set
 
 # squid/bot/catalogue/search/filters.py:336
 guided-search-keywords = Keywords
@@ -5244,6 +5256,12 @@ search-filter-contains = { $name } has “{ $shown }”
 # squid/bot/catalogue/search/labels.py:127
 search-filter-equals = { $name } is { $shown }
 
+# squid/bot/catalogue/search/labels.py:115
+search-filter-is-not-set = { $name } is not set
+
+# squid/bot/catalogue/search/labels.py:114
+search-filter-is-set = { $name } is set
+
 # squid/bot/catalogue/search/labels.py:109
 search-filter-keywords = Keywords: { $words }
 
@@ -5366,6 +5384,9 @@ search-reference-operators = - Quote phrases: `title:"vault door"`. Compare numb
 
 # squid/bot/catalogue/search/help.py:179
 search-reference-or = - `OR` matches either side. Group with brackets: `(door OR extender) width<=5`.
+
+# squid/bot/catalogue/search/help.py:191
+search-reference-presence = - Use `volume IS SET` for a known volume or `volume IS NOT SET` for a missing one.
 
 # squid/bot/catalogue/search/help.py:85
 search-reference-record-title = `title:door`
