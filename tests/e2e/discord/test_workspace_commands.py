@@ -1,8 +1,10 @@
 """Exercise the guild workspaces through their registered application commands."""
 
 import discord
+import pytest
 import simcord
 
+from squid.bot.diagnostics.screen import ErrorReportScreen
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ, PERM_GRANT_GUILD, SETTINGS_SERVER_VIEW
@@ -114,6 +116,37 @@ async def test_settings_renders_the_channel_configured_for_this_guild() -> None:
         summary = "\n".join(displayed_text(result.response.message))
         assert "Server settings" in summary
         assert f"<#{builds.id}>" in summary
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+async def test_errors_checks_access_before_loading_reports(allowed: bool) -> None:
+    accounts, reports = WorkspaceAccounts(), StoredReports()
+    nodes = (DIAGNOSTICS_ERROR_READ,) if allowed else ()
+    services = bot_services(accounts=accounts, permissions=staff_permissions(*nodes), error_reports=reports)
+    async with command_environment("squid.bot.diagnostics.cog", services=services) as (bot, env):
+        channel = env.guild.create_text_channel("staff")
+        staff = staff_member(env, accounts)
+
+        result = await staff.slash(channel, "errors")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        detail = "\n".join(displayed_text(result.response.message))
+        if allowed:
+            assert reports.recent_calls
+            assert reports.report.reference in detail
+            (session,) = bot.sessions.active()
+            (root,) = session.message_roots
+            assert isinstance(root.component, ErrorReportScreen)
+            assert root.component.opening.owner is bot.get_cog("Diagnostics")
+            await bot.remove_cog("Diagnostics")
+            assert root.finished
+        else:
+            assert not reports.recent_calls
+            assert "diagnostics.error.read" in detail
+            assert not tuple(bot.sessions.active())
+            (captured,) = env.errors
+            assert isinstance(captured, discord.app_commands.CommandInvokeError)
 
 
 async def test_errors_opens_the_referenced_report_with_its_full_text_attachment() -> None:

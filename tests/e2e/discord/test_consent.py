@@ -1,12 +1,13 @@
 from typing import override
 
 import pytest
+import wrapture
 
 from squid.bot.accounts.consent import ConsentPrompt
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
 from tests.e2e.discord.environment import command_environment, displayed_text
-from tests.e2e.discord.workspace_services import WorkspaceAccounts
+from tests.e2e.discord.workspace_services import WorkspaceAccounts, WorkspaceInbox
 from tests.support.services import bot_services
 from tests.support.submission_form import Drafts, Finalization, Forms, Intake, Schematics
 
@@ -70,3 +71,29 @@ async def test_first_submission_waits_for_consent_before_saving(answer: str, mon
             (editor,) = opened.followups
             assert editor.ephemeral
             assert any("Alice's door" in text for text in displayed_text(editor.message))
+
+
+async def test_declining_notifications_consent_leaves_no_workspace() -> None:
+    accounts = FirstTimeAccounts()
+    services = bot_services(accounts=accounts, notifications=WorkspaceInbox(37))
+    async with command_environment("squid.bot.notifications_cog", services=services) as (bot, env):
+        channel = env.guild.create_text_channel("community")
+        visitor = env.guild.add_member(env.create_user("visitor"))
+        wait = wrapture.binding(ConsentPrompt, "wait").on_call.decorates(
+            lambda wrapped, _instance, args, kwargs: env.external_wait(
+                wrapped(*args, **kwargs), reason="member consent"
+            )
+        )
+
+        with wait:
+            opened = await visitor.slash(channel, "notifications")
+            assert opened.response is not None
+            assert opened.response.ephemeral
+            assert not opened.followups
+            decision = await visitor.click(opened.response.message, label="Cancel")
+
+        assert decision.acknowledged
+        assert not accounts.discord_accounts
+        assert not tuple(bot.sessions.active())
+        contents = [text for message in channel.history(viewer=visitor) for text in displayed_text(message)]
+        assert "Cancelled. No account information was stored." in contents

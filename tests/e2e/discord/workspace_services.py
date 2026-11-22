@@ -127,6 +127,7 @@ class WorkspaceInbox(NotificationService):
 
 class StoredReports(ErrorReportService):
     def __init__(self) -> None:
+        self.recent_calls: list[tuple[int, bool]] = []
         self.report = ErrorReport(
             reference="37a81f",
             correlation_id="37a81f-command",
@@ -144,3 +145,8 @@ class StoredReports(ErrorReportService):
         assert reference == self.report.reference
         assert prefix
         return self.report, 1
+
+    @override
+    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> tuple[ErrorReport, ...]:
+        self.recent_calls.append((limit, work_lost_only))
+        return (self.report,)
