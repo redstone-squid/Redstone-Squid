@@ -2,14 +2,14 @@
 import { tagsGetBySlug } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { localizePath } from "@/locales/locale";
-import { unwrap } from "@/server/api";
+import { load } from "@/server/api";
 import PageHeading from "@/ui/astro/PageHeading.astro";
 
 const slug = Astro.params.slug;
 if (!slug) return Astro.rewrite("/404");
-const result = await tagsGetBySlug({ client: Astro.locals.api, path: { slug } });
-if (result.response?.status === 404) return Astro.rewrite("/404");
-const tag = unwrap(result);
+const loaded = await load(tagsGetBySlug({ client: Astro.locals.api, path: { slug } }));
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const tag = loaded.data;
 if (slug !== tag.slug) {
   return new Response(null, {
     status: 302,

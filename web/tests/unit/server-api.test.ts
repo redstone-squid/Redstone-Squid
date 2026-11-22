@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { buildsGet, buildsList } from "@/generated/sdk.gen";
 import type { BuildsListResponse } from "@/generated/types.gen";
-import { ApiError, createApiClient, unwrap } from "@/server/api";
+import { ApiError, createApiClient, load, unwrap } from "@/server/api";
 import type { RuntimeConfig } from "@/server/config";
 
 const API = "https://api.catalogue.test";
@@ -125,5 +125,30 @@ describe("API errors", () => {
     expect(unknown.status).toBe(503);
     expect(unknown.problem).toBeUndefined();
     expect(unknown.cause).toBeInstanceOf(TypeError);
+  });
+});
+
+describe("load", () => {
+  const client = () => createApiClient("en", config);
+
+  it("returns the data of a successful call", async () => {
+    server.use(http.get(`${API}/v1/builds`, () => HttpResponse.json(emptyPage)));
+    expect(await load(buildsList({ client: client() }))).toEqual({ data: emptyPage });
+  });
+
+  it("keeps a 404 and turns every other failure into a 503", async () => {
+    server.use(
+      http.get(`${API}/v1/builds/404`, () =>
+        HttpResponse.json({ title: "Not found", status: 404 }, { status: 404 }),
+      ),
+      http.get(`${API}/v1/builds/500`, () =>
+        HttpResponse.json({ title: "Broken", status: 500 }, { status: 500 }),
+      ),
+      http.get(`${API}/v1/builds/0`, () => HttpResponse.error()),
+    );
+    const lookup = (build_id: number) => load(buildsGet({ client: client(), path: { build_id } }));
+    expect(await lookup(404)).toEqual({ status: 404 });
+    expect(await lookup(500)).toEqual({ status: 503 });
+    expect(await lookup(0)).toEqual({ status: 503 });
   });
 });
