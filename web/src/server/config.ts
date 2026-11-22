@@ -53,8 +53,10 @@ export function getRuntimeConfig(
   production = import.meta.env.PROD,
 ): RuntimeConfig {
   const value = (name: keyof typeof DEVELOPMENT_DEFAULTS): string => {
-    const configured = environment[name]?.trim();
-    if (production && !configured) {
+    // An empty variable counts as unset, so development falls back to the default.
+    const trimmed = environment[name]?.trim();
+    const configured = trimmed === "" ? undefined : trimmed;
+    if (production && configured === undefined) {
       throw new Error(`${name} is required in production.`);
     }
     return checkedUrl(name, configured ?? DEVELOPMENT_DEFAULTS[name], production);
