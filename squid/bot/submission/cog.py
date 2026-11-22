@@ -188,7 +188,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         options={
             "query": sd.Option(
                 name=tr(t"command-records-query-name = query"),
-                description=tr(t"command-fastest-query-help = Search text or filters, e.g. smallest 3x3."),
+                description=tr(t"command-fastest-query-help = Search text or filters, e.g. observerless 3x3."),
                 autocomplete=suggests("search_query"),
             ),
         },
@@ -203,7 +203,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         options={
             "query": sd.Option(
                 name=tr(t"command-records-query-name = query"),
-                description=tr(t"command-smallest-query-help = Search text or filters, e.g. fastest 3x3."),
+                description=tr(t"command-smallest-query-help = Search text or filters, e.g. observerless 3x3."),
                 autocomplete=suggests("search_query"),
             ),
         },
