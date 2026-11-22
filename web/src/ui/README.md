@@ -37,12 +37,11 @@ Astro can split route bundles without changing the cascade. The layouts serve
 the fonts locally. Use sentence case for headings, labels, and badges. Reserve
 monospace for technical values.
 
-Astro owns server-rendered routes. Catalogue pages share a placeholder in
-`CatalogueLayout` while they are rebuilt. Use Svelte for new interactive islands.
+Astro owns server-rendered routes. Use Svelte for new interactive islands.
 
 Use the Fluent catalogues in `src/locales` for both languages. After updating
-message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes.
-The workbench uses a language query parameter. The language selector preserves the URL query.
+message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes;
+the workbench uses a language query parameter. The language selector preserves the URL query.
 
 ## Review
 
