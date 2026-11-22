@@ -49,6 +49,10 @@ lint:
 typecheck:
     uv run --locked pyrefly check --config pyproject.toml
 
+# Open a live, local Discord counter preview.
+ui-preview:
+    uv run --locked python -m scripts.ui_preview
+
 # Render every Discord screen the selected tests open into ui-gallery/index.html.
 ui-gallery paths="tests/unit/bot" *flags:
     uv run --locked pytest -p tests.support.ui_gallery --ui-gallery=ui-gallery --no-cov -q {{paths}} {{flags}}
