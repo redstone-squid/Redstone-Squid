@@ -259,7 +259,7 @@ async def test_delivery_claim_selects_most_recent_discord_identity_and_completes
 
     assert claimed.id == delivery_id
     assert claimed.discord_id == 456
-    assert "was confirmed." in render_delivery(claimed, None)
+    assert "was approved." in render_delivery(claimed, None)
     assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed), commit=True) is True
 
 
