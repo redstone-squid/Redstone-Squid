@@ -53,10 +53,10 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         accounts.discord_accounts[str(author.id)] = Account(id=7, consent=AccountConsent.grant_current())
         accounts.discord_accounts[str(other.id)] = Account(id=9, consent=AccountConsent.grant_current())
 
-        submitted = await author.slash(channel, "build submit", name="Aurora", door_size="2x2")
+        submitted = await author.slash(channel, "build submit", name="Aurora", opening_size="2x2")
         assert submitted.response is not None
         assert submitted.response.ephemeral
-        assert any("Submit a build" in line for line in displayed_text(submitted.response.message))
+        assert any("Build draft" in line for line in displayed_text(submitted.response.message))
         assert drafts.current is not None
         assert drafts.current.snapshot.owner_account_id == 7
         assert drafts.current.snapshot.answers["opening_width"] == 2
@@ -70,7 +70,7 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         reopened = await author.click(listed.response.message, label="Open")
         assert reopened.response is not None
         assert reopened.response.ephemeral
-        assert any("Submit a build" in line for line in displayed_text(reopened.response.message))
+        assert any("Build draft" in line for line in displayed_text(reopened.response.message))
 
         other_drafts = await other.slash(channel, "build drafts")
         assert other_drafts.response is not None
