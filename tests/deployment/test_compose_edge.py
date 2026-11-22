@@ -78,7 +78,8 @@ def test_plain_compose_preserves_host_routing_and_local_mounts(compose_project: 
     assert not web.get("ports")
     assert web["environment"]["API_BASE_URL"] == "https://squid.test"
     assert web["environment"]["SITE_URL"] == "https://squid.test"
-    assert web["build"]["context"] == str(compose_project / "web")
+    assert web["build"]["context"] == str(compose_project)
+    assert web["build"]["dockerfile"] == "web/Dockerfile"
     assert config["networks"]["edge"]["name"] == "test-edge"
     assert config["networks"]["edge"]["external"] is True
     assert not config["services"]["pgweb"].get("profiles")

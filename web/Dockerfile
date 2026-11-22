@@ -4,9 +4,10 @@ WORKDIR /app
 
 FROM base AS build
 
-COPY package.json bun.lock ./
+COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
-COPY . .
+COPY contracts/vocabulary.json /contracts/vocabulary.json
+COPY web/ .
 RUN bun run build
 
 FROM base AS runtime

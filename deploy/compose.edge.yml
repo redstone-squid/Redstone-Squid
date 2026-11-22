@@ -13,7 +13,8 @@ services:
     logging:
       driver: local
     build:
-      context: ./web
+      context: .
+      dockerfile: web/Dockerfile
     image: ${WEB_IMAGE:-redstone-squid-web:local}
     restart: unless-stopped
     environment:

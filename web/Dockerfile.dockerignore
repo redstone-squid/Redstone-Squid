@@ -1,0 +1,9 @@
+**
+!contracts/vocabulary.json
+!web/astro.config.ts
+!web/bun.lock
+!web/package.json
+!web/public/**
+!web/scripts/**
+!web/src/**
+!web/tsconfig.json
