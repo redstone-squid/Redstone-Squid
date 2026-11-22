@@ -17,6 +17,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    FetchedValue,
     ForeignKey,
     ForeignKeyConstraint,
     Identity,
@@ -33,7 +34,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.core.persistence.base import Base
-from squid.core.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
+from squid.core.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin, SlugMixin
 from squid.core.persistence.revisions import Revisioned
 from squid.core.persistence.types import InstantUTC, StrEnumText
 from squid.core.tags.domain import (
@@ -57,11 +58,35 @@ class UnitDefinition(Base, kw_only=True):
     scale_to_base: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
 
 
-class TagDefinition(AuditTimestampsMixin, Revisioned, Base, kw_only=True):
+class TagSlug(Base, kw_only=True):
+    """Reserved tag URL spellings, retained after retirement."""
+
+    __tablename__ = "tag_slugs"
+    __table_args__ = (
+        UniqueConstraint("slug", "tag_id", name="tag_slugs_owner_key"),
+        CheckConstraint("slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'", name="tag_slugs_format_check"),
+        Index("tag_slugs_tag_id_idx", "tag_id"),
+    )
+
+    slug: Mapped[str] = mapped_column(Text, primary_key=True)
+    tag_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("tag_definitions.id", ondelete="SET NULL", deferrable=True, initially="DEFERRED")
+    )
+
+
+class TagDefinition(SlugMixin, AuditTimestampsMixin, Revisioned, Base, kw_only=True):
     """A canonical tag that may be assigned to builds."""
 
     __tablename__ = "tag_definitions"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["slug", "id"],
+            ["tag_slugs.slug", "tag_slugs.tag_id"],
+            name="tag_definitions_slug_owner_fkey",
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+        ),
         CheckConstraint("revision > 0", name="tag_definitions_revision_positive"),
         Index("tag_definitions_created_by_idx", "created_by_account_id"),
         UniqueConstraint("id", "value_type", name="tag_definitions_id_value_type_key"),
@@ -123,6 +148,7 @@ class TagDefinition(AuditTimestampsMixin, Revisioned, Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, server_default=FetchedValue(), init=False)
     stable_key: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
