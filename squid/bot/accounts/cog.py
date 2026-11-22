@@ -6,16 +6,13 @@ from uuid import UUID
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.profile_render import (
-    public_profile_fields,
-)
+from squid.bot.accounts.creator_page import CreatorPage
 from squid.bot.accounts.workspace import AccountWorkspace
-from squid.bot.follows import FollowCard
-from squid.bot.ui import card_node, text_node
+from squid.bot.routes import ScreenUnavailable
+from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import suggests
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.i18n import tr
-from squid.core.notifications.domain import SubscriptionKind
 from squid_i18n import md_tr
 from squid_ui.content.text import Text
 
@@ -57,7 +54,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 public_id = UUID(creator)
             except ValueError:
                 return text_node(tr(t"account-select-creator-result = Choose a creator from the name suggestions."))
-            return await self._public_profile_card(public_id, "Creator")
+            return await self._public_page(public_id, "Creator")
         actor = request.user
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)
@@ -75,34 +72,14 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 text_node(_missing_creator_page(user.display_name)),
                 audience="personal",
             )
-        return await self._public_profile_card(account.public_creator_id, user.display_name)
+        return await self._public_page(account.public_creator_id, user.display_name)
 
-    async def _public_profile_card(self, public_id: UUID, fallback_name: str):
-        """Render somebody else's page from the same filtered view the API serves."""
-        public = await self.account_service.get_public_profile(public_id)
-        if public is None:
-            return text_node(
-                tr(t"bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.")
-            )
-        if public.hidden:
-            return card_node(
-                tr(t"bot-verify-hidden-creator-page = Hidden creator page"),
-                tr(
-                    t"verify-creator-page-hidden = This creator has hidden their "
-                    t"page. Their build credit is still listed."
-                ),
-                fields=public_profile_fields(public),
-            )
-        return FollowCard(
-            card_node(
-                public.display_name or fallback_name,
-                public.bio,
-                fields=public_profile_fields(public),
-                media=() if public.avatar_url is None else (public.avatar_url,),
-            ),
-            SubscriptionKind.CREATOR,
-            public_id,
-        )
+    async def _public_page(self, public_id: UUID, fallback_name: str) -> sd.CommandResult:
+        try:
+            page = await CreatorPage.load(self.account_service, public_id, fallback_name)
+        except ScreenUnavailable as error:
+            return text_node(error.message)
+        return sd.Response(page, audience="public")
 
 
 def _missing_creator_page(user: str) -> Text:
@@ -112,7 +89,7 @@ def _missing_creator_page(user: str) -> Text:
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))
-    bot.ui_router.mount(__name__, AccountWorkspace.open_account)
+    bot.ui_router.mount(__name__, AccountWorkspace.open_account, CreatorPage.open)
 
 
 async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:

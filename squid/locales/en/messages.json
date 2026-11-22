@@ -1328,7 +1328,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:59"
+      "squid/bot/accounts/cog.py:56"
     ]
   },
   "account-submit-claim": {
@@ -5457,7 +5457,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/cog.py:109"
+      "squid/bot/accounts/cog.py:86"
     ]
   },
   "bot-verify-hidden-creator-page": {
@@ -5466,7 +5466,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:89"
+      "squid/bot/accounts/creator_page.py:62"
     ]
   },
   "bot-verify-that-creator-page-could-not-be-found": {
@@ -5475,7 +5475,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:85"
+      "squid/bot/accounts/creator_page.py:42"
     ]
   },
   "bot-version-tracking-add-minecraft-version": {
@@ -7303,7 +7303,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:37"
+      "squid/bot/accounts/cog.py:34"
     ]
   },
   "command-account-creator-name": {
@@ -7312,7 +7312,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:36"
+      "squid/bot/accounts/cog.py:33"
     ]
   },
   "command-account-help": {
@@ -7321,7 +7321,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:33"
+      "squid/bot/accounts/cog.py:30"
     ]
   },
   "command-account-name": {
@@ -7330,7 +7330,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:32"
+      "squid/bot/accounts/cog.py:29"
     ]
   },
   "command-account-user-name": {
@@ -7339,7 +7339,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:41"
+      "squid/bot/accounts/cog.py:38"
     ]
   },
   "command-archive-message-name": {
@@ -8870,7 +8870,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/follows.py:37"
+      "squid/bot/follows.py:21"
     ]
   },
   "context-follow-record": {
@@ -8879,7 +8879,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/follows.py:39"
+      "squid/bot/follows.py:23"
     ]
   },
   "context-follow-saved": {
@@ -8888,7 +8888,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/follows.py:64"
+      "squid/bot/follows.py:48"
     ]
   },
   "contextual-search-cancel": {
@@ -9212,6 +9212,15 @@
     "arguments": [],
     "locations": [
       "squid/core/errors.py:182"
+    ]
+  },
+  "creator-page-fallback-name": {
+    "fingerprint": "c180bb77803ce7e89f6f5f97fbffe8b553ab3696eac79ce7e763ef0767c9c3e3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/creator_page.py:50"
     ]
   },
   "credits-add": {
@@ -21364,7 +21373,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:90"
+      "squid/bot/accounts/creator_page.py:63"
     ]
   },
   "verify-creator-page-target-prompt": {
@@ -21373,7 +21382,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:42"
+      "squid/bot/accounts/cog.py:39"
     ]
   },
   "versions-add-permission-denied": {

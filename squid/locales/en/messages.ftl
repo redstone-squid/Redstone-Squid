@@ -382,7 +382,7 @@ account-refresh-member-action = Refresh member
 # squid/bot/accounts/workspace.py:349, squid/bot/accounts/workspace.py:537
 account-search-credit-names = Search credited names
 
-# squid/bot/accounts/cog.py:59
+# squid/bot/accounts/cog.py:56
 account-select-creator-result = Choose a creator from the name suggestions.
 
 # squid/bot/accounts/workspace.py:539
@@ -1628,13 +1628,13 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/chrome.py:268
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/accounts/cog.py:109
+# squid/bot/accounts/cog.py:86
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
-# squid/bot/accounts/cog.py:89
+# squid/bot/accounts/creator_page.py:62
 bot-verify-hidden-creator-page = Hidden creator page
 
-# squid/bot/accounts/cog.py:85
+# squid/bot/accounts/creator_page.py:42
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
 # squid/bot/version_tracking_cog.py:166
@@ -2195,19 +2195,19 @@ command-access-user-help = Start with this member selected.
 # squid/bot/permissions_cog.py:53
 command-access-user-name = user
 
-# squid/bot/accounts/cog.py:37
+# squid/bot/accounts/cog.py:34
 command-account-creator-help = Search public creator pages by credited name
 
-# squid/bot/accounts/cog.py:36
+# squid/bot/accounts/cog.py:33
 command-account-creator-name = creator
 
-# squid/bot/accounts/cog.py:33
+# squid/bot/accounts/cog.py:30
 command-account-help = Manage your account or view a creator page
 
-# squid/bot/accounts/cog.py:32
+# squid/bot/accounts/cog.py:29
 command-account-name = account
 
-# squid/bot/accounts/cog.py:41
+# squid/bot/accounts/cog.py:38
 command-account-user-name = user
 
 # squid/bot/admin_cog.py:92
@@ -2693,13 +2693,13 @@ consent-storage-prerequisite = Before Redstone Squid stores anything about you
 # squid/bot/accounts/consent.py:132, squid/bot/accounts/consent.py:96
 consent-value-2 = { $user_mention } (`{ $user_id }`)
 
-# squid/bot/follows.py:37
+# squid/bot/follows.py:21
 context-follow-creator = Follow creator
 
-# squid/bot/follows.py:39
+# squid/bot/follows.py:23
 context-follow-record = Follow record
 
-# squid/bot/follows.py:64
+# squid/bot/follows.py:48
 context-follow-saved = Following. Manage your follows in /notifications.
 
 # squid/bot/catalogue/search/contextual.py:232
@@ -2803,6 +2803,9 @@ core-state-invalid-operation = Application state is invalid for this operation.
 
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
+
+# squid/bot/accounts/creator_page.py:50
+creator-page-fallback-name = Creator
 
 # squid/bot/submission/ui/credits.py:109, squid/bot/submission/ui/credits.py:82
 credits-add = Add credit
@@ -6375,10 +6378,10 @@ ui-page-jump-unavailable = This pager is no longer available.
 # squid/bot/chrome.py:116
 ui-tally-option = { $label } — { NUMBER($count) }
 
-# squid/bot/accounts/cog.py:90
+# squid/bot/accounts/creator_page.py:63
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
-# squid/bot/accounts/cog.py:42
+# squid/bot/accounts/cog.py:39
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking_cog.py:103

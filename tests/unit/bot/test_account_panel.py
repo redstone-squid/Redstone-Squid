@@ -16,11 +16,11 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.accounts.cog import VerifyCog
 from squid.bot.accounts.consent import ConsentPrompt, request_consent
+from squid.bot.accounts.creator_page import CreatorPage
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
 from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
-from squid.bot.follows import FollowCard
 from squid.bot.utils.permissions import Grants
 from squid.core.accounts.domain import (
     AccountConsent,
@@ -351,10 +351,11 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
     cog = VerifyCog.__new__(VerifyCog)
     cog.account_service = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
 
-    card = await cog._public_profile_card(page, "Someone")
+    response = await cog._public_page(page, "Someone")
 
-    assert isinstance(card, FollowCard)
-    assert "Someone" in str(card.render())
+    assert isinstance(response, sd.Response)
+    assert isinstance(response.content, CreatorPage)
+    assert "Someone" in str(response.content.render())
 
 
 async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> None:
