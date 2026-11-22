@@ -34,6 +34,7 @@ from squid.api.idempotency import (
     assert_idempotency_completion_installed,
     reserve_idempotent_before_request,
 )
+from squid.api.observability import instrument_api_app
 from squid.api.openapi import (
     ApplicationValueSchemaPlugin,
     ContractJsonRenderPlugin,
@@ -51,7 +52,7 @@ from squid.bootstrap import create_api_runtime
 from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config, load_or_exit
 from squid.core.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
 from squid.logging_config import configure_api_logging
-from squid.observability import configure_observability, instrument_api_app
+from squid.observability import configure_observability
 from squid.runtime import (
     ApiServices,
     ApplicationRuntime,

@@ -25,8 +25,8 @@ from squid.core.accounts.errors import MinecraftServiceUnavailableError
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import InternalError, JSONValue
+from squid.core.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
 from squid.core.permissions.domain import Decision, Reason
-from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
 from squid_ui.content.text import Localization, current_localization
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message

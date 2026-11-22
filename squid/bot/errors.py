@@ -24,7 +24,7 @@ from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.log_capture import captured
 from squid.core.errors import DomainError, JSONValue, RateLimitedError, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
-from squid.observability import (
+from squid.core.observability import (
     TraceSurface,
     correlated_log_buffer,
     correlation_id,

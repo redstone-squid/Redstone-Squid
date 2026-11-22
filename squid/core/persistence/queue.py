@@ -43,7 +43,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import FromClause
 from whenever import Instant
 
-from squid.observability import add_counter
+from squid.core.observability import add_counter
 
 logger = logging.getLogger(__name__)
 

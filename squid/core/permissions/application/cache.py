@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.observability import add_counter
 from squid.core.permissions.domain import Rule
-from squid.observability import add_counter
 
 MAX_ENTRIES = 4096
 """Bounded so a raid, or a scripted client, cannot grow the cache without limit."""

@@ -48,12 +48,13 @@ from squid.config import (
     load_or_exit,
 )
 from squid.core.errors import RateLimitedError
+from squid.core.observability import TraceSurface, correlation_scope, trace_span
 from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.posts.domain import ResourceKind
 from squid.core.posts.topics import TopicPublisher, resource_topic
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
-from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
+from squid.observability import configure_observability
 from squid.runtime import (
     BackgroundTaskSupervisor,
     BotServices,

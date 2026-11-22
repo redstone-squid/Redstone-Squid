@@ -14,15 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.errors import InternalError
-from squid.core.persistence.base import Base
-from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.observability import (
+from squid.core.observability import (
     CorrelatedLogBuffer,
     bind_correlation_id,
     correlation_id,
     correlation_reference,
     unbind_correlation_id,
 )
+from squid.core.persistence.base import Base
+from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 _TABLES = [Base.metadata.tables["error_reports"]]
 

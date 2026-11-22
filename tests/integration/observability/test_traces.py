@@ -8,7 +8,6 @@ from typing import Any, cast
 
 import pytest
 from litestar import Litestar, get
-from litestar.middleware import DefineMiddleware
 from litestar.testing import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
@@ -16,7 +15,6 @@ from sqlalchemy.pool import StaticPool
 pytest.importorskip("opentelemetry.sdk")
 
 from opentelemetry import propagate, trace  # pyright: ignore[reportMissingImports]
-from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware  # pyright: ignore[reportMissingImports]
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # pyright: ignore[reportMissingImports]
 from opentelemetry.sdk.metrics import MeterProvider  # pyright: ignore[reportMissingImports]
 from opentelemetry.sdk.metrics.export import (  # pyright: ignore[reportMissingImports]
@@ -31,8 +29,10 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # pyright:
 )
 from opentelemetry.trace.status import Status, StatusCode  # pyright: ignore[reportMissingImports]
 
-from squid import observability
-from squid.observability import (
+from squid.api.observability import instrument_api_app
+from squid.config import ObservabilityConfig
+from squid.core import observability
+from squid.core.observability import (
     TraceContextFilter,
     correlation_id,
     extracted_trace_span,
@@ -65,11 +65,9 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
     def correlation() -> dict[str, str]:
         return {"error_id": correlation_id()}
 
-    # Both middleware signatures implement ASGI; Litestar uses narrower TypedDict scopes.
-    api = Litestar(
-        [probe, correlation],
-        middleware=[DefineMiddleware(OpenTelemetryMiddleware, tracer_provider=provider)],  # type: ignore[bad-argument-type]
-    )
+    api = Litestar([probe, correlation])
+    config = ObservabilityConfig.model_validate({"enabled": True, "endpoint": "http://collector:4318"})
+    instrument_api_app(api, config)
     try:
         with TestClient(api) as client:
             assert client.get("/probe").json() == {"value": 1}
@@ -198,7 +196,7 @@ def _live_telemetry(
 ) -> Any:
     tracer_provider = provider or trace.get_tracer_provider()
     resolved_meter_provider = meter_provider or MeterProvider()
-    return observability._Telemetry(  # pyright: ignore[reportPrivateUsage]
+    return observability.Telemetry(
         pid=observability.os.getpid(),
         tracer=cast(Any, tracer_provider.get_tracer("squid")),
         worker_tracer=cast(Any, tracer_provider.get_tracer("squid.worker")),
@@ -206,5 +204,4 @@ def _live_telemetry(
         propagator=cast(Any, propagate),
         current_span=cast(Any, trace.get_current_span),
         error_status=lambda: Status(StatusCode.ERROR),
-        instrument_api_app=lambda app: None,
     )

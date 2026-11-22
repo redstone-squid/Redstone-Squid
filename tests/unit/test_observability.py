@@ -7,29 +7,30 @@ from typing import Any
 import pytest
 from pytest_mock import MockerFixture
 
-from squid import observability
+from squid import observability as startup
 from squid.config import ObservabilityConfig
+from squid.core import observability
 from squid.observability import ObservabilityHandle, configure_observability
 
 
 @pytest.fixture(autouse=True)
 def _reset_observability_state() -> Iterator[None]:
     """Isolate module caches between tests without installing a real telemetry SDK."""
-    previous_pid = observability._configured_pid  # pyright: ignore[reportPrivateUsage]
-    previous_handle = observability._configured_handle  # pyright: ignore[reportPrivateUsage]
+    previous_pid = startup._configured_pid  # pyright: ignore[reportPrivateUsage]
+    previous_handle = startup._configured_handle  # pyright: ignore[reportPrivateUsage]
     previous_active = observability._ACTIVE  # pyright: ignore[reportPrivateUsage]
     previous_counters = observability._counters  # pyright: ignore[reportPrivateUsage]
     previous_histograms = observability._histograms  # pyright: ignore[reportPrivateUsage]
     previous_gauges = observability._gauges  # pyright: ignore[reportPrivateUsage]
-    observability._configured_pid = None  # pyright: ignore[reportPrivateUsage]
-    observability._configured_handle = None  # pyright: ignore[reportPrivateUsage]
+    startup._configured_pid = None  # pyright: ignore[reportPrivateUsage]
+    startup._configured_handle = None  # pyright: ignore[reportPrivateUsage]
     observability._ACTIVE = None  # pyright: ignore[reportPrivateUsage]
     observability._counters = {}  # pyright: ignore[reportPrivateUsage]
     observability._histograms = {}  # pyright: ignore[reportPrivateUsage]
     observability._gauges = {}  # pyright: ignore[reportPrivateUsage]
     yield
-    observability._configured_pid = previous_pid  # pyright: ignore[reportPrivateUsage]
-    observability._configured_handle = previous_handle  # pyright: ignore[reportPrivateUsage]
+    startup._configured_pid = previous_pid  # pyright: ignore[reportPrivateUsage]
+    startup._configured_handle = previous_handle  # pyright: ignore[reportPrivateUsage]
     observability._ACTIVE = previous_active  # pyright: ignore[reportPrivateUsage]
     observability._counters = previous_counters  # pyright: ignore[reportPrivateUsage]
     observability._histograms = previous_histograms  # pyright: ignore[reportPrivateUsage]
@@ -41,7 +42,7 @@ def enabled_config() -> ObservabilityConfig:
 
 
 def test_disabled_configuration_does_not_probe_optional_dependency(mocker: MockerFixture) -> None:
-    configure_sdk = mocker.patch.object(observability, "_configure_otel")
+    configure_sdk = mocker.patch.object(startup, "_configure_otel")
 
     handle = configure_observability(ObservabilityConfig(), service_name="bot")
     handle.shutdown()
@@ -52,7 +53,7 @@ def test_disabled_configuration_does_not_probe_optional_dependency(mocker: Mocke
 def test_enabled_configuration_is_process_idempotent(mocker: MockerFixture) -> None:
     shutdown = mocker.Mock()
     configured = ObservabilityHandle(shutdown)
-    configure_sdk = mocker.patch.object(observability, "_configure_otel", return_value=configured)
+    configure_sdk = mocker.patch.object(startup, "_configure_otel", return_value=configured)
 
     first = configure_observability(enabled_config(), service_name="api")
     second = configure_observability(enabled_config(), service_name="api")
@@ -66,7 +67,7 @@ def test_enabled_configuration_is_process_idempotent(mocker: MockerFixture) -> N
 
 def test_missing_optional_extra_degrades_to_warning(caplog: pytest.LogCaptureFixture, mocker: MockerFixture) -> None:
     missing_extra = ModuleNotFoundError("No module named 'opentelemetry'", name="opentelemetry")
-    mocker.patch.object(observability, "_configure_otel", side_effect=missing_extra)
+    mocker.patch.object(startup, "_configure_otel", side_effect=missing_extra)
 
     handle = configure_observability(enabled_config(), service_name="bot")
 
@@ -85,18 +86,18 @@ def test_missing_optional_extra_degrades_to_warning(caplog: pytest.LogCaptureFix
     ],
 )
 def test_signal_endpoint_appends_signal_path(base: str, signal: str, expected: str) -> None:
-    assert observability._signal_endpoint(base, signal) == expected  # pyright: ignore[reportPrivateUsage]
+    assert startup._signal_endpoint(base, signal) == expected  # pyright: ignore[reportPrivateUsage]
 
 
 def test_shutdown_clears_active_telemetry_and_metric_caches(mocker: MockerFixture) -> None:
     telemetry = _fake_telemetry(mocker)
     counter = mocker.Mock()
-    observability._ACTIVE = telemetry  # pyright: ignore[reportPrivateUsage]
+    telemetry.activate()
     observability._counters["counter"] = counter  # pyright: ignore[reportPrivateUsage]
     observability._histograms["histogram"] = mocker.Mock()  # pyright: ignore[reportPrivateUsage]
     observability._gauges["gauge"] = mocker.Mock()  # pyright: ignore[reportPrivateUsage]
 
-    handle = ObservabilityHandle(lambda: observability._clear_telemetry(telemetry))  # pyright: ignore[reportPrivateUsage]
+    handle = ObservabilityHandle(telemetry.deactivate)
     handle.shutdown()
     observability.add_counter("counter")
 
@@ -109,7 +110,7 @@ def test_shutdown_clears_active_telemetry_and_metric_caches(mocker: MockerFixtur
 
 def test_foreign_pid_makes_public_telemetry_helpers_inert(mocker: MockerFixture) -> None:
     telemetry = _fake_telemetry(mocker, pid=observability.os.getpid() + 1)
-    observability._ACTIVE = telemetry  # pyright: ignore[reportPrivateUsage]
+    telemetry.activate()
 
     with observability.trace_span("span"):
         pass
@@ -137,7 +138,7 @@ def test_resource_attributes_include_environment_and_release() -> None:
         }
     )
 
-    assert observability._resource_attributes(config, "worker") == {  # pyright: ignore[reportPrivateUsage]
+    assert startup._resource_attributes(config, "worker") == {  # pyright: ignore[reportPrivateUsage]
         "service.name": "redstone-squid-worker",
         "deployment.environment.name": "staging",
         "service.version": "abcdef123456",
@@ -145,9 +146,9 @@ def test_resource_attributes_include_environment_and_release() -> None:
 
 
 def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture) -> None:
-    observability._configured_pid = 100  # pyright: ignore[reportPrivateUsage]
-    observability._configured_handle = ObservabilityHandle()  # pyright: ignore[reportPrivateUsage]
-    mocker.patch.object(observability.os, "getpid", return_value=200)
+    startup._configured_pid = 100  # pyright: ignore[reportPrivateUsage]
+    startup._configured_handle = ObservabilityHandle()  # pyright: ignore[reportPrivateUsage]
+    mocker.patch.object(startup.os, "getpid", return_value=200)
 
     with pytest.raises(RuntimeError, match="before this process forked"):
         configure_observability(enabled_config(), service_name="api")
@@ -218,7 +219,7 @@ def _correlated_record(message: str, *, correlation: str) -> logging.LogRecord:
 
 
 def _fake_telemetry(mocker: MockerFixture, *, pid: int | None = None) -> Any:
-    return observability._Telemetry(  # pyright: ignore[reportPrivateUsage]
+    return observability.Telemetry(
         pid=observability.os.getpid() if pid is None else pid,
         tracer=mocker.Mock(),
         worker_tracer=mocker.Mock(),
@@ -226,7 +227,6 @@ def _fake_telemetry(mocker: MockerFixture, *, pid: int | None = None) -> Any:
         propagator=mocker.Mock(),
         current_span=mocker.Mock(),
         error_status=mocker.Mock(),
-        instrument_api_app=mocker.Mock(),
     )
 
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.config import EMBEDDING_DIMENSION, OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, EmbeddingConfig
 from squid.core.builds.models import Build
-from squid.observability import add_counter, trace_span
+from squid.core.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
 

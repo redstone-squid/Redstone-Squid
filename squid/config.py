@@ -405,8 +405,6 @@ class ApiConfig(_FrozenModel):
     @field_validator("secret_nodes")
     @classmethod
     def _require_parsable_secret_nodes(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        # Imported here rather than at module scope: `squid.core.permissions` reaches
-        # `squid.observability`, which reads `ObservabilityConfig` from this module.
         from squid.core.permissions.domain import InvalidPatternError, Pattern
 
         for raw in value:

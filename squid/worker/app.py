@@ -16,13 +16,14 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.media.application.jobs import MediaProcessingJobRunner
+from squid.core.observability import TraceSurface, record_histogram, trace_span
 from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.core.schematics.infrastructure.durable import SchematicJobRunner
 from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
-from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
+from squid.observability import configure_observability
 from squid.runtime import BackgroundTaskSupervisor, RuntimeJob, WorkerServices, start_log_capture
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,

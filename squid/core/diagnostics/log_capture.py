@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 from uuid import uuid4
 
+from squid.core.observability import correlated_log_buffer, correlation_reference
+
 if TYPE_CHECKING:
     import asyncio
 
@@ -115,8 +117,6 @@ class ErrorReportLogHandler(logging.Handler):
             # Logs outside a request still need a reference for report lookup.
             correlation = uuid4().hex[:12]
 
-        from squid.observability import correlated_log_buffer
-
         buffer = correlated_log_buffer()
         return _Pending(
             error=error,
@@ -159,8 +159,6 @@ class ErrorReportLogHandler(logging.Handler):
             self.detach()
 
     async def _store_queued(self, service: ErrorReportService) -> None:
-        from squid.observability import correlation_reference
-
         while self._pending:
             pending = self._pending.popleft()
             try:

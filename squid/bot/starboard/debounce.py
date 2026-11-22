@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 import anyio
 
-from squid.observability import TraceSurface, trace_span
+from squid.core.observability import TraceSurface, trace_span
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 logger = logging.getLogger(__name__)

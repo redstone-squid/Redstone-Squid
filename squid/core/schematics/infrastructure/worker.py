@@ -37,6 +37,7 @@ from pydantic import ValidationError
 
 from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
+from squid.core.observability import add_counter, record_gauge, record_histogram, trace_context_headers
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.domain.models import (
@@ -61,7 +62,6 @@ from squid.core.schematics.errors import (
 from squid.core.schematics.infrastructure import wire
 from squid.core.schematics.infrastructure.wire import Frame, FrameStreamClosed, Operation
 from squid.core.schematics.infrastructure.worker_contracts import WorkerLimits, WorkerLogRecord
-from squid.observability import add_counter, record_gauge, record_histogram, trace_context_headers
 
 logger = logging.getLogger(__name__)
 

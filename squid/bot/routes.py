@@ -7,7 +7,7 @@ import discord
 
 import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
-from squid.observability import TraceSurface, correlation_scope, trace_span
+from squid.core.observability import TraceSurface, correlation_scope, trace_span
 from squid_i18n import TextLike
 from squid_ui.content.text import localization_scope
 from squid_ui.routing import Endpoint, Proceed, RouteMatch, Router
@@ -20,7 +20,7 @@ type AppRequest = sd.Request[Any, RedstoneSquid]
 
 
 class ScreenUnavailable(Exception):
-    """Send a localized explanation under the endpoint's response policy."""
+    """Send a localized explanation when a screen cannot open."""
 
     def __init__(self, message: TextLike) -> None:
         super().__init__()
@@ -66,14 +66,12 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
                 try:
                     result = await proceed()
                 except ScreenUnavailable as error:
-                    result = await request.respond(
-                        text_node(error.message), audience=cast(sd.Audience, policy.audience)
-                    )
-                else:
-                    if isinstance(result, sd.Screen):
-                        result = await request.respond(result)
-                    elif isinstance(result, sd.Response):
-                        result = await request.respond(result, audience=cast(sd.Audience, policy.audience))
+                    result = sd.Response(text_node(error.message))
+                if isinstance(result, sd.Screen):
+                    result = await request.respond(result)
+                elif isinstance(result, sd.Response):
+                    audience = cast(sd.Audience, request.audience or policy.audience)
+                    result = await request.respond(result, audience=audience)
             except Exception as error:
                 # Preserve domain exceptions rather than wrapping them in a task-group error.
                 failure = error

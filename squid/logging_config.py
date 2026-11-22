@@ -9,7 +9,7 @@ from pathlib import Path
 
 from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
-from squid.observability import CORRELATION_BUFFER_HANDLER, install_trace_context_log_filter
+from squid.core.observability import CORRELATION_BUFFER_HANDLER, install_trace_context_log_filter
 
 DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
@@ -154,7 +154,7 @@ def build_logging_config(
 
     if log_tail_records > 0:
         handlers[CORRELATION_BUFFER_HANDLER] = {
-            "()": "squid.observability.CorrelatedLogBuffer",
+            "()": "squid.core.observability.CorrelatedLogBuffer",
             "level": level,
             "formatter": default_formatter,
             "max_records": log_tail_records,

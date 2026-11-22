@@ -32,7 +32,7 @@ from squid.api.errors import handle_squid_error
 from squid.api.security import Caller, current_caller
 from squid.config import RateLimitConfig
 from squid.core.errors import RateLimitedError
-from squid.observability import add_counter
+from squid.core.observability import add_counter
 
 logger = logging.getLogger(__name__)
 

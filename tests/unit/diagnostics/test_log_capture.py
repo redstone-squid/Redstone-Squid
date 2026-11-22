@@ -15,7 +15,7 @@ from squid.core.diagnostics.log_capture import (
     install_log_capture,
     work_lost,
 )
-from squid.observability import CorrelatedLogBuffer
+from squid.core.observability import CorrelatedLogBuffer
 
 
 class RecordingService:

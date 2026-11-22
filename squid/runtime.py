@@ -39,6 +39,14 @@ from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaPro
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.notifications import NotificationService
+from squid.core.observability import (
+    add_counter,
+    correlated_log_buffer,
+    correlation_reference,
+    correlation_scope,
+    record_gauge,
+    record_histogram,
+)
 from squid.core.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
@@ -70,14 +78,6 @@ from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
-from squid.observability import (
-    add_counter,
-    correlated_log_buffer,
-    correlation_reference,
-    correlation_scope,
-    record_gauge,
-    record_histogram,
-)
 
 logger = logging.getLogger(__name__)
 

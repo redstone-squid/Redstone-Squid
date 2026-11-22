@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover - Windows has no rlimits
 
 from squid.config import load_worker_log_config, load_worker_observability_config
 from squid.core.errors import DomainError, SquidError
+from squid.core.observability import extracted_trace_span
 from squid.core.schematics.domain.values import VerifiedResourcePack
 from squid.core.schematics.errors import (
     AmbiguousSimulationInputError,
@@ -33,7 +34,7 @@ from squid.core.schematics.infrastructure import wire
 from squid.core.schematics.infrastructure.wire import ErrorKind, Frame, Operation
 from squid.core.schematics.infrastructure.worker_contracts import WorkerLimits
 from squid.logging_config import configure_worker_logging
-from squid.observability import configure_observability, extracted_trace_span
+from squid.observability import configure_observability
 
 logger = logging.getLogger(__name__)
 

@@ -12,6 +12,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
+from squid.core.observability import CORRELATION_BUFFER_HANDLER
 from squid.logging_config import (
     build_logging_config,
     configure_api_logging,
@@ -20,7 +21,6 @@ from squid.logging_config import (
     prepare_log_path,
     resolve_level,
 )
-from squid.observability import CORRELATION_BUFFER_HANDLER
 
 
 class TestResolveLevel:

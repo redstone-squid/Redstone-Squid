@@ -15,6 +15,7 @@ from dataclasses import replace
 import anyio
 
 from squid.core.errors import ValidationError
+from squid.core.observability import add_counter, trace_span
 from squid.core.suggestions.application.matching import rank
 from squid.core.suggestions.application.ports import ComposedSuggestionProvider, SuggestionAuthorizer
 from squid.core.suggestions.application.registry import SuggestionRegistry, SuggestionSource
@@ -27,7 +28,6 @@ from squid.core.suggestions.domain import (
     SuggestionResult,
     Visibility,
 )
-from squid.observability import add_counter, trace_span
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)

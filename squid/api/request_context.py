@@ -6,7 +6,7 @@ from uuid import uuid4
 from litestar.datastructures import Headers, MutableScopeHeaders
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
-from squid.observability import active_trace_id, bind_correlation_id, unbind_correlation_id
+from squid.core.observability import active_trace_id, bind_correlation_id, unbind_correlation_id
 
 REQUEST_ID_HEADER = "Request-Id"
 

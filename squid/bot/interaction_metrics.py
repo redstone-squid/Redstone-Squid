@@ -10,7 +10,7 @@ import time
 import anyio
 import discord
 
-from squid.observability import add_counter, record_histogram
+from squid.core.observability import add_counter, record_histogram
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 0.05

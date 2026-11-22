@@ -31,7 +31,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import localization_for, tr
-from squid.observability import correlated_log_buffer, correlation_id, correlation_reference
+from squid.core.observability import correlated_log_buffer, correlation_id, correlation_reference
 from squid_i18n import localization_scope
 
 if TYPE_CHECKING:

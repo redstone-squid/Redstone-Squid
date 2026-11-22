@@ -12,7 +12,7 @@ from discord.ext.commands import Cog
 
 from squid.bot.events.handlers import build_handler_registry
 from squid.core.events.dispatcher import DomainEventRunner
-from squid.observability import TraceSurface, trace_span
+from squid.core.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 
 if TYPE_CHECKING:

@@ -17,6 +17,7 @@ from discord import app_commands
 import squid_ui.ext.discord as sd
 from squid.bot.utils.permissions import allows
 from squid.core.actors import Actor
+from squid.core.observability import trace_span
 from squid.core.suggestions.application import SuggestionSource
 from squid.core.suggestions.domain import (
     ReplacementSpan,
@@ -25,7 +26,6 @@ from squid.core.suggestions.domain import (
     ValueType,
     Visibility,
 )
-from squid.observability import trace_span
 
 if TYPE_CHECKING:
     import squid.bot.app

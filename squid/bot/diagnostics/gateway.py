@@ -7,7 +7,7 @@ from typing import Literal
 
 import discord
 
-from squid.observability import add_counter
+from squid.core.observability import add_counter
 
 type GatewayEventKind = Literal["identify", "connect", "ready", "disconnect", "resume"]
 

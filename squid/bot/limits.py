@@ -5,7 +5,7 @@ from collections import OrderedDict, deque
 from math import ceil
 
 from squid.core.errors import RateLimitedError
-from squid.observability import add_counter
+from squid.core.observability import add_counter
 from squid_i18n import tr
 
 

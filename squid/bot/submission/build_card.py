@@ -23,8 +23,8 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
-from squid.observability import add_counter
 from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 

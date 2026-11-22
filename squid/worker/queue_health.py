@@ -11,6 +11,7 @@ from sqlalchemy import Select, extract, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.events.infrastructure.repository import DOMAIN_EVENT_DELIVERY_SPEC
+from squid.core.observability import record_gauge
 from squid.core.persistence.queue import VISIBILITY_TIMEOUT, ClaimedRowQueue, QueueSpec
 from squid.core.records.infrastructure.range_publications import RANGE_RECOMPUTE_QUEUE_SPEC
 from squid.core.records.infrastructure.repository import RECORD_RECOMPUTE_QUEUE_SPEC
@@ -19,7 +20,6 @@ from squid.core.schematics.infrastructure.render_jobs import SCHEMATIC_RENDER_QU
 from squid.core.search.infrastructure.embeddings import SEARCH_EMBEDDING_QUEUE_SPEC
 from squid.core.search.infrastructure.projection import SEARCH_PROJECTION_QUEUE_SPEC
 from squid.core.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
-from squid.observability import record_gauge
 
 VISIBILITY_TIMEOUT_SECONDS = int(VISIBILITY_TIMEOUT.total_seconds())
 

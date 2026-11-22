@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from squid.config import OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, OpenAIConfig
 from squid.core.builds.application.inference import InlineImage
-from squid.observability import add_counter, trace_span
+from squid.core.observability import add_counter, trace_span
 
 logger = logging.getLogger(__name__)
 

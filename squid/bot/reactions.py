@@ -70,7 +70,7 @@ import anyio
 import discord
 
 from squid.core.concurrency import run_all
-from squid.observability import add_counter, record_gauge, record_histogram
+from squid.core.observability import add_counter, record_gauge, record_histogram
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 if TYPE_CHECKING:
