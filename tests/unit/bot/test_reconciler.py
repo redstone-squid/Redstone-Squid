@@ -14,6 +14,7 @@ import pytest
 from squid.bot.app import RedstoneSquid
 from squid.bot.sync.cog import ReconciliationCog
 from squid.core.posts.domain import ResourceKind
+from squid.core.posts.topics import resource_topic
 from squid.core.sync import (
     DiscordReconciliationService,
     ReconciliationAction,
@@ -21,7 +22,6 @@ from squid.core.sync import (
     ReconciliationResource,
 )
 from squid.runtime import BackgroundTaskSupervisor
-from squid.topics import resource_topic
 from squid_reactivity import LocalTopicBus
 from tests.support.delivery_uow import ReconciliationUnitOfWork
 from tests.support.services import bot_services

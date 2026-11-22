@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
+from squid.core.posts.topics import resource_topic
 from squid.core.sync import ReconciliationJob
 from squid.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
-from squid.topics import resource_topic
 
 if TYPE_CHECKING:
     import squid.bot.app

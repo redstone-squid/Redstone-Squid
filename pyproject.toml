@@ -33,7 +33,7 @@ dependencies = [
     "squid-i18n",
     "squid-ui-widgets",
     "squid-replication",
-    # squid/topics.py imports the PostgreSQL LISTEN/NOTIFY bridge directly.
+    # Resource refresh notifications use the PostgreSQL LISTEN/NOTIFY bridge.
     "squid-storage[postgres]",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",

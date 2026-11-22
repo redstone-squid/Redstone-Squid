@@ -48,7 +48,9 @@ from squid.config import (
     load_or_exit,
 )
 from squid.core.errors import RateLimitedError
+from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.posts.domain import ResourceKind
+from squid.core.posts.topics import TopicPublisher, resource_topic
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
@@ -59,7 +61,6 @@ from squid.runtime import (
     start_log_capture,
     start_permission_epoch_watch,
 )
-from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_reactivity import EventLedger, LocalTopicBus, observe_events
 from squid_storage import PostgresTopicBridge
 from squid_ui.content.text import localization_scope

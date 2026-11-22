@@ -9,7 +9,7 @@ import asyncpg
 import pytest
 from testcontainers.postgres import PostgresContainer
 
-from squid.topics import resource_topic
+from squid.core.posts.topics import resource_topic
 from squid_storage import PostgresTopicBridge
 from squid_ui.runtime import LocalTopicBus, TopicName
 
