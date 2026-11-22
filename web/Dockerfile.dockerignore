@@ -1,5 +1,6 @@
 **
 !contracts/vocabulary.json
+!web/.prettierrc.json
 !web/astro.config.ts
 !web/bun.lock
 !web/package.json
