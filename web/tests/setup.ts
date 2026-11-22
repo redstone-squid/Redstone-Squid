@@ -1,8 +1,8 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+import { beforeEach } from "vitest";
 
 // Components read the page locale from <html lang>, like the browser after server rendering.
-afterEach(() => {
+beforeEach(() => {
   document.documentElement.lang = "en";
 });
 

@@ -24,6 +24,13 @@ const recordCriterionLabels = {
     fastest_smallest: "先最快，再最小",
     smallest_fastest: "先最小，再最快",
   },
+  "en-XA": {
+    first: "[Ƒîŕšţ··]",
+    fastest: "[Ƒåšţéšţ···]",
+    smallest: "[Šɱåļļéšţ····]",
+    fastest_smallest: "[Ƒåšţéšţ, ţĥéñ šɱåļļéšţ·········]",
+    smallest_fastest: "[Šɱåļļéšţ, ţĥéñ ƒåšţéšţ·········]",
+  },
 } as const satisfies Record<Locale, Record<RecordCriterion, string>>;
 export function recordCriterionLabel(value: RecordCriterion, locale: Locale = getLocale()): string {
   return recordCriterionLabels[locale][value];
@@ -32,6 +39,12 @@ export function recordCriterionLabel(value: RecordCriterion, locale: Locale = ge
 const buildKindLabels = {
   en: { door: "Door", entrance: "Entrance", extender: "Piston extender", utility: "Utility" },
   "zh-CN": { door: "门", entrance: "入口", extender: "活塞伸缩器", utility: "实用装置" },
+  "en-XA": {
+    door: "[Đööŕ··]",
+    entrance: "[Éñţŕåñçé····]",
+    extender: "[Þîšţöñ éẋţéñđéŕ······]",
+    utility: "[Ûţîļîţý···]",
+  },
 } as const satisfies Record<Locale, Record<BuildKind, string>>;
 export function buildKindLabel(value: BuildKind, locale: Locale = getLocale()): string {
   return buildKindLabels[locale][value];
@@ -40,6 +53,7 @@ export function buildKindLabel(value: BuildKind, locale: Locale = getLocale()): 
 const versionScopeLabels = {
   en: { all_time: "All time", up_to_date: "Current version" },
   "zh-CN": { all_time: "所有版本", up_to_date: "当前版本" },
+  "en-XA": { all_time: "[Åļļ ţîɱé····]", up_to_date: "[Çûŕŕéñţ ṽéŕšîöñ······]" },
 } as const satisfies Record<Locale, Record<VersionScope, string>>;
 export function versionScopeLabel(value: VersionScope, locale: Locale = getLocale()): string {
   return versionScopeLabels[locale][value];
@@ -48,6 +62,11 @@ export function versionScopeLabel(value: VersionScope, locale: Locale = getLocal
 const resolutionStatusLabels = {
   en: { resolved: "Resolved", unresolved: "Awaiting evidence", no_candidate: "No eligible builds" },
   "zh-CN": { resolved: "已确定", unresolved: "等待证据", no_candidate: "没有符合条件的作品" },
+  "en-XA": {
+    resolved: "[Ŕéšöļṽéđ····]",
+    unresolved: "[Åŵåîţîñĝ éṽîđéñçé·······]",
+    no_candidate: "[Ñö éļîĝîƀļé ƀûîļđš········]",
+  },
 } as const satisfies Record<Locale, Record<ResolutionStatus, string>>;
 export function resolutionStatusLabel(
   value: ResolutionStatus,
@@ -59,6 +78,7 @@ export function resolutionStatusLabel(
 const buildStatusLabels = {
   en: { pending: "Pending", approved: "Approved", rejected: "Rejected" },
   "zh-CN": { pending: "待审核", approved: "已通过", rejected: "未通过" },
+  "en-XA": { pending: "[Þéñđîñĝ···]", approved: "[Åþþŕöṽéđ····]", rejected: "[Ŕéĵéçţéđ····]" },
 } as const satisfies Record<Locale, Record<BuildStatusFilter, string>>;
 export function buildStatusLabel(value: BuildStatusFilter, locale: Locale = getLocale()): string {
   return buildStatusLabels[locale][value];

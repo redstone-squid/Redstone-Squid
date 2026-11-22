@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 
-import { SUPPORTED_LOCALES, localizePath } from "@/locales/locale";
+import { PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 
 export const GET: APIRoute = ({ locals }) => {
   const { siteUrl } = locals.config;
-  const homes = SUPPORTED_LOCALES.map((locale) => {
+  const homes = PUBLIC_LOCALES.map((locale) => {
     const url = new URL(localizePath("/", locale), siteUrl).href
       .replaceAll("&", "&amp;")
       .replaceAll('"', "&quot;");

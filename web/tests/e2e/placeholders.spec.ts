@@ -66,3 +66,15 @@ test("status pages and sitemap stay available during the rebuild", async ({ requ
     "<loc>https://catalogue.redstone-squid.org/zh-cn</loc>",
   ]);
 });
+
+test("the pseudo-locale renders bracketed text and stays out of search and menus", async ({
+  page,
+}) => {
+  await page.goto("/en-xa/records");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-XA");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^\[.*\]$/);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");
+  await expect(page.locator('link[hreflang="en-XA"]')).toHaveCount(0);
+  await page.locator(".language-selector summary").click();
+  await expect(page.locator(".language-selector a")).toHaveText(["English", "简体中文"]);
+});

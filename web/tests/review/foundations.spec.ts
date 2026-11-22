@@ -48,7 +48,8 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.getByRole("link", { name: "Foundations", exact: true }).click();
     await expect(page).toHaveURL(/design-system\?.*#foundations$/);
-    await page.getByRole("link", { name: "中文", exact: true }).click();
+    await page.locator(".language-selector summary").first().click();
+    await page.getByRole("link", { name: "简体中文", exact: true }).first().click();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   } finally {
     await context.close();

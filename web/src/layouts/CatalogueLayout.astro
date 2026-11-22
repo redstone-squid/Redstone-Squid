@@ -2,7 +2,7 @@
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
-import { localizePath } from "@/locales/locale";
+import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
@@ -12,7 +12,7 @@ import "@/ui/base.css";
 import "./catalogue-layout.css";
 type Props = ComponentProps<typeof DocumentHead>;
 const { locale, config } = Astro.locals;
-const activePath = localizePath(Astro.url.pathname, "en");
+const activePath = unprefixedPath(Astro.url.pathname);
 const nav = [
   [m.navBuilds, "/builds"],
   [m.navRecords, "/records"],

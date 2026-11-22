@@ -1,6 +1,6 @@
 import { existsSync, globSync, readFileSync, writeFileSync } from "node:fs";
 import { format, resolveConfig } from "prettier";
-import { SUPPORTED_LOCALES } from "../../src/locales/locale";
+import { DEFAULT_LOCALE, PUBLIC_LOCALES, SUPPORTED_LOCALES } from "../../src/locales/locale";
 import { catalogContract, compareCatalogs, reviewStatus, sourceFingerprints } from "./catalogs";
 import { compileCatalogs, functionName } from "./compile";
 import { compileVocabulary, type Vocabulary } from "./vocabulary";
@@ -24,18 +24,21 @@ async function emit(path: string, source: string): Promise<void> {
     throw new Error(`Run bun run i18n:generate and commit ${path}.`);
 }
 
+// The source catalog comes first; pseudo-locales are compiled from it and have no catalog.
+const catalogLocales = [DEFAULT_LOCALE, ...PUBLIC_LOCALES.filter((l) => l !== DEFAULT_LOCALE)];
+const pseudoLocales = SUPPORTED_LOCALES.filter((locale) => !PUBLIC_LOCALES.includes(locale));
 const catalogs = Object.fromEntries(
-  SUPPORTED_LOCALES.map((locale) => [locale, readFileSync(catalogPath(locale), "utf8")]),
+  catalogLocales.map((locale) => [locale, readFileSync(catalogPath(locale), "utf8")]),
 );
-const [english, ...translations] = SUPPORTED_LOCALES.map((locale) =>
+const [english, ...translations] = catalogLocales.map((locale) =>
   catalogContract(catalogs[locale] ?? ""),
 );
 if (!english) throw new Error("No locales are configured.");
 for (const translation of translations) compareCatalogs(english, translation);
 
 // A translation records the English fingerprint it was reviewed against, as in squid-i18n.
-const fingerprints = sourceFingerprints(catalogs.en ?? "");
-for (const locale of SUPPORTED_LOCALES.filter((locale) => locale !== "en")) {
+const fingerprints = sourceFingerprints(catalogs[DEFAULT_LOCALE] ?? "");
+for (const locale of catalogLocales.slice(1)) {
   const path = revisionsPath(locale);
   if (review) {
     writeFileSync(path, `${JSON.stringify(fingerprints, null, 2)}\n`);
@@ -63,9 +66,12 @@ const unused = Object.keys(english).filter((id) => !called.has(functionName(id))
 if (unused.length > 0)
   throw new Error(`Delete these messages or use them in src/:\n${unused.join("\n")}`);
 
-await emit(target, compileCatalogs(catalogs));
+await emit(target, compileCatalogs(catalogs, pseudoLocales));
 const vocabulary = JSON.parse(readFileSync("../contracts/vocabulary.json", "utf8")) as Vocabulary;
-await emit("src/locales/vocabulary.gen.ts", compileVocabulary(vocabulary, SUPPORTED_LOCALES));
+await emit(
+  "src/locales/vocabulary.gen.ts",
+  compileVocabulary(vocabulary, catalogLocales, pseudoLocales),
+);
 console.info(
   `Compiled ${Object.keys(english).length} messages in ${SUPPORTED_LOCALES.length} locales.`,
 );

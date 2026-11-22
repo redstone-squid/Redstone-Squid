@@ -14,11 +14,14 @@ import { compileVocabulary } from "../../scripts/i18n/vocabulary";
 type Message = (...args: unknown[]) => string;
 
 /** Compile catalogs and import the result, so tests exercise the generated code itself. */
-async function load(catalogs: Record<string, string>): Promise<Record<string, Message>> {
+async function load(
+  catalogs: Record<string, string>,
+  pseudoLocales: string[] = [],
+): Promise<Record<string, Message>> {
   const format = path.resolve("src/locales/format.ts");
   const locale = path.resolve("src/locales/locale.ts");
   const javascript = ts
-    .transpileModule(compileCatalogs(catalogs), {
+    .transpileModule(compileCatalogs(catalogs, pseudoLocales), {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     })
     .outputText.replace('"./format"', JSON.stringify(format))
@@ -88,6 +91,14 @@ describe("message compiler", () => {
     expect(byCreator?.({ name: "{ $name } <b>builder</b>" }, "en")).toBe(
       "Builds by { $name } <b>builder</b>",
     );
+  });
+
+  it("compiles pseudo-locales as accented, bracketed, longer English", async () => {
+    const { holders } = await load(
+      { en: "holders = { $count ->\n  [one] { $count } holder\n *[other] { $count } holders\n}" },
+      ["en-XA"],
+    );
+    expect(holders?.({ count: 2 }, "en-XA")).toBe("[2 ĥöļđéŕš····]");
   });
 
   it("types arguments from how every locale uses them", () => {

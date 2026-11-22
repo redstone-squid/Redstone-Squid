@@ -1,5 +1,6 @@
 ---
-import { localizePath } from "@/locales/locale";
+import LanguageSelector from "@/layouts/LanguageSelector.astro";
+import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
@@ -11,7 +12,7 @@ type Props = { title: string; theme: "light" | "dark" };
 const { title, theme } = Astro.props;
 const { locale } = Astro.locals;
 const query = new URLSearchParams({ theme });
-const onLibrary = localizePath(Astro.url.pathname, "en").replace(/\/$/, "") === "/design-system";
+const onLibrary = unprefixedPath(Astro.url.pathname).replace(/\/$/, "") === "/design-system";
 const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
 ---
 
@@ -33,7 +34,10 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
         <img src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
-      <span class="sq-muted">{m.workbenchWorkbench()}</span>
+      <div class="sq-row">
+        <span class="sq-muted">{m.workbenchWorkbench()}</span>
+        <LanguageSelector />
+      </div>
     </header>
     <div class="sq-shell">
       <aside class="sq-sidebar">

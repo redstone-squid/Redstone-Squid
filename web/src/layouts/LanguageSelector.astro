@@ -1,5 +1,5 @@
 ---
-import { LOCALES, SUPPORTED_LOCALES, localizePath } from "@/locales/locale";
+import { LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 type Props = { align?: "start" | "end" };
 const { align = "end" } = Astro.props;
@@ -13,7 +13,7 @@ const path = `${Astro.url.pathname}${Astro.url.search}`;
     <span aria-hidden="true">⌄</span>
   </summary>
   <ul aria-label={m.navLanguage()}>
-    {SUPPORTED_LOCALES.map((language) => (
+    {PUBLIC_LOCALES.map((language) => (
       <li>
         <a
           href={localizePath(path, language)}

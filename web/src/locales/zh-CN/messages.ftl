@@ -72,7 +72,6 @@ workbench-components = 组件
 workbench-page-patterns = 页面模式
 workbench-feedback-states = 反馈状态
 workbench-fixture-alt = { $title } 示意图
-workbench-switch-language = English
 workbench-piston-door = 活塞门
 workbench-seamless-door = 无缝门
 workbench-extender = 活塞扩展器

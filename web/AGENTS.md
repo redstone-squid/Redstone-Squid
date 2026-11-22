@@ -92,6 +92,8 @@ m.recordHolderCount({ count: holders.length });
   `{ required: m.trialRequired, ... } satisfies Record<DraftError, unknown>`. Never build a
   message name from a string.
 - The build fails when a message is not called from `src/`, so delete text with its feature.
+- Open any page under `/en-xa` to see the pseudo-locale: every message is accented,
+  bracketed, and about 40% longer, so hard-coded text and layouts that cannot grow stand out.
 - Each translation's `source-revisions.json` records the English it was reviewed against.
   When you change English wording, update every translation and run `bun run i18n:review`;
   the build fails until you do.

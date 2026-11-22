@@ -1,4 +1,5 @@
 import { functionName } from "./compile";
+import { pseudoText } from "./pseudo";
 
 /** `{locale: {group: {value: label}}}`, as written by scripts/export_vocabulary.py. */
 export type Vocabulary = Record<string, Record<string, Record<string, string>>>;
@@ -13,13 +14,20 @@ const VALUE_TYPES: Record<string, string> = {
 };
 
 /**
- * Compile the exported domain labels into one `<group>Label(locale, value)` function per group.
+ * Compile the exported domain labels into one `<group>Label(value, locale?)` function per group.
  *
- * Every locale must have the same groups and values as English.
+ * The first of `locales` is the source; every locale must label the same values. Each of
+ * `pseudoLocales` gets the pseudo form of the source labels.
  */
-export function compileVocabulary(vocabulary: Vocabulary, locales: readonly string[]): string {
-  const english = vocabulary.en;
-  if (!english) throw new Error("The vocabulary has no English labels.");
+export function compileVocabulary(
+  vocabulary: Vocabulary,
+  locales: readonly string[],
+  pseudoLocales: readonly string[] = [],
+): string {
+  const source = locales[0];
+  const english = source === undefined ? undefined : vocabulary[source];
+  if (source === undefined || english === undefined)
+    throw new Error(`The vocabulary has no labels for the source locale ${String(source)}.`);
   const groups = Object.keys(english);
   for (const locale of locales) {
     for (const group of groups) {
@@ -36,9 +44,13 @@ export function compileVocabulary(vocabulary: Vocabulary, locales: readonly stri
   });
   const definitions = types.map(([group, type]) => {
     const name = functionName(group.replaceAll("_", "-"));
-    const labels = Object.fromEntries(
-      locales.map((locale) => [locale, vocabulary[locale]?.[group]]),
+    const pseudoLabels = Object.fromEntries(
+      Object.entries(english[group] ?? {}).map(([value, label]) => [value, pseudoText(label)]),
     );
+    const labels = Object.fromEntries([
+      ...locales.map((locale): [string, unknown] => [locale, vocabulary[locale]?.[group]]),
+      ...pseudoLocales.map((locale): [string, unknown] => [locale, pseudoLabels]),
+    ]);
     return [
       `const ${name}Labels = ${JSON.stringify(labels)} as const satisfies Record<Locale, Record<${type}, string>>;`,
       `export function ${name}Label(value: ${type}, locale: Locale = getLocale()): string {`,

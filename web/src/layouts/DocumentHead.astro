@@ -1,5 +1,5 @@
 ---
-import { LOCALES, SUPPORTED_LOCALES, localizePath } from "@/locales/locale";
+import { DEFAULT_LOCALE, LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 type Props = {
   title: string;
@@ -17,7 +17,9 @@ const title = `${Astro.props.title} · ${m.siteName()}`;
 const description = Astro.props.description ?? m.metaDefaultDescription();
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
 const canonical = new URL(localizePath(canonicalPath), config.siteUrl).toString();
-const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
+const defaultUrl = new URL(localizePath(canonicalPath, DEFAULT_LOCALE), config.siteUrl).toString();
+// The pseudo-locale exists for development and review only.
+const noindex = Astro.props.noindex === true || LOCALES[locale].pseudo;
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData
   ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
@@ -28,16 +30,16 @@ const jsonLd = Astro.props.structuredData
 <meta name="viewport" content="width=device-width" />
 <meta name="description" content={description} />
 <meta name="theme-color" content={Astro.props.themeColor ?? "#090b0c"} />
-<meta name="robots" content={Astro.props.noindex ? "noindex,follow" : "index,follow"} />
+<meta name="robots" content={noindex ? "noindex,follow" : "index,follow"} />
 <link rel="canonical" href={canonical} />
-{SUPPORTED_LOCALES.map((language) => (
+{PUBLIC_LOCALES.map((language) => (
   <link
     rel="alternate"
     hreflang={language}
     href={new URL(localizePath(canonicalPath, language), config.siteUrl).toString()}
   />
 ))}
-<link rel="alternate" hreflang="x-default" href={englishUrl} />
+<link rel="alternate" hreflang="x-default" href={defaultUrl} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={m.siteName()} />

@@ -1,3 +1,4 @@
+import { accent, padding } from "./pseudo";
 import {
   parse,
   type Expression,
@@ -18,7 +19,8 @@ const ARGUMENT_TYPES: Record<ArgumentKind, string> = {
 const PLURAL_CATEGORIES = new Set(["zero", "one", "two", "few", "many", "other"]);
 
 type Entry = { pattern: Pattern; term: boolean; source: string };
-type Scope = { locale: string; entries: Map<string, Entry>; terms: Record<string, string> };
+// A pseudo scope compiles the reference catalog with accented text.
+type Scope = { locale: string; entries: Map<string, Entry>; pseudo: boolean };
 
 /** Convert a Fluent ID such as `record-holder-count` to the exported `recordHolderCount`. */
 export function functionName(id: string): string {
@@ -44,19 +46,26 @@ function parseCatalog(source: string, locale: string): Map<string, Entry> {
 /**
  * Compile Fluent catalogs into a TypeScript module with one function per message.
  *
- * Each function takes the locale and, when the message has variables, an `args` object whose
- * types follow how the variables are used: a plural selector or `NUMBER()` takes a number,
- * `DATETIME()` takes a date. The catalogs must already have matching IDs and variables.
+ * Each function takes, when the message has variables, an `args` object whose types follow how
+ * the variables are used: a plural selector or `NUMBER()` takes a number, `DATETIME()` takes a
+ * date. The catalogs must already have matching IDs and variables. The first catalog is the
+ * source; each of `pseudoLocales` gets an accented, bracketed, longer copy of it.
  */
-export function compileCatalogs(catalogs: Record<string, string>): string {
-  const locales = Object.keys(catalogs);
-  const scopes = locales.map((locale) => ({
+export function compileCatalogs(
+  catalogs: Record<string, string>,
+  pseudoLocales: readonly string[] = [],
+): string {
+  const translated: Scope[] = Object.entries(catalogs).map(([locale, source]) => ({
     locale,
-    entries: parseCatalog(catalogs[locale] ?? "", locale),
-    terms: {},
+    entries: parseCatalog(source, locale),
+    pseudo: false,
   }));
-  const reference = scopes[0];
+  const reference = translated[0];
   if (!reference) throw new Error("At least one catalog is required.");
+  const scopes = [
+    ...translated,
+    ...pseudoLocales.map((locale) => ({ locale, entries: reference.entries, pseudo: true })),
+  ];
 
   // Every locale contributes to a message's argument types, so translators can, for example,
   // add a plural selector that English does not need.
@@ -87,13 +96,16 @@ export function compileCatalogs(catalogs: Record<string, string>): string {
     const cases = scopes.map((scope) => {
       const pattern = scope.entries.get(id)?.pattern;
       if (!pattern) throw new Error(`${scope.locale} is missing ${id}.`);
-      const body = compilePattern(pattern, {
+      const compiled = compilePattern(pattern, {
         scope,
         variables,
         variablesOf,
         helpers,
         argumentsOf: new Map(),
       });
+      const body = scope.pseudo
+        ? `"[" + ${compiled} + ${JSON.stringify(`${padding(textLength(pattern))}]`)}`
+        : compiled;
       return `    case ${JSON.stringify(scope.locale)}:\n      return ${body};`;
     });
     const english = reference.entries.get(id)?.source ?? id;
@@ -182,7 +194,7 @@ type Context = {
 function compilePattern(pattern: Pattern, context: Context): string {
   const parts = pattern.elements.map((element) =>
     element.type === "TextElement"
-      ? JSON.stringify(element.value)
+      ? JSON.stringify(context.scope.pseudo ? accent(element.value) : element.value)
       : compileExpression(element.expression, context),
   );
   return parts.length > 0 ? parts.join(" + ") : '""';
@@ -274,4 +286,17 @@ function compileOptions(named: NamedArgument[]): string {
         `${argument.name.name}: ${argument.value.type === "NumberLiteral" ? argument.value.value : JSON.stringify(argument.value.value)}`,
     )
     .join(", ")} }`;
+}
+
+/** The length of a pattern's own text, following each select expression's default variant. */
+function textLength(pattern: Pattern): number {
+  let length = 0;
+  for (const element of pattern.elements) {
+    if (element.type === "TextElement") length += element.value.length;
+    else if (element.expression.type === "SelectExpression") {
+      const fallback = element.expression.variants.find((variant) => variant.default);
+      if (fallback) length += textLength(fallback.value);
+    }
+  }
+  return length;
 }

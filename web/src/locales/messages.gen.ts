@@ -9,6 +9,8 @@ export function siteName(locale: Locale = getLocale()): string {
       return "Redstone Squid";
     case "zh-CN":
       return "红石鱿鱼";
+    case "en-XA":
+      return "[" + "Ŕéđšţöñé Šǫûîđ" + "······]";
   }
 }
 
@@ -19,6 +21,8 @@ export function navHome(locale: Locale = getLocale()): string {
       return "Home";
     case "zh-CN":
       return "首页";
+    case "en-XA":
+      return "[" + "Ĥöɱé" + "··]";
   }
 }
 
@@ -29,6 +33,8 @@ export function navBuilds(locale: Locale = getLocale()): string {
       return "Builds";
     case "zh-CN":
       return "作品";
+    case "en-XA":
+      return "[" + "Ɓûîļđš" + "···]";
   }
 }
 
@@ -39,6 +45,8 @@ export function navRecords(locale: Locale = getLocale()): string {
       return "Records";
     case "zh-CN":
       return "纪录";
+    case "en-XA":
+      return "[" + "Ŕéçöŕđš" + "···]";
   }
 }
 
@@ -49,6 +57,8 @@ export function navSearch(locale: Locale = getLocale()): string {
       return "Search";
     case "zh-CN":
       return "搜索";
+    case "en-XA":
+      return "[" + "Šéåŕçĥ" + "···]";
   }
 }
 
@@ -59,6 +69,8 @@ export function navSubmit(locale: Locale = getLocale()): string {
       return "Submit";
     case "zh-CN":
       return "投稿";
+    case "en-XA":
+      return "[" + "Šûƀɱîţ" + "···]";
   }
 }
 
@@ -69,6 +81,8 @@ export function navAbout(locale: Locale = getLocale()): string {
       return "About";
     case "zh-CN":
       return "关于";
+    case "en-XA":
+      return "[" + "Åƀöûţ" + "··]";
   }
 }
 
@@ -79,6 +93,8 @@ export function navLanguage(locale: Locale = getLocale()): string {
       return "Language";
     case "zh-CN":
       return "语言";
+    case "en-XA":
+      return "[" + "Ļåñĝûåĝé" + "····]";
   }
 }
 
@@ -89,6 +105,8 @@ export function navSkip(locale: Locale = getLocale()): string {
       return "Skip to content";
     case "zh-CN":
       return "跳到正文";
+    case "en-XA":
+      return "[" + "Šķîþ ţö çöñţéñţ" + "······]";
   }
 }
 
@@ -99,6 +117,8 @@ export function footerNote(locale: Locale = getLocale()): string {
       return "Minecraft redstone builds and records.";
     case "zh-CN":
       return "Minecraft 红石作品与纪录。";
+    case "en-XA":
+      return "[" + "Ṁîñéçŕåƒţ ŕéđšţöñé ƀûîļđš åñđ ŕéçöŕđš." + "················]";
   }
 }
 
@@ -109,6 +129,8 @@ export function footerDiscord(locale: Locale = getLocale()): string {
       return "Join the Discord";
     case "zh-CN":
       return "加入 Discord";
+    case "en-XA":
+      return "[" + "Ĵöîñ ţĥé Đîšçöŕđ" + "·······]";
   }
 }
 
@@ -119,6 +141,8 @@ export function footerInvite(locale: Locale = getLocale()): string {
       return "Invite the bot";
     case "zh-CN":
       return "邀请机器人";
+    case "en-XA":
+      return "[" + "Îñṽîţé ţĥé ƀöţ" + "······]";
   }
 }
 
@@ -129,6 +153,8 @@ export function homeTitle(locale: Locale = getLocale()): string {
       return "Minecraft redstone builds";
     case "zh-CN":
       return "Minecraft 红石作品";
+    case "en-XA":
+      return "[" + "Ṁîñéçŕåƒţ ŕéđšţöñé ƀûîļđš" + "··········]";
   }
 }
 
@@ -139,6 +165,8 @@ export function buildsTitle(locale: Locale = getLocale()): string {
       return "Build catalogue";
     case "zh-CN":
       return "作品目录";
+    case "en-XA":
+      return "[" + "Ɓûîļđ çåţåļöĝûé" + "······]";
   }
 }
 
@@ -149,6 +177,8 @@ export function buildCreators(locale: Locale = getLocale()): string {
       return "Creators";
     case "zh-CN":
       return "作者";
+    case "en-XA":
+      return "[" + "Çŕéåţöŕš" + "····]";
   }
 }
 
@@ -159,6 +189,8 @@ export function buildDescription(locale: Locale = getLocale()): string {
       return "Builder notes";
     case "zh-CN":
       return "建造者说明";
+    case "en-XA":
+      return "[" + "Ɓûîļđéŕ ñöţéš" + "······]";
   }
 }
 
@@ -169,6 +201,8 @@ export function buildMedia(locale: Locale = getLocale()): string {
       return "Media";
     case "zh-CN":
       return "媒体";
+    case "en-XA":
+      return "[" + "Ṁéđîå" + "··]";
   }
 }
 
@@ -179,6 +213,8 @@ export function recordsTitle(locale: Locale = getLocale()): string {
       return "Active records";
     case "zh-CN":
       return "当前纪录";
+    case "en-XA":
+      return "[" + "Åçţîṽé ŕéçöŕđš" + "······]";
   }
 }
 
@@ -192,6 +228,10 @@ export function recordComputed(
       return "Computed " + formatDateTime(locale, args.date, { dateStyle: "medium" });
     case "zh-CN":
       return "计算于 " + formatDateTime(locale, args.date, { dateStyle: "medium" });
+    case "en-XA":
+      return (
+        "[" + "Çöɱþûţéđ " + formatDateTime(locale, args.date, { dateStyle: "medium" }) + "····]"
+      );
   }
 }
 
@@ -210,6 +250,20 @@ export function recordHolderCount(args: { count: number }, locale: Locale = getL
       );
     case "zh-CN":
       return formatNumber(locale, args.count) + " 个保持作品";
+    case "en-XA":
+      return (
+        "[" +
+        select(
+          locale,
+          args.count,
+          {
+            one: formatNumber(locale, args.count) + " ĥöļđéŕ",
+            other: formatNumber(locale, args.count) + " ĥöļđéŕš",
+          },
+          "other",
+        ) +
+        "····]"
+      );
   }
 }
 
@@ -220,6 +274,8 @@ export function searchTitle(locale: Locale = getLocale()): string {
       return "Search the catalogue";
     case "zh-CN":
       return "搜索目录";
+    case "en-XA":
+      return "[" + "Šéåŕçĥ ţĥé çåţåļöĝûé" + "········]";
   }
 }
 
@@ -230,6 +286,8 @@ export function searchSuggestions(locale: Locale = getLocale()): string {
       return "Suggestions";
     case "zh-CN":
       return "建议";
+    case "en-XA":
+      return "[" + "Šûĝĝéšţîöñš" + "·····]";
   }
 }
 
@@ -240,6 +298,8 @@ export function searchSuggestionError(locale: Locale = getLocale()): string {
       return "Suggestions are temporarily unavailable.";
     case "zh-CN":
       return "暂时无法获取搜索建议。";
+    case "en-XA":
+      return "[" + "Šûĝĝéšţîöñš åŕé ţéɱþöŕåŕîļý ûñåṽåîļåƀļé." + "················]";
   }
 }
 
@@ -250,6 +310,8 @@ export function searchHelpTitle(locale: Locale = getLocale()): string {
       return "Query language reference";
     case "zh-CN":
       return "查询语言参考";
+    case "en-XA":
+      return "[" + "Ǫûéŕý ļåñĝûåĝé ŕéƒéŕéñçé" + "··········]";
   }
 }
 
@@ -260,6 +322,8 @@ export function aboutTitle(locale: Locale = getLocale()): string {
       return "About the catalogue";
     case "zh-CN":
       return "关于本目录";
+    case "en-XA":
+      return "[" + "Åƀöûţ ţĥé çåţåļöĝûé" + "········]";
   }
 }
 
@@ -270,6 +334,8 @@ export function commonLoadMore(locale: Locale = getLocale()): string {
       return "Load more";
     case "zh-CN":
       return "加载更多";
+    case "en-XA":
+      return "[" + "Ļöåđ ɱöŕé" + "····]";
   }
 }
 
@@ -280,6 +346,8 @@ export function commonPrevious(locale: Locale = getLocale()): string {
       return "Previous";
     case "zh-CN":
       return "上一页";
+    case "en-XA":
+      return "[" + "Þŕéṽîöûš" + "····]";
   }
 }
 
@@ -290,6 +358,8 @@ export function commonHome(locale: Locale = getLocale()): string {
       return "Return home";
     case "zh-CN":
       return "返回首页";
+    case "en-XA":
+      return "[" + "Ŕéţûŕñ ĥöɱé" + "·····]";
   }
 }
 
@@ -300,6 +370,8 @@ export function errorNotFoundTitle(locale: Locale = getLocale()): string {
       return "That catalogue page was not found";
     case "zh-CN":
       return "找不到该目录页面";
+    case "en-XA":
+      return "[" + "Ţĥåţ çåţåļöĝûé þåĝé ŵåš ñöţ ƒöûñđ" + "··············]";
   }
 }
 
@@ -310,6 +382,12 @@ export function errorNotFoundBody(locale: Locale = getLocale()): string {
       return "The link may be old, or the item may no longer be public.";
     case "zh-CN":
       return "链接可能已过期，或该条目已不再公开。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥé ļîñķ ɱåý ƀé öļđ, öŕ ţĥé îţéɱ ɱåý ñö ļöñĝéŕ ƀé þûƀļîç." +
+        "·······················]"
+      );
   }
 }
 
@@ -320,6 +398,8 @@ export function errorServiceTitle(locale: Locale = getLocale()): string {
       return "The catalogue service is unavailable";
     case "zh-CN":
       return "目录服务暂时不可用";
+    case "en-XA":
+      return "[" + "Ţĥé çåţåļöĝûé šéŕṽîçé îš ûñåṽåîļåƀļé" + "···············]";
   }
 }
 
@@ -330,6 +410,12 @@ export function errorServiceBody(locale: Locale = getLocale()): string {
       return "The catalogue API did not answer in time. Please try again shortly.";
     case "zh-CN":
       return "目录 API 未及时响应，请稍后重试。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥé çåţåļöĝûé ÅÞÎ đîđ ñöţ åñšŵéŕ îñ ţîɱé. Þļéåšé ţŕý åĝåîñ šĥöŕţļý." +
+        "···························]"
+      );
   }
 }
 
@@ -340,6 +426,12 @@ export function metaDefaultDescription(locale: Locale = getLocale()): string {
       return "Explore approved Minecraft redstone builds and active records from the Redstone Squid community.";
     case "zh-CN":
       return "浏览 Redstone Squid 社区已确认的 Minecraft 红石作品和当前纪录。";
+    case "en-XA":
+      return (
+        "[" +
+        "Éẋþļöŕé åþþŕöṽéđ Ṁîñéçŕåƒţ ŕéđšţöñé ƀûîļđš åñđ åçţîṽé ŕéçöŕđš ƒŕöɱ ţĥé Ŕéđšţöñé Šǫûîđ çöɱɱûñîţý." +
+        "·······································]"
+      );
   }
 }
 
@@ -350,6 +442,8 @@ export function workbenchDarkTheme(locale: Locale = getLocale()): string {
       return "Dark theme";
     case "zh-CN":
       return "深色主题";
+    case "en-XA":
+      return "[" + "Đåŕķ ţĥéɱé" + "····]";
   }
 }
 
@@ -360,6 +454,8 @@ export function workbenchLightTheme(locale: Locale = getLocale()): string {
       return "Light theme";
     case "zh-CN":
       return "浅色主题";
+    case "en-XA":
+      return "[" + "Ļîĝĥţ ţĥéɱé" + "·····]";
   }
 }
 
@@ -370,6 +466,12 @@ export function workbenchFoundationsDescription(locale: Locale = getLocale()): s
       return "Semantic colours, spacing, and type used in the catalogue.";
     case "zh-CN":
       return "构建目录使用的语义颜色、间距和字体。";
+    case "en-XA":
+      return (
+        "[" +
+        "Šéɱåñţîç çöļöûŕš, šþåçîñĝ, åñđ ţýþé ûšéđ îñ ţĥé çåţåļöĝûé." +
+        "························]"
+      );
   }
 }
 
@@ -380,6 +482,8 @@ export function workbenchComponentsDescription(locale: Locale = getLocale()): st
       return "Shared controls with accessible behavior built in.";
     case "zh-CN":
       return "内置无障碍交互的共享控件。";
+    case "en-XA":
+      return "[" + "Šĥåŕéđ çöñţŕöļš ŵîţĥ åççéššîƀļé ƀéĥåṽîöŕ ƀûîļţ îñ." + "····················]";
   }
 }
 
@@ -390,6 +494,8 @@ export function workbenchNoPreviewAvailable(locale: Locale = getLocale()): strin
       return "No preview available";
     case "zh-CN":
       return "暂无预览";
+    case "en-XA":
+      return "[" + "Ñö þŕéṽîéŵ åṽåîļåƀļé" + "········]";
   }
 }
 
@@ -400,6 +506,8 @@ export function workbenchDimensions(locale: Locale = getLocale()): string {
       return "Dimensions";
     case "zh-CN":
       return "尺寸";
+    case "en-XA":
+      return "[" + "Đîɱéñšîöñš" + "····]";
   }
 }
 
@@ -410,6 +518,8 @@ export function workbenchOpening(locale: Locale = getLocale()): string {
       return "Opening";
     case "zh-CN":
       return "开启时间";
+    case "en-XA":
+      return "[" + "Öþéñîñĝ" + "···]";
   }
 }
 
@@ -420,6 +530,8 @@ export function workbenchStatesDescription(locale: Locale = getLocale()): string
       return "Give every outcome a clear next step.";
     case "zh-CN":
       return "为每种结果提供清晰的后续步骤。";
+    case "en-XA":
+      return "[" + "Ĝîṽé éṽéŕý öûţçöɱé å çļéåŕ ñéẋţ šţéþ." + "···············]";
   }
 }
 
@@ -430,6 +542,8 @@ export function workbenchApproved(locale: Locale = getLocale()): string {
       return "Approved";
     case "zh-CN":
       return "已通过";
+    case "en-XA":
+      return "[" + "Åþþŕöṽéđ" + "····]";
   }
 }
 
@@ -440,6 +554,8 @@ export function workbenchReadyToExplore(locale: Locale = getLocale()): string {
       return "Ready to explore";
     case "zh-CN":
       return "可以开始探索";
+    case "en-XA":
+      return "[" + "Ŕéåđý ţö éẋþļöŕé" + "·······]";
   }
 }
 
@@ -450,6 +566,8 @@ export function workbenchApprovedDescription(locale: Locale = getLocale()): stri
       return "The community has verified this build.";
     case "zh-CN":
       return "社区已验证此作品。";
+    case "en-XA":
+      return "[" + "Ţĥé çöɱɱûñîţý ĥåš ṽéŕîƒîéđ ţĥîš ƀûîļđ." + "················]";
   }
 }
 
@@ -460,6 +578,8 @@ export function workbenchEmpty(locale: Locale = getLocale()): string {
       return "Empty";
     case "zh-CN":
       return "空状态";
+    case "en-XA":
+      return "[" + "Éɱþţý" + "··]";
   }
 }
 
@@ -470,6 +590,8 @@ export function workbenchNoMatchingBuilds(locale: Locale = getLocale()): string 
       return "No matching builds";
     case "zh-CN":
       return "没有匹配的作品";
+    case "en-XA":
+      return "[" + "Ñö ɱåţçĥîñĝ ƀûîļđš" + "········]";
   }
 }
 
@@ -480,6 +602,8 @@ export function workbenchEmptyDescription(locale: Locale = getLocale()): string 
       return "Try a broader size or another Minecraft version.";
     case "zh-CN":
       return "尝试更宽泛的尺寸或其他 Minecraft 版本。";
+    case "en-XA":
+      return "[" + "Ţŕý å ƀŕöåđéŕ šîžé öŕ åñöţĥéŕ Ṁîñéçŕåƒţ ṽéŕšîöñ." + "····················]";
   }
 }
 
@@ -490,6 +614,8 @@ export function workbenchUnavailable(locale: Locale = getLocale()): string {
       return "Unavailable";
     case "zh-CN":
       return "暂不可用";
+    case "en-XA":
+      return "[" + "Ûñåṽåîļåƀļé" + "·····]";
   }
 }
 
@@ -500,6 +626,8 @@ export function workbenchCouldnTLoadBuilds(locale: Locale = getLocale()): string
       return "Couldn’t load builds";
     case "zh-CN":
       return "无法加载作品";
+    case "en-XA":
+      return "[" + "Çöûļđñ’ţ ļöåđ ƀûîļđš" + "········]";
   }
 }
 
@@ -510,6 +638,8 @@ export function workbenchUnavailableDescription(locale: Locale = getLocale()): s
       return "Your filters are preserved. Try again shortly.";
     case "zh-CN":
       return "筛选条件已保留。请稍后重试。";
+    case "en-XA":
+      return "[" + "Ýöûŕ ƒîļţéŕš åŕé þŕéšéŕṽéđ. Ţŕý åĝåîñ šĥöŕţļý." + "···················]";
   }
 }
 
@@ -520,6 +650,8 @@ export function workbenchFetchingBuilds(locale: Locale = getLocale()): string {
       return "Fetching builds…";
     case "zh-CN":
       return "正在获取作品…";
+    case "en-XA":
+      return "[" + "Ƒéţçĥîñĝ ƀûîļđš…" + "·······]";
   }
 }
 
@@ -530,6 +662,8 @@ export function workbenchRedstoneSquidDesignFoundations(locale: Locale = getLoca
       return "Redstone Squid / Design foundations";
     case "zh-CN":
       return "Redstone Squid / 设计基础";
+    case "en-XA":
+      return "[" + "Ŕéđšţöñé Šǫûîđ / Đéšîĝñ ƒöûñđåţîöñš" + "··············]";
   }
 }
 
@@ -540,6 +674,8 @@ export function workbenchFixtureDisclaimer(locale: Locale = getLocale()): string
       return "Fixture illustrations, not real build schematics.";
     case "zh-CN":
       return "示意图为测试素材，并非真实作品结构。";
+    case "en-XA":
+      return "[" + "Ƒîẋţûŕé îļļûšţŕåţîöñš, ñöţ ŕéåļ ƀûîļđ šçĥéɱåţîçš." + "····················]";
   }
 }
 
@@ -550,6 +686,8 @@ export function workbenchCreateADraft(locale: Locale = getLocale()): string {
       return "Create a draft";
     case "zh-CN":
       return "创建草稿";
+    case "en-XA":
+      return "[" + "Çŕéåţé å đŕåƒţ" + "······]";
   }
 }
 
@@ -560,6 +698,8 @@ export function workbenchDraftDescription(locale: Locale = getLocale()): string 
       return "Workbench example. Nothing is sent to the server.";
     case "zh-CN":
       return "工作台示例。不会向服务器发送任何内容。";
+    case "en-XA":
+      return "[" + "Ŵöŕķƀéñçĥ éẋåɱþļé. Ñöţĥîñĝ îš šéñţ ţö ţĥé šéŕṽéŕ." + "····················]";
   }
 }
 
@@ -570,6 +710,8 @@ export function workbenchCloseDialog(locale: Locale = getLocale()): string {
       return "Close dialog";
     case "zh-CN":
       return "关闭对话框";
+    case "en-XA":
+      return "[" + "Çļöšé đîåļöĝ" + "·····]";
   }
 }
 
@@ -580,6 +722,8 @@ export function workbenchNewDraft(locale: Locale = getLocale()): string {
       return "New draft";
     case "zh-CN":
       return "新建草稿";
+    case "en-XA":
+      return "[" + "Ñéŵ đŕåƒţ" + "····]";
   }
 }
 
@@ -590,6 +734,8 @@ export function workbenchBuildTitle(locale: Locale = getLocale()): string {
       return "Build title";
     case "zh-CN":
       return "作品标题";
+    case "en-XA":
+      return "[" + "Ɓûîļđ ţîţļé" + "·····]";
   }
 }
 
@@ -600,6 +746,8 @@ export function workbenchEnterATitleForYourBuild(locale: Locale = getLocale()): 
       return "Enter a title for your build.";
     case "zh-CN":
       return "请输入作品标题。";
+    case "en-XA":
+      return "[" + "Éñţéŕ å ţîţļé ƒöŕ ýöûŕ ƀûîļđ." + "············]";
   }
 }
 
@@ -610,6 +758,8 @@ export function workbenchSaveDraft(locale: Locale = getLocale()): string {
       return "Save draft";
     case "zh-CN":
       return "保存草稿";
+    case "en-XA":
+      return "[" + "Šåṽé đŕåƒţ" + "····]";
   }
 }
 
@@ -620,6 +770,8 @@ export function workbenchExampleDraftSaved(locale: Locale = getLocale()): string
       return "Example draft saved.";
     case "zh-CN":
       return "示例草稿已保存。";
+    case "en-XA":
+      return "[" + "Éẋåɱþļé đŕåƒţ šåṽéđ." + "········]";
   }
 }
 
@@ -630,6 +782,8 @@ export function workbenchCheckTheHighlightedField(locale: Locale = getLocale()):
       return "Check the highlighted field.";
     case "zh-CN":
       return "请检查标记的字段。";
+    case "en-XA":
+      return "[" + "Çĥéçķ ţĥé ĥîĝĥļîĝĥţéđ ƒîéļđ." + "············]";
   }
 }
 
@@ -640,6 +794,8 @@ export function workbenchBrowseExamples(locale: Locale = getLocale()): string {
       return "Browse examples";
     case "zh-CN":
       return "浏览示例";
+    case "en-XA":
+      return "[" + "Ɓŕöŵšé éẋåɱþļéš" + "······]";
   }
 }
 
@@ -650,6 +806,8 @@ export function workbenchCreator(locale: Locale = getLocale()): string {
       return "Creator";
     case "zh-CN":
       return "创作者";
+    case "en-XA":
+      return "[" + "Çŕéåţöŕ" + "···]";
   }
 }
 
@@ -660,6 +818,8 @@ export function workbenchPublicNameShownOnTheBuild(locale: Locale = getLocale())
       return "Public name shown on the build.";
     case "zh-CN":
       return "在作品页面展示的公开名称。";
+    case "en-XA":
+      return "[" + "Þûƀļîç ñåɱé šĥöŵñ öñ ţĥé ƀûîļđ." + "·············]";
   }
 }
 
@@ -670,6 +830,8 @@ export function workbenchMinecraftVersion(locale: Locale = getLocale()): string 
       return "Minecraft version";
     case "zh-CN":
       return "Minecraft 版本";
+    case "en-XA":
+      return "[" + "Ṁîñéçŕåƒţ ṽéŕšîöñ" + "·······]";
   }
 }
 
@@ -680,6 +842,12 @@ export function workbenchControlsDescription(locale: Locale = getLocale()): stri
       return "Keyboard, focus, validation, and disabled states share the same primitives.";
     case "zh-CN":
       return "键盘、焦点、验证和禁用状态使用统一的基础组件。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ķéýƀöåŕđ, ƒöçûš, ṽåļîđåţîöñ, åñđ đîšåƀļéđ šţåţéš šĥåŕé ţĥé šåɱé þŕîɱîţîṽéš." +
+        "······························]"
+      );
   }
 }
 
@@ -690,6 +858,8 @@ export function workbenchSkipToContent(locale: Locale = getLocale()): string {
       return "Skip to content";
     case "zh-CN":
       return "跳至内容";
+    case "en-XA":
+      return "[" + "Šķîþ ţö çöñţéñţ" + "······]";
   }
 }
 
@@ -700,6 +870,8 @@ export function workbenchWorkbench(locale: Locale = getLocale()): string {
       return "Workbench";
     case "zh-CN":
       return "组件工作台";
+    case "en-XA":
+      return "[" + "Ŵöŕķƀéñçĥ" + "····]";
   }
 }
 
@@ -710,6 +882,8 @@ export function workbenchFoundations(locale: Locale = getLocale()): string {
       return "Foundations";
     case "zh-CN":
       return "基础规范";
+    case "en-XA":
+      return "[" + "Ƒöûñđåţîöñš" + "·····]";
   }
 }
 
@@ -720,6 +894,8 @@ export function workbenchComponents(locale: Locale = getLocale()): string {
       return "Components";
     case "zh-CN":
       return "组件";
+    case "en-XA":
+      return "[" + "Çöɱþöñéñţš" + "····]";
   }
 }
 
@@ -730,6 +906,8 @@ export function workbenchPagePatterns(locale: Locale = getLocale()): string {
       return "Page patterns";
     case "zh-CN":
       return "页面模式";
+    case "en-XA":
+      return "[" + "Þåĝé þåţţéŕñš" + "······]";
   }
 }
 
@@ -740,6 +918,8 @@ export function workbenchFeedbackStates(locale: Locale = getLocale()): string {
       return "Feedback states";
     case "zh-CN":
       return "反馈状态";
+    case "en-XA":
+      return "[" + "Ƒééđƀåçķ šţåţéš" + "······]";
   }
 }
 
@@ -753,16 +933,8 @@ export function workbenchFixtureAlt(
       return "Illustrated " + formatValue(locale, args.title) + " fixture";
     case "zh-CN":
       return formatValue(locale, args.title) + " 示意图";
-  }
-}
-
-/** 中文 */
-export function workbenchSwitchLanguage(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "中文";
-    case "zh-CN":
-      return "English";
+    case "en-XA":
+      return "[" + "Îļļûšţŕåţéđ " + formatValue(locale, args.title) + " ƒîẋţûŕé" + "········]";
   }
 }
 
@@ -773,6 +945,8 @@ export function workbenchPistonDoor(locale: Locale = getLocale()): string {
       return "Piston door";
     case "zh-CN":
       return "活塞门";
+    case "en-XA":
+      return "[" + "Þîšţöñ đööŕ" + "·····]";
   }
 }
 
@@ -783,6 +957,8 @@ export function workbenchSeamlessDoor(locale: Locale = getLocale()): string {
       return "Seamless door";
     case "zh-CN":
       return "无缝门";
+    case "en-XA":
+      return "[" + "Šéåɱļéšš đööŕ" + "······]";
   }
 }
 
@@ -793,6 +969,8 @@ export function workbenchExtender(locale: Locale = getLocale()): string {
       return "Extender";
     case "zh-CN":
       return "活塞扩展器";
+    case "en-XA":
+      return "[" + "Éẋţéñđéŕ" + "····]";
   }
 }
 
@@ -803,6 +981,8 @@ export function workbenchPageTitle(locale: Locale = getLocale()): string {
       return "Design system";
     case "zh-CN":
       return "设计系统";
+    case "en-XA":
+      return "[" + "Đéšîĝñ šýšţéɱ" + "······]";
   }
 }
 
@@ -818,6 +998,17 @@ export function workbenchBuildCount(args: { count: number }, locale: Locale = ge
       );
     case "zh-CN":
       return formatNumber(locale, args.count) + " 个示例作品";
+    case "en-XA":
+      return (
+        "[" +
+        select(
+          locale,
+          args.count,
+          { one: "Öñé éẋåɱþļé ƀûîļđ", other: formatNumber(locale, args.count) + " éẋåɱþļé ƀûîļđš" },
+          "other",
+        ) +
+        "······]"
+      );
   }
 }
 
@@ -828,6 +1019,8 @@ export function settingsGlobalSettings(locale: Locale = getLocale()): string {
       return "Global settings";
     case "zh-CN":
       return "全局设置";
+    case "en-XA":
+      return "[" + "Ĝļöƀåļ šéţţîñĝš" + "······]";
   }
 }
 
@@ -838,6 +1031,8 @@ export function submissionPageTitle(locale: Locale = getLocale()): string {
       return "Submit a build";
     case "zh-CN":
       return "投稿作品";
+    case "en-XA":
+      return "[" + "Šûƀɱîţ å ƀûîļđ" + "······]";
   }
 }
 
@@ -848,6 +1043,8 @@ export function cliPageTitle(locale: Locale = getLocale()): string {
       return "Link the Squid CLI";
     case "zh-CN":
       return "关联 Squid CLI";
+    case "en-XA":
+      return "[" + "Ļîñķ ţĥé Šǫûîđ ÇĻÎ" + "········]";
   }
 }
 
@@ -858,6 +1055,8 @@ export function minecraftPageTitle(locale: Locale = getLocale()): string {
       return "Link a Minecraft player";
     case "zh-CN":
       return "关联 Minecraft 玩家";
+    case "en-XA":
+      return "[" + "Ļîñķ å Ṁîñéçŕåƒţ þļåýéŕ" + "··········]";
   }
 }
 
@@ -868,6 +1067,8 @@ export function trialTitle(locale: Locale = getLocale()): string {
       return "Draft workflow";
     case "zh-CN":
       return "草稿流程";
+    case "en-XA":
+      return "[" + "Đŕåƒţ ŵöŕķƒļöŵ" + "······]";
   }
 }
 
@@ -878,6 +1079,12 @@ export function trialDisclaimer(locale: Locale = getLocale()): string {
       return "Fixture only: uploads and server responses are simulated locally. No data leaves this page. The title Reserved triggers server validation.";
     case "zh-CN":
       return "仅供测试：上传和服务器响应均在本地模拟。数据不会离开此页面。标题 Reserved 会触发服务器验证。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ƒîẋţûŕé öñļý: ûþļöåđš åñđ šéŕṽéŕ ŕéšþöñšéš åŕé šîɱûļåţéđ ļöçåļļý. Ñö đåţå ļéåṽéš ţĥîš þåĝé. Ţĥé ţîţļé Ŕéšéŕṽéđ ţŕîĝĝéŕš šéŕṽéŕ ṽåļîđåţîöñ." +
+        "························································]"
+      );
   }
 }
 
@@ -888,6 +1095,8 @@ export function trialDetails(locale: Locale = getLocale()): string {
       return "Build details";
     case "zh-CN":
       return "作品详情";
+    case "en-XA":
+      return "[" + "Ɓûîļđ đéţåîļš" + "······]";
   }
 }
 
@@ -898,6 +1107,8 @@ export function trialCategory(locale: Locale = getLocale()): string {
       return "Category";
     case "zh-CN":
       return "类别";
+    case "en-XA":
+      return "[" + "Çåţéĝöŕý" + "····]";
   }
 }
 
@@ -908,6 +1119,8 @@ export function trialDoor(locale: Locale = getLocale()): string {
       return "Piston door";
     case "zh-CN":
       return "活塞门";
+    case "en-XA":
+      return "[" + "Þîšţöñ đööŕ" + "·····]";
   }
 }
 
@@ -918,6 +1131,8 @@ export function trialUtility(locale: Locale = getLocale()): string {
       return "Utility";
     case "zh-CN":
       return "实用装置";
+    case "en-XA":
+      return "[" + "Ûţîļîţý" + "···]";
   }
 }
 
@@ -928,6 +1143,8 @@ export function trialWidth(locale: Locale = getLocale()): string {
       return "Opening width";
     case "zh-CN":
       return "开口宽度";
+    case "en-XA":
+      return "[" + "Öþéñîñĝ ŵîđţĥ" + "······]";
   }
 }
 
@@ -938,6 +1155,8 @@ export function trialFindVersion(locale: Locale = getLocale()): string {
       return "Find a version";
     case "zh-CN":
       return "搜索版本";
+    case "en-XA":
+      return "[" + "Ƒîñđ å ṽéŕšîöñ" + "······]";
   }
 }
 
@@ -948,6 +1167,8 @@ export function trialChooseVersion(locale: Locale = getLocale()): string {
       return "Choose a version";
     case "zh-CN":
       return "选择版本";
+    case "en-XA":
+      return "[" + "Çĥööšé å ṽéŕšîöñ" + "·······]";
   }
 }
 
@@ -958,6 +1179,8 @@ export function trialUpload(locale: Locale = getLocale()): string {
       return "Attach a schematic";
     case "zh-CN":
       return "附加原理图";
+    case "en-XA":
+      return "[" + "Åţţåçĥ å šçĥéɱåţîç" + "········]";
   }
 }
 
@@ -968,6 +1191,8 @@ export function trialUploading(locale: Locale = getLocale()): string {
       return "Uploading fixture";
     case "zh-CN":
       return "正在模拟上传";
+    case "en-XA":
+      return "[" + "Ûþļöåđîñĝ ƒîẋţûŕé" + "·······]";
   }
 }
 
@@ -978,6 +1203,8 @@ export function trialSaving(locale: Locale = getLocale()): string {
       return "Saving…";
     case "zh-CN":
       return "正在保存…";
+    case "en-XA":
+      return "[" + "Šåṽîñĝ…" + "···]";
   }
 }
 
@@ -988,6 +1215,8 @@ export function trialSaved(locale: Locale = getLocale()): string {
       return "Draft saved.";
     case "zh-CN":
       return "草稿已保存。";
+    case "en-XA":
+      return "[" + "Đŕåƒţ šåṽéđ." + "·····]";
   }
 }
 
@@ -998,6 +1227,12 @@ export function trialFailed(locale: Locale = getLocale()): string {
       return "Save failed. Your changes are preserved; retry when ready.";
     case "zh-CN":
       return "保存失败。更改已保留，可以重试。";
+    case "en-XA":
+      return (
+        "[" +
+        "Šåṽé ƒåîļéđ. Ýöûŕ çĥåñĝéš åŕé þŕéšéŕṽéđ; ŕéţŕý ŵĥéñ ŕéåđý." +
+        "························]"
+      );
   }
 }
 
@@ -1008,6 +1243,8 @@ export function trialRetry(locale: Locale = getLocale()): string {
       return "Retry save";
     case "zh-CN":
       return "重试保存";
+    case "en-XA":
+      return "[" + "Ŕéţŕý šåṽé" + "····]";
   }
 }
 
@@ -1018,6 +1255,8 @@ export function trialCancel(locale: Locale = getLocale()): string {
       return "Cancel operation";
     case "zh-CN":
       return "取消操作";
+    case "en-XA":
+      return "[" + "Çåñçéļ öþéŕåţîöñ" + "·······]";
   }
 }
 
@@ -1028,6 +1267,8 @@ export function trialReady(locale: Locale = getLocale()): string {
       return "Ready to edit.";
     case "zh-CN":
       return "可以开始编辑。";
+    case "en-XA":
+      return "[" + "Ŕéåđý ţö éđîţ." + "······]";
   }
 }
 
@@ -1038,6 +1279,8 @@ export function trialFixErrors(locale: Locale = getLocale()): string {
       return "Check the highlighted fields.";
     case "zh-CN":
       return "请检查标记的字段。";
+    case "en-XA":
+      return "[" + "Çĥéçķ ţĥé ĥîĝĥļîĝĥţéđ ƒîéļđš." + "············]";
   }
 }
 
@@ -1048,6 +1291,8 @@ export function trialRequired(locale: Locale = getLocale()): string {
       return "This field is required.";
     case "zh-CN":
       return "此项为必填项。";
+    case "en-XA":
+      return "[" + "Ţĥîš ƒîéļđ îš ŕéǫûîŕéđ." + "··········]";
   }
 }
 
@@ -1058,6 +1303,8 @@ export function trialPositive(locale: Locale = getLocale()): string {
       return "Enter a positive whole number.";
     case "zh-CN":
       return "请输入正整数。";
+    case "en-XA":
+      return "[" + "Éñţéŕ å þöšîţîṽé ŵĥöļé ñûɱƀéŕ." + "············]";
   }
 }
 
@@ -1068,6 +1315,8 @@ export function trialReserved(locale: Locale = getLocale()): string {
       return "This title is already taken.";
     case "zh-CN":
       return "此标题已被使用。";
+    case "en-XA":
+      return "[" + "Ţĥîš ţîţļé îš åļŕéåđý ţåķéñ." + "············]";
   }
 }
 
@@ -1081,6 +1330,8 @@ export function trialAttachment(
       return "Attached: " + formatValue(locale, args.filename);
     case "zh-CN":
       return "已附加：" + formatValue(locale, args.filename);
+    case "en-XA":
+      return "[" + "Åţţåçĥéđ: " + formatValue(locale, args.filename) + "····]";
   }
 }
 
@@ -1091,6 +1342,8 @@ export function navPrimary(locale: Locale = getLocale()): string {
       return "Main navigation";
     case "zh-CN":
       return "主导航";
+    case "en-XA":
+      return "[" + "Ṁåîñ ñåṽîĝåţîöñ" + "······]";
   }
 }
 
@@ -1101,6 +1354,8 @@ export function navCommunity(locale: Locale = getLocale()): string {
       return "Community";
     case "zh-CN":
       return "社区";
+    case "en-XA":
+      return "[" + "Çöɱɱûñîţý" + "····]";
   }
 }
 
@@ -1111,6 +1366,8 @@ export function navPagination(locale: Locale = getLocale()): string {
       return "Catalogue pages";
     case "zh-CN":
       return "目录分页";
+    case "en-XA":
+      return "[" + "Çåţåļöĝûé þåĝéš" + "······]";
   }
 }
 
@@ -1124,6 +1381,13 @@ export function recordLastChecked(
       return "Last checked " + formatDateTime(locale, args.date, { dateStyle: "medium" });
     case "zh-CN":
       return "上次检查：" + formatDateTime(locale, args.date, { dateStyle: "medium" });
+    case "en-XA":
+      return (
+        "[" +
+        "Ļåšţ çĥéçķéđ " +
+        formatDateTime(locale, args.date, { dateStyle: "medium" }) +
+        "······]"
+      );
   }
 }
 
@@ -1134,6 +1398,8 @@ export function recordRefreshPending(locale: Locale = getLocale()): string {
       return "Refresh pending";
     case "zh-CN":
       return "等待刷新";
+    case "en-XA":
+      return "[" + "Ŕéƒŕéšĥ þéñđîñĝ" + "······]";
   }
 }
 
@@ -1144,6 +1410,8 @@ export function workbenchLinkButton(locale: Locale = getLocale()): string {
       return "Link button";
     case "zh-CN":
       return "链接按钮";
+    case "en-XA":
+      return "[" + "Ļîñķ ƀûţţöñ" + "·····]";
   }
 }
 
@@ -1154,6 +1422,8 @@ export function workbenchVariant(locale: Locale = getLocale()): string {
       return "Variant";
     case "zh-CN":
       return "样式";
+    case "en-XA":
+      return "[" + "Ṽåŕîåñţ" + "···]";
   }
 }
 
@@ -1164,6 +1434,8 @@ export function workbenchSize(locale: Locale = getLocale()): string {
       return "Size";
     case "zh-CN":
       return "尺寸";
+    case "en-XA":
+      return "[" + "Šîžé" + "··]";
   }
 }
 
@@ -1174,6 +1446,8 @@ export function workbenchPrimary(locale: Locale = getLocale()): string {
       return "Primary";
     case "zh-CN":
       return "主要";
+    case "en-XA":
+      return "[" + "Þŕîɱåŕý" + "···]";
   }
 }
 
@@ -1184,6 +1458,8 @@ export function workbenchSecondary(locale: Locale = getLocale()): string {
       return "Secondary";
     case "zh-CN":
       return "次要";
+    case "en-XA":
+      return "[" + "Šéçöñđåŕý" + "····]";
   }
 }
 
@@ -1194,6 +1470,8 @@ export function workbenchQuiet(locale: Locale = getLocale()): string {
       return "Quiet";
     case "zh-CN":
       return "低调";
+    case "en-XA":
+      return "[" + "Ǫûîéţ" + "··]";
   }
 }
 
@@ -1204,6 +1482,8 @@ export function workbenchNormal(locale: Locale = getLocale()): string {
       return "Default";
     case "zh-CN":
       return "默认";
+    case "en-XA":
+      return "[" + "Đéƒåûļţ" + "···]";
   }
 }
 
@@ -1214,6 +1494,8 @@ export function workbenchSmall(locale: Locale = getLocale()): string {
       return "Compact";
     case "zh-CN":
       return "紧凑";
+    case "en-XA":
+      return "[" + "Çöɱþåçţ" + "···]";
   }
 }
 
@@ -1224,6 +1506,8 @@ export function workbenchApply(locale: Locale = getLocale()): string {
       return "Apply";
     case "zh-CN":
       return "应用";
+    case "en-XA":
+      return "[" + "Åþþļý" + "··]";
   }
 }
 
@@ -1234,6 +1518,12 @@ export function workbenchLibraryDescription(locale: Locale = getLocale()): strin
       return "Inspect the tokens and try the controls used across the build catalogue.";
     case "zh-CN":
       return "查看构建目录使用的设计变量，试用界面控件。";
+    case "en-XA":
+      return (
+        "[" +
+        "Îñšþéçţ ţĥé ţöķéñš åñđ ţŕý ţĥé çöñţŕöļš ûšéđ åçŕöšš ţĥé ƀûîļđ çåţåļöĝûé." +
+        "·····························]"
+      );
   }
 }
 
@@ -1244,6 +1534,8 @@ export function workbenchSpacing(locale: Locale = getLocale()): string {
       return "Spacing";
     case "zh-CN":
       return "间距";
+    case "en-XA":
+      return "[" + "Šþåçîñĝ" + "···]";
   }
 }
 
@@ -1254,6 +1546,8 @@ export function workbenchTypography(locale: Locale = getLocale()): string {
       return "Typography";
     case "zh-CN":
       return "字体";
+    case "en-XA":
+      return "[" + "Ţýþöĝŕåþĥý" + "····]";
   }
 }
 
@@ -1264,6 +1558,8 @@ export function workbenchBrowsing(locale: Locale = getLocale()): string {
       return "Browsing";
     case "zh-CN":
       return "浏览";
+    case "en-XA":
+      return "[" + "Ɓŕöŵšîñĝ" + "····]";
   }
 }
 
@@ -1274,6 +1570,8 @@ export function workbenchMediaStory(locale: Locale = getLocale()): string {
       return "Explore the media gallery";
     case "zh-CN":
       return "查看媒体图库";
+    case "en-XA":
+      return "[" + "Éẋþļöŕé ţĥé ɱéđîå ĝåļļéŕý" + "··········]";
   }
 }
 
@@ -1284,6 +1582,8 @@ export function workbenchFormControls(locale: Locale = getLocale()): string {
       return "Form controls";
     case "zh-CN":
       return "表单控件";
+    case "en-XA":
+      return "[" + "Ƒöŕɱ çöñţŕöļš" + "······]";
   }
 }
 
@@ -1294,6 +1594,8 @@ export function workbenchFieldState(locale: Locale = getLocale()): string {
       return "Field state";
     case "zh-CN":
       return "字段状态";
+    case "en-XA":
+      return "[" + "Ƒîéļđ šţåţé" + "·····]";
   }
 }
 
@@ -1304,6 +1606,8 @@ export function workbenchInvalid(locale: Locale = getLocale()): string {
       return "Invalid";
     case "zh-CN":
       return "验证失败";
+    case "en-XA":
+      return "[" + "Îñṽåļîđ" + "···]";
   }
 }
 
@@ -1314,6 +1618,8 @@ export function workbenchDisabled(locale: Locale = getLocale()): string {
       return "Disabled";
     case "zh-CN":
       return "禁用";
+    case "en-XA":
+      return "[" + "Đîšåƀļéđ" + "····]";
   }
 }
 
@@ -1324,6 +1630,8 @@ export function workbenchNotesHint(locale: Locale = getLocale()): string {
       return "Describe the opening sequence or timing.";
     case "zh-CN":
       return "描述开启过程或时序。";
+    case "en-XA":
+      return "[" + "Đéšçŕîƀé ţĥé öþéñîñĝ šéǫûéñçé öŕ ţîɱîñĝ." + "················]";
   }
 }
 
@@ -1334,6 +1642,8 @@ export function workbenchEdition(locale: Locale = getLocale()): string {
       return "Minecraft edition";
     case "zh-CN":
       return "Minecraft 版本类型";
+    case "en-XA":
+      return "[" + "Ṁîñéçŕåƒţ éđîţîöñ" + "·······]";
   }
 }
 
@@ -1344,6 +1654,8 @@ export function workbenchIncludeDimensions(locale: Locale = getLocale()): string
       return "Include build dimensions";
     case "zh-CN":
       return "包含作品尺寸";
+    case "en-XA":
+      return "[" + "Îñçļûđé ƀûîļđ đîɱéñšîöñš" + "··········]";
   }
 }
 
@@ -1354,6 +1666,8 @@ export function workbenchSelectCategory(locale: Locale = getLocale()): string {
       return "Choose a category";
     case "zh-CN":
       return "选择类别";
+    case "en-XA":
+      return "[" + "Çĥööšé å çåţéĝöŕý" + "·······]";
   }
 }
 
@@ -1364,6 +1678,8 @@ export function workbenchLayouts(locale: Locale = getLocale()): string {
       return "Layouts";
     case "zh-CN":
       return "布局";
+    case "en-XA":
+      return "[" + "Ļåýöûţš" + "···]";
   }
 }
 
@@ -1374,6 +1690,8 @@ export function workbenchStack(locale: Locale = getLocale()): string {
       return "Stack";
     case "zh-CN":
       return "纵向排列";
+    case "en-XA":
+      return "[" + "Šţåçķ" + "··]";
   }
 }
 
@@ -1384,6 +1702,8 @@ export function workbenchRow(locale: Locale = getLocale()): string {
       return "Row";
     case "zh-CN":
       return "横向排列";
+    case "en-XA":
+      return "[" + "Ŕöŵ" + "··]";
   }
 }
 
@@ -1394,6 +1714,8 @@ export function workbenchGrid(locale: Locale = getLocale()): string {
       return "Grid";
     case "zh-CN":
       return "网格";
+    case "en-XA":
+      return "[" + "Ĝŕîđ" + "··]";
   }
 }
 
@@ -1404,6 +1726,8 @@ export function workbenchCompact(locale: Locale = getLocale()): string {
       return "Compact";
     case "zh-CN":
       return "紧凑";
+    case "en-XA":
+      return "[" + "Çöɱþåçţ" + "···]";
   }
 }
 
@@ -1414,6 +1738,8 @@ export function workbenchSection(locale: Locale = getLocale()): string {
       return "Spacious";
     case "zh-CN":
       return "宽松";
+    case "en-XA":
+      return "[" + "Šþåçîöûš" + "····]";
   }
 }
 
@@ -1424,6 +1750,8 @@ export function workbenchStatusBadges(locale: Locale = getLocale()): string {
       return "Status badges";
     case "zh-CN":
       return "状态徽标";
+    case "en-XA":
+      return "[" + "Šţåţûš ƀåđĝéš" + "······]";
   }
 }
 
@@ -1434,6 +1762,12 @@ export function trialUploadFailure(locale: Locale = getLocale()): string {
       return "The upload failed. Retry with the same file or choose another.";
     case "zh-CN":
       return "上传失败。请重试或选择其他文件。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥé ûþļöåđ ƒåîļéđ. Ŕéţŕý ŵîţĥ ţĥé šåɱé ƒîļé öŕ çĥööšé åñöţĥéŕ." +
+        "·························]"
+      );
   }
 }
 
@@ -1444,6 +1778,8 @@ export function trialRetryUpload(locale: Locale = getLocale()): string {
       return "Retry upload";
     case "zh-CN":
       return "重新上传";
+    case "en-XA":
+      return "[" + "Ŕéţŕý ûþļöåđ" + "·····]";
   }
 }
 
@@ -1454,6 +1790,8 @@ export function trialUploadScenario(locale: Locale = getLocale()): string {
       return "Simulate upload failure";
     case "zh-CN":
       return "模拟上传失败";
+    case "en-XA":
+      return "[" + "Šîɱûļåţé ûþļöåđ ƒåîļûŕé" + "··········]";
   }
 }
 
@@ -1464,5 +1802,7 @@ export function placeholderRebuilding(locale: Locale = getLocale()): string {
       return "The Redstone Squid website is being rebuilt.";
     case "zh-CN":
       return "红石鱿鱼网站正在重建。";
+    case "en-XA":
+      return "[" + "Ţĥé Ŕéđšţöñé Šǫûîđ ŵéƀšîţé îš ƀéîñĝ ŕéƀûîļţ." + "··················]";
   }
 }

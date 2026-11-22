@@ -75,7 +75,6 @@ workbench-components = Components
 workbench-page-patterns = Page patterns
 workbench-feedback-states = Feedback states
 workbench-fixture-alt = Illustrated { $title } fixture
-workbench-switch-language = 中文
 workbench-piston-door = Piston door
 workbench-seamless-door = Seamless door
 workbench-extender = Extender

@@ -1,5 +1,4 @@
 ---
-import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import BuildPreview from "@/features/builds/BuildPreview.astro";
 import "@/workbench/workbench.css";
@@ -18,7 +17,6 @@ import SvelteControls from "@/workbench/Controls.svelte";
 import { buildFixtures } from "@/workbench/fixtures";
 import { selectedOption } from "@/workbench/story-option";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
-const otherLocale = Astro.locals.locale === "en" ? "zh-CN" : "en";
 const fieldStates = {
   normal: m.workbenchNormal,
   invalid: m.workbenchInvalid,
@@ -38,9 +36,6 @@ const preferences = (key: string, value: string) => {
       <h1>{m.workbenchPageTitle()}</h1>
       <p class="sq-lede">{m.workbenchLibraryDescription()}</p>
       <div class="sq-row">
-        <LinkButton href={localizePath(`${Astro.url.pathname}${Astro.url.search}`, otherLocale)}>
-          {m.workbenchSwitchLanguage()}
-        </LinkButton>
         <LinkButton href={preferences("theme", theme === "light" ? "dark" : "light")}>
           {theme === "light" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
         </LinkButton>

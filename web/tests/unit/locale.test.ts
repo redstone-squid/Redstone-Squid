@@ -6,7 +6,8 @@ describe("locale mapping", () => {
   it("reads the locale only from a whole path prefix", () => {
     expect(localeFromPath("/zh-cn/builds")).toBe("zh-CN");
     expect(localeFromPath("/zh-cn")).toBe("zh-CN");
-    expect(localeFromPath("/builds/zh-cn-example")).toBe("en");
+    expect(localeFromPath("/builds/zh-cn-example")).toBeUndefined();
+    expect(localeFromPath("/")).toBeUndefined();
   });
 
   it("preserves routes, queries, fragments, and page addresses while switching language", () => {
