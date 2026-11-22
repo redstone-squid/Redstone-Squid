@@ -391,6 +391,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
         __name__,
         BuildBrowseScreen.open_index,
         BuildBrowseScreen.open_detail,
+        BuildBrowseScreen.open_creator_builds,
         open_consent_prompt,
         review_attachments,
         edit_build,

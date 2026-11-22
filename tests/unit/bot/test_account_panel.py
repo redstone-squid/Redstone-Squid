@@ -26,6 +26,7 @@ from squid.core.accounts.domain import (
     AccountConsent,
     AccountMerge,
     ClaimStatus,
+    CreditedAlias,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -348,14 +349,33 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
 
 async def test_somebody_elses_creator_page_uses_the_public_profile_projection() -> None:
     page = UUID(int=7)
-    cog = VerifyCog.__new__(VerifyCog)
-    cog.account_service = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
+    accounts = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
 
-    response = await cog._public_page(page, "Someone")
+    creator = await CreatorPage.load(accounts, page, "Someone")
 
-    assert isinstance(response, sd.Response)
-    assert isinstance(response.content, CreatorPage)
-    assert "Someone" in str(response.content.render())
+    assert "Someone" in str(creator.render())
+
+
+def test_a_creator_page_opens_their_builds_by_any_name() -> None:
+    profile = PublicCreatorProfile(
+        public_id=UUID(int=7),
+        hidden=False,
+        aliases=(CreditedAlias("Notch", 3), CreditedAlias("Old Name", 1)),
+    )
+
+    tree = CreatorPage(profile, "Someone").render()
+
+    assert {"builds", "credited-as", "follow"} <= set(keys(tree))
+    assert any("/creators/00000000-0000-0000-0000-000000000007/builds" in str(node) for node in tree)
+
+
+def test_a_hidden_creator_page_still_opens_their_builds_but_cannot_be_followed() -> None:
+    profile = PublicCreatorProfile(public_id=UUID(int=7), hidden=True, aliases=(CreditedAlias("Notch", 3),))
+
+    tree_keys = set(keys(CreatorPage(profile, "Someone").render()))
+
+    assert "builds" in tree_keys
+    assert not {"follow", "credited-as"} & tree_keys
 
 
 async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> None:

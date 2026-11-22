@@ -236,6 +236,11 @@ class PublicCreatorProfile:
         """Whether the requested public identifier belonged to a merged account."""
         return self.canonical_public_id is not None and self.canonical_public_id != self.public_id
 
+    @property
+    def name(self) -> str | None:
+        """The display name, or the first credited name of a hidden or unnamed profile."""
+        return self.display_name or next((alias.name for alias in self.aliases), None)
+
     @classmethod
     def from_record(cls, record: CreatorProfileRecord) -> PublicCreatorProfile:
         """Return the public view of a creator profile.

@@ -1,9 +1,10 @@
 """Canonical build catalogue, review, and schematic workspace."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Literal, Self, cast, override
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -52,6 +53,7 @@ from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import QuerySyntaxError, SearchQueryParser
 from squid.core.search.domain import RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope, SearchSort
 from squid.core.search.domain.query import (
+    CREATOR_ID_STORAGE,
     BooleanExpression,
     BooleanOperator,
     FieldExpression,
@@ -379,6 +381,8 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     _results: SearchScreen | None = sl.state(None, opaque=True)
     _show_search_help: bool = sl.state(False)
     _query: CatalogueQuery = sl.state(CatalogueQuery())
+    # Reloaded by each search rather than restored, like the results they describe.
+    _creator_names: Mapping[str, str] = sl.state(factory=dict, opaque=True)
     _sort: str = sl.state("")
     _search_mode: SearchMode = sl.state(SearchMode.LEXICAL)
     _build_search: _TabSearch = sl.state(_TabSearch())
@@ -558,11 +562,15 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         records: bool = False,
         sort: str = "",
         mode: SearchMode = SearchMode.LEXICAL,
+        typed: bool = True,
     ) -> Self:
-        """Open search results in the catalogue."""
+        """Open search results in the catalogue.
+
+        A typed query keeps its spelling in the summary; otherwise each filter is described.
+        """
         screen = await cls.create(request, initial_records=records, restore_preferences=False)
         screen._search_mode = mode
-        await screen._run_search(CatalogueQuery.from_text(screen._search_parser, query), sort)
+        await screen._run_search(CatalogueQuery.from_text(screen._search_parser, query, typed=typed), sort)
         return screen
 
     @router.route("/builds")
@@ -570,6 +578,12 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def open_index(cls, request: AppRequest) -> Self:
         """Open the catalogue at its build list."""
         return await cls.create(request)
+
+    @router.route("/creators/{public_id}/builds")
+    @classmethod
+    async def open_creator_builds(cls, request: AppRequest, public_id: UUID) -> Self:
+        """Open the catalogue at the builds credited to one creator."""
+        return await cls.create_search(request, query=f"creator:{public_id}", typed=False)
 
     @router.route("/builds/{build_id}")
     @classmethod
@@ -700,7 +714,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
     def _find_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        query = _query_summary(self._query, records=self._mode == "records")
+        query = _query_summary(self._query, records=self._mode == "records", creators=self._creator_names)
         sort = sort_label(self._sort)
         nodes.append(
             sd.v2.section(
@@ -963,6 +977,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             anchor=focus.anchor if focus is not None else None,
         )
         page = await self._search_service.search(request)
+        self._creator_names = await self._load_creator_names(expression)
         results = SearchScreen(
             self._search_service,
             request,
@@ -977,6 +992,23 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         # A holder opened from a record still has that record to return to.
         keep_selected = focus is not None and (focus.record_id is not None or not restored)
         self._accept_search(query, sort, keep_selected=keep_selected)
+
+    async def _load_creator_names(self, expression: QueryExpression | None) -> dict[str, str]:
+        """Name each creator a query filters by ID, so its summary does not show the ID."""
+        if self._accounts is None or expression is None:
+            return {}
+        names: dict[str, str] = {}
+        for _, leaf in query_leaves(expression):
+            clause = leaf.operand if isinstance(leaf, NotExpression) else leaf
+            if not isinstance(clause, FieldExpression):
+                continue
+            storage, value = clause.stored()
+            if storage != CREATOR_ID_STORAGE or str(value) in names:
+                continue
+            profile = await self._accounts.get_public_profile(UUID(str(value)))
+            if profile is not None and profile.name is not None:
+                names[str(value)] = profile.name
+        return names
 
     def _search_focus(self) -> SearchFocus | None:
         if self._mode == "records":
@@ -1010,7 +1042,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._selected = None
 
 
-def _query_summary(query: CatalogueQuery, *, records: bool) -> sl.TextLike:
+def _query_summary(query: CatalogueQuery, *, records: bool, creators: Mapping[str, str]) -> sl.TextLike:
     """Describe the active query as its filters, or as everything when it is empty.
 
     Typed queries keep their spelling. A query with OR keeps its syntax to show the grouping.
@@ -1020,7 +1052,7 @@ def _query_summary(query: CatalogueQuery, *, records: bool) -> sl.TextLike:
         return tr(t"browse-query-all-records = All records") if records else tr(t"browse-query-all-builds = All builds")
     if query.source is not None or _has_or(expression):
         return inline_code(query.text)
-    return Text.join(" · ", [filter_label(leaf) for _, leaf in query_leaves(expression)])
+    return Text.join(" · ", [filter_label(leaf, creators) for _, leaf in query_leaves(expression)])
 
 
 def _has_or(expression: QueryExpression) -> bool:

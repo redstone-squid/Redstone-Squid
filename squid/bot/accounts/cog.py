@@ -54,7 +54,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 public_id = UUID(creator)
             except ValueError:
                 return text_node(tr(t"account-select-creator-result = Choose a creator from the name suggestions."))
-            return await self._public_page(public_id, "Creator")
+            return await self._public_page(request, public_id, "Creator")
         actor = request.user
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)
@@ -72,14 +72,16 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
                 text_node(_missing_creator_page(user.display_name)),
                 audience="personal",
             )
-        return await self._public_page(account.public_creator_id, user.display_name)
+        return await self._public_page(request, account.public_creator_id, user.display_name)
 
-    async def _public_page(self, public_id: UUID, fallback_name: str) -> sd.CommandResult:
+    async def _public_page(
+        self, request: sd.Request[Self, BotT], public_id: UUID, fallback_name: str
+    ) -> sd.CommandResult:
         try:
             page = await CreatorPage.load(self.account_service, public_id, fallback_name)
         except ScreenUnavailable as error:
             return text_node(error.message)
-        return sd.Response(page, audience="public")
+        return await request.respond(page, audience="public")
 
 
 def _missing_creator_page(user: str) -> Text:

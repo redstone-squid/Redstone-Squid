@@ -15,6 +15,7 @@ from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_c
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
 from squid.bot.app import RedstoneSquid
+from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.lookup import pick
 from squid.bot.notifications_view import NotificationPanel, VisibilityResolver
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
@@ -227,12 +228,12 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             tr(t"account-workspace-profile-setup-help = Review the privacy notice to create your profile."),
         )
         credit = (
-            self._setup_nodes(
+            self._claim_nodes(self._account)
+            if self._account is not None and not consent_needed
+            else self._setup_nodes(
                 tr(t"account-claim-heading = Claim credit for your builds"),
                 tr(t"account-workspace-credit-setup-help = Review the privacy notice before claiming build credit."),
             )
-            if consent_needed
-            else self._claim_nodes()
         )
         notifications = self._notifications or self._setup_nodes(
             tr(t"account-workspace-notifications = Notifications"),
@@ -333,7 +334,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             nodes.extend(self._merge_nodes())
         return nodes
 
-    def _claim_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
+    def _claim_nodes(self, account: Account) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
         return (
             sl.section(
                 sl.heading(tr(t"account-claim-heading = Claim credit for your builds")),
@@ -345,6 +346,11 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                 ),
             ),
             sl.action_controls(
+                sl.routed_action_control(
+                    tr(t"account-credits-builds = Your builds"),
+                    BuildBrowseScreen.open_creator_builds.custom_id(public_id=account.public_creator_id),
+                    key="builds",
+                ),
                 sl.action_control(
                     tr(t"account-search-credit-names = Search credited names"),
                     self._choose_claim,

@@ -298,17 +298,20 @@ access-who = Whose access?
 # squid/bot/accounts/presentation.py:59
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
 
-# squid/bot/accounts/workspace.py:231, squid/bot/accounts/workspace.py:339
+# squid/bot/accounts/workspace.py:234, squid/bot/accounts/workspace.py:340
 account-claim-heading = Claim credit for your builds
 
-# squid/bot/accounts/workspace.py:341
+# squid/bot/accounts/workspace.py:342
 account-claim-help = If your builds are credited to another name you used, submit a claim. Staff review it before adding the credit to your account.
 
-# squid/bot/accounts/workspace.py:550
+# squid/bot/accounts/workspace.py:556
 account-claim-pending-review = Claim #{ $claim_id } for **{ $alias_name }** is awaiting staff approval.
 
 # squid/bot/accounts/presentation.py:51
 account-credits-attributed = Build credits under **{ $name }** are attributed to your account.
+
+# squid/bot/accounts/workspace.py:350
+account-credits-builds = Your builds
 
 # squid/bot/accounts/presentation.py:68
 account-credits-retained = You are still credited under: { $names }.
@@ -337,31 +340,31 @@ account-history-visibility = Change identity visibility
 # squid/bot/accounts/overview.py:249
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:293
+# squid/bot/accounts/workspace.py:294
 account-link-heading = Connect Minecraft
 
-# squid/bot/accounts/workspace.py:295
+# squid/bot/accounts/workspace.py:296
 account-link-help = Run `/link` in Minecraft on the community server, then enter the code here.
 
 # squid/bot/accounts/overview.py:356
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:559
+# squid/bot/accounts/workspace.py:565
 account-merge-code-warning = Merge code `{ $code }` expires { $expiry }. Keep it private. Anyone with the code can merge this account into theirs.
 
-# squid/bot/accounts/workspace.py:597
+# squid/bot/accounts/workspace.py:603
 account-merge-complete = The other account's creator page now redirects to yours.
 
-# squid/bot/accounts/workspace.py:367
+# squid/bot/accounts/workspace.py:373
 account-merge-heading = Merge Squid accounts
 
-# squid/bot/accounts/workspace.py:369
+# squid/bot/accounts/workspace.py:375
 account-merge-help = Create a code on the account you're moving. Enter it on the account you want to keep to preview the transfer.
 
-# squid/bot/accounts/workspace.py:382
+# squid/bot/accounts/workspace.py:388
 account-merge-preview-action = Enter merge code
 
-# squid/bot/accounts/workspace.py:575
+# squid/bot/accounts/workspace.py:581
 account-merge-transfer-preview = Move { $aliases } creator names, { $identities } identities, and { $builds } build credits here? This cannot be undone.
 
 # squid/bot/accounts/presentation.py:41
@@ -370,22 +373,22 @@ account-name-changed = Your Minecraft name changed from **{ $old }** to **{ $new
 # squid/bot/accounts/presentation.py:37
 account-name-unchanged = Your Minecraft name is still **{ $name }**. Nothing changed.
 
-# squid/bot/accounts/workspace.py:504
+# squid/bot/accounts/workspace.py:510
 account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.
 
-# squid/bot/accounts/workspace.py:300
+# squid/bot/accounts/workspace.py:301
 account-refresh-help = Refresh Minecraft after you change your in-game name or skin.
 
-# squid/bot/accounts/workspace.py:322
+# squid/bot/accounts/workspace.py:323
 account-refresh-member-action = Refresh member
 
-# squid/bot/accounts/workspace.py:349, squid/bot/accounts/workspace.py:537
+# squid/bot/accounts/workspace.py:355, squid/bot/accounts/workspace.py:543
 account-search-credit-names = Search credited names
 
 # squid/bot/accounts/cog.py:56
 account-select-creator-result = Choose a creator from the name suggestions.
 
-# squid/bot/accounts/workspace.py:539
+# squid/bot/accounts/workspace.py:545
 account-submit-claim = Submit claim
 
 # squid/bot/accounts/overview.py:331
@@ -493,82 +496,82 @@ account-view-verified = { $visibility } · verified { $age }
 # squid/bot/accounts/profile_editor.py:193
 account-view-your-account = Your account
 
-# squid/bot/accounts/workspace.py:259
+# squid/bot/accounts/workspace.py:260
 account-workspace-account = Account
 
-# squid/bot/accounts/workspace.py:245
+# squid/bot/accounts/workspace.py:246
 account-workspace-accounts = Accounts
 
-# squid/bot/accounts/workspace.py:581
+# squid/bot/accounts/workspace.py:587
 account-workspace-cancel = Cancel
 
-# squid/bot/accounts/workspace.py:621
+# squid/bot/accounts/workspace.py:627
 account-workspace-claim-an-older-creator-name = Claim an older creator name
 
-# squid/bot/accounts/workspace.py:354
+# squid/bot/accounts/workspace.py:360
 account-workspace-claim-creator-credit = Enter a name manually
 
-# squid/bot/accounts/workspace.py:377
+# squid/bot/accounts/workspace.py:383
 account-workspace-create-merge-code = Create merge code
 
-# squid/bot/accounts/workspace.py:623
+# squid/bot/accounts/workspace.py:629
 account-workspace-creator-name = Creator name
 
-# squid/bot/accounts/workspace.py:232
+# squid/bot/accounts/workspace.py:235
 account-workspace-credit-setup-help = Review the privacy notice before claiming build credit.
 
-# squid/bot/accounts/workspace.py:246
+# squid/bot/accounts/workspace.py:247
 account-workspace-credits = Credits
 
-# squid/bot/accounts/workspace.py:617
+# squid/bot/accounts/workspace.py:623
 account-workspace-discord-member = Discord member
 
-# squid/bot/accounts/workspace.py:611
+# squid/bot/accounts/workspace.py:617
 account-workspace-in-game-link-code = In-game link code
 
-# squid/bot/accounts/workspace.py:305, squid/bot/accounts/workspace.py:609
+# squid/bot/accounts/workspace.py:306, squid/bot/accounts/workspace.py:615
 account-workspace-link-minecraft-account = Link Minecraft account
 
-# squid/bot/accounts/workspace.py:267
+# squid/bot/accounts/workspace.py:268
 account-workspace-loading-account = Loading account.
 
-# squid/bot/accounts/workspace.py:580
+# squid/bot/accounts/workspace.py:586
 account-workspace-merge-accounts = Merge accounts
 
-# squid/bot/accounts/workspace.py:629
+# squid/bot/accounts/workspace.py:635
 account-workspace-merge-code = Merge code
 
-# squid/bot/accounts/workspace.py:238, squid/bot/accounts/workspace.py:247
+# squid/bot/accounts/workspace.py:239, squid/bot/accounts/workspace.py:248
 account-workspace-notifications = Notifications
 
-# squid/bot/accounts/workspace.py:239
+# squid/bot/accounts/workspace.py:240
 account-workspace-notifications-setup-help = Review the privacy notice to access your inbox, follows, and delivery settings.
 
-# squid/bot/accounts/workspace.py:244
+# squid/bot/accounts/workspace.py:245
 account-workspace-overview = Overview
 
-# squid/bot/accounts/workspace.py:627
+# squid/bot/accounts/workspace.py:633
 account-workspace-preview-account-merge = Preview account merge
 
-# squid/bot/accounts/workspace.py:227
+# squid/bot/accounts/workspace.py:228
 account-workspace-profile-setup-help = Review the privacy notice to create your profile.
 
-# squid/bot/accounts/workspace.py:514
+# squid/bot/accounts/workspace.py:520
 account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity.
 
-# squid/bot/accounts/workspace.py:615
+# squid/bot/accounts/workspace.py:621
 account-workspace-refresh-member-identity = Refresh member identity
 
-# squid/bot/accounts/workspace.py:314
+# squid/bot/accounts/workspace.py:315
 account-workspace-refresh-minecraft = Refresh Minecraft
 
-# squid/bot/accounts/workspace.py:252
+# squid/bot/accounts/workspace.py:253
 account-workspace-review-claims = Review claims
 
-# squid/bot/accounts/workspace.py:272
+# squid/bot/accounts/workspace.py:273
 account-workspace-review-privacy-notice = Review privacy notice
 
-# squid/bot/accounts/workspace.py:226
+# squid/bot/accounts/workspace.py:227
 account-workspace-set-up-profile = Set up your account
 
 # squid/core/accounts/errors.py:179
@@ -589,7 +592,7 @@ accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers
 # squid/core/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/core/accounts/infrastructure/repository.py:685
+# squid/core/accounts/infrastructure/repository.py:656
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/core/accounts/errors.py:330
@@ -1204,16 +1207,16 @@ bot-starboard-screen-starboards = Starboards
 # squid/bot/starboard/screen.py:431
 bot-starboard-screen-up = Up
 
-# squid/bot/catalogue/browse.py:266, squid/bot/catalogue/browse.py:309
+# squid/bot/catalogue/browse.py:268, squid/bot/catalogue/browse.py:311
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/catalogue/browse.py:454
+# squid/bot/catalogue/browse.py:458
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1052
+# squid/bot/catalogue/browse.py:1084
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/catalogue/browse.py:317
+# squid/bot/catalogue/browse.py:319
 bot-submission-build-browse-cancel = Cancel
 
 # squid/bot/catalogue/schematics/tools.py:350
@@ -1228,22 +1231,22 @@ bot-submission-build-browse-download-result = Download result
 # squid/bot/catalogue/schematics/tools.py:94
 bot-submission-build-browse-download-schematic = Download
 
-# squid/bot/catalogue/browse.py:827
+# squid/bot/catalogue/browse.py:841
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/catalogue/browse.py:230
+# squid/bot/catalogue/browse.py:232
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1050
+# squid/bot/catalogue/browse.py:1082
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/catalogue/browse.py:653
+# squid/bot/catalogue/browse.py:667
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/catalogue/schematics/tools.py:362
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/catalogue/browse.py:275, squid/bot/catalogue/browse.py:311
+# squid/bot/catalogue/browse.py:277, squid/bot/catalogue/browse.py:313
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/catalogue/schematics/tools.py:122
@@ -1628,13 +1631,13 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/chrome.py:268
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/accounts/cog.py:86
+# squid/bot/accounts/cog.py:88
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
-# squid/bot/accounts/creator_page.py:62
+# squid/bot/accounts/creator_page.py:68
 bot-verify-hidden-creator-page = Hidden creator page
 
-# squid/bot/accounts/creator_page.py:42
+# squid/bot/accounts/creator_page.py:48
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
 # squid/bot/version_tracking_cog.py:166
@@ -1799,13 +1802,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:157
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:1020
+# squid/bot/catalogue/browse.py:1052
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:1020
+# squid/bot/catalogue/browse.py:1052
 browse-query-all-records = All records
 
-# squid/bot/catalogue/browse.py:707
+# squid/bot/catalogue/browse.py:721
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1814,19 +1817,19 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/catalogue/browse.py:630
+# squid/bot/catalogue/browse.py:644
 build-browse-all-builds = Builds
 
-# squid/bot/catalogue/browse.py:646
+# squid/bot/catalogue/browse.py:660
 build-browse-record-tools = Record tools
 
-# squid/bot/catalogue/browse.py:638
+# squid/bot/catalogue/browse.py:652
 build-browse-records = Records
 
-# squid/bot/catalogue/browse.py:709
+# squid/bot/catalogue/browse.py:723
 build-browser-close-search = Done
 
-# squid/bot/catalogue/browse.py:711
+# squid/bot/catalogue/browse.py:725
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/ui/saved_drafts.py:57
@@ -1949,7 +1952,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:403
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/catalogue/browse.py:699, squid/bot/catalogue/browse.py:870
+# squid/bot/catalogue/browse.py:713, squid/bot/catalogue/browse.py:884
 build-id-not-visible = No visible build has that ID.
 
 # squid/core/builds/application/input.py:46
@@ -1964,22 +1967,22 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/core/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/catalogue/browse.py:455
+# squid/bot/catalogue/browse.py:459
 build-list-empty = No builds are available.
 
-# squid/bot/catalogue/browse.py:290
+# squid/bot/catalogue/browse.py:292
 build-review-approve-effect = The build becomes visible in the public catalogue.
 
-# squid/bot/catalogue/browse.py:289
+# squid/bot/catalogue/browse.py:291
 build-review-approve-title = Approve build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:295
+# squid/bot/catalogue/browse.py:297
 build-review-reject-effect = The build is rejected and leaves the catalogue.
 
-# squid/bot/catalogue/browse.py:294
+# squid/bot/catalogue/browse.py:296
 build-review-reject-title = Reject build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:341, squid/bot/catalogue/browse.py:343
+# squid/bot/catalogue/browse.py:343, squid/bot/catalogue/browse.py:345
 build-review-state-updated = Build review state updated.
 
 # squid/bot/catalogue/schematics/tools.py:154
@@ -1988,10 +1991,10 @@ build-schematic-missing = This build has no schematic attached.
 # squid/bot/catalogue/schematics/tools.py:158
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/catalogue/browse.py:256
+# squid/bot/catalogue/browse.py:258
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/catalogue/browse.py:258
+# squid/bot/catalogue/browse.py:260
 build-schematic-tools-show = Schematic tools
 
 # squid/bot/catalogue/search/results.py:164, squid/bot/catalogue/search/results.py:168, squid/bot/catalogue/search/results.py:244, squid/bot/catalogue/search/results.py:297
@@ -2084,10 +2087,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:207
+# squid/bot/catalogue/browse.py:793, squid/bot/catalogue/search/help.py:207
 catalogue-search-help = Search help
 
-# squid/bot/catalogue/browse.py:602
+# squid/bot/catalogue/browse.py:616
 catalogue-search-help-close = Close help
 
 # squid/core/catalogue/domain/titles.py:67
@@ -2804,7 +2807,20 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/accounts/creator_page.py:50
+# squid/bot/accounts/creator_page.py:120
+creator-page-build-count =
+    { $count ->
+        [one] { $count } build
+       *[other] { $count } builds
+    }
+
+# squid/bot/accounts/creator_page.py:100
+creator-page-builds = Builds
+
+# squid/bot/accounts/creator_page.py:86
+creator-page-credited-as = Select a name to see the builds credited to it.
+
+# squid/bot/accounts/creator_page.py:56
 creator-page-fallback-name = Creator
 
 # squid/bot/submission/ui/credits.py:109, squid/bot/submission/ui/credits.py:82
@@ -3503,7 +3519,7 @@ guided-search-query-title = Search query
 # squid/bot/catalogue/search/filters.py:242
 guided-search-remove-clause = Remove
 
-# squid/bot/catalogue/browse.py:785
+# squid/bot/catalogue/browse.py:799
 guided-search-reset = Reset
 
 # squid/bot/catalogue/search/filters.py:463
@@ -4114,7 +4130,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/core/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/catalogue/browse.py:583
+# squid/bot/catalogue/browse.py:597
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:510
@@ -4123,7 +4139,7 @@ navigation-draft-unavailable = That draft is unavailable.
 # squid/bot/navigation/cog.py:36
 navigation-invalid-address = That screen address is invalid. Try /builds, /drafts, or /account.
 
-# squid/bot/accounts/workspace.py:163
+# squid/bot/accounts/workspace.py:164
 navigation-tab-unavailable = That account tab is unavailable.
 
 # squid/bot/notifications_view.py:335
@@ -4766,7 +4782,7 @@ record-browse-pending = Newer inputs are waiting to be checked.
 # squid/bot/catalogue/record_browser.py:103
 record-browse-title = Records
 
-# squid/bot/catalogue/browse.py:746
+# squid/bot/catalogue/browse.py:760
 record-browser-all = All criteria
 
 # squid/bot/catalogue/record_display.py:66
@@ -5166,7 +5182,7 @@ schematics-zoom-positive = Render zoom must be positive.
 # squid/core/search/application/fields.py:264
 search-align-increments = { $field_name } must align to increments of { $step }
 
-# squid/core/search/domain/query.py:106
+# squid/core/search/domain/query.py:128
 search-boolean-minimum-operands = Boolean expressions require at least two operands
 
 # squid/core/search/application/ranking.py:71
@@ -5211,85 +5227,85 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 # squid/core/search/application/fields.py:115
 search-expects-number = { $field_name } expects a number
 
-# squid/bot/catalogue/search/labels.py:62
+# squid/bot/catalogue/search/labels.py:64
 search-field-base-title = Record criterion
 
-# squid/bot/catalogue/search/labels.py:74
+# squid/bot/catalogue/search/labels.py:76
 search-field-completion-at = Completed
 
-# squid/bot/catalogue/search/labels.py:76
+# squid/bot/catalogue/search/labels.py:78
 search-field-created-at = Submitted
 
-# squid/bot/catalogue/search/labels.py:54
+# squid/bot/catalogue/search/labels.py:56
 search-field-creator = Creator
 
-# squid/bot/catalogue/search/labels.py:70
+# squid/bot/catalogue/search/labels.py:72
 search-field-depth = Depth
 
-# squid/bot/catalogue/search/labels.py:44
+# squid/bot/catalogue/search/labels.py:46
 search-field-description = Description
 
 # squid/core/search/application/fields.py:106
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
-# squid/bot/catalogue/search/labels.py:68
+# squid/bot/catalogue/search/labels.py:70
 search-field-height = Height
 
-# squid/bot/catalogue/search/labels.py:60
+# squid/bot/catalogue/search/labels.py:62
 search-field-kind = Kind
 
-# squid/bot/catalogue/search/labels.py:52
+# squid/bot/catalogue/search/labels.py:54
 search-field-pattern = Pattern
 
-# squid/bot/catalogue/search/labels.py:48
+# squid/bot/catalogue/search/labels.py:50
 search-field-restriction = Restriction
 
-# squid/bot/catalogue/search/labels.py:58
+# squid/bot/catalogue/search/labels.py:60
 search-field-status = Status
 
-# squid/bot/catalogue/search/labels.py:46
+# squid/bot/catalogue/search/labels.py:48
 search-field-tag = Tag
 
-# squid/bot/catalogue/search/labels.py:42
+# squid/bot/catalogue/search/labels.py:44
 search-field-title = Title
 
-# squid/bot/catalogue/search/labels.py:50
+# squid/bot/catalogue/search/labels.py:52
 search-field-type = Type
 
-# squid/bot/catalogue/search/labels.py:78
+# squid/bot/catalogue/search/labels.py:80
 search-field-updated-at = Updated
 
-# squid/bot/catalogue/search/labels.py:56
+# squid/bot/catalogue/search/labels.py:58
 search-field-version = Version
 
-# squid/bot/catalogue/search/labels.py:64
+# squid/bot/catalogue/search/labels.py:66
 search-field-version-scope = Version scope
 
-# squid/bot/catalogue/search/labels.py:72
+# squid/bot/catalogue/search/labels.py:74
 search-field-volume = Volume
 
-# squid/bot/catalogue/search/labels.py:66
+# squid/bot/catalogue/search/labels.py:68
 search-field-width = Width
 
-# squid/bot/catalogue/search/labels.py:132
+# squid/bot/catalogue/search/labels.py:140
 search-filter-contains = { $name } has “{ $shown }”
 
-# squid/bot/catalogue/search/labels.py:133
+# squid/bot/catalogue/search/labels.py:124, squid/bot/catalogue/search/labels.py:141
 search-filter-equals = { $name } is { $shown }
 
-# squid/bot/catalogue/search/labels.py:115
+# squid/bot/catalogue/search/labels.py:118
 search-filter-is-not-set = { $name } is not set
 
-# squid/bot/catalogue/search/labels.py:114
+# squid/bot/catalogue/search/labels.py:117
 search-filter-is-set = { $name } is set
 
-# squid/bot/catalogue/search/labels.py:110
+# squid/bot/catalogue/search/labels.py:113
 search-filter-keywords = Keywords: { $words }
 
-# squid/bot/catalogue/search/labels.py:107
+# squid/bot/catalogue/search/labels.py:110
 search-filter-not = Not: { $inner }
 
-# squid/bot/catalogue/search/labels.py:128
+# squid/bot/catalogue/search/labels.py:136
 search-filter-range = { $name } { $lower } to { $upper }
 
 # squid/bot/catalogue/search/results.py:502
@@ -5319,7 +5335,7 @@ search-grouped-tied-holders = Tied holders
 # squid/core/search/application/ranking.py:69
 search-k-positive = k must be positive
 
-# squid/core/search/domain/query.py:131
+# squid/core/search/domain/query.py:153
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
 # squid/bot/catalogue/search/help.py:178
@@ -5439,19 +5455,19 @@ search-search-numbers-finite = Search numbers must be finite
 # squid/core/search/application/services.py:71
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/bot/catalogue/search/labels.py:151
+# squid/bot/catalogue/search/labels.py:159
 search-sort-ascending = { $field }, smallest first
 
-# squid/bot/catalogue/search/labels.py:141
+# squid/bot/catalogue/search/labels.py:149
 search-sort-default = Default order
 
-# squid/bot/catalogue/search/labels.py:150
+# squid/bot/catalogue/search/labels.py:158
 search-sort-descending = { $field }, largest first
 
-# squid/bot/catalogue/search/labels.py:147
+# squid/bot/catalogue/search/labels.py:155
 search-sort-newest = { $field }, newest first
 
-# squid/bot/catalogue/search/labels.py:148
+# squid/bot/catalogue/search/labels.py:156
 search-sort-oldest = { $field }, oldest first
 
 # squid/core/search/application/ranking.py:78
@@ -6378,7 +6394,7 @@ ui-page-jump-unavailable = This pager is no longer available.
 # squid/bot/chrome.py:116
 ui-tally-option = { $label } — { NUMBER($count) }
 
-# squid/bot/accounts/creator_page.py:63
+# squid/bot/accounts/creator_page.py:69
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
 # squid/bot/accounts/cog.py:39
