@@ -17,6 +17,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
+from math import prod
 
 from sqlalchemy import Text, case, cast, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
@@ -443,6 +444,8 @@ class SearchProjectionLoader:
                 if (value := _assignment_value(assignment)) is not None
             ),
         ]
+        if len(dimensions) == 3:
+            filters.append(ProjectionFilter("volume", Decimal(prod(dimensions.values()))))
         if isinstance(build, DoorBuild):
             filters.extend(
                 ProjectionFilter(name, Decimal(value))

@@ -212,6 +212,7 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool) ->
     assert filters["width"] == Decimal(10)
     assert filters["height"] == Decimal(12)
     assert filters["depth"] == Decimal(5)
+    assert filters["volume"] == Decimal(600)
     assert "door_depth" not in filters
     if door:
         assert filters["door_width"] == Decimal(3)
