@@ -157,6 +157,24 @@ export default tseslint.config(
     rules: { "squid/import-boundaries": "error" },
   },
   {
+    // Messages format numbers and dates with NUMBER() and DATETIME(), so translators own them.
+    files: ["src/**/*.{ts,astro,svelte}"],
+    ignores: ["src/locales/format.ts"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "Intl", message: "Format inside a message with NUMBER() or DATETIME()." },
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].map((property) => ({
+          property,
+          message: "Format inside a message with NUMBER() or DATETIME().",
+        })),
+      ],
+    },
+  },
+  {
     // The workbench shows fixture content, and src/ui receives its labels through props.
     files: ["src/{pages,layouts,features}/**/*.{astro,svelte}"],
     ignores: ["src/pages/design-system*", "src/pages/design-system/**"],
