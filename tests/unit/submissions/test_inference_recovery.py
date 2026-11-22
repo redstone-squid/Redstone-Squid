@@ -12,7 +12,7 @@ import pytest
 from squid.core.actors import Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
-from squid.core.builds.domain import BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildInput, DoorDraftDetails
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.core.permissions.application.ports import PermissionRepository
 from squid.core.submissions.application.inference_runs import (
@@ -50,7 +50,7 @@ class RetainedRun:
         return InferenceClaim(self.token)
 
     async def complete(
-        self, run_id: UUID, token: UUID, drafts: tuple[BuildDraft, ...]
+        self, run_id: UUID, token: UUID, drafts: tuple[BuildInput, ...]
     ) -> tuple[InferenceCandidate, ...]:
         assert (run_id, token) == (self.id, self.token)
         self.candidates = tuple(
@@ -81,15 +81,15 @@ class RecoveringInference(BuildInferenceService):
         *,
         model: str,
         reasoning_effort: str | None = None,
-    ) -> list[BuildDraft]:
+    ) -> list[BuildInput]:
         return await self.infer_calls(source, model=model, reasoning_effort=reasoning_effort)
 
     async def _infer(
         self, source: BuildInferenceInput, *, model: str, reasoning_effort: str | None = None
-    ) -> list[BuildDraft]:
+    ) -> list[BuildInput]:
         if self.infer_calls.await_count == 1:
             raise RuntimeError("model unavailable")
-        return [BuildDraft(details=DoorDraftDetails(door_width=3))]
+        return [BuildInput(details=DoorDraftDetails(door_width=3))]
 
 
 @dataclass

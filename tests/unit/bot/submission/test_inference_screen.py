@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from squid.bot.submission.ui.inference import InferenceCandidatesScreen
-from squid.core.builds.domain import BuildDraft
+from squid.core.builds.domain import BuildInput
 from squid.core.submissions.application.inference_runs import InferenceCandidate
 from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services
@@ -11,7 +11,7 @@ from tests.support.services import bot_services
 
 async def test_candidate_pages_cover_results_beyond_discords_choice_limit() -> None:
     run_id = uuid4()
-    candidates = tuple(InferenceCandidate(uuid4(), run_id, 7, BuildDraft()) for _ in range(31))
+    candidates = tuple(InferenceCandidate(uuid4(), run_id, 7, BuildInput()) for _ in range(31))
     screen = InferenceCandidatesScreen(bot_services(), run_id, candidates)
     async with stage(screen, owner=object()) as ui:
         first = ui.control(ui.key_for("candidate-0")).payload["options"]

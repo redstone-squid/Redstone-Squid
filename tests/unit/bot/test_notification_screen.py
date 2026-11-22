@@ -372,7 +372,7 @@ async def test_inbox_selection_shows_build_context_and_routed_action() -> None:
     screen = make_screen().screen
     await screen.on_load()
 
-    assert "Build #9 was confirmed." in labels(render_tree(screen.inbox))
+    assert "Build #9 was approved." in labels(render_tree(screen.inbox))
     assert "Open build" not in labels(render_tree(screen.inbox))
     await choose(screen.inbox, "inbox", "3")
 
@@ -392,7 +392,7 @@ async def test_inbox_hides_action_for_notification_without_a_build() -> None:
     await choose(screen.inbox, "inbox", "3")
 
     assert "Open build" not in labels(render_tree(screen.inbox))
-    assert "A build was confirmed." in labels(render_tree(screen.inbox))
+    assert "A build was approved." in labels(render_tree(screen.inbox))
 
 
 async def test_following_does_not_render_empty_subtext_markers() -> None:

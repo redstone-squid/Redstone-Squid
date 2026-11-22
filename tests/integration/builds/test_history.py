@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.errors import BuildRevisionMismatchError
 from squid.core.builds.history import BuildEditContext
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot, PendingBuildEdit
@@ -34,7 +34,7 @@ async def seed(sessions: async_sessionmaker[AsyncSession]) -> int:
         await session.flush()
         account_id = account.id
     async with SqlAlchemyUnitOfWork(sessions) as uow, uow.builds.editing(actor="test_worker", source="test"):
-        build = OtherBuild(submitter_account_id=account_id, submission_status=Status.PENDING, description="first")
+        build = OtherBuild(submitter_account_id=account_id, submission_status=BuildStatus.PENDING, description="first")
         await uow.builds.save(build)
         await uow.commit()
         assert build.id is not None

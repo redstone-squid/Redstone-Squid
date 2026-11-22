@@ -210,7 +210,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         ),
         options={
             "category": sd.Option(
-                name=tr(t"command-build-submit-category-name = category"),
+                name=tr(t"command-build-submit-category-name = kind"),
                 description=tr(t"submit-category-help = The kind of build to submit."),
                 choices=[
                     sd.Choice("Door", tr(t"command-build-submit-choice-category-door = Door")),
@@ -225,13 +225,13 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 description=tr(t"submit-name-help = An optional name for the build."),
             ),
             "door_size": sd.Option(
-                name=tr(t"command-build-submit-door-size-name = door_size"),
+                name=tr(t"command-build-submit-door-size-name = opening_size"),
                 description=md_tr(
-                    t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.",
+                    t"submit-door-dimensions-help = Opening size as width x height x depth, e.g. `2x2x1`. Depth is optional.",
                 ),
             ),
             "door_type": sd.Option(
-                name=tr(t"command-build-submit-door-type-name = door_type"),
+                name=tr(t"command-build-submit-door-type-name = orientation"),
                 description=tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor."),
                 choices=[
                     sd.Choice("Door", tr(t"command-build-submit-choice-door-type-door = Door")),
@@ -240,9 +240,9 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 ],
             ),
             "build_size": sd.Option(
-                name=tr(t"command-build-submit-build-size-name = build_size"),
+                name=tr(t"command-build-submit-build-size-name = build_dimensions"),
                 description=md_tr(
-                    t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.",
+                    t"bot-submission-submit-the-whole-build-e-g-x-x = Build dimensions as width x height x depth, e.g. `5x7x4`.",
                 ),
             ),
             "creators": sd.Option(

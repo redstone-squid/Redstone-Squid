@@ -88,7 +88,7 @@ class BuildSample:
     oversized: bool = False
 
 
-class BuildDraft(sl.Reactive):
+class BuildInput(sl.Reactive):
     """Own a disposable build and replicated tags until the workbench calls close."""
 
     build: BuildSample = sl.state(BuildSample())
@@ -144,7 +144,7 @@ class BuildForm(sl.forms.Form[sd.Request[Any, Any]]):
         label=tr(t"layout-workbench-description = Description"), minimum=10, maximum=2000
     )
 
-    def __init__(self, draft: BuildDraft, history: sl.runtime.History) -> None:
+    def __init__(self, draft: BuildInput, history: sl.runtime.History) -> None:
         build = draft.build
         super().__init__(
             name=build.title, dimensions=build.dimensions, ticks=build.ticks, description=build.description
@@ -182,7 +182,7 @@ class Workbench(InspectablePanel):
     notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.")
     fail_next: bool = sl.state(False)
 
-    def __init__(self, draft: BuildDraft) -> None:
+    def __init__(self, draft: BuildInput) -> None:
         self.draft = draft
 
     @override
@@ -306,7 +306,7 @@ class BuildPreview(InspectablePanel):
 
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-preview")))
 
-    def __init__(self, draft: BuildDraft) -> None:
+    def __init__(self, draft: BuildInput) -> None:
         self.draft = draft
 
     @override

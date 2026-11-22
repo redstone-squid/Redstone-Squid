@@ -9,7 +9,7 @@ from uuid import UUID
 
 import pytest
 
-from squid.core.builds.domain import BuildCategory, BuildDraft, ShowcaseTag, Status
+from squid.core.builds.domain import BuildCategory, BuildInput, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
 from squid.core.builds.domain.taxonomy import RestrictionField
 from squid.core.builds.domain.titles import format_build_display_title
@@ -209,7 +209,7 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
 )
 async def test_general_patterns_survive_prefill_durable_payload_and_build(category: SubmissionCategory) -> None:
     pattern = _definition("spiral", TagSemanticKind.PATTERN)
-    source = BuildDraft(
+    source = BuildInput(
         category=BuildCategory(category.value.title()),
         display_name="Tiny hidden staircase",
         patterns=[pattern.display_name],
@@ -617,7 +617,7 @@ def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None
     )
     assert isinstance(build, DoorBuild)
     assert build.id is None
-    assert build.submission_status is Status.PENDING
+    assert build.submission_status is BuildStatus.PENDING
     assert (build.door_width, build.door_height, build.door_depth) == (2, 2, None)
     assert build.orientation == "Trapdoor"
     assert build.wiring_placement_restrictions == [restriction.display_name]

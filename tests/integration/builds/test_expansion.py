@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.history_models import BuildHistorySnapshot
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -36,7 +36,7 @@ async def test_expansion_round_trip_history_and_record_exclusion(
     async with SqlAlchemyUnitOfWork(sessions) as uow, uow.builds.editing(actor="test", source="test"):
         build = DoorBuild(
             submitter_account_id=account_id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             expansion=document,
             orientation="Door",
             door_width=6,
@@ -114,7 +114,7 @@ async def test_database_rejects_invalid_document_envelope(
         account = Account()
         session.add(account)
         await session.flush()
-        build = DoorBuild(submitter_account_id=account.id, submission_status=Status.PENDING)
+        build = DoorBuild(submitter_account_id=account.id, submission_status=BuildStatus.PENDING)
         session.add(build)
         await session.flush()
         build_id = build.id
@@ -136,7 +136,7 @@ async def test_live_lookup_loads_families_without_sample_dimensions(
         await session.flush()
         family = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             expansion=expansion_document(),
             orientation="Door",
             width=1,
@@ -146,7 +146,7 @@ async def test_live_lookup_loads_families_without_sample_dimensions(
         )
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -156,7 +156,7 @@ async def test_live_lookup_loads_families_without_sample_dimensions(
         )
         pending = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.PENDING,
+            submission_status=BuildStatus.PENDING,
             expansion=expansion_document(),
             orientation="Door",
         )

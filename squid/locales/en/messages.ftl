@@ -1031,7 +1031,7 @@ bot-settings-view-choose-a-role = Choose a role
 bot-settings-view-confirm-reset = Confirm reset
 
 # squid/bot/settings/screen.py:65
-bot-settings-view-confirmed-builds = Confirmed builds
+bot-settings-view-confirmed-builds = Approved builds
 
 # squid/bot/settings/screen.py:631
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
@@ -1192,7 +1192,7 @@ bot-submission-build-browse-approve = Approve
 # squid/bot/catalogue/browse.py:453
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1053
+# squid/bot/catalogue/browse.py:1051
 bot-submission-build-browse-build-id = Build ID
 
 # squid/bot/catalogue/browse.py:316
@@ -1216,7 +1216,7 @@ bot-submission-build-browse-edit = Edit
 # squid/bot/catalogue/browse.py:229
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1051
+# squid/bot/catalogue/browse.py:1049
 bot-submission-build-browse-open-build = Open build
 
 # squid/bot/catalogue/browse.py:652
@@ -1371,10 +1371,10 @@ bot-submission-search-view-view-build = Expand
 bot-submission-submit-author-has-not-consented = Author has not consented
 
 # squid/bot/submission/form.py:91
-bot-submission-submit-check-build-size = Check the build size
+bot-submission-submit-check-build-size = Check the build dimensions
 
 # squid/bot/submission/form.py:81
-bot-submission-submit-check-door-size = Check the door size
+bot-submission-submit-check-door-size = Check the opening size
 
 # squid/bot/submission/cog.py:235
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
@@ -1383,7 +1383,7 @@ bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
 # squid/bot/submission/cog.py:244
-bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
+bot-submission-submit-the-whole-build-e-g-x-x = Build dimensions as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/opening.py:97
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
@@ -1781,11 +1781,11 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:143
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:1020
+# squid/bot/catalogue/browse.py:1019
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:1020
-browse-query-all-standings = All records
+# squid/bot/catalogue/browse.py:1019
+browse-query-all-records = All records
 
 # squid/bot/catalogue/browse.py:706
 browse-query-summary = { $query } · { $sort }
@@ -1956,7 +1956,7 @@ build-review-approve-effect = The build becomes visible in the public catalogue.
 build-review-approve-title = Approve build #{ $build_id }?
 
 # squid/bot/catalogue/browse.py:294
-build-review-reject-effect = The build is marked as denied and leaves the catalogue.
+build-review-reject-effect = The build is rejected and leaves the catalogue.
 
 # squid/bot/catalogue/browse.py:293
 build-review-reject-title = Reject build #{ $build_id }?
@@ -2012,8 +2012,8 @@ builds-attribute-immutable = Attribute `{ $name }` is immutable!
 # squid/core/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/core/builds/models.py:225
-builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildDraft.
+# squid/core/builds/models.py:227
+builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildInput.
 
 # squid/core/builds/errors.py:22
 builds-check-id-action = Check the build ID and try again.
@@ -2241,10 +2241,10 @@ command-build-issues-name = issues
 command-build-name = build
 
 # squid/bot/submission/cog.py:243
-command-build-submit-build-size-name = build_size
+command-build-submit-build-size-name = build_dimensions
 
 # squid/bot/submission/cog.py:213
-command-build-submit-category-name = category
+command-build-submit-category-name = kind
 
 # squid/bot/submission/cog.py:216
 command-build-submit-choice-category-door = Door
@@ -2277,10 +2277,10 @@ command-build-submit-creators-name = creators
 command-build-submit-description-name = description
 
 # squid/bot/submission/cog.py:228
-command-build-submit-door-size-name = door_size
+command-build-submit-door-size-name = opening_size
 
 # squid/bot/submission/cog.py:234
-command-build-submit-door-type-name = door_type
+command-build-submit-door-type-name = orientation
 
 # squid/bot/submission/cog.py:285
 command-build-submit-file-2-name = file_2
@@ -2928,7 +2928,7 @@ diagnostics-view-work-lost-only = Work lost only
 draft-editor-add-files = Add files
 
 # squid/bot/submission/ui/sections.py:83
-draft-editor-build-size = Build size
+draft-editor-build-size = Build dimensions
 
 # squid/bot/submission/ui/sections.py:279
 draft-editor-choose = Choose…
@@ -2940,7 +2940,7 @@ draft-editor-choose-file = Choose a file to manage…
 draft-editor-done = Done
 
 # squid/bot/submission/ui/sections.py:88
-draft-editor-door-size = Door size
+draft-editor-door-size = Opening size
 
 # squid/bot/submission/ui/drafts.py:555, squid/bot/submission/ui/editor.py:37, squid/bot/submission/ui/sections.py:217
 draft-editor-edit = Edit
@@ -3030,7 +3030,7 @@ draft-editor-issue-schematic-required = Add a schematic under **Files**.
 draft-editor-issue-sponsor = The Minecraft server credited for this build is no longer available for credit. Turn off server credit to continue.
 
 # squid/bot/submission/ui/drafts.py:1064
-draft-editor-issue-target-rejected = The build could not be created from these answers. Check them and press **Submit** again.
+draft-editor-issue-target-rejected = The build could not be created from these answers. Check them and press **Submit draft** again.
 
 # squid/bot/submission/ui/drafts.py:531
 draft-editor-loading = Loading your draft…
@@ -3161,20 +3161,20 @@ draft-editor-status-done-unknown = ✅ Your build was saved and is now pending r
 
 # squid/bot/submission/ui/drafts.py:866
 draft-editor-status-editing =
-    Fill in each section, then press **Submit**. Your answers are saved as you go.
+    Fill in each section, then press **Submit draft**. Your answers are saved as you go.
     -# Reopen this draft with `/build drafts` until { $expires }.
 
 # squid/bot/submission/ui/drafts.py:900
 draft-editor-status-expired = This draft expired before it was submitted. Start a new one with `/build submit`; your answers are listed below for reference.
 
 # squid/bot/submission/ui/drafts.py:880
-draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** Fix the problems below, then press **Submit** again.
+draft-editor-status-needs-changes = ⚠️ **Your draft needs changes.** Fix the problems below, then press **Submit draft** again.
 
 # squid/bot/submission/ui/drafts.py:874
-draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** The submission continues on its own once they are ready. If you edit anything now, press **Submit** again afterwards.
+draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** The submission continues on its own once they are ready. If you edit anything now, press **Submit draft** again afterwards.
 
 # squid/bot/submission/ui/drafts.py:607
-draft-editor-submit = Submit
+draft-editor-submit = Submit draft
 
 # squid/bot/submission/ui/drafts.py:857
 draft-editor-title-creating = ## Submitting your build · { $category }
@@ -3183,7 +3183,7 @@ draft-editor-title-creating = ## Submitting your build · { $category }
 draft-editor-title-done = ## Build submitted · { $category }
 
 # squid/bot/submission/ui/drafts.py:863
-draft-editor-title-editing = ## Submit a build · { $category }
+draft-editor-title-editing = ## Build draft · { $category }
 
 # squid/bot/submission/ui/drafts.py:861
 draft-editor-title-expired = ## Draft expired · { $category }
@@ -3228,7 +3228,7 @@ draft-inference-no-values = No new answers could be inferred from this schematic
 draft-inference-not-ready = The schematic is not ready for inference. Check its status under Files, then try again after processing finishes.
 
 # squid/bot/submission/ui/drafts.py:401
-draft-inference-review = Schematic suggestions filled empty answers. Review the build size, width/depth orientation, name, credits, and restrictions below. Category, opening size, orientation, and opening/closing times were not detected.
+draft-inference-review = Schematic suggestions filled empty answers. Review the build dimensions, width/depth orientation, name, credits, and restrictions below. Category, opening size, orientation, and opening/closing times were not detected.
 
 # squid/bot/submission/ui/sections.py:264
 draft-options-empty = No matching choices. Clear the search to see all choices.
@@ -4121,10 +4121,10 @@ notifications-build-number = Build #{ $build_id }
 notifications-channel-preferences = Manage notification channels and subscriptions
 
 # squid/bot/notification_text.py:22
-notifications-confirmed-summary = { $build } was confirmed.
+notifications-confirmed-summary = { $build } was approved.
 
 # squid/bot/notification_text.py:26
-notifications-creator-summary = { $build } by a creator you follow was confirmed.
+notifications-creator-summary = { $build } by a creator you follow was approved.
 
 # squid/core/notifications/application.py:199
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
@@ -4136,7 +4136,7 @@ notifications-delivery-heading = Where notifications arrive
 notifications-delivery-help = Choose your delivery channels. Changes save immediately.
 
 # squid/bot/notification_text.py:24
-notifications-denied-summary = { $build } was denied.
+notifications-denied-summary = { $build } was rejected.
 
 # squid/bot/notifications_view.py:202
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
@@ -4704,7 +4704,7 @@ record-browse-computed = Computed { $computed_at }
 record-browse-empty = No published records are available.
 
 # squid/bot/catalogue/record_display.py:54
-record-browse-no-holders = No confirmed holders yet.
+record-browse-no-holders = No record holders yet.
 
 # squid/bot/catalogue/record_display.py:44
 record-browse-open-holder = Open build #{ $build_id }
@@ -4716,7 +4716,7 @@ record-browse-pending = Newer inputs are waiting to be checked.
 record-browse-title = Records
 
 # squid/bot/catalogue/browse.py:742
-record-browser-all = All types
+record-browser-all = All criteria
 
 # squid/bot/catalogue/browse.py:765
 record-browser-all-time = All time
@@ -4818,7 +4818,7 @@ records-maintenance-tools = Recompute
 records-maximum-category-size = Maximum category size cannot be negative.
 
 # squid/core/records/errors.py:42
-records-no-confirmed-build = No confirmed build satisfies the requested record category.
+records-no-confirmed-build = No approved build satisfies the requested record category.
 
 # squid/bot/catalogue/records.py:246
 records-no-maintenance-actions = No maintenance actions are available.
@@ -5127,7 +5127,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:226
+# squid/core/search/application/fields.py:229
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:95
@@ -5166,13 +5166,13 @@ search-example-extenders = Current smallest extenders
 # squid/bot/catalogue/search/help.py:24
 search-example-fastest = All-time fastest doors
 
-# squid/core/search/application/fields.py:129
+# squid/core/search/application/fields.py:131
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/core/search/application/fields.py:119
+# squid/core/search/application/fields.py:121
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/core/search/application/fields.py:111
+# squid/core/search/application/fields.py:113
 search-expects-number = { $field_name } expects a number
 
 # squid/bot/catalogue/search/labels.py:61
@@ -5193,7 +5193,7 @@ search-field-depth = Depth
 # squid/bot/catalogue/search/labels.py:43
 search-field-description = Description
 
-# squid/core/search/application/fields.py:102
+# squid/core/search/application/fields.py:104
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
 # squid/bot/catalogue/search/labels.py:67
@@ -5323,7 +5323,7 @@ search-reference-label-dates = Dates
 search-reference-label-kind = Kind
 
 # squid/bot/catalogue/search/help.py:54
-search-reference-label-record-type = Record type
+search-reference-label-record-type = Record criterion
 
 # squid/bot/catalogue/search/help.py:90
 search-reference-label-size = Size
@@ -5347,7 +5347,7 @@ search-reference-operators = - Quote phrases: `title:"vault door"`. Compare numb
 search-reference-or = - `OR` matches either side. Group with brackets: `(door OR extender) width<=5`.
 
 # squid/bot/catalogue/search/help.py:48
-search-reference-record-scope = Record filters describe the record. To filter by build size or creator, search Builds instead.
+search-reference-record-scope = Record filters describe the record. To filter by build dimensions or creator, search Builds instead.
 
 # squid/bot/catalogue/search/help.py:67
 search-reference-record-title = `title:door`
@@ -5373,7 +5373,7 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:63
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:221
+# squid/core/search/application/fields.py:224
 search-search-numbers-finite = Search numbers must be finite
 
 # squid/core/search/application/services.py:71
@@ -5569,7 +5569,7 @@ submissions-application-forms-display-name = Build name
 submissions-application-forms-door = Door
 
 # squid/core/submissions/application/forms.py:519
-submissions-application-forms-door-geometry = Door size and type
+submissions-application-forms-door-geometry = Opening size and door type
 
 # squid/core/submissions/application/forms.py:544
 submissions-application-forms-door-orientation = Door type
@@ -6046,10 +6046,10 @@ submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seam
 submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, java:IGN, bedrock:Name.
 
 # squid/bot/submission/cog.py:229
-submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
+submit-door-dimensions-help = Opening size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
 # squid/bot/submission/form.py:62
-submit-door-options-only = Door size and orientation can only be supplied for doors.
+submit-door-options-only = Opening size and orientation can only be supplied for doors.
 
 # squid/bot/submission/form.py:82
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.

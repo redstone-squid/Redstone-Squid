@@ -14,7 +14,7 @@ from squid.bot.catalogue.search.entry import SearchTarget
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
 from squid.bot.submission.cog import BuildCommands, SearchModeChoice
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
@@ -457,7 +457,7 @@ async def test_grouped_record_and_holder_navigation_preserves_the_search_page() 
 
     async def load(build_id: int) -> Build:
         loaded.append(build_id)
-        return DoorBuild(id=build_id, submission_status=Status.CONFIRMED)
+        return DoorBuild(id=build_id, submission_status=BuildStatus.APPROVED)
 
     async def render(build: Build) -> sl.LayoutNode:
         return sl.paragraph(f"Build card #{build.id}")

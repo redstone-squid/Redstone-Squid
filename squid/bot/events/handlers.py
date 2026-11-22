@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.events.dispatcher import EventHandler
 from squid.core.voting.domain import DeleteLogVoteTarget, VoteSessionResult
@@ -37,7 +37,7 @@ class PostSubmittedBuildHandler:
                 extra={"squid.build.id": event.aggregate_id},
             )
             return
-        if build.submission_status != Status.PENDING:
+        if build.submission_status != BuildStatus.PENDING:
             return
         await ensure_build_review(self.bot, build, await configured_vote_channels(self.bot))
 

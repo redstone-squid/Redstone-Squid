@@ -8,7 +8,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.showcase.workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
+from squid.bot.showcase.workbench import BuildForm, BuildInput, BuildPreview, BuildSample, Workbench
 from squid_i18n import source_text
 from squid_reactivity import transaction
 from squid_replication import LoroBackend, Replica
@@ -23,10 +23,10 @@ from squid_ui.ext.discord.testing import (
 from squid_ui.selectors import select
 
 
-def workbench() -> tuple[BuildDraft, Workbench, MessageRoot, MessageRoot, MessageRootScheduler]:
+def workbench() -> tuple[BuildInput, Workbench, MessageRoot, MessageRoot, MessageRootScheduler]:
     bus = sl.runtime.LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     return (
         draft,
@@ -62,7 +62,7 @@ def test_preview_and_editor_fit(oversized: bool) -> None:
 
 
 def test_form_validates_dimensions_without_losing_values() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     form = BuildForm(draft, editor.history)
     form.dimensions = "0x4x3"
@@ -119,7 +119,7 @@ async def test_failed_publication_can_retry() -> None:
 
 
 async def test_inspector_captures_committed_report_and_refreshes() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     draft.build = replace(draft.build, oversized=True)
     preview = BuildPreview(draft)
@@ -144,7 +144,7 @@ async def test_inspector_captures_committed_report_and_refreshes() -> None:
 
 
 async def test_form_submission_is_one_undoable_edit() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     async with sd.testing.stage(editor, owner=object()) as ui:
         form = await ui.press_for_form("edit")
@@ -161,7 +161,7 @@ async def test_form_submission_is_one_undoable_edit() -> None:
 
 
 async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     async with sd.testing.stage(editor, owner=object()) as ui:
         form = await ui.press_for_form("edit")
@@ -185,7 +185,7 @@ async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
 
 @pytest.mark.parametrize("oversized", [False, True])
 async def test_tag_picker_undo_and_redo_preserve_build_fields(oversized: bool) -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     draft.build = replace(draft.build, oversized=oversized)
     preview = BuildPreview(draft)
     async with sd.testing.stage(preview, owner=object()) as ui:
@@ -213,7 +213,7 @@ async def test_tag_picker_undo_and_redo_preserve_build_fields(oversized: bool) -
 
 @pytest.mark.parametrize("remote_tag", ["Compact", "Seamless"])
 async def test_tag_undo_preserves_remote_additions(remote_tag: str) -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     remote = Replica("remote", backend=LoroBackend())
     document = remote.open(draft.document.document_id)
     document.import_update(draft.document.export_since())
@@ -238,7 +238,7 @@ async def test_tag_undo_preserves_remote_additions(remote_tag: str) -> None:
 
 
 async def test_tag_undo_does_not_reverse_another_replicas_removal() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     remote = Replica("remote", backend=LoroBackend())
     document = remote.open(draft.document.document_id)
     document.import_update(draft.document.export_since())
@@ -257,7 +257,7 @@ async def test_tag_undo_does_not_reverse_another_replicas_removal() -> None:
 
 
 async def test_workbench_closes_its_replica() -> None:
-    draft = BuildDraft()
+    draft = BuildInput()
     editor = Workbench(draft)
     async with sd.testing.stage(editor, owner=object()) as ui:
         await ui.press("large")

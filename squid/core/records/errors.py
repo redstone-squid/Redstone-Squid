@@ -37,9 +37,9 @@ class RecordDefinitionNotFoundError(NotFoundError):
 
 
 class NoMatchingRecordCategoryError(NotFoundError):
-    """No confirmed build satisfies the requested record category."""
+    """No approved build satisfies the requested record category."""
 
-    default_message = tr(t"records-no-confirmed-build = No confirmed build satisfies the requested record category.")
+    default_message = tr(t"records-no-confirmed-build = No approved build satisfies the requested record category.")
     default_title = tr(t"records-category-not-found-title = Record category not found")
     default_code = ErrorCode.RECORD_NOT_FOUND
     default_resource = "record_category"

@@ -51,7 +51,7 @@ def record_standings(
         )
         if others
         else None,
-        sl.note(tr(t"record-browse-no-holders = No confirmed holders yet.")) if not holders else None,
+        sl.note(tr(t"record-browse-no-holders = No record holders yet.")) if not holders else None,
     )
 
 

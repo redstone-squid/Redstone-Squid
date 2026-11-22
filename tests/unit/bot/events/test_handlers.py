@@ -12,7 +12,7 @@ from whenever import Instant
 
 from squid.bot.events.handlers import PostSubmittedBuildHandler
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, OtherBuild
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.runtime import BotServices
@@ -70,7 +70,7 @@ def _handler(build: Build) -> tuple[PostSubmittedBuildHandler, BuildQueryRecorde
 
 async def test_submitted_build_is_sent_to_the_review_publisher(review_calls: list[Build]) -> None:
     build = OtherBuild(id=42, submitter_account_id=7)
-    build.submission_status = Status.PENDING
+    build.submission_status = BuildStatus.PENDING
     handler, queries = _handler(build)
 
     await handler.handle(_event(event_type="build.submitted", schema_version=2))
@@ -81,7 +81,7 @@ async def test_submitted_build_is_sent_to_the_review_publisher(review_calls: lis
 
 async def test_submitted_build_redelivery_reuses_the_same_review_publisher_path(review_calls: list[Build]) -> None:
     build = OtherBuild(id=42, submitter_account_id=7)
-    build.submission_status = Status.PENDING
+    build.submission_status = BuildStatus.PENDING
     handler, queries = _handler(build)
     event = _event(event_type="build.submitted", schema_version=2)
 

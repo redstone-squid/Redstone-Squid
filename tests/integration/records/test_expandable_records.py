@@ -8,14 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.models import RecordLookupRequest
 from squid.core.records.application.services import RecordComputationService, RecordService
 from squid.core.records.domain import BuildKind, RecordCriterion
 from squid.core.records.models import RecordHolder, RecordResult
-from squid.core.search.infrastructure.projection import SearchProjectionLoader
+from squid.core.search.infrastructure.projection import SearchProjectionLoader, SearchProjectionRepository
 from tests.integration.records.test_live import document
 from tests.support.build_edits import build_edit_session
 
@@ -30,7 +30,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         await session.flush()
         family = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             expansion=document(),
             door_width=99,
@@ -43,7 +43,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         )
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -91,7 +91,11 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         result = await session.get(RecordResult, smallest.result_id)
         assert result is not None
         assert not result.history_complete
-        projection = await SearchProjectionLoader(session).load("record", f"result:{smallest.result_id}")
+        loader = SearchProjectionLoader(session)
+        build_projection = await loader.load("build", str(family_id))
+        assert build_projection is not None
+        await SearchProjectionRepository(session).replace(build_projection)
+        projection = await loader.load("record", f"result:{smallest.result_id}")
         assert projection is not None
         assert projection.document_data["holder_metrics"] == {str(family_id): holder.metric_snapshot}
 

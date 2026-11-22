@@ -8,7 +8,7 @@ from sqlalchemy import Column, MetaData, Table, create_engine, insert, select
 from sqlalchemy.dialects import sqlite
 from whenever import Instant
 
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.persistence.types import InstantUTC, IntEnumSmallInt
 
@@ -83,8 +83,8 @@ def test_int_enum_small_int_round_trips_as_a_member() -> None:
 
 
 def test_build_submission_status_column_coerces_to_status() -> None:
-    """Return a Status member so callers can use .name and enum identity comparisons."""
+    """Return a BuildStatus member so callers can use .name and enum identity comparisons."""
     column_type = Build.__table__.c.submission_status.type
 
     assert isinstance(column_type, IntEnumSmallInt)
-    assert column_type.process_result_value(1, sqlite.dialect()) is Status.CONFIRMED
+    assert column_type.process_result_value(1, sqlite.dialect()) is BuildStatus.APPROVED

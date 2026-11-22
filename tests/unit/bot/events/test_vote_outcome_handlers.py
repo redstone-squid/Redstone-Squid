@@ -91,8 +91,8 @@ async def test_an_undecided_build_vote_leaves_the_build_alone(result: VoteSessio
 
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
-    bot.services.builds.confirm.assert_not_awaited()
-    bot.services.builds.deny.assert_not_awaited()
+    bot.services.builds.approve.assert_not_awaited()
+    bot.services.builds.reject.assert_not_awaited()
 
 
 async def test_a_still_open_session_is_not_applied() -> None:
@@ -107,7 +107,7 @@ async def test_a_still_open_session_is_not_applied() -> None:
 
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
-    bot.services.builds.confirm.assert_not_awaited()
+    bot.services.builds.approve.assert_not_awaited()
 
 
 def test_a_build_vote_without_a_target_is_rejected_by_the_domain() -> None:
@@ -120,7 +120,7 @@ async def test_a_delete_log_session_does_not_touch_builds() -> None:
 
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
-    bot.services.builds.confirm.assert_not_awaited()
+    bot.services.builds.approve.assert_not_awaited()
 
 
 async def test_an_approved_delete_log_vote_deletes_its_target() -> None:
@@ -169,5 +169,5 @@ async def test_a_missing_session_is_skipped_by_both_handlers() -> None:
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
     await DeleteVotedMessageHandler(bot).handle(_event())
 
-    bot.services.builds.confirm.assert_not_awaited()
+    bot.services.builds.approve.assert_not_awaited()
     bot.get_or_fetch_message.assert_not_awaited()

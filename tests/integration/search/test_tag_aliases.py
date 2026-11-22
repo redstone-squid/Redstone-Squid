@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
@@ -63,7 +63,7 @@ async def catalogue(migrated_session_factory: async_sessionmaker[AsyncSession]) 
         await session.flush()
         target = OtherBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             submission_time=Instant.now(),
             edited_time=Instant.now(),
             tags=[TagAssignment(definition) for definition in definitions],
@@ -71,7 +71,7 @@ async def catalogue(migrated_session_factory: async_sessionmaker[AsyncSession]) 
         # A description mentioning an alias must not satisfy an explicit restriction filter.
         textual = OtherBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             submission_time=Instant.now(),
             edited_time=Instant.now(),
             description="observerless",

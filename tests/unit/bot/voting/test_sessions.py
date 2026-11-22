@@ -9,7 +9,7 @@ import discord
 import pytest
 
 from squid.bot.voting.sessions import ensure_build_review
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.voting.domain import VoteKind
@@ -23,7 +23,7 @@ async def test_a_guild_without_a_vote_channel_does_not_fail_the_submission(
 
     Raising here would report a saved build as failed and keep retrying the same delivery.
     """
-    build = OtherBuild(id=42, submission_status=Status.PENDING, submitter_account_id=7)
+    build = OtherBuild(id=42, submission_status=BuildStatus.PENDING, submitter_account_id=7)
 
     with caplog.at_level(logging.WARNING, logger="squid.bot.voting.sessions"):
         session_id = await ensure_build_review(cast(Any, None), build, [])
@@ -39,7 +39,7 @@ async def test_build_reviews_read_current_default_thresholds() -> None:
         ensure_build_submission_vote=AsyncMock(return_value=123),
     )
     bot = SimpleNamespace(services=SimpleNamespace(settings=settings, votes=votes), refresh_posts=AsyncMock())
-    build = OtherBuild(id=42, submission_status=Status.PENDING, submitter_account_id=7)
+    build = OtherBuild(id=42, submission_status=BuildStatus.PENDING, submitter_account_id=7)
     channels = [cast(discord.TextChannel, SimpleNamespace(id=10, guild=SimpleNamespace(id=1)))]
     await ensure_build_review(cast(Any, bot), build, channels)
     assert votes.ensure_build_submission_vote.call_args.kwargs["pass_threshold"] == 5
@@ -57,7 +57,7 @@ async def test_review_batches_presets_for_unique_destination_guilds() -> None:
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=RuntimeSettingsStub(), votes=votes), refresh_posts=AsyncMock()
     )
-    build = OtherBuild(id=42, submission_status=Status.PENDING, submitter_account_id=7)
+    build = OtherBuild(id=42, submission_status=BuildStatus.PENDING, submitter_account_id=7)
     channels = [
         cast(discord.TextChannel, SimpleNamespace(id=id_, guild=SimpleNamespace(id=guild)))
         for id_, guild in [(10, 1), (10, 1), (11, 1), (20, 2)]

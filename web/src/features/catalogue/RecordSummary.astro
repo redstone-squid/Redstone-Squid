@@ -9,9 +9,7 @@ const { record, locale, linked = true } = Astro.props;
 ---
 
 <SummaryCard>
-  <span class="sq-kicker">
-    {translateTaxonomy(locale, record.criterion)}
-  </span>
+  <span class="sq-kicker">{translateTaxonomy(locale, record.criterion)}</span>
   <h3>
     {linked ? (
       <a href={localizePath(`/records/${record.record_id}`, locale)}>{record.title}</a>

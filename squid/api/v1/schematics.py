@@ -34,7 +34,7 @@ from squid.core.schematics.errors import SchematicSupportUnavailableError
         404,
         422,
         503,
-        describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
+        describe={404: "No approved build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="build_schematics_list",
     security=[ANONYMOUS],
@@ -48,7 +48,7 @@ async def list_build_schematics(
     page_size: PageSizeParam = 50,
     offset: OffsetParam = None,
 ) -> Page[SchematicSummary]:
-    """List analyzed schematics attached to a confirmed build."""
+    """List analyzed schematics attached to a approved build."""
     await build_queries.get_public(build_id)
     # Attachment order has no identifier sequence worth anchoring to, so this listing is
     # offset-only, like the ranked build search.
@@ -90,7 +90,7 @@ async def get_schematic_content(
     build_queries: BuildQueries,
     schematics: Schematics,
 ) -> Response[bytes]:
-    """Download explicitly published original bytes from a confirmed build."""
+    """Download explicitly published original bytes from a approved build."""
     await build_queries.get_public(build_id)
     download = await schematics.public_download(build_id, schematic_id)
     # Generate the filename from IDs and the known format so user-supplied names
@@ -117,7 +117,7 @@ async def get_schematic_content(
             422,
             503,
             describe={
-                404: "No confirmed build with this identifier, or it has no schematic attached.",
+                404: "No approved build with this identifier, or it has no schematic attached.",
                 409: "The attached schematic will never be previewed; `context.reason` says why.",
                 503: "Previews are not configured on this instance, or the renderer is unavailable.",
             },
@@ -143,7 +143,7 @@ async def render_build_schematic(
     pitch: Annotated[float | None, QueryParameter(ge=-90, le=90)] = None,
     zoom: Annotated[float | None, QueryParameter(gt=0, le=16)] = None,
 ) -> Response[bytes]:
-    """Return a PNG preview of a confirmed build's primary schematic.
+    """Return a PNG preview of a approved build's primary schematic.
 
     Omitted camera parameters use deployment defaults. Reuse a stored preview
     when its recipe matches; otherwise render it during this request.

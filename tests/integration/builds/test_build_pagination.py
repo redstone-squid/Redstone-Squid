@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
 from squid.core.builds.application.queries import BuildListSort
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -18,7 +18,7 @@ from tests.support.build_edits import transact_build_edit as transact
 
 pytestmark = pytest.mark.asyncio
 
-_CONFIRMED = frozenset({Status.CONFIRMED})
+_CONFIRMED = frozenset({BuildStatus.APPROVED})
 
 
 async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> list[int]:
@@ -33,7 +33,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
     identifiers: list[int] = []
     for _ in range(count):
         build = OtherBuild(
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             submitter_account_id=account_id,
             ai_generated=False,
         )

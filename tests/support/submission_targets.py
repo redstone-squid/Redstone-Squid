@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import BuildCategory, Status
+from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.core.submissions.domain import (
@@ -53,7 +53,7 @@ def submission_build(
 ) -> Build:
     """Construct a minimally persistable typed build for one category."""
     common: dict[str, Any] = {
-        "submission_status": Status.PENDING,
+        "submission_status": BuildStatus.PENDING,
         "submitter_account_id": account_id,
         "source_submission_draft_id": draft_id,
         "sponsor": sponsor,

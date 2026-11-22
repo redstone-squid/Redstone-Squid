@@ -18,7 +18,7 @@ def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:
         document_data={
             "holder_build_ids": [7, 9],
             "metric": {"volume": 24},
-            "criterion": "smallest",
+            "base_title": "smallest",
             "version_scope": "all_time",
         },
     )
@@ -36,7 +36,7 @@ def test_build_hit_reads_projected_dimensions_and_leaves_missing_ones_unknown() 
         resource_kind="build",
         source_key="42",
         title="5x5 Piston Door",
-        status="confirmed",
+        status="approved",
         description=None,
         tags=[],
         document_data={"dimensions": {"width": 10, "depth": 3}},

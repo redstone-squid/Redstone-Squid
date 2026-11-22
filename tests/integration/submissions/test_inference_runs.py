@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support.expansion import expansion_document
@@ -34,8 +34,8 @@ async def test_completed_run_replays_original_candidates_and_rejects_changed_inp
             run,
             claim_token,
             (
-                BuildDraft(category=None),
-                BuildDraft(
+                BuildInput(category=None),
+                BuildInput(
                     category=BuildCategory.DOOR,
                     details=DoorDraftDetails(door_width=3, door_expansion=expansion_document()),
                 ),
@@ -91,11 +91,11 @@ async def test_reclaimed_run_fences_late_completion_and_failure(
     assert second_token != first_token
     with pytest.raises(ConflictError):
         await transact(
-            repository, lambda uow: uow.inference_runs.complete(run, first_token, (BuildDraft(width=1),)), commit=True
+            repository, lambda uow: uow.inference_runs.complete(run, first_token, (BuildInput(width=1),)), commit=True
         )
     await transact(repository, lambda uow: uow.inference_runs.fail(run, first_token), commit=True)
     result = await transact(
-        repository, lambda uow: uow.inference_runs.complete(run, second_token, (BuildDraft(width=2),)), commit=True
+        repository, lambda uow: uow.inference_runs.complete(run, second_token, (BuildInput(width=2),)), commit=True
     )
     assert result[0].facts.width == 2
 

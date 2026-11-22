@@ -3,7 +3,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from squid.core.builds.application.edit_schema import BuildPatch
 from squid.core.builds.application.editing import BuildEditPatch
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionParameter
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import DoorBuild, OtherBuild
@@ -39,7 +39,7 @@ def test_invalid_structured_domain_is_rejected(values: dict[str, object]) -> Non
 
 def test_inference_payload_and_finalized_build_keep_expansion() -> None:
     document = expansion_document()
-    draft = BuildDraft(category=BuildCategory.DOOR, details=DoorDraftDetails(door_expansion=document))
+    draft = BuildInput(category=BuildCategory.DOOR, details=DoorDraftDetails(door_expansion=document))
     adapter = TypeAdapter(BuildDraftPayload)
     payload = adapter.validate_json(adapter.dump_json(BuildDraftPayload.from_draft(draft)))
     build = payload.to_draft().finalize()

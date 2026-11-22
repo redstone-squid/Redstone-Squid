@@ -14,7 +14,7 @@ from squid.core.builds.application.ports import (
 )
 from squid.core.builds.application.restrictions import RestrictionReader
 from squid.core.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy, replace_showcase_tags
-from squid.core.builds.domain import BuildDraft, EditAccess, RestrictionTypeLiteral, Status, sort_restrictions
+from squid.core.builds.domain import BuildInput, BuildStatus, EditAccess, RestrictionTypeLiteral, sort_restrictions
 from squid.core.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.models import Build
@@ -91,7 +91,7 @@ class BuildService:
         """Ask the lock manager to reclaim expired leases."""
         await self._locks.clean_stale(older_than=older_than)
 
-    async def classify_restrictions[BuildT: (Build, BuildDraft)](
+    async def classify_restrictions[BuildT: (Build, BuildInput)](
         self, build: BuildT, restrictions: Sequence[str]
     ) -> BuildT:
         """Replace a build's restrictions using repository-owned metadata."""
@@ -118,7 +118,7 @@ class BuildService:
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
-        build.submission_status = Status.PENDING
+        build.submission_status = BuildStatus.PENDING
         await self._prepare_for_persistence(build)
         return build
 
@@ -209,7 +209,7 @@ class BuildService:
         await self._apply_patch(build, patch)
         return build
 
-    async def confirm(
+    async def approve(
         self,
         build_id: int,
         *,
@@ -235,13 +235,13 @@ class BuildService:
             ),
         ):
             build = await self._get_for_update(uow, build_id)
-            if build.submission_status is not Status.PENDING:
+            if build.submission_status is not BuildStatus.PENDING:
                 return build
-            await uow.builds.confirm(build)
+            await uow.builds.approve(build)
             await uow.commit()
         return build
 
-    async def deny(
+    async def reject(
         self,
         build_id: int,
         *,
@@ -267,9 +267,9 @@ class BuildService:
             ),
         ):
             build = await self._get_for_update(uow, build_id)
-            if build.submission_status is not Status.PENDING:
+            if build.submission_status is not BuildStatus.PENDING:
                 return build
-            await uow.builds.deny(build)
+            await uow.builds.reject(build)
             await uow.commit()
         return build
 

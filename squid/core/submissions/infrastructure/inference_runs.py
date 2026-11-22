@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.builds.application.inference import BuildInferenceInput
-from squid.core.builds.domain import BuildDraft
+from squid.core.builds.domain import BuildInput
 from squid.core.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.core.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
@@ -107,7 +107,7 @@ class PostgresInferenceRunRepository(InferenceRunRepository):
 
     @override
     async def complete(
-        self, run_id: UUID, token: UUID, drafts: tuple[BuildDraft, ...]
+        self, run_id: UUID, token: UUID, drafts: tuple[BuildInput, ...]
     ) -> tuple[InferenceCandidate, ...]:
         session = self._session()
         row = await self._claim(session, run_id, token)

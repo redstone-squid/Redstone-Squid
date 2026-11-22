@@ -19,7 +19,7 @@ from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, 
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.builds.application.inference import BuildInferenceInput
-from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
@@ -273,7 +273,7 @@ class Proposals(RecalculationProposalService):
         owner_account_id: int,
         actor: Actor,
         source_message_id: int,
-        candidate: BuildDraft,
+        candidate: BuildInput,
     ) -> RecalculationProposal:
         return await self.create_calls(
             run_id=run_id,
@@ -286,7 +286,7 @@ class Proposals(RecalculationProposalService):
 
 
 async def test_production_recalculation_retains_candidates_without_submitting(monkeypatch: pytest.MonkeyPatch) -> None:
-    candidate = BuildDraft(category=BuildCategory.DOOR, width=9)
+    candidate = BuildInput(category=BuildCategory.DOOR, width=9)
     run_id = uuid4()
     inference = RetainedInference(InferenceCandidate(uuid4(), run_id, 1, candidate))
     now = Instant.now()

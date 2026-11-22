@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.builds.application.inference import BuildInferenceInput
-from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.errors import JSONValue
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.submissions.application.inference_runs import candidate_id
@@ -49,7 +49,7 @@ async def test_run_and_draft_changes_enqueue_minimal_status(
     assert claim_token is not None
     await transact(
         runs,
-        lambda uow: uow.inference_runs.complete(run, claim_token, (BuildDraft(category=BuildCategory.OTHER),)),
+        lambda uow: uow.inference_runs.complete(run, claim_token, (BuildInput(category=BuildCategory.OTHER),)),
         commit=True,
     )
     initial = await create_draft(sessions, owner)

@@ -21,7 +21,7 @@ from squid.core.records.models import (
 
 _MAPPINGS = (
     (RecordDefinition.__table__, "materialization_source", MaterializationSource),
-    (Record.__table__, "criterion", RecordCriterion),
+    (Record.__table__, "base_title", RecordCriterion),
     (Record.__table__, "build_kind", BuildKind),
     (Record.__table__, "version_scope", VersionScope),
     (DefinitionFacet.__table__, "facet_kind", FacetKind),

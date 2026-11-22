@@ -19,7 +19,7 @@ from squid.bot.ui import (
 )
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application.ports import BuildSchematicSummary, BuildSchematicSummaryProvider
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
@@ -31,8 +31,8 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 logger = logging.getLogger(__name__)
 
 PENDING = sl.Role("build.pending", base=sl.Tone.WARNING, marker="⏳ ")
-CONFIRMED = sl.Role("build.confirmed", base=sl.Tone.SUCCESS)
-DENIED = sl.Role("build.denied", base=sl.Tone.DANGER)
+APPROVED = sl.Role("build.approved", base=sl.Tone.SUCCESS)
+REJECTED = sl.Role("build.rejected", base=sl.Tone.DANGER)
 
 _SPONSOR_CREDIT_MAX_CHARACTERS = 255
 _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
@@ -82,17 +82,17 @@ def _attachment_failure_summary(failures: Sequence[AttachmentFailureInfo]) -> st
     return truncate_display_text("\n".join(lines), _EVIDENCE_FIELD_MAX_CHARACTERS)
 
 
-def _status_tone(status: Status | None, *, build_id: int | None) -> sl.Tone | sl.Role:
+def _status_tone(status: BuildStatus | None, *, build_id: int | None) -> sl.Tone | sl.Role:
     """Return an exhaustive build-status accent, reporting invalid persisted state."""
     match status:
-        case Status.PENDING:
+        case BuildStatus.PENDING:
             return PENDING
-        case Status.CONFIRMED:
-            return CONFIRMED
-        case Status.DENIED:
-            return DENIED
+        case BuildStatus.APPROVED:
+            return APPROVED
+        case BuildStatus.REJECTED:
+            return REJECTED
         case _:
-            raw_status = status.name if isinstance(status, Status) else str(status)
+            raw_status = status.name if isinstance(status, BuildStatus) else str(status)
             logger.error(
                 "Build %s has no valid submission status",
                 build_id,
@@ -115,7 +115,7 @@ async def render_build_card(
     summary = None
     if (
         build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
-        and build.submission_status is Status.CONFIRMED
+        and build.submission_status is BuildStatus.APPROVED
         and schematic_summaries is not None
     ):
         try:
@@ -212,7 +212,7 @@ def _build_resources(
 def _attachment_review_action(build: Build) -> sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
     if (
         build.id is not None
-        and build.submission_status is Status.CONFIRMED
+        and build.submission_status is BuildStatus.APPROVED
         and (build.extra_info.get("attachment_failures") or build.extra_info.get("attachment_resolutions"))
     ):
         return sl.action_controls(

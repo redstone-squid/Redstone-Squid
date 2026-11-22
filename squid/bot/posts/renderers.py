@@ -9,7 +9,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.ui import render_payload
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.posts.domain import ResourceKind
 
 if TYPE_CHECKING:
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
 @final
 class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
-    """Publish a confirmed build's card to every guild's builds channel.
+    """Publish a approved build's card to every guild's builds channel.
 
-    Only confirmed builds are published here. A pending build is shown by its review
+    Only approved builds are published here. A pending build is shown by its review
     session instead, and a denied one is shown nowhere, so both answer with an empty
     set and the reconciler removes whatever is left over.
     """
@@ -37,7 +37,7 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         build = await self.bot.services.build_queries.get(int(resource_key))
         if build is None:
             return None
-        if build.submission_status != Status.CONFIRMED:
+        if build.submission_status != BuildStatus.APPROVED:
             return ()
 
         payload = render_payload(

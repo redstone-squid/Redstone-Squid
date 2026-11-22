@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
 from squid.core.submissions.application.build_answers import answers_from_build, patch_from_answers
@@ -20,7 +20,7 @@ OPTIONS = {
 
 
 def _door() -> DoorBuild:
-    door = DoorBuild(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1, orientation="Door")
+    door = DoorBuild(id=1, submission_status=BuildStatus.APPROVED, submitter_account_id=1, orientation="Door")
     door.door_width, door.door_height = 2, 2
     door.wiring_placement_restrictions = ["Seamless"]
     door.miscellaneous_restrictions = ["Hand-wired"]
@@ -29,13 +29,13 @@ def _door() -> DoorBuild:
 
 
 def _extender() -> ExtenderBuild:
-    extender = ExtenderBuild(id=2, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    extender = ExtenderBuild(id=2, submission_status=BuildStatus.APPROVED, submitter_account_id=1)
     extender.orientation, extender.extension_length, extender.retraction_time = "Upward", 4, 6
     return extender
 
 
 def _utility() -> UtilityBuild:
-    utility = UtilityBuild(id=3, submission_status=Status.CONFIRMED, submitter_account_id=1, versions=["Java 1.21"])
+    utility = UtilityBuild(id=3, submission_status=BuildStatus.APPROVED, submitter_account_id=1, versions=["Java 1.21"])
     compact = TagDefinition(
         id=1,
         stable_key="compact",
@@ -163,7 +163,7 @@ def test_an_extender_keeps_its_direction_unless_changed() -> None:
 
 
 def test_extender_timings_are_answers() -> None:
-    extender = ExtenderBuild(id=2, submission_status=Status.CONFIRMED, submitter_account_id=1, extension_time=8)
+    extender = ExtenderBuild(id=2, submission_status=BuildStatus.APPROVED, submitter_account_id=1, extension_time=8)
     before = answers_from_build(extender, OPTIONS)
 
     assert (before.answers["extension_time"], before.answers["retraction_time"]) == (8, None)

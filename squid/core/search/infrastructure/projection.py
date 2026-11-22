@@ -496,7 +496,7 @@ class SearchProjectionLoader:
                 (SearchDocument.resource_kind == "build")
                 & (SearchDocument.source_key == cast(RecordHolder.build_id, Text)),
             )
-            .where(RecordHolder.result_id == result_id, SearchDocument.status == "confirmed")
+            .where(RecordHolder.result_id == result_id, SearchDocument.status == "approved")
             .order_by(RecordHolder.rank, RecordHolder.build_id)
         )
         return build_record_projection(

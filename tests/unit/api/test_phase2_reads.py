@@ -15,7 +15,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CreditedAlias, PublicCreatorProfile
 from squid.core.accounts.models import CreatorAlias
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
 from squid.core.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
@@ -126,7 +126,7 @@ class ConfirmedBuildFake(BuildQueryService):
         return DoorBuild(
             id=build_id,
             submitter_account_id=1,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             versions=["1.21"],
             door_width=2,
             door_height=2,

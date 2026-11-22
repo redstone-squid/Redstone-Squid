@@ -18,8 +18,8 @@ from squid_i18n import md_tr
 
 class BuildSearchStatus(StrEnum):
     PENDING = "pending"
-    CONFIRMED = "confirmed"
-    DENIED = "denied"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class SearchBuildKind(StrEnum):
@@ -96,6 +96,8 @@ class FieldRegistry:
         """
         if field.value_enum is not None:
             value = raw.casefold()
+            if field.value_enum is BuildSearchStatus:
+                value = {"confirmed": "approved", "denied": "rejected"}.get(value, value)
             if value not in field.value_enum or not field.applies_to(scope, value):
                 choices = ", ".join(member.value for member in field.value_enum if field.applies_to(scope, member))
                 field_name = field.name
@@ -165,6 +167,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "criterion",
             FieldType.TEXT,
+            aliases=("base_title",),
             storage_name="base_title",
             suggested_values=tuple(title.value for title in RecordCriterion),
             scopes=frozenset({SearchScope.RECORDS}),

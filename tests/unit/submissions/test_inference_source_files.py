@@ -6,7 +6,7 @@ import pytest
 from pydantic import TypeAdapter
 from whenever import Instant
 
-from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.errors import JSONValue
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
@@ -43,8 +43,8 @@ def test_source_message_ownership_survives_retained_input_roundtrip() -> None:
 def test_candidate_files_follow_primary_message_ownership(origin: int | None) -> None:
     source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://example.com/image.png", 4, origin)
     drafts = (
-        BuildDraft(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(10),)),
-        BuildDraft(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(20),)),
+        BuildInput(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(10),)),
+        BuildInput(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(20),)),
     )
     encoded = TypeAdapter(SubmissionSourceFile).dump_python(source, mode="json")
     if origin is None:
@@ -74,7 +74,7 @@ def test_two_builds_from_one_message_keep_its_files_shared() -> None:
     source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://example.com/image.png", 4, 10)
     adapter = TypeAdapter(BuildDraftPayload)
     facts = adapter.dump_python(
-        BuildDraftPayload.from_draft(BuildDraft(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(10),))),
+        BuildDraftPayload.from_draft(BuildInput(category=BuildCategory.DOOR, source_messages=(MessageSnapshot(10),))),
         mode="json",
     )
     row = SubmissionInferenceRun(

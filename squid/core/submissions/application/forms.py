@@ -516,7 +516,7 @@ def _door_form(localize: Callable[[Text], str], revision: int = CURRENT_SUBMISSI
         sections=(
             FormSection(
                 id="door_geometry",
-                title=localize(tr(t"submissions-application-forms-door-geometry = Door size and type")),
+                title=localize(tr(t"submissions-application-forms-door-geometry = Opening size and door type")),
                 fields=(
                     _integer_field(
                         "opening_width",

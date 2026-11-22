@@ -30,7 +30,7 @@ from squid.core.accounts.models import CataloguePreference
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
-from squid.core.builds.domain import EditAccess, Status
+from squid.core.builds.domain import BuildStatus, EditAccess
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues
@@ -79,7 +79,7 @@ class _BuildSource:
         count=sl.sources.CountPrecision.EXACT,
     )
 
-    def __init__(self, queries: BuildQueryService, statuses: frozenset[Status]) -> None:
+    def __init__(self, queries: BuildQueryService, statuses: frozenset[BuildStatus]) -> None:
         self._queries = queries
         self._statuses = statuses
 
@@ -109,7 +109,7 @@ class _NeighbourBuildSource:
 
     capabilities = sl.sources.SourceCapabilities(backward=True)
 
-    def __init__(self, queries: BuildQueryService, statuses: frozenset[Status]) -> None:
+    def __init__(self, queries: BuildQueryService, statuses: frozenset[BuildStatus]) -> None:
         self.queries = queries
         self.statuses = statuses
 
@@ -259,7 +259,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     key="schematic-tools",
                 )
             )
-        if build.submission_status is Status.PENDING and BUILD_SUBMISSION_APPROVE in self.grants:
+        if build.submission_status is BuildStatus.PENDING and BUILD_SUBMISSION_APPROVE in self.grants:
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-approve = Approve"),
@@ -268,7 +268,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                     tone=sl.Tone.SUCCESS,
                 )
             )
-        if build.submission_status is Status.PENDING and BUILD_SUBMISSION_REJECT in self.grants:
+        if build.submission_status is BuildStatus.PENDING and BUILD_SUBMISSION_REJECT in self.grants:
             actions.append(
                 sl.action_control(
                     tr(t"bot-submission-build-browse-reject = Reject"),
@@ -291,7 +291,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             )
         return sl.section(
             sl.heading(tr(t"build-review-reject-title = Reject build #{build_id!s}?")),
-            sl.paragraph(tr(t"build-review-reject-effect = The build is marked as denied and leaves the catalogue.")),
+            sl.paragraph(tr(t"build-review-reject-effect = The build is rejected and leaves the catalogue.")),
             accent=sl.Tone.DANGER,
         )
 
@@ -335,7 +335,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             assert review is not None
             await review.save(
                 EditValues.of(
-                    {"submission_status": (Status.CONFIRMED if action == "approve" else Status.DENIED).value}
+                    {"submission_status": (BuildStatus.APPROVED if action == "approve" else BuildStatus.REJECTED).value}
                 ),
                 tr(t"build-review-state-updated = Build review state updated."),
             )
@@ -434,9 +434,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         self.grants = grants
         self._actor_account_id = actor_account_id
         self._refresh_posts = refresh_posts
-        statuses = {Status.CONFIRMED}
+        statuses = {BuildStatus.APPROVED}
         if BUILD_SUBMISSION_VIEW_PENDING in grants:
-            statuses.add(Status.PENDING)
+            statuses.add(BuildStatus.PENDING)
         self._statuses = frozenset(statuses)
         self._browser = sp.Browser(
             _BuildSource(queries, frozenset(statuses)),
@@ -577,7 +577,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         screen = await cls.create(request, build_id=build_id)
         build = await request.client.services.build_queries.get(build_id)
         if build is None or (
-            build.submission_status is not Status.CONFIRMED and BUILD_SUBMISSION_VIEW_PENDING not in screen.grants
+            build.submission_status is not BuildStatus.APPROVED and BUILD_SUBMISSION_VIEW_PENDING not in screen.grants
         ):
             raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
         return screen
@@ -739,9 +739,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                             )
                         ),
                         sl.action_control(
-                            tr(t"record-browser-all = All types"),
+                            tr(t"record-browser-all = All criteria"),
                             partial(self._toggle_record_category, None),
-                            key="all-standings",
+                            key="all-criteria",
                             tone=sl.Tone.SUCCESS if titles == frozenset() else sl.Tone.NEUTRAL,
                             available=titles is not None,
                         ),
@@ -832,7 +832,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _select(self, build_id: int) -> bool:
         build = await self._queries.get(build_id)
         if build is None or (
-            build.submission_status is not Status.CONFIRMED and BUILD_SUBMISSION_VIEW_PENDING not in self.grants
+            build.submission_status is not BuildStatus.APPROVED and BUILD_SUBMISSION_VIEW_PENDING not in self.grants
         ):
             return False
         await self._show_build(build)
@@ -1016,9 +1016,7 @@ def _query_summary(query: CatalogueQuery, *, records: bool) -> sl.TextLike:
     """
     expression = query.parsed.expression
     if expression is None:
-        return (
-            tr(t"browse-query-all-standings = All records") if records else tr(t"browse-query-all-builds = All builds")
-        )
+        return tr(t"browse-query-all-records = All records") if records else tr(t"browse-query-all-builds = All builds")
     if query.source is not None or _has_or(expression):
         return inline_code(query.text)
     return Text.join(" · ", [filter_label(leaf) for _, leaf in query_leaves(expression)])

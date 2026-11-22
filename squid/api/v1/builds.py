@@ -104,16 +104,16 @@ async def edit_build(
         404,
         422,
         503,
-        describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
+        describe={404: "No approved build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="builds_get",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
 async def get_build(build_id: FromPath[int], build_queries: BuildQueries) -> Response[BuildDetail]:
-    """Return one confirmed public build.
+    """Return one approved public build.
 
-    Pending and denied builds return 404, as do missing builds. This endpoint does
+    Pending and rejected builds return 404, as do missing builds. This endpoint does
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
@@ -140,7 +140,7 @@ async def list_builds(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[PublicBuildSummary]:
-    """Search confirmed builds, or list builds with a selected moderation status.
+    """Search approved builds, or list builds with a selected moderation status.
 
     Supplying q selects indexed search and cannot be combined with status. Search
     uses offset pagination. Without q, results come from the build repository;
@@ -179,8 +179,8 @@ async def list_builds(
     selector = resolve_selector(
         offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
     )
-    effective = status or BuildStatusFilter.CONFIRMED
-    if effective is not BuildStatusFilter.CONFIRMED:
+    effective = status or BuildStatusFilter.APPROVED
+    if effective is not BuildStatusFilter.APPROVED:
         await _require_pending_view(permissions, caller)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),

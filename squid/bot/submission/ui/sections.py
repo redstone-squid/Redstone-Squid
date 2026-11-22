@@ -1,6 +1,6 @@
 """Editing a build form's sections in Discord, shared by draft and saved-build editors.
 
-A build form groups its fields into sections such as "Name and creators" or "Door size and type"
+A build form groups its fields into sections such as "Name and creators" or "Opening size and door type"
 (see `squid.core.submissions.application.forms`). An editor shows one row per section with an Edit
 button. Editing a section opens either a modal, when its fields fit one (at most five typed
 fields), or a separate private message (SectionEditorScreen) with paged select menus for
@@ -80,12 +80,12 @@ class DimensionGroup:
 DIMENSION_GROUPS = (
     DimensionGroup(
         "capture_size",
-        tr(t"draft-editor-build-size = Build size"),
+        tr(t"draft-editor-build-size = Build dimensions"),
         ("capture_width", "capture_height", "capture_depth"),
     ),
     DimensionGroup(
         "opening_size",
-        tr(t"draft-editor-door-size = Door size"),
+        tr(t"draft-editor-door-size = Opening size"),
         ("opening_width", "opening_height", "opening_depth"),
     ),
 )
@@ -428,7 +428,7 @@ def _answer_lines(
 def _dimensions_line(
     group: DimensionGroup, answers: Mapping[str, JSONValue], errors: Mapping[str, str], *, show_empty: bool
 ) -> TextLike | None:
-    """Show a size as "Build size: 5 x 7 x ?", flagging missing or invalid parts.
+    """Show a size as "Build dimensions: 5 x 7 x ?", flagging missing or invalid parts.
 
     Returns None for an empty optional size outside a section's own editor, like other empty
     optional fields.

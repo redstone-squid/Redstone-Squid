@@ -38,7 +38,7 @@ type LookupThreshold = tuple[
 
 
 class DoorRecordCategory(BaseModel):
-    """A taxonomy category; no version means all confirmed versions.
+    """A taxonomy category; no version means all approved versions.
 
     Type IDs match the complete pattern set; restriction IDs select a subset.
     Parameterized restrictions also require (tag ID, operator, value) thresholds.

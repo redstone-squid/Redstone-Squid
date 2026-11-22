@@ -25,7 +25,7 @@ from squid.core.builds.application.edits import (
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.core.builds.history_models import BuildHistoryEntry
 from squid.core.builds.models import Build, OtherBuild
@@ -55,7 +55,7 @@ async def setup(
     )
     build = OtherBuild(
         submitter_account_id=account_id,
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         versions=["Java 1.21.0"],
         description="original",
     )
@@ -224,25 +224,28 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
     command = EditCommand(
         BUILD_STATUS_EDIT,
         (Revision(build_target(build.id), build.revision),),
-        EditValues.of({"submission_status": Status.CONFIRMED}),
+        EditValues.of({"submission_status": BuildStatus.APPROVED}),
     )
     result = await executor.execute(command, actor)
     assert result.receipt is not None
     current = await service.get(build.id)
     assert current is not None
-    assert current.submission_status is Status.CONFIRMED
+    assert current.submission_status is BuildStatus.APPROVED
     with pytest.raises(RevisionConflictError):
         await executor.execute(
-            EditCommand(BUILD_STATUS_EDIT, command.expected, EditValues.of({"submission_status": Status.DENIED})), actor
+            EditCommand(
+                BUILD_STATUS_EDIT, command.expected, EditValues.of({"submission_status": BuildStatus.REJECTED})
+            ),
+            actor,
         )
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
     current = await service.get(build.id)
     assert current is not None
-    assert current.submission_status is Status.PENDING
+    assert current.submission_status is BuildStatus.PENDING
     await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
     current = await service.get(build.id)
     assert current is not None
-    assert current.submission_status is Status.CONFIRMED
+    assert current.submission_status is BuildStatus.APPROVED
     async with sessions() as session:
         entries = list(
             (await session.scalars(select(BuildHistoryEntry).where(BuildHistoryEntry.build_id == build.id))).all()
@@ -308,7 +311,7 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
         )
         await uow.tags.set_status(speed.id, TagModerationStatus.APPROVED)
         await uow.commit()
-    build = await service.confirm(build.id, actor=actor.account_id, source="test")
+    build = await service.approve(build.id, actor=actor.account_id, source="test")
 
     tagged = await executor.execute(
         EditCommand(

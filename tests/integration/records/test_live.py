@@ -7,7 +7,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.models import BuildVersion, DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -64,13 +64,13 @@ async def test_live_lookup_does_not_materialize_large_sizes(
         await session.flush()
         family = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             expansion=document(),
         )
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -119,7 +119,7 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
         await session.flush()
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -175,14 +175,14 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         await session.flush()
         family = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             expansion=document(),
             build_versions=[BuildVersion(version_id=version.id)],
         )
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -193,7 +193,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         )
         other_version = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=9,
             door_height=3,
@@ -203,7 +203,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         )
         pending = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.PENDING,
+            submission_status=BuildStatus.PENDING,
             orientation="Door",
             expansion=DoorExpansion(raw_description="not reviewed"),
             build_versions=[BuildVersion(version_id=version.id)],

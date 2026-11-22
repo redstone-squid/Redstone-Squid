@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild, OtherBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.search.infrastructure.projection import (
@@ -163,7 +163,7 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
     )
     build = OtherBuild(tags=[TagAssignment(definition)])
     build.id = 42
-    build.submission_status = Status.CONFIRMED
+    build.submission_status = BuildStatus.APPROVED
     build.submission_time = build.edited_time = Instant.now()
     session = AsyncMock(spec=AsyncSession)
     session.scalar.return_value = build
@@ -198,7 +198,7 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool) ->
     build = DoorBuild(door_width=3, door_height=4) if door else OtherBuild()
     build.id = 42
     build.width, build.height, build.depth = 10, 12, 5
-    build.submission_status = Status.CONFIRMED
+    build.submission_status = BuildStatus.APPROVED
     build.submission_time = build.edited_time = now
     session = AsyncMock(spec=AsyncSession)
     session.scalar.return_value = build

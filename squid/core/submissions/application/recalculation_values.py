@@ -7,7 +7,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.builds.application.editing import BuildEditPatch
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.builds.domain.credits import Credit
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.models import Build, DoorBuild
@@ -40,7 +40,7 @@ class RecalculationFacts:
     description: str | None = None
 
     @classmethod
-    def from_draft(cls, draft: BuildDraft) -> RecalculationFacts:
+    def from_draft(cls, draft: BuildInput) -> RecalculationFacts:
         """Copy inference facts without finalizing or applying category defaults."""
         details = draft.details if isinstance(draft.details, DoorDraftDetails) else DoorDraftDetails()
         return cls(

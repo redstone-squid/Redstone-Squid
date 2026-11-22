@@ -15,7 +15,7 @@ from whenever import Instant
 from squid.core.builds.application.inference_expansion import InferredDoorExpansion
 from squid.core.builds.domain import (
     BuildCategory,
-    BuildDraft,
+    BuildInput,
     DoorDraftDetails,
     DoorOrientationLiteral,
     ExtenderDraftDetails,
@@ -380,7 +380,7 @@ class BuildInferenceService:
         *,
         model: str,
         reasoning_effort: str | None = None,
-    ) -> list[BuildDraft]:
+    ) -> list[BuildInput]:
         """Infer drafts from the primary messages and their supporting context.
 
         Discard inferred builds that reference no primary message. Keep recognized
@@ -402,7 +402,7 @@ class BuildInferenceService:
 
         primary_by_id = {message.message_id: message for message in source.primary}
         source_uses = Counter(message_id for value in result.builds for message_id in set(value.source_message_ids))
-        builds: list[BuildDraft] = []
+        builds: list[BuildInput] = []
         for inferred in result.builds:
             resolved = [
                 primary_by_id[message_id] for message_id in inferred.source_message_ids if message_id in primary_by_id
@@ -416,7 +416,7 @@ class BuildInferenceService:
             resolved.sort(key=lambda message: source.primary.index(message))
             # Keep each selected message separately so reviewers can trace the
             # inferred build to its text and follow-up attachments.
-            build = BuildDraft(
+            build = BuildInput(
                 source_messages=tuple(
                     MessageSnapshot(
                         id=message.message_id,
@@ -544,7 +544,7 @@ class BuildInferenceService:
         context = "\n".join(render(message) for message in source.context)
         return f"<messages>\n <primary>\n{primary}\n </primary>\n <context>\n{context}\n </context>\n</messages>"
 
-    async def _apply_taxonomy(self, build: BuildDraft, inferred: InferredBuild) -> None:
+    async def _apply_taxonomy(self, build: BuildInput, inferred: InferredBuild) -> None:
         validations: list[Awaitable[tuple[list[str], list[str]]]] = []
         destinations: list[str] = []
         restriction_fields: tuple[tuple[list[str], RestrictionTypeLiteral, str], ...] = (
@@ -588,7 +588,7 @@ class BuildInferenceService:
         ).write(build.extra_info)
 
     async def _apply_fields(
-        self, build: BuildDraft, inferred: InferredBuild, *, exclusive_source_ids: frozenset[int] = frozenset()
+        self, build: BuildInput, inferred: InferredBuild, *, exclusive_source_ids: frozenset[int] = frozenset()
     ) -> None:
         categories = {
             "Piston Door": BuildCategory.DOOR,

@@ -36,11 +36,11 @@ from whenever import Instant
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.builds.domain import (
     BuildCategory,
+    BuildStatus,
     DoorOrientationLiteral,
     EditAccess,
     Info,
     MediaTypeLiteral,
-    Status,
 )
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, StagedCredits
 from squid.core.builds.domain.expansion import DoorExpansion
@@ -117,7 +117,9 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=None)
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     """Optimistic version checked by explicit repository writes."""
-    submission_status: Mapped[Status | None] = mapped_column(IntEnumSmallInt(Status), nullable=False, default=None)
+    submission_status: Mapped[BuildStatus | None] = mapped_column(
+        IntEnumSmallInt(BuildStatus), nullable=False, default=None
+    )
     width: Mapped[int | None] = mapped_column(Integer, default=None)
     """Declared width in blocks; None means unknown."""
     height: Mapped[int | None] = mapped_column(Integer, default=None)
@@ -224,7 +226,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
             raise InvalidStateError(
                 tr(
                     t"builds-build-instantiated-directly = Build cannot be "
-                    t"instantiated directly; construct a category subclass or a BuildDraft."
+                    t"instantiated directly; construct a category subclass or a BuildInput."
                 )
             )
 
@@ -306,7 +308,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
             return EditAccess.FULL
         if account_id is None or account_id != self.submitter_account_id:
             return EditAccess.NONE
-        return EditAccess.FULL if self.submission_status is Status.PENDING else EditAccess.SHOWCASE_TAGS
+        return EditAccess.FULL if self.submission_status is BuildStatus.PENDING else EditAccess.SHOWCASE_TAGS
 
     def copy_for_edit(self, *, source_messages: tuple[MessageRef, ...] | None = None) -> Build:
         """Create an unsaved copy for previewing edits, without ORM history.

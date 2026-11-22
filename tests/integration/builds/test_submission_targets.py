@@ -20,7 +20,7 @@ from squid.core.builds.application import BuildService
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.core.builds.domain import BuildCategory, Status
+from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.repository import BuildRepository
 from squid.core.builds.models import Build, BuildLink, DoorBuild, ExtenderBuild
@@ -134,7 +134,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     account_page = await transact(
         repository,
         lambda uow: uow.builds.list_page(
-            statuses=frozenset({Status.PENDING}), submitter_account_id=account_id, after_id=None, limit=10
+            statuses=frozenset({BuildStatus.PENDING}), submitter_account_id=account_id, after_id=None, limit=10
         ),
     )
     assert {build.category for build in account_page} == set(BuildCategory)
@@ -208,7 +208,7 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
     account_id = await seed_account_and_version(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     confirmed = submission_build(BuildCategory.OTHER, account_id)
-    confirmed.submission_status = Status.CONFIRMED
+    confirmed.submission_status = BuildStatus.APPROVED
     confirmed.display_name = "Public prototype"
     confirmed.description = "moderation-only description"
     confirmed.extra_info = {"source_submission": {"private": True}}

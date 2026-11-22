@@ -230,7 +230,7 @@ def _public_build(build_id: int) -> PublicBuildSummary:
         revision=1,
         title=f"Build {build_id}",
         display_name=None,
-        status="confirmed",
+        status="approved",
         category="Door",
         dimensions=PublicBuildDimensions(width=2, height=3, depth=4),
         creators=(),
@@ -541,7 +541,7 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    with pytest.raises(NoMatchingRecordCategoryError, match="No confirmed build"):
+    with pytest.raises(NoMatchingRecordCategoryError, match="No approved build"):
         await service.lookup_or_materialize(
             RecordLookupRequest(
                 kind=BuildKind.DOOR,

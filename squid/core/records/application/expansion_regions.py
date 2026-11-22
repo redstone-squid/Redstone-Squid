@@ -114,7 +114,7 @@ class DoorRangeAnalysis:
 
 @dataclass(frozen=True, slots=True)
 class DoorRangeResult:
-    """A live analysis of confirmed facts, without a persistent record identity."""
+    """A live analysis of approved facts, without a persistent record identity."""
 
     query: DoorRangeQuery
     evaluated_at: datetime

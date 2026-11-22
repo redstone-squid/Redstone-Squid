@@ -18,11 +18,11 @@ held by one or more qualifying builds, such as the smallest 3×3 piston door.
 
 1. Run `/build submit`. You can leave the command options blank and enter the
    details in the private form.
-2. Choose the build category and fill in the sections. Credit the creators and
+2. Choose the build kind and fill in the sections. Credit the creators and
    include the Minecraft versions the design works in. Use **Files** to manage
    attachments. For a door, the opening size and the size of the full mechanism
    are two separate measurements.
-3. Open **Preview** to check the build card, then press **Submit**. If the form
+3. Open **Preview** to check the build card, then press **Submit draft**. If the form
    flags missing or invalid details, fix them and submit again.
 
 The form saves your answers as you go. Use `/build drafts` to return to an

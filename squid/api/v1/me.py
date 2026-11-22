@@ -48,7 +48,7 @@ from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, Me
 from squid.core.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
 from squid.core.accounts.models import AccountIdentity
 from squid.core.builds.application import PublicBuildSummary
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import (
@@ -93,7 +93,7 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
 UserCaller = NamedDependency[SkipValidation[Caller]]
 RefreshCaller = NamedDependency[SkipValidation[Caller]]
 ManageCaller = NamedDependency[SkipValidation[Caller]]
-_ALL_STATUSES = frozenset(Status)
+_ALL_STATUSES = frozenset(BuildStatus)
 
 
 @get(
@@ -515,7 +515,7 @@ async def list_my_builds(
     """List the caller's own submissions, including the ones still awaiting review.
 
     This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
-    pending and denied builds, which the public search path deliberately cannot return.
+    pending and rejected builds, which the public search path deliberately cannot return.
     """
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError

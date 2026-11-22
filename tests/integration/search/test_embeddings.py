@@ -154,12 +154,12 @@ async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_f
         await session.execute(
             update(SearchDocument)
             .where(SearchDocument.id == first)
-            .values(embedding=[1.0] + [0.0] * 1535, embedding_model="test-model", status="confirmed")
+            .values(embedding=[1.0] + [0.0] * 1535, embedding_model="test-model", status="approved")
         )
         await session.execute(
             update(SearchDocument)
             .where(SearchDocument.id == second)
-            .values(embedding=[0.0, 1.0] + [0.0] * 1534, embedding_model="test-model", status="confirmed")
+            .values(embedding=[0.0, 1.0] + [0.0] * 1534, embedding_model="test-model", status="approved")
         )
         await session.execute(
             update(SearchDocument)
@@ -172,7 +172,7 @@ async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_f
             .values(
                 embedding=[1.0] + [0.0] * 1535,
                 embedding_model="test-model",
-                status="confirmed",
+                status="approved",
                 title="Unrelated",
                 normalized_title="unrelated",
                 fuzzy_text="unrelated",
@@ -201,7 +201,7 @@ async def test_failed_vector_lookup_preserves_lexical_results_and_the_read_scope
         await session.execute(
             update(SearchDocument)
             .where(SearchDocument.id == identifier)
-            .values(status="confirmed", embedding=[1.0] + [0.0] * 1535, embedding_model="test-model")
+            .values(status="approved", embedding=[1.0] + [0.0] * 1535, embedding_model="test-model")
         )
     request = SearchRequest("build", mode=SearchMode.SEMANTIC, scope=SearchScope.BUILDS)
     parsed = SearchQueryParser().parse(request.query)

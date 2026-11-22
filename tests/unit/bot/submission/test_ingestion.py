@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.bot.submission import ingestion
 from squid.core.actors import Actor
 from squid.core.builds.application.inference import BuildInferenceInput
-from squid.core.builds.domain import BuildCategory, BuildDraft
+from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.submissions.application.drafts import StoredDraft
 from squid.core.submissions.application.finalization import (
     DraftPreparationSnapshot,
@@ -145,7 +145,7 @@ def message(*, files: bool = False) -> discord.Message:
 
 
 def candidate() -> InferenceCandidate:
-    return InferenceCandidate(uuid4(), uuid4(), 7, BuildDraft(category=BuildCategory.DOOR))
+    return InferenceCandidate(uuid4(), uuid4(), 7, BuildInput(category=BuildCategory.DOOR))
 
 
 async def test_complete_candidate_uses_shared_finalization(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,7 +157,7 @@ async def test_complete_candidate_uses_shared_finalization(monkeypatch: pytest.M
 
 
 async def test_unknown_category_is_retained_without_inventing_a_door(monkeypatch: pytest.MonkeyPatch) -> None:
-    item = replace(candidate(), facts=BuildDraft())
+    item = replace(candidate(), facts=BuildInput())
     h = setup(monkeypatch, (item,))
     await ingestion.ingest_message_bundle([message()], [], h.services, model="test")
     h.materialize.assert_not_awaited()
@@ -190,7 +190,7 @@ async def test_each_candidate_receives_only_its_unshared_files(monkeypatch: pyte
 async def test_unknown_category_still_keeps_shared_files_unassigned(monkeypatch: pytest.MonkeyPatch) -> None:
     source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://cdn.discordapp.com/source.png", 4)
     known = replace(candidate(), source_files=(source,))
-    unknown = replace(candidate(), facts=BuildDraft(), source_files=(source,))
+    unknown = replace(candidate(), facts=BuildInput(), source_files=(source,))
     h = setup(monkeypatch, (known, unknown))
 
     await ingestion.admit_candidates(h.services, (known, unknown), actor=Actor(account_id=7))

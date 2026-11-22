@@ -9,13 +9,13 @@ from whenever import Instant
 
 from squid.core.builds.domain import (
     BuildCategory,
-    BuildDraft,
+    BuildInput,
+    BuildStatus,
     DoorDraftDetails,
     DoorOrientationLiteral,
     ExtenderDraftDetails,
     Info,
     MediaTypeLiteral,
-    Status,
 )
 from squid.core.builds.domain.credits import Credit, name_credits
 from squid.core.builds.domain.expansion import DoorExpansion
@@ -84,7 +84,7 @@ class BuildDraftPayload:
     """
 
     category: BuildCategory | None = None
-    submission_status: Status | None = None
+    submission_status: BuildStatus | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
@@ -134,7 +134,7 @@ class BuildDraftPayload:
     retraction_time: int | None = None
 
     @classmethod
-    def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:
+    def from_draft(cls, draft: BuildInput) -> BuildDraftPayload:
         """Capture inferred values without storing SQLAlchemy state."""
         detail_names = {item.name for kind in (DoorDraftDetails, ExtenderDraftDetails) for item in fields(kind)}
         values: dict[str, Any] = {
@@ -162,7 +162,7 @@ class BuildDraftPayload:
         ]
         return cls(**values)
 
-    def to_draft(self) -> BuildDraft:
+    def to_draft(self) -> BuildInput:
         """Restore editable facts from the captured payload."""
         values = {item.name: getattr(self, item.name) for item in fields(self)}
         legacy_names = values.pop("creators_ign")
@@ -198,4 +198,4 @@ class BuildDraftPayload:
                     values["details"] = DoorDraftDetails(**door_values)
                 elif has_extender:
                     values["details"] = ExtenderDraftDetails(**extender_values)
-        return BuildDraft(**values)
+        return BuildInput(**values)

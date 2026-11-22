@@ -17,13 +17,13 @@ def _compile(query: str) -> tuple[str, dict[str, object]]:
 
 
 def test_compiler_preserves_full_boolean_semantics_with_bound_values() -> None:
-    sql, parameters = _compile('door OR (status:confirmed NOT title:"slow door")')
+    sql, parameters = _compile('door OR (status:approved NOT title:"slow door")')
 
     assert "search_documents.combined_vector @@ plainto_tsquery" in sql
     assert "search_documents.status" in sql
     assert "NOT" in sql
     assert "search_documents.title_vector @@ phraseto_tsquery" in sql
-    assert {"door", "confirmed", "slow door"}.issubset(set(parameters.values()))
+    assert {"door", "approved", "slow door"}.issubset(set(parameters.values()))
     assert "slow door" not in sql
 
 
@@ -100,34 +100,34 @@ def test_backend_predicate_defaults_builds_to_confirmed() -> None:
 
     assert "search_documents.resource_kind" in str(compiled)
     assert "search_documents.status" in str(compiled)
-    assert ["confirmed"] in compiled.params.values()
+    assert ["approved"] in compiled.params.values()
 
 
 def test_explicit_status_cannot_override_confirmed_visibility_default() -> None:
     parser = SearchQueryParser()
     backend = PostgresSearchBackend(unused_session)
-    request = SearchRequest("status:denied", scope=SearchScope.BUILDS)
+    request = SearchRequest("status:rejected", scope=SearchScope.BUILDS)
 
     compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
 
-    assert "denied" in compiled.params.values()
-    assert ["confirmed"] in compiled.params.values()
+    assert "rejected" in compiled.params.values()
+    assert ["approved"] in compiled.params.values()
 
 
 def test_explicit_visibility_policy_is_applied_independently_of_query() -> None:
     parser = SearchQueryParser()
     backend = PostgresSearchBackend(unused_session)
     request = SearchRequest(
-        "status:denied",
+        "status:rejected",
         scope=SearchScope.BUILDS,
-        visible_statuses=frozenset({"pending", "confirmed"}),
+        visible_statuses=frozenset({"pending", "approved"}),
     )
 
     compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
 
     parameters = compiled.params.values()
-    assert "denied" in parameters
-    assert any(set(value) == {"pending", "confirmed"} for value in parameters if isinstance(value, list))
+    assert "rejected" in parameters
+    assert any(set(value) == {"pending", "approved"} for value in parameters if isinstance(value, list))
 
 
 def unused_session() -> AsyncSession:

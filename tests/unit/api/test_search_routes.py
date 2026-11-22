@@ -8,7 +8,7 @@ import pytest
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import build_hit_id, search, suggest_terms
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
@@ -65,7 +65,7 @@ def indexed_build(build_id: int = 42) -> Build:
     return DoorBuild(
         id=build_id,
         submitter_account_id=123,
-        submission_status=Status.CONFIRMED,
+        submission_status=BuildStatus.APPROVED,
         versions=["1.21"],
         door_width=2,
         door_height=2,
@@ -86,7 +86,7 @@ def empty_page() -> SearchPage:
 async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     page = SearchPage(
         hits=(
-            BuildSearchHit(source_id="42", title="Stale projection title", status="confirmed", score=1.5),
+            BuildSearchHit(source_id="42", title="Stale projection title", status="approved", score=1.5),
             RecordSearchHit(
                 source_id="result:7",
                 title="Smallest 2x2",
@@ -138,7 +138,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
     hit = BuildSearchHit(
         "42",
         "Stale title",
-        "confirmed",
+        "approved",
         records=(record,),
         matches=(SearchMatch("record", "result:7", ("trigram",)),),
         title_match=SearchText("Stale title", ((0, 5),)),
@@ -170,13 +170,13 @@ async def test_search_never_widens_build_visibility_past_confirmed() -> None:
     )
 
     request = graph.search.requests[0]
-    assert request.visible_statuses == frozenset({"confirmed"})
+    assert request.visible_statuses == frozenset({"approved"})
 
 
 @pytest.mark.asyncio
 async def test_search_drops_hits_whose_build_has_vanished() -> None:
     page = SearchPage(
-        hits=(BuildSearchHit(source_id="42", title="Gone", status="confirmed"),),
+        hits=(BuildSearchHit(source_id="42", title="Gone", status="approved"),),
         total=1,
         next=None,
         prev=None,

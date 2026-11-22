@@ -2533,3 +2533,55 @@ def test_payload_schema_reset_preserves_input_immutability(
                     connection.execute(text("UPDATE submission_finalization_inputs SET payload = payload"))
     finally:
         engine.dispose()
+
+
+def test_build_review_status_migration_updates_indexed_documents_and_facets(
+    migration_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    parent = "d6b8f4310ae2"
+    revision = "5fa81c27d6b4"
+    command.upgrade(config, parent)
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("""
+                WITH documents AS (
+                    INSERT INTO search_documents
+                        (resource_kind, source_key, title, status, normalized_title, fuzzy_text, source_hash)
+                    VALUES
+                        ('build', '1', 'door', 'confirmed', 'door', 'door', 'test'),
+                        ('build', '2', 'Denied: door', 'denied', 'door', 'door', 'test'),
+                        ('record', 'result:1', 'smallest door', 'resolved', 'door', 'door', 'test')
+                    RETURNING id, status
+                )
+                INSERT INTO search_document_facets (document_id, field_name, text_value)
+                SELECT id, 'status', status FROM documents
+                """)
+            )
+        statuses = text("""
+            SELECT document.status, facet.text_value
+            FROM search_documents AS document
+            JOIN search_document_facets AS facet ON facet.document_id = document.id
+            ORDER BY document.source_key
+            """)
+        command.upgrade(config, revision)
+        with engine.connect() as connection:
+            assert connection.execute(statuses).all() == [
+                ("approved", "approved"),
+                ("rejected", "rejected"),
+                ("resolved", "resolved"),
+            ]
+            assert connection.execute(text("SELECT source_key FROM search_projection_queue")).scalar_one() == "2"
+
+        command.downgrade(config, parent)
+        with engine.connect() as connection:
+            assert connection.execute(statuses).all() == [
+                ("confirmed", "confirmed"),
+                ("denied", "denied"),
+                ("resolved", "resolved"),
+            ]
+    finally:
+        engine.dispose()

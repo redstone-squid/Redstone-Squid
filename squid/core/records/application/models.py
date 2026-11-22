@@ -61,7 +61,7 @@ class CandidateFacet:
 
 @dataclass(frozen=True, slots=True)
 class CandidateBuild:
-    """A confirmed build plus the facts needed to derive its categories."""
+    """A approved build plus the facts needed to derive its categories."""
 
     kind: BuildKind
     candidate: Candidate

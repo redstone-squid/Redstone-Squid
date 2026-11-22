@@ -107,12 +107,12 @@ class Info(TypedDict, total=False):
     source_submission: dict[str, Any]
 
 
-class Status(IntEnum):
-    """The status of a submission."""
+class BuildStatus(IntEnum):
+    """The review status of a build."""
 
     PENDING = 0
-    CONFIRMED = 1
-    DENIED = 2
+    APPROVED = 1
+    REJECTED = 2
 
 
 class EditAccess(Enum):
@@ -356,7 +356,7 @@ class GeneralDraftDetails:
 
 
 @dataclass(kw_only=True)
-class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
+class BuildInput(StagedMedia, StagedTaxonomy, StagedCredits):
     """Build details collected before the category and required fields are known.
 
     This is an in-memory staging object used by inference and build creation.
@@ -369,7 +369,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy, StagedCredits):
     """
 
     category: BuildCategory | None = None
-    submission_status: Status | None = None
+    submission_status: BuildStatus | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 

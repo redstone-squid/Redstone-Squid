@@ -19,7 +19,7 @@ def test_search_page_preserves_discriminated_hits() -> None:
     page = SearchPage(
         hits=(
             RecordSearchHit("r1", "Fastest Door", None, 1, "Door", "fastest", "all-time"),
-            BuildSearchHit("b1", "Door", "confirmed"),
+            BuildSearchHit("b1", "Door", "approved"),
             MetadataSearchHit("m1", "Seamless", "restriction"),
         ),
         total=3,

@@ -12,7 +12,7 @@ from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.core.actors import Actor
 from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
@@ -32,7 +32,7 @@ ACCOUNT = Caller(kind="account", subject="account:1", nodes=UNBOUNDED, account_i
 
 @dataclass(frozen=True)
 class ListPageCall:
-    statuses: frozenset[Status]
+    statuses: frozenset[BuildStatus]
     submitter_account_id: int | None
     sort: BuildListSort
     selector: PageSelector
@@ -50,7 +50,7 @@ class BuildQueryRecorder(BuildQueryService):
     async def list_page(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -93,7 +93,7 @@ class Fakes(NamedTuple):
     permissions: PermissionRecorder
 
 
-def persisted_build(build_id: int, status: Status = Status.PENDING) -> Build:
+def persisted_build(build_id: int, status: BuildStatus = BuildStatus.PENDING) -> Build:
     return DoorBuild(
         id=build_id,
         submitter_account_id=123,
@@ -112,8 +112,8 @@ def fakes(*, builds: list[Build] | None = None, is_admin: bool = False) -> Fakes
 
 
 @pytest.mark.asyncio
-async def test_anonymous_status_filter_defaults_to_confirmed_only() -> None:
-    graph = fakes(builds=[persisted_build(1, Status.CONFIRMED)])
+async def test_anonymous_status_filter_defaults_to_approved_only() -> None:
+    graph = fakes(builds=[persisted_build(1, BuildStatus.APPROVED)])
 
     await list_builds.fn(
         graph.build_queries,
@@ -122,7 +122,7 @@ async def test_anonymous_status_filter_defaults_to_confirmed_only() -> None:
         ANONYMOUS,
     )
 
-    assert graph.build_queries.calls[-1].statuses == frozenset({Status.CONFIRMED})
+    assert graph.build_queries.calls[-1].statuses == frozenset({BuildStatus.APPROVED})
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
             cast(Any, None),
             graph.permissions,
             SERVICE,
-            status=BuildStatusFilter.DENIED,
+            status=BuildStatusFilter.REJECTED,
         )
 
     assert graph.build_queries.calls == []
@@ -170,7 +170,7 @@ async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
             cast(Any, None),
             graph.permissions,
             owned,
-            status=BuildStatusFilter.DENIED,
+            status=BuildStatusFilter.REJECTED,
         )
 
     assert graph.build_queries.calls == []
@@ -202,7 +202,7 @@ async def test_administrator_reads_the_pending_queue() -> None:
         status=BuildStatusFilter.PENDING,
     )
 
-    assert graph.build_queries.calls[-1].statuses == frozenset({Status.PENDING})
+    assert graph.build_queries.calls[-1].statuses == frozenset({BuildStatus.PENDING})
     assert [item.id for item in page.items] == [9]
 
 
@@ -217,13 +217,13 @@ async def test_status_and_query_are_mutually_exclusive() -> None:
             graph.permissions,
             ACCOUNT,
             q="piston",
-            status=BuildStatusFilter.CONFIRMED,
+            status=BuildStatusFilter.APPROVED,
         )
 
 
 @pytest.mark.asyncio
 async def test_id_anchors_address_the_pages_on_either_side() -> None:
-    builds = [persisted_build(9, Status.CONFIRMED), persisted_build(8, Status.CONFIRMED)]
+    builds = [persisted_build(9, BuildStatus.APPROVED), persisted_build(8, BuildStatus.APPROVED)]
     graph = fakes(builds=builds, is_admin=True)
 
     first = await list_builds.fn(
@@ -288,7 +288,7 @@ async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
 
 @pytest.mark.asyncio
 async def test_a_time_sorted_listing_pages_by_offset() -> None:
-    graph = fakes(builds=[persisted_build(9, Status.CONFIRMED)], is_admin=True)
+    graph = fakes(builds=[persisted_build(9, BuildStatus.APPROVED)], is_admin=True)
 
     page = await list_builds.fn(
         graph.build_queries,
@@ -322,12 +322,12 @@ async def test_an_unlisted_sort_field_is_refused() -> None:
 
 @pytest.mark.asyncio
 async def test_submitters_see_their_own_builds_in_every_status() -> None:
-    graph = fakes(builds=[persisted_build(5), persisted_build(4, Status.DENIED)])
+    graph = fakes(builds=[persisted_build(5), persisted_build(4, BuildStatus.REJECTED)])
 
     page = await list_my_builds.fn(graph.build_queries, ACCOUNT)
 
     call = graph.build_queries.calls[-1]
-    assert call.statuses == frozenset(Status)
+    assert call.statuses == frozenset(BuildStatus)
     assert call.submitter_account_id == 1
     assert [item.id for item in page.items] == [5, 4]
 

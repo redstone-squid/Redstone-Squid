@@ -119,7 +119,7 @@ async def test_delivery_disables_mentions_and_completes_the_claim_once(worker: D
     text = view.children[0]
     assert isinstance(text, discord.ui.TextDisplay)
     assert text.content == (
-        "Build #42 was confirmed.\nhttps://example.test/builds/42\n\n"
+        "Build #42 was approved.\nhttps://example.test/builds/42\n\n"
         "View your inbox and manage updates with `/notifications`."
     )
     assert worker.send.await_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}

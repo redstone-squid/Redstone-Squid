@@ -204,7 +204,7 @@ class RecordSubscriptionFilter:
                 tr(t"notifications-record-filter-predicate-limit = a record filter must contain at least one predicate")
             )
         _validate_values(self.build_kinds, _BUILD_KINDS, "build kind")
-        _validate_values(self.criteria, _RECORD_CRITERIA, "base title")
+        _validate_values(self.criteria, _RECORD_CRITERIA, "record criterion")
         _validate_values(self.version_scopes, _VERSION_SCOPES, "version scope")
         if len({predicate.tag_id for predicate in self.tags}) != len(self.tags):
             raise ValidationError(

@@ -46,12 +46,12 @@ def search_help(
         fields = (
             sl.paragraph(
                 tr(
-                    t"search-reference-record-scope = Record filters describe the record. To filter by build size "
+                    t"search-reference-record-scope = Record filters describe the record. To filter by build dimensions "
                     t"or creator, search Builds instead."
                 )
             ),
             _entry(
-                tr(t"search-reference-label-record-type = Record type"),
+                tr(t"search-reference-label-record-type = Record criterion"),
                 md_tr(t"search-reference-record-type = `criterion:` {criteria}"),
             ),
             _entry(

@@ -19,7 +19,7 @@ from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
@@ -159,7 +159,7 @@ def _component(view: Any) -> BuildEditScreen | None:
 
 
 def _door() -> DoorBuild:
-    return DoorBuild(id=1, submission_status=Status.PENDING, submitter_account_id=1)
+    return DoorBuild(id=1, submission_status=BuildStatus.PENDING, submitter_account_id=1)
 
 
 async def test_edit_route_opens_the_workspace() -> None:
@@ -208,7 +208,7 @@ async def test_recovery_route_reloads_current_state_before_authorizing() -> None
     latest = DoorBuild(
         id=1,
         revision=4,
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=1,
         version_spec="1.21.4",
     )
@@ -225,7 +225,7 @@ async def test_recovery_route_reloads_current_state_before_authorizing() -> None
 
 
 async def test_recovery_route_limits_a_confirmed_builds_submitter_to_its_tags() -> None:
-    latest = DoorBuild(id=1, revision=4, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    latest = DoorBuild(id=1, revision=4, submission_status=BuildStatus.APPROVED, submitter_account_id=1)
     bot = _bot(latest, allowed=False, account_id=1)
     interaction = _interaction(bot)
 
@@ -239,7 +239,7 @@ async def test_recovery_route_limits_a_confirmed_builds_submitter_to_its_tags() 
 
 async def test_in_session_reload_reauthorizes_the_reloaded_non_pending_build() -> None:
     original = _door()
-    latest = DoorBuild(id=1, revision=2, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    latest = DoorBuild(id=1, revision=2, submission_status=BuildStatus.APPROVED, submitter_account_id=1)
     bot = _bot(latest, allowed=False, account_id=1)
     interaction = _interaction(bot)
     request = await sd.request(interaction)

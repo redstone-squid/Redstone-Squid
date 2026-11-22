@@ -220,7 +220,7 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     assert reopened.workspace.draft.snapshot.answers["display_name"] == "Saved name"
     assert reopened.workspace.manifest.revision == reopened.workspace.draft.snapshot.schema_revision
     assert "Build name: Saved name" in rendered_text(reopened)
-    assert "Submit" in labels(reopened.render())
+    assert "Submit draft" in labels(reopened.render())
 
 
 @pytest.mark.parametrize(
@@ -332,7 +332,7 @@ async def test_overview_is_one_card_within_discord_limits(category: str) -> None
     assert not payload_problems(payload)
     # Every section has its own Edit button, and the files row offers to add files.
     assert labels(editor.render()).count("Edit") == len(editor.workspace.sections)
-    assert {"Add files", "Preview", "Submit"} <= set(labels(editor.render()))
+    assert {"Add files", "Preview", "Submit draft"} <= set(labels(editor.render()))
     for section in editor.workspace.sections:
         for chunk in modal_chunks(section):
             event = press()
@@ -347,8 +347,8 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
     text = rendered_text(editor)
     # Creators, schematic access, door size, and door type; the build size is optional.
     assert "4 required fields are empty" in text
-    assert "Door size: ⚠️ *Required*" in text
-    assert "Build size" not in text
+    assert "Opening size: ⚠️ *Required*" in text
+    assert "Build dimensions" not in text
     assert not find(editor.render(), sl.semantic.ActionControl, key="submit").available
 
     with transaction() as tx:
@@ -380,7 +380,7 @@ async def test_modal_sections_open_in_place_and_keep_the_overview() -> None:
     await submit_modal(event, {"capture_size": "3x4x5", "version_compatibility": None})
     answers = editor.workspace.draft.snapshot.answers
     assert (answers["capture_width"], answers["capture_height"], answers["capture_depth"]) == (3, 4, 5)
-    assert "Build size: 3 x 4 x 5" in rendered_text(editor)
+    assert "Build dimensions: 3 x 4 x 5" in rendered_text(editor)
 
     # The modal was opened at revision 0, so a second submission from it is stale.
     await submit_modal(event, {"capture_size": "9x9x9", "version_compatibility": None})
@@ -433,17 +433,17 @@ async def test_door_size_may_omit_depth_but_not_width() -> None:
     await editor._edit_section("door_geometry", event)
     await submit_modal(event, {"opening_size": "2 x 3", "door_orientation": "door"})
     assert "opening_depth" not in editor.workspace.draft.snapshot.answers
-    assert "Door size: 2 x 3 x ?" in rendered_text(editor)
-    assert "Door size: 2 x 3 x ? —" not in rendered_text(editor)
+    assert "Opening size: 2 x 3 x ?" in rendered_text(editor)
+    assert "Opening size: 2 x 3 x ? —" not in rendered_text(editor)
 
     event = press()
     await editor._edit_section("door_geometry", event)
     await submit_modal(event, {"opening_size": "? x 3", "door_orientation": "door"})
-    assert "Door size: ? x 3 x ? — ⚠️ Required" in rendered_text(editor)
+    assert "Opening size: ? x 3 x ? — ⚠️ Required" in rendered_text(editor)
 
 
 def test_size_input_rejects_text_that_is_not_a_size() -> None:
-    field = _DimensionsField(key="capture_size", label="Build size", required=True)
+    field = _DimensionsField(key="capture_size", label="Build dimensions", required=True)
     assert field.parse(" 5x7x4 ") == "5x7x4"
     assert field.parse("5*7") == "5*7"
     with pytest.raises(FormValueError):
@@ -572,7 +572,7 @@ async def test_live_projection_moves_from_creating_to_done() -> None:
     await editor.workspace.projection.reload()
     assert editor.workspace.phase is Phase.CREATING
     assert "Creating your build" in rendered_text(editor)
-    assert "Submit" not in labels(editor.render())
+    assert "Submit draft" not in labels(editor.render())
     assert "Edit" not in labels(editor.render())
 
     drafts.current = replace(drafts.current, snapshot=replace(drafts.current.snapshot, status=DraftStatus.SUBMITTED))
@@ -607,7 +607,7 @@ async def test_needs_changes_lists_issues_the_submitter_can_act_on() -> None:
     text = rendered_text(editor)
     assert "- Credits: Too short" in text
     assert "Choose the main one under **Files**" in text
-    assert "Submit" in labels(editor.render())
+    assert "Submit draft" in labels(editor.render())
 
 
 async def test_waiting_for_files_hides_processing_issues_and_submit() -> None:
@@ -624,7 +624,7 @@ async def test_waiting_for_files_hides_processing_issues_and_submit() -> None:
     assert "Waiting for your files" in text
     assert "still being processed" not in text
     assert "Refresh" in labels(editor.render())
-    assert "Submit" not in labels(editor.render())
+    assert "Submit draft" not in labels(editor.render())
 
 
 async def test_pressing_edit_on_a_catalogue_section_opens_a_second_message() -> None:

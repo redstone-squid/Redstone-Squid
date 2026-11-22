@@ -26,7 +26,7 @@ const builds = [
     revision: 3,
     title: "Copper Bolt 5×5",
     display_name: "Copper Bolt",
-    status: "confirmed",
+    status: "approved",
     category: "door",
     dimensions: { width: 9, height: 7, depth: 4 },
     creators: ["CircuitSage", "红石猫"],
@@ -47,7 +47,7 @@ const builds = [
     revision: 1,
     title: "Observerless Iris",
     display_name: null,
-    status: "confirmed",
+    status: "approved",
     category: "entrance",
     dimensions: { width: 12, height: 12, depth: 5 },
     creators: ["Space Builder"],
@@ -65,7 +65,7 @@ const builds = [
     revision: 2,
     title: "Slim Piston Extender",
     display_name: null,
-    status: "confirmed",
+    status: "approved",
     category: "extender",
     dimensions: { width: 3, height: 5, depth: 8 },
     creators: ["CircuitSage"],
@@ -284,7 +284,8 @@ async function routeRequest(request: Request): Promise<Response> {
     return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
-  if (url.pathname === `/v1/records/${recordDetail.record_id}`) return json(recordDetail satisfies PublicRecordDetail);
+  if (url.pathname === `/v1/records/${recordDetail.record_id}`)
+    return json(recordDetail satisfies PublicRecordDetail);
   if (url.pathname === `/v1/records/${expandableRecord.record_id}`) return json(expandableRecord);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 

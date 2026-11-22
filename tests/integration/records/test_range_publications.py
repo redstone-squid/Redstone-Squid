@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.errors import InvalidStateError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -149,7 +149,7 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         await session.flush()
         door = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             expansion=family(branch(volume="10n")).expansion,
         )
@@ -158,7 +158,7 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         build_id = door.id
         fixed = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=6,
             door_height=3,
@@ -366,7 +366,7 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
         session.add_all(
             DoorBuild(
                 submitter_account_id=account.id,
-                submission_status=Status.CONFIRMED,
+                submission_status=BuildStatus.APPROVED,
                 orientation="Door",
                 door_width=width,
                 door_height=3,

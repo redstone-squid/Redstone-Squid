@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.models import Message
@@ -123,7 +123,7 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
             insert(Build).values(
                 id=BUILD_ID,
                 category="Other",
-                submission_status=Status.PENDING,
+                submission_status=BuildStatus.PENDING,
                 submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
             )
         )
@@ -803,7 +803,7 @@ async def test_deferred_kind_subtype_invariant_rejects_invalid_final_shapes(
                 await session.execute(
                     insert(Build).values(
                         id=BUILD_ID + 1,
-                        submission_status=Status.PENDING,
+                        submission_status=BuildStatus.PENDING,
                         submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
                     )
                 )

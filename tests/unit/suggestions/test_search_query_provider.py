@@ -71,16 +71,16 @@ async def test_a_field_value_is_read_from_the_index() -> None:
         ("criterion:unknown", []),
     ],
 )
-async def test_base_titles_are_suggested_without_indexed_records(query: str, expected: list[str]) -> None:
+async def test_record_criteria_are_suggested_without_indexed_records(query: str, expected: list[str]) -> None:
     result, facets = await suggest(query)
 
     assert [item.value for item in result.items] == expected
     assert facets.calls == []
     assert result.replacement is not None
-    assert (result.replacement.start, result.replacement.end) == (11, len(query))
+    assert (result.replacement.start, result.replacement.end) == (len("criterion:"), len(query))
 
 
-async def test_base_title_suggestions_respect_the_limit() -> None:
+async def test_record_criterion_suggestions_respect_the_limit() -> None:
     instance, _ = provider()
     result = await instance.suggest(SuggestionRequest(source="search_query", query="criterion:", limit=2))
 
@@ -96,7 +96,7 @@ async def test_version_scopes_are_suggested_without_indexed_records() -> None:
 
 async def test_catalogue_completions_use_the_scoped_registry() -> None:
     instance, _ = provider()
-    for scope, status in (("builds", "confirmed"), ("records", "resolved")):
+    for scope, status in (("builds", "approved"), ("records", "resolved")):
         result = await instance.suggest(
             SuggestionRequest(source="search_query", query="status:", context={"scope": scope})
         )

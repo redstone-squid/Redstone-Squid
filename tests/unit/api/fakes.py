@@ -25,7 +25,7 @@ from squid.core.auth.application.web import WebSessionService
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
-from squid.core.builds.domain.models import Status
+from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build
 from squid.core.cli_auth.application import CliAuthorizationService
@@ -283,7 +283,7 @@ class MockBuildQueries(BuildQueryService):
     async def list_page(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,

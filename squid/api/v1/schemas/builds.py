@@ -11,7 +11,7 @@ from squid.core.builds.application.edit_schema import BuildPatch as BuildPatch
 from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 
@@ -20,11 +20,11 @@ class BuildStatusFilter(StrEnum):
     """Moderation state selectable on the authoritative build collection."""
 
     PENDING = "pending"
-    CONFIRMED = "confirmed"
-    DENIED = "denied"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
-    def to_domain(self) -> Status:
-        return Status[self.name]
+    def to_domain(self) -> BuildStatus:
+        return BuildStatus[self.name]
 
 
 class BuildLinks(BaseModel):

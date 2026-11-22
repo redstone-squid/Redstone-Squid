@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build, DoorBuild
@@ -100,7 +100,7 @@ class PublicBuildSummary:
         """Copy display fields from a persisted build.
 
         The caller must check visibility first; this method does not require the
-        build to be confirmed.
+        build to be approved.
         """
         # ORM identity columns may still be None before flush.
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -174,7 +174,7 @@ class BuildQueryRepository(Protocol):
     async def list_page(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None,
         sort: BuildListSort,
         offset: int,
@@ -186,7 +186,7 @@ class BuildQueryRepository(Protocol):
     async def count(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None,
     ) -> int: ...
 
@@ -216,14 +216,14 @@ class BuildQueryService:
             return await uow.builds.get_by_id(build_id)
 
     async def get_public(self, build_id: int) -> Build:
-        """Return a confirmed build, or raise BuildNotFoundError.
+        """Return a approved build, or raise BuildNotFoundError.
 
         Missing, pending, and denied builds produce the same error so this public
-        lookup does not reveal unconfirmed submissions.
+        lookup does not reveal builds awaiting review.
         """
         async with self._uow_factory() as uow:
             build = await uow.builds.get_by_id(build_id)
-            if build is None or build.submission_status is not Status.CONFIRMED:
+            if build is None or build.submission_status is not BuildStatus.APPROVED:
                 raise BuildNotFoundError(build_id)
             return build
 
@@ -244,7 +244,7 @@ class BuildQueryService:
     async def list_page(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,

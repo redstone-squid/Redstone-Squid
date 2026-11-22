@@ -65,7 +65,7 @@ class ResultPager:
         self.session = session
         self.request = request
         self.query = query
-        self.statuses = request.visible_statuses if request.visible_statuses is not None else frozenset({"confirmed"})
+        self.statuses = request.visible_statuses if request.visible_statuses is not None else frozenset({"approved"})
 
     async def page(
         self, predicate: ColumnElement[bool], order: ResultOrder, *, warnings: tuple[str, ...] = ()

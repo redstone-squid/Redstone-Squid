@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.models import ComputationBatch, RebuildSummary
@@ -28,7 +28,7 @@ async def seed_door(sessions: async_sessionmaker[AsyncSession]) -> int:
         await session.flush()
         door = DoorBuild(
             submitter_account_id=account.id,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Door",
             door_width=2,
             door_height=2,

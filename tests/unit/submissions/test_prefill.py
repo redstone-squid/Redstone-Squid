@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.builds.models import BuildLink
 from squid.core.submissions.application.forms import build_submission_manifest
 from squid.core.submissions.application.prefill import project_submission
@@ -12,14 +12,14 @@ from squid.core.submissions.domain.normalization import normalize_submission
 
 
 def test_missing_category_is_retained_for_correction() -> None:
-    result = project_submission(BuildDraft(), build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
+    result = project_submission(BuildInput(), build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
     assert result.category is None
     assert result.answers == {}
     assert result.unresolved == ("category",)
 
 
 def test_known_labels_become_keys_and_unknown_names_remain_proposals() -> None:
-    draft = BuildDraft(
+    draft = BuildInput(
         category=BuildCategory.DOOR,
         patterns=["Regular", "New pattern"],
         ai_generated=True,
@@ -47,7 +47,7 @@ def test_known_labels_become_keys_and_unknown_names_remain_proposals() -> None:
 
 def test_discord_drafts_do_not_keep_an_exported_version() -> None:
     # From form revision 4 only capture clients are asked which version a build was exported from.
-    draft = BuildDraft(category=BuildCategory.DOOR, version_spec="Java 1.21.0")
+    draft = BuildInput(category=BuildCategory.DOOR, version_spec="Java 1.21.0")
     result = project_submission(
         draft,
         build_submission_manifest(),
@@ -59,7 +59,7 @@ def test_discord_drafts_do_not_keep_an_exported_version() -> None:
 
 
 def test_compatibility_range_is_not_an_exact_source_version() -> None:
-    draft = BuildDraft(
+    draft = BuildInput(
         category=BuildCategory.DOOR,
         version_spec="1.20+",
         versions=["Java 1.21.0"],
@@ -81,7 +81,7 @@ def test_compatibility_range_is_not_an_exact_source_version() -> None:
 
 def test_invalid_inferred_values_are_flagged_for_correction() -> None:
     result = project_submission(
-        BuildDraft(category=BuildCategory.OTHER, width=-1),
+        BuildInput(category=BuildCategory.OTHER, width=-1),
         build_submission_manifest(),
         {},
         origin=SubmissionOrigin.DISCORD,
@@ -91,7 +91,7 @@ def test_invalid_inferred_values_are_flagged_for_correction() -> None:
 
 
 def test_names_inference_could_not_resolve_become_proposals() -> None:
-    draft = BuildDraft(
+    draft = BuildInput(
         category=BuildCategory.DOOR,
         patterns=["Regular"],
         component_restrictions=["Observerless"],
@@ -116,7 +116,7 @@ def test_names_inference_could_not_resolve_become_proposals() -> None:
 
 
 def test_general_pattern_fields_are_added_without_rewriting_pinned_forms() -> None:
-    source = BuildDraft(category=BuildCategory.ENTRANCE, extra_info={"unknown_patterns": ["Spiral Staircase"]})
+    source = BuildInput(category=BuildCategory.ENTRANCE, extra_info={"unknown_patterns": ["Spiral Staircase"]})
     current = project_submission(source, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
     pinned = project_submission(source, build_submission_manifest(revision=7), {}, origin=SubmissionOrigin.DISCORD)
 
@@ -127,7 +127,7 @@ def test_general_pattern_fields_are_added_without_rewriting_pinned_forms() -> No
 
 
 def test_external_links_are_form_answers_in_revision_six_and_remain_references_on_older_forms() -> None:
-    source = BuildDraft(
+    source = BuildInput(
         category=BuildCategory.DOOR,
         links=[
             BuildLink(url="https://imgur.com/a/example", media_type="image"),
@@ -144,7 +144,7 @@ def test_external_links_are_form_answers_in_revision_six_and_remain_references_o
 
 
 def test_unknown_restrictions_retain_their_categories_through_normalization() -> None:
-    source = BuildDraft(
+    source = BuildInput(
         category=BuildCategory.DOOR,
         extra_info={
             "unknown_restrictions": {

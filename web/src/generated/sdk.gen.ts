@@ -138,9 +138,9 @@ export const browserAuthorizationCallback = <ThrowOnError extends boolean = fals
 /**
  * GetBuild
  *
- * Return one confirmed public build.
+ * Return one approved public build.
  *
- * Pending and denied builds return 404, as do missing builds. This endpoint does
+ * Pending and rejected builds return 404, as do missing builds. This endpoint does
  * not expose unpublished submissions, even to callers who can view them elsewhere.
  */
 export const buildsGet = <ThrowOnError extends boolean = false>(options: Options<BuildsGetData, ThrowOnError>): RequestResult<BuildsGetResponses, BuildsGetErrors, ThrowOnError> => (options.client ?? client).get<BuildsGetResponses, BuildsGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}', ...options });
@@ -167,7 +167,7 @@ export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * ListBuilds
  *
- * Search confirmed builds, or list builds with a selected moderation status.
+ * Search approved builds, or list builds with a selected moderation status.
  *
  * Supplying q selects indexed search and cannot be combined with status. Search
  * uses offset pagination. Without q, results come from the build repository;
@@ -596,7 +596,7 @@ export const accountMinecraftRefresh = <ThrowOnError extends boolean = false>(op
  * List the caller's own submissions, including the ones still awaiting review.
  *
  * This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
- * pending and denied builds, which the public search path deliberately cannot return.
+ * pending and rejected builds, which the public search path deliberately cannot return.
  */
 export const accountBuildsList = <ThrowOnError extends boolean = false>(options?: Options<AccountBuildsListData, ThrowOnError>): RequestResult<AccountBuildsListResponses, AccountBuildsListErrors, ThrowOnError> => (options?.client ?? client).get<AccountBuildsListResponses, AccountBuildsListErrors, ThrowOnError>({
     security: [{
@@ -1079,21 +1079,21 @@ export const recordsGetDoorRangePoint = <ThrowOnError extends boolean = false>(o
 /**
  * ListBuildSchematics
  *
- * List analyzed schematics attached to a confirmed build.
+ * List analyzed schematics attached to a approved build.
  */
 export const buildSchematicsList = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicsListData, ThrowOnError>): RequestResult<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics', ...options });
 
 /**
  * GetSchematicContent
  *
- * Download explicitly published original bytes from a confirmed build.
+ * Download explicitly published original bytes from a approved build.
  */
 export const buildSchematicContentGet = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicContentGetData, ThrowOnError>): RequestResult<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicContentGetResponses, BuildSchematicContentGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics/{schematic_id}/content', ...options });
 
 /**
  * RenderBuildSchematic
  *
- * Return a PNG preview of a confirmed build's primary schematic.
+ * Return a PNG preview of a approved build's primary schematic.
  *
  * Omitted camera parameters use deployment defaults. Reuse a stored preview
  * when its recipe matches; otherwise render it during this request.

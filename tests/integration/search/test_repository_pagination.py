@@ -62,7 +62,7 @@ async def seed_builds(
                 title=title,
                 normalized_title=title.casefold(),
                 fuzzy_text=title.casefold(),
-                status="confirmed",
+                status="approved",
                 source_hash=f"hash-{index}",
             )
             session.add(document)
@@ -98,7 +98,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
                 source_hash=f"record-{result_id}",
                 document_data={
                     "holder_build_ids": holders,
-                    "criterion": title.split()[0].casefold(),
+                    "base_title": title.split()[0].casefold(),
                     "version_scope": "all_time",
                     "metric": {"volume": 24},
                     "holder_metrics": {str(holder): {"volume": 24, "width": width} for holder in holders},
@@ -114,7 +114,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
             session.add(
                 SearchDocumentFacet(
                     document_id=document.id,
-                    field_name="criterion",
+                    field_name="base_title",
                     ordinal=0,
                     text_value=title.split()[0].casefold(),
                 )
@@ -286,7 +286,7 @@ def request(query: str, *, offset: int = 0, page_size: int = 2, sort: SearchSort
         page_size=page_size,
         offset=offset,
         sort=sort,
-        visible_statuses=frozenset({"confirmed"}),
+        visible_statuses=frozenset({"approved"}),
     )
 
 
@@ -311,9 +311,9 @@ async def test_filter_only_offsets_partition_the_matches_without_overlap(
     await seed_builds(async_session_factory, ["Alpha door", "Bravo door", "Charlie door", "Delta door"])
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
-    first = await search(backend, request("status:confirmed"))
-    second = await search(backend, request("status:confirmed", offset=2))
-    past_the_end = await search(backend, request("status:confirmed", offset=4))
+    first = await search(backend, request("status:approved"))
+    second = await search(backend, request("status:approved", offset=2))
+    past_the_end = await search(backend, request("status:approved", offset=4))
 
     assert [hit.title for hit in first.hits] == ["Alpha door", "Bravo door"]
     assert [hit.title for hit in second.hits] == ["Charlie door", "Delta door"]
@@ -334,8 +334,8 @@ async def test_a_document_with_several_sort_values_is_paged_once(
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     sort = SearchSort("width", SortDirection.ASCENDING)
 
-    first = await search(backend, request("status:confirmed", sort=sort))
-    second = await search(backend, request("status:confirmed", offset=2, sort=sort))
+    first = await search(backend, request("status:approved", sort=sort))
+    second = await search(backend, request("status:approved", offset=2, sort=sort))
 
     assert [hit.title for hit in first.hits] == ["Alpha door", "Bravo door"]
     assert [hit.title for hit in second.hits] == ["Charlie door"]
@@ -354,8 +354,8 @@ async def test_sort_direction_picks_the_extreme_value_it_orders_by(
     )
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
-    ascending = await search(backend, request("status:confirmed", sort=SearchSort("width", SortDirection.ASCENDING)))
-    descending = await search(backend, request("status:confirmed", sort=SearchSort("width", SortDirection.DESCENDING)))
+    ascending = await search(backend, request("status:approved", sort=SearchSort("width", SortDirection.ASCENDING)))
+    descending = await search(backend, request("status:approved", sort=SearchSort("width", SortDirection.DESCENDING)))
 
     assert [hit.title for hit in ascending.hits] == ["Alpha door", "Bravo door"]
     assert [hit.title for hit in descending.hits] == ["Alpha door", "Bravo door"]
@@ -373,7 +373,7 @@ async def test_documents_without_the_sort_field_come_last(
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     sort = SearchSort("width", SortDirection.ASCENDING)
 
-    page = await search(backend, request("status:confirmed", page_size=3, sort=sort))
+    page = await search(backend, request("status:approved", page_size=3, sort=sort))
 
     assert [hit.title for hit in page.hits] == ["Charlie door", "Bravo door", "Alpha door"]
     assert page.total == 3
@@ -402,10 +402,10 @@ async def test_public_title_suggestions_share_search_visibility(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     documents = (
-        ("build", "confirmed", "Piston confirmed"),
-        ("build", "CONFIRMED", "Piston uppercase"),
+        ("build", "approved", "Piston approved"),
+        ("build", "APPROVED", "Piston uppercase"),
         ("build", "pending", "Piston pending"),
-        ("build", "denied", "Piston denied"),
+        ("build", "rejected", "Piston rejected"),
         ("build", None, "Piston unclassified"),
         ("record", None, "Piston record"),
         ("tag", None, "Piston metadata"),
@@ -425,7 +425,7 @@ async def test_public_title_suggestions_share_search_visibility(
         )
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     query = SearchQueryParser().parse("piston")
-    public_titles = {"Piston confirmed", "Piston uppercase", "Piston record", "Piston metadata"}
+    public_titles = {"Piston approved", "Piston uppercase", "Piston record", "Piston metadata"}
 
     assert set(await transact(backend, lambda uow: uow.search.suggest(query, limit=25))) == public_titles
     public = await search(backend, SearchRequest(query="piston", scope=SearchScope.ALL, page_size=25))

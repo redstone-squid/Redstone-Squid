@@ -18,7 +18,7 @@ from squid.core.builds.application.services import (
     BuildService,
 )
 from squid.core.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
-from squid.core.builds.domain import BuildCategory, ShowcaseTag, Status, normalize_tag_name
+from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag, normalize_tag_name
 from squid.core.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
@@ -43,13 +43,13 @@ class FakeBuildRepository(FakeBuildEditing):
         self.events.append("save")
         self.saved.append(build)
 
-    async def set_status(self, build: Build, status: Status) -> None:
+    async def set_status(self, build: Build, status: BuildStatus) -> None:
         build.submission_status = status
 
-    async def confirm(self, build: Build) -> None:
+    async def approve(self, build: Build) -> None:
         self.confirmed.append(build)
 
-    async def deny(self, build: Build) -> None:
+    async def reject(self, build: Build) -> None:
         self.denied.append(build)
 
     async def get_for_update(self, build_id: int) -> Build | None:
@@ -282,7 +282,7 @@ def existing_build() -> DoorBuild:
     return DoorBuild(
         id=42,
         submitter_account_id=1,
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
         description="old",
         extra_info={
@@ -407,8 +407,8 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     service = build_service(repository, locks)
     cutoff = Instant.from_utc(2026, 7, 29)
 
-    await service.confirm(42, actor="test", operation="edit", source="test")
-    await service.deny(42, actor="test", operation="edit", source="test")
+    await service.approve(42, actor="test", operation="edit", source="test")
+    await service.reject(42, actor="test", operation="edit", source="test")
     await service.clean_stale_locks(older_than=cutoff)
 
     assert [build.id for build in repository.confirmed] == [existing_build.id]
@@ -450,7 +450,7 @@ async def test_prepare_for_account_does_not_require_a_discord_identity() -> None
     assert build.source_submission_draft_id == draft_id
     assert build.display_name == "Workshop prototype"
     assert build.category is BuildCategory.OTHER
-    assert build.submission_status is Status.PENDING
+    assert build.submission_status is BuildStatus.PENDING
     assert repository.saved == []
 
 
@@ -536,7 +536,7 @@ class TestAuthorizedEditing:
 
     async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
         """Confirmation ends the submitter's permission to edit through ownership alone."""
-        existing_build.submission_status = Status.CONFIRMED
+        existing_build.submission_status = BuildStatus.APPROVED
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
@@ -616,13 +616,15 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     assert build.extra_info == {}
 
 
-@pytest.mark.parametrize("status", [Status.CONFIRMED, Status.DENIED])
-async def test_vote_outcome_leaves_an_existing_decision_unchanged(existing_build: DoorBuild, status: Status) -> None:
+@pytest.mark.parametrize("status", [BuildStatus.APPROVED, BuildStatus.REJECTED])
+async def test_vote_outcome_leaves_an_existing_decision_unchanged(
+    existing_build: DoorBuild, status: BuildStatus
+) -> None:
     existing_build.submission_status = status
     repository = FakeBuildRepository(existing_build)
     service = build_service(repository)
-    await service.confirm(42, actor="vote_worker", source="vote_outcome")
-    await service.deny(42, actor="vote_worker", source="vote_outcome")
+    await service.approve(42, actor="vote_worker", source="vote_outcome")
+    await service.reject(42, actor="vote_worker", source="vote_outcome")
     assert repository.confirmed == []
     assert repository.denied == []
     assert existing_build.submission_status is status

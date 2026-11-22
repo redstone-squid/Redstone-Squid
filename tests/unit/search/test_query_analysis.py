@@ -22,6 +22,6 @@ def test_only_positive_text_clauses_participate_in_ranking() -> None:
 
 
 def test_structured_and_negative_text_query_is_filter_only() -> None:
-    query = SearchQueryParser().parse("status:confirmed volume<50 NOT title:broken")
+    query = SearchQueryParser().parse("status:approved volume<50 NOT title:broken")
 
     assert is_filter_only(query)

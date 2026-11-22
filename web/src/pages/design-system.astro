@@ -145,7 +145,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   >
     <Layout pattern="grid">
       <Notice tone="success" title={t("workbench.ready-to-explore")}>
-        {t("workbench.confirmed-description")}
+        {t("workbench.approved-description")}
       </Notice>
       <Notice tone="info" title={t("workbench.no-matching-builds")}>
         {t("workbench.empty-description")}
@@ -161,7 +161,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       <h3>{t("workbench.status-badges")}</h3>
       <Layout pattern="row" gap="compact">
         <Badge>{t("workbench.empty")}</Badge>
-        <Badge tone="success">{t("workbench.confirmed")}</Badge>
+        <Badge tone="success">{t("workbench.approved")}</Badge>
         <Badge tone="warning">{t("workbench.unavailable")}</Badge>
       </Layout>
     </div>

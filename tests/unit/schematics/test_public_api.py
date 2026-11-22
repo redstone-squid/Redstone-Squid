@@ -16,7 +16,7 @@ from squid.api.v1.schematics import (
     router,
 )
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
@@ -71,7 +71,7 @@ class ConfirmedBuilds(BuildQueryService):
         return DoorBuild(
             id=build_id,
             submitter_account_id=1,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             versions=["1.21"],
             door_width=2,
             door_height=2,

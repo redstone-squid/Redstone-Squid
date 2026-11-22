@@ -8,7 +8,7 @@ import squid_ui_widgets as sp
 from squid.bot.catalogue.record_display import record_standings
 from squid.bot.submission.build_card import build_card
 from squid.bot.ui import tr
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -41,7 +41,7 @@ class CataloguePreview(sd.Screen):
         )
         build = DoorBuild(
             id=holders[0],
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             width=3,
             height=4,
             depth=2,

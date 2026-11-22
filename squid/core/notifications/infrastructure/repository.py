@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.infrastructure.consent import account_consent_current
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.core.notifications.domain import (
@@ -506,7 +506,7 @@ class PostgresNotificationRepository:
 
     async def _materialize_staff_submission(self, session: AsyncSession, event: DomainEvent) -> None:
         build = await session.get(Build, event.aggregate_id)
-        if build is None or build.submission_status != Status.PENDING:
+        if build is None or build.submission_status != BuildStatus.PENDING:
             return
         staff_account_ids = (
             await session.execute(
@@ -538,7 +538,7 @@ class PostgresNotificationRepository:
 
     async def _materialize_build_outcome(self, session: AsyncSession, event: DomainEvent) -> None:
         build = await session.get(Build, event.aggregate_id)
-        expected_status = Status.CONFIRMED if event.event_type == "build.confirmed" else Status.DENIED
+        expected_status = BuildStatus.APPROVED if event.event_type == "build.confirmed" else BuildStatus.REJECTED
         if (
             build is None
             or build.submission_status != expected_status

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.permissions.application.ports import PermissionUnitOfWork
@@ -74,11 +74,11 @@ class BuildRepository(BuildEditing, Protocol):
 
     async def save(self, build: Build) -> None: ...
 
-    async def set_status(self, build: Build, status: Status) -> None: ...
+    async def set_status(self, build: Build, status: BuildStatus) -> None: ...
 
-    async def confirm(self, build: Build) -> None: ...
+    async def approve(self, build: Build) -> None: ...
 
-    async def deny(self, build: Build) -> None: ...
+    async def reject(self, build: Build) -> None: ...
 
 
 class BuildLockManager(Protocol):

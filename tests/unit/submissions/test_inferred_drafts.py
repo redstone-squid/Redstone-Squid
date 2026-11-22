@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.errors import ValidationError
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
@@ -67,7 +67,7 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
         uuid4(),
         uuid4(),
         7,
-        BuildDraft(category=BuildCategory.DOOR, details=DoorDraftDetails(door_width=3), source_messages=(source,)),
+        BuildInput(category=BuildCategory.DOOR, details=DoorDraftDetails(door_width=3), source_messages=(source,)),
     )
     first = await materialize_candidate(
         candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms()), actor=Actor(account_id=7)
@@ -87,7 +87,7 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
 
 async def test_unknown_category_requires_explicit_selection() -> None:
     drafts = Drafts()
-    candidate = InferenceCandidate(uuid4(), uuid4(), 7, BuildDraft())
+    candidate = InferenceCandidate(uuid4(), uuid4(), 7, BuildInput())
     with pytest.raises(ValidationError):
         await materialize_candidate(
             candidate,
@@ -110,7 +110,7 @@ async def test_unknown_category_requires_explicit_selection() -> None:
 async def test_expansion_survives_materialization_outside_the_form_answers() -> None:
     document = expansion_document()
     candidate = InferenceCandidate(
-        uuid4(), uuid4(), 7, BuildDraft(category=BuildCategory.DOOR, details=DoorDraftDetails(door_expansion=document))
+        uuid4(), uuid4(), 7, BuildInput(category=BuildCategory.DOOR, details=DoorDraftDetails(door_expansion=document))
     )
     stored = await materialize_candidate(
         candidate,

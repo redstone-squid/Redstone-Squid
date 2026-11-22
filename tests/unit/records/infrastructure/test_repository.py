@@ -54,7 +54,7 @@ def test_gap_rows_carry_the_definition_title() -> None:
         subtitle="All-time",
         materialization_source=MaterializationSource.EAGER,
     )
-    definition.record_title = Record(
+    definition.record = Record(
         criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,

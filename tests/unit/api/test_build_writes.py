@@ -11,7 +11,7 @@ from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
 from squid.core.builds.application import BuildEditPatch, BuildService
-from squid.core.builds.domain import ShowcaseTag, Status
+from squid.core.builds.domain import BuildStatus, ShowcaseTag
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
@@ -26,7 +26,7 @@ ACCOUNT = Caller(
 )
 
 
-def persisted_build(*, submitter_account_id: int = 1, status: Status = Status.PENDING) -> Build:
+def persisted_build(*, submitter_account_id: int = 1, status: BuildStatus = BuildStatus.PENDING) -> Build:
     return DoorBuild(
         id=42,
         submitter_account_id=submitter_account_id,

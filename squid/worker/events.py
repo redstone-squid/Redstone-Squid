@@ -25,7 +25,7 @@ class VoteOutcomeReader(Protocol):
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
 
-    async def confirm(
+    async def approve(
         self,
         build_id: int,
         *,
@@ -36,7 +36,7 @@ class BuildStatusWriter(Protocol):
         correlation_id: str | None = None,
     ) -> object: ...
 
-    async def deny(
+    async def reject(
         self,
         build_id: int,
         *,
@@ -60,7 +60,7 @@ class ApplyBuildVoteOutcomeHandler:
         if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
             return
         if snapshot.result is VoteSessionResult.APPROVED:
-            await self._builds.confirm(
+            await self._builds.approve(
                 snapshot.target.build_id,
                 actor="vote_worker",
                 operation="moderation",
@@ -69,7 +69,7 @@ class ApplyBuildVoteOutcomeHandler:
                 correlation_id=str(event.id),
             )
         elif snapshot.result is VoteSessionResult.DENIED:
-            await self._builds.deny(
+            await self._builds.reject(
                 snapshot.target.build_id,
                 actor="vote_worker",
                 operation="moderation",

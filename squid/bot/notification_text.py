@@ -19,11 +19,11 @@ def notification_summary(kind: NotificationKind, payload: Mapping[str, object]) 
     )
     match kind:
         case NotificationKind.BUILD_CONFIRMED:
-            return tr(t"notifications-confirmed-summary = {build} was confirmed.")
+            return tr(t"notifications-confirmed-summary = {build} was approved.")
         case NotificationKind.BUILD_DENIED:
-            return tr(t"notifications-denied-summary = {build} was denied.")
+            return tr(t"notifications-denied-summary = {build} was rejected.")
         case NotificationKind.CREATOR_BUILD_CONFIRMED:
-            return tr(t"notifications-creator-summary = {build} by a creator you follow was confirmed.")
+            return tr(t"notifications-creator-summary = {build} by a creator you follow was approved.")
         case NotificationKind.STAFF_BUILD_SUBMITTED:
             return tr(t"notifications-review-summary = {build} is awaiting staff review.")
         case NotificationKind.RECORD_GAINED:

@@ -173,7 +173,7 @@ export type BuildSponsor = {
  *
  * Moderation state selectable on the authoritative build collection.
  */
-export type BuildStatusFilter = 'pending' | 'confirmed' | 'denied';
+export type BuildStatusFilter = 'pending' | 'approved' | 'rejected';
 
 /**
  * CandidateGap
@@ -2788,7 +2788,7 @@ export type BuildsGetData = {
 
 export type BuildsGetErrors = {
     /**
-     * No confirmed build with this identifier. A pending build answers 404 as well.
+     * No approved build with this identifier. A pending build answers 404 as well.
      */
     404: ProblemDetail;
     /**
@@ -5761,7 +5761,7 @@ export type BuildSchematicsListErrors = {
      */
     400: ProblemDetail;
     /**
-     * No confirmed build with this identifier. A pending build answers 404 as well.
+     * No approved build with this identifier. A pending build answers 404 as well.
      */
     404: ProblemDetail;
     /**
@@ -5846,7 +5846,7 @@ export type BuildSchematicRenderGetData = {
 
 export type BuildSchematicRenderGetErrors = {
     /**
-     * No confirmed build with this identifier, or it has no schematic attached.
+     * No approved build with this identifier, or it has no schematic attached.
      */
     404: ProblemDetail;
     /**

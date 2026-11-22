@@ -35,7 +35,7 @@ def _field(name: str) -> FieldDefinition:
 
 
 def test_parser_applies_and_before_or_and_supports_implicit_and() -> None:
-    parsed = SearchQueryParser().parse('compact OR title:"seamless door" status:confirmed')
+    parsed = SearchQueryParser().parse('compact OR title:"seamless door" status:approved')
 
     assert parsed.expression == BooleanExpression(
         BooleanOperator.OR,
@@ -45,12 +45,12 @@ def test_parser_applies_and_before_or_and_supports_implicit_and() -> None:
                 BooleanOperator.AND,
                 (
                     FieldExpression(_field("title"), ComparisonOperator.EQUAL, "seamless door", phrase=True),
-                    FieldExpression(_field("status"), ComparisonOperator.EQUAL, "confirmed"),
+                    FieldExpression(_field("status"), ComparisonOperator.EQUAL, "approved"),
                 ),
             ),
         ),
     )
-    assert parsed.normalized == 'compact OR (title:"seamless door" AND status:confirmed)'
+    assert parsed.normalized == 'compact OR (title:"seamless door" AND status:approved)'
 
 
 def test_parser_supports_not_comparisons_and_typed_ranges() -> None:
@@ -204,7 +204,7 @@ def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
     shorthand = SearchQueryParser(scope=SearchScope.RECORDS).parse("Fastest")
     assert isinstance(builds, BuildQuery)
     assert isinstance(builds.expression, FieldExpression)
-    assert builds.expression.value is BuildSearchStatus.CONFIRMED
+    assert builds.expression.value is BuildSearchStatus.APPROVED
     assert isinstance(records, RecordQuery)
     assert isinstance(records.expression, FieldExpression)
     assert records.expression.value is ResolutionStatus.RESOLVED
@@ -219,7 +219,7 @@ def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
         (SearchScope.BUILDS, "criterion:first", "cannot be used"),
         (SearchScope.BUILDS, "status:resolved", "expects one of"),
         (SearchScope.RECORDS, "door OR NOT width:5", "cannot be used"),
-        (SearchScope.RECORDS, "status:confirmed", "expects one of"),
+        (SearchScope.RECORDS, "status:approved", "expects one of"),
         (SearchScope.RECORDS, "kind:other", "expects one of"),
     ],
 )

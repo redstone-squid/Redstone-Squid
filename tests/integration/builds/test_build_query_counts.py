@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole, name_credits
 from squid.core.builds.models import OtherBuild
 from squid.core.messages.domain import MessageSnapshot
@@ -44,7 +44,7 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
     build_ids: list[int] = []
     for index in range(count):
         build = OtherBuild(
-            submission_status=Status.PENDING,
+            submission_status=BuildStatus.PENDING,
             submitter_account_id=account_id,
             versions=["Java 1.21.0"],
             credits=name_credits([f"Builder {index}"], legacy=True),
@@ -73,7 +73,7 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
         builds = await transact(
             repository,
             lambda uow: uow.builds.list_page(
-                statuses=frozenset({Status.PENDING}), submitter_account_id=None, after_id=None, limit=50
+                statuses=frozenset({BuildStatus.PENDING}), submitter_account_id=None, after_id=None, limit=50
             ),
         )
 
@@ -128,7 +128,7 @@ async def test_typed_credits_keep_same_names_separate_and_resolve_verified_subje
         Credit(name="Alex"),
     ]
     build = OtherBuild(
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=account_id,
         credits=credits,
         source_messages=(
@@ -153,7 +153,7 @@ async def test_private_provider_identity_does_not_reveal_credit_ownership_on_a_p
     account_id, _ = await _seed(migrated_session_factory, 1)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     build = OtherBuild(
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=account_id,
         credits=[Credit(name="Private Discord name", kind=CreditKind.DISCORD, subject="123456789")],
     )

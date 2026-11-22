@@ -32,7 +32,7 @@ from squid.core.search.infrastructure.results import ResultOrder, ResultPager
 from squid.core.search.models import SearchDocument
 
 _CANDIDATE_LIMIT = 200
-_PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})
+_PUBLIC_BUILD_STATUSES = frozenset({"approved"})
 _SEMANTIC_WARNING = "Semantic search is temporarily unavailable; showing lexical results."
 logger = logging.getLogger(__name__)
 

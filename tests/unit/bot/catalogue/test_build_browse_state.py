@@ -21,7 +21,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import CataloguePreference
 from squid.core.builds.application import BuildQueryService, BuildService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.messages.domain import MessageRef
 from squid.core.pagination import Page, PageAnchor, PageSelector
@@ -63,7 +63,7 @@ from tests.unit.suggestions.test_services import RecordingProvider
 def _screen(
     *,
     initial_id: int | None = 7,
-    status: Status = Status.CONFIRMED,
+    status: BuildStatus = BuildStatus.APPROVED,
     schematics_available: bool = False,
     schematic_attached: bool = True,
     video_enabled: bool = False,
@@ -193,7 +193,7 @@ async def test_search_opens_full_build_and_preserves_results(records: bool) -> N
     hit = (
         RecordSearchHit("10", "Fastest door", "Java", 7, "Door", "fastest", "all_time")
         if records
-        else BuildSearchHit("7", "Door", "confirmed", "A door")
+        else BuildSearchHit("7", "Door", "approved", "A door")
     )
     service = cast(AsyncMock, screen._search_service)
     service.search.return_value = SearchPage(hits=(hit,), total=1, next=None, prev=None)
@@ -218,7 +218,7 @@ async def test_search_opens_full_build_and_preserves_results(records: bool) -> N
 async def test_sort_keeps_the_focused_build_on_its_new_page(entry: str, monkeypatch: pytest.MonkeyPatch) -> None:
     screen = _screen(initial_id=7 if entry == "direct" else None)
     service = cast(AsyncMock, screen._search_service)
-    hit = BuildSearchHit("7", "Door 7", "confirmed")
+    hit = BuildSearchHit("7", "Door 7", "approved")
     service.search.return_value = SearchPage((hit,), total=1, next=None, prev=None)
     async with stage(screen, owner=object()) as ui:
         if entry == "catalogue":
@@ -229,7 +229,7 @@ async def test_sort_keeps_the_focused_build_on_its_new_page(entry: str, monkeypa
         assert "Build #7" in ui.texts()
 
         service.search.return_value = SearchPage(
-            (BuildSearchHit("9", "Door 9", "confirmed"), hit), total=17, next=None, prev=PageAnchor(offset=0), offset=15
+            (BuildSearchHit("9", "Door 9", "approved"), hit), total=17, next=None, prev=PageAnchor(offset=0), offset=15
         )
         await pick_sort(ui, "-width", monkeypatch)
 
@@ -303,7 +303,7 @@ def test_only_the_submitter_or_an_editor_gets_edit(submitter_account_id: int, ed
 
 @pytest.mark.parametrize("action", ["approve", "reject"])
 async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
-    async with stage(_screen(status=Status.PENDING), owner=object()) as ui:
+    async with stage(_screen(status=BuildStatus.PENDING), owner=object()) as ui:
         await ui.press(ui.key_for(action))
 
         heading = f"## {action.title()} build #7?"
@@ -316,7 +316,7 @@ async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
 
 
 async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
-    screen = _screen(status=Status.PENDING)
+    screen = _screen(status=BuildStatus.PENDING)
     await screen.on_load()
     assert screen._selected is not None
     detail = cast(_BuildDetail, screen._selected._detail.value)
@@ -333,7 +333,7 @@ async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
 
 
 async def test_schematic_controls_survive_opening_and_cancelling_review() -> None:
-    screen = _screen(status=Status.PENDING, schematics_available=True)
+    screen = _screen(status=BuildStatus.PENDING, schematics_available=True)
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("schematic-tools"))
         ui.control(ui.key_for("schematic-info"))
@@ -371,7 +371,7 @@ async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer:
     screen = _screen()
     queries = cast(AsyncMock, screen._queries)
     queries.list_page.return_value = Page(
-        items=(DoorBuild(id=8 if newer else 6, submission_status=Status.CONFIRMED),),
+        items=(DoorBuild(id=8 if newer else 6, submission_status=BuildStatus.APPROVED),),
         total=20,
         next=None,
         prev=None,
@@ -380,7 +380,7 @@ async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer:
         await ui.press(ui.key_for("linked-build.item-previous" if newer else "linked-build.item-next"))
         assert f"Build #{8 if newer else 6}" in ui.texts()
         queries.list_page.assert_awaited_once_with(
-            statuses=frozenset({Status.CONFIRMED, Status.PENDING}),
+            statuses=frozenset({BuildStatus.APPROVED, BuildStatus.PENDING}),
             selector=PageSelector(before_id=7) if newer else PageSelector(after_id=7),
             page_size=1,
         )
@@ -420,7 +420,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
     async with stage(_screen(initial_id=None, records=records, initial_records=True), owner=object()) as ui:
         ui.assert_within_limits()
         assert "## Records" in ui.texts()
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("all-criteria"))
         await ui.select(ui.key_for("records.open"), ["10"])
         await ui.press(ui.key_for("holder-7"))
         assert "Build #7" in ui.texts()
@@ -497,7 +497,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
     screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         if browser == "records":
-            await ui.press(ui.key_for("all-standings"))
+            await ui.press(ui.key_for("all-criteria"))
         else:
             await ui.press(ui.key_for("record-tools"))
             if browser == "titles":
@@ -509,7 +509,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
 
 
 async def test_full_build_card_fits_with_catalogue_navigation() -> None:
-    screen = _screen(status=Status.PENDING, schematics_available=True)
+    screen = _screen(status=BuildStatus.PENDING, schematics_available=True)
     screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
     async with stage(screen, owner=object()) as ui:
         ui.control(ui.key_for("linked-build.item-next"))
@@ -586,7 +586,7 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
         assert "## Search results" in ui.texts()
 
 
-async def test_record_versions_filter_compact_standings_and_search() -> None:
+async def test_record_versions_filter_browse_and_search() -> None:
     records = AsyncMock(spec=RecordService)
 
     async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedRecordResult]:
@@ -660,7 +660,7 @@ async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, query, "-created_at")
         assert ui.control(ui.key_for("smallest")).payload["style"] == 3
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 2
         await ui.press(ui.key_for("fastest"))
         assert screen._guided is not None
         assert "(criterion:fastest OR criterion:smallest)" in screen._guided.query.text
@@ -671,7 +671,7 @@ async def test_record_buttons_edit_typed_title_filters(query: str) -> None:
             SearchQueryParser().parse("criterion:fastest AND door").expression,
         )
         await ui.press(ui.key_for("remove-0" if screen._query.text.startswith("criterion") else "remove-1"))
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 3
         assert screen._guided.query.text == "door"
         assert screen._sort == "-created_at"
 
@@ -690,7 +690,7 @@ async def test_record_buttons_leave_complex_title_filters_to_the_editor(query: s
     screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, query)
-        for key in ("smallest", "fastest", "first", "all-standings"):
+        for key in ("smallest", "fastest", "first", "all-criteria"):
             assert ui.control(ui.key_for(key)).payload["disabled"]
 
 
@@ -699,9 +699,9 @@ async def test_all_types_preserves_literal_keywords() -> None:
     screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "fastest AND criterion:smallest")
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("all-criteria"))
         assert screen._query.text == "(fastest)"
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 3
 
 
 async def test_all_types_clears_title_filters_and_preserves_other_filters() -> None:
@@ -712,14 +712,14 @@ async def test_all_types_clears_title_filters_and_preserves_other_filters() -> N
     async with stage(screen, owner=object()) as ui:
         assert ui.control(ui.key_for("smallest")).payload["label"] == "Smallest"
         await ui.press(ui.key_for("smallest"))
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("all-criteria"))
         assert screen._query.text == ""
         assert screen._results is None
         assert ui.control(ui.key_for("smallest")).payload["style"] == 2
         assert "## Records" in ui.texts()
         # With a typed query, the query and sort stay and the search reruns without types.
         await submit_search(ui, "door criterion:smallest", "-created_at")
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("all-criteria"))
         assert screen._query.text == "door"
         assert screen._sort == "-created_at"
         assert service.search.call_args.args[0].query == "door"
@@ -842,27 +842,29 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
     queries.list_page.side_effect = (
         Page(
             items=tuple(
-                DoorBuild(id=identifier, submission_status=Status.CONFIRMED) for identifier in range(27, 12, -1)
+                DoorBuild(id=identifier, submission_status=BuildStatus.APPROVED) for identifier in range(27, 12, -1)
             ),
             total=16,
             next=PageAnchor(after_id=13),
             prev=None,
         ),
         Page(
-            items=(DoorBuild(id=12, submission_status=Status.CONFIRMED),),
+            items=(DoorBuild(id=12, submission_status=BuildStatus.APPROVED),),
             total=16,
             next=None,
             prev=PageAnchor(offset=0),
         ),
     )
-    queries.get.side_effect = lambda identifier: DoorBuild(id=identifier, submission_status=Status.CONFIRMED)
+    queries.get.side_effect = lambda identifier: DoorBuild(id=identifier, submission_status=BuildStatus.APPROVED)
     async with stage(screen, owner=object()) as ui:
         await ui.select(ui.key_for("builds.open"), ["13"])
         assert "Build #13" in ui.texts()
         await ui.press(ui.key_for("builds.item-next"))
         assert "Build #12" in ui.texts()
         queries.list_page.assert_awaited_with(
-            statuses=frozenset({Status.CONFIRMED, Status.PENDING}), selector=PageSelector(offset=15), page_size=15
+            statuses=frozenset({BuildStatus.APPROVED, BuildStatus.PENDING}),
+            selector=PageSelector(offset=15),
+            page_size=15,
         )
 
 
@@ -884,7 +886,7 @@ async def test_search_help_precedes_the_selected_build() -> None:
 
 
 async def test_help_keeps_an_open_builds_schematic_tools() -> None:
-    screen = _screen(status=Status.PENDING, schematics_available=True, video_enabled=True)
+    screen = _screen(status=BuildStatus.PENDING, schematics_available=True, video_enabled=True)
     screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
     async with stage(screen, owner=object()) as ui:
         await ui.press(ui.key_for("schematic-tools"))
@@ -923,7 +925,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
     screen = _screen(initial_id=None, records=record_service, initial_records=records)
     queries = cast(AsyncMock, screen._queries)
     queries.list_page.return_value = Page(
-        items=tuple(DoorBuild(id=index, submission_status=Status.CONFIRMED) for index in range(1, 26)),
+        items=tuple(DoorBuild(id=index, submission_status=BuildStatus.APPROVED) for index in range(1, 26)),
         total=25,
         next=None,
         prev=None,
@@ -933,7 +935,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
         hits=tuple(
             RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
             if records
-            else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
+            else BuildSearchHit(str(index), f"Door {index}", "approved", "A detailed door description")
             for index in range(1, 26)
         ),
         total=25,
@@ -964,11 +966,11 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
     screen = _screen(initial_id=None)
     queries = cast(AsyncMock, screen._queries)
 
-    async def page(*, statuses: frozenset[Status], selector: PageSelector, page_size: int) -> Page[Build]:
-        assert Status.CONFIRMED in statuses
+    async def page(*, statuses: frozenset[BuildStatus], selector: PageSelector, page_size: int) -> Page[Build]:
+        assert BuildStatus.APPROVED in statuses
         return Page(
             items=tuple(
-                DoorBuild(id=index + 1, submission_status=Status.CONFIRMED)
+                DoorBuild(id=index + 1, submission_status=BuildStatus.APPROVED)
                 for index in range(selector.offset, selector.offset + page_size)
             ),
             total=400,
@@ -1056,7 +1058,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         )
     )
     cast(AsyncMock, screen._search_service).search.return_value = SearchPage(
-        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "confirmed", "A door") for index in range(5)),
+        hits=tuple(BuildSearchHit(str(index), f"Door {index}", "approved", "A door") for index in range(5)),
         total=5,
         next=None,
         prev=None,
@@ -1128,14 +1130,14 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
         ui.assert_within_limits()
 
 
-async def test_records_default_to_standings_and_highlight_active_controls() -> None:
+async def test_records_default_to_browse_and_highlight_active_controls() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     async with stage(screen, owner=object()) as ui:
         assert "## Records" in ui.texts()
         assert "## Find a record" not in ui.texts()
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 3
         assert ui.control(ui.key_for("guided-search")).payload["style"] == 2
         ui.control(ui.key_for("open-id"))
         await ui.press(ui.key_for("guided-search"))
@@ -1149,11 +1151,11 @@ async def test_records_default_to_standings_and_highlight_active_controls() -> N
         await form.submit({"query": "kind:door"})
         assert "## Search help" not in ui.texts()
         # A typed query is not a type, so All types stays highlighted until a type is chosen.
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 3
         await ui.press(ui.key_for("smallest"))
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 2
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 2
         await ui.press(ui.key_for("reset"))
-        assert ui.control(ui.key_for("all-standings")).payload["style"] == 3
+        assert ui.control(ui.key_for("all-criteria")).payload["style"] == 3
         assert screen._guided is not None
         assert screen._guided.query.text == ""
         assert "## Records" in ui.texts()
@@ -1185,7 +1187,7 @@ async def test_expanded_editor_and_help_fit_together(records: bool) -> None:
         hits=tuple(
             RecordSearchHit(str(index), f"Fastest door {index}", "Java", index, f"Door {index}", "fastest", "all_time")
             if records
-            else BuildSearchHit(str(index), f"Door {index}", "confirmed", "A detailed door description")
+            else BuildSearchHit(str(index), f"Door {index}", "approved", "A detailed door description")
             for index in range(25)
         ),
         total=25,
@@ -1245,7 +1247,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         assert screen._query.text == shared
         assert screen._sort == ""
 
-        build_query = 'kind:door (title:"vault door" OR piston) width<=5 status:confirmed'
+        build_query = 'kind:door (title:"vault door" OR piston) width<=5 status:approved'
         await submit_search(ui, build_query, "-width")
         await ui.press(ui.key_for("all-records"))
         assert (
@@ -1259,7 +1261,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         await ui.press(ui.key_for("all-builds"))
         request = service.search.call_args.args[0]
         assert request.scope is SearchScope.BUILDS
-        assert request.query == "kind:door AND width<=5 AND status:confirmed"
+        assert request.query == "kind:door AND width<=5 AND status:approved"
         assert screen._sort == "-width"
 
         await ui.press(ui.key_for("reset"))
@@ -1372,7 +1374,7 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
     screen._render_build = lambda build: render_build_card(build, MediaPreviewClient())
     build = DoorBuild(
         id=7,
-        submission_status=Status.CONFIRMED,
+        submission_status=BuildStatus.APPROVED,
         width=10,
         height=12,
         depth=3,
@@ -1383,7 +1385,7 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
     )
     build.creators_ign = ["Builder One", "Builder Two", "Builder Three"]
     cast(AsyncMock, screen._queries).get.return_value = build
-    hit = BuildSearchHit("7", "Door 7", "confirmed", "A detailed door description")
+    hit = BuildSearchHit("7", "Door 7", "approved", "A detailed door description")
     cast(AsyncMock, screen._search_service).search.return_value = SearchPage(hits=(hit,), total=1, next=None, prev=None)
     async with stage(screen, owner=object()) as ui:
         await toggle_help(ui)
@@ -1434,7 +1436,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         assert screen._query.text == ""
         assert service.search.call_args.args[0].query == ""
         assert screen._results is not None
-        await ui.press(ui.key_for("all-standings"))
+        await ui.press(ui.key_for("all-criteria"))
         assert screen._results is None
         form = await ui.press_for_form(ui.key_for("advanced"))
         await form.submit({"query": "status:unresolved"})

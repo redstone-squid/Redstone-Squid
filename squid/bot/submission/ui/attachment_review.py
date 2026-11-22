@@ -20,7 +20,7 @@ from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
 from squid.config import attachment_review_archive_root
 from squid.core.builds.application import BuildEditPatch
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -93,7 +93,7 @@ class AttachmentReview(sd.Screen[None]):
             build_id = await builds.next_attachment_review(0)
         if build_id is not None:
             screen.build = await builds.get(build_id)
-            if screen.build is None or screen.build.submission_status is not Status.CONFIRMED:
+            if screen.build is None or screen.build.submission_status is not BuildStatus.APPROVED:
                 msg = "This build is unavailable for attachment review."
                 raise ScreenUnavailable(msg)
         return screen
@@ -169,13 +169,13 @@ class AttachmentReview(sd.Screen[None]):
         ids.discard(current)
         for identity in sorted(ids, key=lambda value: (value < current, value)):
             candidate = await builds.get(identity)
-            if candidate and candidate.submission_status is Status.CONFIRMED:
+            if candidate and candidate.submission_status is BuildStatus.APPROVED:
                 for index, issue in enumerate(candidate.extra_info.get("attachment_failures", [])):
                     if issue["attachment_id"] == attachment_id:
                         self.build = candidate
                         self.index = index
                         return
-        await event.notice("No other confirmed build from these messages has this attachment awaiting review.")
+        await event.notice("No other approved build from these messages has this attachment awaiting review.")
 
     async def _advance(self, event: sl.ActionEventView) -> None:
         assert self.build is not None
@@ -200,7 +200,7 @@ class AttachmentReview(sd.Screen[None]):
         builds = request.client.services.builds
         assert shown.id is not None
         build = await builds.get(shown.id)
-        if build is None or build.submission_status is not Status.CONFIRMED or shown.revision != build.revision:
+        if build is None or build.submission_status is not BuildStatus.APPROVED or shown.revision != build.revision:
             await event.notice("This build changed. Reopen attachment review.")
             return
         failures = build.extra_info.get("attachment_failures", [])

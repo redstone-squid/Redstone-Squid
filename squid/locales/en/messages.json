@@ -3455,7 +3455,7 @@
     ]
   },
   "bot-settings-view-confirmed-builds": {
-    "fingerprint": "c513fd968a2ee37184935cf9b43d7c1f042530ed43841ae83e5bece867999ab5",
+    "fingerprint": "306a418b7b491ae4f6cfb8787e6bc2024929717cbcbd490f9290b9f997a4df10",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -4001,7 +4001,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/browse.py:1053"
+      "squid/bot/catalogue/browse.py:1051"
     ]
   },
   "bot-submission-build-browse-cancel": {
@@ -4080,7 +4080,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/browse.py:1051"
+      "squid/bot/catalogue/browse.py:1049"
     ]
   },
   "bot-submission-build-browse-open-by-id": {
@@ -4610,7 +4610,7 @@
     ]
   },
   "bot-submission-submit-check-build-size": {
-    "fingerprint": "925ec4d125f3f2c604fecc679bb27b9095b1f8984504f6a96ed43955323cfbbd",
+    "fingerprint": "797885c90aa7ad9d7431e38d64e100f313888a0bb625bfad0a0567534c6af690",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -4619,7 +4619,7 @@
     ]
   },
   "bot-submission-submit-check-door-size": {
-    "fingerprint": "8304f93417435ef1254514f718ca5d8b0df0e2a3104cfd462dfe80814b1553b9",
+    "fingerprint": "7a724f127f5323bee6550cbb5b89e72b9a0317e9cda6a5dd88549c4534aa78d6",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -4646,7 +4646,7 @@
     ]
   },
   "bot-submission-submit-the-whole-build-e-g-x-x": {
-    "fingerprint": "45ab8cef17c1e51874f89717ca442b919f673475680ff136095c639ab4ce1ef3",
+    "fingerprint": "cff9e6fe98539500b720965fcdaeaeebd4dc82ff652f024b418facc623375dd0",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -5917,16 +5917,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/browse.py:1020"
+      "squid/bot/catalogue/browse.py:1019"
     ]
   },
-  "browse-query-all-standings": {
-    "fingerprint": "0cc83f3ce4ef20978ce35ea5ddf8a086ccc6d3da502f23f7076c7dc862a42472",
+  "browse-query-all-records": {
+    "fingerprint": "788ffb0a78ee867d3a3670c1be44cb28e9bd3b0e6b4f2a1fc0451f6f27b24501",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/browse.py:1020"
+      "squid/bot/catalogue/browse.py:1019"
     ]
   },
   "browse-query-summary": {
@@ -6483,7 +6483,7 @@
     ]
   },
   "build-review-reject-effect": {
-    "fingerprint": "80b5feada42de9ec0e607f017a1b1457db50f631070c6ba15d095d14d5c19bc7",
+    "fingerprint": "b67800681f2df04df696b9455aedcb9153f07fc324a6e10d09df9874b8ac76e0",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -6670,12 +6670,12 @@
     ]
   },
   "builds-build-instantiated-directly": {
-    "fingerprint": "4f406e91441c16d7f2830327478e5aba48a034c5e4f34d633ae49e1275928868",
+    "fingerprint": "93c2418d925c3ef901a0abd637a2f06447cd2855c8387b2586473baf89e95faf",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/builds/models.py:225"
+      "squid/core/builds/models.py:227"
     ]
   },
   "builds-check-id-action": {
@@ -7428,7 +7428,7 @@
     ]
   },
   "command-build-submit-build-size-name": {
-    "fingerprint": "7f44f978da14ab4163add4fa513347c0f9a31190eee179185e37c737ea95ab4b",
+    "fingerprint": "db3f3baf686b006193341a1aee562ff92ddead1f049e1e9fbcbf12577e69d066",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -7437,7 +7437,7 @@
     ]
   },
   "command-build-submit-category-name": {
-    "fingerprint": "a5aa35cca82c4bb015ac54c338d20ac6bac03472f4f35700fa2f9fdc34a83dd2",
+    "fingerprint": "18a8567f04ce96d06e32aaf4301e34fc676d142386d28a04c55accb4247b131a",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -7536,7 +7536,7 @@
     ]
   },
   "command-build-submit-door-size-name": {
-    "fingerprint": "44cb9bd86ed87626786f0bf174fde7b9295ff413c07340a5464d629095d9d236",
+    "fingerprint": "e0ea4d281871308afcb070548025f2b01f93bcbecf2c3bb6e478d0e28a6f25b8",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -7545,7 +7545,7 @@
     ]
   },
   "command-build-submit-door-type-name": {
-    "fingerprint": "24faa82f217c3856a5ee936d04544cea374a4f33d40b51286b97248c6bf9c113",
+    "fingerprint": "39c54f2745406ab74857bc7d091ab9540ff4dc8e4162e44f68747e4a0990378b",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -9616,7 +9616,7 @@
     ]
   },
   "draft-editor-build-size": {
-    "fingerprint": "5b7f03236eb0680feb3a0db45e06e7c8a483042bad860f59dc3495be74ad0904",
+    "fingerprint": "6631060689071c6d5c82c923e72ddf51c419e450f57b6930ddcf0ab543456929",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -9653,7 +9653,7 @@
     ]
   },
   "draft-editor-door-size": {
-    "fingerprint": "9fa06c221dfbffa37a3bd38e2c58468be75bcf8a3b659024d63390e1d2de1389",
+    "fingerprint": "1638e77a594a0dcc32ed39156776904dd97e262605dac30c3880a0ad0917048d",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -9931,7 +9931,7 @@
     ]
   },
   "draft-editor-issue-target-rejected": {
-    "fingerprint": "7bcacaa05a62cb28d47cf1e3249933928a939d7a548a1b5597f023be57c90b2d",
+    "fingerprint": "a20e76a3469d4a4aa3d47aaf8f476e709a4acdf68698c97db61bbb47ca31eda5",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -10334,7 +10334,7 @@
     ]
   },
   "draft-editor-status-editing": {
-    "fingerprint": "13bfc41db72d399e39c0a488afa116a1f05b55e5d6f08afa601b6e3c234a840c",
+    "fingerprint": "2be5e4b42058f24d682b251a484b5b195d05a1b24aef890722d580cd3e0a9be5",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -10358,7 +10358,7 @@
     ]
   },
   "draft-editor-status-needs-changes": {
-    "fingerprint": "97b42c583219f1f9cac08ce45bf9191f72d24cd4742470b10864ab5ce116de80",
+    "fingerprint": "09bf752a4a72bd327d423215a6d8f3475a1523c9a50cd038640f5ba9c0cd15fe",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -10367,7 +10367,7 @@
     ]
   },
   "draft-editor-status-waiting": {
-    "fingerprint": "47c6c4ecadac8861691aa1837fade5bdf419e94ff772edb943ed981470110b57",
+    "fingerprint": "3aff3a51c30890683081fb47c91908051e190f85e7a297272378422d9658dfd3",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -10376,7 +10376,7 @@
     ]
   },
   "draft-editor-submit": {
-    "fingerprint": "05277c2289235c3f43a6e5099e3a2d7777dff8465862a78badcbc7656f8ea847",
+    "fingerprint": "4b6f33620166ac5f5ca5b6494d0faf38b2793715c3ecb1a55f4d73fc579e6288",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -10415,7 +10415,7 @@
     ]
   },
   "draft-editor-title-editing": {
-    "fingerprint": "4be7099dffc2d6671281a231f5d4842a01edb0eb28776342ffca91efec9f218c",
+    "fingerprint": "5fc14acff27ee52d250fd05926593f1833ad12e0cb75d99c3e566b33a03442f8",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -10570,7 +10570,7 @@
     ]
   },
   "draft-inference-review": {
-    "fingerprint": "c0168611f72cdc54e1de0711bd623b3fa9917c8c2bd57e3f74f321b8057b875b",
+    "fingerprint": "b29365c91102b7ecc4db9b0500ab537a3c9e316cba5d56d73a97429f1e383869",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -13426,7 +13426,7 @@
     ]
   },
   "notifications-confirmed-summary": {
-    "fingerprint": "2b9e80ddbe98e2a48e068075febeea33017883d11066be8fc724877c11da3e03",
+    "fingerprint": "86a3b1f9e79ae75f444bbcb090ae7f2188f1bf8ddca90b396efff72e78ede80c",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -13441,7 +13441,7 @@
     ]
   },
   "notifications-creator-summary": {
-    "fingerprint": "035496b130a871a901b71a741ccc2f707e8f77838a08312ccaed6384c19968ca",
+    "fingerprint": "4ddba0c3fff204a02fa4108bb5654c2ba13b2218097cd57104385ccdcf809590",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -13483,7 +13483,7 @@
     ]
   },
   "notifications-denied-summary": {
-    "fingerprint": "72fd44c227b159fd44c3f97a3a88fa021c793dd333fda37355f616951605f390",
+    "fingerprint": "0f62db209f7301aae179a1e1c5888669fea19a87187fae22349ba60954fe17e5",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -15357,7 +15357,7 @@
     ]
   },
   "record-browse-no-holders": {
-    "fingerprint": "2aaa9cbc88620c36cd636436b4acf2d128c984f509dbeb9cb44f7b373de2f509",
+    "fingerprint": "42393faa5f5b9eaa6529def74ae0055123671521481361741945e0464ee74e46",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -15399,7 +15399,7 @@
     ]
   },
   "record-browser-all": {
-    "fingerprint": "e4cccf7f02c6c9e74deecd92797d36331971bd5f3a0d920972a21daa8e340000",
+    "fingerprint": "2e8c7a3ac7e566e18456ef1e1ad60ebd4baf11fe95eea10d5c0d0d3324b191ca",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -15757,7 +15757,7 @@
     ]
   },
   "records-no-confirmed-build": {
-    "fingerprint": "38827cbcb0259eca4696e7adddfe8d85e3956f6a684e873a0b6d3cad4867e2b1",
+    "fingerprint": "d4cc574b43b51bb3ba3a6a226c067a2a958c28950dbe6781a4383623410fc519",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -16941,7 +16941,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:226"
+      "squid/core/search/application/fields.py:229"
     ]
   },
   "search-boolean-minimum-operands": {
@@ -17070,7 +17070,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:129"
+      "squid/core/search/application/fields.py:131"
     ]
   },
   "search-expects-iso-date": {
@@ -17085,7 +17085,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:119"
+      "squid/core/search/application/fields.py:121"
     ]
   },
   "search-expects-number": {
@@ -17100,7 +17100,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:111"
+      "squid/core/search/application/fields.py:113"
     ]
   },
   "search-field-base-title": {
@@ -17174,7 +17174,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:102"
+      "squid/core/search/application/fields.py:104"
     ]
   },
   "search-field-height": {
@@ -17655,7 +17655,7 @@
     ]
   },
   "search-reference-label-record-type": {
-    "fingerprint": "3298e0f63ec10ee082f6ce4d15637768ab2723550d5b833993a28b765589dace",
+    "fingerprint": "e1e1210ea076f2c3d0009f6f29d1884cdd805de6845aeb78682aaf1e8af598aa",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -17727,7 +17727,7 @@
     ]
   },
   "search-reference-record-scope": {
-    "fingerprint": "57d964f85aa8a2bc52e088ca76fd49d4351c64efe53236f162c9c0811326329f",
+    "fingerprint": "c938c2e5713cc51a2739c47f1965ac83791aa0e6fe38458fc1e7f3135cfc7f9a",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -17826,7 +17826,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/search/application/fields.py:221"
+      "squid/core/search/application/fields.py:224"
     ]
   },
   "search-search-results-sorted": {
@@ -18462,7 +18462,7 @@
     ]
   },
   "submissions-application-forms-door-geometry": {
-    "fingerprint": "1b392c233833a9ceebf068a51454a38754d2973dfb6fc9695780154e5865dcb1",
+    "fingerprint": "b1d7eb0aeb08843d1ccfd5aa2cc2431f148219b6412c24210a686dec5fe01097",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -20078,7 +20078,7 @@
     ]
   },
   "submit-door-dimensions-help": {
-    "fingerprint": "13cb76b9898f1effd8d80fef463569b83d9f080d2f1648b112d7088d9c0f98e3",
+    "fingerprint": "6cb9fe8301fa4e0bb779ddc79a0bb5002762296e7f2ac810d4fa30d1041481c5",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -20087,7 +20087,7 @@
     ]
   },
   "submit-door-options-only": {
-    "fingerprint": "f7f4c4466c126b8351331e98524196545e9a778cb2e4d7df4d2d195c8500e8a9",
+    "fingerprint": "559126a6f415781f96ee6b244c6c21ee0b0ee7ef849557da5b2d66bde826bf83",
     "attributes": [],
     "has_value": true,
     "arguments": [],

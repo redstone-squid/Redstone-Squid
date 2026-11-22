@@ -13,7 +13,7 @@ from squid.bot.routes import AppRequest, ScreenUnavailable
 from squid.bot.submission.ui import drafts
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
@@ -52,11 +52,11 @@ def test_persistent_button_addresses_the_screen_directly(router: MountedRouter[A
         BuildBrowseScreen.open_detail.custom_id(build_id=10**100)
 
 
-@pytest.mark.parametrize("status", [None, Status.PENDING, Status.CONFIRMED])
+@pytest.mark.parametrize("status", [None, BuildStatus.PENDING, BuildStatus.APPROVED])
 @pytest.mark.parametrize("view_pending", [False, True])
 async def test_build_visibility_is_checked_before_opening(
     monkeypatch: pytest.MonkeyPatch,
-    status: Status | None,
+    status: BuildStatus | None,
     view_pending: bool,
 ) -> None:
     request = MagicMock()
@@ -64,7 +64,7 @@ async def test_build_visibility_is_checked_before_opening(
     build = None if status is None else MagicMock(submission_status=status)
     request.client.services.build_queries.get = AsyncMock(return_value=build)
     monkeypatch.setattr(BuildBrowseScreen, "create", AsyncMock(return_value=screen))
-    allowed = status is Status.CONFIRMED or (status is Status.PENDING and view_pending)
+    allowed = status is BuildStatus.APPROVED or (status is BuildStatus.PENDING and view_pending)
     if allowed:
         opening = await BuildBrowseScreen.open_detail.function(BuildBrowseScreen, request, 12)
         assert opening is not None

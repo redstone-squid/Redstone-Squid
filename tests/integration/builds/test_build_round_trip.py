@@ -22,7 +22,7 @@ from whenever import Instant
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.core.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
 from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.core.builds.domain import BuildCategory, ShowcaseTag, Status
+from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.infrastructure.repository import BuildRepository
 from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
@@ -153,7 +153,7 @@ async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> 
 def _make_build(category: BuildCategory, account_id: int) -> Build:
     """A fully populated build whose taxonomy resolves without loss."""
     common: dict[str, Any] = {
-        "submission_status": Status.PENDING,
+        "submission_status": BuildStatus.PENDING,
         "submitter_account_id": account_id,
         "versions": ["Java 1.21.0"],
         "version_spec": "1.21+",
@@ -321,7 +321,7 @@ async def test_attachment_enrichment_evidence_round_trips_as_nested_json(
 async def test_loaded_status_is_a_status_member(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Check identity as well as equality: Status is an IntEnum.
+    """Check identity as well as equality: BuildStatus is an IntEnum.
 
     A stored integer compares equal to its enum member but lacks .name and fails
     identity checks used by callers.
@@ -335,16 +335,16 @@ async def test_loaded_status_is_a_status_member(
 
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
-    assert loaded.submission_status is Status.PENDING
+    assert loaded.submission_status is BuildStatus.PENDING
 
     await transact(
         repository,
-        lambda uow: uow.builds.confirm(loaded),
+        lambda uow: uow.builds.approve(loaded),
         commit=True,
     )
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert reloaded is not None
-    assert reloaded.submission_status is Status.CONFIRMED
+    assert reloaded.submission_status is BuildStatus.APPROVED
 
 
 async def test_persisting_a_build_creates_no_account(
@@ -472,7 +472,7 @@ async def test_saving_a_build_keeps_newer_source_message_content(
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     source = MessageSnapshot(id=6100, guild_id=4000, channel_id=5000, author_id=7000, content="original")
     build = OtherBuild(
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
         source_messages=(source,),
@@ -515,7 +515,7 @@ async def test_one_message_can_source_several_builds(
     build_ids: list[int] = []
     for _ in range(2):
         build = OtherBuild(
-            submission_status=Status.PENDING,
+            submission_status=BuildStatus.PENDING,
             submitter_account_id=account_id,
             versions=["Java 1.21.0"],
             source_messages=(shared,),
@@ -669,7 +669,7 @@ async def test_an_unknown_door_size_stays_unknown_through_save_and_reload(
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = DoorBuild(
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
         # The column is NOT NULL, so save() normalizes None to False; setting it
@@ -763,7 +763,7 @@ async def test_round_trip_property(
     category, field_values = values
 
     build = BUILD_CLASS_BY_CATEGORY[category](
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
         **field_values,  # type: ignore[arg-type]
@@ -886,14 +886,14 @@ async def test_tracked_status_change_advances_the_revision_once(
     ):
         tracked = await uow.builds.get_for_update(build.id)
         assert tracked is not None
-        await uow.builds.confirm(tracked)
-        assert tracked.submission_status is Status.CONFIRMED
+        await uow.builds.approve(tracked)
+        assert tracked.submission_status is BuildStatus.APPROVED
         await uow.commit()
     async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
         loaded = await uow.builds.get_by_id(build.id)
         assert loaded is not None
         assert loaded.revision == previous_revision + 1
-        assert loaded.submission_status is Status.CONFIRMED
+        assert loaded.submission_status is BuildStatus.APPROVED
 
 
 async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(

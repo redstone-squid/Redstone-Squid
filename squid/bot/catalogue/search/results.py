@@ -11,7 +11,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.search.domain import (
     BuildSearchHit,
@@ -238,7 +238,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
         if self._load_build is None or self._render_build is None:
             return sl.section(sl.heading(self.hit.title), sl.paragraph(_detail_text(self.hit)))
         build = await self._load_build(build_id)
-        if build is None or build.submission_status is not Status.CONFIRMED:
+        if build is None or build.submission_status is not BuildStatus.APPROVED:
             return sl.note(tr(t"build-search-build-unavailable = That build is no longer available."))
         return await self._render_build(build)
 

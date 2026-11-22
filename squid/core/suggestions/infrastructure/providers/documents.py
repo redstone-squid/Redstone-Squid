@@ -76,7 +76,7 @@ class DocumentProvider:
         )
 
 
-PUBLIC_BUILD_STATUSES = ("confirmed",)
+PUBLIC_BUILD_STATUSES = ("approved",)
 PENDING_BUILD_STATUSES = ("pending",)
 
 

@@ -10,7 +10,7 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.ports import BuildUnitOfWork
-from squid.core.builds.domain import BuildDraft
+from squid.core.builds.domain import BuildInput
 from squid.core.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.builds.models import Build
 from squid.core.errors import (
@@ -71,7 +71,7 @@ class RecalculationProposalService:
         owner_account_id: int,
         actor: Actor,
         source_message_id: int,
-        candidate: BuildDraft,
+        candidate: BuildInput,
     ) -> RecalculationProposal:
         """Retain one stable candidate; inference alone never writes the target build."""
         async with self._uow_factory() as uow:

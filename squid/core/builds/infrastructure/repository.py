@@ -25,7 +25,7 @@ from squid.core.builds.application.queries import (
     PublicBuildSummary,
     PublicBuildTag,
 )
-from squid.core.builds.domain import BuildCategory, Credit, CreditAttribution, Info, Status, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildCategory, BuildStatus, Credit, CreditAttribution, Info, UnresolvedTaxonomy
 from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 def _page_filter[S: Select[Any]](
     statement: S,
     *,
-    statuses: frozenset[Status],
+    statuses: frozenset[BuildStatus],
     submitter_account_id: int | None,
 ) -> S:
     """Apply the status and submitter visibility policy shared by page and count queries."""
@@ -107,7 +107,7 @@ def _public_summary_from_selected_row(
     """Map only the columns selected by the public-summary read model."""
     try:
         category = BuildCategory(row["category"])
-        status = Status(row["submission_status"])
+        status = BuildStatus(row["submission_status"])
     except (TypeError, ValueError) as exc:
         msg = "A public build has invalid category or status metadata."
         raise DataIntegrityError(msg, context={"build_id": row.get("id")}) from exc
@@ -212,7 +212,7 @@ class BuildRepository:
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
 
     async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
-        """Return selected public fields for confirmed builds in requested order.
+        """Return selected public fields for approved builds in requested order.
 
         This is deliberately not implemented through ``get_many``: record details do not need
         submitter identities, source messages, moderation notes, embeddings, or attachment
@@ -258,7 +258,7 @@ class BuildRepository:
                     .select_from(builds)
                     .outerjoin(door, door.c.build_id == builds.c.id)
                     .outerjoin(extender, extender.c.build_id == builds.c.id)
-                    .where(builds.c.id.in_(build_ids), builds.c.submission_status == Status.CONFIRMED)
+                    .where(builds.c.id.in_(build_ids), builds.c.submission_status == BuildStatus.APPROVED)
                 )
             )
             .mappings()
@@ -372,7 +372,7 @@ class BuildRepository:
     async def list_page(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         offset: int = 0,
@@ -420,7 +420,7 @@ class BuildRepository:
     async def count(
         self,
         *,
-        statuses: frozenset[Status],
+        statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
     ) -> int:
         """Count the builds a listing can display under a visibility policy."""
@@ -440,7 +440,7 @@ class BuildRepository:
             select(builds.id)
             .where(
                 builds.id > after,
-                builds.submission_status == Status.CONFIRMED,
+                builds.submission_status == BuildStatus.APPROVED,
                 func.jsonb_typeof(builds.extra_info["attachment_failures"]) == "array",
                 builds.extra_info["attachment_failures"][0].is_not(None),
             )
@@ -506,7 +506,7 @@ class BuildRepository:
         build.edited_time = Instant.now()
         submitter_account_id = await self._resolve_submitter_account_id(session, build)
         build.submitter_account_id = submitter_account_id
-        build.submission_status = build.submission_status or Status.PENDING
+        build.submission_status = build.submission_status or BuildStatus.PENDING
         build.ai_generated = build.ai_generated or False
         build.display_name = _normalize_display_name(build.display_name)
         build.submission_time = build.submission_time or Instant.now()
@@ -819,27 +819,27 @@ class BuildRepository:
             )
         )
 
-    async def confirm(self, build: Build) -> None:
-        """Mark a persisted build confirmed, checking and advancing its revision."""
+    async def approve(self, build: Build) -> None:
+        """Mark a persisted build approved, checking and advancing its revision."""
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = "Build ID is missing."
-            raise InvalidStateError(msg, context={"operation": "confirm"})
+            raise InvalidStateError(msg, context={"operation": "approve"})
 
-        await self._set_status(build, Status.CONFIRMED, operation="confirm")
+        await self._set_status(build, BuildStatus.APPROVED, operation="approve")
 
-    async def deny(self, build: Build) -> None:
-        """Mark a persisted build denied, checking and advancing its revision."""
+    async def reject(self, build: Build) -> None:
+        """Mark a persisted build rejected, checking and advancing its revision."""
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             msg = "Build ID is missing."
-            raise InvalidStateError(msg, context={"operation": "deny"})
+            raise InvalidStateError(msg, context={"operation": "reject"})
 
-        await self._set_status(build, Status.DENIED, operation="deny")
+        await self._set_status(build, BuildStatus.REJECTED, operation="reject")
 
-    async def set_status(self, build: Build, status: Status) -> None:
+    async def set_status(self, build: Build, status: BuildStatus) -> None:
         """Write a review status, including PENDING when undoing a decision."""
         await self._set_status(build, status, operation="review")
 
-    async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
+    async def _set_status(self, build: Build, status: BuildStatus, *, operation: str) -> None:
         assert build.id is not None
         edited_time = Instant.now()
         session = self._session()
@@ -869,7 +869,7 @@ class BuildRepository:
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""
         session = self._session()
-        statement = select(Build).where(Build.submission_status == Status.PENDING).options(*_mapper_load_options())
+        statement = select(Build).where(Build.submission_status == BuildStatus.PENDING).options(*_mapper_load_options())
         result = await session.execute(statement)
         return await self._loader.load_many(session, list(result.unique().scalars().all()))
 

@@ -7,10 +7,10 @@ from uuid import UUID
 
 from squid.core.builds.domain import (
     BuildCategory,
+    BuildStatus,
     DoorOrientationLiteral,
     Info,
     ShowcaseTag,
-    Status,
     UnresolvedTaxonomy,
     read_showcase_tags,
 )
@@ -453,5 +453,5 @@ def preview_build(
         build = BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[SubmissionCategory(category)]](**common, patterns=pattern_names)
     build.display_name = text("display_name")
     build.ai_generated = answers.get("ai_generated") is True
-    build.submission_status = Status.PENDING
+    build.submission_status = BuildStatus.PENDING
     return build

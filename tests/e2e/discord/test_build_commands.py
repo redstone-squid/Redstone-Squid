@@ -9,7 +9,7 @@ from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService, BuildService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.search.application import SearchService
@@ -105,7 +105,7 @@ async def test_attachment_reviewer_reaches_end_of_queue_privately() -> None:
 
 class CatalogueQueries(BuildQueryService):
     def __init__(self) -> None:
-        self.pending_build = DoorBuild(id=73, submission_status=Status.PENDING)
+        self.pending_build = DoorBuild(id=73, submission_status=BuildStatus.PENDING)
 
     @override
     async def get(self, build_id: int) -> Build | None:

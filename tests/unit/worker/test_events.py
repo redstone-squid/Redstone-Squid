@@ -42,7 +42,7 @@ class BuildRecorder(BuildService):
         self.denied: list[int] = []
 
     @override
-    async def confirm(
+    async def approve(
         self,
         build_id: int,
         *,
@@ -56,7 +56,7 @@ class BuildRecorder(BuildService):
         return cast(Build, object())
 
     @override
-    async def deny(
+    async def reject(
         self,
         build_id: int,
         *,

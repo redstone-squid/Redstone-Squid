@@ -29,9 +29,9 @@ from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, Searc
 
 logger = logging.getLogger(__name__)
 
-# Public search always restricts results to confirmed builds. This separate filter
+# Public search always restricts results to approved builds. This separate filter
 # also applies when the query itself asks for another status.
-PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
+PUBLIC_SEARCH_STATUSES = frozenset({"approved"})
 
 
 class PublicSearchFieldDTO(DataclassDTO[FieldDefinition]):

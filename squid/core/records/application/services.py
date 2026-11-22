@@ -67,12 +67,12 @@ from squid_i18n import md_tr
 
 
 class RecordComputationService:
-    """Compare confirmed builds and publish replacement record results.
+    """Compare approved builds and publish replacement record results.
 
     Categories group builds by features such as door size and restrictions.
     Within each category, the record criterion selects the comparison: first,
     fastest, smallest, or a combination. An all-time scope considers every
-    confirmed candidate; a current scope considers those supporting the pinned
+    approved candidate; a current scope considers those supporting the pinned
     Minecraft version. Resolution can retain tied holders or report missing
     facts that prevent a decision.
 
@@ -459,7 +459,7 @@ class RecordService:
             )
 
     async def lookup_door(self, request: DoorRecordLookup) -> LiveDoorRecord:
-        """Evaluate one size against current confirmed facts without persisting it.
+        """Evaluate one size against current approved facts without persisting it.
 
         The repository pins a read-only database snapshot before loading related
         facts. Evaluation continues on immutable values after releasing that

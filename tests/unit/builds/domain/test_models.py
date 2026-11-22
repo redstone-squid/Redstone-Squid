@@ -6,11 +6,11 @@ import pytest
 
 from squid.core.builds.domain import (
     BuildCategory,
-    BuildDraft,
+    BuildInput,
+    BuildStatus,
     DoorDraftDetails,
     ExtenderDraftDetails,
     GeneralDraftDetails,
-    Status,
 )
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.domain.titles import format_build_category, format_build_display_title
@@ -24,7 +24,7 @@ def sample_build() -> DoorBuild:
     """Sample Build instance for testing."""
     build = DoorBuild(
         id=1,
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         width=5,
         height=6,
         depth=7,
@@ -92,7 +92,7 @@ class TestBuildDraft:
         from squid.core.builds.errors import InvalidBuildError
 
         with pytest.raises(InvalidBuildError, match="category"):
-            BuildDraft().finalize()
+            BuildInput().finalize()
 
     @pytest.mark.parametrize(
         ("category", "expected_type"),
@@ -105,14 +105,14 @@ class TestBuildDraft:
         ],
     )
     def test_finalize_produces_the_category_subclass(self, category: BuildCategory, expected_type: type[Build]) -> None:
-        draft = BuildDraft(category=category, width=3, credits=name_credits(["Alice"], legacy=True))
+        draft = BuildInput(category=category, width=3, credits=name_credits(["Alice"], legacy=True))
         build = draft.finalize()
         assert type(build) is expected_type
         assert build.width == 3
         assert build.creators_ign == ["Alice"]
 
     def test_finalize_preserves_unknown_door_facts(self) -> None:
-        draft = BuildDraft(category=BuildCategory.DOOR)
+        draft = BuildInput(category=BuildCategory.DOOR)
         build = draft.finalize()
         assert isinstance(build, DoorBuild)
         assert (build.door_width, build.door_height) == (None, None)
@@ -121,7 +121,7 @@ class TestBuildDraft:
 
 class TestBuildTitle:
     def test_get_title_basic(self, sample_build: DoorBuild):
-        sample_build.submission_status = Status.PENDING
+        sample_build.submission_status = BuildStatus.PENDING
         sample_build.door_width = 2
         sample_build.door_height = 3
         sample_build.door_depth = 1
@@ -151,7 +151,7 @@ class TestBuildTitle:
 
     def test_extender_display_title(self) -> None:
         extender = ExtenderBuild(
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Upward",
             extension_length=3,
             extender_type="Regular",
@@ -163,9 +163,9 @@ class TestBuildTitle:
     @pytest.mark.parametrize(
         ("build", "expected"),
         [
-            (UtilityBuild(submission_status=Status.PENDING), "Pending: Utility"),
-            (EntranceBuild(submission_status=Status.PENDING), "Pending: Entrance"),
-            (OtherBuild(submission_status=Status.PENDING), "Pending: Other"),
+            (UtilityBuild(submission_status=BuildStatus.PENDING), "Pending: Utility"),
+            (EntranceBuild(submission_status=BuildStatus.PENDING), "Pending: Entrance"),
+            (OtherBuild(submission_status=BuildStatus.PENDING), "Pending: Other"),
         ],
     )
     def test_generic_category_display_titles(self, build: Build, expected: str) -> None:
@@ -228,7 +228,7 @@ def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
 
 def test_draft_category_changes_preserve_common_facts_and_clear_incompatible_details() -> None:
     details = DoorDraftDetails(door_width=3)
-    draft = BuildDraft(width=9, details=details)
+    draft = BuildInput(width=9, details=details)
     draft.select_category(BuildCategory.DOOR)
     assert draft.details is details
     draft.select_category(None)
@@ -242,8 +242,8 @@ def test_draft_category_changes_preserve_common_facts_and_clear_incompatible_det
 
 def test_draft_rejects_mismatched_category_details_at_creation_and_finalization() -> None:
     with pytest.raises(InvalidBuildError, match="details do not match"):
-        BuildDraft(category=BuildCategory.DOOR, details=ExtenderDraftDetails(extension_length=2))
-    draft = BuildDraft(category=BuildCategory.DOOR)
+        BuildInput(category=BuildCategory.DOOR, details=ExtenderDraftDetails(extension_length=2))
+    draft = BuildInput(category=BuildCategory.DOOR)
     draft.details = ExtenderDraftDetails()
     with pytest.raises(InvalidBuildError, match="details do not match"):
         draft.finalize()

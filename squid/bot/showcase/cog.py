@@ -10,7 +10,7 @@ from discord.ext.commands import Context
 import squid_ui.ext.discord as sd
 from squid.bot.showcase.catalogue import CataloguePreview
 from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
-from squid.bot.showcase.workbench import BuildDraft, BuildPreview, Workbench
+from squid.bot.showcase.workbench import BuildInput, BuildPreview, Workbench
 from squid_i18n import tr
 from squid_ui.ext.discord.i18n import to_locale_str
 
@@ -49,7 +49,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def workbench(self, ctx: Context[BotT]) -> None:
         """Edit a sample build and watch a second message update live."""
         request = await self.ui.request(ctx)
-        draft = BuildDraft()
+        draft = BuildInput()
         editor = await request.respond(
             Workbench(draft),
             session_key=uuid.uuid4(),

@@ -10,7 +10,7 @@ import anyio
 from squid.core.actors import Actor
 from squid.core.artifacts.application import ArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
-from squid.core.builds.domain import BuildDraft
+from squid.core.builds.domain import BuildInput
 from squid.core.errors import AccountRequiredError, AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
@@ -26,7 +26,7 @@ class InferenceCandidate:
     id: UUID
     run_id: UUID
     owner_account_id: int
-    facts: BuildDraft
+    facts: BuildInput
     source_files: tuple[SubmissionSourceFile, ...] = ()
 
 
@@ -56,7 +56,7 @@ class InferenceRunRepository(Protocol):
         self, run_id: UUID, owner: int, inputs: dict[str, JSONValue], *, capacity: int
     ) -> InferenceClaim: ...
     async def complete(
-        self, run_id: UUID, token: UUID, drafts: tuple[BuildDraft, ...]
+        self, run_id: UUID, token: UUID, drafts: tuple[BuildInput, ...]
     ) -> tuple[InferenceCandidate, ...]: ...
     async def fail(self, run_id: UUID, token: UUID) -> None: ...
     async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None: ...

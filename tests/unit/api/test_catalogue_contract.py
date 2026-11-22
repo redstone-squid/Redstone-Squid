@@ -9,7 +9,7 @@ import pytest
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetails, GeneralDetails
 from squid.core.builds.application import PublicBuildPreview, PublicBuildSummary
-from squid.core.builds.domain import MediaTypeLiteral, Status
+from squid.core.builds.domain import BuildStatus, MediaTypeLiteral
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.services import PublicRecordQueryService
@@ -23,7 +23,7 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
     values: dict[str, Any] = {
         "id": build_id,
         "submitter_account_id": 123,
-        "submission_status": Status.CONFIRMED,
+        "submission_status": BuildStatus.APPROVED,
         "versions": ["Java 1.21.5"],
         "version_spec": ">=1.21",
         "width": 3,
@@ -192,7 +192,7 @@ def test_detail_details_are_keyed_by_the_build_category() -> None:
         ExtenderBuild(
             id=2,
             submitter_account_id=1,
-            submission_status=Status.CONFIRMED,
+            submission_status=BuildStatus.APPROVED,
             orientation="Upward",
             extension_length=6,
         )
@@ -201,6 +201,8 @@ def test_detail_details_are_keyed_by_the_build_category() -> None:
     assert extender.details.category == "Extender"
     assert extender.details.extension_length == 6
 
-    utility = BuildDetail.from_domain(UtilityBuild(id=3, submitter_account_id=1, submission_status=Status.CONFIRMED))
+    utility = BuildDetail.from_domain(
+        UtilityBuild(id=3, submitter_account_id=1, submission_status=BuildStatus.APPROVED)
+    )
     assert isinstance(utility.details, GeneralDetails)
     assert utility.details.category == "Utility"

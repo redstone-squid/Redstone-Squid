@@ -19,7 +19,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.edits import build_target
 from squid.core.builds.application.ports import BuildSchematicSummary
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, BuildLink, DoorBuild
 from squid.core.edits.domain import Revision, RevisionConflictError
@@ -77,7 +77,7 @@ class EditRecorder(BuildService):
 def display_build() -> Build:
     return DoorBuild(
         id=7,
-        submission_status=Status.PENDING,
+        submission_status=BuildStatus.PENDING,
         width=5,
         height=6,
         depth=7,
@@ -188,18 +188,18 @@ async def test_build_card_video_without_preview_stays_in_gallery(display_build: 
 @pytest.mark.parametrize(
     ("status", "expected"),
     [
-        (Status.PENDING, sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")),
-        (Status.CONFIRMED, sl.Role("build.confirmed", sl.Tone.SUCCESS)),
-        (Status.DENIED, sl.Role("build.denied", sl.Tone.DANGER)),
+        (BuildStatus.PENDING, sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")),
+        (BuildStatus.APPROVED, sl.Role("build.confirmed", sl.Tone.SUCCESS)),
+        (BuildStatus.REJECTED, sl.Role("build.denied", sl.Tone.DANGER)),
     ],
 )
-def test_build_statuses_have_domain_roles(status: Status, expected: sl.Role) -> None:
+def test_build_statuses_have_domain_roles(status: BuildStatus, expected: sl.Role) -> None:
     assert build_card_module._status_tone(status, build_id=7) == expected
 
 
-@pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
+@pytest.mark.parametrize("status", [None, cast(BuildStatus, "legacy")])
 def test_missing_or_unknown_build_status_is_neutral_and_reported(
-    status: Status | None,
+    status: BuildStatus | None,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -606,7 +606,7 @@ def card_schematic(*, multiple: bool = False) -> BuildSchematicSummary:
 
 @pytest.mark.parametrize("multiple", [False, True])
 async def test_build_card_shows_compact_attachment_specific_dimensions(display_build: Build, multiple: bool) -> None:
-    display_build.submission_status = Status.CONFIRMED
+    display_build.submission_status = BuildStatus.APPROVED
     reader = SchematicSummaryReader(card_schematic(multiple=multiple))
     node = await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)
     presentation = render_payload([node])
@@ -632,9 +632,9 @@ async def test_build_card_shows_compact_attachment_specific_dimensions(display_b
     assert "12 \u00d7 8 \u00d7 10" not in source_text(measured.fallbacks[0])
 
 
-@pytest.mark.parametrize("status", [Status.PENDING, Status.DENIED])
+@pytest.mark.parametrize("status", [BuildStatus.PENDING, BuildStatus.REJECTED])
 async def test_build_card_does_not_fetch_public_download_for_unpublished_build(
-    display_build: Build, status: Status
+    display_build: Build, status: BuildStatus
 ) -> None:
     display_build.submission_status = status
     reader = SchematicSummaryReader(card_schematic())
@@ -644,7 +644,7 @@ async def test_build_card_does_not_fetch_public_download_for_unpublished_build(
 
 @pytest.mark.parametrize("fail", [False, True])
 async def test_missing_schematic_summary_keeps_the_ordinary_card(display_build: Build, fail: bool) -> None:
-    display_build.submission_status = Status.CONFIRMED
+    display_build.submission_status = BuildStatus.APPROVED
     reader = SchematicSummaryReader(None, fail=fail)
     payload = render_payload([await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)])
     content = str(payload.layout.to_components())
@@ -654,8 +654,8 @@ async def test_missing_schematic_summary_keeps_the_ordinary_card(display_build: 
 
 
 async def test_unsaved_build_skips_schematic_lookup(display_build: Build) -> None:
-    display_build = DoorBuild(submission_status=Status.CONFIRMED)
-    display_build.submission_status = Status.CONFIRMED
+    display_build = DoorBuild(submission_status=BuildStatus.APPROVED)
+    display_build.submission_status = BuildStatus.APPROVED
     reader = SchematicSummaryReader(card_schematic())
     await render_build_card(display_build, MediaPreviewClient(), schematic_summaries=reader)
     assert reader.calls == []

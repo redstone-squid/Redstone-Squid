@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 from whenever import Instant
 
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError
 from squid.core.events.infrastructure.repository import publish_domain_event
@@ -157,7 +157,7 @@ class PostgresRecordRepository:
         statement = (
             select(DoorBuild)
             .where(
-                DoorBuild.submission_status == Status.CONFIRMED,
+                DoorBuild.submission_status == BuildStatus.APPROVED,
                 DoorBuild.orientation == orientation,
                 or_(DoorBuild.expansion.is_not(None), fixed_domain),
             )
@@ -747,7 +747,7 @@ class PostgresRecordRepository:
         statement = (
             select(DoorBuild)
             .where(
-                DoorBuild.submission_status == Status.CONFIRMED,
+                DoorBuild.submission_status == BuildStatus.APPROVED,
                 or_(
                     DoorBuild.expansion.is_not(None),
                     and_(DoorBuild.door_width.is_not(None), DoorBuild.door_height.is_not(None)),
@@ -771,7 +771,7 @@ class PostgresRecordRepository:
     async def _list_extenders(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
             select(ExtenderBuild)
-            .where(ExtenderBuild.submission_status == Status.CONFIRMED)
+            .where(ExtenderBuild.submission_status == BuildStatus.APPROVED)
             .options(
                 selectinload(ExtenderBuild.tags).options(*assignment_units()),
                 selectinload(ExtenderBuild.build_versions),

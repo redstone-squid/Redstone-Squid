@@ -45,7 +45,7 @@ class FakeSearchBackend:
         assert self.active_scopes == 1
         self.calls.append((request, query, sort_field))
         self.embeddings.append(query_embedding)
-        hit = BuildSearchHit("1", "Door", "confirmed", score=0.5)
+        hit = BuildSearchHit("1", "Door", "approved", score=0.5)
         return SearchSlice((hit,), self.total, warnings=("degraded",))
 
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
@@ -56,12 +56,12 @@ async def test_service_parses_query_and_reports_the_backend_total() -> None:
     backend = FakeSearchBackend()
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
 
-    page = await service.search(SearchRequest("status:confirmed door", scope=SearchScope.BUILDS, page_size=5))
+    page = await service.search(SearchRequest("status:approved door", scope=SearchScope.BUILDS, page_size=5))
 
     assert page.hits[0].resource_kind == "build"
     assert page.total == 25
     assert page.warnings == ("degraded",)
-    assert backend.calls[0][1].normalized == "status:confirmed AND door"
+    assert backend.calls[0][1].normalized == "status:approved AND door"
     assert backend.calls[0][2] is None
 
 

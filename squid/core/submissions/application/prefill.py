@@ -1,9 +1,9 @@
 """Convert collected build details into answers for a submission form.
 
-Inference produces a BuildDraft with build field names and human-readable tag
+Inference produces a BuildInput with build field names and human-readable tag
 names. Prefill maps these to the form's field IDs and stable option keys before
 a retained submission draft is created. Unrecognized or invalid values are
-reported for review, while the original BuildDraft remains available to callers.
+reported for review, while the original BuildInput remains available to callers.
 """
 
 from collections.abc import Mapping, Sequence
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from squid.core.builds.domain import (
     RESTRICTION_FIELDS,
-    BuildDraft,
+    BuildInput,
     DoorDraftDetails,
     ExtenderDraftDetails,
     UnresolvedTaxonomy,
@@ -33,7 +33,7 @@ class SubmissionPrefill:
 
 
 async def prefill_submission(
-    source: BuildDraft,
+    source: BuildInput,
     forms: SubmissionFormService,
     *,
     origin: SubmissionOrigin,
@@ -51,7 +51,7 @@ async def prefill_submission(
 
 
 def project_submission(
-    source: BuildDraft,
+    source: BuildInput,
     manifest: FormManifest,
     options: Mapping[str, Sequence[ChoiceOption]],
     *,

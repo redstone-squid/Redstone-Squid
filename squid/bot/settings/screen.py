@@ -62,7 +62,7 @@ SETTING_LABELS: dict[ScalarChannelSetting, Text] = {
     "Smallest": tr(t"bot-settings-view-smallest-record-builds = Smallest-record builds"),
     "Fastest": tr(t"bot-settings-view-fastest-record-builds = Fastest-record builds"),
     "First": tr(t"bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds"),
-    "Builds": tr(t"bot-settings-view-confirmed-builds = Confirmed builds"),
+    "Builds": tr(t"bot-settings-view-confirmed-builds = Approved builds"),
     "Vote": tr(t"bot-settings-view-builds-awaiting-review = Builds awaiting review"),
 }
 """What each channel setting is for, named rather than title-cased so it translates."""

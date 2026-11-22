@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.voting.domain import VoteKind
 
@@ -46,7 +46,7 @@ async def ensure_build_review(
     if build.id is None or build.submitter_account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
         msg = "A persisted build and submitter account are required for review."
         raise ValueError(msg)
-    if build.submission_status != Status.PENDING:
+    if build.submission_status != BuildStatus.PENDING:
         msg = "The build must be pending to post it."
         raise ValueError(msg)
     unique_channels = tuple({channel.id: channel for channel in channels}.values())
@@ -72,7 +72,7 @@ async def ensure_build_review(
         pass_threshold=settings.build_vote_pass_threshold,
         fail_threshold=settings.build_vote_fail_threshold,
         build_id=build.id,
-        changes=[("submission_status", Status.PENDING, Status.CONFIRMED)],
+        changes=[("submission_status", BuildStatus.PENDING, BuildStatus.APPROVED)],
         options=options,
     )
     await bot.refresh_posts("vote_session", str(session_id))

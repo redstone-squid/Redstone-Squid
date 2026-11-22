@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
 from squid.core.builds.application.queries import PublicBuildSummary
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.infrastructure.projection import SearchProjectionLoader
@@ -48,7 +48,7 @@ async def test_public_values_and_incompatible_assignment_units(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     build = OtherBuild(
         submitter_account_id=account.id,
-        submission_status=Status.CONFIRMED,
+        submission_status=BuildStatus.APPROVED,
         tags=[TagAssignment(definition, Decimal(20), "test_second")],
     )
     await transact(

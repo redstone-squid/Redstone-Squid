@@ -6,7 +6,7 @@ import pytest
 
 from squid.core.actors import Actor
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, BuildEditUnitOfWork, BuildStatusEdit, build_target
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, InvalidStateError
@@ -14,11 +14,11 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
 
 
-@pytest.mark.parametrize("status", [Status.CONFIRMED, Status.DENIED])
-async def test_review_captures_status_and_checks_current_permission(status: Status) -> None:
+@pytest.mark.parametrize("status", [BuildStatus.APPROVED, BuildStatus.REJECTED])
+async def test_review_captures_status_and_checks_current_permission(status: BuildStatus) -> None:
     uow = AsyncMock(spec=BuildEditUnitOfWork)
     uow.builds = AsyncMock()
-    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=3, submission_status=Status.PENDING)
+    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=3, submission_status=BuildStatus.PENDING)
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.return_value = None
     actor = Actor(account_id=1)
@@ -27,9 +27,9 @@ async def test_review_captures_status_and_checks_current_permission(status: Stat
     )
     handler = BuildStatusEdit(permissions)
     prepared = await handler.prepare(uow, actor, command)
-    assert prepared.before.unpack() == {"submission_status": Status.PENDING}
+    assert prepared.before.unpack() == {"submission_status": BuildStatus.PENDING}
     assert prepared.after.unpack() == {"submission_status": status}
-    permission = BUILD_SUBMISSION_APPROVE if status is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
+    permission = BUILD_SUBMISSION_APPROVE if status is BuildStatus.APPROVED else BUILD_SUBMISSION_REJECT
     permissions.require.assert_awaited_once_with(actor, permission, uow=uow)
     permissions.require.side_effect = AuthorizationError
     with pytest.raises(AuthorizationError):
@@ -39,9 +39,9 @@ async def test_review_captures_status_and_checks_current_permission(status: Stat
 async def test_review_rejects_stale_revision_and_already_decided_build() -> None:
     uow = AsyncMock(spec=BuildEditUnitOfWork)
     uow.builds = AsyncMock()
-    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=Status.DENIED)
+    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=BuildStatus.REJECTED)
     handler = BuildStatusEdit(AsyncMock(spec=PermissionService))
-    values = EditValues.of({"submission_status": Status.CONFIRMED})
+    values = EditValues.of({"submission_status": BuildStatus.APPROVED})
     with pytest.raises(RevisionConflictError):
         await handler.prepare(
             uow, Actor(account_id=1), EditCommand(BUILD_STATUS_EDIT, (Revision(build_target(7), 3),), values)
@@ -55,14 +55,14 @@ async def test_review_rejects_stale_revision_and_already_decided_build() -> None
 async def test_undo_requires_the_original_decision_permission() -> None:
     uow = AsyncMock(spec=BuildEditUnitOfWork)
     uow.builds = AsyncMock()
-    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=Status.DENIED)
+    uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=BuildStatus.REJECTED)
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.side_effect = AuthorizationError
     actor = Actor(account_id=1)
     command = EditCommand(
         BUILD_STATUS_EDIT,
         (Revision(build_target(7), 4),),
-        EditValues.of({"submission_status": Status.PENDING}),
+        EditValues.of({"submission_status": BuildStatus.PENDING}),
         purpose="undo",
     )
     with pytest.raises(AuthorizationError):

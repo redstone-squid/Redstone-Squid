@@ -16,7 +16,7 @@ from squid.core.builds.application.edit_schema import BuildPatch
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.application.services import BuildService
-from squid.core.builds.domain import Info, ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, Info, ShowcaseTag, UnresolvedTaxonomy
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.core.builds.errors import BuildNotFoundError
@@ -226,7 +226,7 @@ class BuildStatusEdit:
         if values.keys() != {"submission_status"}:
             raise ValidationError
         try:
-            status = Status(values["submission_status"])
+            status = BuildStatus(values["submission_status"])
         except (ValueError, TypeError) as error:
             raise ValidationError from error
         build_id = int(command.expected[0].target.key)
@@ -236,14 +236,14 @@ class BuildStatusEdit:
         expected = require_revision(command.expected[0], build.revision)
         previous = build.submission_status
         if command.purpose == "undo":
-            if status is not Status.PENDING or previous not in (Status.CONFIRMED, Status.DENIED):
+            if status is not BuildStatus.PENDING or previous not in (BuildStatus.APPROVED, BuildStatus.REJECTED):
                 raise InvalidStateError
             decision = previous
         else:
-            if previous is not Status.PENDING or status not in (Status.CONFIRMED, Status.DENIED):
+            if previous is not BuildStatus.PENDING or status not in (BuildStatus.APPROVED, BuildStatus.REJECTED):
                 raise InvalidStateError
             decision = status
-        permission = BUILD_SUBMISSION_APPROVE if decision is Status.CONFIRMED else BUILD_SUBMISSION_REJECT
+        permission = BUILD_SUBMISSION_APPROVE if decision is BuildStatus.APPROVED else BUILD_SUBMISSION_REJECT
         await self._permissions.require(actor, permission, uow=uow)
         assert previous is not None
         return PreparedBuildEdit(
@@ -265,5 +265,5 @@ class BuildStatusEdit:
             correlation_kind="edit_operation",
             correlation_id=str(command.operation_id),
         ):
-            await uow.builds.set_status(prepared.build, Status(prepared.after.unpack()["submission_status"]))
+            await uow.builds.set_status(prepared.build, BuildStatus(prepared.after.unpack()["submission_status"]))
         return (Revision(command.expected[0].target, prepared.build.revision),)

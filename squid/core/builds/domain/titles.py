@@ -13,7 +13,7 @@ from squid.core.catalogue.domain import (
     TitleToken,
 )
 
-from .models import Status
+from .models import BuildStatus
 from .taxonomy import UnresolvedTaxonomy
 
 _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
@@ -97,10 +97,10 @@ def format_build_display_title(build: Build, *, markdown: bool) -> str:
     """
     category = format_build_category(build)
     terms: list[str] = []
-    if build.submission_status == Status.PENDING:
+    if build.submission_status == BuildStatus.PENDING:
         terms.append("Pending:")
-    elif build.submission_status == Status.DENIED:
-        terms.append("Denied:")
+    elif build.submission_status == BuildStatus.REJECTED:
+        terms.append("Rejected:")
     if build.ai_generated:
         terms.append("\N{ROBOT FACE}")
     terms.extend(_showcase_qualifiers(build))

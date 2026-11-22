@@ -16,7 +16,7 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.ui import error_node
-from squid.core.builds.domain import BuildCategory, BuildDraft, DoorDraftDetails, DoorOrientationLiteral
+from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails, DoorOrientationLiteral
 from squid.core.builds.domain.models import BuildCategoryLiteral
 from squid.core.submissions.application.credit_text import parse_credit_lines
 from squid.core.submissions.application.prefill import prefill_submission
@@ -59,7 +59,7 @@ async def open_submission_form(
     if category != "Door" and (door_size is not None or door_type is not None):
         return error_node(
             tr(t"submit-inapplicable-options = Options do not apply"),
-            tr(t"submit-door-options-only = Door size and orientation can only be supplied for doors."),
+            tr(t"submit-door-options-only = Opening size and orientation can only be supplied for doors."),
         )
     if category not in {"Door", "Extender"} and patterns is not None:
         return error_node(
@@ -67,7 +67,7 @@ async def open_submission_form(
             tr(t"submit-pattern-options-only = Patterns can only be supplied for doors and extenders."),
         )
     category_code = category.lower()
-    draft = BuildDraft(
+    draft = BuildInput(
         ai_generated=False,
         category=BuildCategory(category),
         display_name=optional_text(name) if name is not None else None,
@@ -78,7 +78,7 @@ async def open_submission_form(
             draft.details.door_dimensions = parse_hallway_dimensions(door_size)
         except ValueError:
             return error_node(
-                tr(t"bot-submission-submit-check-door-size = Check the door size"),
+                tr(t"bot-submission-submit-check-door-size = Check the opening size"),
                 md_tr(
                     t"submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.",
                 ),
@@ -88,7 +88,7 @@ async def open_submission_form(
             draft.dimensions = parse_dimensions(build_size)
         except ValueError:
             return error_node(
-                tr(t"bot-submission-submit-check-build-size = Check the build size"),
+                tr(t"bot-submission-submit-check-build-size = Check the build dimensions"),
                 md_tr(
                     t"submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.",
                 ),

@@ -12,7 +12,7 @@ from squid.bot.posts.renderers import BuildCardRenderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application import BuildQueryService
-from squid.core.builds.domain import Status
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, OtherBuild
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain import Setting
@@ -50,9 +50,9 @@ class Settings(SettingsService):
         return {10: 201 if setting == "Vote" else 300, 20: 999, 30: None}
 
 
-@pytest.mark.parametrize("build_status", [Status.PENDING, Status.CONFIRMED, Status.DENIED])
+@pytest.mark.parametrize("build_status", [BuildStatus.PENDING, BuildStatus.APPROVED, BuildStatus.REJECTED])
 @pytest.mark.parametrize("vote_status", [VoteStatus.OPEN, VoteStatus.CLOSED])
-async def test_review_destinations_follow_the_session(build_status: Status, vote_status: VoteStatus) -> None:
+async def test_review_destinations_follow_the_session(build_status: BuildStatus, vote_status: VoteStatus) -> None:
     build = OtherBuild(id=7, submission_status=build_status)
     snapshot = build_snapshot(status=vote_status, target=BuildVoteTarget(7))
     settings = Settings()
@@ -81,8 +81,8 @@ async def test_review_destinations_follow_the_session(build_status: Status, vote
     assert settings.requested == (["Vote"] if vote_status is VoteStatus.OPEN else [])
 
 
-@pytest.mark.parametrize("status", [Status.PENDING, Status.CONFIRMED, Status.DENIED, None])
-async def test_only_confirmed_builds_reach_build_channels(status: Status | None) -> None:
+@pytest.mark.parametrize("status", [BuildStatus.PENDING, BuildStatus.APPROVED, BuildStatus.REJECTED, None])
+async def test_only_confirmed_builds_reach_build_channels(status: BuildStatus | None) -> None:
     build = OtherBuild(id=7, submission_status=status) if status is not None else None
     settings = Settings()
     channels = {
@@ -100,9 +100,9 @@ async def test_only_confirmed_builds_reach_build_channels(status: Status | None)
 
     if status is None:
         assert posts is None
-    elif status is Status.CONFIRMED:
+    elif status is BuildStatus.APPROVED:
         assert posts is not None
         assert [(post.channel_id, post.guild_id) for post in posts] == [(300, 10)]
     else:
         assert posts == ()
-    assert settings.requested == (["Builds"] if status is Status.CONFIRMED else [])
+    assert settings.requested == (["Builds"] if status is BuildStatus.APPROVED else [])

@@ -1,7 +1,7 @@
 """The private Discord panel for filling in and submitting a build draft.
 
 A submission draft stores answers keyed by the field IDs of a pinned FormManifest. The
-manifest groups fields into sections such as "Name and creators" or "Door size and type".
+manifest groups fields into sections such as "Name and creators" or "Opening size and door type".
 The draft panel (DraftEditorScreen) is one message: a row per section listing every answer
 in it with an Edit button beside the row, a Files row, and the Submit button.
 
@@ -272,7 +272,7 @@ class DraftWorkspace(sl.Reactive):
     def missing_required(self) -> tuple[str, ...]:
         """IDs of empty required fields, with a size reported once under its group key.
 
-        The count matches what the summary flags: one "Door size" line rather than its parts.
+        The count matches what the summary flags: one "Opening size" line rather than its parts.
         """
         answers = self.answers
         missing = [field.id for field in self.fields if field.required and is_empty(answers.get(field.id))]
@@ -400,7 +400,7 @@ class DraftWorkspace(sl.Reactive):
             self.notice = (
                 tr(
                     t"draft-inference-review = Schematic suggestions filled empty answers. "
-                    t"Review the build size, width/depth orientation, name, credits, and restrictions below. "
+                    t"Review the build dimensions, width/depth orientation, name, credits, and restrictions below. "
                     t"Category, opening size, orientation, and opening/closing times were not detected."
                 )
                 if values
@@ -604,7 +604,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 sl.action_controls(
                     preview,
                     sl.action_control(
-                        tr(t"draft-editor-submit = Submit"),
+                        tr(t"draft-editor-submit = Submit draft"),
                         self._submit,
                         key="submit",
                         tone=sl.Tone.SUCCESS,
@@ -860,13 +860,13 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
         case Phase.EXPIRED:
             title = md_tr(t"draft-editor-title-expired = ## Draft expired · {category}")
         case _:
-            title = md_tr(t"draft-editor-title-editing = ## Submit a build · {category}")
+            title = md_tr(t"draft-editor-title-editing = ## Build draft · {category}")
     match phase:
         case Phase.EDITING:
             status = md_tr(
                 t"""
                 draft-editor-status-editing =
-                    Fill in each section, then press **Submit**. Your answers are saved as you go.
+                    Fill in each section, then press **Submit draft**. Your answers are saved as you go.
                     -# Reopen this draft with `/build drafts` until {expires}.
                 """,
             )
@@ -874,12 +874,12 @@ def _header(ws: DraftWorkspace, phase: Phase) -> Any:
             status = md_tr(
                 t"draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** "
                 t"The submission continues on its own once they are ready. "
-                t"If you edit anything now, press **Submit** again afterwards.",
+                t"If you edit anything now, press **Submit draft** again afterwards.",
             )
         case Phase.NEEDS_CHANGES:
             status = md_tr(
-                t"draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** "
-                t"Fix the problems below, then press **Submit** again.",
+                t"draft-editor-status-needs-changes = ⚠️ **Your draft needs changes.** "
+                t"Fix the problems below, then press **Submit draft** again.",
             )
         case Phase.CREATING:
             status = tr(
@@ -954,7 +954,7 @@ def _files_text(ws: DraftWorkspace, *, heading: bool = True) -> Text:
 
 
 def field_names(manifest: FormManifest, category: str, field_ids: Iterable[str]) -> Text:
-    """Join field labels for a sentence, naming a size once (as "Door size") instead of its parts."""
+    """Join field labels for a sentence, naming a size once (as "Opening size") instead of its parts."""
     labels = {field.id: field.label for field in manifest.fields_for(category)}
     names: list[TextLike] = []
     for field_id in field_ids:
@@ -1063,5 +1063,5 @@ def _issue_text(issue: SubmissionAttentionIssue, labels: Mapping[str, str]) -> T
         case _:
             return md_tr(
                 t"draft-editor-issue-target-rejected = The build could not be created from these answers. "
-                t"Check them and press **Submit** again.",
+                t"Check them and press **Submit draft** again.",
             )

@@ -18,7 +18,7 @@ from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.submission.ui.sections import SectionEditorScreen
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.builds.application import BuildService
-from squid.core.builds.domain import ShowcaseTag, Status, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
@@ -54,12 +54,12 @@ def rendered(screen: BuildEditScreen) -> str:
 def _door(**values: Any) -> DoorBuild:
     if "creators_ign" in values:
         values["credits"] = name_credits(values.pop("creators_ign"), legacy=True)
-    return DoorBuild(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1, **values)
+    return DoorBuild(id=1, submission_status=BuildStatus.APPROVED, submitter_account_id=1, **values)
 
 
 @pytest.mark.parametrize("build_type", [DoorBuild, ExtenderBuild, OtherBuild])
 async def test_every_category_renders_its_form_sections_within_discord_limits(build_type: Any) -> None:
-    screen = editor(build_type(id=1, submission_status=Status.CONFIRMED, submitter_account_id=1))
+    screen = editor(build_type(id=1, submission_status=BuildStatus.APPROVED, submitter_account_id=1))
     await screen.projection.reload()
 
     assert screen.workspace.sections
