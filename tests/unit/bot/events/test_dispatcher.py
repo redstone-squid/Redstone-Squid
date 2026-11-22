@@ -5,9 +5,12 @@ from typing import override
 
 from whenever import Instant
 
-from squid.bot.events.cog import CONSUMER, DELIVERY_REQUIRED_EVENTS
+from squid.bot.app import RedstoneSquid
+from squid.bot.events.cog import CONSUMER, DELIVERY_REQUIRED_EVENTS, DomainEventCog
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.core.events.dispatcher import DomainEventRunner
+from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 def _delivery(event_type: str = "build.confirmed", *, schema_version: int = 1) -> DomainEventDelivery:
@@ -25,9 +28,17 @@ def _delivery(event_type: str = "build.confirmed", *, schema_version: int = 1) -
 
 @dataclass(slots=True)
 class EventServiceRecorder(DomainEventService):
+    pending: list[DomainEventDelivery] = field(default_factory=list)
     completed: list[DomainEventDelivery] = field(default_factory=list)
     failed: list[tuple[DomainEventDelivery, Exception]] = field(default_factory=list)
     rejected: list[tuple[DomainEventDelivery, Exception]] = field(default_factory=list)
+
+    @override
+    async def claim(self, consumer: str, limit: int = 20) -> tuple[DomainEventDelivery, ...]:
+        assert consumer == CONSUMER
+        deliveries = tuple(self.pending[:limit])
+        del self.pending[:limit]
+        return deliveries
 
     @override
     async def complete(self, delivery: DomainEventDelivery) -> bool:
@@ -141,3 +152,32 @@ async def test_a_failing_handler_stops_the_ones_after_it_and_retries_the_deliver
     assert later.events == []
     assert len(events.failed) == 1
     assert events.completed == []
+
+
+async def test_detaching_a_subscription_leaves_other_registrations_active() -> None:
+    async def ready() -> None:
+        pass
+
+    events = EventServiceRecorder()
+    bot: RedstoneSquid = make_layout_bot(services=bot_services(domain_events=events), wait_until_ready=ready)
+    cog = DomainEventCog(bot)
+    handler = HandlerRecorder()
+    delivery = _delivery("vote_session.closed")
+    handlers = {delivery.event.event_type: handler.handle}
+    detach_first = cog.subscribe(handlers)
+    detach_second = cog.subscribe(handlers)
+
+    events.pending.append(delivery)
+    await cog.process_domain_events()
+    assert handler.events == [delivery.event, delivery.event]
+
+    await detach_first()
+    events.pending.append(delivery)
+    await cog.process_domain_events()
+    assert handler.events == [delivery.event] * 3
+
+    await detach_second()
+    events.pending.append(delivery)
+    await cog.process_domain_events()
+    assert handler.events == [delivery.event] * 3
+    assert events.completed == [delivery] * 3

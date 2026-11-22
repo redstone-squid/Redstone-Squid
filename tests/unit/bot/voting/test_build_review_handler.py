@@ -10,7 +10,7 @@ from typing import Any, cast, override
 import pytest
 from whenever import Instant
 
-from squid.bot.events.handlers import PostSubmittedBuildHandler
+from squid.bot.voting.event_handlers import PostSubmittedBuildHandler
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, OtherBuild
@@ -52,8 +52,8 @@ def review_calls(monkeypatch: pytest.MonkeyPatch) -> list[Build]:
     async def review(bot: object, build: Build, channels: object) -> None:
         calls.append(build)
 
-    monkeypatch.setattr("squid.bot.events.handlers.configured_vote_channels", channels)
-    monkeypatch.setattr("squid.bot.events.handlers.ensure_build_review", review)
+    monkeypatch.setattr("squid.bot.voting.event_handlers.configured_vote_channels", channels)
+    monkeypatch.setattr("squid.bot.voting.event_handlers.ensure_build_review", review)
     return calls
 
 

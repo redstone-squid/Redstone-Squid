@@ -23,6 +23,7 @@ from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.catalogue.search.contextual import ContextualSearches
 from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree
+from squid.bot.events.spec import extension as domain_events_extension
 from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.interaction_metrics import InteractionMetrics
@@ -90,7 +91,7 @@ EXTENSIONS: tuple[Extension, ...] = (
     starboard_extension,
     recount_extension,
     "squid.bot.sync.cog",
-    "squid.bot.events.cog",
+    domain_events_extension,
     "squid.bot.notifications_cog",
     "squid.bot.accounts.cog",
     "squid.bot.admin_cog",

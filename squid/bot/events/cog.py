@@ -1,17 +1,14 @@
-"""Run Discord side effects for recorded application events.
+"""Dispatch recorded application events to Discord feature handlers."""
 
-The Discord consumer receives its own delivery of each domain event. Handlers create or resume
-review delivery when a build is submitted and remove a message when a delete-log vote approves it.
-The dispatcher acknowledges the delivery after its handlers succeed; a retry runs those handlers
-again. Post content is kept current separately by the reconciliation workflow in squid.bot.sync.
-"""
-
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping
+from functools import partial
 from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
-from squid.bot.events.handlers import build_handler_registry
-from squid.core.events.dispatcher import DomainEventRunner
+from squid.bot.events.spec import extension
+from squid.core.events.dispatcher import DomainEventRunner, EventHandler
 from squid.core.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 
@@ -29,10 +26,31 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
+        self._handlers: dict[str, tuple[EventHandler, ...]] = {}
+        self._batch_lock = asyncio.Lock()
         self._runner = DomainEventRunner(
-            bot.services.domain_events, CONSUMER, build_handler_registry(bot), required=DELIVERY_REQUIRED_EVENTS
+            bot.services.domain_events, CONSUMER, self._handlers, required=DELIVERY_REQUIRED_EVENTS
         )
         self._task: JobHandle | None = None
+
+    def subscribe(self, handlers: Mapping[str, EventHandler]) -> Callable[[], Awaitable[None]]:
+        """Register handlers and return a callback to detach them between batches."""
+        registrations = tuple((event_type, partial(handler)) for event_type, handler in handlers.items())
+        for event_type, handler in registrations:
+            self._handlers[event_type] = (*self._handlers.get(event_type, ()), handler)
+
+        async def detach() -> None:
+            async with self._batch_lock:
+                for event_type, handler in registrations:
+                    remaining = tuple(
+                        current for current in self._handlers.get(event_type, ()) if current is not handler
+                    )
+                    if remaining:
+                        self._handlers[event_type] = remaining
+                    else:
+                        self._handlers.pop(event_type, None)
+
+        return detach
 
     @override
     async def cog_load(self) -> None:
@@ -55,9 +73,13 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
         """
         await self.bot.wait_until_ready()
         with trace_span("squid.background.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._runner.process_batch()
+            async with self._batch_lock:
+                await self._runner.process_batch()
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Register the domain-event dispatcher."""
-    await bot.add_cog(DomainEventCog(bot))
+    ctx = bot.extension_manager.setup_context(extension)
+    cog = DomainEventCog(bot)
+    await bot.add_cog(cog)
+    ctx.publish(cog)

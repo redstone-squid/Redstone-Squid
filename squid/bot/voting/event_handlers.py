@@ -1,4 +1,4 @@
-"""Handlers reacting to one domain-event type each."""
+"""Start build review and apply approved message deletions from recorded events."""
 
 import contextlib
 import logging
@@ -9,7 +9,6 @@ import discord
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.core.builds.domain import BuildStatus
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
-from squid.core.events.dispatcher import EventHandler
 from squid.core.voting.domain import DeleteLogVoteTarget, VoteSessionResult
 
 if TYPE_CHECKING:
@@ -61,13 +60,3 @@ class DeleteVotedMessageHandler:
         # An already-deleted target is the expected state on redelivery.
         with contextlib.suppress(discord.NotFound):
             await message.delete()
-
-
-def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[EventHandler, ...]]:
-    """Map each handled event type to the handlers that react to it."""
-    return {
-        "build.submitted": (PostSubmittedBuildHandler(bot).handle,),
-        # Confirming a build enqueues reconciliation through the database, so the
-        # reconciler owns publication of confirmed cards.
-        "vote_session.closed": (DeleteVotedMessageHandler(bot).handle,),
-    }

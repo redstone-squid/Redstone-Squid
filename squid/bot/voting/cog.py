@@ -1,7 +1,7 @@
 """Voting commands and current actor resolution for persisted ballot weights."""
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Literal, Self, cast, override
 
 import discord
@@ -11,9 +11,12 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.events.spec import DomainEventSubscriptions
+from squid.bot.events.spec import extension as domain_events_extension
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
 from squid.bot.voting.controls import close_poll, refresh_poll
+from squid.bot.voting.event_handlers import DeleteVotedMessageHandler, PostSubmittedBuildHandler
 from squid.bot.voting.poll_wizard import (
     DEFAULT_POLL_CHOICES,
     SCOPE_CHOICES,
@@ -40,10 +43,12 @@ if TYPE_CHECKING:
 
 
 class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
-    """Expose voting commands and own the reaction handler."""
+    """Expose voting commands and own voting's reaction and domain-event handlers."""
 
-    def __init__(self, bot: BotT):
+    def __init__(self, bot: BotT, domain_events: DomainEventSubscriptions) -> None:
         super().__init__(bot)
+        self._domain_events = domain_events
+        self._detach_domain_events: Callable[[], Awaitable[None]] | None = None
         self.vote_service = bot.services.votes
         self.publisher = DiscordPollPublisher(bot)
         self.reactions = VoteReactionHandler(bot, self)
@@ -52,9 +57,18 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     @override
     async def cog_load(self) -> None:
         self.reactions.start()
+        self._detach_domain_events = self._domain_events.subscribe(
+            {
+                "build.submitted": PostSubmittedBuildHandler(self.bot).handle,
+                "vote_session.closed": DeleteVotedMessageHandler(self.bot).handle,
+            }
+        )
 
     @override
     async def cog_unload(self) -> None:
+        if self._detach_domain_events is not None:
+            await self._detach_domain_events()
+            self._detach_domain_events = None
         await self.reactions.close()
 
     @sd.command(
@@ -337,7 +351,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     ctx = bot.extension_manager.setup_context(extension)
-    cog = VoteCog(bot)
+    cog = VoteCog(bot, ctx.require(domain_events_extension))
     await bot.add_cog(cog)
     ctx.publish(VotingExports(recount=cog.reactions))
     bot.ui_router.mount(__name__, close_poll, refresh_poll)

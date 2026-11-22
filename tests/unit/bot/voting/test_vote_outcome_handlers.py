@@ -7,7 +7,7 @@ import discord
 import pytest
 from whenever import Instant
 
-from squid.bot.events.handlers import DeleteVotedMessageHandler
+from squid.bot.voting.event_handlers import DeleteVotedMessageHandler
 from squid.core.builds.application import BuildService
 from squid.core.events import DomainEvent
 from squid.core.voting.application import VoteService

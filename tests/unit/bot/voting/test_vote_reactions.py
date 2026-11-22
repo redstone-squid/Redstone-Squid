@@ -13,6 +13,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.actors import AccountIdCache
+from squid.bot.events.cog import DomainEventCog
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.voting.cog import VoteCog
 from squid.core.accounts.application import AccountService
@@ -272,7 +273,7 @@ class ReactionHarness:
             wait_until_ready=self.wait_until_ready,
         )
         self.bot.reactions = ReactionRouter(self.bot, self.supervisor, concurrency=1)
-        self.cog = VoteCog(self.bot)
+        self.cog = VoteCog(self.bot, DomainEventCog(self.bot))
 
     @asynccontextmanager
     async def running(self) -> AsyncIterator[None]:

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
+from squid.bot.events.spec import extension as domain_events_extension
 from squid.bot.extensions import ExtensionSpec
 
 
@@ -17,4 +18,6 @@ class VotingExports:
     recount: VoteRecount
 
 
-extension: ExtensionSpec[VotingExports] = ExtensionSpec(id="voting", module="squid.bot.voting.cog")
+extension: ExtensionSpec[VotingExports] = ExtensionSpec(
+    id="voting", module="squid.bot.voting.cog", requires=(domain_events_extension.id,)
+)
