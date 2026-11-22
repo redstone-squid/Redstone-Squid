@@ -2397,7 +2397,7 @@ command-fastest-help = Browse fastest records and their holder builds
 command-fastest-name = fastest
 
 # squid/bot/submission/cog.py:191
-command-fastest-query-help = Search text or filters, e.g. smallest 3x3.
+command-fastest-query-help = Search text or filters, e.g. observerless 3x3.
 
 # squid/bot/help_cog.py:209
 command-help-command-name = command
@@ -2586,7 +2586,7 @@ command-smallest-help = Browse smallest records and their holder builds
 command-smallest-name = smallest
 
 # squid/bot/submission/cog.py:206
-command-smallest-query-help = Search text or filters, e.g. fastest 3x3.
+command-smallest-query-help = Search text or filters, e.g. observerless 3x3.
 
 # squid/bot/starboard/cog.py:207
 command-starboard-help = Configure this server's starboards
@@ -4189,13 +4189,13 @@ notifications-denied-summary = { $build } was rejected.
 # squid/bot/notifications_view.py:195
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
-# squid/core/notifications/domain.py:243
+# squid/core/notifications/domain.py:244
 notifications-domain-invalid-tag-predicate = invalid tag predicate
 
-# squid/core/notifications/domain.py:338
+# squid/core/notifications/domain.py:339
 notifications-domain-unsupported = unsupported { $name }: { $value }
 
-# squid/core/notifications/domain.py:166
+# squid/core/notifications/domain.py:167
 notifications-exact-predicate-value-required = exact predicates require a value
 
 # squid/bot/notifications_view.py:401
@@ -4222,10 +4222,10 @@ notifications-inbox-heading = Recent notifications
 # squid/bot/notifications_view.py:530
 notifications-inbox-help = Select a notification to see details and open its build, or select several to change their read state.
 
-# squid/core/notifications/domain.py:245
+# squid/core/notifications/domain.py:246
 notifications-invalid-exact-tag-value = invalid exact tag value
 
-# squid/core/notifications/domain.py:324, squid/core/notifications/domain.py:329
+# squid/core/notifications/domain.py:325, squid/core/notifications/domain.py:330
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
 # squid/bot/notifications_cog.py:145
@@ -4243,25 +4243,25 @@ notifications-open-in-discord = Open it in Discord with `/build browse id:{ $bui
 # squid/core/notifications/application.py:150
 notifications-page-size = page_size must be between 1 and 100
 
-# squid/core/notifications/domain.py:264
+# squid/core/notifications/domain.py:265
 notifications-persisted-record-filter = persisted record filter violates the notification contract
 
-# squid/core/notifications/domain.py:250
+# squid/core/notifications/domain.py:251
 notifications-persisted-tag-predicate = persisted tag predicate violates the notification contract
 
-# squid/core/notifications/domain.py:162
+# squid/core/notifications/domain.py:163
 notifications-presence-predicates-include = presence predicates cannot include a value
 
 # squid/bot/notification_text.py:54
 notifications-record-detail = • { $title }
 
-# squid/core/notifications/domain.py:204
+# squid/core/notifications/domain.py:205
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
 # squid/bot/notifications_view.py:385
 notifications-record-filter-required = Choose at least one record filter.
 
-# squid/core/notifications/domain.py:211
+# squid/core/notifications/domain.py:212
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
 # squid/bot/notification_text.py:34
@@ -4289,16 +4289,16 @@ notifications-tab-delivery = Delivery
 # squid/bot/notifications_view.py:83
 notifications-tab-inbox = Inbox
 
-# squid/core/notifications/domain.py:155
+# squid/core/notifications/domain.py:156
 notifications-tag-id-positive = tag_id must be positive
 
-# squid/core/notifications/domain.py:158
+# squid/core/notifications/domain.py:159
 notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'
 
-# squid/core/notifications/domain.py:237
+# squid/core/notifications/domain.py:238
 notifications-tag-predicates-objects = tag predicates must be objects
 
-# squid/core/notifications/domain.py:232
+# squid/core/notifications/domain.py:233
 notifications-tags-list = tags must be a list
 
 # squid/bot/notification_text.py:40
