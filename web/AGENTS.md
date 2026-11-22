@@ -17,7 +17,7 @@ interaction. The site reads the Python API through an SDK generated from
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
 
-`scripts/import-boundaries.ts` enforces this table through ESLint. If a rule blocks you,
+`scripts/lint/import-boundaries.ts` enforces this table through ESLint. If a rule blocks you,
 move the code to the right layer rather than working around the rule.
 
 ## Requests
@@ -59,11 +59,33 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 2. Put the components under `src/features/<area>/`. Compose them from `src/ui` first;
    see `src/ui/README.md`.
 3. Add messages to both `src/locales/en.ftl` and `src/locales/zh-CN.ftl`, then run
-   `bun run i18n:generate`. Use `translate(locale, key)`. Don't hard-code text.
+   `bun run i18n:generate`. Use `translate(locale, key)`; lint rejects letters written
+   directly in markup.
 4. Cover pure logic with a Vitest test in `tests/unit` and the route with a Playwright
    test in `tests/e2e`. Check both locales.
 
+## Tests
+
+- `tests/unit`: Vitest in jsdom. Render Svelte components with Testing Library and query
+  by role and accessible name. Coverage thresholds apply to `src/lib`, `src/ui`,
+  `src/features`, and `src/workbench`.
+- `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
+- `tests/review`: screenshots, axe, and recorded workflows of the design-system workbench.
+- Browser specs import `test` and `expect` from `tests/support/test`. A test fails on any
+  console error, and `await expect(page).toPassAxe()` runs axe. Server ports and environment
+  live in `tests/support/servers.ts`.
+
 ## Checks
+
+`bun run lint` runs ESLint, stylelint, and knip. Beyond the TypeScript and Svelte presets:
+
+- `squid/import-boundaries` enforces the layer table and `squid/no-raw-text` keeps text in
+  the catalogs (both in `scripts/lint/`).
+- `strict-boolean-expressions` requires explicit checks such as `items.length > 0` or
+  `value !== ""`, so `0` and `""` are never mistaken for missing values.
+- stylelint requires colors to come from tokens in `src/ui/tokens.css`.
+- knip fails on unused files, exports, and dependencies. Delete dead code instead of
+  exporting it for later.
 
 From `web/`: `bun run format`, `bun run lint`, `bun run check`, `bun run test`, then
 `bun run build` and the relevant Playwright tests, such as
