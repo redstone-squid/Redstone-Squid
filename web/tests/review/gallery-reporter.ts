@@ -19,7 +19,10 @@ export default class GalleryReporter implements Reporter {
   onTestEnd(test: TestCase, result: TestResult): void {
     const media: string[] = [];
     for (const attachment of result.attachments) {
-      if (!attachment.path || !["image/png", "video/webm"].includes(attachment.contentType))
+      if (
+        attachment.path === undefined ||
+        !["image/png", "video/webm"].includes(attachment.contentType)
+      )
         continue;
       const video = attachment.contentType === "video/webm";
       const filename = `${this.sequence++}.${video ? "webm" : "png"}`;
@@ -33,7 +36,7 @@ export default class GalleryReporter implements Reporter {
     }
     const title = escapeHtml(test.titlePath().filter(Boolean).join(" / "));
     this.entries.push(
-      `<section><h2>${title}</h2><p>${escapeHtml(result.status)} · attempt ${result.retry + 1}</p>${media.join("") || "<p>No media captured. See the Playwright report for test details.</p>"}</section>`,
+      `<section><h2>${title}</h2><p>${escapeHtml(result.status)} · attempt ${result.retry + 1}</p>${media.length > 0 ? media.join("") : "<p>No media captured. See the Playwright report for test details.</p>"}</section>`,
     );
   }
 

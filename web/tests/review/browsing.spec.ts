@@ -1,5 +1,4 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./test";
+import { expect, test } from "../support/test";
 
 test("browse sample records, change language, and open the media placeholder", async ({ page }) => {
   await page.goto("/design-system?theme=dark#browsing");
@@ -15,5 +14,5 @@ test("browse sample records, change language, and open the media placeholder", a
   await page.getByRole("link", { name: "查看媒体图库" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.getByText("红石鱿鱼网站正在重建。")).toBeVisible();
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await expect(page).toPassAxe();
 });

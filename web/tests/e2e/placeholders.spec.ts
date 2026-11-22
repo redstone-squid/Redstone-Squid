@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../support/test";
 
 const routes = [
   "/",
@@ -31,7 +31,7 @@ for (const [prefix, locale, message] of [
       const path = new URL(route, "https://catalogue.invalid").pathname;
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
         "href",
-        `https://catalogue.redstone-squid.org${prefix}${path === "/" && prefix ? "" : path}`,
+        `https://catalogue.redstone-squid.org${prefix}${path === "/" && prefix !== "" ? "" : path}`,
       );
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
         "content",

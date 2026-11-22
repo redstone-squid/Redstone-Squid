@@ -1,5 +1,5 @@
-import AxeBuilder from "@axe-core/playwright";
-import { test, expect } from "./test";
+import { test, expect } from "../support/test";
+import { APP_URL } from "../support/servers";
 
 test.use({ video: "on" });
 for (const locale of ["en", "zh-CN"]) {
@@ -31,6 +31,7 @@ for (const locale of ["en", "zh-CN"]) {
           dialog: "新建草稿",
           close: "关闭对话框",
         };
+
   test(`${locale} / draft workflow`, async ({ page, browserName }, testInfo) => {
     await page.goto(`/design-system-trial?lang=${locale}&scenario=retry`);
     await page.getByRole("button", { name: labels.save, exact: true }).click();
@@ -56,10 +57,12 @@ for (const locale of ["en", "zh-CN"]) {
     await expect(page.getByRole("status")).toHaveText(labels.saved);
     await expect(page.locator("astro-island")).toHaveCount(1);
     await expect(page.getByLabel(labels.title, { exact: true })).toHaveValue("Copper Bolt");
-    // Run axe in Chromium; compatibility projects exercise the workflow itself.
+    // The review suite runs axe in Chromium; compatibility projects exercise the workflow.
     // Playwright's Firefox 1572 crashes in axe on this form.
+    // eslint-disable-next-line playwright/no-conditional-in-test
     if (browserName === "chromium") {
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      // eslint-disable-next-line playwright/no-conditional-expect
+      await expect(page).toPassAxe();
     }
     await page.evaluate(() => document.fonts.ready);
     await page.getByLabel(labels.title, { exact: true }).focus();
@@ -69,9 +72,7 @@ for (const locale of ["en", "zh-CN"]) {
       path: screenshot,
       contentType: "image/png",
     });
-    if (["desktop", "mobile"].includes(testInfo.project.name)) {
-      await expect(page).toHaveScreenshot(`trial-svelte-${locale}.png`, { fullPage: true });
-    }
+    await expect(page).toHaveScreenshot(`trial-svelte-${locale}.png`, { fullPage: true });
     await page.getByLabel(labels.category).selectOption("utility");
     await expect(page.getByLabel(labels.width)).toHaveCount(0);
     await page.getByLabel(labels.title, { exact: true }).fill("Reserved");
@@ -81,6 +82,7 @@ for (const locale of ["en", "zh-CN"]) {
       "true",
     );
   });
+
   test(`${locale} / dialog keyboard behavior`, async ({ page }) => {
     await page.goto(`/design-system?lang=${locale}`);
     const trigger = page.getByRole("button", { name: labels.dialog, exact: true });
@@ -93,16 +95,17 @@ for (const locale of ["en", "zh-CN"]) {
     await expect(page.getByRole("button", { name: labels.save, exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: labels.close })).toBeFocused();
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await expect(page).toPassAxe();
     await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
+    await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
   test(`${locale} / server-rendered form`, async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     try {
       const page = await context.newPage();
-      await page.goto(`http://127.0.0.1:4321/design-system-trial?lang=${locale}`);
+      await page.goto(`${APP_URL}/design-system-trial?lang=${locale}`);
       await expect(page.getByLabel(labels.title, { exact: true })).toBeVisible();
       await expect(page.getByLabel(labels.width)).toBeVisible();
       await expect(page.getByLabel(labels.version, { exact: true })).toBeVisible();

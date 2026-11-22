@@ -16,10 +16,10 @@ describe("draft trial fixture", () => {
       const api = createDraftFixture();
       const controller = new AbortController();
       const upload = api.upload(new File(["fixture"], "door.schem"), controller.signal, vi.fn());
-      const rejected = expect(upload).rejects.toMatchObject({ name: "AbortError" });
+      const rejected = upload.catch((error: unknown) => error);
       expect(vi.getTimerCount()).toBe(1);
       controller.abort();
-      await rejected;
+      expect(await rejected).toMatchObject({ name: "AbortError" });
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();

@@ -1,10 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  API_PORT,
+  APP_URL,
+  FIXTURE_API_COMMAND,
+  appEnvironment,
+  fixtureApiEnvironment,
+} from "../tests/support/servers";
 
 const pages = [
-  ["home", "http://127.0.0.1:4321/"],
-  ["chinese-home", "http://127.0.0.1:4321/zh-cn"],
+  ["home", `${APP_URL}/`],
+  ["chinese-home", `${APP_URL}/zh-cn`],
 ] as const;
 const thresholds = { performance: 0.9, "best-practices": 0.95, seo: 0.95 } as const;
 const servers: ChildProcess[] = [];
@@ -25,29 +32,21 @@ function waitForExit(child: ChildProcess): Promise<void> {
 
 try {
   servers.push(
-    spawn("bun", ["tests/fixtures/api.ts"], {
+    spawn(FIXTURE_API_COMMAND[0], [FIXTURE_API_COMMAND[1]], {
       stdio: "inherit",
-      env: { ...process.env, FIXTURE_API_PORT: "8787" },
+      env: { ...process.env, ...fixtureApiEnvironment },
     }),
     spawn("node", ["dist/server/entry.mjs"], {
       stdio: "inherit",
-      env: {
-        ...process.env,
-        HOST: "127.0.0.1",
-        PORT: "4321",
-        API_BASE_URL: "http://0.0.0.0:8787",
-        SITE_URL: "https://catalogue.redstone-squid.org",
-        DISCORD_COMMUNITY_URL: "https://discord.gg/redstone",
-        BOT_INVITE_URL: "https://discord.com/oauth2/authorize?client_id=fixture",
-      },
+      env: { ...process.env, ...appEnvironment },
     }),
   );
 
   for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
       const [api, app] = await Promise.all([
-        fetch("http://127.0.0.1:8787/livez"),
-        fetch("http://127.0.0.1:4321/about"),
+        fetch(`http://127.0.0.1:${API_PORT}/livez`),
+        fetch(`${APP_URL}/about`),
       ]);
       if (api.ok && app.ok) break;
     } catch {

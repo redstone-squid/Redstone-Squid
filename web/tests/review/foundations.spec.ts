@@ -1,5 +1,5 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./test";
+import { expect, test } from "../support/test";
+import { APP_URL } from "../support/servers";
 
 for (const locale of ["en", "zh-CN"]) {
   for (const theme of ["light", "dark"]) {
@@ -18,7 +18,7 @@ for (const locale of ["en", "zh-CN"]) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await expect(page).toPassAxe();
       const name = `${locale}-${theme}`;
       const screenshot = testInfo.outputPath(`${name}.png`);
       await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
@@ -32,7 +32,7 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
   const context = await browser.newContext({ javaScriptEnabled: false });
   try {
     const page = await context.newPage();
-    await page.goto("http://127.0.0.1:4321/design-system");
+    await page.goto(`${APP_URL}/design-system`);
     await expect(page.getByRole("heading", { name: "Design system" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
     await page.getByRole("combobox", { name: "Variant", exact: true }).selectOption("quiet");
