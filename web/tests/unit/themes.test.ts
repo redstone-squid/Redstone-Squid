@@ -10,7 +10,7 @@ const themes = new Map(
     ),
   ].map(([, name, body]): [string, string[]] => [
     name ?? "",
-    [...(body ?? "").matchAll(/(--[a-z-]+):/g)]
+    [...(body ?? "").matchAll(/(--[a-z0-9-]+):/g)]
       .map(([, token]) => token ?? "")
       .sort((a, b) => a.localeCompare(b)),
   ]),

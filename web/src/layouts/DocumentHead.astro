@@ -1,9 +1,9 @@
 ---
 import { DEFAULT_LOCALE, LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import { THEME_COLORS } from "@/ui/themes";
 type Props = {
   title: string;
-  themeColor?: string;
   description?: string;
   /** Path without a locale prefix; defaults to the current route. */
   canonicalPath?: string;
@@ -34,7 +34,7 @@ const jsonLd = Astro.props.structuredData
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width" />
 <meta name="description" content={description} />
-<meta name="theme-color" content={Astro.props.themeColor ?? "#090b0c"} />
+<meta name="theme-color" content={THEME_COLORS.light} />
 <meta name="robots" content={noindex ? "noindex,follow" : "index,follow"} />
 <link rel="canonical" href={canonical} />
 {PUBLIC_LOCALES.map((language) => (

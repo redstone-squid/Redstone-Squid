@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { AstroPWAIntegration } from "@vite-pwa/astro";
 import { defineConfig } from "astro/config";
 import { PUBLIC_LOCALES, localizePath } from "./src/locales/locale";
+import { THEME_COLORS } from "./src/ui/themes";
 
 // Changes on every build so installed workers refetch the server-rendered offline pages.
 const revision = process.env.GITHUB_SHA ?? String(Date.now());
@@ -27,8 +28,8 @@ export default defineConfig({
         description: "Minecraft redstone builds and records.",
         start_url: "/",
         display: "standalone",
-        background_color: "#f5f5f4",
-        theme_color: "#f5f5f4",
+        background_color: THEME_COLORS.light,
+        theme_color: THEME_COLORS.light,
         icons: [
           { src: "pwa-64x64.png", sizes: "64x64", type: "image/png" },
           { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },

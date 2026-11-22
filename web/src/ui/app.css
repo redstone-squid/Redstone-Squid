@@ -10,38 +10,117 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
+  --color-highlight: var(--highlight);
   --color-focus: var(--focus);
   --color-overlay: var(--overlay);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
   --color-cover: var(--cover);
   --color-cover-fg: var(--cover-fg);
   --color-cover-fg-muted: var(--cover-fg-muted);
   --color-cover-art: var(--cover-art);
   --shadow-card: 0 8px 28px var(--shadow-color);
+  --shadow-overlay: 0 12px 40px var(--shadow-color), 0 2px 6px var(--shadow-color);
+  --shadow-sticky: 6px 0 8px -6px var(--shadow-color);
   --shadow-pressed: inset 0 2px 4px var(--pressed);
 }
 
 @theme {
   --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-mono: ui-monospace, "Noto Sans Mono CJK SC", monospace;
+
+  /* 13px is the smallest text: hints, errors, badges, and table metadata stay legible in CJK. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.5;
+  --text-sm--line-height: 1.55;
+  --text-base--line-height: 1.6;
+  --text-lg--line-height: 1.5;
+  --text-xl--line-height: 1.4;
+  --text-2xl--line-height: 1.3;
+  --text-3xl--line-height: 1.2;
+  /* The home hero only; page titles use text-3xl. */
+  --text-display: clamp(2rem, 5vw, 3.5rem);
+  --text-display--line-height: 1.1;
+  /* Reset to 0 for Chinese below: negative tracking crowds CJK glyphs. */
+  --tracking-tight: -0.02em;
+  --tracking-display: -0.04em;
+
+  --radius-xs: 0.25rem;
   --radius-sm: 0.375rem;
   --radius-md: 0.75rem;
   --radius-lg: 1.25rem;
+
+  /* Page edge padding, the 44px touch target, and the sticky-header offset for anchors. */
+  --spacing-gutter: clamp(1rem, 4vw, 3rem);
+  --spacing-control: 2.75rem;
+  --spacing-control-sm: 2.25rem;
+  --spacing-header: 5.5rem;
+
   --container-content: 76rem;
-  /* Small text keeps the body's line height, as the design did before Tailwind. */
-  --text-sm--line-height: 1.55;
-  --text-xs--line-height: 1.55;
+  --container-prose: 42rem;
+  --container-form: 48rem;
+  --container-wide: 96rem;
+  --container-dialog-sm: 26rem;
+  --container-dialog-md: 32rem;
+  --container-dialog-lg: 48rem;
+  /* Minimum column widths for card grids. */
+  --container-tile: 12rem;
+  --container-card: 18rem;
+  --container-card-wide: 22rem;
+  /* Widths for fields whose values are short, such as numbers and codes. */
+  --container-field-xs: 8ch;
+  --container-field-sm: 16ch;
+  --container-field-md: 30ch;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.2);
+}
+
+:root:lang(zh) {
+  --tracking-tight: 0;
+  --tracking-display: 0;
+}
+
+/* One stacking ladder, so overlays never fight over arbitrary numbers. */
+@utility z-sticky {
+  z-index: 10;
+}
+@utility z-header {
+  z-index: 20;
+}
+@utility z-dropdown {
+  z-index: 30;
+}
+@utility z-overlay {
+  z-index: 40;
+}
+@utility z-modal {
+  z-index: 50;
+}
+@utility z-skiplink {
+  z-index: 60;
 }
 
 @layer base {
@@ -53,16 +132,24 @@
   body {
     line-height: 1.55;
   }
+  /*
+   * Astro wraps slot content passed to Svelte components in these elements. It only ships this
+   * rule on pages that hydrate an island, so static pages would lay the wrapper out as one box.
+   */
+  astro-slot,
+  astro-static-slot {
+    display: contents;
+  }
   h1 {
-    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-size: var(--text-display);
     font-weight: 700;
     line-height: 1.1;
-    letter-spacing: -0.045em;
+    letter-spacing: var(--tracking-display);
   }
   h2 {
     font-size: 1.25rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-tight);
   }
   h3 {
     font-size: 1rem;
@@ -76,6 +163,13 @@
   :focus-visible {
     outline: 3px solid var(--color-focus);
     outline-offset: 3px;
+  }
+  [id] {
+    scroll-margin-top: var(--spacing-header);
+  }
+  mark {
+    background: var(--color-highlight);
+    color: inherit;
   }
   /* stylelint-disable declaration-no-important -- Reduced motion must beat component styles. */
   @media (prefers-reduced-motion: reduce) {

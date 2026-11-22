@@ -2,6 +2,9 @@
  * One block of color tokens per theme, selected by <html data-theme>. Add a theme by adding a
  * block that defines every token below and listing it in themes.ts; app.css maps the tokens to
  * Tailwind utilities, so components never change.
+ *
+ * Contrast targets against `surface`: text colors 4.5:1, `line-strong` and chart colors 3:1.
+ * `line` is for dividers and card edges only; control borders use `line-strong`.
  */
 :root,
 :root[data-theme="light"] {
@@ -9,22 +12,35 @@
   --canvas: oklch(96.99% 0.0013 106.42);
   --surface: oklch(100% 0 0);
   --surface-muted: oklch(95.08% 0.0029 128.49);
+  --surface-raised: oklch(100% 0 0);
   --fg: oklch(26.15% 0.0102 164.07);
   --fg-muted: oklch(48.91% 0.0156 159.48);
   --line: oklch(87.69% 0.0087 145.5);
+  --line-strong: oklch(62% 0.012 155);
   --accent: oklch(52.01% 0.1741 28.21);
   --accent-hover: oklch(44.53% 0.1461 28.64);
   --accent-soft: oklch(94.81% 0.0215 31.78);
   --on-accent: oklch(100% 0 0);
+  --info: oklch(50% 0.13 250);
+  --info-soft: oklch(95.5% 0.022 250);
   --success: oklch(44.77% 0.0899 155.04);
   --success-soft: oklch(95.09% 0.0199 154.9);
   --warning: oklch(47.51% 0.0983 67.9);
   --warning-soft: oklch(96.59% 0.0412 88.79);
   --danger: oklch(50.26% 0.1716 27.84);
+  --danger-soft: oklch(95.6% 0.02 22);
+  --on-danger: oklch(100% 0 0);
+  --highlight: oklch(92% 0.11 95);
   --focus: oklch(49.52% 0.1691 261.27);
   --overlay: oklch(23.03% 0.0195 166.98 / 0.702);
   --pressed: oklch(19.79% 0.0198 144.78 / 0.2);
   --shadow-color: oklch(23.03% 0.0195 166.98 / 0.039);
+  --chart-1: oklch(55% 0.15 255);
+  --chart-2: oklch(60% 0.13 55);
+  --chart-3: oklch(56% 0.085 185);
+  --chart-4: oklch(55% 0.17 340);
+  --chart-5: oklch(58% 0.12 120);
+  --chart-6: oklch(52% 0.16 295);
 }
 
 :root[data-theme="dark"] {
@@ -32,22 +48,35 @@
   --canvas: oklch(21.48% 0.0107 163.76);
   --surface: oklch(26.43% 0.0124 160.4);
   --surface-muted: oklch(31.05% 0.0163 156.15);
+  --surface-raised: oklch(30% 0.0145 158);
   --fg: oklch(96.05% 0.0073 132.42);
   --fg-muted: oklch(78.4% 0.0175 151.03);
   --line: oklch(42.88% 0.0211 153.01);
+  --line-strong: oklch(58% 0.02 153);
   --accent: oklch(72.18% 0.14 28.42);
   --accent-hover: oklch(79.11% 0.1208 28.12);
   --accent-soft: oklch(32.1% 0.0416 30.98);
   --on-accent: oklch(21.09% 0.0395 31.01);
+  --info: oklch(80% 0.09 250);
+  --info-soft: oklch(32% 0.045 250);
   --success: oklch(81.4% 0.0917 153.76);
   --success-soft: oklch(33.84% 0.0424 152.88);
   --warning: oklch(83.77% 0.1065 83.62);
   --warning-soft: oklch(34.48% 0.0403 87.66);
   --danger: oklch(81.84% 0.102 26.88);
+  --danger-soft: oklch(32% 0.05 22);
+  --on-danger: oklch(21.09% 0.0395 31.01);
+  --highlight: oklch(48% 0.09 90);
   --focus: oklch(79.81% 0.1014 263.22);
   --overlay: oklch(23.03% 0.0195 166.98 / 0.702);
   --pressed: oklch(19.79% 0.0198 144.78 / 0.2);
   --shadow-color: oklch(0% 0 0 / 0.133);
+  --chart-1: oklch(74% 0.12 255);
+  --chart-2: oklch(78% 0.13 60);
+  --chart-3: oklch(76% 0.1 185);
+  --chart-4: oklch(74% 0.15 340);
+  --chart-5: oklch(80% 0.13 120);
+  --chart-6: oklch(72% 0.13 295);
 }
 
 /* Theme-independent: the workbench cover keeps the same dark palette in every theme. */
