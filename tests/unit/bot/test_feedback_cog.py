@@ -1,22 +1,16 @@
 """Check feedback channel access and owner configuration."""
 
-from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
 
 from squid.bot import feedback_cog as feedback
-from tests.support.discord import make_layout_bot
-from tests.support.services import bot_services
 
 
 @pytest.mark.parametrize(
     ("channel_type", "visible", "private", "manage_threads", "missing", "expected"),
     [
-        (discord.DMChannel, True, False, False, False, False),
-        (discord.TextChannel, True, False, False, False, True),
-        (discord.TextChannel, False, False, False, False, False),
         (discord.TextChannel, True, False, False, True, False),
         (discord.Thread, True, False, False, False, True),
         (discord.Thread, True, True, False, False, True),
@@ -34,31 +28,17 @@ async def test_owner_access_includes_private_thread_membership(
 ) -> None:
     channel = Mock(spec=channel_type)
     member = Mock(spec=discord.Member)
-    if channel_type is not discord.DMChannel:
-        channel.guild = Mock(get_member=Mock(return_value=None), fetch_member=AsyncMock(return_value=member))
-        channel.permissions_for.return_value = discord.Permissions(view_channel=visible, manage_threads=manage_threads)
-        if channel_type is discord.Thread:
-            channel.is_private.return_value = private
-            channel.fetch_member = AsyncMock()
-            lookup = channel.fetch_member
-        else:
-            lookup = channel.guild.fetch_member
-        if missing:
-            lookup.side_effect = discord.NotFound(Mock(status=404, reason="Not Found"), "Unknown member")
+    channel.guild = Mock(get_member=Mock(return_value=None), fetch_member=AsyncMock(return_value=member))
+    channel.permissions_for.return_value = discord.Permissions(view_channel=visible, manage_threads=manage_threads)
+    if channel_type is discord.Thread:
+        channel.is_private.return_value = private
+        channel.fetch_member = AsyncMock()
+        lookup = channel.fetch_member
+    else:
+        lookup = channel.guild.fetch_member
+    if missing:
+        lookup.side_effect = discord.NotFound(Mock(status=404, reason="Not Found"), "Unknown member")
 
     assert await feedback.owner_can_view(channel, 42) is expected
     if channel_type is discord.Thread and private and not manage_threads:
         channel.fetch_member.assert_awaited_once_with(42)
-
-
-async def test_missing_owner_explains_feedback_is_unavailable() -> None:
-    bot = make_layout_bot(services=bot_services())
-    bot.owner_id = None
-    cog = feedback.FeedbackCog(bot)
-    request = Mock(respond=AsyncMock())
-
-    await cog._report(cast(Any, request), "Suggestion", "Improve things")
-
-    request.respond.assert_awaited_once_with(
-        "Feedback is unavailable: no bot owner is configured.", audience="personal"
-    )

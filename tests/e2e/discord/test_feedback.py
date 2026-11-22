@@ -44,9 +44,9 @@ async def test_feedback_posts_publicly_and_only_pings_owner(command: str, headin
         assert send.json["allowed_mentions"] == {"users": [owner.id], "parse": []}
 
 
-@pytest.mark.parametrize("in_guild", [True, False])
+@pytest.mark.parametrize("source", ["guild", "hidden", "dm"])
 @pytest.mark.parametrize("dm_fails", [True, False])
-async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(in_guild: bool, dm_fails: bool) -> None:
+async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(source: str, dm_fails: bool) -> None:
     async with command_environment("squid.bot.feedback_cog") as (bot, env):
         guild = env.guild
         reporter = env.create_user("reporter")
@@ -59,8 +59,12 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(in_guild: 
             send_dm.on_call.raises(discord.Forbidden(response, "Cannot send messages"))
 
         with wrapture.timeline(send_dm):
-            if in_guild:
-                channel = guild.create_text_channel("feedback")
+            if source != "dm":
+                overwrites = None
+                if source == "hidden":
+                    owner_member = guild.add_member(owner)
+                    overwrites = {owner_member: discord.PermissionOverwrite(view_channel=False)}
+                channel = guild.create_text_channel("feedback", overwrites=overwrites)
                 result = await guild.add_member(reporter).slash(channel, "bug", message="Something broke")
             else:
                 channel = reporter.dm_channel
@@ -87,7 +91,7 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(in_guild: 
             assert forwarded is not None
             context = (
                 f"Server: {guild.name}\nhttps://discord.com/channels/{guild.id}/{channel.id}"
-                if in_guild
+                if source != "dm"
                 else "Submitted in a direct message."
             )
             assert displayed_text(forwarded) == [f"Bug report: Something broke\n\n{context}"]
@@ -98,3 +102,19 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(in_guild: 
             )
             assert send.json is not None
             assert send.json["allowed_mentions"] == {"parse": []}
+
+
+async def test_missing_owner_explains_feedback_is_unavailable() -> None:
+    async with command_environment("squid.bot.feedback_cog") as (bot, env):
+        bot.owner_id = None
+        channel = env.guild.create_text_channel("feedback")
+        reporter = env.guild.add_member(env.create_user("reporter"))
+
+        result = await reporter.slash(channel, "suggestion", message="Improve things")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert result.response.message.content == "Feedback is unavailable: no bot owner is configured."
+        assert not any(
+            call.method == "POST" and call.path == f"/channels/{channel.id}/messages" for call in env.http_requests
+        )
