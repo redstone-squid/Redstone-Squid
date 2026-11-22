@@ -6,35 +6,22 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, cast, override
+from functools import partial
+from typing import Any, override
 
 import discord
 import pytest_asyncio
 from discord.ext import commands
 
-import squid_ui.ext.discord as sd
-from squid.bot.actors import AccountIdCache, DiscordActorResolver
-from squid.bot.app import (
-    DEVELOPMENT_EXTENSIONS,
-    EXTENSIONS,
-    CatboxClient,
-    MediaPreviewClient,
-    PostReconciler,
-    RedstoneSquid,
-)
-from squid.bot.errors import SquidCommandTree
+from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS, RedstoneSquid
 from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.help_cog import DIRECTORY_CATEGORIES
-from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.cog import BuildCommands
-from squid.config import BuildConfig
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import VoteActorResolver
-from squid.runtime import BackgroundTaskSupervisor
 from squid_i18n import Text, source_text
-from squid_reactivity import EventLedger, LocalTopicBus
 from tests.support.runtime import SchedulingRecorder
-from tests.support.services import bot_services, unconfigured
+from tests.support.services import bot_services
 
 LOADABLE = (*EXTENSIONS, *(name for name in DEVELOPMENT_EXTENSIONS if name.startswith("squid.")))
 """Every extension this repo owns, development-only ones included.
@@ -54,39 +41,6 @@ class RegistrationVotes(VoteService):
         self.resolver = resolver
 
 
-class StubBot(commands.Bot):
-    """A real command registry with checked services and real reaction registration."""
-
-    def __init__(self, extensions: Sequence[Extension]) -> None:
-        super().__init__(
-            command_prefix="!",
-            intents=discord.Intents.none(),
-            tree_cls=SquidCommandTree,
-        )
-        self.topic_bus = LocalTopicBus()
-        self.action_ledger = EventLedger(limit=200)
-        self.ui = sd.install(self, sd.Config(bus=self.topic_bus))
-        self.sessions = self.ui.sessions
-        self.services = bot_services(votes=RegistrationVotes())
-        self.extension_manager = ExtensionManager(extensions)
-        self.background_tasks = SchedulingRecorder()
-        self.reactions = ReactionRouter(cast(RedstoneSquid, self), BackgroundTaskSupervisor())
-        self.post_reconciler = unconfigured(PostReconciler)
-        self.account_ids = AccountIdCache()
-        self.actors = DiscordActorResolver(cast(RedstoneSquid, self))
-        self.build_config = BuildConfig()
-        self.catbox = unconfigured(CatboxClient)
-        self.media_previews = unconfigured(MediaPreviewClient)
-        self.development_mode = False
-        self.owner_server_id = 1
-        self.bot_name = "stub"
-        self.bot_version = "0"
-        self.source_code_url = "https://example.invalid"
-        self.notification_site_url = None
-        self.inference_model = "stub"
-        self.inference_reasoning_effort = "low"
-
-
 @asynccontextmanager
 async def _loaded_bot(extensions: Sequence[Extension]) -> AsyncIterator[commands.Bot]:
     """Load the requested extensions, restoring imported modules when the context exits.
@@ -98,13 +52,16 @@ async def _loaded_bot(extensions: Sequence[Extension]) -> AsyncIterator[commands
     can no longer see, and the real implementation runs instead.
     """
     before = dict(sys.modules)
-    bot = StubBot(extensions)
+    bot = RedstoneSquid(bot_services(votes=RegistrationVotes()))
+    bot.extension_manager = ExtensionManager(extensions)
+    bot.background_tasks = SchedulingRecorder()
     try:
-        await bot.extension_manager.start(bot.load_extension, bot.unload_extension)
-        yield bot
+        async with bot:
+            await bot.extension_manager.start(
+                partial(commands.Bot.load_extension, bot), partial(commands.Bot.unload_extension, bot)
+            )
+            yield bot
     finally:
-        await bot.ui.close()
-        await bot.extension_manager.close(bot.unload_extension)
         for name, module in before.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module
@@ -114,13 +71,6 @@ async def _loaded_bot(extensions: Sequence[Extension]) -> AsyncIterator[commands
 async def loaded_bot() -> AsyncIterator[commands.Bot]:
     """Load production and development extensions together to check for collisions."""
     async with _loaded_bot(LOADABLE) as bot:
-        yield bot
-
-
-@pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def production_bot() -> AsyncIterator[commands.Bot]:
-    """Load only the extensions registered by a production bot."""
-    async with _loaded_bot(EXTENSIONS) as bot:
         yield bot
 
 
