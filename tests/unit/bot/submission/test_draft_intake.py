@@ -3,14 +3,18 @@
 A failed download remains a draft requirement, so finalization cannot silently omit that file.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast, override
-from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
+import aiohttp
 import discord
 import pytest
+import wrapture
 
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
 from squid.core.actors import Actor
@@ -27,9 +31,9 @@ from tests.support.services import bot_services
 
 
 class Intake(SubmissionAttachmentIntake):
-    def __init__(self) -> None:
-        self._schematics = cast(DraftSchematicService, MagicMock(max_bytes=SCHEMATIC_FILE_SCHEMA_MAX_BYTES))
-        self._media = cast(MediaProcessingJobService, MagicMock(limits=MediaLimits()))
+    def __init__(self, *, media_limits: MediaLimits | None = None) -> None:
+        self._schematics = cast(DraftSchematicService, SimpleNamespace(max_bytes=SCHEMATIC_FILE_SCHEMA_MAX_BYTES))
+        self._media = cast(MediaProcessingJobService, SimpleNamespace(limits=media_limits or MediaLimits()))
         self.files: dict[UUID, SuppliedAttachment] = {}
         self.registered: list[bytes] = []
 
@@ -113,44 +117,53 @@ async def test_download_uses_limit_for_file_type(filename: str) -> None:
     assert bool(intake.registered) is (expected is IntakeStatus.READY)
 
 
+@dataclass(frozen=True)
+class CDNResponse:
+    chunks: tuple[bytes, ...]
+
+    def raise_for_status(self) -> None:
+        pass
+
+    @property
+    def content(self) -> CDNResponse:
+        return self
+
+    async def iter_chunked(self, _size: int) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            yield chunk
+
+
+@asynccontextmanager
+async def cdn_response(*chunks: bytes) -> AsyncIterator[CDNResponse]:
+    yield CDNResponse(chunks)
+
+
 @pytest.mark.parametrize("declared_size", [4, 9])
-async def test_retained_download_enforces_configured_limit(monkeypatch: pytest.MonkeyPatch, declared_size: int) -> None:
-    intake = Intake()
-    intake._media = cast(MediaProcessingJobService, MagicMock(limits=MediaLimits(max_source_bytes=8)))
+async def test_retained_download_enforces_configured_limit(declared_size: int) -> None:
+    intake = Intake(media_limits=MediaLimits(max_source_bytes=8))
     source = SubmissionSourceFile(
         uuid4(), "clip.mp4", "video/mp4", "https://cdn.discordapp.com/clip.mp4", declared_size
     )
     intake.files[source.id] = SuppliedAttachment(source.id, source.filename, "video", IntakeStatus.PENDING, source)
-    response = MagicMock()
-    response.content.iter_chunked.return_value.__aiter__.return_value = [b"1234", b"56789"]
-    client = MagicMock()
-    client.get.return_value.__aenter__.return_value = response
-    session = MagicMock()
-    session.return_value.__aenter__.return_value = client
-    monkeypatch.setattr("squid.bot.submission.draft_intake.aiohttp.ClientSession", session)
-
-    with pytest.raises(ValidationError, match="limit"):
-        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+    get = wrapture.binding(aiohttp.ClientSession, "get").on_call.returns(cdn_response(b"1234", b"56789"))
+    with wrapture.timeline(get):
+        with pytest.raises(ValidationError, match="limit"):
+            await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+        get.events.assert_times(int(declared_size <= 8))
 
     assert intake.files[source.id].status is IntakeStatus.FAILED
     assert intake.registered == []
-    assert session.called is (declared_size <= 8)
 
 
-async def test_retained_video_larger_than_schematic_limit_is_registered(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_retained_video_larger_than_schematic_limit_is_registered() -> None:
     intake = Intake()
     data = b"x" * (SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1)
     source = SubmissionSourceFile(uuid4(), "clip.mp4", "video/mp4", "https://cdn.discordapp.com/clip.mp4", len(data))
     intake.files[source.id] = SuppliedAttachment(source.id, source.filename, "video", IntakeStatus.PENDING, source)
-    response = MagicMock()
-    response.content.iter_chunked.return_value.__aiter__.return_value = [data]
-    client = MagicMock()
-    client.get.return_value.__aenter__.return_value = response
-    session = MagicMock()
-    session.return_value.__aenter__.return_value = client
-    monkeypatch.setattr("squid.bot.submission.draft_intake.aiohttp.ClientSession", session)
-
-    await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+    get = wrapture.binding(aiohttp.ClientSession, "get").on_call.returns(cdn_response(data))
+    with wrapture.timeline(get):
+        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+        get.events.with_args(url=source.url, allow_redirects=False).assert_once()
 
     assert intake.files[source.id].status is IntakeStatus.READY
     assert intake.registered == [data]
