@@ -181,47 +181,21 @@ async def test_redstoner_deploys_after_permission_recheck() -> None:
     assert len(responder.notices) == 1
 
 
-@pytest.mark.parametrize("outcome", ["success", "send_failure", "hidden", "same_channel", "other_user", "other_guild"])
-async def test_paste_moves_only_the_callers_accessible_selection(outcome: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    authorize = AsyncMock()
-    monkeypatch.setattr("squid.bot.admin_cog.enforce", authorize)
-    source = Mock(spec=discord.TextChannel)
-    source.permissions_for.return_value = SimpleNamespace(view_channel=outcome != "hidden", read_message_history=True)
-    current = Mock(spec=discord.Message)
-    source.fetch_message = AsyncMock(return_value=current)
-    selected = SimpleNamespace(channel=source, id=123)
-    guild = SimpleNamespace(id=2 if outcome == "other_guild" else 1, fetch_member=AsyncMock())
-    destination = source if outcome == "same_channel" else Mock(spec=discord.TextChannel)
-    request = SimpleNamespace(
-        guild=guild,
-        user=SimpleNamespace(id=8 if outcome == "other_user" else 7),
-        channel=destination,
-        interaction=Mock(spec=discord.Interaction),
-    )
-    move = AsyncMock(side_effect=RuntimeError("send failed") if outcome == "send_failure" else None)
-    owner = SimpleNamespace(_pending_archives={(1, 7): selected}, _paste_lock=asyncio.Lock(), _archive_message=move)
-    callback = inspect.unwrap(cast(Any, Admin).paste.callback)
-    if outcome == "send_failure":
-        with pytest.raises(RuntimeError, match="send failed"):
-            await callback(owner, request)
-    else:
-        await callback(owner, request)
-    authorize.assert_awaited_once()
-    if outcome == "success":
-        move.assert_awaited_once_with(current, request.interaction)
-        assert owner._pending_archives == {}
-    else:
-        assert owner._pending_archives == {(1, 7): selected}
-        if outcome != "send_failure":
-            move.assert_not_awaited()
-
-
-async def test_archive_selection_does_not_move_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_paste_rechecks_access_to_the_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("squid.bot.admin_cog.enforce", AsyncMock())
-    guild = SimpleNamespace(id=1)
-    message = SimpleNamespace(guild=guild, delete=AsyncMock())
-    request = SimpleNamespace(guild=guild, user=SimpleNamespace(id=7))
-    owner = SimpleNamespace(_pending_archives={})
-    await Admin.archive_message_context(cast(Any, owner), cast(Any, request), cast(discord.Message, message))
-    assert owner._pending_archives == {(1, 7): message}
-    message.delete.assert_not_awaited()
+    source = Mock(spec=discord.TextChannel)
+    source.permissions_for.return_value = discord.Permissions(read_message_history=True)
+    source.fetch_message = AsyncMock()
+    selected = SimpleNamespace(channel=source, id=123)
+    request = SimpleNamespace(
+        guild=SimpleNamespace(id=1, fetch_member=AsyncMock()),
+        user=SimpleNamespace(id=7),
+        channel=Mock(spec=discord.TextChannel),
+    )
+    owner = SimpleNamespace(_pending_archives={(1, 7): selected}, _paste_lock=asyncio.Lock())
+    callback = inspect.unwrap(cast(Any, Admin).paste.callback)
+
+    await callback(owner, request)
+
+    source.fetch_message.assert_not_awaited()
+    assert owner._pending_archives == {(1, 7): selected}

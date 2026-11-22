@@ -6,6 +6,7 @@ from functools import partial
 import discord
 import pytest
 import simcord
+import wrapture
 from discord.ext import commands
 
 from squid.bot.recount.spec import extension as recount_extension
@@ -22,6 +23,7 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.starboard.models import StarboardConfig
 from squid.core.voting.domain import VoteStatus
+from squid_ui.ext.discord.testing import http_error
 from tests.e2e.discord.community_services import (
     Boards,
     CommunitySettings,
@@ -48,11 +50,15 @@ def community_moderator(env: simcord.Env, accounts: WorkspaceAccounts) -> simcor
     return moderator
 
 
+@pytest.mark.parametrize("first_send_fails", [False, True])
 async def test_archive_then_paste_moves_the_selected_message_with_its_attachment(
     monkeypatch: pytest.MonkeyPatch,
+    first_send_fails: bool,
 ) -> None:
     accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
+    services = bot_services(
+        accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE), error_reports=OwnerReports()
+    )
     async with command_environment(ADMIN, services=services) as (bot, env):
         # Adding the archive's reaction starts the router's persistent workers. An idle
         # shard is waiting for another gateway event while its handlers remain observable.
@@ -73,6 +79,21 @@ async def test_archive_then_paste_moves_the_selected_message_with_its_attachment
         assert any("Run /paste" in text for text in displayed_text(selected.response.message))
         assert message.id in [item.id for item in source.history()]
 
+        if first_send_fails:
+            edit = wrapture.binding(discord.Interaction, "edit_original_response")
+            error = http_error(500, message="archive send failed")
+            edit.on_call.raises(error).then(after=1).passes_through()
+            with wrapture.timeline(edit):
+                failed = await moderator.slash(destination, "paste")
+                edit.events.raising(discord.HTTPException).assert_once()
+            (captured,) = env.errors
+            assert isinstance(captured, discord.app_commands.CommandInvokeError)
+            assert captured.original is error
+            assert failed.response is not None
+            assert any("Something went wrong" in text for text in displayed_text(failed.response.message))
+            assert not any("The original design" in item.content for item in destination.history())
+            assert message.id in [item.id for item in source.history()]
+
         pasted = await moderator.slash(destination, "paste")
         assert pasted.response is not None
         copy = pasted.response.message
@@ -88,6 +109,43 @@ async def test_archive_then_paste_moves_the_selected_message_with_its_attachment
         again = await moderator.slash(destination, "paste")
         assert again.response is not None
         assert any("Select a message" in text for text in displayed_text(again.response.message))
+
+
+@pytest.mark.parametrize("destination", ["same-channel", "other-user", "other-guild"])
+async def test_archive_selection_only_applies_to_its_owner_and_guild(destination: str) -> None:
+    accounts = WorkspaceAccounts()
+    services = bot_services(accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
+    async with command_environment(ADMIN, services=services) as (_, env):
+        guild = env.guild
+        source = guild.create_text_channel("source")
+        moderator = community_moderator(env, accounts)
+        builder = guild.add_member(env.create_user("builder"))
+        message = await builder.send(source, "The original design")
+
+        await moderator.context_menu(source, "Archive Message", message)
+        if destination == "same-channel":
+            result = await moderator.slash(source, "paste")
+            expected = "Run /paste in a different channel"
+        elif destination == "other-user":
+            other_role = guild.create_role(
+                "Staff", permissions=discord.Permissions(manage_guild=True, manage_messages=True)
+            )
+            other = guild.add_member(env.create_user("other moderator"), roles=[other_role])
+            accounts.discord_accounts[str(other.id)] = Account(id=18, consent=AccountConsent.grant_current())
+            result = await other.slash(guild.create_text_channel("archive"), "paste")
+            expected = "Select a message"
+        else:
+            other_guild = env.create_guild("Other guild")
+            other_role = other_guild.create_role(
+                "Staff", permissions=discord.Permissions(manage_guild=True, manage_messages=True)
+            )
+            other = other_guild.add_member(moderator.user, roles=[other_role])
+            result = await other.slash(other_guild.create_text_channel("archive"), "paste")
+            expected = "Select a message"
+
+        assert result.response is not None
+        assert any(expected in text for text in displayed_text(result.response.message))
+        assert message.id in [item.id for item in source.history()]
 
 
 @pytest.mark.parametrize("entry", ["slash", "prefix"])
