@@ -1,20 +1,22 @@
-FROM oven/bun:1.4.4 AS build
+FROM oven/bun:1.4.4 AS base
 
 WORKDIR /app
+
+FROM base AS build
+
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
-FROM node:24-bookworm-slim AS runtime
+FROM base AS runtime
 
 ENV HOST=0.0.0.0 \
     NODE_ENV=production \
     PORT=4321
-WORKDIR /app
-COPY --from=build --chown=node:node /app/dist ./dist
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/package.json ./package.json
-USER node
+COPY --from=build --chown=bun:bun /app/dist ./dist
+COPY --from=build --chown=bun:bun /app/node_modules ./node_modules
+COPY --from=build --chown=bun:bun /app/package.json ./package.json
+USER bun
 EXPOSE 4321
-CMD ["node", "dist/server/entry.mjs"]
+CMD ["bun", "dist/server/entry.mjs"]
