@@ -181,6 +181,36 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return await BuildBrowseScreen.create_search(request, query=query, records=True)
         return await BuildBrowseScreen.create(request, initial_records=True)
 
+    @sd.command(
+        name=tr(t"command-fastest-name = fastest"),
+        description=tr(t"command-fastest-help = Browse fastest records and their holder builds"),
+        defer="public",
+        options={
+            "query": sd.Option(
+                name=tr(t"command-records-query-name = query"),
+                description=tr(t"command-fastest-query-help = Search text or filters, e.g. smallest 3x3."),
+                autocomplete=suggests("search_query"),
+            ),
+        },
+    )
+    async def fastest_records(self, request: sd.Request[Self, BotT], query: str = "") -> BuildBrowseScreen:
+        return await BuildBrowseScreen.create_search(request, query=f"fastest {query}".rstrip(), records=True)
+
+    @sd.command(
+        name=tr(t"command-smallest-name = smallest"),
+        description=tr(t"command-smallest-help = Browse smallest records and their holder builds"),
+        defer="public",
+        options={
+            "query": sd.Option(
+                name=tr(t"command-records-query-name = query"),
+                description=tr(t"command-smallest-query-help = Search text or filters, e.g. fastest 3x3."),
+                autocomplete=suggests("search_query"),
+            ),
+        },
+    )
+    async def smallest_records(self, request: sd.Request[Self, BotT], query: str = "") -> BuildBrowseScreen:
+        return await BuildBrowseScreen.create_search(request, query=f"smallest {query}".rstrip(), records=True)
+
     @sd.Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
         """Search when the bot is mentioned without a command."""

@@ -1394,13 +1394,13 @@ bot-submission-submit-check-build-size = Check the build dimensions
 # squid/bot/submission/form.py:81
 bot-submission-submit-check-door-size = Check the opening size
 
-# squid/bot/submission/cog.py:235
+# squid/bot/submission/cog.py:265
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
 # squid/bot/submission/message_intake.py:101
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/cog.py:244
+# squid/bot/submission/cog.py:274
 bot-submission-submit-the-whole-build-e-g-x-x = Build dimensions as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/opening.py:97
@@ -2084,7 +2084,7 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:203
+# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:207
 catalogue-search-help = Search help
 
 # squid/bot/catalogue/browse.py:602
@@ -2234,16 +2234,16 @@ command-build-browse-help = Browse builds and record holders.
 # squid/bot/submission/cog.py:148
 command-build-browse-name = browse
 
-# squid/bot/submission/cog.py:341
+# squid/bot/submission/cog.py:371
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
-# squid/bot/submission/cog.py:345
+# squid/bot/submission/cog.py:375
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
-# squid/bot/submission/cog.py:344
+# squid/bot/submission/cog.py:374
 command-build-drafts-inbox-name = inbox
 
-# squid/bot/submission/cog.py:339
+# squid/bot/submission/cog.py:369
 command-build-drafts-name = drafts
 
 # squid/bot/submission/cog.py:56
@@ -2258,76 +2258,76 @@ command-build-issues-name = issues
 # squid/bot/submission/cog.py:55
 command-build-name = build
 
-# squid/bot/submission/cog.py:243
+# squid/bot/submission/cog.py:273
 command-build-submit-build-size-name = build_dimensions
 
-# squid/bot/submission/cog.py:213
+# squid/bot/submission/cog.py:243
 command-build-submit-category-name = kind
 
-# squid/bot/submission/cog.py:216
+# squid/bot/submission/cog.py:246
 command-build-submit-choice-category-door = Door
 
-# squid/bot/submission/cog.py:219
+# squid/bot/submission/cog.py:249
 command-build-submit-choice-category-entrance = Entrance
 
-# squid/bot/submission/cog.py:217
+# squid/bot/submission/cog.py:247
 command-build-submit-choice-category-extender = Extender
 
-# squid/bot/submission/cog.py:220
+# squid/bot/submission/cog.py:250
 command-build-submit-choice-category-other = Other
 
-# squid/bot/submission/cog.py:218
+# squid/bot/submission/cog.py:248
 command-build-submit-choice-category-utility = Utility
 
-# squid/bot/submission/cog.py:237
+# squid/bot/submission/cog.py:267
 command-build-submit-choice-door-type-door = Door
 
-# squid/bot/submission/cog.py:238
+# squid/bot/submission/cog.py:268
 command-build-submit-choice-door-type-skydoor = Skydoor
 
-# squid/bot/submission/cog.py:239
+# squid/bot/submission/cog.py:269
 command-build-submit-choice-door-type-trapdoor = Trapdoor
 
-# squid/bot/submission/cog.py:249
+# squid/bot/submission/cog.py:279
 command-build-submit-creators-name = creators
 
-# squid/bot/submission/cog.py:277
+# squid/bot/submission/cog.py:307
 command-build-submit-description-name = description
 
-# squid/bot/submission/cog.py:228
+# squid/bot/submission/cog.py:258
 command-build-submit-door-size-name = opening_size
 
-# squid/bot/submission/cog.py:234
+# squid/bot/submission/cog.py:264
 command-build-submit-door-type-name = orientation
 
-# squid/bot/submission/cog.py:285
+# squid/bot/submission/cog.py:315
 command-build-submit-file-2-name = file_2
 
-# squid/bot/submission/cog.py:289
+# squid/bot/submission/cog.py:319
 command-build-submit-file-3-name = file_3
 
-# squid/bot/submission/cog.py:293
+# squid/bot/submission/cog.py:323
 command-build-submit-file-4-name = file_4
 
-# squid/bot/submission/cog.py:281
+# squid/bot/submission/cog.py:311
 command-build-submit-file-name = file
 
-# squid/bot/submission/cog.py:208
+# squid/bot/submission/cog.py:238
 command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens.
 
-# squid/bot/submission/cog.py:206
+# squid/bot/submission/cog.py:236
 command-build-submit-name = submit
 
-# squid/bot/submission/cog.py:224
+# squid/bot/submission/cog.py:254
 command-build-submit-name-name = name
 
-# squid/bot/submission/cog.py:263
+# squid/bot/submission/cog.py:293
 command-build-submit-patterns-name = patterns
 
-# squid/bot/submission/cog.py:270
+# squid/bot/submission/cog.py:300
 command-build-submit-restrictions-name = restrictions
 
-# squid/bot/submission/cog.py:256
+# squid/bot/submission/cog.py:286
 command-build-submit-versions-name = versions
 
 # squid/bot/diagnostics/cog.py:26
@@ -2389,6 +2389,15 @@ command-errors-reference-help = The error reference, full ID, or ID prefix to op
 
 # squid/bot/diagnostics/cog.py:62
 command-errors-reference-name = reference
+
+# squid/bot/submission/cog.py:186
+command-fastest-help = Browse fastest records and their holder builds
+
+# squid/bot/submission/cog.py:185
+command-fastest-name = fastest
+
+# squid/bot/submission/cog.py:191
+command-fastest-query-help = Search text or filters, e.g. smallest 3x3.
 
 # squid/bot/help_cog.py:209
 command-help-command-name = command
@@ -2477,7 +2486,7 @@ command-records-browse-help = Browse records and their holder builds
 # squid/bot/submission/cog.py:166
 command-records-name = records
 
-# squid/bot/submission/cog.py:170
+# squid/bot/submission/cog.py:170, squid/bot/submission/cog.py:190, squid/bot/submission/cog.py:205
 command-records-query-name = query
 
 # squid/bot/recount_cog.py:85
@@ -2569,6 +2578,15 @@ command-settings-help = Configure this server
 
 # squid/bot/settings/cog.py:27
 command-settings-name = settings
+
+# squid/bot/submission/cog.py:201
+command-smallest-help = Browse smallest records and their holder builds
+
+# squid/bot/submission/cog.py:200
+command-smallest-name = smallest
+
+# squid/bot/submission/cog.py:206
+command-smallest-query-help = Search text or filters, e.g. fastest 3x3.
 
 # squid/bot/starboard/cog.py:207
 command-starboard-help = Configure this server's starboards
@@ -3407,37 +3425,37 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner_cog.py:128
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/catalogue/search/filters.py:151, squid/bot/catalogue/search/filters.py:171
+# squid/bot/catalogue/search/filters.py:152, squid/bot/catalogue/search/filters.py:172
 guided-search-add-filter = Add filter
 
-# squid/bot/catalogue/search/filters.py:183
+# squid/bot/catalogue/search/filters.py:184
 guided-search-cancel-batch = Cancel adding filters
 
-# squid/bot/catalogue/search/filters.py:185
+# squid/bot/catalogue/search/filters.py:186
 guided-search-change-field = Choose another field
 
 # squid/bot/catalogue/search/filters.py:191
 guided-search-check-presence = Check presence
 
-# squid/bot/catalogue/search/filters.py:149
+# squid/bot/catalogue/search/filters.py:150
 guided-search-close-filters = Close filters
 
-# squid/bot/catalogue/search/filters.py:286
+# squid/bot/catalogue/search/filters.py:298
 guided-search-comparison = Comparison
 
-# squid/bot/catalogue/search/filters.py:143
+# squid/bot/catalogue/search/filters.py:144
 guided-search-edit-query = Type a query
 
-# squid/bot/catalogue/search/filters.py:333
+# squid/bot/catalogue/search/filters.py:363
 guided-search-edit-text = Edit keywords
 
 # squid/bot/catalogue/search/filters.py:348
 guided-search-field-presence = Field presence
 
-# squid/bot/catalogue/search/filters.py:180
+# squid/bot/catalogue/search/filters.py:181
 guided-search-filter-heading = Filter by { $name }
 
-# squid/bot/catalogue/search/filters.py:178
+# squid/bot/catalogue/search/filters.py:179
 guided-search-filter-progress = Filter by { $name } ({ $step } of { $total })
 
 # squid/bot/catalogue/search/filters.py:352
@@ -3446,67 +3464,67 @@ guided-search-is-not-set = Is not set
 # squid/bot/catalogue/search/filters.py:351
 guided-search-is-set = Is set
 
-# squid/bot/catalogue/search/filters.py:336
+# squid/bot/catalogue/search/filters.py:366
 guided-search-keywords = Keywords
 
-# squid/bot/catalogue/search/filters.py:322, squid/bot/catalogue/search/filters.py:339
+# squid/bot/catalogue/search/filters.py:334, squid/bot/catalogue/search/filters.py:369
 guided-search-negated = Exclude matches
 
-# squid/bot/catalogue/search/filters.py:536
+# squid/bot/catalogue/search/filters.py:570
 guided-search-no = No
 
-# squid/bot/catalogue/search/filters.py:280
+# squid/bot/catalogue/search/filters.py:292
 guided-search-operator-at-least = at least
 
-# squid/bot/catalogue/search/filters.py:278
+# squid/bot/catalogue/search/filters.py:290
 guided-search-operator-at-most = at most
 
-# squid/bot/catalogue/search/filters.py:281
+# squid/bot/catalogue/search/filters.py:293
 guided-search-operator-between = between
 
-# squid/bot/catalogue/search/filters.py:276
+# squid/bot/catalogue/search/filters.py:288
 guided-search-operator-equal = is
 
-# squid/bot/catalogue/search/filters.py:279
+# squid/bot/catalogue/search/filters.py:291
 guided-search-operator-greater = more than
 
-# squid/bot/catalogue/search/filters.py:277
+# squid/bot/catalogue/search/filters.py:289
 guided-search-operator-less = less than
 
-# squid/bot/catalogue/search/filters.py:244
+# squid/bot/catalogue/search/filters.py:256
 guided-search-query-label = Words and filters, e.g. door width<=5
 
-# squid/bot/catalogue/search/filters.py:240
+# squid/bot/catalogue/search/filters.py:252
 guided-search-query-title = Search query
 
-# squid/bot/catalogue/search/filters.py:230
+# squid/bot/catalogue/search/filters.py:242
 guided-search-remove-clause = Remove
 
 # squid/bot/catalogue/browse.py:785
 guided-search-reset = Reset
 
-# squid/bot/catalogue/search/filters.py:432
+# squid/bot/catalogue/search/filters.py:463
 guided-search-search-filter = Search fields
 
-# squid/bot/catalogue/search/filters.py:447
+# squid/bot/catalogue/search/filters.py:478
 guided-search-search-options = Search sort orders
 
-# squid/bot/catalogue/search/filters.py:472
+# squid/bot/catalogue/search/filters.py:503
 guided-search-search-values = Search { $name }
 
-# squid/bot/catalogue/search/filters.py:206
+# squid/bot/catalogue/search/filters.py:213
 guided-search-selected-field = Set { $name } filter
 
-# squid/bot/catalogue/search/filters.py:137
+# squid/bot/catalogue/search/filters.py:138
 guided-search-sort = Sort by
 
-# squid/bot/catalogue/search/filters.py:157
+# squid/bot/catalogue/search/filters.py:158
 guided-search-sorting = Sort
 
-# squid/bot/catalogue/search/filters.py:313
+# squid/bot/catalogue/search/filters.py:325
 guided-search-upper = And (only for between)
 
-# squid/bot/catalogue/search/filters.py:536
+# squid/bot/catalogue/search/filters.py:570
 guided-search-yes = Yes
 
 # squid/bot/help_cog.py:27
@@ -5145,7 +5163,7 @@ schematics-zoom-positive = Render zoom must be positive.
 # squid/core/search/application/fields.py:264
 search-align-increments = { $field_name } must align to increments of { $step }
 
-# squid/core/search/domain/query.py:95
+# squid/core/search/domain/query.py:106
 search-boolean-minimum-operands = Boolean expressions require at least two operands
 
 # squid/core/search/application/ranking.py:71
@@ -5190,70 +5208,70 @@ search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 # squid/core/search/application/fields.py:115
 search-expects-number = { $field_name } expects a number
 
-# squid/bot/catalogue/search/labels.py:61
+# squid/bot/catalogue/search/labels.py:62
 search-field-base-title = Record criterion
 
-# squid/bot/catalogue/search/labels.py:73
+# squid/bot/catalogue/search/labels.py:74
 search-field-completion-at = Completed
 
-# squid/bot/catalogue/search/labels.py:75
+# squid/bot/catalogue/search/labels.py:76
 search-field-created-at = Submitted
 
-# squid/bot/catalogue/search/labels.py:53
+# squid/bot/catalogue/search/labels.py:54
 search-field-creator = Creator
 
-# squid/bot/catalogue/search/labels.py:69
+# squid/bot/catalogue/search/labels.py:70
 search-field-depth = Depth
 
-# squid/bot/catalogue/search/labels.py:43
+# squid/bot/catalogue/search/labels.py:44
 search-field-description = Description
 
 # squid/core/search/application/fields.py:106
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
-# squid/bot/catalogue/search/labels.py:67
+# squid/bot/catalogue/search/labels.py:68
 search-field-height = Height
 
-# squid/bot/catalogue/search/labels.py:59
+# squid/bot/catalogue/search/labels.py:60
 search-field-kind = Kind
 
-# squid/bot/catalogue/search/labels.py:51
+# squid/bot/catalogue/search/labels.py:52
 search-field-pattern = Pattern
 
-# squid/bot/catalogue/search/labels.py:47
+# squid/bot/catalogue/search/labels.py:48
 search-field-restriction = Restriction
 
-# squid/bot/catalogue/search/labels.py:57
+# squid/bot/catalogue/search/labels.py:58
 search-field-status = Status
 
-# squid/bot/catalogue/search/labels.py:45
+# squid/bot/catalogue/search/labels.py:46
 search-field-tag = Tag
 
-# squid/bot/catalogue/search/labels.py:41
+# squid/bot/catalogue/search/labels.py:42
 search-field-title = Title
 
-# squid/bot/catalogue/search/labels.py:49
+# squid/bot/catalogue/search/labels.py:50
 search-field-type = Type
 
-# squid/bot/catalogue/search/labels.py:77
+# squid/bot/catalogue/search/labels.py:78
 search-field-updated-at = Updated
 
-# squid/bot/catalogue/search/labels.py:55
+# squid/bot/catalogue/search/labels.py:56
 search-field-version = Version
 
-# squid/bot/catalogue/search/labels.py:63
+# squid/bot/catalogue/search/labels.py:64
 search-field-version-scope = Version scope
 
-# squid/bot/catalogue/search/labels.py:71
+# squid/bot/catalogue/search/labels.py:72
 search-field-volume = Volume
 
-# squid/bot/catalogue/search/labels.py:65
+# squid/bot/catalogue/search/labels.py:66
 search-field-width = Width
 
-# squid/bot/catalogue/search/labels.py:126
+# squid/bot/catalogue/search/labels.py:132
 search-filter-contains = { $name } has “{ $shown }”
 
-# squid/bot/catalogue/search/labels.py:127
+# squid/bot/catalogue/search/labels.py:133
 search-filter-equals = { $name } is { $shown }
 
 # squid/bot/catalogue/search/labels.py:115
@@ -5262,13 +5280,13 @@ search-filter-is-not-set = { $name } is not set
 # squid/bot/catalogue/search/labels.py:114
 search-filter-is-set = { $name } is set
 
-# squid/bot/catalogue/search/labels.py:109
+# squid/bot/catalogue/search/labels.py:110
 search-filter-keywords = Keywords: { $words }
 
-# squid/bot/catalogue/search/labels.py:106
+# squid/bot/catalogue/search/labels.py:107
 search-filter-not = Not: { $inner }
 
-# squid/bot/catalogue/search/labels.py:122
+# squid/bot/catalogue/search/labels.py:128
 search-filter-range = { $name } { $lower } to { $upper }
 
 # squid/bot/catalogue/search/results.py:502
@@ -5298,7 +5316,7 @@ search-grouped-tied-holders = Tied holders
 # squid/core/search/application/ranking.py:69
 search-k-positive = k must be positive
 
-# squid/core/search/domain/query.py:120
+# squid/core/search/domain/query.py:131
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
 # squid/bot/catalogue/search/help.py:178
@@ -5319,7 +5337,7 @@ search-reference-credit = `creator:Steve`, `version:"Java 1.20"`
 # squid/bot/catalogue/search/help.py:127
 search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and `updated_at`.
 
-# squid/bot/catalogue/search/help.py:192
+# squid/bot/catalogue/search/help.py:196
 search-reference-empty = - No results? Remove filters one at a time. Filters never reveal hidden builds.
 
 # squid/bot/catalogue/search/help.py:138
@@ -5400,7 +5418,7 @@ search-reference-record-types = The Smallest, Fastest and First buttons match re
 # squid/bot/catalogue/search/help.py:109
 search-reference-size = `width<=5`, `height:[3 TO 5]`, `depth`, `volume`. The whole build in blocks, not the door opening.
 
-# squid/bot/catalogue/search/help.py:191
+# squid/bot/catalogue/search/help.py:195
 search-reference-sort = - Order results with Sort, not in the query.
 
 # squid/bot/catalogue/search/help.py:171, squid/bot/catalogue/search/help.py:173
@@ -5418,19 +5436,19 @@ search-search-numbers-finite = Search numbers must be finite
 # squid/core/search/application/services.py:71
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/bot/catalogue/search/labels.py:145
+# squid/bot/catalogue/search/labels.py:151
 search-sort-ascending = { $field }, smallest first
 
-# squid/bot/catalogue/search/labels.py:135
+# squid/bot/catalogue/search/labels.py:141
 search-sort-default = Default order
 
-# squid/bot/catalogue/search/labels.py:144
+# squid/bot/catalogue/search/labels.py:150
 search-sort-descending = { $field }, largest first
 
-# squid/bot/catalogue/search/labels.py:141
+# squid/bot/catalogue/search/labels.py:147
 search-sort-newest = { $field }, newest first
 
-# squid/bot/catalogue/search/labels.py:142
+# squid/bot/catalogue/search/labels.py:148
 search-sort-oldest = { $field }, oldest first
 
 # squid/core/search/application/ranking.py:78
@@ -6060,10 +6078,10 @@ submissions-visible-closing-time = Visible closing time
 # squid/core/submissions/application/forms.py:568
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/cog.py:286, squid/bot/submission/cog.py:290, squid/bot/submission/cog.py:294
+# squid/bot/submission/cog.py:316, squid/bot/submission/cog.py:320, squid/bot/submission/cog.py:324
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/cog.py:282
+# squid/bot/submission/cog.py:312
 submit-attachment-types-help = Your schematic, an image, or a video.
 
 # squid/bot/submission/message_intake.py:121
@@ -6075,16 +6093,16 @@ submit-build-log-channel-required = Builds are only read out of messages posted 
 # squid/bot/submission/form.py:92
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/cog.py:214
+# squid/bot/submission/cog.py:244
 submit-category-help = The kind of build to submit.
 
-# squid/bot/submission/cog.py:271
+# squid/bot/submission/cog.py:301
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/cog.py:250
+# squid/bot/submission/cog.py:280
 submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, java:IGN, bedrock:Name.
 
-# squid/bot/submission/cog.py:229
+# squid/bot/submission/cog.py:259
 submit-door-dimensions-help = Opening size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
 # squid/bot/submission/form.py:62
@@ -6096,19 +6114,19 @@ submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or
 # squid/bot/submission/form.py:61, squid/bot/submission/form.py:66
 submit-inapplicable-options = Options do not apply
 
-# squid/bot/submission/cog.py:225
+# squid/bot/submission/cog.py:255
 submit-name-help = An optional name for the build.
 
 # squid/bot/submission/form.py:67
 submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
 
-# squid/bot/submission/cog.py:264
+# squid/bot/submission/cog.py:294
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/cog.py:278
+# squid/bot/submission/cog.py:308
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/cog.py:257
+# squid/bot/submission/cog.py:287
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/core/suggestions/application/registry.py:82
