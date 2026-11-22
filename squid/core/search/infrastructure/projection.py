@@ -37,6 +37,9 @@ from squid.core.builds.models import (
 from squid.core.diagnostics.log_capture import work_lost
 from squid.core.errors import DataIntegrityError
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.core.records.application.door_categories import door_category_lookup
+from squid.core.records.application.models import CategoryIdentity
+from squid.core.records.domain import BuildKind
 from squid.core.records.models import (
     ComputationRun,
     RecordDefinition,
@@ -111,6 +114,7 @@ class RecordProjectionSource:
     category_key: str
     title: str
     subtitle: str | None
+    category_facets: tuple[ProjectionFacet, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,6 +516,7 @@ class SearchProjectionLoader:
                 category_key=definition.category_key,
                 title=definition.title,
                 subtitle=definition.subtitle,
+                category_facets=await self._record_category_facets(definition.category_key),
             ),
             tuple(
                 RecordHolderProjectionSource(
@@ -523,6 +528,70 @@ class SearchProjectionLoader:
                 for holder, title, creators in holders
             ),
         )
+
+    async def _record_category_facets(self, key: str) -> tuple[ProjectionFacet, ...]:
+        identity = CategoryIdentity.from_key(key)
+        if identity is None:
+            return ()
+
+        facets: list[ProjectionFacet] = []
+        pattern_ids: frozenset[int] = frozenset()
+        if identity.kind is BuildKind.DOOR and (door := door_category_lookup(identity)) is not None:
+            width, height, depth = door.opening
+            facets.extend(
+                (
+                    ProjectionFacet("door_width", Decimal(width)),
+                    ProjectionFacet("door_height", Decimal(height)),
+                    ProjectionFacet("door_depth", Decimal(depth)),
+                    ProjectionFacet("orientation", door.orientation),
+                )
+            )
+            pattern_ids = door.type_ids
+            if not pattern_ids:
+                facets.append(ProjectionFacet("type", "Regular"))
+        elif identity.kind is BuildKind.EXTENDER:
+            parts = identity.base_key.split("|", maxsplit=3)
+            if len(parts) == 4 and parts[0] == "extender":
+                _, orientation, length, types = parts
+                if length.isdecimal():
+                    facets.extend(
+                        (
+                            ProjectionFacet("extender_length", Decimal(length)),
+                            ProjectionFacet("orientation", orientation),
+                        )
+                    )
+                if types.startswith("t[") and types.endswith("]"):
+                    type_key = types[2:-1]
+                    if all(part.isdecimal() for part in type_key.split(",")):
+                        pattern_ids = frozenset(int(part) for part in type_key.split(","))
+                    elif type_key:
+                        # Extender categories without pattern tags use the stored type name.
+                        facets.append(ProjectionFacet("type", type_key))
+
+        restriction_ids = frozenset(identity.restriction_ids)
+        tag_ids = pattern_ids | restriction_ids
+        if tag_ids:
+            facets.extend(ProjectionFacet("category_tag_id", Decimal(tag_id)) for tag_id in sorted(tag_ids))
+            definitions = await self._session.scalars(
+                select(TagDefinition)
+                .options(selectinload(TagDefinition.aliases))
+                .where(
+                    TagDefinition.id.in_(tag_ids),
+                    TagDefinition.moderation_status == "approved",
+                    TagDefinition.authority == "official",
+                )
+                .order_by(TagDefinition.id)
+            )
+            for definition in definitions:
+                if definition.id in pattern_ids and definition.semantic_kind == "pattern":
+                    field_name = "type"
+                elif definition.id in restriction_ids and definition.semantic_kind == "restriction":
+                    field_name = "restriction"
+                else:
+                    continue
+                names = {definition.display_name, *(alias.alias for alias in definition.aliases)}
+                facets.extend(ProjectionFacet(field_name, name) for name in sorted(names))
+        return tuple(facets)
 
     async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
         if subtype == "tag":
@@ -620,6 +689,22 @@ class SearchProjectionWorker:
                             .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
                             .order_by(RecordResult.id)
                         )
+                    if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
+                        subtype, tag_id = key
+                        if subtype == "tag":
+                            await self._session.execute(
+                                select(
+                                    func.upsert_search_projection_request("record", SearchDocument.source_key, "upsert")
+                                )
+                                .select_from(SearchDocumentFacet)
+                                .join(SearchDocument, SearchDocument.id == SearchDocumentFacet.document_id)
+                                .where(
+                                    SearchDocument.resource_kind == "record",
+                                    SearchDocumentFacet.field_name == "category_tag_id",
+                                    SearchDocumentFacet.numeric_value == Decimal(tag_id),
+                                )
+                                .order_by(SearchDocument.source_key)
+                            )
                     await self._store.complete(item_id, token)
                 succeeded += 1
             except Exception as error:
@@ -706,6 +791,7 @@ def build_record_projection(
             ProjectionFacet("record_state", "current"),
             ProjectionFacet("kind", source.build_kind),
             ProjectionFacet("version_scope", source.version_scope),
+            *source.category_facets,
             *(
                 ProjectionFacet("creator", name)
                 for name in dict.fromkeys(n for holder in holders for n in holder.creators)

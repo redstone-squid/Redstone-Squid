@@ -29,6 +29,7 @@ class FieldDefinition:
     supports_sort: bool = False
     ranked: bool = False
     """Whether the value of a clause on this field also counts as text for relevance ranking."""
+    unranked_scopes: frozenset[SearchScope] = frozenset()
     unit_scales: tuple[tuple[str, Decimal], ...] = ()
     """Accepted suffixes and multipliers that convert values to the canonical unit."""
     numeric_step: Decimal | None = None

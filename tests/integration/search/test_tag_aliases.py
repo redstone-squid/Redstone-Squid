@@ -15,6 +15,16 @@ from squid.core.accounts.models import Account
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.models import (
+    ComputationRun,
+    ComputationStatus,
+    MaterializationSource,
+    Record,
+    RecordDefinition,
+    RecordResult,
+    RulesRevision,
+)
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, SearchPage, SearchRequest, SearchScope, SearchSort
 from squid.core.search.infrastructure.projection import SearchProjectionWorker
@@ -216,3 +226,76 @@ async def test_migration_requeues_existing_builds_and_tag_metadata(
     assert _ids(await service.search(SearchRequest("restriction:observerless", scope=SearchScope.BUILDS))) == {
         target_id
     }
+
+
+async def test_record_category_filters_match_without_holders_and_refresh_aliases(
+    migrated_session_factory: async_sessionmaker[AsyncSession], catalogue: tuple[int, int, int]
+) -> None:
+    _, _, restriction_id = catalogue
+    async with migrated_session_factory.begin() as session:
+        pattern_id = await session.scalar(select(TagDefinition.id).where(TagDefinition.stable_key == "search-1"))
+        assert pattern_id is not None
+        rules = RulesRevision(document_hash="search-record-categories", calculator_version="1", formatter_version="1")
+        session.add(rules)
+        await session.flush()
+        result_ids: list[str] = []
+        for kind, categories in (
+            (
+                BuildKind.DOOR,
+                (
+                    f"door:door|2x3|t[{pattern_id}]|Trapdoor:r[{restriction_id}]:p[]",
+                    "door:door|2x4x2|t[]|Door:r[]:p[]",
+                ),
+            ),
+            (BuildKind.EXTENDER, ("extender:extender|Horizontal|4|t[Double]:r[]:p[]",)),
+        ):
+            run = ComputationRun(
+                rules_revision_id=rules.id, build_kind=kind, status=ComputationStatus.COMPLETED, is_active=True
+            )
+            session.add(run)
+            await session.flush()
+            for key in categories:
+                record = Record(
+                    criterion=RecordCriterion.SMALLEST,
+                    build_kind=kind,
+                    version_scope=VersionScope.ALL_TIME,
+                    category_key=key,
+                )
+                session.add(record)
+                await session.flush()
+                definition = RecordDefinition(
+                    record_id=record.public_id,
+                    rules_revision_id=rules.id,
+                    title="Smallest",
+                    materialization_source=MaterializationSource.EAGER,
+                )
+                session.add(definition)
+                await session.flush()
+                result = RecordResult(run_id=run.id, definition_id=definition.id, status=ResolutionStatus.NO_CANDIDATE)
+                session.add(result)
+                await session.flush()
+                result_ids.append(f"result:{result.id}")
+    await _refresh(migrated_session_factory)
+
+    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+
+    async def matches(query: str) -> set[str]:
+        page = await service.search(SearchRequest(query, scope=SearchScope.RECORDS))
+        return {hit.source_id for hit in page.hits}
+
+    door, thick_door, extender = result_ids
+    assert await matches("door_width:2 door_height:[3 TO 4]") == {door, thick_door}
+    assert await matches("door_depth:1 orientation:trapdoor type:laced restriction:observerless") == {door}
+    assert await matches("door_height>=4 OR restriction:observerless") == {door, thick_door}
+    assert await matches("door_depth:2 type:regular") == {thick_door}
+    assert await matches("orientation:horizontal extender_length>=4 type:double") == {extender}
+
+    async with migrated_session_factory.begin() as session:
+        await session.execute(
+            update(TagAlias)
+            .where(TagAlias.tag_id == restriction_id, TagAlias.alias == "Observerless")
+            .values(alias="Detector Free", normalized_alias="detector free")
+        )
+    await _refresh(migrated_session_factory)
+    assert await matches('restriction:"detector free"') == {door}
+    assert await matches("restriction:observerless") == set()

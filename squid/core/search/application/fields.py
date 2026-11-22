@@ -57,6 +57,8 @@ class FieldRegistry:
         field = self._fields.get(name.casefold())
         if field is None or not field.applies_to(scope):
             return None
+        if scope in field.unranked_scopes:
+            field = replace(field, ranked=False)
         for enum_scope, value_enum in field.scoped_enums:
             if enum_scope is scope:
                 return replace(
@@ -146,8 +148,20 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("title", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("description", FieldType.TEXT, ranked=True),
         FieldDefinition("tag", FieldType.TEXT, ranked=True),
-        FieldDefinition("restriction", FieldType.TEXT, ranked=True),
-        FieldDefinition("type", FieldType.TEXT, ranked=True),
+        FieldDefinition(
+            "restriction",
+            FieldType.TEXT,
+            ranked=True,
+            scopes=CATALOGUE_SCOPES,
+            unranked_scopes=frozenset({SearchScope.RECORDS}),
+        ),
+        FieldDefinition(
+            "type",
+            FieldType.TEXT,
+            ranked=True,
+            scopes=CATALOGUE_SCOPES,
+            unranked_scopes=frozenset({SearchScope.RECORDS}),
+        ),
         FieldDefinition("pattern", FieldType.TEXT, ranked=True),
         FieldDefinition("creator", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("version", FieldType.TEXT),
@@ -185,11 +199,17 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("height", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("depth", FieldType.NUMBER, supports_range=True, supports_sort=True),
-        FieldDefinition("door_width", FieldType.NUMBER, supports_range=True, supports_sort=True),
-        FieldDefinition("door_height", FieldType.NUMBER, supports_range=True, supports_sort=True),
-        FieldDefinition("door_depth", FieldType.NUMBER, supports_range=True, supports_sort=True),
-        FieldDefinition("orientation", FieldType.TEXT),
-        FieldDefinition("extender_length", FieldType.NUMBER, supports_range=True),
+        FieldDefinition(
+            "door_width", FieldType.NUMBER, supports_range=True, supports_sort=True, scopes=CATALOGUE_SCOPES
+        ),
+        FieldDefinition(
+            "door_height", FieldType.NUMBER, supports_range=True, supports_sort=True, scopes=CATALOGUE_SCOPES
+        ),
+        FieldDefinition(
+            "door_depth", FieldType.NUMBER, supports_range=True, supports_sort=True, scopes=CATALOGUE_SCOPES
+        ),
+        FieldDefinition("orientation", FieldType.TEXT, scopes=CATALOGUE_SCOPES),
+        FieldDefinition("extender_length", FieldType.NUMBER, supports_range=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("completion_at", FieldType.TIMESTAMP, supports_range=True, aliases=("completion_date",)),
         FieldDefinition("created_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
         FieldDefinition("updated_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
