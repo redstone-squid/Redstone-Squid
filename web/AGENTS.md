@@ -137,6 +137,11 @@ m.recordHolderCount({ count: holders.length });
   When you change English wording, update every translation and run `bun run i18n:review`;
   the build fails until you do.
 
+## Code documentation
+
+Follow [TSDoc and comments](code-documentation-style.md). Document contracts at the
+declaration and explain surprising decisions beside the code that depends on them.
+
 ## Tests
 
 - `tests/unit`: Vitest in jsdom. See [autocomplete](tests/unit/autocomplete.test.ts) for
@@ -152,9 +157,11 @@ m.recordHolderCount({ count: holders.length });
   live in `tests/support/servers.ts`.
 
 Name tests for the behavior they protect. Keep the action and outcome visible in each test.
-Use comments for timing, browser behavior, or constraints the code cannot explain on its own.
 
 ## Checks
+
+The root pre-commit hook runs general file checks on staged web files. CI runs the
+web-specific formatting, lint, type, and test checks.
 
 `bun run lint` runs ESLint, stylelint, and knip. Beyond the TypeScript and Svelte presets:
 
