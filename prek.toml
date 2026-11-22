@@ -17,6 +17,8 @@ repo = "local"
 hooks = [
     { id = "ruff-check", name = "ruff check", entry = "uv run --locked ruff check --fix --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
     { id = "ruff-format", name = "ruff format", entry = "uv run --locked ruff format --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
+    { id = "web-format", name = "web Prettier", entry = '''bash -c 'cd web && exec bun run prettier --write -- "${@#web/}"' --''', language = "system", files = '^web/.*\.(astro|css|js|jsonc?|md|svelte|ts)$', exclude = '^web/(src/generated/|openapi\.json$)', stages = ["pre-commit"] },
+    { id = "web-lint", name = "web lint", entry = "bun run --cwd web lint", language = "system", pass_filenames = false, files = '^web/', stages = ["pre-push"] },
     { id = "i18n-check", name = "validate Fluent catalogs", entry = "uv run --locked squid-i18n check", language = "system", pass_filenames = false, files = '^(squid/.*\.py$|packages/.*\.py$|squid/locales/|packages/[^/]+/src/[^/]+/locales/|(?:packages/[^/]+/)?pyproject\.toml$|uv\.lock$|prek\.toml$)', stages = ["pre-push"] },
     { id = "pyrefly", name = "pyrefly", entry = "uv run --locked pyrefly check --config pyproject.toml", language = "system", pass_filenames = false, always_run = true, stages = ["pre-push"] },
 ]

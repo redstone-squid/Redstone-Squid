@@ -162,7 +162,8 @@ jobs:
         run: uv run --locked ruff format --check
 
       - name: Check repository files
-        run: uv run --locked prek run --all-files
+        # The catalogue job checks formatting with its installed Bun dependencies.
+        run: uv run --locked prek run --all-files --skip web-format
 
       - name: Check deployment policies
         run: uv run --locked pytest --no-cov tests/deployment -m "not docker"

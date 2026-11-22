@@ -160,8 +160,10 @@ Name tests for the behavior they protect. Keep the action and outcome visible in
 
 ## Checks
 
-The root pre-commit hook runs general file checks on staged web files. CI runs the
-web-specific formatting, lint, type, and test checks.
+Pre-commit runs Prettier on staged web files. Review and restage any formatting
+changes before retrying the commit. Pre-push runs `bun run lint` when the push
+includes web changes. Install the web dependencies with `bun install --frozen-lockfile`
+from `web/` before committing web work.
 
 `bun run lint` runs ESLint, stylelint, and knip. Beyond the TypeScript and Svelte presets:
 
