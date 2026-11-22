@@ -33,7 +33,7 @@ CREATE TABLE public.tag_definitions (
     CONSTRAINT tag_definitions_restriction_type_check CHECK ((((semantic_kind = 'restriction'::text) AND (restriction_type IS NOT NULL)) OR ((semantic_kind <> 'restriction'::text) AND (restriction_type IS NULL)))),
     CONSTRAINT tag_definitions_revision_positive CHECK ((revision > 0)),
     CONSTRAINT tag_definitions_semantic_kind_check CHECK ((semantic_kind = ANY (ARRAY['restriction'::text, 'pattern'::text, 'showcase'::text]))),
-    CONSTRAINT tag_definitions_user_showcase_only_check CHECK (((authority = 'official'::text) OR ((semantic_kind = 'showcase'::text) AND (restriction_type IS NULL) AND (record_operator IS NULL)))),
+    CONSTRAINT tag_definitions_user_kind_check CHECK (((authority = 'official'::text) OR ((record_operator IS NULL) AND ((semantic_kind = 'showcase'::text) OR ((semantic_kind = 'restriction'::text) AND (restriction_type = 'component'::text) AND (value_type = 'none'::text)))))),
     CONSTRAINT tag_definitions_value_type_check CHECK ((value_type = ANY (ARRAY['none'::text, 'numeric'::text, 'text'::text, 'boolean'::text])))
 );
 

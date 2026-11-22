@@ -44,7 +44,9 @@ def upgrade() -> None:
                 ('no_redstone_blocks', 'No Redstone Blocks', 'user', 'restriction', 'component', 64),
                 ('no_fence_gates', 'No Fence Gates', 'user', 'restriction', 'component', 65),
                 ('no_pistons', 'No Pistons', 'user', 'restriction', 'component', 66),
-                ('no_grindstones', 'No Grindstones', 'user', 'restriction', 'component', 67)
+                ('no_grindstones', 'No Grindstones', 'user', 'restriction', 'component', 67),
+                ('uncontained', 'Uncontained', 'user', 'restriction', 'component', 68),
+                ('only_piston_sounds', 'Only Piston Sounds', 'user', 'restriction', 'component', 69)
         )
         INSERT INTO tag_definitions (
             stable_key, display_name, normalized_name, authority, semantic_kind, restriction_type,
@@ -117,9 +119,9 @@ def upgrade() -> None:
             ('no_burnouts', 'burnoutless|no burnout', ''),
             ('no_mobs', 'mobless', ''),
             ('no_redstone_dust', 'dustless|no dust|redstone dustless', ''),
-            ('no_comparators', 'comparatorless|comparator-less|no comparator', ''),
+            ('no_comparators', 'comparatorless|comparator-less|no comparator', 'comperatorless'),
             ('no_jukeboxes', 'jukeless|jukeboxless', ''),
-            ('no_target_blocks', 'targetless|no targets', ''),
+            ('no_target_blocks', 'targetless|target-less|targetblockless|no targets', ''),
             ('no_hoppers', 'hopperless', 'dropper-hopperless'),
             ('no_cauldrons', 'cauldronless', ''),
             ('no_droppers', 'dropperless', 'dropper-hopperless'),
@@ -129,7 +131,9 @@ def upgrade() -> None:
             ('no_redstone_blocks', 'redstoneblockless', ''),
             ('no_fence_gates', 'fencegateless', ''),
             ('no_pistons', 'pistonless', ''),
-            ('no_grindstones', 'grindstoneless', '')
+            ('no_grindstones', 'grindstoneless', ''),
+            ('uncontained', '', ''),
+            ('only_piston_sounds', 'piston sounds only|piston sound only|only piston noises|no non-piston sounds|piston noise only', 'pistons sounds only|pisten sounds only')
         ) AS cleanup(stable_key, aliases, corrections)
     """)
     op.execute("""
