@@ -24,11 +24,12 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
       });
       expect(title).toBeInvalid();
       expect(title).toHaveAccessibleDescription(m.workbenchEnterATitleForYourBuild(locale));
+      const status = screen.getByRole("status");
       await user.type(title, "Copper Bolt");
       await user.click(save);
-      expect(screen.getByRole("status")).toHaveTextContent(m.workbenchExampleDraftSaved(locale));
+      expect(status).toHaveTextContent(m.workbenchExampleDraftSaved(locale));
       await user.type(title, " revised");
-      expect(screen.getByRole("status")).toBeEmptyDOMElement();
+      expect(status).toHaveTextContent(/^$/);
       await user.click(screen.getByRole("button", { name: m.workbenchCloseDialog(locale) }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
