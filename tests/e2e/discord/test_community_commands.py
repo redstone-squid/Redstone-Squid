@@ -148,6 +148,49 @@ async def test_archive_selection_only_applies_to_its_owner_and_guild(destination
         assert message.id in [item.id for item in source.history()]
 
 
+async def test_paste_rechecks_source_access_after_a_role_is_removed() -> None:
+    accounts = WorkspaceAccounts()
+    services = bot_services(accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
+    async with command_environment(ADMIN, services=services) as (_, env):
+        guild = env.guild
+        moderator_role = guild.create_role(
+            "Moderators", permissions=discord.Permissions(manage_guild=True, manage_messages=True)
+        )
+        reader_role = guild.create_role("Source readers")
+        source = guild.create_text_channel(
+            "source",
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                reader_role: discord.PermissionOverwrite(view_channel=True, read_message_history=True),
+            },
+        )
+        destination = guild.create_text_channel("archive")
+        user = env.create_user("moderator")
+        moderator = guild.add_member(user, roles=[moderator_role, reader_role])
+        accounts.discord_accounts[str(user.id)] = Account(id=17, consent=AccountConsent.grant_current())
+        builder = guild.add_member(env.create_user("builder"), roles=[reader_role])
+        original = await builder.send(source, "The original design")
+        selected = await moderator.context_menu(source, "Archive Message", original)
+        assert selected.response is not None
+        assert any("Run /paste" in line for line in displayed_text(selected.response.message))
+
+        guild.remove_member(user)
+        moderator = guild.add_member(user, roles=[moderator_role])
+        denied = await moderator.slash(destination, "paste")
+        assert denied.response is not None
+        assert any(
+            "You no longer have access to the source message" in line
+            for line in displayed_text(denied.response.message)
+        )
+        assert original.id in [item.id for item in source.history()]
+
+        retry = await moderator.slash(destination, "paste")
+        assert retry.response is not None
+        assert any(
+            "You no longer have access to the source message" in line for line in displayed_text(retry.response.message)
+        )
+
+
 @pytest.mark.parametrize("entry", ["slash", "prefix"])
 async def test_runtime_settings_displays_the_current_value_and_revision(entry: str) -> None:
     accounts = WorkspaceAccounts()

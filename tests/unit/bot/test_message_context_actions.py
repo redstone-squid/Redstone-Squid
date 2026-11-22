@@ -1,14 +1,11 @@
 """Message context actions and their live Redstoner workspace."""
 
-import asyncio
-import inspect
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import discord
-import pytest
 
 import squid_ui.ext.discord as sd
 from squid.bot.admin_cog import Admin
@@ -179,23 +176,3 @@ async def test_redstoner_deploys_after_permission_recheck() -> None:
     assert authorize.calls == 1
     assert publish.calls == 1
     assert len(responder.notices) == 1
-
-
-async def test_paste_rechecks_access_to_the_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("squid.bot.admin_cog.enforce", AsyncMock())
-    source = Mock(spec=discord.TextChannel)
-    source.permissions_for.return_value = discord.Permissions(read_message_history=True)
-    source.fetch_message = AsyncMock()
-    selected = SimpleNamespace(channel=source, id=123)
-    request = SimpleNamespace(
-        guild=SimpleNamespace(id=1, fetch_member=AsyncMock()),
-        user=SimpleNamespace(id=7),
-        channel=Mock(spec=discord.TextChannel),
-    )
-    owner = SimpleNamespace(_pending_archives={(1, 7): selected}, _paste_lock=asyncio.Lock())
-    callback = inspect.unwrap(cast(Any, Admin).paste.callback)
-
-    await callback(owner, request)
-
-    source.fetch_message.assert_not_awaited()
-    assert owner._pending_archives == {(1, 7): selected}
