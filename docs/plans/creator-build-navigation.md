@@ -94,14 +94,13 @@ replacement with Back is a separate change.
 
 - A Creators button on published build-log posts (`ui:/builds/{id}/creators`). It is easy once
   the route exists but adds a row to every post.
-- A Web/API counterpart. The API search gets `creator:<id>` for free.
+- Creator links in the web catalogue. API search accepts `creator:<id>` automatically.
 
 ## Order of work
 
 1. `CreatorPage` route; `/account` opens it.
 2. Shared credit-resolution subquery, creator IDs in the index with their enqueue triggers, and
-   the Builds controls on the creator page and
-   Credits tab.
+   the Builds controls on the creator page and Credits tab.
 3. `credit_owners` and the Creators select on build detail.
 
 Each step can ship separately.
