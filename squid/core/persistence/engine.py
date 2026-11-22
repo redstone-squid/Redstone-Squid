@@ -5,9 +5,8 @@ from pathlib import Path
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, create_engine, make_url, select, text
+from sqlalchemy import make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
 
 from squid import PROJECT_ROOT
 from squid.config import DatabaseConfig
@@ -15,13 +14,7 @@ from squid.core.errors import DataIntegrityError
 
 
 class DatabaseEngine:
-    """Own the connection pools used by one application process.
-
-    Async sessions serve application operations; synchronous sessions support
-    schema inspection and other synchronous callers. The pools connect to the same
-    database, but sessions from different factories do not share a transaction.
-    Process shutdown must call close to release both pools.
-    """
+    """Own the async PostgreSQL connection pool and session factory for one process."""
 
     def __init__(
         self,
@@ -29,10 +22,10 @@ class DatabaseEngine:
         *,
         debug: bool = False,
     ) -> None:
-        """Create async and sync connection pools for the configured database.
+        """Create an asyncpg connection pool for the configured database.
 
         Args:
-            config: Database connection settings. The pools use asyncpg and psycopg2.
+            config: Database connection settings.
             debug: Whether to log SQL statements.
         """
         base = make_url(config.url.get_secret_value())
@@ -40,13 +33,10 @@ class DatabaseEngine:
         self.async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.async_engine, expire_on_commit=False
         )
-        self.sync_engine: Engine = create_engine(base.set(drivername="postgresql+psycopg2"), echo=debug)
-        self.sync_session: sessionmaker[Session] = sessionmaker(self.sync_engine, expire_on_commit=False)
 
     async def close(self) -> None:
-        """Release database connection pools owned by this engine."""
+        """Release the database connection pool."""
         await self.async_engine.dispose()
-        self.sync_engine.dispose()
 
     async def ping(self) -> None:
         """Execute a lightweight query to verify the async connection path."""
