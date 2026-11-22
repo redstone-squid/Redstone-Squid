@@ -654,7 +654,7 @@ class PostgresRecordRepository:
         ).scalars()
         identities: list[CategoryIdentity] = []
         for key in keys:
-            identity = parse_category_key(key)
+            identity = CategoryIdentity.from_key(key)
             if identity is not None:
                 identities.append(identity)
         return tuple(identities)
@@ -669,7 +669,7 @@ class PostgresRecordRepository:
         )
         if key is None:
             return None
-        identity = parse_category_key(key)
+        identity = CategoryIdentity.from_key(key)
         if identity is None:
             raise DataIntegrityError(
                 md_tr(
@@ -1170,30 +1170,6 @@ def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordG
         fields=tuple(fields),
         build_kind=definition.build_kind,
     )
-
-
-def parse_category_key(key: str) -> CategoryIdentity | None:
-    """Parse a stored category key, returning `None` for unrecognized syntax.
-
-    This checks the serialized structure, not whether the referenced tags exist
-    or their operators and values form a valid category.
-    """
-    try:
-        kind_value, remainder = key.split(":", maxsplit=1)
-        base_key, restriction_part = remainder.rsplit(":r[", maxsplit=1)
-        raw_ids, separator, raw_values = restriction_part.partition("]:p[")
-        if not separator or not raw_values.endswith("]"):
-            return None
-        restriction_ids = tuple(int(value) for value in raw_ids.split(",") if value)
-        values = tuple(
-            (int(tag_id), operator, value)
-            for item in raw_values.removesuffix("]").split(",")
-            if item
-            for tag_id, operator, value in (item.split(":", maxsplit=2),)
-        )
-        return CategoryIdentity(BuildKind(kind_value), base_key, restriction_ids, values)
-    except ValueError, TypeError:
-        return None
 
 
 def _as_datetime(value: Instant | None) -> datetime | None:

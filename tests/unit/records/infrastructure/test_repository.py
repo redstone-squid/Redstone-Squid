@@ -20,7 +20,6 @@ from squid.core.records.infrastructure.repository import (
     PostgresRecordRepository,
     _extender_candidate,
     _gap_from_row,
-    parse_category_key,
 )
 from squid.core.records.models import (
     ComputationRun,
@@ -39,11 +38,11 @@ def test_requested_category_key_round_trips() -> None:
         restriction_ids=(2, 4, 9),
     )
 
-    assert parse_category_key(category.key) == category
+    assert CategoryIdentity.from_key(category.key) == category
 
 
 def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
-    assert parse_category_key("not-a-record-category") is None
+    assert CategoryIdentity.from_key("not-a-record-category") is None
 
 
 def test_gap_rows_carry_the_definition_title() -> None:
