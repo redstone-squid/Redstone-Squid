@@ -100,6 +100,7 @@ class RecordDefinition(Base, kw_only=True):
         ),
         UniqueConstraint("rules_revision_id", "title_id", name="title_definitions_identity_key"),
         Index("title_definitions_title_idx", "title_id"),
+        {"comment": "The wording of one stable record title under a rules revision."},
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -176,6 +177,7 @@ class Record(Base, kw_only=True):
             name="record_titles_identity_key",
             postgresql_nulls_not_distinct=True,
         ),
+        {"comment": "A stable public identity for a record title across rules revisions."},
     )
 
     public_id: Mapped[uuid.UUID] = mapped_column(

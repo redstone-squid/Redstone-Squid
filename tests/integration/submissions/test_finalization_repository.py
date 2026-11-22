@@ -11,7 +11,7 @@ from uuid import UUID
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session
 from whenever import Instant
@@ -22,6 +22,7 @@ from squid.core.errors import DataIntegrityError
 from squid.core.media.domain import MediaKind
 from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
+from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.submissions.application import DraftPreparationSnapshot, StoredDraft
@@ -101,6 +102,9 @@ async def finalization_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=tuple(reversed(_TABLES)))
+            await connection.execute(
+                text("DROP FUNCTION IF EXISTS public.reject_submission_finalization_input_update()")
+            )
 
 
 @pytest.fixture
@@ -700,6 +704,16 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
             .where(SubmissionFinalizationInput.job_id == job.job_id)
             .values(payload=legacy, payload_sha256="0" * 64 if corrupt_input else submission_payload_digest(legacy))
         )
+
+    # create_all omits these entities. Install them after seeding the historical payloads.
+    async with async_session_factory.begin() as session:
+        for entity in current_entities():
+            if entity.signature in {
+                "reject_submission_finalization_input_update()",
+                "submission_finalization_inputs_immutable",
+            }:
+                for statement in entity.to_sql_statement_create_or_replace():
+                    await session.execute(statement)
 
     migration = runpy.run_path(
         "squid/core/persistence/migrations/versions/2026_11_17_1900-b8e2c6f0a4d9_reset_finalization_payload_schema.py"
