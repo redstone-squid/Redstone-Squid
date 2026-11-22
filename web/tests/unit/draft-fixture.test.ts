@@ -17,9 +17,8 @@ describe("draft trial fixture", () => {
       const controller = new AbortController();
       const progress = vi.fn();
       const upload = api.upload(new File(["fixture"], "door.schem"), controller.signal, progress);
-      const rejected = expect(upload).rejects.toMatchObject({ name: "AbortError" });
       controller.abort();
-      await rejected;
+      await expect(upload).rejects.toMatchObject({ name: "AbortError" });
       expect(progress).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
