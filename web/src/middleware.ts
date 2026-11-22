@@ -14,7 +14,11 @@ import { getRuntimeConfig } from "./server/config";
 export const onRequest = defineMiddleware(async (context, next) => {
   const startedAt = performance.now();
   const { pathname, search } = context.url;
-  const locale = localeFromPath(pathname);
+  const prefixed = localeFromPath(pathname);
+  // Astro.rewrite() in a page runs middleware again with an unprefixed URL, such as /404.
+  // Locals are only partly set on the first pass, so read them as partial.
+  const inherited = (context.locals as Partial<App.Locals>).locale;
+  const locale = prefixed === "en" ? (inherited ?? "en") : prefixed;
   context.locals.locale = locale;
   const log = (event: string, fields: Record<string, unknown>) =>
     JSON.stringify({
@@ -27,7 +31,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   try {
     context.locals.config = getRuntimeConfig();
     context.locals.api = createApiClient(locale, context.locals.config);
-    const response = await (locale === "en" ? next() : next(localizePath(pathname, "en") + search));
+    const response = await (prefixed === "en"
+      ? next()
+      : next(localizePath(pathname, "en") + search));
     console.info(log("http_request", { status: response.status }));
     return response;
   } catch (error) {
