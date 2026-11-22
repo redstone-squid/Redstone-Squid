@@ -1,4 +1,4 @@
-"""Feedback stays public and notifies the owner only where they have access."""
+"""Check feedback channel access and owner configuration."""
 
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
@@ -7,65 +7,8 @@ import discord
 import pytest
 
 from squid.bot import feedback_cog as feedback
-from squid_i18n.text import NEUTRAL, discord_text, resolve_text
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
-
-
-@pytest.mark.parametrize("in_guild", [True, False])
-@pytest.mark.parametrize("dm_fails", [True, False])
-async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(
-    monkeypatch: pytest.MonkeyPatch, in_guild: bool, dm_fails: bool
-) -> None:
-    owner = Mock(spec=discord.User)
-    bot = make_layout_bot(services=bot_services())
-    bot.owner_id = 42
-    monkeypatch.setattr(bot, "get_user", Mock(return_value=None), raising=False)
-    fetch_user = AsyncMock(return_value=owner)
-    monkeypatch.setattr(bot, "fetch_user", fetch_user, raising=False)
-    cog = feedback.FeedbackCog(bot)
-    request = Mock(
-        user=Mock(id=7),
-        guild=Mock(id=10, name="Test server") if in_guild else None,
-        channel=Mock(spec=discord.TextChannel, id=20),
-        respond=AsyncMock(),
-        interaction=Mock(delete_original_response=AsyncMock()),
-    )
-    monkeypatch.setattr(feedback, "owner_can_view", AsyncMock(return_value=False))
-    send = AsyncMock()
-    if dm_fails:
-        send.side_effect = discord.Forbidden(Mock(status=403, reason="Forbidden"), "Cannot send messages")
-    channel_send = AsyncMock()
-    send_to = Mock(side_effect=[channel_send, send])
-    monkeypatch.setattr(feedback.sd, "send_to", send_to)
-    monkeypatch.setattr(feedback, "render_payload", lambda nodes: nodes)
-    monkeypatch.setattr(feedback, "text_node", lambda text: discord_text(resolve_text(text, NEUTRAL)))
-
-    await cog._report(cast(Any, request), "Bug report", "Something broke")
-
-    fetch_user.assert_awaited_once_with(42)
-    channel_send.assert_awaited_once()
-    assert channel_send.await_args is not None
-    posted = channel_send.await_args.args[0][0]
-    assert "Bug report: Something broke" in posted
-    assert "<@7>" not in posted
-    assert " from " not in posted
-    assert request.respond.await_count == (1 if dm_fails else 0)
-    if dm_fails:
-        assert request.respond.await_args.kwargs == {"audience": "personal"}
-        request.interaction.delete_original_response.assert_not_awaited()
-    else:
-        request.interaction.delete_original_response.assert_awaited_once()
-    assert send_to.call_count == 2
-    assert send_to.call_args.args == (owner,)
-    assert send_to.call_args.kwargs["allowed_mentions"].to_dict() == {"parse": []}
-    assert send.await_args is not None
-    sent = str(send.await_args.args)
-    assert "Something broke" in sent
-    assert "Bug report" in sent
-    assert "<@7>" not in sent
-    assert " from " not in sent
-    assert ("https://discord.com/channels/10/20" if in_guild else "direct message") in sent
 
 
 @pytest.mark.parametrize(

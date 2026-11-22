@@ -938,6 +938,7 @@ packaging==26.3 \
     #   squid-ui-discord
     #   squid-ui-slack
     #   wheel
+    #   wrapture
 parse==1.22.4 \
     --hash=sha256:706d458feed5a81b02768d3156e8070baf6cee7d150a3a3c0cd43101a875c3b5 \
     --hash=sha256:ae430a4477316eed4a9710f642b2db968ec89d5d82e6b0908b8169673b476847
@@ -1588,6 +1589,10 @@ wrapt==2.5.2 \
     #   opentelemetry-instrumentation-httpx
     #   opentelemetry-instrumentation-sqlalchemy
     #   testcontainers
+    #   wrapture
+wrapture==1.0.0b4 \
+    --hash=sha256:946d141a10071d75e393d3bbc2a9f589f035e2e52ec8a43d1c80678f98ce5684 \
+    --hash=sha256:d63420ee3f22ba58ee88692e3c58b7bf955cb29559a89e6c58e6274c454a126c
 yarl==1.25.1 \
     --hash=sha256:0136d640dfa9b0523853e411430a99f8a91eca85774c6420285a33b755bc6de3 \
     --hash=sha256:03dd38de09bc213e9a8b29761eec33ee1d5318dac0e49d8af36e4d27830e23a7 \

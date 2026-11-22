@@ -97,6 +97,7 @@ dev = [
     # The default test and type-check suites include the Slack workspace member.
     "squid-ui-slack",
     "simcord==4.0.1",
+    "wrapture==1.0.0b4",
 ]
 # Documentation tooling is installed only when building or publishing the site.
 docs = [

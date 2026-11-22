@@ -2385,6 +2385,7 @@ dev = [
     { name = "squid-ui-slack" },
     { name = "testcontainers" },
     { name = "types-psycopg2" },
+    { name = "wrapture" },
 ]
 docs = [
     { name = "mkdocstrings-python" },
@@ -2459,6 +2460,7 @@ dev = [
     { name = "squid-ui-slack", editable = "packages/squid-ui-slack" },
     { name = "testcontainers", specifier = ">=4.10.0" },
     { name = "types-psycopg2", specifier = ">=2.9" },
+    { name = "wrapture", specifier = "==1.0.0b4" },
 ]
 docs = [
     { name = "mkdocstrings-python", specifier = ">=1.18,<2" },
@@ -3267,6 +3269,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0d/d9/aef3035a3e3d918eb51e7db454af9e06919f0c5208fa0a9315548fef7734/wrapt-2.5.2-cp315-cp315t-win_amd64.whl", hash = "sha256:7f89423965b23aa62a90bf21c20353056a829ca9a60c01fde9aec9876c99392e", size = 110099, upload-time = "2026-10-29T23:06:19.293Z" },
     { url = "https://files.pythonhosted.org/packages/5f/ea/56eddba6249fae5361b53eb62e2e25ad86cabec4632d943d356aba8dea1b/wrapt-2.5.2-cp315-cp315t-win_arm64.whl", hash = "sha256:fa642d3781c061579cb138773add4a55b16f99de9ebc41603e89a756cf9e62c6", size = 106397, upload-time = "2026-10-29T23:06:20.826Z" },
     { url = "https://files.pythonhosted.org/packages/77/8b/1ea57b936b70f98e8e7620a352578096d778dbee95b262f73c066d210ffb/wrapt-2.5.2-py3-none-any.whl", hash = "sha256:61eb54e9540ea522c2c4752a57549a83d3c67e6704ed708403d28e067aaf90f0", size = 82025, upload-time = "2026-10-29T23:06:38.56Z" },
+]
+
+[[package]]
+name = "wrapture"
+version = "1.0.0b4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/d8/cab09edd26c741176064b0e499e09fb6c4d366b124a14894e55b004ad29c/wrapture-1.0.0b4.tar.gz", hash = "sha256:946d141a10071d75e393d3bbc2a9f589f035e2e52ec8a43d1c80678f98ce5684", size = 451839, upload-time = "2026-09-15T09:53:01.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/92/d27930e817519c69335ad7d509cc2f8aa8fbcf2bb812090ffd5dfd7f8cf7/wrapture-1.0.0b4-py3-none-any.whl", hash = "sha256:d63420ee3f22ba58ee88692e3c58b7bf955cb29559a89e6c58e6274c454a126c", size = 279325, upload-time = "2026-09-15T09:52:59.387Z" },
 ]
 
 [[package]]
