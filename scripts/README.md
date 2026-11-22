@@ -121,3 +121,13 @@ For historical files, set `ATTACHMENT_REVIEW_ARCHIVE` to the directory containin
 `-f deploy/compose.attachment-review.yml` alongside the deployment's usual Compose files.
 The bot user needs read access to the manifest and files and traversal access to
 their directories. Only those two archive entries are mounted, both read-only.
+
+### Live Discord preview
+
+Run `just ui-preview` and open <http://127.0.0.1:8000>. Click **Add** to run
+the Counter screen's Python handler. Each page load starts a fresh screen.
+Idle previews expire after ten minutes. Ctrl-C stops the server.
+
+To try another single-message Components V2 screen, pass its factory to
+`preview_app` in `scripts/ui_preview.py`. The preview supports callback buttons
+and links. Use `just ui-gallery` for static snapshots.
