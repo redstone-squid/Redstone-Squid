@@ -9,7 +9,7 @@ from hashlib import sha256
 RETIRED = rb"fac[e]t|taxon[o]m"
 
 # Signatures cover the path and matching lines only. These freeze historical
-# migration SQL, tests of old revisions, and readers of previously stored data.
+# migration SQL, published contracts, and readers of previously stored data.
 LEGACY_SIGNATURES = {
     "07f092262a117b36cf94677aefc217d092daf9fb86fbb97d9acb9600440c2a21",
     "15ef96e8390683e1062c4fa286d8b65c5f33fa419b9af96b998eba097b257528",
@@ -24,6 +24,7 @@ LEGACY_SIGNATURES = {
     "7bcf34068a4688059335dd0da01541d422ab54b517ca39b168c2b6dcf6749974",
     "8b66725115736b860fcdcbdbc5f44ecfaf2a8d06159a68f451de3b4dc285ea6e",
     "8c8b9c0c46a065b4556c58533b431267af8dd9ea6fcbcf7c0555ba40a2039c14",
+    "a5db418616389facbf7f0f26f18dd1f1e03db4c994d76c41a28fdd5e49c654b4",
     "cc2280d5feedccab78744e7c1f731e6b4b0f650073bcb8a132891dfcd99dca5f",
     "d2f0552cbdf23643904a9bedc29358c9864d2861f765d8863d8b852688c2b3f4",
     "dcb2cc66bb1a716d6e83eaed9c3f11d5a0e499bc8ae9c5b589f4c4f0ee43d9ee",

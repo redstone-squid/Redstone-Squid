@@ -265,7 +265,8 @@ def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
     payload = response.model_dump(mode="json")
 
     assert payload["schema_id"] == "build_submission.v1"
-    assert payload["revision"] == 9
+    assert payload["revision"] == 10
+    assert any(section["id"] == "tags" for section in payload["common_sections"])
     assert payload["common_sections"][0]["fields"][0]["control"] == "text"
     assert payload["common_sections"][0]["fields"][0]["origins"] == ["cli", "discord", "fabric", "paper", "web"]
     fields = {field["id"] for section in payload["common_sections"] for field in section["fields"]}

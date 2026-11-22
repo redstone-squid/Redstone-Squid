@@ -37,8 +37,8 @@ from squid_i18n import Text, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 # Older revisions remain immutable for pinned drafts and queued submissions.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 9
-_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9})
+CURRENT_SUBMISSION_SCHEMA_REVISION = 10
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10})
 
 
 class FormManifestRegistry(Protocol):
@@ -300,7 +300,7 @@ def _build_form_manifest(revision: int) -> FormManifest:
             ),
         ),
         FormSection(
-            id="tags",
+            id="tags" if revision >= 10 else "taxonomy",
             title=localize(tr(t"submissions-restrictions-tags = Restrictions and tags")),
             fields=(
                 FormField(
