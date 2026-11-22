@@ -1324,31 +1324,31 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/cog.py:154
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/catalogue/search/results.py:636
+# squid/bot/catalogue/search/results.py:641
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Record criterion**
     { $criterion } · { $version_scope }
 
-# squid/bot/catalogue/search/results.py:535
+# squid/bot/catalogue/search/results.py:540
 bot-submission-search-view-creator = Creator
 
-# squid/bot/catalogue/search/results.py:670
+# squid/bot/catalogue/search/results.py:675
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/catalogue/search/results.py:647
+# squid/bot/catalogue/search/results.py:652
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/catalogue/search/results.py:531
+# squid/bot/catalogue/search/results.py:536
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/catalogue/search/results.py:529
+# squid/bot/catalogue/search/results.py:534
 bot-submission-search-view-restriction = Restriction
 
 # squid/bot/catalogue/search/results.py:300, squid/bot/catalogue/search/results.py:380
@@ -1357,29 +1357,29 @@ bot-submission-search-view-retry = Retry
 # squid/bot/catalogue/search/results.py:375
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/catalogue/search/results.py:533
+# squid/bot/catalogue/search/results.py:538
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/catalogue/search/results.py:659
+# squid/bot/catalogue/search/results.py:664
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/catalogue/search/results.py:539
+# squid/bot/catalogue/search/results.py:544
 bot-submission-search-view-tag = Tag
 
-# squid/bot/catalogue/search/results.py:679
+# squid/bot/catalogue/search/results.py:684
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/catalogue/search/results.py:687
+# squid/bot/catalogue/search/results.py:692
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/catalogue/search/results.py:537
+# squid/bot/catalogue/search/results.py:542
 bot-submission-search-view-version = Version
 
 # squid/bot/catalogue/search/results.py:149
@@ -2024,13 +2024,13 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/core/builds/errors.py:126
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/core/builds/domain/models.py:158
+# squid/core/builds/domain/models.py:152
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/core/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/core/builds/models.py:225
+# squid/core/builds/models.py:230
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildInput.
 
 # squid/core/builds/errors.py:22
@@ -2069,7 +2069,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/core/builds/errors.py:55
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/core/builds/domain/models.py:182
+# squid/core/builds/domain/models.py:176
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/core/builds/errors.py:99
@@ -2084,7 +2084,7 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:196
+# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:203
 catalogue-search-help = Search help
 
 # squid/bot/catalogue/browse.py:602
@@ -4757,7 +4757,7 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:
 # squid/bot/catalogue/records.py:247
 records-active-version = the active version
 
-# squid/core/records/application/services.py:751, squid/core/records/application/services.py:782
+# squid/core/records/application/services.py:755, squid/core/records/application/services.py:786
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:488
@@ -4793,7 +4793,7 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:285
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:795
+# squid/core/records/application/services.py:799
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/core/records/domain/models.py:115
@@ -4835,7 +4835,7 @@ records-no-unresolved-categories = Every active record category has the evidence
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:712
+# squid/core/records/application/services.py:716
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:464
@@ -4847,19 +4847,19 @@ records-recompute-definition = Recompute definition
 # squid/bot/catalogue/records.py:188, squid/bot/catalogue/records.py:393, squid/bot/catalogue/records.py:441
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/core/records/application/services.py:536
+# squid/core/records/application/services.py:540
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/core/records/errors.py:26
 records-record-category-not-found = Record category not found.
 
-# squid/core/records/infrastructure/repository.py:675
+# squid/core/records/infrastructure/repository.py:683
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:813
+# squid/core/records/application/services.py:817
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:492
@@ -5130,7 +5130,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:249
+# squid/core/search/application/fields.py:264
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:95
@@ -5253,7 +5253,7 @@ search-filter-not = Not: { $inner }
 # squid/bot/catalogue/search/labels.py:122
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/catalogue/search/results.py:497
+# squid/bot/catalogue/search/results.py:502
 search-grouped-build-count = { $total } builds
 
 # squid/bot/catalogue/search/results.py:254
@@ -5265,13 +5265,13 @@ search-grouped-loading-build = Loading build…
 # squid/bot/catalogue/search/results.py:195
 search-grouped-matching-records = Matching records
 
-# squid/bot/catalogue/search/results.py:622
+# squid/bot/catalogue/search/results.py:627
 search-grouped-more-records = +{ $count } more records
 
 # squid/bot/catalogue/search/results.py:197
 search-grouped-records = Records
 
-# squid/bot/catalogue/search/results.py:499
+# squid/bot/catalogue/search/results.py:504
 search-grouped-result-count = { $total } results
 
 # squid/bot/catalogue/record_display.py:41
@@ -5283,10 +5283,10 @@ search-k-positive = k must be positive
 # squid/core/search/domain/query.py:120
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
-# squid/bot/catalogue/search/help.py:171
+# squid/bot/catalogue/search/help.py:178
 search-reference-and = - Everything you type must match: `door width<=5`.
 
-# squid/bot/catalogue/search/help.py:98
+# squid/bot/catalogue/search/help.py:105
 search-reference-build-kind = `kind:door` · { $categories }
 
 # squid/bot/catalogue/search/help.py:67
@@ -5295,31 +5295,31 @@ search-reference-category-features = `orientation:trapdoor`, `type:"full seamles
 # squid/bot/catalogue/search/help.py:60
 search-reference-category-size = `door_width`, `door_height>=3`, and `door_depth` measure the opening in blocks. Use `extender_length>=4` for an extender's reach.
 
-# squid/bot/catalogue/search/help.py:109
+# squid/bot/catalogue/search/help.py:116
 search-reference-credit = `creator:Steve`, `version:"Java 1.20"`
 
-# squid/bot/catalogue/search/help.py:120
+# squid/bot/catalogue/search/help.py:127
 search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and `updated_at`.
 
-# squid/bot/catalogue/search/help.py:185
+# squid/bot/catalogue/search/help.py:192
 search-reference-empty = - No results? Remove filters one at a time. Filters never reveal hidden builds.
 
-# squid/bot/catalogue/search/help.py:131
+# squid/bot/catalogue/search/help.py:138
 search-reference-example-description = **{ $title }** — `{ $query }`
 
-# squid/bot/catalogue/search/help.py:154
+# squid/bot/catalogue/search/help.py:161
 search-reference-example-reset = Running an example replaces your current query, type buttons and sort.
 
-# squid/bot/catalogue/search/help.py:151
+# squid/bot/catalogue/search/help.py:158
 search-reference-examples = Examples
 
-# squid/bot/catalogue/search/help.py:146, squid/bot/catalogue/search/help.py:147
+# squid/bot/catalogue/search/help.py:153, squid/bot/catalogue/search/help.py:154
 search-reference-fields = What you can search
 
 # squid/bot/catalogue/search/help.py:74
 search-reference-holder-measurements = `volume<=100 opening_time<=10gt` matches when one holder meets both limits. Use `gt` for game ticks or `s` for seconds.
 
-# squid/bot/catalogue/search/help.py:91
+# squid/bot/catalogue/search/help.py:98
 search-reference-intro = Type words to match titles and descriptions. Add filter lists every field and its known values, or type filters yourself, like `width<=5`.
 
 # squid/bot/catalogue/search/help.py:56
@@ -5331,67 +5331,67 @@ search-reference-label-category-features = Category features
 # squid/bot/catalogue/search/help.py:59
 search-reference-label-category-size = Category dimensions
 
-# squid/bot/catalogue/search/help.py:108
+# squid/bot/catalogue/search/help.py:115
 search-reference-label-credit = Creator and version
 
-# squid/bot/catalogue/search/help.py:119
+# squid/bot/catalogue/search/help.py:126
 search-reference-label-dates = Dates
 
 # squid/bot/catalogue/search/help.py:73
 search-reference-label-holder-measurements = Holder measurements
 
-# squid/bot/catalogue/search/help.py:55, squid/bot/catalogue/search/help.py:97
+# squid/bot/catalogue/search/help.py:104, squid/bot/catalogue/search/help.py:55
 search-reference-label-kind = Kind
 
 # squid/bot/catalogue/search/help.py:51
 search-reference-label-record-type = Record criterion
 
-# squid/bot/catalogue/search/help.py:101
+# squid/bot/catalogue/search/help.py:108
 search-reference-label-size = Size
 
-# squid/bot/catalogue/search/help.py:112
+# squid/bot/catalogue/search/help.py:119
 search-reference-label-tags = Restrictions, patterns and tags
 
-# squid/bot/catalogue/search/help.py:77
+# squid/bot/catalogue/search/help.py:84
 search-reference-label-title = Title words
 
-# squid/bot/catalogue/search/help.py:73
+# squid/bot/catalogue/search/help.py:80
 search-reference-label-version-scope = Version scope
 
-# squid/bot/catalogue/search/help.py:176
+# squid/bot/catalogue/search/help.py:183
 search-reference-not = - `NOT` leaves matches out: `door NOT restriction:observerless`.
 
-# squid/bot/catalogue/search/help.py:180
+# squid/bot/catalogue/search/help.py:187
 search-reference-operators = - Quote phrases: `title:"vault door"`. Compare numbers and dates with `<`, `<=`, `>`, `>=` or a range like `[3 TO 5]`.
 
-# squid/bot/catalogue/search/help.py:172
+# squid/bot/catalogue/search/help.py:179
 search-reference-or = - `OR` matches either side. Group with brackets: `(door OR extender) width<=5`.
 
-# squid/bot/catalogue/search/help.py:78
+# squid/bot/catalogue/search/help.py:85
 search-reference-record-title = `title:door`
 
 # squid/bot/catalogue/search/help.py:52
 search-reference-record-type = `criterion:` { $criteria }
 
-# squid/bot/catalogue/search/help.py:81
+# squid/bot/catalogue/search/help.py:88
 search-reference-record-types = The Smallest, Fastest and First buttons match records of any selected type, together with your query.
 
-# squid/bot/catalogue/search/help.py:102
+# squid/bot/catalogue/search/help.py:109
 search-reference-size = `width<=5`, `height:[3 TO 5]`, `depth`, `volume`. The whole build in blocks, not the door opening.
 
-# squid/bot/catalogue/search/help.py:184
+# squid/bot/catalogue/search/help.py:191
 search-reference-sort = - Order results with Sort, not in the query.
 
-# squid/bot/catalogue/search/help.py:164, squid/bot/catalogue/search/help.py:166
+# squid/bot/catalogue/search/help.py:171, squid/bot/catalogue/search/help.py:173
 search-reference-syntax = Combining filters
 
-# squid/bot/catalogue/search/help.py:113
+# squid/bot/catalogue/search/help.py:120
 search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `tag:`. Quote names with spaces.
 
-# squid/bot/catalogue/search/help.py:74
+# squid/bot/catalogue/search/help.py:81
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:244
+# squid/core/search/application/fields.py:259
 search-search-numbers-finite = Search numbers must be finite
 
 # squid/core/search/application/services.py:71
