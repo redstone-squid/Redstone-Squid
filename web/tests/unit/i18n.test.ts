@@ -1,22 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  apiLocaleToRoute,
   formatDate,
   formatNumber,
   localeFromPath,
   localizePath,
-  routeLocaleToApi,
   translate,
   translateTaxonomy,
 } from "../../src/lib/i18n";
 
 describe("locale mapping", () => {
-  it("keeps route and API spellings explicit", () => {
-    expect(routeLocaleToApi("en")).toBe("en");
-    expect(routeLocaleToApi("zh-cn")).toBe("zh-CN");
-    expect(apiLocaleToRoute("en")).toBe("en");
-    expect(apiLocaleToRoute("zh-CN")).toBe("zh-cn");
+  it("reads the locale only from a whole path prefix", () => {
     expect(localeFromPath("/zh-cn/builds")).toBe("zh-CN");
     expect(localeFromPath("/zh-cn")).toBe("zh-CN");
     expect(localeFromPath("/builds/zh-cn-example")).toBe("en");

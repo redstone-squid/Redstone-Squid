@@ -28,6 +28,10 @@ for (const [prefix, locale, message] of [
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByText(message, { exact: true })).toBeVisible();
       await expect(page.locator("astro-island")).toHaveCount(0);
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+        "href",
+        `https://catalogue.redstone-squid.org${prefix}${route === "/" && prefix ? "" : route.split("?")[0]}`,
+      );
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
         "content",
         route === "/" ? "index,follow" : "noindex,follow",

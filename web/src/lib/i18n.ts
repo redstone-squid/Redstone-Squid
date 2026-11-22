@@ -10,11 +10,10 @@ import {
 
 export type { MessageKey, StaticMessageKey } from "../locales/keys";
 export const LOCALES = {
-  en: { label: "English", prefix: "", route: "en", openGraph: "en_US" },
-  "zh-CN": { label: "简体中文", prefix: "/zh-cn", route: "zh-cn", openGraph: "zh_CN" },
+  en: { label: "English", prefix: "", openGraph: "en_US" },
+  "zh-CN": { label: "简体中文", prefix: "/zh-cn", openGraph: "zh_CN" },
 } as const;
 export type Locale = keyof typeof LOCALES;
-export type RouteLocale = (typeof LOCALES)[Locale]["route"];
 export const SUPPORTED_LOCALES = Object.keys(LOCALES) as Locale[];
 
 function createBundle(locale: Locale, source: string): FluentBundle {
@@ -29,14 +28,7 @@ const bundles = {
 } satisfies Record<Locale, FluentBundle>;
 const knownKeys = new Set<string>(messageKeys);
 
-export function routeLocaleToApi(locale: RouteLocale): Locale {
-  return SUPPORTED_LOCALES.find((id) => LOCALES[id].route === locale) ?? "en";
-}
-
-export function apiLocaleToRoute(locale: Locale): RouteLocale {
-  return LOCALES[locale].route;
-}
-
+/** Read the locale from a URL prefix. Middleware does this once per request; use `Astro.locals.locale`. */
 export function localeFromPath(pathname: string): Locale {
   return (
     SUPPORTED_LOCALES.find((locale) => {

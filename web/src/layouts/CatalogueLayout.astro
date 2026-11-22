@@ -2,18 +2,16 @@
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
-import { getRuntimeConfig } from "../lib/config";
-import { localizePath, translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+import { localizePath, translate, type StaticMessageKey } from "../lib/i18n";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
 import "../ui/base.css";
 import "./catalogue-layout.css";
-type Props = ComponentProps<typeof DocumentHead> & { locale: Locale };
-const { locale } = Astro.props;
+type Props = ComponentProps<typeof DocumentHead>;
+const { locale, config } = Astro.locals;
 const t = (key: StaticMessageKey) => translate(locale, key);
-const config = getRuntimeConfig();
 const activePath = localizePath(Astro.url.pathname, "en");
 const nav = [
   ["nav.builds", "/builds"],

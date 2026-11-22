@@ -1,30 +1,21 @@
 ---
-import { getRuntimeConfig } from "../lib/config";
-import {
-  LOCALES,
-  SUPPORTED_LOCALES,
-  localeFromPath,
-  localizePath,
-  translate,
-  type Locale,
-} from "../lib/i18n";
+import { LOCALES, SUPPORTED_LOCALES, localizePath, translate } from "../lib/i18n";
 type Props = {
   title: string;
   themeColor?: string;
   description?: string;
-  locale?: Locale;
+  /** Path without a locale prefix; defaults to the current route. */
   canonicalPath?: string;
   noindex?: boolean;
   image?: string;
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
 };
 
-const config = getRuntimeConfig();
-const locale = Astro.props.locale ?? localeFromPath(Astro.url.pathname);
+const { locale, config } = Astro.locals;
 const title = `${Astro.props.title} · ${translate(locale, "site.name")}`;
 const description = Astro.props.description ?? translate(locale, "meta.defaultDescription");
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
-const canonical = new URL(canonicalPath, config.siteUrl).toString();
+const canonical = new URL(localizePath(canonicalPath, locale), config.siteUrl).toString();
 const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData

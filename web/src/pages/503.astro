@@ -1,5 +1,7 @@
 ---
-import PlaceholderPage from "../views/PlaceholderPage.astro";
+import PlaceholderPage from "../layouts/PlaceholderPage.astro";
+
+Astro.response.status = 503;
 ---
 
 <PlaceholderPage status={503} />

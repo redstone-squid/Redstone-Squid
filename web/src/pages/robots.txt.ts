@@ -1,11 +1,9 @@
 import type { APIRoute } from "astro";
 
-import { getRuntimeConfig } from "../lib/config";
-
-export const GET: APIRoute = () => {
-  const config = getRuntimeConfig();
+export const GET: APIRoute = ({ locals }) => {
+  const { config } = locals;
   return new Response(
-    `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /zh-cn/api/\nSitemap: ${config.siteUrl}/sitemap.xml\n`,
+    `User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${config.siteUrl}/sitemap.xml\n`,
     {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

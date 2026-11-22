@@ -1,4 +1,5 @@
-import type { PageQuery } from "./api";
+/** The API query parameters that address one page. The API rejects more than one at a time. */
+export type PageAddress = { after_id?: number; before_id?: number; offset?: number };
 
 /** Every query parameter that addresses a page, and so never belongs on a canonical URL. */
 export const PAGE_PARAMS = ["offset", "after_id", "before_id"] as const;
@@ -16,11 +17,11 @@ function positiveInteger(value: string | null): number | undefined {
  * Values use JavaScript numeric parsing. Unsafe, invalid, or nonpositive values are skipped; if none
  * remain, return the first page so a hand-edited link can still render.
  */
-export function readPageParams(params: URLSearchParams): PageQuery {
+export function readPageParams(params: URLSearchParams): PageAddress {
   const afterId = positiveInteger(params.get("after_id"));
-  if (afterId !== undefined) return { afterId };
+  if (afterId !== undefined) return { after_id: afterId };
   const beforeId = positiveInteger(params.get("before_id"));
-  if (beforeId !== undefined) return { beforeId };
+  if (beforeId !== undefined) return { before_id: beforeId };
   // Offset 0 is the first page, which is addressed by naming no parameter at all.
   const offset = positiveInteger(params.get("offset"));
   return offset === undefined ? {} : { offset };
@@ -32,6 +33,6 @@ export function readOffset(params: URLSearchParams): number | undefined {
 }
 
 /** Whether a request asked for anything other than the first page, which should not be indexed. */
-export function isPaged(query: PageQuery): boolean {
-  return query.afterId !== undefined || query.beforeId !== undefined || Boolean(query.offset);
+export function isPaged(page: PageAddress): boolean {
+  return page.after_id !== undefined || page.before_id !== undefined || Boolean(page.offset);
 }

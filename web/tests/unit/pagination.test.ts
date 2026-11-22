@@ -14,16 +14,16 @@ describe("page addresses read from a URL", () => {
   });
 
   it("reads each anchor kind", () => {
-    expect(readPageParams(params("after_id=42"))).toEqual({ afterId: 42 });
-    expect(readPageParams(params("before_id=42"))).toEqual({ beforeId: 42 });
+    expect(readPageParams(params("after_id=42"))).toEqual({ after_id: 42 });
+    expect(readPageParams(params("before_id=42"))).toEqual({ before_id: 42 });
     expect(readPageParams(params("offset=20"))).toEqual({ offset: 20 });
   });
 
   it("prefers an identifier anchor when a link carries more than one", () => {
     // The API rejects the combination, so a hand-edited URL resolves to the anchor rather than
     // failing the whole page render.
-    expect(readPageParams(params("offset=20&after_id=42"))).toEqual({ afterId: 42 });
-    expect(readPageParams(params("before_id=8&after_id=42"))).toEqual({ afterId: 42 });
+    expect(readPageParams(params("offset=20&after_id=42"))).toEqual({ after_id: 42 });
+    expect(readPageParams(params("before_id=8&after_id=42"))).toEqual({ after_id: 42 });
   });
 
   it("ignores values that cannot address a page", () => {
@@ -36,17 +36,17 @@ describe("page addresses read from a URL", () => {
 
   it("rejects unsafe anchors without rounding them and falls back to the next valid address", () => {
     expect(readPageParams(params("after_id=9007199254740993&before_id=42"))).toEqual({
-      beforeId: 42,
+      before_id: 42,
     });
     expect(readPageParams(params("before_id=9007199254740993"))).toEqual({});
     expect(readOffset(params("offset=9007199254740993"))).toBeUndefined();
     expect(readPageParams(params("after_id=9007199254740991"))).toEqual({
-      afterId: Number.MAX_SAFE_INTEGER,
+      after_id: Number.MAX_SAFE_INTEGER,
     });
   });
 
   it("preserves JavaScript numeric syntax for safe page addresses", () => {
-    expect(readPageParams(params("after_id=1e2"))).toEqual({ afterId: 100 });
+    expect(readPageParams(params("after_id=1e2"))).toEqual({ after_id: 100 });
     expect(readOffset(params("offset=0x10"))).toBe(16);
   });
 
@@ -57,8 +57,8 @@ describe("page addresses read from a URL", () => {
   });
 
   it("treats any addressed page as unindexable", () => {
-    expect(isPaged({ afterId: 42 })).toBe(true);
-    expect(isPaged({ beforeId: 42 })).toBe(true);
+    expect(isPaged({ after_id: 42 })).toBe(true);
+    expect(isPaged({ before_id: 42 })).toBe(true);
     expect(isPaged({ offset: 20 })).toBe(true);
     expect(isPaged({ offset: 0 })).toBe(false);
   });

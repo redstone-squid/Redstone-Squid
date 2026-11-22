@@ -1,35 +1,38 @@
 import { defineMiddleware } from "astro:middleware";
+import { localeFromPath, localizePath } from "./lib/i18n";
+import { createApiClient } from "./server/api";
+import { getRuntimeConfig } from "./server/config";
 
+/**
+ * Set up request locals and log each request.
+ *
+ * Every route exists once, without a locale prefix. A prefixed request such as `/zh-cn/records`
+ * is rewritten to `/records` with `locals.locale` set, so pages never branch on the URL prefix.
+ * Configuration is read here so a bad deployment fails with a 500 before the page starts
+ * streaming, rather than truncating a 200 response.
+ */
 export const onRequest = defineMiddleware(async (context, next) => {
   const startedAt = performance.now();
-  try {
-    const renderedResponse = await next();
-    // Finish rendering before reading responseStatus: nested views set it while producing the body.
-    const body = context.request.method === "HEAD" ? null : await renderedResponse.arrayBuffer();
-    const response = new Response(body, {
-      status: context.locals.responseStatus ?? renderedResponse.status,
-      statusText: context.locals.responseStatus ? undefined : renderedResponse.statusText,
-      headers: renderedResponse.headers,
+  const { pathname, search } = context.url;
+  const locale = localeFromPath(pathname);
+  context.locals.locale = locale;
+  const log = (event: string, fields: Record<string, unknown>) =>
+    JSON.stringify({
+      event,
+      method: context.request.method,
+      path: pathname,
+      duration_ms: Math.round(performance.now() - startedAt),
+      ...fields,
     });
-    console.info(
-      JSON.stringify({
-        event: "http_request",
-        method: context.request.method,
-        path: context.url.pathname,
-        status: response.status,
-        duration_ms: Math.round(performance.now() - startedAt),
-      }),
-    );
+  try {
+    context.locals.config = getRuntimeConfig();
+    context.locals.api = createApiClient(locale, context.locals.config);
+    const response = await (locale === "en" ? next() : next(localizePath(pathname, "en") + search));
+    console.info(log("http_request", { status: response.status }));
     return response;
   } catch (error) {
     console.error(
-      JSON.stringify({
-        event: "http_request_error",
-        method: context.request.method,
-        path: context.url.pathname,
-        duration_ms: Math.round(performance.now() - startedAt),
-        error: error instanceof Error ? error.message : String(error),
-      }),
+      log("http_request_error", { error: error instanceof Error ? error.message : String(error) }),
     );
     throw error;
   }

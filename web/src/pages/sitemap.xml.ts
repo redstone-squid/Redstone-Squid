@@ -1,10 +1,9 @@
 import type { APIRoute } from "astro";
 
-import { getRuntimeConfig } from "../lib/config";
 import { SUPPORTED_LOCALES, localizePath } from "../lib/i18n";
 
-export const GET: APIRoute = () => {
-  const { siteUrl } = getRuntimeConfig();
+export const GET: APIRoute = ({ locals }) => {
+  const { siteUrl } = locals.config;
   const homes = SUPPORTED_LOCALES.map((locale) => {
     const url = new URL(localizePath("/", locale), siteUrl).href
       .replaceAll("&", "&amp;")
