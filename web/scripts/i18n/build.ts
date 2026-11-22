@@ -3,11 +3,21 @@ import { format, resolveConfig } from "prettier";
 import { SUPPORTED_LOCALES } from "../../src/locales/locale";
 import { catalogContract, compareCatalogs } from "./catalogs";
 import { compileCatalogs, functionName } from "./compile";
+import { compileVocabulary, type Vocabulary } from "./vocabulary";
 
-// Validate the catalogs, then compile them into src/locales/messages.ts. With --write the
-// module is regenerated; otherwise the build fails if the committed module is out of date.
-// Every message must be called somewhere in src/, so deleted features cannot leave text behind.
+// Compile the catalogs into src/locales/messages.ts and the exported domain labels into
+// src/locales/vocabulary.ts. With --write the modules are regenerated; otherwise the build fails
+// if a committed module is out of date. Every message must be called somewhere in src/, so
+// deleted features cannot leave text behind.
 const target = "src/locales/messages.ts";
+const write = process.argv.includes("--write");
+
+async function emit(path: string, source: string): Promise<void> {
+  const formatted = await format(source, { ...(await resolveConfig(path)), filepath: path });
+  if (write) writeFileSync(path, formatted);
+  else if (readFileSync(path, "utf8") !== formatted)
+    throw new Error(`Run bun run i18n:generate and commit ${path}.`);
+}
 const catalogs = Object.fromEntries(
   SUPPORTED_LOCALES.map((locale) => [locale, readFileSync(`src/locales/${locale}.ftl`, "utf8")]),
 );
@@ -28,13 +38,9 @@ const unused = Object.keys(reference).filter((id) => !called.has(functionName(id
 if (unused.length > 0)
   throw new Error(`Delete these messages or use them in src/:\n${unused.join("\n")}`);
 
-const generated = await format(compileCatalogs(catalogs), {
-  ...(await resolveConfig(target)),
-  filepath: target,
-});
-if (process.argv.includes("--write")) writeFileSync(target, generated);
-else if (readFileSync(target, "utf8") !== generated)
-  throw new Error("Run bun run i18n:generate and commit src/locales/messages.ts.");
+await emit(target, compileCatalogs(catalogs));
+const vocabulary = JSON.parse(readFileSync("../contracts/vocabulary.json", "utf8")) as Vocabulary;
+await emit("src/locales/vocabulary.ts", compileVocabulary(vocabulary, SUPPORTED_LOCALES));
 console.info(
   `Compiled ${Object.keys(reference).length} messages in ${SUPPORTED_LOCALES.length} locales.`,
 );

@@ -17,7 +17,7 @@ export default defineConfig({
         "src/features/**/*.{ts,svelte}",
         "src/workbench/**/*.{ts,svelte}",
       ],
-      exclude: ["src/generated/**", "src/locales/messages.ts"],
+      exclude: ["src/generated/**", "src/locales/messages.ts", "src/locales/vocabulary.ts"],
       reporter: ["text", "json-summary"],
       thresholds: {
         lines: 90,

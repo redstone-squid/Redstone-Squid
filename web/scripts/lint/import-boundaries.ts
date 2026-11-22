@@ -24,7 +24,7 @@ const LAYERS = {
   workbench: ["workbench", "layouts", "features", "lib", "ui", "locales", "generated"],
   server: ["server", "lib", "locales", "generated"],
   lib: ["lib", "locales", "generated"],
-  locales: ["locales"],
+  locales: ["locales", "generated"],
   ui: ["ui"],
 } as const satisfies Record<string, readonly string[]>;
 type Layer = keyof typeof LAYERS;

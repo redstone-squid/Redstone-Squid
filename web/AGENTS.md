@@ -14,7 +14,7 @@ interaction. The site reads the Python API through an SDK generated from
 | `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                 |
 | `src/server`     | Runtime config and the API client. Server only                           | `lib`, `locales`, `generated`                          |
 | `src/lib`        | Code that runs on both sides: pagination, problem details                | `locales`, `generated`                                 |
-| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales` only                                         |
+| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                 |
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
 
@@ -80,9 +80,13 @@ m.recordHolderCount(locale, { count: holders.length });
 - IDs are kebab-case and start with their area (`record-holder-count`).
 - Arguments are typed by how the catalogs use them: a plural selector or `NUMBER()` takes a
   number, `DATETIME()` a date. Format numbers and dates inside the message, not in code.
-- To pick a message by value, write a map checked against the union type, such as
-  `{ fastest: m.criterionFastest, ... } satisfies Record<RecordCriterion, unknown>`.
-  Never build a message name from a string.
+- Domain values such as record criteria, build kinds, and statuses have one label each, in
+  `squid/core/vocabulary.py`, shared with the bot. `just export-vocabulary` writes them to
+  `contracts/vocabulary.json`, which compiles into `src/locales/vocabulary.ts`:
+  `recordCriterionLabel(locale, record.criterion)`.
+- To pick a message by any other value, write a map checked against the union type, such as
+  `{ required: m.trialRequired, ... } satisfies Record<DraftError, unknown>`. Never build a
+  message name from a string.
 - The build fails when a message is not called from `src/`, so delete text with its feature.
 
 ## Tests

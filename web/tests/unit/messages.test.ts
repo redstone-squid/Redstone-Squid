@@ -4,6 +4,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { catalogContract, compareCatalogs } from "../../scripts/i18n/catalogs";
 import { compileCatalogs } from "../../scripts/i18n/compile";
+import { compileVocabulary } from "../../scripts/i18n/vocabulary";
 
 type Message = (locale: string, args?: Record<string, unknown>) => string;
 
@@ -111,5 +112,33 @@ describe("catalog contract", () => {
       "user",
     ]);
     expect(catalogContract("-brand = Squid\nhello = { -brand }")).toEqual({ hello: [] });
+  });
+});
+
+describe("vocabulary compiler", () => {
+  const labels = { first: "First", fastest: "Fastest" };
+
+  it("types each group's values with its OpenAPI type", () => {
+    const source = compileVocabulary(
+      {
+        en: { record_criterion: labels },
+        "zh-CN": { record_criterion: { first: "首个", fastest: "最快" } },
+      },
+      ["en", "zh-CN"],
+    );
+    expect(source).toContain(
+      "export function recordCriterionLabel(locale: Locale, value: RecordCriterion): string",
+    );
+    expect(source).toContain("satisfies Record<Locale, Record<RecordCriterion, string>>");
+  });
+
+  it("rejects locales that label different values and groups without a type", () => {
+    expect(() =>
+      compileVocabulary(
+        { en: { record_criterion: labels }, "zh-CN": { record_criterion: { first: "首个" } } },
+        ["en", "zh-CN"],
+      ),
+    ).toThrow("must label exactly");
+    expect(() => compileVocabulary({ en: { mystery: labels } }, ["en"])).toThrow("OpenAPI type");
   });
 });

@@ -1,4 +1,4 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["src/generated/**", "src/locales/messages.ts"]
+  "ignore": ["src/generated/**", "src/locales/messages.ts", "src/locales/vocabulary.ts"]
 }

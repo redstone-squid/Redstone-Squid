@@ -30,6 +30,7 @@ export default tseslint.config(
       "coverage/**",
       "src/generated/**",
       "src/locales/messages.ts",
+      "src/locales/vocabulary.ts",
       "playwright-report/**",
       "test-results/**",
       "review-gallery/**",
