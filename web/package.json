@@ -18,7 +18,6 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
-    "test:docs-screenshots": "DOCS_SCREENSHOTS=1 playwright test tests/e2e/docs-screenshots.spec.ts --project=chromium-desktop --project=mobile-chrome",
     "test:lighthouse": "bun scripts/check-lighthouse.ts",
     "check:bundle": "bun scripts/check-bundle.ts",
     "test:review": "playwright test --config playwright.review.config.ts",
