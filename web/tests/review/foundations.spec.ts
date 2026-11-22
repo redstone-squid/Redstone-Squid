@@ -21,6 +21,10 @@ for (const locale of ["en", "zh-CN"] as const) {
         "content",
         "noindex,nofollow",
       );
+      const draft = page.getByRole("button", { name: m.workbenchNewDraft(locale), exact: true });
+      await draft.scrollIntoViewIfNeeded();
+      await expect(draft).toBeEnabled();
+      await page.evaluate(() => window.scrollTo(0, 0));
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
@@ -68,6 +72,8 @@ test("updates button previews and theme without navigating", async ({ page }) =>
   await expect(
     page.getByRole("complementary").getByRole("link", { name: m.trialTitle("en") }),
   ).toHaveAttribute("href", /\/design-system-trial\?theme=dark$/);
+  await page.getByRole("link", { name: m.workbenchFoundations("en"), exact: true }).click();
+  await expect(page).toHaveURL(/\?variant=quiet&size=small&theme=dark#foundations$/);
   expect(navigations).toEqual([]);
 
   const header = page.getByRole("banner");
@@ -90,6 +96,7 @@ test("reflows at 320px and retains controls in forced colours", async ({ page })
     true,
   );
   const newDraft = page.getByRole("button", { name: m.workbenchNewDraft("zh-CN") });
+  await newDraft.scrollIntoViewIfNeeded();
   await expect(newDraft).toBeVisible();
   await newDraft.click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -103,6 +110,7 @@ test("changes field state and layout in place and restores them from the URL", a
   });
   const fields = page.getByRole("region", { name: m.workbenchFormControls("en") });
   const invalid = fields.getByRole("button", { name: m.workbenchInvalid("en") });
+  await page.evaluate(() => document.fonts.ready);
   await invalid.focus();
   const scroll = await page.evaluate(() => window.scrollY);
   await invalid.press("Enter");

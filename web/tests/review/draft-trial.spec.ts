@@ -4,6 +4,25 @@ import { test, expect } from "@tests/support/test";
 import { attachReviewScreenshot } from "@tests/support/review-screenshot";
 
 test.use({ video: "on" });
+
+test("switches the draft scenario without reloading the form", async ({ page }) => {
+  await page.goto("/design-system-trial?theme=dark");
+  const navigations: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest()) navigations.push(request.url());
+  });
+  const title = page.getByRole("textbox", { name: m.workbenchBuildTitle("en") });
+  await title.fill("Copper Bolt");
+  const scenario = page.getByRole("button", { name: m.trialUploadScenario("en") });
+  await scenario.focus();
+  await scenario.press("Enter");
+  await expect(scenario).toBeFocused();
+  await expect(scenario).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/\?theme=dark&scenario=upload-retry$/);
+  await expect(title).toHaveValue("Copper Bolt");
+  expect(navigations).toEqual([]);
+});
+
 for (const locale of ["en", "zh-CN"] as const) {
   test(`${locale} / draft workflow`, async ({ page, browserName }, testInfo) => {
     await page.goto(localizePath("/design-system-trial?scenario=retry", locale));

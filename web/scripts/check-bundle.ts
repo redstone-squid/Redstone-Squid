@@ -28,7 +28,7 @@ const budgets: EntryBudget[] = [
     completeKiB: 60,
   },
   {
-    entries: ["src/workbench/DraftTrial.svelte"],
+    entries: ["src/workbench/DraftScenarioToggle.svelte", "src/workbench/DraftTrialStory.svelte"],
     label: "Svelte draft trial",
     initialKiB: 32,
     completeKiB: 45,

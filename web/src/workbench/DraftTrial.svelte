@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, untrack } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/svelte/Button.svelte";
   import SelectField from "@/ui/svelte/SelectField.svelte";
@@ -28,9 +28,13 @@
   let progress = $state(0);
   let retryFile = $state<File>();
   let attachment = $state("");
-  // The route scenario is fixed for this island's lifetime.
-  const api = untrack(() => createDraftFixture(scenario));
+  let ready = $state(false);
+  // Changing the simulated transport leaves the visitor's draft intact.
+  const api = $derived(createDraftFixture(scenario));
   let operation: AbortController | undefined;
+  onMount(() => {
+    ready = true;
+  });
   onDestroy(() => operation?.abort());
   const busy = $derived(phase === "saving" || phase === "uploading");
   const feedback = $derived(draftFeedback(phase, errors));
@@ -93,7 +97,7 @@
   }}
 >
   <p class={mutedClass}>{m.trialDisclaimer()}</p>
-  <fieldset class={cn(layoutStyles({ pattern: "stack" }), "min-w-0")} disabled={busy}>
+  <fieldset class={cn(layoutStyles({ pattern: "stack" }), "min-w-0")} disabled={!ready || busy}>
     <legend class={kickerClass}>{m.trialDetails()}</legend>
     <Field
       label={m.workbenchBuildTitle()}
@@ -144,7 +148,7 @@
   {/if}
   {#if attachment}<p>{m.trialAttachment({ filename: attachment })}</p>{/if}
   <div class={layoutStyles({ pattern: "actions" })}>
-    <Button type="submit" variant="primary" disabled={busy}
+    <Button type="submit" variant="primary" disabled={!ready || busy}
       >{(phase === "saving"
         ? m.trialSaving
         : phase === "error"

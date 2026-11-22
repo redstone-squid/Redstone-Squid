@@ -6,6 +6,8 @@ test.describe("workflow recording", () => {
   test("create a draft / validation and keyboard recovery", async ({ page }, testInfo) => {
     await page.goto("/design-system");
     const trigger = page.getByRole("button", { name: m.workbenchNewDraft("en"), exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    await expect(trigger).toBeEnabled();
     await trigger.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");

@@ -1,29 +1,21 @@
 ---
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
-import LinkButton from "@/ui/astro/LinkButton.astro";
 import PageHeading from "@/ui/astro/PageHeading.astro";
 import Panel from "@/ui/astro/Panel.astro";
 import * as m from "@/locales/messages.gen";
-import SvelteDraftTrial from "@/workbench/DraftTrial.svelte";
+import DraftScenarioToggle from "@/workbench/DraftScenarioToggle.svelte";
+import DraftTrialStory from "@/workbench/DraftTrialStory.svelte";
 import { parseTheme } from "@/ui/themes";
 const theme = parseTheme(Astro.url.searchParams.get("theme"));
-const selected = Astro.url.searchParams.get("scenario");
-const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
-const uploadScenario = new URLSearchParams({ theme, scenario: "upload-retry" });
+const { search } = Astro.url;
 ---
 
 <WorkbenchLayout title={m.trialTitle()} {theme}>
   <PageHeading title={m.trialTitle()}>
     <p>Svelte 5</p>
-    <LinkButton
-      href={`?${uploadScenario}`}
-      size="small"
-      aria-current={scenario === "upload-retry" ? "page" : undefined}
-    >
-      {m.trialUploadScenario()}
-    </LinkButton>
+    <DraftScenarioToggle client:load {search} />
   </PageHeading>
   <Panel id="trial" title={m.trialDetails()}>
-    <SvelteDraftTrial client:load {scenario} />
+    <DraftTrialStory client:load {search} />
   </Panel>
 </WorkbenchLayout>
