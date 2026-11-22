@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from functools import lru_cache
+from typing import Self, override
 from zoneinfo import ZoneInfo
 
 from babel import UnknownLocaleError
@@ -29,10 +30,36 @@ class _SafeText(str):
 
     parts: tuple[str | tree.Node, ...]
 
-    def __new__(cls, value: str, parts: tuple[str | tree.Node, ...] | None = None) -> _SafeText:
+    def __new__(cls, value: str, parts: tuple[str | tree.Node, ...] | None = None) -> Self:
         result = super().__new__(cls, value)
         result.parts = (value,) if parts is None else parts
         return result
+
+
+class _Fragment(_SafeText):
+    """A translated message passed to another message; selectors match its message ID.
+
+    Translators cannot see the grammar of a resolved word, so a selector such as
+    ``{ $name -> [search-field-width] ... }`` lets them inflect or agree with it.
+    """
+
+    message_id: str
+
+    def __new__(cls, value: str, parts: tuple[str | tree.Node, ...], message_id: str) -> Self:
+        result = super().__new__(cls, value, parts)
+        result.message_id = message_id
+        return result
+
+    # Fluent compiles variant matching to ``==``; output still uses the resolved text.
+    @override
+    def __eq__(self, other: object) -> bool:
+        return self.message_id == other
+
+    @override
+    def __ne__(self, other: object) -> bool:
+        return self.message_id != other
+
+    __hash__ = _SafeText.__hash__
 
 
 class _Escaper:
@@ -85,7 +112,13 @@ def _arguments(message: text._Translation, localization: text.Localization) -> d
     for name, value in message.bindings.items():
         if isinstance(value, text.Text):
             resolved = text.resolve_text(value, localization)
-            args[name] = _SafeText(resolved.plain(), (tree.Node("sequence", children=resolved.nodes),))
+            parts = (tree.Node("sequence", children=resolved.nodes),)
+            declaration = value.declaration
+            args[name] = (
+                _SafeText(resolved.plain(), parts)
+                if declaration is None
+                else _Fragment(resolved.plain(), parts, declaration.identifier)
+            )
         elif isinstance(value, NumberExpression):
             args[name] = fluent_number(value.value, **dict(value.options))
         elif isinstance(value, DateTimeExpression):

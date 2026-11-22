@@ -96,6 +96,24 @@ def test_string_selector_uses_unescaped_value() -> None:
     assert source_text(message) == "needs-review"
 
 
+def test_translated_arguments_select_by_message_id() -> None:
+    width = tr(t"field-width = Width")
+    volume = tr(t"field-volume = Volume")
+    name = width
+    message = tr(t"filter-set = {name} is set")
+    french = Localization(
+        "fr",
+        (
+            "field-width = Largeur\nfield-volume = Volume\n"
+            "filter-set = { $name ->\n    [field-width] { $name } est définie\n   *[other] { $name } est défini\n}\n",
+        ),
+    )
+
+    assert resolve_text(message, french).content == "Largeur est définie"
+    name = volume
+    assert resolve_text(tr(t"filter-set = {name} is set"), french).content == "Volume est défini"
+
+
 def test_invalid_authoring_is_rejected() -> None:
     count = 2
     with pytest.raises(DeclarationError, match="local variable"):
