@@ -1,5 +1,4 @@
 site-name = Redstone Squid
-nav-home = Home
 nav-builds = Builds
 nav-records = Records
 nav-search = Search
@@ -154,3 +153,17 @@ placeholder-rebuilding = The Redstone Squid website is being rebuilt.
 
 offline-title = You are offline
 offline-body = This page needs a connection. Reconnect and try again.
+
+records-intro = The current holder of every record, recomputed whenever a build is approved.
+records-empty = No records have been published yet.
+record-holders = Holders
+record-no-holders = No build holds this record yet.
+record-status = Status: { $status }
+build-size = { $width } × { $height } × { $depth }
+build-ticks = { $ticks } gt
+build-preview-alt = Preview of { $title }
+build-no-preview = No preview available
+build-image-unavailable = Preview could not be loaded
+build-dimensions = Dimensions
+build-opening = Opening
+common-next = Next

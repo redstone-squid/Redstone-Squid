@@ -10,8 +10,6 @@ const routes = [
   "/cli/link?user_code=example",
   "/creators/Space%20Builder",
   "/minecraft/link?user_code=example",
-  "/records",
-  "/records/11",
   "/search?q=door",
   "/search/help",
   "/submit",

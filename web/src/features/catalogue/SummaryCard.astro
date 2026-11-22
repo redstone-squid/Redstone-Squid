@@ -4,10 +4,7 @@ import { panelClass } from "@/ui/variants";
 ---
 
 <article
-  class={cn(
-    panelClass,
-    "grid content-start gap-3 [&_a]:no-underline [&_a:hover]:underline [&_h3]:text-lg",
-  )}
+  class={cn(panelClass, "grid content-start gap-3 [&_a]:no-underline [&_a:hover]:underline")}
 >
   <slot />
 </article>

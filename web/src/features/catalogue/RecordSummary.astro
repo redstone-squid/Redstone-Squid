@@ -7,19 +7,21 @@ import type { PublishedRecordResult } from "@/generated/types.gen";
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { buildKindLabel, recordCriterionLabel, versionScopeLabel } from "@/locales/vocabulary.gen";
-type Props = { record: PublishedRecordResult; linked?: boolean };
-const { record, linked = true } = Astro.props;
+/** `headingLevel` follows the heading the card sits under: 2 directly under a page title. */
+type Props = { record: PublishedRecordResult; linked?: boolean; headingLevel?: 2 | 3 };
+const { record, linked = true, headingLevel = 3 } = Astro.props;
+const Heading = headingLevel === 2 ? "h2" : "h3";
 ---
 
 <SummaryCard>
   <span class={kickerClass}>{recordCriterionLabel(record.criterion)}</span>
-  <h3>
+  <Heading class="text-lg">
     {linked ? (
       <a href={localizePath(`/records/${record.record_id}`)}>{record.title}</a>
     ) : (
       record.title
     )}
-  </h3>
+  </Heading>
   {record.subtitle && <p class={mutedClass}>{record.subtitle}</p>}
   <div class={layoutStyles({ pattern: "row" })}>
     <Badge>{buildKindLabel(record.build_kind)}</Badge>

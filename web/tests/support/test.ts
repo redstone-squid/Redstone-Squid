@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { test as base, expect as baseExpect, type Page } from "@playwright/test";
 
@@ -6,8 +7,25 @@ import { test as base, expect as baseExpect, type Page } from "@playwright/test"
  *
  * Each test fails if the page logs a console error or throws, which catches hydration
  * failures that assertions miss. `await expect(page).toPassAxe()` fails on any axe violation.
+ * Fixture media URLs on media.fixture.invalid are served locally; `broken.png` is not an image,
+ * so pages can show their broken-image fallback.
  */
-export const test = base.extend<{ browserDiagnostics: undefined }>({
+const fixtureImage = readFileSync("public/fixtures/copper-door.svg");
+
+export const test = base.extend<{ browserDiagnostics: undefined; fixtureMedia: undefined }>({
+  fixtureMedia: [
+    async ({ page }, use) => {
+      await page.route("https://media.fixture.invalid/**", (route) =>
+        route.fulfill(
+          route.request().url().endsWith("/broken.png")
+            ? { contentType: "image/png", body: "not an image" }
+            : { contentType: "image/svg+xml", body: fixtureImage },
+        ),
+      );
+      await use(undefined);
+    },
+    { auto: true },
+  ],
   browserDiagnostics: [
     async ({ page }, use) => {
       const errors: string[] = [];

@@ -14,18 +14,6 @@ export function siteName(locale: Locale = getLocale()): string {
   }
 }
 
-/** Home */
-export function navHome(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Home";
-    case "zh-CN":
-      return "首页";
-    case "en-XA":
-      return "[" + "Ĥöɱé" + "··]";
-  }
-}
-
 /** Builds */
 export function navBuilds(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1818,5 +1806,194 @@ export function offlineBody(locale: Locale = getLocale()): string {
       return (
         "[" + "Ţĥîš þåĝé ñééđš å çöññéçţîöñ. Ŕéçöññéçţ åñđ ţŕý åĝåîñ." + "······················]"
       );
+  }
+}
+
+/** The current holder of every record, recomputed whenever a build is approved. */
+export function recordsIntro(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "The current holder of every record, recomputed whenever a build is approved.";
+    case "zh-CN":
+      return "每项纪录当前的保持者，作品通过审核后会重新计算。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥé çûŕŕéñţ ĥöļđéŕ öƒ éṽéŕý ŕéçöŕđ, ŕéçöɱþûţéđ ŵĥéñéṽéŕ å ƀûîļđ îš åþþŕöṽéđ." +
+        "·······························]"
+      );
+  }
+}
+
+/** No records have been published yet. */
+export function recordsEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No records have been published yet.";
+    case "zh-CN":
+      return "尚未发布任何纪录。";
+    case "en-XA":
+      return "[" + "Ñö ŕéçöŕđš ĥåṽé ƀééñ þûƀļîšĥéđ ýéţ." + "··············]";
+  }
+}
+
+/** Holders */
+export function recordHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Holders";
+    case "zh-CN":
+      return "纪录保持者";
+    case "en-XA":
+      return "[" + "Ĥöļđéŕš" + "···]";
+  }
+}
+
+/** No build holds this record yet. */
+export function recordNoHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No build holds this record yet.";
+    case "zh-CN":
+      return "暂无作品保持此纪录。";
+    case "en-XA":
+      return "[" + "Ñö ƀûîļđ ĥöļđš ţĥîš ŕéçöŕđ ýéţ." + "·············]";
+  }
+}
+
+/** Status: { $status } */
+export function recordStatus(
+  args: { status: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Status: " + formatValue(locale, args.status);
+    case "zh-CN":
+      return "状态：" + formatValue(locale, args.status);
+    case "en-XA":
+      return "[" + "Šţåţûš: " + formatValue(locale, args.status) + "····]";
+  }
+}
+
+/** { $width } × { $height } × { $depth } */
+export function buildSize(
+  args: { depth: string | number; height: string | number; width: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return (
+        formatValue(locale, args.width) +
+        " × " +
+        formatValue(locale, args.height) +
+        " × " +
+        formatValue(locale, args.depth)
+      );
+    case "zh-CN":
+      return (
+        formatValue(locale, args.width) +
+        " × " +
+        formatValue(locale, args.height) +
+        " × " +
+        formatValue(locale, args.depth)
+      );
+    case "en-XA":
+      return (
+        "[" +
+        formatValue(locale, args.width) +
+        " × " +
+        formatValue(locale, args.height) +
+        " × " +
+        formatValue(locale, args.depth) +
+        "···]"
+      );
+  }
+}
+
+/** { $ticks } gt */
+export function buildTicks(args: { ticks: string | number }, locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return formatValue(locale, args.ticks) + " gt";
+    case "zh-CN":
+      return formatValue(locale, args.ticks) + " 游戏刻";
+    case "en-XA":
+      return "[" + formatValue(locale, args.ticks) + " ĝţ" + "··]";
+  }
+}
+
+/** Preview of { $title } */
+export function buildPreviewAlt(
+  args: { title: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Preview of " + formatValue(locale, args.title);
+    case "zh-CN":
+      return formatValue(locale, args.title) + " 的预览图";
+    case "en-XA":
+      return "[" + "Þŕéṽîéŵ öƒ " + formatValue(locale, args.title) + "·····]";
+  }
+}
+
+/** No preview available */
+export function buildNoPreview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No preview available";
+    case "zh-CN":
+      return "暂无预览";
+    case "en-XA":
+      return "[" + "Ñö þŕéṽîéŵ åṽåîļåƀļé" + "········]";
+  }
+}
+
+/** Preview could not be loaded */
+export function buildImageUnavailable(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Preview could not be loaded";
+    case "zh-CN":
+      return "预览图无法加载";
+    case "en-XA":
+      return "[" + "Þŕéṽîéŵ çöûļđ ñöţ ƀé ļöåđéđ" + "···········]";
+  }
+}
+
+/** Dimensions */
+export function buildDimensions(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Dimensions";
+    case "zh-CN":
+      return "尺寸";
+    case "en-XA":
+      return "[" + "Đîɱéñšîöñš" + "····]";
+  }
+}
+
+/** Opening */
+export function buildOpening(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Opening";
+    case "zh-CN":
+      return "开门时间";
+    case "en-XA":
+      return "[" + "Öþéñîñĝ" + "···]";
+  }
+}
+
+/** Next */
+export function commonNext(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Next";
+    case "zh-CN":
+      return "下一页";
+    case "en-XA":
+      return "[" + "Ñéẋţ" + "··]";
   }
 }

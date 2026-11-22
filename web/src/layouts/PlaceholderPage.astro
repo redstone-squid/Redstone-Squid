@@ -32,11 +32,7 @@ const description = copy.description();
 ---
 
 <CatalogueLayout {title} {description} noindex={!home}>
-  <Layout
-    pattern="stack"
-    gap="normal"
-    class="mx-auto w-[calc(100%-4rem)] max-w-content py-16 max-sm:w-[calc(100%-2rem)]"
-  >
+  <Layout pattern="stack" gap="normal">
     <h1>{title}</h1>
     <p>{description}</p>
     <div>

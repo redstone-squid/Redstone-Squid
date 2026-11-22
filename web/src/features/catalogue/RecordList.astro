@@ -1,0 +1,29 @@
+---
+import type { PageAnchor, PublishedRecordResult } from "@/generated/types.gen";
+import * as m from "@/locales/messages.gen";
+import Notice from "@/ui/astro/Notice.astro";
+import Pagination from "./Pagination.astro";
+import RecordSummary from "./RecordSummary.astro";
+
+/** One page of records with links to the adjacent pages. `url` is the current page's URL. */
+type Props = {
+  records: PublishedRecordResult[];
+  next: PageAnchor | null;
+  prev: PageAnchor | null;
+  url: URL;
+};
+const { records, next, prev, url } = Astro.props;
+---
+
+{records.length === 0 ? (
+  <Notice title={m.recordsEmpty()} />
+) : (
+  <ul class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-4">
+    {records.map((record) => (
+      <li class="grid">
+        <RecordSummary {record} headingLevel={2} />
+      </li>
+    ))}
+  </ul>
+)}
+<Pagination {next} {prev} {url} />

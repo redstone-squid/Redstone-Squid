@@ -1,5 +1,4 @@
 site-name = 红石鱿鱼
-nav-home = 首页
 nav-builds = 作品
 nav-records = 纪录
 nav-search = 搜索
@@ -148,3 +147,17 @@ placeholder-rebuilding = 红石鱿鱼网站正在重建。
 
 offline-title = 你已离线
 offline-body = 此页面需要联网。请连接网络后重试。
+
+records-intro = 每项纪录当前的保持者，作品通过审核后会重新计算。
+records-empty = 尚未发布任何纪录。
+record-holders = 纪录保持者
+record-no-holders = 暂无作品保持此纪录。
+record-status = 状态：{ $status }
+build-size = { $width } × { $height } × { $depth }
+build-ticks = { $ticks } 游戏刻
+build-preview-alt = { $title } 的预览图
+build-no-preview = 暂无预览
+build-image-unavailable = 预览图无法加载
+build-dimensions = 尺寸
+build-opening = 开门时间
+common-next = 下一页

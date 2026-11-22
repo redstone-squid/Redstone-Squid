@@ -1,6 +1,26 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
+import { readPageAddress } from "@/features/catalogue/pagination";
+import RecordList from "@/features/catalogue/RecordList.astro";
+import { recordsList } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import PageHeading from "@/ui/astro/PageHeading.astro";
+
+const page = readPageAddress(Astro.url.searchParams);
+const loaded = await load(
+  recordsList({ client: Astro.locals.api, query: { ...page, page_size: 20 } }),
+);
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const { items, next, prev } = loaded.data;
 ---
 
-<PlaceholderPage title={m.recordsTitle} />
+<CatalogueLayout
+  title={m.recordsTitle()}
+  description={m.recordsIntro()}
+  canonicalPath="/records"
+  noindex={Object.keys(page).length > 0}
+>
+  <PageHeading title={m.recordsTitle()} description={m.recordsIntro()} />
+  <RecordList records={items} {next} {prev} url={Astro.url} />
+</CatalogueLayout>

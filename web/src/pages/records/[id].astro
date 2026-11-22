@@ -1,6 +1,20 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
-import * as m from "@/locales/messages.gen";
+import RecordDetail from "@/features/catalogue/RecordDetail.astro";
+import { recordsGet } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { load } from "@/server/api";
+
+const loaded = await load(
+  recordsGet({ client: Astro.locals.api, path: { record_id: Astro.params.id ?? "" } }),
+);
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const record = loaded.data;
 ---
 
-<PlaceholderPage title={m.navRecords} />
+<CatalogueLayout
+  title={record.title}
+  description={record.subtitle ?? record.title}
+  canonicalPath={`/records/${record.record_id}`}
+>
+  <RecordDetail {record} />
+</CatalogueLayout>

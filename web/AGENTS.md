@@ -35,29 +35,32 @@ Middleware (`src/middleware.ts`) runs first and sets three request locals:
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
 
 Pages load data in frontmatter and pass plain props down. Feature components never fetch
-or read `Astro.locals`:
+or read `Astro.locals`. `src/pages/records/` is the reference: copy it for a new screen.
 
 ```astro
 ---
-import CatalogueLayout from "../../layouts/CatalogueLayout.astro";
-import { recordsGet } from "../../generated/sdk.gen";
-import { unwrap } from "../../server/api";
+import RecordDetail from "@/features/catalogue/RecordDetail.astro";
+import { recordsGet } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { load } from "@/server/api";
 
-const id = Astro.params.id;
-if (!id) return Astro.rewrite("/404");
-const result = await recordsGet({
-  client: Astro.locals.api,
-  path: { record_id: id },
-});
-if (result.response?.status === 404) return Astro.rewrite("/404");
-const record = unwrap(result); // Other failures throw ApiError and render a 500.
+const loaded = await load(
+  recordsGet({ client: Astro.locals.api, path: { record_id: Astro.params.id ?? "" } }),
+);
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const record = loaded.data;
 ---
 
-<CatalogueLayout title={record.title}>...</CatalogueLayout>
+<CatalogueLayout title={record.title} canonicalPath={`/records/${record.record_id}`}>
+  <RecordDetail {record} />
+</CatalogueLayout>
 ```
 
-Responses stream, so set the status and throw any errors before the template renders.
-An error thrown inside a component after rendering starts truncates a 200 response.
+`load()` turns an API 404 into the 404 page and logs any other failure, including a timeout,
+as the 503 page. Responses stream, so load and choose the status before the template renders;
+an error thrown inside a component after rendering starts truncates a 200 response. Listings
+read their page with `readPageAddress` and link onward with `Pagination` from the API's
+`next` and `prev` anchors; mark pages after the first `noindex`.
 
 ## Adding a page
 

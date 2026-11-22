@@ -1,22 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { readOffset } from "@/features/catalogue/pagination";
+import { pageHref, readOffset, readPageAddress } from "@/features/catalogue/pagination";
 
-describe("offset pagination", () => {
-  it("reads a safe positive offset", () => {
-    expect(readOffset(new URLSearchParams("offset=20"))).toBe(20);
-    expect(readOffset(new URLSearchParams("offset=9007199254740991"))).toBe(
-      Number.MAX_SAFE_INTEGER,
-    );
-  });
+const params = (search: string) => new URLSearchParams(search);
 
-  it("uses the first page when no offset is supplied", () => {
-    expect(readOffset(new URLSearchParams("after_id=42"))).toBeUndefined();
+describe("page addresses", () => {
+  it("reads one address, preferring identifiers over an offset", () => {
+    expect(readPageAddress(params(""))).toEqual({});
+    expect(readPageAddress(params("after_id=42"))).toEqual({ after_id: 42 });
+    expect(readPageAddress(params("before_id=8"))).toEqual({ before_id: 8 });
+    expect(readPageAddress(params("offset=20&after_id=42"))).toEqual({ after_id: 42 });
   });
 
   it.each(["0", "-1", "1.5", "abc", "9007199254740993"])(
-    "uses the first page for offset %s",
-    (offset) => {
-      expect(readOffset(new URLSearchParams({ offset }))).toBeUndefined();
+    "skips the invalid value %s and falls back to the next address",
+    (value) => {
+      expect(readPageAddress(params(`after_id=${value}&offset=20`))).toEqual({ offset: 20 });
+      expect(readOffset(params(`offset=${value}`))).toBeUndefined();
     },
   );
+
+  it("links to an anchor, replacing the current address and keeping other parameters", () => {
+    const url = new URL("https://catalogue.test/zh-cn/records?sort=new&after_id=3");
+    expect(pageHref(url, { offset: null, after_id: null, before_id: 9 })).toBe(
+      "/zh-cn/records?sort=new&before_id=9",
+    );
+  });
 });

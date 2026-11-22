@@ -1,0 +1,36 @@
+---
+import type { PublicBuildSummary } from "@/generated/types.gen";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import BuildPreview from "./BuildPreview.astro";
+
+/** A public build as a linked preview card. `category` is the label to show for its kind. */
+type Props = { build: PublicBuildSummary; category: string; eager?: boolean };
+const { build, category, eager = false } = Astro.props;
+const title = build.display_name ?? build.title;
+const { width, height, depth } = build.dimensions;
+// Only HTTPS previews are shown; the API should never send others, but this is untrusted input.
+const preview =
+  build.preview && URL.canParse(build.preview.url) && build.preview.url.startsWith("https://")
+    ? build.preview.url
+    : null;
+---
+
+<BuildPreview
+  build={{
+    title,
+    category,
+    creator: build.creators.join(" · "),
+    dimensions: m.buildSize({ width: width ?? "?", height: height ?? "?", depth: depth ?? "?" }),
+    timing: build.opening_time === null ? "—" : m.buildTicks({ ticks: build.opening_time }),
+    image: preview === null ? null : { src: preview, alt: m.buildPreviewAlt({ title }) },
+  }}
+  labels={{
+    noPreview: m.buildNoPreview(),
+    imageUnavailable: m.buildImageUnavailable(),
+    dimensions: m.buildDimensions(),
+    opening: m.buildOpening(),
+  }}
+  href={localizePath(`/builds/${build.id}`)}
+  {eager}
+/>

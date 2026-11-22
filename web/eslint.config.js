@@ -176,7 +176,7 @@ export default tseslint.config(
     rules: { "better-tailwindcss/enforce-consistent-class-order": "error" },
   },
   {
-    files: ["src/features/builds/BuildPreview.astro"],
+    files: ["src/features/catalogue/BuildPreview.astro"],
     rules: {
       // The Astro adapter flags img's onerror despite the recommended img lifecycle exception.
       // Keep keyboard and pointer checks; error/load only handle image loading, not user input.
