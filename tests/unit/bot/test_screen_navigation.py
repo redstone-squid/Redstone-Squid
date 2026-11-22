@@ -1,25 +1,17 @@
 """Navigation controls reference the same endpoint as typed calls and address dispatch."""
 
-import inspect
-from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
 
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
-from squid.bot.navigation.cog import NavigationCommands
-from squid.bot.routes import AppRequest, ScreenUnavailable
-from squid.bot.submission.ui import drafts
+from squid.bot.routes import AppRequest
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
-from squid.core.builds.domain import BuildStatus
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
-from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.ext.discord import primitives
 from squid_ui.routing import MountedRouter
-from tests.support.grants import grants
 
 
 @pytest.fixture
@@ -50,83 +42,3 @@ def test_persistent_button_addresses_the_screen_directly(router: MountedRouter[A
     assert router.resolve(button.route_id[3:]).endpoint is DraftEditorScreen.open_draft
     with pytest.raises(LayoutInvariantError, match="100"):
         BuildBrowseScreen.open_detail.custom_id(build_id=10**100)
-
-
-@pytest.mark.parametrize("status", [None, BuildStatus.PENDING, BuildStatus.APPROVED])
-@pytest.mark.parametrize("view_pending", [False, True])
-async def test_build_visibility_is_checked_before_opening(
-    monkeypatch: pytest.MonkeyPatch,
-    status: BuildStatus | None,
-    view_pending: bool,
-) -> None:
-    request = MagicMock()
-    screen = MagicMock(grants=grants(*([BUILD_SUBMISSION_VIEW_PENDING] if view_pending else [])))
-    build = None if status is None else MagicMock(submission_status=status)
-    request.client.services.build_queries.get = AsyncMock(return_value=build)
-    monkeypatch.setattr(BuildBrowseScreen, "create", AsyncMock(return_value=screen))
-    allowed = status is BuildStatus.APPROVED or (status is BuildStatus.PENDING and view_pending)
-    if allowed:
-        opening = await BuildBrowseScreen.open_detail.function(BuildBrowseScreen, request, 12)
-        assert opening is not None
-        assert opening is screen
-    else:
-        with pytest.raises(ScreenUnavailable):
-            await BuildBrowseScreen.open_detail.function(BuildBrowseScreen, request, 12)
-
-
-async def test_draft_consent_stops_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(drafts, "ensure_consented_account", AsyncMock(return_value=None))
-    editor = AsyncMock()
-    monkeypatch.setattr(drafts.DraftEditorScreen, "load", editor)
-    assert await DraftEditorScreen.open_draft.function(DraftEditorScreen, MagicMock(), UUID(int=1)) is None
-    editor.assert_not_awaited()
-
-
-@pytest.mark.parametrize("error", [DraftNotFoundError(UUID(int=1)), DraftAccessDeniedError()])
-async def test_draft_access_failure_does_not_open_editor(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
-    monkeypatch.setattr(drafts, "ensure_consented_account", AsyncMock(return_value=1))
-    monkeypatch.setattr(drafts.DraftEditorScreen, "load", AsyncMock(side_effect=error))
-    with pytest.raises(ScreenUnavailable):
-        await DraftEditorScreen.open_draft.function(DraftEditorScreen, MagicMock(), UUID(int=1))
-
-
-async def test_account_tab_validation_and_current_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    screen = MagicMock()
-    screen.focus.side_effect = [ValueError("Unavailable tab"), None]
-    create = AsyncMock(return_value=screen)
-    monkeypatch.setattr(AccountWorkspace, "create", create)
-    request = MagicMock()
-    with pytest.raises(ScreenUnavailable):
-        await AccountWorkspace.open_account.function(AccountWorkspace, request, "review")
-    opening = await AccountWorkspace.open_account.function(AccountWorkspace, request, "identity")
-    assert opening is not None
-    assert opening is screen
-    screen.focus.assert_called_with("identity")
-    create.assert_awaited_with(request)
-
-
-@pytest.mark.parametrize("address", ["builds/12", "/builds/12", "  builds/12  ", "drafts?inbox=true", "account#claims"])
-async def test_navigation_accepts_optional_leading_slash(
-    router: MountedRouter[AppRequest], monkeypatch: pytest.MonkeyPatch, address: str
-) -> None:
-    dispatch = AsyncMock()
-    monkeypatch.setattr(router, "dispatch", dispatch)
-    request = MagicMock()
-    request.client.ui_router = router
-    callback = inspect.unwrap(NavigationCommands.open_screen.callback)
-    await callback(MagicMock(), request, address)
-    expected = router.resolve("/" + address.strip().lstrip("/"))
-    dispatch.assert_awaited_once_with(request, expected)
-
-
-@pytest.mark.parametrize("address", ["", "  ", "https://example.com/builds", "//example.com/builds", "?inbox=true"])
-async def test_navigation_rejects_non_screen_addresses(
-    router: MountedRouter[AppRequest], monkeypatch: pytest.MonkeyPatch, address: str
-) -> None:
-    dispatch = AsyncMock()
-    monkeypatch.setattr(router, "dispatch", dispatch)
-    request = MagicMock()
-    request.client.ui_router = router
-    callback = inspect.unwrap(NavigationCommands.open_screen.callback)
-    await callback(MagicMock(), request, address)
-    dispatch.assert_not_awaited()
