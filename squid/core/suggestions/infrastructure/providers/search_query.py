@@ -39,9 +39,11 @@ from squid.core.tags.domain import TagSemanticKind
 
 
 class FilterValueReader(TagReader, Protocol):
-    """Read indexed values for search completions."""
+    """Read indexed values and creator profiles for search completions."""
 
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
+
+    async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
 
 
 class SearchQueryProvider:
@@ -101,7 +103,7 @@ class SearchQueryProvider:
         else:
             values = await self._filters.filter_values(context.field.name, context.prefix, limit=limit)
         # Preserve prefix matching and ordering when quoting the values.
-        return tuple(
+        names = tuple(
             Suggestion(
                 value=render_value(value, quoted=context.quoted),
                 label=value,
@@ -109,6 +111,19 @@ class SearchQueryProvider:
             )
             for value in values
         )
+        if context.field.name != "creator":
+            return names
+        # A creator profile matches every name its account is credited under, so it comes first.
+        profiles = tuple(
+            Suggestion(
+                value=render_value(public_id, quoted=context.quoted),
+                label=name,
+                description="all builds by this creator",
+                kind="creator_profile",
+            )
+            for public_id, name in await self._filters.creator_profiles(context.prefix, limit=limit)
+        )
+        return (profiles + names)[:limit]
 
 
 def _terms(

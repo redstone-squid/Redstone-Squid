@@ -35,6 +35,10 @@ class FakeFilterValues:
             TagEntry(2, "z", "Zig Zag", "pattern", aliases=("woven",)),
         ]
 
+    async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
+        profiles = [("9d10eb8e-3bd0-44d6-a207-a6a4dc564e58", "Bob")]
+        return [profile for profile in profiles if profile[1].casefold().startswith(query.casefold())][:limit]
+
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         self.calls.append((field_name, prefix, limit))
         return [value for value in self.values.get(field_name, []) if value.casefold().startswith(prefix.casefold())]
@@ -180,8 +184,18 @@ async def test_an_open_quote_is_preserved_when_completing() -> None:
 
 
 async def test_database_order_is_preserved_rather_than_re_ranked() -> None:
-    result, _ = await suggest("creator:b", creator=["bob", "Bea", "bill"])
+    result, _ = await suggest("version:b", version=["bob", "Bea", "bill"])
     assert [item.label for item in result.items] == ["bob", "Bea", "bill"]
+
+
+async def test_creator_profiles_come_before_credited_names_and_insert_the_id() -> None:
+    result, _ = await suggest("creator:b", creator=["bob", "Bea"])
+
+    assert [(item.value, item.kind) for item in result.items] == [
+        ("9d10eb8e-3bd0-44d6-a207-a6a4dc564e58", "creator_profile"),
+        ("bob", "creator"),
+        ("Bea", "creator"),
+    ]
 
 
 async def test_an_explicit_cursor_completes_mid_query() -> None:
