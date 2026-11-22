@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal, Self, cast, override
+from typing import Any, Literal, Self, cast, override
 
 import anyio
 import discord
@@ -14,7 +14,9 @@ from squid.bot.accounts.claims import ClaimReviewComponent
 from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
 from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
+from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
+from squid.bot.notifications_view import NotificationPanel, VisibilityResolver
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
@@ -25,12 +27,14 @@ from squid.core.accounts.errors import AccountAlreadyLinkedError, AccountNotFoun
 from squid.core.accounts.models import Account
 from squid.core.actors import Actor
 from squid.core.edits.application import EditRunner
+from squid.core.notifications import InboxVisibility, NotificationService
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
+    BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
@@ -40,47 +44,48 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 router = AppRoutes()
 
 
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
+type AccountTab = Literal["overview", "accounts", "credits", "notifications", "review"]
 
 
-type AccountTab = Literal["overview", "identity", "claims", "merge", "review"]
-
-
-class AccountWorkspace(sd.Screen):
-    """Combine account linking, profile controls, creator claims, and account merges.
-
-    AccountOverview supplies the overview tab. Other tabs carry the workflows that
-    create or change account relationships; claim reviewers also get the shared
-    moderation component. Rebuilding reloads the account before choosing tabs.
-    """
+class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
+    """Manage the user's profile, linked accounts, build credits, and notifications."""
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("account"))
+
+    _account: Account | None = sl.state(None, opaque=True)
+    _pending_focus: AccountTab | None = sl.state(None)
+    _overview: AccountOverview | None = sl.state(None, opaque=True)
+    _notifications: NotificationPanel | None = sl.state(None, opaque=True)
+    _tabs: sp.Tabs[ComponentsV2Target, AppRequest] | None = sl.state(None, opaque=True)
+    _merge_code: str | None = sl.state(None)
+    _merge_decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, AppRequest] | None = sl.state(
+        None, opaque=True
+    )
 
     def __init__(
         self,
         *,
         accounts: AccountService,
+        notifications: NotificationService,
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         actor_id: int,
         account: Account | None,
         request_consent: ConsentRequest,
         grants: Grants,
+        discord_username: str | None = None,
+        inbox_visibility: VisibilityResolver | None = None,
     ) -> None:
-        self._pending_focus: AccountTab | None = None
         self._accounts = accounts
+        self._notification_service = notifications
+        self._inbox_visibility = inbox_visibility
         self._edits = edits
         self._edit_actor = actor
         self._actor_id = actor_id
+        self._discord_username = discord_username
         self._account = account
         self._request_consent = request_consent
         self.grants = grants
-        self._overview: AccountOverview | None = None
-        self._claims: ClaimReviewComponent | None = None
-        self._tabs: sp.Tabs[ComponentsV2Target, sd.Request] | None = None
-        self._merge_code: str | None = None
-        self._merge_decision: sp.ComponentDriver[sp.DecisionState, ComponentsV2Target, sd.Request] | None = None
 
     @classmethod
     async def create(cls, request: AppRequest) -> Self:
@@ -121,11 +126,19 @@ class AccountWorkspace(sd.Screen):
         async def edit_actor() -> Actor:
             return await request.client.actors.resolve(request, refresh=True)
 
+        async def inbox_visibility() -> InboxVisibility:
+            current = await edit_actor()
+            decision = await request.client.services.permissions.check(current, BUILD_SUBMISSION_VIEW_PENDING)
+            return InboxVisibility(include_staff=decision.allowed)
+
         return cls(
             accounts=request.client.services.accounts,
+            notifications=request.client.services.notifications,
             edits=request.client.services.edits,
             actor=edit_actor,
             actor_id=actor.id,
+            discord_username=actor.name,
+            inbox_visibility=inbox_visibility,
             account=account,
             request_consent=open_consent,
             grants=await Grants.load(
@@ -151,10 +164,7 @@ class AccountWorkspace(sd.Screen):
         return screen
 
     def focus_targets(self) -> frozenset[AccountTab]:
-        tabs: set[AccountTab] = {"identity"}
-        # ORM identity columns may still be None before flush.
-        if self._account is not None and self._account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
-            tabs.update(("overview", "claims", "merge"))
+        tabs: set[AccountTab] = {"overview", "accounts", "credits", "notifications"}
         if ACCOUNT_CLAIM_LIST in self.grants:
             tabs.add("review")
         return frozenset(tabs)
@@ -195,29 +205,51 @@ class AccountWorkspace(sd.Screen):
                 account_id=account_id,
                 actor_id=self._actor_id,
                 request_consent=self._request_consent,
+                discord_username=self._discord_username,
+                on_access_changed=self._rebuild,
             )
         if self._overview is not None:
             await self._overview.on_load()
-        self._claims = None
+        consent_needed = self._account is None or account_id is None or self._account.needs_consent_refresh
+        if consent_needed:
+            self._notifications = None
+        elif self._notifications is None or self._notifications.account_id != account_id:
+            assert account_id is not None
+            self._notifications = NotificationPanel(
+                notifications=self._notification_service,
+                edits=self._edits,
+                actor=self._edit_actor,
+                account_id=account_id,
+                visibility_resolver=self._inbox_visibility,
+            )
+        setup = self._setup_nodes(
+            tr(t"account-workspace-set-up-profile = Set up your account"),
+            tr(t"account-workspace-profile-setup-help = Review the privacy notice to create your profile."),
+        )
+        credit = (
+            self._setup_nodes(
+                tr(t"account-claim-heading = Claim credit for your builds"),
+                tr(t"account-workspace-credit-setup-help = Review the privacy notice before claiming build credit."),
+            )
+            if consent_needed
+            else self._claim_nodes()
+        )
+        notifications = self._notifications or self._setup_nodes(
+            tr(t"account-workspace-notifications = Notifications"),
+            tr(
+                t"account-workspace-notifications-setup-help = Review the privacy notice to access your inbox, follows, and delivery settings."
+            ),
+        )
+        tabs: list[sp.Tab[ComponentsV2Target, AppRequest]] = [
+            sp.Tab("overview", tr(t"account-workspace-overview = Overview"), self._overview or setup),
+            sp.Tab("accounts", tr(t"account-workspace-accounts = Accounts"), self._identity_nodes()),
+            sp.Tab("credits", tr(t"account-workspace-credits = Credits"), credit),
+            sp.Tab("notifications", tr(t"account-workspace-notifications = Notifications"), notifications),
+        ]
         if ACCOUNT_CLAIM_LIST in self.grants:
             claims = await self._accounts.pending_alias_claims(with_claimants=True)
-            self._claims = ClaimReviewComponent(
-                self._accounts,
-                claims,
-                author_id=self._actor_id,
-                grants=self.grants,
-            )
-        tabs: list[sp.Tab[ComponentsV2Target, sd.Request]] = []
-        if self._overview is not None:
-            tabs.append(sp.Tab("overview", tr(t"account-workspace-overview = Overview"), self._overview))
-        tabs.append(
-            sp.Tab("identity", tr(t"account-workspace-link-and-refresh = Link and refresh"), self._identity_nodes())
-        )
-        if account_id is not None:
-            tabs.append(sp.Tab("claims", tr(t"account-workspace-creator-claims = Creator claims"), self._claim_nodes()))
-            tabs.append(sp.Tab("merge", tr(t"account-workspace-merge-accounts = Merge accounts"), self._merge_nodes()))
-        if self._claims is not None:
-            tabs.append(sp.Tab("review", tr(t"account-workspace-review-claims = Review claims"), self._claims))
+            review = ClaimReviewComponent(self._accounts, claims, author_id=self._actor_id, grants=self.grants)
+            tabs.append(sp.Tab("review", tr(t"account-workspace-review-claims = Review claims"), review))
         selected: str | None = self._pending_focus
         if selected is None and self._tabs is not None:
             selected = self._tabs.machine_state.selected
@@ -228,34 +260,46 @@ class AccountWorkspace(sd.Screen):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+    def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self._merge_decision,)
         if self._tabs is None:
             return (sl.status(tr(t"account-workspace-loading-account = Loading account.")),)
         return (self._tabs,)
 
-    def _identity_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
+    def _privacy_control(self) -> sl.semantic.ActionControl[sd.Request]:
+        return sl.action_control(
+            tr(t"account-workspace-review-privacy-notice = Review privacy notice"), self._consent, key="consent"
+        )
+
+    def _setup_nodes(
+        self, title: sl.TextLike, help_text: sl.TextLike
+    ) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
+        return (
+            sl.section(sl.heading(title), sl.paragraph(help_text)),
+            sl.action_controls(self._privacy_control(), key="account-setup"),
+        )
+
+    def _identity_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, AppRequest]]:
         account = self._account
+        can_refresh = (
+            account is not None
+            and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+            and not account.needs_consent_refresh
+            and ACCOUNT_IDENTITY_REFRESH in self.grants
+            and bool(account.identities_for(IdentityProvider.JAVA))
+        )
         header = sl.section(
             sl.heading(tr(t"account-link-heading = Connect Minecraft")),
             sl.paragraph(
-                tr(
-                    t"account-link-help = Enter your in-game link code to connect your Minecraft identity to this "
-                    t"account. Run /link in Minecraft on the community server to get a code."
+                md_tr(
+                    t"account-link-help = Run `/link` in Minecraft on the community server, then enter the code here."
                 )
             ),
-            sl.note(tr(t"account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.")),
+            can_refresh
+            and sl.note(tr(t"account-refresh-help = Refresh Minecraft after you change your in-game name or skin.")),
         )
         controls: list[sl.semantic.ActionControl[sd.Request] | sl.semantic.FormTrigger[sd.Request]] = []
-        if account is None or account.needs_consent_refresh:
-            controls.append(
-                sl.action_control(
-                    tr(t"account-workspace-review-privacy-notice = Review privacy notice"),
-                    self._consent,
-                    key="consent",
-                )
-            )
         controls.append(
             sl.form(
                 tr(t"account-workspace-link-minecraft-account = Link Minecraft account"),
@@ -264,15 +308,10 @@ class AccountWorkspace(sd.Screen):
                 on_submit=self._link,
             )
         )
-        if (
-            account is not None
-            and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
-            and not account.needs_consent_refresh
-            and ACCOUNT_IDENTITY_REFRESH in self.grants
-        ):
+        if can_refresh:
             controls.append(
                 sl.action_control(
-                    tr(t"account-workspace-refresh-minecraft-identity = Refresh Minecraft identity"),
+                    tr(t"account-workspace-refresh-minecraft = Refresh Minecraft"),
                     self._refresh_identity,
                     key="refresh",
                 )
@@ -286,19 +325,24 @@ class AccountWorkspace(sd.Screen):
                     on_submit=self._refresh_member_identity,
                 )
             )
-        return [header, sl.action_controls(*controls, key="identity-tools")]
+        nodes: list[sl.LayoutNode[ComponentsV2Target, AppRequest]] = [
+            header,
+            sl.action_controls(*controls, key="identity-tools", display=sl.semantic.ControlDisplay.INDIVIDUAL),
+        ]
+        if account is not None and account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
+            nodes.extend(self._merge_nodes())
+        return nodes
 
-    def _claim_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+    def _claim_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
         return (
             sl.section(
-                sl.heading(tr(t"account-claim-heading = Claim your earlier builds")),
+                sl.heading(tr(t"account-claim-heading = Claim credit for your builds")),
                 sl.paragraph(
                     tr(
-                        t"account-claim-help = Used another creator name? Submit that name to connect its build "
-                        t"credits to your account."
+                        t"account-claim-help = If your builds are credited to another name you used, "
+                        t"submit a claim. Staff review it before adding the credit to your account."
                     )
                 ),
-                sl.note(tr(t"account-claim-review-help = Staff review each claim before credits are connected.")),
             ),
             sl.action_controls(
                 sl.action_control(
@@ -306,46 +350,42 @@ class AccountWorkspace(sd.Screen):
                     self._choose_claim,
                     key="search-claims",
                 ),
-                key="claim-search-actions",
-            ),
-            sl.form(
-                tr(t"account-workspace-claim-creator-credit = Claim a name not listed"),
-                _ClaimForm().spec(),
-                key="claim",
-                on_submit=self._claim,
+                sl.form(
+                    tr(t"account-workspace-claim-creator-credit = Enter a name manually"),
+                    _ClaimForm().spec(),
+                    key="claim",
+                    on_submit=self._claim,
+                ),
+                key="claim-actions",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             ),
         )
 
-    def _merge_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+    def _merge_nodes(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:
         return (
             sl.section(
-                sl.heading(tr(t"account-merge-heading = Bring your accounts together")),
+                sl.heading(tr(t"account-merge-heading = Merge Squid accounts")),
                 sl.paragraph(
                     tr(
-                        t"account-merge-help = On the account you want to move, create a merge code. Then open the "
-                        t"account you want to keep and enter that code."
-                    )
-                ),
-                sl.note(
-                    tr(
-                        t"account-merge-preview-help = You will review the transfer before confirming. Keep merge "
-                        t"codes private."
+                        t"account-merge-help = Create a code on the account you're moving. "
+                        t"Enter it on the account you want to keep to preview the transfer."
                     )
                 ),
             ),
             sl.action_controls(
+                sl.action_control(
+                    tr(t"account-workspace-create-merge-code = Create merge code"),
+                    self._create_merge_code,
+                    key="merge-code",
+                ),
                 sl.form(
                     tr(t"account-merge-preview-action = Enter merge code"),
                     _MergeForm().spec(),
                     key="merge",
                     on_submit=self._request_merge,
                 ),
-                sl.action_control(
-                    tr(t"account-workspace-create-merge-code = Create merge code"),
-                    self._create_merge_code,
-                    key="merge-code",
-                ),
                 key="merge-code-actions",
+                display=sl.semantic.ControlDisplay.INDIVIDUAL,
             ),
         )
 
@@ -492,7 +532,7 @@ class AccountWorkspace(sd.Screen):
 
     async def _choose_claim(self, event: sd.PressEvent) -> None:
         await pick(
-            cast("sd.PressEvent[RedstoneSquid]", event),
+            cast(sd.PressEvent[RedstoneSquid], event),
             "creators",
             tr(t"account-search-credit-names = Search credited names"),
             self._claim_picked,
@@ -514,11 +554,11 @@ class AccountWorkspace(sd.Screen):
 
     async def _create_merge_code(self, event: sd.PressEvent) -> None:
         code, ticket = await self._accounts.create_merge_code(self._account_id())
-        expiry = ticket.expires_at.to_stdlib().isoformat()
+        expiry = sl.md(discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"))
         await event.notice(
             md_tr(
-                t"account-merge-code-warning = Merge code: `{code}`. It "
-                t"expires {expiry}. Keep it private: it hands this account over.",
+                t"account-merge-code-warning = Merge code `{code}` expires {expiry}. "
+                t"Keep it private. Anyone with the code can merge this account into theirs.",
             )
         )
 
@@ -531,7 +571,7 @@ class AccountWorkspace(sd.Screen):
         identities = preview.identity_count
         builds = preview.build_count
         self._merge_code = code
-        self._merge_decision = sp.Decision[ComponentsV2Target, sd.Request](
+        self._merge_decision = sp.Decision[ComponentsV2Target, AppRequest](
             md_tr(
                 t"account-merge-transfer-preview = Move {aliases} creator "
                 t"names, {identities} identities, and {builds} build credits here? This cannot be undone.",
@@ -550,14 +590,11 @@ class AccountWorkspace(sd.Screen):
             self._merge_decision = None
             return
         result = await self._accounts.complete_merge(self._account_id(), code)
-        redirected = result.redirected_public_creator_id
         self._merge_code = None
         self._merge_decision = None
         await self._rebuild(changed_account_id=result.surviving_account_id)
         await event.source.notice(
-            md_tr(
-                t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.",
-            )
+            tr(t"account-merge-complete = The other account's creator page now redirects to yours.")
         )
 
     def _account_id(self) -> int:

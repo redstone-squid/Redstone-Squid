@@ -67,7 +67,10 @@ async def test_unknown_screen_address_finishes_the_private_defer_with_navigation
 async def test_notifications_show_a_consented_members_personal_inbox() -> None:
     accounts = WorkspaceAccounts()
     services = bot_services(accounts=accounts, notifications=WorkspaceInbox(7), permissions=staff_permissions())
-    async with command_environment("squid.bot.notifications_cog", services=services) as (_, env):
+    async with command_environment("squid.bot.accounts.cog", "squid.bot.notifications_cog", services=services) as (
+        _,
+        env,
+    ):
         channel = env.guild.create_text_channel("public")
         member = env.guild.add_member(env.create_user("builder"))
         accounts.discord_accounts[str(member.id)] = Account(id=7, consent=AccountConsent.grant_current())
@@ -79,6 +82,23 @@ async def test_notifications_show_a_consented_members_personal_inbox() -> None:
         summary = "\n".join(displayed_text(result.response.message))
         assert "1 unread" in summary
         assert "0 follows" in summary
+
+        changed = await member.click(result.response.message, label="Accounts")
+
+        assert changed.acknowledged
+        accounts_tab = displayed_text(result.response.message)
+        assert any("Connect Minecraft" in text for text in accounts_tab)
+        assert any("Merge Squid accounts" in text for text in accounts_tab)
+
+        await member.click(result.response.message, label="Credits")
+
+        assert any("Claim credit for your builds" in text for text in displayed_text(result.response.message))
+
+        opened = await member.slash(channel, "account")
+
+        assert opened.response is not None
+        assert opened.response.ephemeral
+        assert any("Creator profile" in text for text in displayed_text(opened.response.message))
 
 
 async def test_access_opens_with_the_selected_discord_role_in_the_invoking_guild() -> None:

@@ -298,17 +298,14 @@ access-who = Whose access?
 # squid/bot/accounts/presentation.py:59
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id } is awaiting staff review.
 
-# squid/bot/accounts/workspace.py:294
-account-claim-heading = Claim your earlier builds
+# squid/bot/accounts/workspace.py:231, squid/bot/accounts/workspace.py:339
+account-claim-heading = Claim credit for your builds
 
-# squid/bot/accounts/workspace.py:296
-account-claim-help = Used another creator name? Submit that name to connect its build credits to your account.
+# squid/bot/accounts/workspace.py:341
+account-claim-help = If your builds are credited to another name you used, submit a claim. Staff review it before adding the credit to your account.
 
-# squid/bot/accounts/workspace.py:510
+# squid/bot/accounts/workspace.py:550
 account-claim-pending-review = Claim #{ $claim_id } for **{ $alias_name }** is awaiting staff approval.
-
-# squid/bot/accounts/workspace.py:301
-account-claim-review-help = Staff review each claim before credits are connected.
 
 # squid/bot/accounts/presentation.py:51
 account-credits-attributed = Build credits under **{ $name }** are attributed to your account.
@@ -319,55 +316,52 @@ account-credits-retained = You are still credited under: { $names }.
 # squid/bot/accounts/presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/accounts/overview.py:355
+# squid/bot/accounts/overview.py:361
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/accounts/overview.py:364
+# squid/bot/accounts/overview.py:370
 account-hidden-page-credit-note = Your profile is hidden. Your credited names still appear on your builds.
 
-# squid/bot/accounts/overview.py:255, squid/bot/accounts/overview.py:267
+# squid/bot/accounts/overview.py:259, squid/bot/accounts/overview.py:271
 account-history-profile = Edit profile
 
 # squid/bot/accounts/profile_editor.py:149
 account-history-profile-draft = Edit profile draft
 
-# squid/bot/accounts/overview.py:241
+# squid/bot/accounts/overview.py:243
 account-history-unlink = Unlink identity
 
-# squid/bot/accounts/overview.py:221
+# squid/bot/accounts/overview.py:223
 account-history-visibility = Change identity visibility
 
-# squid/bot/accounts/overview.py:245
+# squid/bot/accounts/overview.py:249
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:241
+# squid/bot/accounts/workspace.py:293
 account-link-heading = Connect Minecraft
 
-# squid/bot/accounts/workspace.py:243
-account-link-help = Enter your in-game link code to connect your Minecraft identity to this account. Run /link in Minecraft on the community server to get a code.
+# squid/bot/accounts/workspace.py:295
+account-link-help = Run `/link` in Minecraft on the community server, then enter the code here.
 
-# squid/bot/accounts/overview.py:350
+# squid/bot/accounts/overview.py:356
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
-# squid/bot/accounts/workspace.py:519
-account-merge-code-warning = Merge code: `{ $code }`. It expires { $expiry }. Keep it private: it hands this account over.
+# squid/bot/accounts/workspace.py:559
+account-merge-code-warning = Merge code `{ $code }` expires { $expiry }. Keep it private. Anyone with the code can merge this account into theirs.
 
-# squid/bot/accounts/workspace.py:558
-account-merge-complete = Merged. `{ $redirected }` now redirects to your creator page.
+# squid/bot/accounts/workspace.py:597
+account-merge-complete = The other account's creator page now redirects to yours.
 
-# squid/bot/accounts/workspace.py:322
-account-merge-heading = Bring your accounts together
+# squid/bot/accounts/workspace.py:367
+account-merge-heading = Merge Squid accounts
 
-# squid/bot/accounts/workspace.py:324
-account-merge-help = On the account you want to move, create a merge code. Then open the account you want to keep and enter that code.
+# squid/bot/accounts/workspace.py:369
+account-merge-help = Create a code on the account you're moving. Enter it on the account you want to keep to preview the transfer.
 
-# squid/bot/accounts/workspace.py:338
+# squid/bot/accounts/workspace.py:382
 account-merge-preview-action = Enter merge code
 
-# squid/bot/accounts/workspace.py:330
-account-merge-preview-help = You will review the transfer before confirming. Keep merge codes private.
-
-# squid/bot/accounts/workspace.py:535
+# squid/bot/accounts/workspace.py:575
 account-merge-transfer-preview = Move { $aliases } creator names, { $identities } identities, and { $builds } build credits here? This cannot be undone.
 
 # squid/bot/accounts/presentation.py:41
@@ -376,25 +370,25 @@ account-name-changed = Your Minecraft name changed from **{ $old }** to **{ $new
 # squid/bot/accounts/presentation.py:37
 account-name-unchanged = Your Minecraft name is still **{ $name }**. Nothing changed.
 
-# squid/bot/accounts/workspace.py:464
+# squid/bot/accounts/workspace.py:504
 account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.
 
-# squid/bot/accounts/workspace.py:248
-account-refresh-help = Already linked? Refresh to update your Minecraft name and profile.
+# squid/bot/accounts/workspace.py:300
+account-refresh-help = Refresh Minecraft after you change your in-game name or skin.
 
-# squid/bot/accounts/workspace.py:283
+# squid/bot/accounts/workspace.py:322
 account-refresh-member-action = Refresh member
 
-# squid/bot/accounts/workspace.py:305, squid/bot/accounts/workspace.py:497
+# squid/bot/accounts/workspace.py:349, squid/bot/accounts/workspace.py:537
 account-search-credit-names = Search credited names
 
 # squid/bot/accounts/cog.py:59
 account-select-creator-result = Choose a creator from the name suggestions.
 
-# squid/bot/accounts/workspace.py:499
+# squid/bot/accounts/workspace.py:539
 account-submit-claim = Submit claim
 
-# squid/bot/accounts/overview.py:325
+# squid/bot/accounts/overview.py:331
 account-view-account-option = { $provider } — { $name }
 
 # squid/bot/accounts/profile_editor.py:91
@@ -403,16 +397,19 @@ account-view-bio = Bio
 # squid/bot/accounts/profile_editor.py:58
 account-view-cancel = Cancel
 
-# squid/bot/accounts/overview.py:179
+# squid/bot/accounts/overview.py:181
 account-view-creator-page = Profile
 
-# squid/bot/accounts/overview.py:324
+# squid/bot/accounts/overview.py:136
+account-view-creator-profile = Creator profile
+
+# squid/bot/accounts/overview.py:330
 account-view-current-discord = Your Discord account
 
 # squid/bot/accounts/profile_editor.py:79
 account-view-display-name = Display name
 
-# squid/bot/accounts/overview.py:173
+# squid/bot/accounts/overview.py:175
 account-view-edit-page = Edit profile
 
 # squid/bot/accounts/profile_editor.py:75
@@ -421,13 +418,13 @@ account-view-edit-profile = Edit profile
 # squid/bot/accounts/profile_editor.py:130
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/accounts/overview.py:332
+# squid/bot/accounts/overview.py:338
 account-view-hidden = Hidden from your profile
 
-# squid/bot/accounts/overview.py:183
+# squid/bot/accounts/overview.py:185
 account-view-hidden-2 = Hidden
 
-# squid/bot/accounts/overview.py:191
+# squid/bot/accounts/overview.py:193
 account-view-hidden-from-page = Hidden
 
 # squid/bot/accounts/profile_editor.py:110
@@ -436,7 +433,7 @@ account-view-https-url = HTTPS URL
 # squid/bot/accounts/profile_editor.py:105
 account-view-label = Label
 
-# squid/bot/accounts/overview.py:311
+# squid/bot/accounts/overview.py:317
 account-view-linked-accounts = Linked accounts
 
 # squid/bot/accounts/profile_editor.py:30
@@ -445,7 +442,7 @@ account-view-links = { $count } links
 # squid/bot/accounts/profile_editor.py:122, squid/bot/accounts/profile_editor.py:99
 account-view-links-2 = Links
 
-# squid/bot/accounts/overview.py:312
+# squid/bot/accounts/overview.py:318
 account-view-none-yet = _None yet._
 
 # squid/bot/accounts/profile_editor.py:73
@@ -460,104 +457,119 @@ account-view-profile-saved = Profile saved.
 # squid/bot/accounts/profile_editor.py:85
 account-view-pronouns = Pronouns
 
-# squid/bot/accounts/overview.py:348
+# squid/bot/accounts/overview.py:354
 account-view-remove-this-linked-account = Remove this linked account?
 
 # squid/bot/accounts/profile_editor.py:133
 account-view-save-profile = Save profile
 
-# squid/bot/accounts/overview.py:148
+# squid/bot/accounts/overview.py:150
 account-view-select-linked-account = Select a linked account to change its visibility or unlink it.
 
-# squid/bot/accounts/overview.py:187
+# squid/bot/accounts/overview.py:189
 account-view-selected-identity = Account
 
-# squid/bot/accounts/overview.py:182
+# squid/bot/accounts/overview.py:184
 account-view-shown = Public
 
-# squid/bot/accounts/overview.py:190
+# squid/bot/accounts/overview.py:192
 account-view-shown-on-page = Shown
 
-# squid/bot/accounts/overview.py:330
+# squid/bot/accounts/overview.py:336
 account-view-shown-publicly = Shown on your profile
 
-# squid/bot/accounts/overview.py:340
+# squid/bot/accounts/overview.py:346
 account-view-unknown = unknown
 
-# squid/bot/accounts/overview.py:195
+# squid/bot/accounts/overview.py:197
 account-view-unlink = Unlink account
 
-# squid/bot/accounts/overview.py:359
+# squid/bot/accounts/overview.py:365
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/accounts/overview.py:342
+# squid/bot/accounts/overview.py:348
 account-view-verified = { $visibility } · verified { $age }
 
-# squid/bot/accounts/overview.py:134, squid/bot/accounts/profile_editor.py:193
+# squid/bot/accounts/profile_editor.py:193
 account-view-your-account = Your account
 
-# squid/bot/accounts/workspace.py:227
+# squid/bot/accounts/workspace.py:259
 account-workspace-account = Account
 
-# squid/bot/accounts/workspace.py:541
+# squid/bot/accounts/workspace.py:245
+account-workspace-accounts = Accounts
+
+# squid/bot/accounts/workspace.py:581
 account-workspace-cancel = Cancel
 
-# squid/bot/accounts/workspace.py:584
+# squid/bot/accounts/workspace.py:621
 account-workspace-claim-an-older-creator-name = Claim an older creator name
 
-# squid/bot/accounts/workspace.py:312
-account-workspace-claim-creator-credit = Claim a name not listed
+# squid/bot/accounts/workspace.py:354
+account-workspace-claim-creator-credit = Enter a name manually
 
-# squid/bot/accounts/workspace.py:344
+# squid/bot/accounts/workspace.py:377
 account-workspace-create-merge-code = Create merge code
 
-# squid/bot/accounts/workspace.py:217
-account-workspace-creator-claims = Creator claims
-
-# squid/bot/accounts/workspace.py:586
+# squid/bot/accounts/workspace.py:623
 account-workspace-creator-name = Creator name
 
-# squid/bot/accounts/workspace.py:580
+# squid/bot/accounts/workspace.py:232
+account-workspace-credit-setup-help = Review the privacy notice before claiming build credit.
+
+# squid/bot/accounts/workspace.py:246
+account-workspace-credits = Credits
+
+# squid/bot/accounts/workspace.py:617
 account-workspace-discord-member = Discord member
 
-# squid/bot/accounts/workspace.py:574
+# squid/bot/accounts/workspace.py:611
 account-workspace-in-game-link-code = In-game link code
 
-# squid/bot/accounts/workspace.py:214
-account-workspace-link-and-refresh = Link and refresh
-
-# squid/bot/accounts/workspace.py:261, squid/bot/accounts/workspace.py:572
+# squid/bot/accounts/workspace.py:305, squid/bot/accounts/workspace.py:609
 account-workspace-link-minecraft-account = Link Minecraft account
 
-# squid/bot/accounts/workspace.py:235
+# squid/bot/accounts/workspace.py:267
 account-workspace-loading-account = Loading account.
 
-# squid/bot/accounts/workspace.py:218, squid/bot/accounts/workspace.py:540
+# squid/bot/accounts/workspace.py:580
 account-workspace-merge-accounts = Merge accounts
 
-# squid/bot/accounts/workspace.py:592
+# squid/bot/accounts/workspace.py:629
 account-workspace-merge-code = Merge code
 
-# squid/bot/accounts/workspace.py:212
+# squid/bot/accounts/workspace.py:238, squid/bot/accounts/workspace.py:247
+account-workspace-notifications = Notifications
+
+# squid/bot/accounts/workspace.py:239
+account-workspace-notifications-setup-help = Review the privacy notice to access your inbox, follows, and delivery settings.
+
+# squid/bot/accounts/workspace.py:244
 account-workspace-overview = Overview
 
-# squid/bot/accounts/workspace.py:590
+# squid/bot/accounts/workspace.py:627
 account-workspace-preview-account-merge = Preview account merge
 
-# squid/bot/accounts/workspace.py:474
+# squid/bot/accounts/workspace.py:227
+account-workspace-profile-setup-help = Review the privacy notice to create your profile.
+
+# squid/bot/accounts/workspace.py:514
 account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity.
 
-# squid/bot/accounts/workspace.py:578
+# squid/bot/accounts/workspace.py:615
 account-workspace-refresh-member-identity = Refresh member identity
 
-# squid/bot/accounts/workspace.py:275
-account-workspace-refresh-minecraft-identity = Refresh Minecraft identity
+# squid/bot/accounts/workspace.py:314
+account-workspace-refresh-minecraft = Refresh Minecraft
 
-# squid/bot/accounts/workspace.py:220
+# squid/bot/accounts/workspace.py:252
 account-workspace-review-claims = Review claims
 
-# squid/bot/accounts/workspace.py:254
+# squid/bot/accounts/workspace.py:272
 account-workspace-review-privacy-notice = Review privacy notice
+
+# squid/bot/accounts/workspace.py:226
+account-workspace-set-up-profile = Set up your account
 
 # squid/core/accounts/errors.py:179
 accounts-account-already-linked = Your account is already linked to a different Minecraft account.
@@ -894,67 +906,64 @@ bot-consent-value =
     { "*" }*{ $username }**
     `{ $uuid }`
 
-# squid/bot/notifications_view.py:453
+# squid/bot/notifications_view.py:446
 bot-notifications-view-base-title = Record criterion
 
-# squid/bot/notifications_view.py:444
+# squid/bot/notifications_view.py:437
 bot-notifications-view-build-kind = Build kind
 
-# squid/bot/notifications_view.py:57
+# squid/bot/notifications_view.py:55
 bot-notifications-view-creator = Creator
 
-# squid/bot/notifications_view.py:174
+# squid/bot/notifications_view.py:167
 bot-notifications-view-discord-dms = Discord DMs
 
-# squid/bot/notifications_view.py:421
+# squid/bot/notifications_view.py:414
 bot-notifications-view-exact-tag-value = Exact tag value
 
-# squid/bot/notifications_view.py:248
+# squid/bot/notifications_view.py:241
 bot-notifications-view-follow-creator = Follow creator
 
-# squid/bot/notifications_view.py:258, squid/bot/notifications_view.py:440
+# squid/bot/notifications_view.py:251, squid/bot/notifications_view.py:433
 bot-notifications-view-follow-matching-records = Follow matching records
 
-# squid/bot/notifications_view.py:253
+# squid/bot/notifications_view.py:246
 bot-notifications-view-follow-record = Follow record
 
-# squid/bot/notifications_view.py:88
+# squid/bot/notifications_view.py:84
 bot-notifications-view-following = Following
 
-# squid/bot/notifications_view.py:349
+# squid/bot/notifications_view.py:342
 bot-notifications-view-following-that-creator = Following that creator.
 
-# squid/bot/notifications_view.py:363
+# squid/bot/notifications_view.py:356
 bot-notifications-view-following-that-record = Following that record.
 
-# squid/bot/notifications_view.py:561
+# squid/bot/notifications_view.py:554
 bot-notifications-view-mark-selected-read = Mark selected read
 
-# squid/bot/notifications_view.py:567
+# squid/bot/notifications_view.py:560
 bot-notifications-view-mark-selected-unread = Mark selected unread
 
-# squid/bot/notifications_view.py:110
-bot-notifications-view-notifications = Notifications
-
-# squid/bot/notifications_view.py:549
+# squid/bot/notifications_view.py:542
 bot-notifications-view-read = Read
 
-# squid/bot/notifications_view.py:59
+# squid/bot/notifications_view.py:57
 bot-notifications-view-record = Record
 
-# squid/bot/notifications_view.py:61
+# squid/bot/notifications_view.py:59
 bot-notifications-view-record-filter = Record filter
 
-# squid/bot/notifications_view.py:265
+# squid/bot/notifications_view.py:258
 bot-notifications-view-unfollow-selected = Unfollow selected
 
-# squid/bot/notifications_view.py:547
+# squid/bot/notifications_view.py:540
 bot-notifications-view-unread = Unread
 
-# squid/bot/notifications_view.py:462
+# squid/bot/notifications_view.py:455
 bot-notifications-view-version-scope = Version scope
 
-# squid/bot/notifications_view.py:168
+# squid/bot/notifications_view.py:161
 bot-notifications-view-web-inbox = Web inbox
 
 # squid/bot/accounts/profile_render.py:110
@@ -2426,7 +2435,7 @@ command-layout-workbench-help = Edit a sample build and watch a second message u
 # squid/bot/showcase/cog.py:44
 command-layout-workbench-name = workbench
 
-# squid/bot/notifications_cog.py:59
+# squid/bot/notifications_cog.py:52
 command-notifications-name = notifications
 
 # squid/bot/navigation/cog.py:22
@@ -4081,43 +4090,43 @@ navigation-draft-unavailable = That draft is unavailable.
 # squid/bot/navigation/cog.py:36
 navigation-invalid-address = That screen address is invalid. Try /builds, /drafts, or /account.
 
-# squid/bot/accounts/workspace.py:150
+# squid/bot/accounts/workspace.py:163
 navigation-tab-unavailable = That account tab is unavailable.
 
-# squid/bot/notifications_view.py:342
+# squid/bot/notifications_view.py:335
 notification-choose-creator = Choose a creator
 
-# squid/bot/notifications_view.py:355
+# squid/bot/notifications_view.py:348
 notification-choose-record = Choose a record
 
-# squid/bot/notifications_view.py:288, squid/bot/notifications_view.py:366
+# squid/bot/notifications_view.py:281, squid/bot/notifications_view.py:359
 notification-choose-tag = Choose filter tag
 
-# squid/bot/notifications_view.py:293
+# squid/bot/notifications_view.py:286
 notification-clear-tag = Clear filter tag
 
-# squid/bot/notifications_view.py:344, squid/bot/notifications_view.py:357
+# squid/bot/notifications_view.py:337, squid/bot/notifications_view.py:350
 notification-follow = Follow
 
-# squid/bot/notifications_view.py:335
+# squid/bot/notifications_view.py:328
 notification-history-follow = Follow
 
-# squid/bot/notifications_view.py:196
+# squid/bot/notifications_view.py:189
 notification-history-preferences = Change notification preferences
 
-# squid/bot/notifications_view.py:594
+# squid/bot/notifications_view.py:587
 notification-history-read = Change read state
 
-# squid/bot/notifications_view.py:313
+# squid/bot/notifications_view.py:306
 notification-history-unfollow = Unfollow
 
-# squid/bot/notifications_view.py:431
+# squid/bot/notifications_view.py:424
 notification-tag-false = False
 
-# squid/bot/notifications_view.py:430
+# squid/bot/notifications_view.py:423
 notification-tag-true = True
 
-# squid/bot/notifications_view.py:374
+# squid/bot/notifications_view.py:367
 notification-tag-unavailable = That tag is no longer available. Choose another tag.
 
 # squid/bot/notification_text.py:18
@@ -4126,8 +4135,8 @@ notifications-build = A build
 # squid/bot/notification_text.py:18
 notifications-build-number = Build #{ $build_id }
 
-# squid/bot/notifications_cog.py:61
-notifications-channel-preferences = Manage notification channels and subscriptions
+# squid/bot/notifications_cog.py:54
+notifications-channel-preferences = Open your inbox, follows, and delivery preferences
 
 # squid/bot/notification_text.py:22
 notifications-confirmed-summary = { $build } was approved.
@@ -4138,16 +4147,16 @@ notifications-creator-summary = { $build } by a creator you follow was approved.
 # squid/core/notifications/application.py:199
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
-# squid/bot/notifications_view.py:160
+# squid/bot/notifications_view.py:153
 notifications-delivery-heading = Where notifications arrive
 
-# squid/bot/notifications_view.py:162
+# squid/bot/notifications_view.py:155
 notifications-delivery-help = Choose your delivery channels. Changes save immediately.
 
 # squid/bot/notification_text.py:24
 notifications-denied-summary = { $build } was rejected.
 
-# squid/bot/notifications_view.py:202
+# squid/bot/notifications_view.py:195
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
 # squid/core/notifications/domain.py:243
@@ -4159,28 +4168,28 @@ notifications-domain-unsupported = unsupported { $name }: { $value }
 # squid/core/notifications/domain.py:166
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/bot/notifications_view.py:408
+# squid/bot/notifications_view.py:401
 notifications-follow-filter-confirmation = Following records matching that filter.
 
-# squid/bot/notifications_view.py:282
+# squid/bot/notifications_view.py:275
 notifications-following-empty = Nothing followed yet. Add your first follow below.
 
-# squid/bot/notifications_view.py:275
+# squid/bot/notifications_view.py:268
 notifications-following-heading = Your follows
 
-# squid/bot/notifications_view.py:277
+# squid/bot/notifications_view.py:270
 notifications-following-help = Follow creators or records to hear about new builds and records.
 
-# squid/bot/notifications_view.py:527
+# squid/bot/notifications_view.py:520
 notifications-inbox-empty = Your inbox is empty
 
-# squid/bot/notifications_view.py:529
+# squid/bot/notifications_view.py:522
 notifications-inbox-empty-help = Follow creators or records in Following to get updates.
 
-# squid/bot/notifications_view.py:535
+# squid/bot/notifications_view.py:528
 notifications-inbox-heading = Recent notifications
 
-# squid/bot/notifications_view.py:537
+# squid/bot/notifications_view.py:530
 notifications-inbox-help = Select a notification to see details and open its build, or select several to change their read state.
 
 # squid/core/notifications/domain.py:245
@@ -4189,16 +4198,16 @@ notifications-invalid-exact-tag-value = invalid exact tag value
 # squid/core/notifications/domain.py:324, squid/core/notifications/domain.py:329
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/bot/notifications_cog.py:184
+# squid/bot/notifications_cog.py:145
 notifications-manage-hint = View your inbox and manage updates with `/notifications`.
 
 # squid/bot/notification_text.py:56
 notifications-more-records = …and { $remaining } more records.
 
-# squid/bot/notifications_cog.py:120, squid/bot/notifications_view.py:620
+# squid/bot/notifications_cog.py:85, squid/bot/notifications_view.py:613
 notifications-open-build = Open build
 
-# squid/bot/notifications_cog.py:176
+# squid/bot/notifications_cog.py:137
 notifications-open-in-discord = Open it in Discord with `/build browse id:{ $build_id }`.
 
 # squid/core/notifications/application.py:150
@@ -4219,7 +4228,7 @@ notifications-record-detail = • { $title }
 # squid/core/notifications/domain.py:204
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
-# squid/bot/notifications_view.py:392
+# squid/bot/notifications_view.py:385
 notifications-record-filter-required = Choose at least one record filter.
 
 # squid/core/notifications/domain.py:211
@@ -4241,13 +4250,13 @@ notifications-retention-days-positive = retention_days must be positive
 # squid/bot/notification_text.py:28
 notifications-review-summary = { $build } is awaiting staff review.
 
-# squid/bot/notifications_view.py:111
+# squid/bot/notifications_view.py:105
 notifications-summary = { $unread } unread · { $following } follows
 
-# squid/bot/notifications_view.py:89
+# squid/bot/notifications_view.py:85
 notifications-tab-delivery = Delivery
 
-# squid/bot/notifications_view.py:87
+# squid/bot/notifications_view.py:83
 notifications-tab-inbox = Inbox
 
 # squid/core/notifications/domain.py:155

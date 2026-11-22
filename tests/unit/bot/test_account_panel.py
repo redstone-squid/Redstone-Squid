@@ -38,6 +38,9 @@ from squid.core.accounts.domain import (
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.actors import Actor
+from squid.core.notifications import NotificationPreferences, NotificationService
+from squid.core.notifications.application import NotificationEditorSnapshot
+from squid.core.pagination import Page
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_ui.content.text import NEUTRAL, resolve_text, source_text
@@ -45,6 +48,7 @@ from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.interactions import Visibility
 from squid_ui.testing import RecordingResponder, find, keys, labels, press_event, render_tree, submit_event
 from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
+from tests.support.services import bot_services
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -59,8 +63,16 @@ async def edit_actor() -> Actor:
     return Actor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
-def _workspace(*, accounts: SnapshotAccountService, **kwargs: Any) -> AccountWorkspace:
-    return AccountWorkspace(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
+def _workspace(
+    *, accounts: SnapshotAccountService, notifications: NotificationService | None = None, **kwargs: Any
+) -> AccountWorkspace:
+    return AccountWorkspace(
+        accounts=accounts,
+        notifications=notifications or bot_services().notifications,
+        edits=AccountEditRecorder(accounts),
+        actor=edit_actor,
+        **kwargs,
+    )
 
 
 def _overview(*, accounts: SnapshotAccountService, **kwargs: Any) -> AccountOverview:
@@ -329,7 +341,9 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
     await workspace.on_load()
 
     assert workspace._tabs is not None
-    assert {"Link and refresh", "Review privacy notice"} <= set(labels(workspace._tabs.render()))
+    assert {"Overview", "Accounts", "Credits", "Notifications", "Review privacy notice"} <= set(
+        labels(workspace._tabs.render())
+    )
 
 
 async def test_somebody_elses_creator_page_uses_the_public_profile_projection() -> None:
@@ -541,7 +555,7 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
 
 
 def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(identities=(DISCORD, JAVA), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
 
     async def authorize(_node: PermissionNode) -> bool:
         return True
@@ -555,8 +569,8 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
             grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH} if allowed else ()), authorize),
         )
 
-    assert "Refresh Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
-    assert "Refresh Minecraft identity" in labels(workspace(allowed=True)._identity_nodes())
+    assert "Refresh Minecraft" not in labels(workspace(allowed=False)._identity_nodes())
+    assert "Refresh Minecraft" in labels(workspace(allowed=True)._identity_nodes())
 
 
 @pytest.mark.parametrize("allowed", [False, True], ids=["revoked", "allowed"])
@@ -976,7 +990,7 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
     assert accounts.linked == []
 
 
-async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> None:
+async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker: MockerFixture) -> None:
     account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
 
     class OverviewAccounts(AccountMutationService):
@@ -984,11 +998,14 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account:
             assert provider is IdentityProvider.DISCORD
             assert subject == str(AUTHOR_ID)
-            return account
+            return await self.get_account_by_id(ACCOUNT_ID)
 
         @override
         async def get_account_by_id(self, account_id: int) -> Account:
             assert account_id == ACCOUNT_ID
+            if self.consent_grants:
+                account.consent = AccountConsent.grant_current()
+                account.revision = 2
             return account
 
         @override
@@ -1019,15 +1036,21 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
+    notifications = mocker.Mock(spec=NotificationService)
+    notifications.editor_snapshot.return_value = NotificationEditorSnapshot(
+        NotificationPreferences(ACCOUNT_ID, consent_pending=False), ()
+    )
+    notifications.inbox.return_value = Page(items=(), total=0, next=None, prev=None)
     workspace = _workspace(
         accounts=accounts,
+        notifications=notifications,
         actor_id=AUTHOR_ID,
         account=account,
         request_consent=consent,
         grants=Grants(frozenset(), authorize),
     )
     async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
-        for tab in ("identity", "claims", "merge", "overview"):
+        for tab in ("accounts", "credits", "notifications", "overview"):
             await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith(f"account-tabs.{tab}")))
         overview = workspace._overview
         assert isinstance(overview, AccountOverview)
@@ -1058,10 +1081,17 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         assert overview._profile_editor is None
         assert accounts.profile_updates == []
 
+        edit_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("edit_page"))
         await ui.press(edit_key)
         assert overview._profile_editor is not None
         assert overview._profile_editor is not draft
         assert not overview._profile_editor.history.entries
+        notifications.editor_snapshot.assert_not_awaited()
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.notifications"))
+        )
+        notifications.editor_snapshot.assert_awaited_once_with(ACCOUNT_ID)
+        assert any("Your inbox is empty" in content for content in ui.texts())
 
 
 async def test_identity_visibility_needs_a_selected_identity() -> None:
@@ -1092,7 +1122,7 @@ def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
         "Discord — redbuilder",
         "Minecraft (Java) — Notch",
     ]
-    assert [resolve_text(option.description, NEUTRAL).content for option in picker.choices] == [
+    assert [resolve_text(option.description or "", NEUTRAL).content for option in picker.choices] == [
         "Shown on your profile",
         "Hidden from your profile",
     ]
@@ -1129,26 +1159,24 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
     )
     focusable: sl.Focusable[AccountTab] = workspace
     assert isinstance(workspace, sl.Focusable)
-    assert focusable.focus_targets() == frozenset({"overview", "identity", "claims", "merge"})
+    assert focusable.focus_targets() == frozenset({"overview", "accounts", "credits", "notifications"})
     with pytest.raises(ValueError, match="Unavailable account tab"):
         focusable.focus("review")
-    focusable.focus("identity")
-    focusable.focus("claims")
+    focusable.focus("accounts")
+    focusable.focus("credits")
     async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
         assert workspace._tabs is not None
-        assert workspace._tabs.machine_state.selected == "claims"
-        await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.merge")))
+        assert workspace._tabs.machine_state.selected == "credits"
+        await ui.press(
+            next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.notifications"))
+        )
         await workspace._rebuild()
-        assert workspace._tabs.machine_state.selected == "merge"
-        focusable.focus("identity")
-        assert workspace._tabs.machine_state.selected == "identity"
-        focusable.focus("claims")
+        assert workspace._tabs.machine_state.selected == "notifications"
         accounts.current = None
         await workspace._rebuild()
-        assert workspace._tabs.machine_state.selected == "identity"
-        assert focusable.focus_targets() == frozenset({"identity"})
-        with pytest.raises(ValueError, match="Unavailable account tab"):
-            focusable.focus("claims")
+        assert workspace._tabs.machine_state.selected == "notifications"
+        assert "Review privacy notice" in labels(workspace._tabs.render())
+        await ui.root.refresh()
 
 
 @pytest.mark.parametrize("failure", [RuntimeError("redemption failed"), asyncio.CancelledError()])

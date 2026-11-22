@@ -10,7 +10,7 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.notifications_view import NotificationScreen
+from squid.bot.notifications_view import NotificationPanel
 from squid.core.actors import Actor
 from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
@@ -26,7 +26,7 @@ from squid.core.notifications.models import InboxNotification, NotificationSubsc
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.suggestions.domain import Suggestion
 from squid.core.tags.domain import TagValueType
-from squid_ui.ext.discord import SessionSpec, primitives
+from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.testing import stage
 from squid_ui.selectors import query, select
 from squid_ui.testing import RecordingResponder, choose, labels, press, render_index, render_tree, submit
@@ -126,7 +126,7 @@ class NotificationRecorder(NotificationService):
 
 @dataclass(frozen=True)
 class ScreenHarness:
-    screen: NotificationScreen
+    screen: NotificationPanel
     notifications: NotificationRecorder
 
 
@@ -141,12 +141,11 @@ def make_screen(
         return Actor(account_id=7, discord_user_id=42)
 
     return ScreenHarness(
-        NotificationScreen(
+        NotificationPanel(
             notifications=notifications,
             edits=NotificationEditRecorder(notifications, visibility),
             actor=actor,
             account_id=7,
-            author_id=42,
             visibility=visibility,
             visibility_resolver=visibility_resolver,
         ),
@@ -161,9 +160,6 @@ async def test_screen_offers_all_follow_workflows() -> None:
     await press(screen.tabs, "notification-tabs.following")
     rendered = render_tree(screen)
 
-    assert isinstance(NotificationScreen.__response_spec__.session, SessionSpec)
-    assert NotificationScreen.__response_spec__.session.name == "notifications"
-    assert NotificationScreen.__response_spec__.audience == "personal"
     assert {"Follow creator", "Follow record", "Follow matching records"} <= set(labels(rendered))
 
 

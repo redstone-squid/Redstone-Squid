@@ -1,26 +1,19 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import TYPE_CHECKING, Any, Self, override
+from typing import TYPE_CHECKING, Self, override
 
 import anyio
 import discord
 
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.i18n import to_locale_str
 from squid.bot.notification_text import notification_build_id, notification_details
-from squid.bot.notifications_view import NotificationScreen
-from squid.bot.utils.permissions import allows
-from squid.core.actors import Actor
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
-from squid.core.notifications import (
-    InboxVisibility,
-    PendingNotificationDelivery,
-)
+from squid.core.notifications import PendingNotificationDelivery
 from squid.core.notifications.domain import NotificationKind
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_i18n import discord_text, md_tr, resolve_text
 from squid_ui.content.text import Text, localization_scope
@@ -58,40 +51,12 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
     @sd.command(
         name=to_locale_str(tr(t"command-notifications-name = notifications")),
         description=to_locale_str(
-            tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
+            tr(t"notifications-channel-preferences = Open your inbox, follows, and delivery preferences")
         ),
     )
-    async def notifications(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> None:
-        """Open the notification preferences and subscription workspace."""
-        account_id = await self._account_id(request)
-        if account_id is None:
-            return
-
-        async def actor() -> Actor:
-            return await request.client.actors.resolve(request, refresh=True)
-
-        async def visibility() -> InboxVisibility:
-            current = await actor()
-            return InboxVisibility(
-                include_staff=(
-                    await self.bot.services.permissions.check(current, BUILD_SUBMISSION_VIEW_PENDING)
-                ).allowed
-            )
-
-        screen = NotificationScreen(
-            notifications=self.bot.services.notifications,
-            edits=self.bot.services.edits,
-            actor=actor,
-            account_id=account_id,
-            author_id=request.user.id,
-            visibility=await self._inbox_visibility(request),
-            visibility_resolver=visibility,
-        )
-        await request.respond(screen)
-
-    @staticmethod
-    async def _inbox_visibility(caller: sd.Request[Any, squid.bot.app.RedstoneSquid]) -> InboxVisibility:
-        return InboxVisibility(include_staff=await allows(caller, BUILD_SUBMISSION_VIEW_PENDING))
+    async def notifications(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> AccountWorkspace:
+        """Open the Notifications tab of the account workspace."""
+        return await AccountWorkspace.open_account(request, tab="notifications")
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
@@ -141,10 +106,6 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             else:
                 await self.bot.services.notifications.complete_delivery(delivery)
 
-    async def _account_id(self, request: sd.Request[Self, squid.bot.app.RedstoneSquid]) -> int | None:
-        """The caller's consented account, or `None` once they have been told why not."""
-        return await ensure_consented_account(request, self.bot.services.accounts)
-
 
 def delivery_message(delivery: PendingNotificationDelivery) -> Text:
     """Build the same contextual message shown in the notification inbox."""
@@ -185,5 +146,5 @@ def render_delivery(
         )
 
 
-async def setup(bot: Any) -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(NotificationCog(bot))

@@ -43,8 +43,6 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 if TYPE_CHECKING:
     from squid.core.notifications.application import NotificationService
 
-SESSION_SECONDS = 300
-
 MAX_LISTED = 25
 """Maximum subscriptions or inbox items offered by one Discord select."""
 
@@ -61,10 +59,8 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
             return tr(t"bot-notifications-view-record-filter = Record filter")
 
 
-class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
+class NotificationPanel(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Compose notification workflows with one revision-aware edit history."""
-
-    policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
 
     def __init__(
         self,
@@ -73,10 +69,10 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         account_id: int,
-        author_id: int,
         visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
         visibility_resolver: VisibilityResolver | None = None,
     ) -> None:
+        self.account_id = account_id
         self.settings = NotificationSettings(notifications, account_id)
         self.edits = EditController(edits, actor, self._refresh)
         self.preferences = NotificationPreferencesControls(self.settings, self.edits)
@@ -106,10 +102,7 @@ class NotificationScreen(sd.Screen[None, Any, RedstoneSquid]):
         following = len(self.settings.subscriptions)
         unread = self.inbox.unread_count
         return (
-            sl.section(
-                sl.heading(tr(t"bot-notifications-view-notifications = Notifications")),
-                sl.note(md_tr(t"notifications-summary = {unread} unread · {following} follows")),
-            ),
+            sl.note(md_tr(t"notifications-summary = {unread} unread · {following} follows")),
             self.tabs,
             *self.edits.refresh_controls(),
         )

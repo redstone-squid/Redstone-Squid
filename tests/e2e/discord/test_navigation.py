@@ -138,7 +138,12 @@ async def test_draft_access_failure_does_not_open_editor(error: Exception) -> No
 
 
 @pytest.mark.parametrize(
-    ("tab", "expected"), [("review", "That account tab is unavailable."), ("identity", "Connect Minecraft")]
+    ("tab", "expected"),
+    [
+        ("review", "That account tab is unavailable."),
+        ("accounts", "Connect Minecraft"),
+        ("notifications", "Review the privacy notice to access your inbox"),
+    ],
 )
 async def test_account_address_respects_available_tabs(tab: str, expected: str) -> None:
     services = bot_services(accounts=WorkspaceAccounts(), permissions=staff_permissions())
@@ -154,7 +159,9 @@ async def test_account_address_respects_available_tabs(tab: str, expected: str) 
         assert any(expected in text for text in displayed_text(result.response.message))
 
 
-@pytest.mark.parametrize("address", ["builds/12", "/builds/12", "  builds/12  ", "drafts?inbox=true", "account#claims"])
+@pytest.mark.parametrize(
+    "address", ["builds/12", "/builds/12", "  builds/12  ", "drafts?inbox=true", "account#credits"]
+)
 async def test_navigation_accepts_optional_leading_slash(address: str) -> None:
     routes = AppRoutes()
 
@@ -167,7 +174,7 @@ async def test_navigation_accepts_optional_leading_slash(address: str) -> None:
         return sd.Response(f"Draft inbox: {inbox} for {request.user.id}")
 
     @routes.route("/account", fragment="tab")
-    async def account(request: AppRequest, tab: Literal["claims"] | None = None) -> sd.Response:
+    async def account(request: AppRequest, tab: Literal["credits"] | None = None) -> sd.Response:
         return sd.Response(f"Account tab: {tab} for {request.user.id}")
 
     async with command_environment(NAVIGATION) as (bot, env):
@@ -180,7 +187,7 @@ async def test_navigation_accepts_optional_leading_slash(address: str) -> None:
         expected = {
             "builds/12": "Build 12",
             "drafts?inbox=true": "Draft inbox: True",
-            "account#claims": "Account tab: claims",
+            "account#credits": "Account tab: credits",
         }[address.strip().lstrip("/")]
         assert result.response is not None
         assert result.response.ephemeral

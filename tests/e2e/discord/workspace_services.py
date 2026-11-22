@@ -8,8 +8,9 @@ import simcord
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
+from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import AccountConsent, IdentityProvider
-from squid.core.accounts.models import Account
+from squid.core.accounts.models import Account, AccountProfile
 from squid.core.actors import Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
@@ -44,6 +45,11 @@ class WorkspaceAccounts(AccountService):
         assert provider is IdentityProvider.DISCORD
         self.lookups.append(subject)
         return self.discord_accounts.get(subject)
+
+    @override
+    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+        account = next(account for account in self.discord_accounts.values() if account.id == account_id)
+        return AccountEditorSnapshot(account, AccountProfile.empty(account_id))
 
 
 def staff_member(env: simcord.Env, accounts: WorkspaceAccounts) -> simcord.MemberActor:

@@ -96,7 +96,7 @@ async def open_detail(cls, request: AppRequest, build_id: int) -> Self: ...
 
 Names in `{braces}` are path parameters. Other parameters have defaults and appear
 in the query string when changed. A named optional fragment parameter, such as
-`@router.route("/account", fragment="tab")`, produces `/account#claims`. Integers
+`@router.route("/account", fragment="tab")`, produces `/account#credits`. Integers
 are positive IDs; booleans, UUIDs, string Literals, and optional forms are supported.
 
 The decorated attribute is a typed endpoint handle:

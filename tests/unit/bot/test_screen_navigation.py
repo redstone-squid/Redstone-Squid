@@ -28,7 +28,7 @@ def router() -> MountedRouter[AppRequest]:
     return routes
 
 
-@pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#claims"])
+@pytest.mark.parametrize("address", ["/builds", "/builds/12", "/drafts", "/drafts?inbox=true", "/account#credits"])
 def test_screen_addresses_roundtrip_through_the_application_registry(
     router: MountedRouter[AppRequest], address: str
 ) -> None:

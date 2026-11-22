@@ -85,11 +85,13 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         actor_id: int,
         request_consent: ConsentRequest,
         discord_username: str | None = None,
+        on_access_changed: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._accounts = accounts
         self._account_id = account_id
         self._actor_id = actor_id
         self._discord_username = discord_username
+        self._on_access_changed = on_access_changed
         self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
@@ -131,7 +133,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         extra_media = media[1:]
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading(self._profile.display_name or tr(t"account-view-your-account = Your account")),
+                sl.heading(self._profile.display_name or tr(t"account-view-creator-profile = Creator profile")),
                 # Shorten the bio before reducing the identity fields or footer.
                 self._profile.bio and sl.paragraph(self._profile.bio).truncate(),
                 sl.fields(*fields),
@@ -240,6 +242,8 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         await self.edits.bind(UNLINK_EDIT, account_target(self._account_id), self._revision).save(
             EditValues.of({"identity_id": identity.id}), tr(t"account-history-unlink = Unlink identity")
         )
+        if identity.discord_id == self._actor_id and self._on_access_changed is not None:
+            await self._on_access_changed()
         removed_label = _identity_label(identity)
         await event.notice(
             md_tr(
@@ -294,6 +298,8 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 raise RevisionConflictError(expected, granted.revision)
             self._revision = granted.revision
             self._needs_consent = False
+            if self._on_access_changed is not None:
+                await self._on_access_changed()
             await work()
 
         await self._request_consent(event, answered)
