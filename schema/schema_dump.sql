@@ -646,6 +646,29 @@ $$;
 
 
 --
+-- Name: enqueue_build_source_preview_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_build_source_preview_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    PERFORM public.upsert_discord_sync_request('build', source.build_id::text, 'refresh')
+    FROM public.build_source_messages source
+    WHERE source.message_id = NEW.id
+    ORDER BY source.build_id;
+
+    PERFORM public.upsert_discord_sync_request('vote_session', review.vote_session_id::text, 'refresh')
+    FROM public.build_source_messages source
+    JOIN public.build_vote_sessions review ON review.build_id = source.build_id
+    WHERE source.message_id = NEW.id
+    ORDER BY review.vote_session_id;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: enqueue_computed_record_search_projection(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7761,6 +7784,13 @@ CREATE INDEX build_schematics_uploaded_by_idx ON public.build_schematics USING b
 
 
 --
+-- Name: build_source_messages_message_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX build_source_messages_message_id_idx ON public.build_source_messages USING btree (message_id);
+
+
+--
 -- Name: build_tag_assignments_created_by_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9200,6 +9230,13 @@ CREATE TRIGGER extenders_reject_truncate BEFORE TRUNCATE ON public.extenders FOR
 --
 
 CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.generic_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+
+--
+-- Name: messages messages_enqueue_build_source_preview_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER messages_enqueue_build_source_preview_sync AFTER UPDATE OF content, deleted_at, channel_id, guild_id ON public.messages FOR EACH ROW WHEN (((old.content IS DISTINCT FROM new.content) OR (old.deleted_at IS DISTINCT FROM new.deleted_at) OR (old.channel_id IS DISTINCT FROM new.channel_id) OR (old.guild_id IS DISTINCT FROM new.guild_id))) EXECUTE FUNCTION public.enqueue_build_source_preview_sync();
 
 
 --

@@ -36,6 +36,8 @@ ALTER TABLE ONLY public.messages
 
 CREATE INDEX messages_guild_idx ON public.messages USING btree (guild_id);
 
+CREATE TRIGGER messages_enqueue_build_source_preview_sync AFTER UPDATE OF content, deleted_at, channel_id, guild_id ON public.messages FOR EACH ROW WHEN (((old.content IS DISTINCT FROM new.content) OR (old.deleted_at IS DISTINCT FROM new.deleted_at) OR (old.channel_id IS DISTINCT FROM new.channel_id) OR (old.guild_id IS DISTINCT FROM new.guild_id))) EXECUTE FUNCTION public.enqueue_build_source_preview_sync();
+
 CREATE TRIGGER messages_enqueue_starboard_sync AFTER UPDATE OF deleted_at ON public.messages FOR EACH ROW WHEN ((old.deleted_at IS DISTINCT FROM new.deleted_at)) EXECUTE FUNCTION public.enqueue_starboard_sync();
 
 ALTER TABLE ONLY public.messages
