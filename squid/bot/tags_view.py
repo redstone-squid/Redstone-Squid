@@ -196,11 +196,18 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._pending_action is not None and self._decision is not None:
             tag, action = self._pending_action
             tag_name = tag.display_name
-            action_label = _action_label(action)
             return (
                 sl.section(
                     sl.heading(tr(t"bot-tags-view-confirm-tag-moderation = Confirm tag moderation")),
-                    sl.paragraph(md_tr(t"bot-tags-view-value-3 = {action_label} **{tag_name}**?")),
+                    sl.paragraph(
+                        md_tr(t"""
+                        bot-tags-view-confirm-action = {{ {action} ->
+                            [approve] Approve **{tag_name}**?
+                            [reject] Reject **{tag_name}**?
+                           *[archive] Archive **{tag_name}**?
+                        }}
+                        """)
+                    ),
                 ),
                 self._decision,
             )
@@ -371,10 +378,17 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             _action_label(action),
         )
         tag_name = tag.display_name
-        action_label = _action_label(action)
         self._pending_action = None
         self._decision = None
-        await event.source.notice(md_tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
+        await event.source.notice(
+            md_tr(t"""
+            bot-tags-view-moderated = {{ {action} ->
+                [approve] Approved **{tag_name}**.
+                [reject] Rejected **{tag_name}**.
+               *[archive] Archived **{tag_name}**.
+            }}
+            """)
+        )
 
 
 def _tag_summary(tag: TagDefinition) -> str:

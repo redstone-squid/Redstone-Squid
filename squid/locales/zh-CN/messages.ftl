@@ -19,12 +19,14 @@ account-view-cancel = 取消
 account-workspace-cancel = 取消
 admin-build-spreadsheet = 构造电子表格
 admin-database = 数据库
-admin-globally = 全局
 admin-open-database = 打开数据库
 admin-open-spreadsheet = 打开电子表格
-admin-synced-commands = 已{ $scope }同步 { $count } 个命令。
+admin-synced-commands =
+    { $scope ->
+        [guild] 已向当前服务器同步 { $count } 个命令。
+       *[global] 已全局同步 { $count } 个命令。
+    }
 admin-synced-the-tree-to = 已同步命令树至 { $synced }/{ $total }。
-admin-to-the-current-guild = 向当前服务器
 consent-cancel = 取消
 errors-unexpected-reference = 发生了意外错误。参考编号：`{ $error_id }`
 errors-invalid-arguments-hint = 请检查命令参数后重试。

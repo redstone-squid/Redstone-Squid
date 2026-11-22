@@ -309,13 +309,16 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             else:
                 synced = await tree.sync()
 
-            scope = (
-                tr(t"admin-globally = globally")
-                if spec is None
-                else tr(t"admin-to-the-current-guild = to the current guild")
-            )
+            scope = "global" if spec is None else "guild"
             count = len(synced)
-            return text_node(md_tr(t"admin-synced-commands = Synced {count} commands {scope}."))
+            return text_node(
+                md_tr(t"""
+                admin-synced-commands = {{ {scope} ->
+                    [guild] Synced {count} commands to the current guild.
+                   *[global] Synced {count} commands globally.
+                }}
+                """)
+            )
 
         ret = 0
         for guild in guilds:
