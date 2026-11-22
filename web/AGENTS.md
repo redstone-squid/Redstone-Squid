@@ -39,9 +39,11 @@ import CatalogueLayout from "../../layouts/CatalogueLayout.astro";
 import { recordsGet } from "../../generated/sdk.gen";
 import { unwrap } from "../../server/api";
 
+const id = Astro.params.id;
+if (!id) return Astro.rewrite("/404");
 const result = await recordsGet({
   client: Astro.locals.api,
-  path: { record_id: Number(Astro.params.id) },
+  path: { record_id: id },
 });
 if (result.response?.status === 404) return Astro.rewrite("/404");
 const record = unwrap(result); // Other failures throw ApiError and render a 500.
