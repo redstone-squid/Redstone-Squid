@@ -1120,13 +1120,13 @@ bot-settings-view-voting-2 = Voting — { $kind_label }
 # squid/bot/starboard/render.py:27
 bot-starboard-render-no-text-content = -# (no text content)
 
-# squid/bot/starboard/render.py:50
+# squid/bot/starboard/render.py:39
 bot-starboard-render-original-message = Original message
 
-# squid/bot/starboard/render.py:56
+# squid/bot/starboard/render.py:44
 bot-starboard-render-reactions = { " " }({ $count } reactions)
 
-# squid/bot/starboard/render.py:38
+# squid/bot/starboard/render.py:31
 bot-starboard-render-replying-to-message = -# Replying to message `{ $message_id }`
 
 # squid/bot/starboard/screen.py:112
@@ -2030,7 +2030,7 @@ builds-attribute-immutable = Attribute `{ $name }` is immutable!
 # squid/core/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/core/builds/models.py:227
+# squid/core/builds/models.py:225
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildInput.
 
 # squid/core/builds/errors.py:22

@@ -3766,7 +3766,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/starboard/render.py:50"
+      "squid/bot/starboard/render.py:39"
     ]
   },
   "bot-starboard-render-reactions": {
@@ -3781,7 +3781,7 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/render.py:56"
+      "squid/bot/starboard/render.py:44"
     ]
   },
   "bot-starboard-render-replying-to-message": {
@@ -3796,7 +3796,7 @@
       }
     ],
     "locations": [
-      "squid/bot/starboard/render.py:38"
+      "squid/bot/starboard/render.py:31"
     ]
   },
   "bot-starboard-screen-boards": {
@@ -6734,7 +6734,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/builds/models.py:227"
+      "squid/core/builds/models.py:225"
     ]
   },
   "builds-check-id-action": {
